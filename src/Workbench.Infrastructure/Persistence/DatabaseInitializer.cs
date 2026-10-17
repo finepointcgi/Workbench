@@ -37,7 +37,8 @@ public static class DatabaseInitializer
         var owner = new Column { Name = "Owner", Type = ColumnType.Person, Order = 1 };
         var hours = new Column { Name = "Planned hours", Type = ColumnType.Number, Order = 2 };
         var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 3 };
-        schedule.Columns.AddRange([status, owner, hours, budget]);
+        var costPerHour = new Column { Name = "Cost per hour", Type = ColumnType.Currency, Order = 4, Formula = "[Budget] / [Planned hours]" };
+        schedule.Columns.AddRange([status, owner, hours, budget, costPerHour]);
 
         var today = DateOnly.FromDateTime(now);
         var phase = new Item { Title = "Phase 1: Planning", Order = 0, Start = today, Finish = today.AddDays(20), CostpointWbsId = "1001.01.01" };

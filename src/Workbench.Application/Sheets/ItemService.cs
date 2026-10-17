@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Formulas;
 using Workbench.Contracts;
 using Workbench.Contracts.Sheets;
 using Workbench.Domain;
@@ -21,7 +22,9 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
             .OrderBy(i => i.ParentId)
             .ThenBy(i => i.Order)
             .ToListAsync(cancellationToken);
-        return items.Select(i => i.ToDto()).ToList();
+        var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken);
+        var computed = FormulaCalculator.Calculate(columns, items, Today());
+        return items.Select(i => WithComputed(i.ToDto(), computed)).ToList();
     }
 
     public async Task<ItemDto> CreateAsync(Guid sheetId, CreateItemRequest request, CancellationToken cancellationToken = default)
@@ -52,12 +55,12 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
             Title = request.Title.Trim(),
             Start = request.Start,
             Finish = request.Finish,
-            Values = request.Values is null ? [] : new Dictionary<string, string?>(request.Values),
+            Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken),
         };
         db.Items.Add(item);
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);
-        return item.ToDto();
+        return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
     public async Task<ItemDto> UpdateAsync(Guid sheetId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken = default)
@@ -72,10 +75,10 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         item.Start = request.Start;
         item.Finish = request.Finish;
         item.CostpointWbsId = string.IsNullOrWhiteSpace(request.CostpointWbsId) ? null : request.CostpointWbsId.Trim();
-        item.Values = new Dictionary<string, string?>(request.Values);
+        item.Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken);
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        return item.ToDto();
+        return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
     public async Task<ItemDto> MoveAsync(Guid sheetId, Guid itemId, MoveItemRequest request, CancellationToken cancellationToken = default)
@@ -111,7 +114,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
 
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        return item.ToDto();
+        return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid sheetId, Guid itemId, CancellationToken cancellationToken = default)
@@ -138,6 +141,54 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>Copies request values, dropping formula columns: their values are computed on read, never stored.</summary>
+    private static async Task<Dictionary<string, string?>> StoredValuesAsync(
+        IWorkbenchDbContext db, Guid sheetId, IReadOnlyDictionary<string, string?>? values, CancellationToken cancellationToken)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return [];
+        }
+
+        var formulaColumnIds = await db.Columns
+            .Where(c => c.SheetId == sheetId && c.Formula != null)
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken);
+        return new Dictionary<string, string?>(
+            values.Where(kv => !(Guid.TryParse(kv.Key, out var id) && formulaColumnIds.Contains(id))));
+    }
+
+    /// <summary>The item's DTO with formula columns calculated against the rest of the sheet.</summary>
+    private async Task<ItemDto> WithComputedAsync(IWorkbenchDbContext db, Guid sheetId, Item item, CancellationToken cancellationToken)
+    {
+        var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken);
+        if (columns.All(c => c.Formula is null))
+        {
+            return item.ToDto();
+        }
+
+        var items = await db.Items.AsNoTracking().Where(i => i.SheetId == sheetId).ToListAsync(cancellationToken);
+        return WithComputed(item.ToDto(), FormulaCalculator.Calculate(columns, items, Today()));
+    }
+
+    private static ItemDto WithComputed(ItemDto dto, IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, string?>> computed)
+    {
+        if (!computed.TryGetValue(dto.Id, out var row) || row.Count == 0)
+        {
+            return dto;
+        }
+
+        var values = new Dictionary<string, string?>(dto.Values);
+        foreach (var (columnId, value) in row)
+        {
+            values[columnId.ToString()] = value;
+        }
+
+        return dto with { Values = values };
+    }
+
+    private DateOnly Today() => DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
 
     private static void Renumber(IEnumerable<Item> siblings)
     {
