@@ -10,6 +10,10 @@ public interface IWorkbenchDbContext : IAsyncDisposable
     DbSet<Column> Columns { get; }
     DbSet<Item> Items { get; }
 
+    /// <summary>Any other mapped entity. New features use this instead of adding properties here.</summary>
+    DbSet<TEntity> Set<TEntity>()
+        where TEntity : class;
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 
