@@ -1,0 +1,150 @@
+@* One week of the month grid: day cells underneath, item bars stacked in lanes on top. *@
+
+<div class="calendar-week" style="grid-template-rows: @RowTemplate">
+    @foreach (var (day, index) in Week.Days.Select((d, i) => (d, i)))
+    {
+        <div class="@DayClass(day)" style="grid-column:@(index + 1); grid-row: 1 / -1"
+             data-date="@day.ToString("yyyy-MM-dd")" title="Add an item on @day.ToString("MMM d")"
+             @onclick="() => OnDayClick.InvokeAsync(day)">
+            <span class="calendar-day-number">@(day.Day == 1 ? day.ToString("MMM d") : day.Day.ToString())</span>
+        </div>
+    }
+
+    @foreach (var segment in Week.Segments)
+    {
+        var color = ColorOf(segment.Entry.Item);
+        <div class="@BarClass(segment)" role="button" tabindex="0"
+             style="grid-column:@(segment.Column + 1) / span @segment.Span; grid-row:@(segment.Lane + 2); @BarStyle(color)"
+             data-item-id="@segment.Entry.Item.Id" data-start="@segment.Start.ToString("yyyy-MM-dd")" data-end="@segment.End.ToString("yyyy-MM-dd")"
+             title="@Tooltip(segment.Entry)" @onclick="() => OnItemClick.InvokeAsync(segment.Entry.Item)">
+            @segment.Entry.Item.Title
+        </div>
+    }
+
+    @if (AddingDate is { } adding && Week.Covers(adding))
+    {
+        <div class="calendar-quick-add" style="grid-column:@(adding.DayNumber - Week.Start.DayNumber + 1); grid-row:-2">
+            <MudTextField @ref="_field" T="string" @bind-Value="_title" Placeholder="New item" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Immediate="true" AutoFocus="true" OnKeyDown="OnKeyDownAsync" OnBlur="OnBlurAsync"
+                          aria-label="@($"New item on {adding:MMM d}")" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public CalendarWeek Week { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public DateOnly Month { get; set; }
+
+    [Parameter]
+    public DateOnly Today { get; set; }
+
+    /// <summary>The day being quick-added to, if it is in this week.</summary>
+    [Parameter]
+    public DateOnly? AddingDate { get; set; }
+
+    [Parameter]
+    public Func<ItemDto, Color> ColorOf { get; set; } = _ => Color.Primary;
+
+    [Parameter]
+    public EventCallback<DateOnly> OnDayClick { get; set; }
+
+    [Parameter]
+    public EventCallback<ItemDto> OnItemClick { get; set; }
+
+    /// <summary>Called with the trimmed title when the quick-add is submitted.</summary>
+    [Parameter]
+    public EventCallback<string> OnAdd { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelAdd { get; set; }
+
+    private string? _title;
+    private MudTextField<string>? _field;
+    private DateOnly? _focusedFor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Focus the quick-add field whenever it opens on a new day (AutoFocus only covers its first render).
+        var adding = AddingDate is { } day && Week.Covers(day) ? day : (DateOnly?)null;
+        if (adding != _focusedFor)
+        {
+            _focusedFor = adding;
+            if (adding is not null && _field is not null)
+            {
+                await _field.FocusAsync();
+            }
+        }
+    }
+
+    // Day number, one row per lane of bars, then the free space where quick-add appears.
+    // (repeat(0, ...) is invalid CSS, so empty weeks leave it out.)
+    private string RowTemplate =>
+        Week.LaneCount > 0 ? $"28px repeat({Week.LaneCount}, 24px) minmax(28px, 1fr)" : "28px minmax(28px, 1fr)";
+
+    private string DayClass(DateOnly day) =>
+        "calendar-day"
+        + (day.Month != Month.Month || day.Year != Month.Year ? " calendar-day-outside" : "")
+        + (day == Today ? " calendar-day-today" : "");
+
+    private static string BarClass(CalendarSegment segment) =>
+        "calendar-bar"
+        + (segment.ContinuesBefore ? " calendar-bar-continues-before" : "")
+        + (segment.ContinuesAfter ? " calendar-bar-continues-after" : "");
+
+    private static string BarStyle(Color color)
+    {
+        if (color == Color.Default)
+        {
+            return "background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); box-shadow: inset 0 0 0 1px var(--mud-palette-lines-inputs)";
+        }
+
+        var name = color.ToString().ToLowerInvariant();
+        return $"background: var(--mud-palette-{name}); color: var(--mud-palette-{name}-text)";
+    }
+
+    private static string Tooltip(CalendarEntry entry) =>
+        entry.Start == entry.End
+            ? $"{entry.Item.Title} ({entry.Start:MMM d})"
+            : $"{entry.Item.Title} ({entry.Start:MMM d} – {entry.End:MMM d})";
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SubmitAsync();
+        }
+        else if (e.Key == "Escape")
+        {
+            _title = null;
+            await OnCancelAdd.InvokeAsync();
+        }
+    }
+
+    private async Task OnBlurAsync(FocusEventArgs e)
+    {
+        // Leaving the field with text saves it; leaving it empty cancels.
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            await OnCancelAdd.InvokeAsync();
+        }
+        else
+        {
+            await SubmitAsync();
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            return;
+        }
+
+        var title = _title.Trim();
+        _title = null;
+        await OnAdd.InvokeAsync(title);
+    }
+}

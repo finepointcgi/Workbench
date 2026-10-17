@@ -1,0 +1,97 @@
+.calendar-view ::deep .calendar-grid {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: var(--mud-default-borderradius);
+    overflow: hidden;
+}
+
+.calendar-view ::deep .calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    background: var(--mud-palette-background-gray);
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.calendar-view ::deep .calendar-weekdays > div {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+    text-transform: uppercase;
+}
+
+.calendar-view ::deep .calendar-week {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    row-gap: 2px;
+    min-height: 112px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.calendar-view ::deep .calendar-week:last-child {
+    border-bottom: none;
+}
+
+.calendar-view ::deep .calendar-day {
+    border-right: 1px solid var(--mud-palette-lines-default);
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.calendar-view ::deep .calendar-day:nth-child(7) {
+    border-right: none;
+}
+
+.calendar-view ::deep .calendar-day:hover {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.calendar-view ::deep .calendar-day-outside {
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-text-disabled);
+}
+
+.calendar-view ::deep .calendar-day-number {
+    font-size: 0.8rem;
+}
+
+.calendar-view ::deep .calendar-day-today .calendar-day-number {
+    background: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+    border-radius: 12px;
+    padding: 1px 7px;
+    font-weight: 600;
+}
+
+.calendar-view ::deep .calendar-bar {
+    z-index: 1;
+    margin: 0 4px;
+    padding: 0 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    line-height: 24px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.calendar-view ::deep .calendar-bar:hover {
+    filter: brightness(0.92);
+}
+
+.calendar-view ::deep .calendar-bar-continues-before {
+    margin-left: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.calendar-view ::deep .calendar-bar-continues-after {
+    margin-right: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.calendar-view ::deep .calendar-quick-add {
+    z-index: 2;
+    padding: 2px 4px 4px;
+}

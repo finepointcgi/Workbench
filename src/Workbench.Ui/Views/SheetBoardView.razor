@@ -1,3 +1,204 @@
 @inherits SheetViewBase
+@using Workbench.Ui.Board
+@inject IItemService ItemService
+@inject IColumnService ColumnService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
-<MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Board view is coming soon.</MudAlert>
+<div class="board-view">
+    @if (_laneColumn is null)
+    {
+        <MudPaper Outlined="true" Class="pa-8 d-flex flex-column align-center gap-3">
+            <MudIcon Icon="@Icons.Material.Filled.ViewKanban" Size="Size.Large" Class="mud-text-secondary" />
+            <MudText Typo="Typo.h6">No Dropdown column to group by</MudText>
+            <MudText Class="mud-text-secondary">
+                The board puts items in lanes by a Dropdown column. Add a Status column to get started.
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="CreateStatusColumnAsync" Disabled="_busy">Add Status column</MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4" Class="mb-4" Wrap="Wrap.Wrap">
+            <div style="width:240px">
+                <MudSelect T="Guid" Value="_laneColumn.Id" ValueChanged="SelectLaneColumn" Label="Group by"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    @foreach (var column in DropdownColumns)
+                    {
+                        <MudSelectItem T="Guid" Value="column.Id">@column.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <MudSwitch T="bool" Value="_leavesOnly" ValueChanged="SetLeavesOnly" Color="Color.Primary" Label="Leaf items only" />
+        </MudStack>
+
+        <MudDropContainer @ref="_container" T="ItemDto" Items="VisibleItems" ItemsSelector="IsInLane" ItemDropped="OnItemDroppedAsync"
+                          Class="board-lanes">
+            <ChildContent>
+                @foreach (var lane in Lanes)
+                {
+                    <MudPaper Class="board-lane pa-2" Elevation="0" data-lane="@lane.Label">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="px-1 pb-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small"
+                                     Color="@BoardLanes.ColorFor(_laneColumn, lane.Value)" Style="font-size:12px" />
+                            <MudText Typo="Typo.subtitle2" Class="@(lane.IsUnassigned ? "mud-text-secondary" : null)">@lane.Label</MudText>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">@lane.Items.Count</MudChip>
+                        </MudStack>
+                        <MudDropZone T="ItemDto" Identifier="@LaneId(lane.Value)" Class="board-lane-zone" AllowReorder="false" />
+                        <BoardQuickAdd LaneLabel="@lane.Label" OnAdd="title => QuickAddAsync(lane.Value, title)" />
+                    </MudPaper>
+                }
+            </ChildContent>
+            <ItemRenderer>
+                <BoardCard Item="context" Person="@PersonOf(context)" Today="Today" OnOpen="Open" />
+            </ItemRenderer>
+        </MudDropContainer>
+    }
+</div>
+
+@code {
+    // Dropzone identifiers can't be empty, so lanes are keyed with a prefix.
+    private const string LanePrefix = "lane:";
+
+    private ColumnDto? _laneColumn;
+    private Guid? _chosenColumnId;
+    private bool _leavesOnly;
+    private bool _busy;
+    private List<ItemDto> _items = [];
+    private MudDropContainer<ItemDto>? _container;
+    // The drop zones cache their items, so they are refreshed whenever the lanes change.
+    private bool _lanesChanged;
+
+    private IEnumerable<ColumnDto> DropdownColumns =>
+        Sheet.Columns.Where(c => c.Type == ColumnKind.Dropdown).OrderBy(c => c.Order);
+
+    private ColumnDto? PersonColumn =>
+        Sheet.Columns.Where(c => c.Type == ColumnKind.Person).OrderBy(c => c.Order).FirstOrDefault();
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private IReadOnlyList<ItemDto> VisibleItems => _leavesOnly ? BoardLanes.Leaves(_items).ToList() : _items;
+
+    private IReadOnlyList<BoardLane> Lanes => _laneColumn is null ? [] : BoardLanes.Group(_laneColumn, VisibleItems);
+
+    protected override void OnParametersSet()
+    {
+        _items = Items.ToList();
+        _laneColumn = (_chosenColumnId is { } id ? DropdownColumns.FirstOrDefault(c => c.Id == id) : null)
+            ?? BoardLanes.DefaultColumn(Sheet);
+        _lanesChanged = true;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_lanesChanged && _container is not null)
+        {
+            _lanesChanged = false;
+            _container.Refresh();
+        }
+    }
+
+    private void SetLeavesOnly(bool value)
+    {
+        _leavesOnly = value;
+        _lanesChanged = true;
+    }
+
+    private static string LaneId(string value) => LanePrefix + value;
+
+    private bool IsInLane(ItemDto item, string dropzone) =>
+        _laneColumn is not null && LaneId(BoardLanes.ValueOf(item, _laneColumn)) == dropzone;
+
+    private string? PersonOf(ItemDto item) => PersonColumn is { } column ? ValueOf(item, column) : null;
+
+    private void SelectLaneColumn(Guid columnId)
+    {
+        _chosenColumnId = columnId;
+        _laneColumn = DropdownColumns.FirstOrDefault(c => c.Id == columnId) ?? _laneColumn;
+        _lanesChanged = true;
+    }
+
+    private void Open(ItemDto item) => Navigation.NavigateTo($"sheets/{SheetId}?item={item.Id}");
+
+    private async Task OnItemDroppedAsync(MudItemDropInfo<ItemDto> drop)
+    {
+        if (_laneColumn is null || drop.Item is not { } item || drop.DropzoneIdentifier is not { } zone || !zone.StartsWith(LanePrefix))
+        {
+            return;
+        }
+
+        var value = zone[LanePrefix.Length..];
+        if (BoardLanes.ValueOf(item, _laneColumn) == value)
+        {
+            return;
+        }
+
+        var values = new Dictionary<string, string?>(item.Values) { [_laneColumn.Id.ToString()] = value.Length == 0 ? null : value };
+        var index = _items.FindIndex(i => i.Id == item.Id);
+        var previous = index >= 0 ? _items[index] : null;
+        if (index >= 0)
+        {
+            // Show the card in its new lane straight away; the page reload replaces it.
+            _items[index] = item with { Values = values };
+        }
+
+        try
+        {
+            await ItemService.UpdateAsync(SheetId, item.Id,
+                new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values));
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            if (previous is not null)
+            {
+                _items[index] = previous;
+                _lanesChanged = true;
+            }
+
+            Snackbar.Add($"Couldn't move \"{item.Title}\": {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task QuickAddAsync(string laneValue, string title)
+    {
+        if (_laneColumn is null)
+        {
+            return;
+        }
+
+        var values = laneValue.Length == 0
+            ? null
+            : new Dictionary<string, string?> { [_laneColumn.Id.ToString()] = laneValue };
+        try
+        {
+            await ItemService.CreateAsync(SheetId, new CreateItemRequest(title, Values: values));
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't add the item: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CreateStatusColumnAsync()
+    {
+        _busy = true;
+        try
+        {
+            var column = await ColumnService.CreateAsync(SheetId,
+                new CreateColumnRequest(BoardLanes.DefaultColumnName, ColumnKind.Dropdown, BoardLanes.DefaultStatusOptions));
+            _chosenColumnId = column.Id;
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't add the Status column: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

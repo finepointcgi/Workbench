@@ -1,0 +1,94 @@
+@* Quick-add card at the bottom of a lane. *@
+
+@if (_open)
+{
+    <MudPaper Class="pa-2" Elevation="0" Outlined="true">
+        <MudTextField @ref="_field" T="string" @bind-Value="_title" Placeholder="Item title" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" AutoFocus="true" OnKeyDown="OnKeyDownAsync" Disabled="_saving"
+                      aria-label="@($"New item title in {LaneLabel}")" />
+        <MudStack Row="true" Spacing="1" Class="mt-2">
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync"
+                       Disabled="@(_saving || string.IsNullOrWhiteSpace(_title))">Add</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="Close">Cancel</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" FullWidth="true"
+               Class="justify-start mud-text-secondary" OnClick="Open"
+               aria-label="@($"Add item to {LaneLabel}")">Add item</MudButton>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string LaneLabel { get; set; } = string.Empty;
+
+    /// <summary>Called with the trimmed title. The lane creates the item.</summary>
+    [Parameter]
+    public EventCallback<string> OnAdd { get; set; }
+
+    private MudTextField<string>? _field;
+    private bool _open;
+    private bool _saving;
+    private string? _title;
+    private bool _focusPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // AutoFocus only applies on the field's first render; focus explicitly so typing lands straight away.
+        if (_focusPending && _field is not null)
+        {
+            _focusPending = false;
+            await _field.FocusAsync();
+        }
+    }
+
+    private void Open()
+    {
+        _open = true;
+        _focusPending = true;
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SubmitAsync();
+        }
+        else if (e.Key == "Escape")
+        {
+            Close();
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title) || _saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await OnAdd.InvokeAsync(_title.Trim());
+            _title = null;
+        }
+        finally
+        {
+            _saving = false;
+        }
+
+        if (_field is not null)
+        {
+            await _field.FocusAsync();
+        }
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _title = null;
+    }
+}
