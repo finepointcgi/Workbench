@@ -1,0 +1,113 @@
+@* Comment text box with @mention suggestions drawn from the sheet's Person columns. *@
+
+<MudStack Spacing="1">
+    <MudTextField T="string" @bind-Value="_text" Immediate="true" Lines="@Lines" Sizing="InputSizing.Auto" MaxLines="10"
+                  Variant="Variant.Outlined" Placeholder="@Placeholder" Disabled="_busy" MaxLength="10000"
+                  aria-label="@Placeholder" />
+    @if (Suggestions.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-1" role="listbox" aria-label="Mention suggestions">
+            @foreach (var email in Suggestions)
+            {
+                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.AlternateEmail" OnClick="() => Mention(email)" role="option">@email</MudChip>
+            }
+        </MudPaper>
+    }
+    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1">
+        @if (OnCancel.HasDelegate)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="OnCancel" Disabled="_busy">Cancel</MudButton>
+        }
+        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_text))">@SubmitText</MudButton>
+    </MudStack>
+</MudStack>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> People { get; set; } = [];
+
+    [Parameter]
+    public string? InitialText { get; set; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "Write a comment. Type @ to mention someone.";
+
+    [Parameter]
+    public string SubmitText { get; set; } = "Comment";
+
+    [Parameter]
+    public int Lines { get; set; } = 2;
+
+    /// <summary>Called with the text. Return true when it was saved so the box is cleared.</summary>
+    [Parameter, EditorRequired]
+    public Func<string, Task<bool>> OnSubmit { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private string? _text;
+    private bool _busy;
+
+    protected override void OnInitialized() => _text = InitialText;
+
+    /// <summary>The word being typed at the end of the text, when it starts with @.</summary>
+    private string? MentionToken
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(_text))
+            {
+                return null;
+            }
+
+            var start = _text.LastIndexOfAny([' ', '\n', '\t', '\r']) + 1;
+            var token = _text[start..];
+            return token.StartsWith('@') ? token : null;
+        }
+    }
+
+    private IReadOnlyList<string> Suggestions
+    {
+        get
+        {
+            if (MentionToken is not { } token)
+            {
+                return [];
+            }
+
+            var query = token[1..];
+            return People
+                .Where(p => p.Contains(query, StringComparison.OrdinalIgnoreCase) && !string.Equals(p, query, StringComparison.OrdinalIgnoreCase))
+                .Take(6)
+                .ToList();
+        }
+    }
+
+    private void Mention(string email)
+    {
+        var token = MentionToken ?? string.Empty;
+        _text = _text![..^token.Length] + "@" + email + " ";
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_text))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            if (await OnSubmit(_text))
+            {
+                _text = null;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

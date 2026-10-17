@@ -1,0 +1,105 @@
+@using Workbench.Contracts.Collaboration
+@inject NavigationManager Navigation
+
+@* Opens when the sheet page URL has ?item={id}. Views open it by navigating to sheets/{sheetId}?item={itemId}. *@
+<MudDrawer Open="@(_item is not null)" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Variant="@DrawerVariant.Temporary"
+           Width="min(520px, 100vw)" Elevation="4" Class="item-details-drawer" aria-label="Item details">
+    @if (_item is { } item)
+    {
+        <div class="pa-4" style="height:100%; overflow-y:auto">
+            <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Style="flex:1; overflow-wrap:anywhere">@item.Title</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" aria-label="Close details" />
+            </MudStack>
+            @if (Parent(item) is { } parent)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">In @parent.Title</MudText>
+            }
+
+            <MudSimpleTable Dense="true" Elevation="0" Class="mt-3 mb-4 item-details-fields">
+                <tbody>
+                    @if (item.Start is not null || item.Finish is not null || Sheet.Summary.SchedulingEnabled)
+                    {
+                        <tr><th scope="row">Start</th><td>@(item.Start?.ToString("MMM d, yyyy") ?? "—")</td></tr>
+                        <tr><th scope="row">Finish</th><td>@(item.Finish?.ToString("MMM d, yyyy") ?? "—")</td></tr>
+                    }
+                    @foreach (var column in Sheet.Columns)
+                    {
+                        <tr><th scope="row">@column.Name</th><td style="overflow-wrap:anywhere">@Display(item, column)</td></tr>
+                    }
+                    @if (item.CostpointWbsId is { } wbs)
+                    {
+                        <tr><th scope="row">Costpoint WBS</th><td>@wbs</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3" KeepPanelsAlive="false">
+                <MudTabPanel Text="Comments" Icon="@Icons.Material.Outlined.ChatBubbleOutline">
+                    <CommentThread SheetId="Sheet.Summary.Id" ItemId="item.Id" People="_people" Version="Version" />
+                </MudTabPanel>
+                <MudTabPanel Text="Files" Icon="@Icons.Material.Outlined.AttachFile">
+                    <AttachmentList SheetId="Sheet.Summary.Id" ItemId="item.Id" Version="Version" />
+                </MudTabPanel>
+                <MudTabPanel Text="Activity" Icon="@Icons.Material.Outlined.History">
+                    <ActivityFeed SheetId="Sheet.Summary.Id" ItemId="item.Id" Items="Items" Version="Version" Limit="50" />
+                </MudTabPanel>
+            </MudTabs>
+        </div>
+    }
+</MudDrawer>
+
+@code {
+    [Parameter, EditorRequired]
+    public SheetDetail Sheet { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ItemDto> Items { get; set; } = [];
+
+    /// <summary>Bumped by the sheet page after a live reload so the open panel refreshes.</summary>
+    [Parameter]
+    public int Version { get; set; }
+
+    [SupplyParameterFromQuery(Name = "item")]
+    public Guid? ItemId { get; set; }
+
+    private ItemDto? _item;
+    private IReadOnlyList<string> _people = [];
+
+    protected override void OnParametersSet()
+    {
+        _item = ItemId is { } id ? Items.FirstOrDefault(i => i.Id == id) : null;
+        _people = CollaborationFormat.People(Sheet, Items);
+    }
+
+    private ItemDto? Parent(ItemDto item) => item.ParentId is { } p ? Items.FirstOrDefault(i => i.Id == p) : null;
+
+    private static string Display(ItemDto item, ColumnDto column)
+    {
+        var value = item.Values.GetValueOrDefault(column.Id.ToString());
+        if (string.IsNullOrEmpty(value))
+        {
+            return "—";
+        }
+
+        return column.Type switch
+        {
+            ColumnKind.Checkbox => value == "true" ? "Yes" : "No",
+            ColumnKind.Currency when decimal.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var amount) => amount.ToString("C"),
+            ColumnKind.Date when DateOnly.TryParseExact(value, "yyyy-MM-dd", out var date) => date.ToString("MMM d, yyyy"),
+            _ => value,
+        };
+    }
+
+    private Task OnOpenChanged(bool open)
+    {
+        if (!open)
+        {
+            Close();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void Close() => Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("item", (string?)null));
+}

@@ -1,0 +1,6 @@
+<span style="white-space: pre-wrap; overflow-wrap: anywhere;">@foreach (var (text, isMention) in CollaborationFormat.Segments(Body)){@if (isMention){<span class="mud-primary-text" style="font-weight:500">@text</span>}else{@text}}</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Body { get; set; } = string.Empty;
+}

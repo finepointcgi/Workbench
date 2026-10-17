@@ -1,0 +1,144 @@
+@using Workbench.Contracts
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Collaboration
+@inject IAttachmentService Attachments
+@inject ISnackbar Snackbar
+
+<MudFileUpload T="IBrowserFile" @ref="_upload" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="_uploading" Class="mt-0">
+    <CustomContent>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.UploadFile"
+                   OnClick="@context.OpenFilePickerAsync" Disabled="_uploading">Upload file</MudButton>
+    </CustomContent>
+    <SelectedTemplate />
+</MudFileUpload>
+<MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Up to @(AttachmentRules.MaxSizeBytes / (1024 * 1024)) MB. Office documents, PDFs, images, text, email and zip files.</MudText>
+@if (_uploading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@if (_attachments is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_attachments.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">No files attached.</MudText>
+}
+else
+{
+    <MudList T="string" Dense="true" Class="attachments">
+        @foreach (var file in _attachments)
+        {
+            <MudListItem T="string" Icon="@Icons.Material.Outlined.InsertDriveFile">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <div style="flex:1; min-width:0">
+                        <MudLink Href="@Attachments.GetDownloadUrl(SheetId, file.Id)" download="@file.FileName" Typo="Typo.body2" Style="overflow-wrap:anywhere">@file.FileName</MudLink>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                            @CollaborationFormat.Size(file.SizeBytes) · @file.UploadedBy · @CollaborationFormat.Ago(file.UploadedAtUtc, DateTime.UtcNow)
+                        </MudText>
+                    </div>
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Download" Href="@Attachments.GetDownloadUrl(SheetId, file.Id)" aria-label="@($"Download {file.FileName}")" />
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" OnClick="() => DeleteAsync(file)" aria-label="@($"Remove {file.FileName}")" />
+                </MudStack>
+            </MudListItem>
+        }
+    </MudList>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid ItemId { get; set; }
+
+    [Parameter]
+    public int Version { get; set; }
+
+    private MudFileUpload<IBrowserFile>? _upload;
+    private IReadOnlyList<AttachmentDto>? _attachments;
+    private bool _uploading;
+    private (Guid ItemId, int Version)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != (ItemId, Version))
+        {
+            if (_loaded?.ItemId != ItemId)
+            {
+                _attachments = null;
+            }
+
+            _loaded = (ItemId, Version);
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _attachments = await Attachments.ListAsync(SheetId, ItemId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        {
+            _attachments = [];
+            Snackbar.Add($"Couldn't load attachments: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!AttachmentRules.IsAllowed(file.Name))
+        {
+            Snackbar.Add($"\"{Path.GetExtension(file.Name)}\" files can't be attached.", Severity.Warning);
+        }
+        else if (file.Size > AttachmentRules.MaxSizeBytes)
+        {
+            Snackbar.Add($"{file.Name} is larger than {AttachmentRules.MaxSizeBytes / (1024 * 1024)} MB.", Severity.Warning);
+        }
+        else
+        {
+            _uploading = true;
+            StateHasChanged();
+            try
+            {
+                await using var stream = file.OpenReadStream(AttachmentRules.MaxSizeBytes);
+                await Attachments.UploadAsync(SheetId, ItemId, file.Name, stream);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or HttpRequestException or WorkbenchNotFoundException)
+            {
+                Snackbar.Add($"Couldn't upload {file.Name}: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _uploading = false;
+            }
+        }
+
+        if (_upload is not null)
+        {
+            await _upload.ClearAsync();
+        }
+    }
+
+    private async Task DeleteAsync(AttachmentDto file)
+    {
+        try
+        {
+            await Attachments.DeleteAsync(SheetId, file.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
