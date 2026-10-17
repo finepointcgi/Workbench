@@ -1,0 +1,57 @@
+@using System.Globalization
+
+<div class="gantt-task-list" role="table" aria-label="Tasks">
+    <div class="gantt-task-header" role="row" style="height:@(Px(GanttLayout.HeaderHeight))">
+        <span class="gantt-col-name" role="columnheader">Task</span>
+        <span class="gantt-col-date" role="columnheader">Start</span>
+        <span class="gantt-col-date" role="columnheader">Finish</span>
+    </div>
+    @foreach (var row in Rows)
+    {
+        <div class="@(row.IsSummary ? "gantt-task-row summary" : "gantt-task-row")" role="row" style="height:@(Px(GanttLayout.RowHeight))">
+            <span class="gantt-col-name" role="cell" style="padding-left:@(Px(4 + row.Depth * 18))">
+                @if (row.IsSummary)
+                {
+                    var collapsed = Collapsed.Contains(row.Item.Id);
+                    <button type="button" class="gantt-toggle" @onclick="() => OnToggle.InvokeAsync(row.Item.Id)"
+                            aria-label="@(collapsed ? "Expand" : "Collapse") @row.Item.Title" aria-expanded="@(!collapsed)">
+                        <MudIcon Icon="@(collapsed ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                    </button>
+                }
+                else
+                {
+                    <span class="gantt-toggle-spacer"></span>
+                }
+                @if (row.IsMilestone)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Diamond" Size="Size.Small" Class="gantt-milestone-icon" />
+                }
+                <a href="@($"sheets/{SheetId}?item={row.Item.Id}")" class="@(Critical.Contains(row.Item.Id) ? "gantt-task-link critical" : "gantt-task-link")"
+                   title="@row.Item.Title">@row.Item.Title</a>
+            </span>
+            <span class="gantt-col-date" role="cell">@Format(row.Start)</span>
+            <span class="gantt-col-date" role="cell">@Format(row.Finish)</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<GanttRow> Rows { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter]
+    public IReadOnlySet<Guid> Collapsed { get; set; } = new HashSet<Guid>();
+
+    [Parameter]
+    public IReadOnlySet<Guid> Critical { get; set; } = new HashSet<Guid>();
+
+    [Parameter]
+    public EventCallback<Guid> OnToggle { get; set; }
+
+    private static string Px(double value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "px";
+
+    private static string Format(DateOnly? date) => date?.ToString("MMM d", CultureInfo.InvariantCulture) ?? "—";
+}
