@@ -19,7 +19,11 @@
                       AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
     </ToolBarContent>
     <Columns>
-        <PropertyColumn Property="s => s.Name" />
+        <PropertyColumn Property="s => s.Name">
+            <CellTemplate>
+                <MudLink Href="@($"sheets/{context.Item.Id}")" Typo="Typo.body2">@context.Item.Name</MudLink>
+            </CellTemplate>
+        </PropertyColumn>
         <PropertyColumn Property="s => s.Workspace" />
         <PropertyColumn Property="s => s.ItemCount" Title="Items" />
         <TemplateColumn Title="Type" Sortable="false" Filterable="false">

@@ -30,6 +30,9 @@ public sealed class SheetsPageTests
     {
         public Task<IReadOnlyList<SheetSummary>> ListAsync(CancellationToken cancellationToken = default) => Task.FromResult(sheets);
 
+        public Task<SheetDetail?> GetAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<SheetDetail?>(null);
+
         public Task<SheetSummary> CreateAsync(CreateSheetRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
