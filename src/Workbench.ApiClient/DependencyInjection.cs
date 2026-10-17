@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Sheets;
 
 namespace Workbench.ApiClient;
@@ -13,6 +14,7 @@ public static class DependencyInjection
         services.AddHttpClient<IItemService, HttpItemService>(client => client.BaseAddress = serverBaseAddress);
         services.AddWorkbenchSchedulingClients(serverBaseAddress);
         services.AddCollaborationClients(serverBaseAddress);
+        services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

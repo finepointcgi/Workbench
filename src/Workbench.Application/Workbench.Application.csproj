@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Workbench.Domain\Workbench.Domain.csproj" />
     <ProjectReference Include="..\Workbench.Contracts\Workbench.Contracts.csproj" />
+    <ProjectReference Include="..\Workbench.Costpoint\Workbench.Costpoint.csproj" />
   </ItemGroup>
 
   <ItemGroup>
