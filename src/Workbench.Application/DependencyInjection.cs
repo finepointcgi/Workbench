@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.Application.Costpoint;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Sheets;
 
@@ -12,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ISheetService, SheetService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IColumnService, ColumnService>();
+        services.AddWorkbenchCostpoint();
         return services;
     }
 }

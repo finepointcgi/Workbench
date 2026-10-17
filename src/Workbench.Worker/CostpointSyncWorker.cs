@@ -1,13 +1,20 @@
-using Workbench.Costpoint;
+using Workbench.Application.Costpoint;
+using Workbench.Domain.Costpoint;
 
 namespace Workbench.Worker;
 
-/// <summary>Pulls Costpoint master data and actuals into the mirror tables on a schedule.</summary>
-public sealed class CostpointSyncWorker(ICostpointSource source, IConfiguration configuration, ILogger<CostpointSyncWorker> logger)
+/// <summary>Pulls Costpoint master data, budgets and actuals into the mirror tables on a schedule.</summary>
+public sealed class CostpointSyncWorker(CostpointSyncService sync, IConfiguration configuration, ILogger<CostpointSyncWorker> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!sync.Configured)
+        {
+            logger.LogInformation("Costpoint:Source is None; scheduled Costpoint sync is off");
+            return;
+        }
+
         var interval = configuration.GetValue("Costpoint:SyncInterval", TimeSpan.FromHours(24));
         using var timer = new PeriodicTimer(interval);
 
@@ -15,13 +22,22 @@ public sealed class CostpointSyncWorker(ICostpointSource source, IConfiguration 
         {
             try
             {
-                var projects = await source.GetProjectsAsync(stoppingToken);
-                logger.LogInformation("Costpoint sync via {Source}: {Count} projects read", source.Name, projects.Count);
-                // TODO: upsert into CpProject / CpWbsElement / CpActual mirror tables.
+                var run = await sync.RunAsync(stoppingToken);
+                if (run.Status == CpSyncStatus.Succeeded)
+                {
+                    logger.LogInformation(
+                        "Costpoint sync via {Source}: {Projects} projects, {Actuals} actuals; {Inserted} inserted, {Updated} updated, {Deleted} deleted, {Skipped} skipped",
+                        run.Source, run.Projects, run.Actuals, run.Inserted, run.Updated, run.Deleted, run.Skipped);
+                }
+                else
+                {
+                    logger.LogError("Costpoint sync via {Source} failed: {Error}", run.Source, run.Error);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Costpoint sync via {Source} failed", source.Name);
+                // RunAsync records its own failures; this catches the database being unreachable.
+                logger.LogError(ex, "Costpoint sync via {Source} failed", sync.SourceName);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

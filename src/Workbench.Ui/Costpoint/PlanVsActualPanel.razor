@@ -1,0 +1,129 @@
+@using System.Globalization
+@using Workbench.Contracts.Costpoint
+@inject ICostpointService CostpointService
+@inject ISnackbar Snackbar
+
+<style>
+    .plan-vs-actual-total td { font-weight: 600; border-top: 2px solid var(--mud-palette-lines-default); }
+</style>
+
+@* Sheet plan (Planned hours / Budget columns) against Costpoint budgets and actuals, per WBS element. *@
+
+@if (_data is null)
+{
+    <MudProgressLinear Indeterminate="_loading" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">
+            Costpoint @_data.ProjectId@(_data.ProjectName is { } name ? $" · {name}" : "")
+        </MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            @(_data.LastSyncedAtUtc is { } synced ? $"Actuals as of {synced:yyyy-MM-dd HH:mm} UTC" : "Not synced yet")
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="LoadAsync" aria-label="Reload plan vs actual" />
+    </MudStack>
+
+    @foreach (var note in _data.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+
+    <MudDataGrid T="PlanVsActualRow" Items="GridRows" Dense="true" Hover="true" Loading="_loading" Class="mb-4"
+                 SortMode="SortMode.None" RowClassFunc="RowClass">
+        <Columns>
+            <PropertyColumn Property="r => r.WbsId" Title="WBS" />
+            <PropertyColumn Property="r => r.WbsName" Title="Name" />
+            <PropertyColumn Property="r => r.ItemCount" Title="Items" />
+            <PropertyColumn Property="r => r.PlannedHours" Title="Planned hrs" Format="N1" />
+            <PropertyColumn Property="r => r.ActualHours" Title="Actual hrs" Format="N1" />
+            <TemplateColumn Title="Hrs variance">
+                <CellTemplate><span class="@VarianceClass(context.Item.HoursVariance)">@context.Item.HoursVariance.ToString("N1", Culture)</span></CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="r => r.PlannedBudget" Title="Planned $" Format="C0" Culture="Culture" />
+            <PropertyColumn Property="r => r.ActualCost" Title="Actual $" Format="C0" Culture="Culture" />
+            <TemplateColumn Title="$ variance">
+                <CellTemplate><span class="@VarianceClass(context.Item.CostVariance)">@context.Item.CostVariance.ToString("C0", Culture)</span></CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Burn">
+                <CellTemplate>@Percent(context.Item.Burn)</CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="r => r.BudgetHours" Title="CP budget hrs" Format="N0" />
+            <PropertyColumn Property="r => r.BudgetAmount" Title="CP budget $" Format="C0" Culture="Culture" />
+        </Columns>
+        <NoRecordsContent>
+            <MudText>No items on this sheet are mapped to a Costpoint WBS element.</MudText>
+        </NoRecordsContent>
+    </MudDataGrid>
+
+    @if (_data.Rows.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3">Planned budget vs actual cost by WBS</MudText>
+        <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_series" ChartLabels="_labels"
+                  Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+    }
+}
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-US");
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    /// <summary>The sheet's items; when the page reloads them, the panel reloads too.</summary>
+    [Parameter]
+    public object? Items { get; set; }
+
+    private PlanVsActualDto? _data;
+    private List<ChartSeries<double>> _series = [];
+    private string[] _labels = [];
+    private bool _loading;
+    private object? _loadedFor;
+    private Guid _loadedSheet;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_data is null || !ReferenceEquals(_loadedFor, Items) || _loadedSheet != SheetId)
+        {
+            _loadedFor = Items;
+            _loadedSheet = SheetId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _data = await CostpointService.GetPlanVsActualAsync(SheetId);
+            _labels = _data.Rows.Select(r => r.WbsId).ToArray();
+            _series =
+            [
+                new() { Name = "Planned budget", Data = new ChartData<double>(_data.Rows.Select(r => (double)r.PlannedBudget).ToList()) },
+                new() { Name = "Actual cost", Data = new ChartData<double>(_data.Rows.Select(r => (double)r.ActualCost).ToList()) },
+            ];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load plan vs actual: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // The totals row goes last so it lines up with the columns; sorting is off to keep it there.
+    private IEnumerable<PlanVsActualRow> GridRows =>
+        _data is null || _data.Rows.Count == 0 ? [] : [.. _data.Rows, _data.Totals];
+
+    private string RowClass(PlanVsActualRow row, int index) =>
+        ReferenceEquals(row, _data?.Totals) ? "plan-vs-actual-total" : "";
+
+    private static string VarianceClass(decimal variance) => variance < 0 ? "mud-error-text" : "";
+
+    private static string Percent(decimal? value) => value is { } v ? v.ToString("P0", Culture) : "—";
+}
