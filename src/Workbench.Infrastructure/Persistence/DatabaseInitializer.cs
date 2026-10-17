@@ -33,10 +33,24 @@ public static class DatabaseInitializer
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
         };
+        var status = new Column { Name = "Status", Type = ColumnType.Dropdown, Order = 0, Options = ["Not started", "In progress", "Blocked", "Done"] };
+        var owner = new Column { Name = "Owner", Type = ColumnType.Person, Order = 1 };
+        var hours = new Column { Name = "Planned hours", Type = ColumnType.Number, Order = 2 };
+        var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 3 };
+        schedule.Columns.AddRange([status, owner, hours, budget]);
+
+        var today = DateOnly.FromDateTime(now);
+        var phase = new Item { Title = "Phase 1: Planning", Order = 0, Start = today, Finish = today.AddDays(20), CostpointWbsId = "1001.01.01" };
         schedule.Items.AddRange(
         [
-            new Item { Title = "Kickoff", Order = 0, Start = DateOnly.FromDateTime(now), Finish = DateOnly.FromDateTime(now), CostpointWbsId = "1001.01.01" },
-            new Item { Title = "Requirements review", Order = 1, Start = DateOnly.FromDateTime(now.AddDays(1)), Finish = DateOnly.FromDateTime(now.AddDays(10)), CostpointWbsId = "1001.01.02" },
+            phase,
+            new Item { Title = "Kickoff meeting", ParentId = phase.Id, Order = 0, Start = today, Finish = today, CostpointWbsId = "1001.01.01",
+                Values = new() { [status.Id.ToString()] = "Done", [owner.Id.ToString()] = "pm@example.com", [hours.Id.ToString()] = "8", [budget.Id.ToString()] = "1200" } },
+            new Item { Title = "Requirements review", ParentId = phase.Id, Order = 1, Start = today.AddDays(1), Finish = today.AddDays(10), CostpointWbsId = "1001.01.02",
+                Values = new() { [status.Id.ToString()] = "In progress", [owner.Id.ToString()] = "analyst@example.com", [hours.Id.ToString()] = "60", [budget.Id.ToString()] = "9000" } },
+            new Item { Title = "Baseline schedule", ParentId = phase.Id, Order = 2, Start = today.AddDays(11), Finish = today.AddDays(20), CostpointWbsId = "1001.01.03",
+                Values = new() { [status.Id.ToString()] = "Not started", [owner.Id.ToString()] = "pm@example.com", [hours.Id.ToString()] = "40", [budget.Id.ToString()] = "6000" } },
+            new Item { Title = "Phase 2: Execution", Order = 1, Start = today.AddDays(21), Finish = today.AddDays(90), CostpointWbsId = "1001.02" },
         ]);
         var tracker = new Sheet
         {

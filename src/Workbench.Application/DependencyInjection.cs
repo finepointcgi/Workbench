@@ -10,6 +10,8 @@ public static class DependencyInjection
     {
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ISheetService, SheetService>();
+        services.AddScoped<IItemService, ItemService>();
+        services.AddScoped<IColumnService, ColumnService>();
         return services;
     }
 }

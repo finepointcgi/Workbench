@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Workbench.Contracts.Sheets;
+using Workbench.Contracts;
 
 namespace Workbench.Api;
 
@@ -11,24 +11,28 @@ public static class WorkbenchApi
     public static IEndpointRouteBuilder MapWorkbenchApi(this IEndpointRouteBuilder app)
     {
         // TODO: require OIDC bearer auth once identity is wired up.
-        var v1 = app.MapGroup("/api/v1");
+        var v1 = app.MapGroup("/api/v1").AddEndpointFilter(MapErrors);
 
-        var sheets = v1.MapGroup("/sheets").WithTags("Sheets");
-        sheets.MapGet("/", (ISheetService service, CancellationToken ct) => service.ListAsync(ct));
-        sheets.MapPost("/", async (CreateSheetRequest request, ISheetService service, CancellationToken ct) =>
-        {
-            if (string.IsNullOrWhiteSpace(request.Name))
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    [nameof(CreateSheetRequest.Name)] = ["Name is required."],
-                });
-            }
-
-            var created = await service.CreateAsync(request, ct);
-            return Results.Created($"/api/v1/sheets/{created.Id}", created);
-        });
+        v1.MapSheetEndpoints();
+        v1.MapColumnEndpoints();
+        v1.MapItemEndpoints();
 
         return app;
+    }
+
+    private static async ValueTask<object?> MapErrors(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        try
+        {
+            return await next(context);
+        }
+        catch (WorkbenchNotFoundException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
     }
 }

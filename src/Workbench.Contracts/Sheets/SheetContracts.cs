@@ -10,6 +10,8 @@ public sealed record SheetSummary(
     string? CostpointProjectId,
     DateTime UpdatedAtUtc);
 
+public sealed record SheetDetail(SheetSummary Summary, IReadOnlyList<ColumnDto> Columns);
+
 public sealed record CreateSheetRequest(string Name, string? Description, bool SchedulingEnabled);
 
 /// <summary>
@@ -19,6 +21,9 @@ public sealed record CreateSheetRequest(string Name, string? Description, bool S
 public interface ISheetService
 {
     Task<IReadOnlyList<SheetSummary>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the sheet with its columns, or null when it doesn't exist.</summary>
+    Task<SheetDetail?> GetAsync(Guid sheetId, CancellationToken cancellationToken = default);
 
     Task<SheetSummary> CreateAsync(CreateSheetRequest request, CancellationToken cancellationToken = default);
 }
