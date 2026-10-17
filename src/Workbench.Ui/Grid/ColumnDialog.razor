@@ -1,0 +1,66 @@
+@* Adds a column, or edits the name and options of an existing one (the type can't change). *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
+            @if (Column is null)
+            {
+                <MudSelect T="ColumnKind" @bind-Value="_type" Label="Type">
+                    @foreach (var kind in Enum.GetValues<ColumnKind>())
+                    {
+                        <MudSelectItem T="ColumnKind" Value="kind">@CellFormat.KindName(kind)</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Type: @CellFormat.KindName(_type)</MudText>
+            }
+            @if (_type == ColumnKind.Dropdown)
+            {
+                <MudTextField @bind-Value="_options" Label="Options" HelperText="One option per line" Lines="5" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">@(Column is null ? "Add" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The column to edit, or null to add a new one.</summary>
+    [Parameter]
+    public ColumnDto? Column { get; set; }
+
+    private string _name = string.Empty;
+    private ColumnKind _type = ColumnKind.Text;
+    private string? _options;
+
+    protected override void OnInitialized()
+    {
+        if (Column is not null)
+        {
+            _name = Column.Name;
+            _type = Column.Type;
+            _options = string.Join('\n', Column.Options);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        var options = _type == ColumnKind.Dropdown
+            ? (_options ?? string.Empty)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList()
+            : [];
+        MudDialog.Close(DialogResult.Ok(new ColumnDialogResult(_name.Trim(), _type, options)));
+    }
+}
