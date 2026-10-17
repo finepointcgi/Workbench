@@ -51,4 +51,6 @@ dotnet build src/Workbench.Desktop -t:Run
 
 - `Database:Provider`: `Sqlite` (default) or `PostgreSQL`
 - `ConnectionStrings:Workbench`: connection string for the chosen provider
+- `Costpoint:Source`: `None` (default), `Csv`, `Rest` or `Database` (see `src/Workbench.Costpoint/README.md`)
+- `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)

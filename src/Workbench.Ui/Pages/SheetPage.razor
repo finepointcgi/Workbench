@@ -48,6 +48,12 @@ else
                 <SheetGanttView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
             </MudTabPanel>
         }
+        @if (_sheet.Summary.CostpointProjectId is not null)
+        {
+            <MudTabPanel Text="Plan vs actual" Icon="@Icons.Material.Filled.QueryStats">
+                <Workbench.Ui.Costpoint.PlanVsActualPanel SheetId="SheetId" Items="_items" />
+            </MudTabPanel>
+        }
     </MudTabs>
 }
 

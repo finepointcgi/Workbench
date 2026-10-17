@@ -1,0 +1,7 @@
+project_id,wbs_id,parent_wbs_id,name,level,charge_allowed
+1001.01,1001.01.01,,Program Management,1,Y
+1001.01,1001.01.02,,Requirements Analysis,1,Y
+1001.01,1001.01.03,,Schedule Baseline,1,Y
+1001.01,1001.02,,Execution,1,Y
+1002.01,1002.01.01,,Site Surveys,1,Y
+1002.01,1002.01.02,,Systems Integration,1,Y
