@@ -1,3 +1,142 @@
 @inherits SheetViewBase
+@using System.Globalization
+@using Workbench.Ui.Board
+@using Workbench.Ui.Calendar
+@inject IItemService ItemService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
-<MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Calendar view is coming soon.</MudAlert>
+<div class="calendar-view">
+    @if (_source is null)
+    {
+        <MudPaper Outlined="true" Class="pa-8 d-flex flex-column align-center gap-3">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Large" Class="mud-text-secondary" />
+            <MudText Typo="Typo.h6">Nothing to put on the calendar</MudText>
+            <MudText Class="mud-text-secondary">
+                This sheet has no schedule. Add a Date column to see its items on the calendar.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="() => _month = _month.AddMonths(-1)" aria-label="Previous month" />
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="() => _month = _month.AddMonths(1)" aria-label="Next month" />
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => _month = CalendarLayout.FirstOfMonth(Today)">Today</MudButton>
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="ml-2 calendar-title">@_month.ToString("MMMM yyyy", CultureInfo.CurrentCulture)</MudText>
+            <MudSpacer />
+            @if (Sources.Count > 1)
+            {
+                <div style="width:220px">
+                    <MudSelect T="string" @bind-Value="_source" Label="Dates from" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                        @foreach (var (key, label) in Sources)
+                        {
+                            <MudSelectItem T="string" Value="key">@label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            }
+        </MudStack>
+
+        @if (_colorColumn is { } colorColumn)
+        {
+            <MudStack Row="true" Spacing="1" Class="mb-2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mr-1">@colorColumn.Name:</MudText>
+                @foreach (var option in colorColumn.Options)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@BoardLanes.ColorFor(colorColumn, option)" Class="ma-0">@option</MudChip>
+                }
+            </MudStack>
+        }
+
+        <div class="calendar-grid">
+            <div class="calendar-weekdays">
+                @foreach (var name in WeekdayNames)
+                {
+                    <div>@name</div>
+                }
+            </div>
+            @foreach (var week in CalendarLayout.Build(_month, Entries))
+            {
+                <CalendarWeekRow @key="week.Start" Week="week" Month="_month" Today="Today" AddingDate="_addingDate" ColorOf="ColorOf"
+                                 OnDayClick="StartAdd" OnItemClick="Open" OnAdd="QuickAddAsync" OnCancelAdd="() => _addingDate = null" />
+            }
+        </div>
+
+        @if (UnplacedCount > 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+                @UnplacedCount @(UnplacedCount == 1 ? "item has" : "items have") no date and @(UnplacedCount == 1 ? "isn't" : "aren't") shown.
+            </MudText>
+        }
+    }
+</div>
+
+@code {
+    private const string ScheduleSource = "schedule";
+
+    private static readonly string[] WeekdayNames =
+        Enumerable.Range(0, 7).Select(d => CultureInfo.CurrentCulture.DateTimeFormat.AbbreviatedDayNames[d]).ToArray();
+
+    private DateOnly _month = CalendarLayout.FirstOfMonth(Today);
+    private string? _source;
+    private ColumnDto? _colorColumn;
+    private DateOnly? _addingDate;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>Where dates come from: Start..Finish when scheduling is on, then each Date column.</summary>
+    private IReadOnlyList<(string Key, string Label)> Sources =>
+        (Sheet.Summary.SchedulingEnabled ? [(ScheduleSource, "Start – Finish")] : Array.Empty<(string, string)>())
+            .Concat(DateColumns.Select(c => (c.Id.ToString(), c.Name)))
+            .ToList();
+
+    private IEnumerable<ColumnDto> DateColumns => Sheet.Columns.Where(c => c.Type == ColumnKind.Date).OrderBy(c => c.Order);
+
+    private ColumnDto? SourceColumn => DateColumns.FirstOrDefault(c => c.Id.ToString() == _source);
+
+    private IReadOnlyList<CalendarEntry> Entries =>
+        (SourceColumn is { } column ? CalendarLayout.FromDateColumn(Items, column) : CalendarLayout.FromSchedule(Items)).ToList();
+
+    private int UnplacedCount => Items.Count - Entries.Count;
+
+    protected override void OnParametersSet()
+    {
+        var sources = Sources;
+        if (_source is null || sources.All(s => s.Key != _source))
+        {
+            _source = sources.Count > 0 ? sources[0].Key : null;
+        }
+
+        _colorColumn = BoardLanes.DefaultColumn(Sheet);
+    }
+
+    private Color ColorOf(ItemDto item) =>
+        _colorColumn is { } column ? BoardLanes.ColorFor(column, BoardLanes.ValueOf(item, column)) : Color.Primary;
+
+    private void StartAdd(DateOnly day) => _addingDate = day;
+
+    private void Open(ItemDto item) => Navigation.NavigateTo($"sheets/{SheetId}?item={item.Id}");
+
+    private async Task QuickAddAsync(string title)
+    {
+        if (_addingDate is not { } day)
+        {
+            return;
+        }
+
+        _addingDate = null;
+        var request = SourceColumn is { } column
+            ? new CreateItemRequest(title, Values: new Dictionary<string, string?> { [column.Id.ToString()] = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) })
+            : new CreateItemRequest(title, Start: day, Finish: day);
+        try
+        {
+            await ItemService.CreateAsync(SheetId, request);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't add the item: {ex.Message}", Severity.Error);
+        }
+    }
+}

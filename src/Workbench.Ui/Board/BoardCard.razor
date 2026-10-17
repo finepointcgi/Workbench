@@ -1,0 +1,49 @@
+@* One item on the board. Click opens the item's details panel. *@
+
+<MudPaper Class="board-card pa-3 mb-2" Elevation="1" @onclick="() => OnOpen.InvokeAsync(Item)"
+          data-item-id="@Item.Id" role="button" tabindex="0" aria-label="@($"Open {Item.Title}")">
+    <MudText Typo="Typo.body2" Class="board-card-title">@Item.Title</MudText>
+    @if (Item.Finish is not null || !string.IsNullOrEmpty(Item.CostpointWbsId) || !string.IsNullOrEmpty(Initials))
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+            @if (Item.Finish is { } finish)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0 board-card-finish"
+                         Color="@(IsOverdue ? Color.Error : Color.Default)"
+                         Icon="@(IsOverdue ? Icons.Material.Filled.Warning : Icons.Material.Outlined.Event)"
+                         title="@(IsOverdue ? "Overdue" : "Finish")">
+                    @finish.ToString("MMM d")
+                </MudChip>
+            }
+            @if (!string.IsNullOrEmpty(Item.CostpointWbsId))
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" title="Costpoint WBS">@Item.CostpointWbsId</MudChip>
+            }
+            <MudSpacer />
+            @if (!string.IsNullOrEmpty(Initials))
+            {
+                <MudTooltip Text="@Person">
+                    <MudAvatar Size="Size.Small" Color="Color.Primary" Class="board-card-avatar">@Initials</MudAvatar>
+                </MudTooltip>
+            }
+        </MudStack>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ItemDto Item { get; set; } = default!;
+
+    [Parameter]
+    public string? Person { get; set; }
+
+    [Parameter]
+    public DateOnly Today { get; set; }
+
+    [Parameter]
+    public EventCallback<ItemDto> OnOpen { get; set; }
+
+    private string Initials => BoardLanes.Initials(Person);
+
+    private bool IsOverdue => Item.Finish is { } finish && finish < Today;
+}

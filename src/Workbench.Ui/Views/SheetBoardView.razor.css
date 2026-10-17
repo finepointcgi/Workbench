@@ -1,0 +1,37 @@
+.board-view ::deep .board-lanes {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    align-items: flex-start;
+    padding-bottom: 8px;
+}
+
+.board-view ::deep .board-lane {
+    flex: 0 0 280px;
+    background: var(--mud-palette-background-gray);
+    border-radius: var(--mud-default-borderradius);
+}
+
+.board-view ::deep .board-lane-zone {
+    min-height: 48px;
+}
+
+.board-view ::deep .board-card {
+    cursor: pointer;
+}
+
+.board-view ::deep .board-card:hover {
+    box-shadow: var(--mud-elevation-4);
+}
+
+.board-view ::deep .board-card-title {
+    overflow-wrap: anywhere;
+}
+
+.board-view ::deep .board-card-avatar {
+    font-size: 0.7rem;
+}
+
+.board-view ::deep .mud-drop-item-preview-start {
+    opacity: 0.5;
+}
