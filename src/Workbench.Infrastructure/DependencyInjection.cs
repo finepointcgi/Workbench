@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
+using Workbench.Infrastructure.Collaboration;
 using Workbench.Infrastructure.Persistence;
 
 namespace Workbench.Infrastructure;
@@ -33,6 +34,7 @@ public static class DependencyInjection
             }
         });
         services.AddSingleton<IWorkbenchDbContextFactory, WorkbenchDbContextFactory>();
+        services.AddCollaborationInfrastructure(configuration);
         return services;
     }
 }

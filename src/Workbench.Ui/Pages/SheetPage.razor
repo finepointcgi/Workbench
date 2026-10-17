@@ -1,5 +1,6 @@
 @page "/sheets/{SheetId:guid}"
 @using Workbench.Ui.Views
+@using Workbench.Ui.Collaboration
 @inject ISheetService SheetService
 @inject IItemService ItemService
 @inject ISnackbar Snackbar
@@ -48,8 +49,15 @@ else
                 <SheetGanttView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
             </MudTabPanel>
         }
+        <MudTabPanel Text="Activity" Icon="@Icons.Material.Filled.History">
+            <ActivityFeed SheetId="SheetId" Items="_items" Version="_liveVersion" />
+        </MudTabPanel>
     </MudTabs>
+
+    @* Collaboration: item details panel (?item={id}) and live reload when others change the sheet. *@
+    <ItemDetailsDrawer Sheet="_sheet" Items="_items" Version="_liveVersion" />
 }
+<SheetLiveRefresher SheetId="SheetId" Changed="OnLiveChangeAsync" />
 
 @code {
     [Parameter]
@@ -58,6 +66,7 @@ else
     private SheetDetail? _sheet;
     private IReadOnlyList<ItemDto> _items = [];
     private bool _loading = true;
+    private int _liveVersion;
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -77,5 +86,11 @@ else
         {
             _loading = false;
         }
+    }
+
+    private async Task OnLiveChangeAsync()
+    {
+        await LoadAsync();
+        _liveVersion++;
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.Application.Collaboration;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Sheets;
 
@@ -13,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IColumnService, ColumnService>();
         services.AddWorkbenchScheduling();
+        services.AddWorkbenchCollaboration();
         return services;
     }
 }

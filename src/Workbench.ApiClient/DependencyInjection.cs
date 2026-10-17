@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddHttpClient<IColumnService, HttpColumnService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IItemService, HttpItemService>(client => client.BaseAddress = serverBaseAddress);
         services.AddWorkbenchSchedulingClients(serverBaseAddress);
+        services.AddCollaborationClients(serverBaseAddress);
         return services;
     }
 }

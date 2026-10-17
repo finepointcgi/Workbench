@@ -1,0 +1,74 @@
+@using Workbench.Contracts.Collaboration
+@inject IActivityService Activity
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_events is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_events.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">No activity yet.</MudText>
+}
+else
+{
+    <MudList T="string" Dense="true" Class="activity-feed">
+        @foreach (var e in _events)
+        {
+            <MudListItem T="string" Icon="@CollaborationFormat.ActivityIcon(e.Kind)" OnClick="() => Open(e)">
+                <MudText Typo="Typo.body2" Style="overflow-wrap:anywhere">@e.Summary</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary" title="@e.OccurredAtUtc.ToLocalTime().ToString("f")">
+                    @e.Actor · @CollaborationFormat.Ago(e.OccurredAtUtc, DateTime.UtcNow)
+                </MudText>
+            </MudListItem>
+        }
+    </MudList>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    /// <summary>One item's activity; null for the whole sheet (entries then open the item's details).</summary>
+    [Parameter]
+    public Guid? ItemId { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ItemDto> Items { get; set; } = [];
+
+    [Parameter]
+    public int Version { get; set; }
+
+    [Parameter]
+    public int Limit { get; set; } = 100;
+
+    private IReadOnlyList<ActivityDto>? _events;
+    private (Guid SheetId, Guid? ItemId, int Version)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != (SheetId, ItemId, Version))
+        {
+            _loaded = (SheetId, ItemId, Version);
+            try
+            {
+                _events = await Activity.ListAsync(SheetId, ItemId, Limit);
+            }
+            catch (HttpRequestException ex)
+            {
+                _events = [];
+                Snackbar.Add($"Couldn't load activity: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    // On the sheet-wide feed, clicking an entry opens that item's details (if it still exists).
+    private void Open(ActivityDto e)
+    {
+        if (ItemId is null && e.ItemId is { } id && Items.Any(i => i.Id == id))
+        {
+            Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("item", id));
+        }
+    }
+}

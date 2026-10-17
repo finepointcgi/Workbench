@@ -17,6 +17,7 @@ public static class WorkbenchApi
         v1.MapColumnEndpoints();
         v1.MapItemEndpoints();
         v1.MapSchedulingEndpoints();
+        v1.MapCollaborationEndpoints();
 
         return app;
     }
