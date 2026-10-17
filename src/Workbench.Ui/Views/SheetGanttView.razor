@@ -1,3 +1,219 @@
 @inherits SheetViewBase
+@using System.Globalization
+@using Workbench.Contracts
+@using Workbench.Contracts.Scheduling
+@using Workbench.Ui.Gantt
+@inject IItemService ItemService
+@inject IDependencyService DependencyService
+@inject IBaselineService BaselineService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
-<MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Gantt view is coming soon.</MudAlert>
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3" Class="mb-3">
+    <MudToggleGroup T="GanttZoom" Value="_zoom" ValueChanged="SetZoom" Size="Size.Small" Color="Color.Primary" Outlined="true" aria-label="Zoom">
+        <MudToggleItem Value="GanttZoom.Day" Text="Day" />
+        <MudToggleItem Value="GanttZoom.Week" Text="Week" />
+        <MudToggleItem Value="GanttZoom.Month" Text="Month" />
+    </MudToggleGroup>
+    <MudSelect T="Guid" Value="_baselineId" ValueChanged="SelectBaselineAsync" Label="Compare to baseline" Dense="true"
+               Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:220px; max-width:280px">
+        <MudSelectItem Value="Guid.Empty">None</MudSelectItem>
+        @foreach (var baseline in _baselines)
+        {
+            <MudSelectItem Value="baseline.Id">@baseline.Name (@baseline.CapturedAtUtc.ToLocalTime().ToString("MMM d", CultureInfo.InvariantCulture))</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CameraAlt" OnClick="CaptureBaselineAsync">
+        Capture baseline
+    </MudButton>
+    <MudSpacer />
+    @if (_analysis?.ProjectFinish is { } projectFinish)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            <span class="gantt-legend critical"></span>Critical path: @_analysis.CriticalPath.Count task@(_analysis.CriticalPath.Count == 1 ? "" : "s")
+            · Finish @projectFinish.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)
+        </MudText>
+    }
+</MudStack>
+
+@if (_rows.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Add items with start and finish dates to see them on the Gantt.</MudAlert>
+}
+else
+{
+    <div class="gantt">
+        <GanttTaskList Rows="_rows" SheetId="SheetId" Collapsed="_collapsed" Critical="_critical" OnToggle="ToggleAsync" />
+        <GanttTimeline Rows="_rows" Scale="_scale" Dependencies="_dependencies" Analysis="_analysis" Baseline="_baseline"
+                       Today="_today" OnBarDropped="MoveBarAsync" OnLinkDropped="LinkAsync" OnDependencyClick="UnlinkAsync" />
+    </div>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+        Drag a bar to move it or its right edge to change the finish. Drag the dot after a bar onto another task to link them; click an arrow to remove the link.
+    </MudText>
+}
+
+@code {
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly HashSet<Guid> _collapsed = [];
+    private GanttZoom _zoom = GanttZoom.Day;
+    private IReadOnlyList<GanttRow> _rows = [];
+    private GanttScale _scale = default!;
+    private IReadOnlyList<DependencyDto> _dependencies = [];
+    private ScheduleAnalysis? _analysis;
+    private HashSet<Guid> _critical = [];
+    private IReadOnlyList<BaselineSummary> _baselines = [];
+    private Guid _baselineId;
+    private BaselineDetail? _baselineDetail;
+    private Dictionary<Guid, (DateOnly? Start, DateOnly? Finish)>? _baseline;
+    private Guid _loadedSheetId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Layout();
+        await RunAsync(async () =>
+        {
+            if (_loadedSheetId != SheetId)
+            {
+                _loadedSheetId = SheetId;
+                _baselineId = Guid.Empty;
+                _baselineDetail = null;
+                _baselines = await BaselineService.ListAsync(SheetId);
+            }
+
+            await LoadScheduleAsync();
+        });
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        _dependencies = await DependencyService.ListAsync(SheetId);
+        _analysis = await DependencyService.AnalyzeAsync(SheetId);
+        _critical = _analysis.CriticalPath.ToHashSet();
+    }
+
+    /// <summary>Rebuilds rows, baseline spans and the time scale from the current items.</summary>
+    private void Layout()
+    {
+        _rows = GanttLayout.BuildRows(Items, _collapsed);
+        _baseline = null;
+        if (_baselineDetail is not null)
+        {
+            var entries = _baselineDetail.Entries.ToDictionary(e => e.ItemId);
+            var children = GanttLayout.ChildLookup(Items);
+            _baseline = Items.ToDictionary(
+                i => i.Id,
+                i => GanttLayout.Span(i, x => entries.TryGetValue(x.Id, out var e) ? (e.Start, e.Finish) : (null, null), children));
+        }
+
+        var dates = _rows.SelectMany(r => new[] { r.Start, r.Finish })
+            .Concat(_baseline?.Values.SelectMany(b => new[] { b.Start, b.Finish }) ?? [])
+            .OfType<DateOnly>();
+        _scale = GanttScale.Create(_zoom, dates, _today);
+    }
+
+    private void SetZoom(GanttZoom zoom)
+    {
+        _zoom = zoom;
+        Layout();
+    }
+
+    private void ToggleAsync(Guid itemId)
+    {
+        if (!_collapsed.Remove(itemId))
+        {
+            _collapsed.Add(itemId);
+        }
+
+        Layout();
+    }
+
+    private async Task SelectBaselineAsync(Guid baselineId)
+    {
+        _baselineId = baselineId;
+        await RunAsync(async () =>
+            _baselineDetail = baselineId == Guid.Empty ? null : await BaselineService.GetAsync(SheetId, baselineId));
+        Layout();
+    }
+
+    private async Task CaptureBaselineAsync()
+    {
+        var dialog = await DialogService.ShowAsync<CaptureBaselineDialog>("Capture baseline");
+        if (await dialog.Result is not { Canceled: false, Data: string name })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var captured = await BaselineService.CaptureAsync(SheetId, new CaptureBaselineRequest(name));
+            _baselines = await BaselineService.ListAsync(SheetId);
+            Snackbar.Add($"Captured \"{captured.Name}\".", Severity.Success);
+            await SelectBaselineAsync(captured.Id);
+        });
+    }
+
+    private async Task MoveBarAsync(GanttBarDrop drop)
+    {
+        var item = drop.Row.Item;
+        DateOnly? start = item.Start, finish = item.Finish;
+        if (drop.Mode == GanttDragMode.Move)
+        {
+            start = start?.AddDays(drop.Days);
+            finish = finish?.AddDays(drop.Days);
+        }
+        else if ((finish ?? start) is { } end)
+        {
+            finish = end.AddDays(drop.Days);
+            if (start is { } s && finish < s)
+            {
+                finish = s;
+            }
+        }
+
+        await RunAsync(async () =>
+        {
+            await ItemService.UpdateAsync(SheetId, item.Id, new UpdateItemRequest(item.Title, start, finish, item.CostpointWbsId, item.Values));
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private async Task LinkAsync((Guid PredecessorId, Guid SuccessorId) link)
+    {
+        await RunAsync(async () =>
+        {
+            await DependencyService.AddAsync(SheetId, new CreateDependencyRequest(link.PredecessorId, link.SuccessorId));
+            await LoadScheduleAsync();
+        });
+    }
+
+    private async Task UnlinkAsync(DependencyDto dependency)
+    {
+        var from = Items.FirstOrDefault(i => i.Id == dependency.PredecessorId)?.Title;
+        var to = Items.FirstOrDefault(i => i.Id == dependency.SuccessorId)?.Title;
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Remove dependency", $"Remove the link from \"{from}\" to \"{to}\"?", yesText: "Remove", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await DependencyService.RemoveAsync(SheetId, dependency.Id);
+            await LoadScheduleAsync();
+        });
+    }
+
+    /// <summary>Runs a service call and reports expected failures (validation, missing rows, network) in a snackbar.</summary>
+    private async Task RunAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+    }
+}
