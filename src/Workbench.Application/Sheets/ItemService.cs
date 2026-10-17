@@ -110,7 +110,12 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         var order = Math.Clamp(request.Order, 0, siblings.Count);
         siblings.Insert(order, item);
         item.ParentId = request.ParentId;
-        Renumber(siblings);
+
+        // Number by list position: the moved item still carries its old order, so re-sorting would misplace it.
+        for (var i = 0; i < siblings.Count; i++)
+        {
+            siblings[i].Order = i;
+        }
 
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
