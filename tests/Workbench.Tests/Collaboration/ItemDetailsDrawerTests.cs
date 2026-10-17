@@ -43,6 +43,19 @@ public sealed class ItemDetailsDrawerTests
         Assert.DoesNotContain("Kickoff meeting", cut.Markup);
     }
 
+    [Theory]
+    [InlineData("x")]
+    [InlineData("not-a-guid")]
+    public async Task Ignores_a_malformed_item_query(string value)
+    {
+        await using var ctx = CreateContext();
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo($"sheets/{Sheet.Summary.Id}?item={value}");
+
+        var cut = Render(ctx);
+
+        Assert.DoesNotContain("Kickoff meeting", cut.Markup);
+    }
+
     [Fact]
     public async Task Mention_composer_suggests_people_and_completes_the_email()
     {

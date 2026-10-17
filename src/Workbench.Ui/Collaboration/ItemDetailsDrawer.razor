@@ -60,15 +60,16 @@
     [Parameter]
     public int Version { get; set; }
 
+    // Bound as a string: a Guid? query parameter throws on a malformed value and crashes the page.
     [SupplyParameterFromQuery(Name = "item")]
-    public Guid? ItemId { get; set; }
+    public string? ItemQuery { get; set; }
 
     private ItemDto? _item;
     private IReadOnlyList<string> _people = [];
 
     protected override void OnParametersSet()
     {
-        _item = ItemId is { } id ? Items.FirstOrDefault(i => i.Id == id) : null;
+        _item = Guid.TryParse(ItemQuery, out var id) ? Items.FirstOrDefault(i => i.Id == id) : null;
         _people = CollaborationFormat.People(Sheet, Items);
     }
 
