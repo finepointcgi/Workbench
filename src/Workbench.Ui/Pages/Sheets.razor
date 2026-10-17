@@ -1,0 +1,95 @@
+@page "/sheets"
+@inject ISheetService SheetService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Sheets · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Sheets</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="CreateSheetAsync">New sheet</MudButton>
+</MudStack>
+
+<MudDataGrid T="SheetSummary" Items="_sheets" Loading="_loading" Hover="true" Dense="true"
+             SortMode="SortMode.Multiple" Filterable="true" QuickFilter="QuickFilter">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search" Placeholder="Search sheets" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="s => s.Name" />
+        <PropertyColumn Property="s => s.Workspace" />
+        <PropertyColumn Property="s => s.ItemCount" Title="Items" />
+        <TemplateColumn Title="Type" Sortable="false" Filterable="false">
+            <CellTemplate>
+                @if (context.Item.SchedulingEnabled)
+                {
+                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.ViewTimeline">Project</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.TableRows">Sheet</MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="s => s.CostpointProjectId" Title="Costpoint project" />
+        <PropertyColumn Property="s => s.UpdatedAtUtc" Title="Updated (UTC)" Format="yyyy-MM-dd HH:mm" />
+    </Columns>
+    <NoRecordsContent>
+        <MudText>No sheets yet. Create one to get started.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<SheetSummary> _sheets = [];
+    private bool _loading = true;
+    private string? _search;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private bool QuickFilter(SheetSummary sheet) =>
+        string.IsNullOrWhiteSpace(_search)
+        || sheet.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || sheet.Workspace.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || (sheet.CostpointProjectId?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _sheets = await SheetService.ListAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CreateSheetAsync()
+    {
+        var dialog = await DialogService.ShowAsync<NewSheetDialog>("New sheet");
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not CreateSheetRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            var created = await SheetService.CreateAsync(request);
+            Snackbar.Add($"Created \"{created.Name}\"", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            Snackbar.Add($"Couldn't create the sheet: {ex.Message}", Severity.Error);
+        }
+    }
+}
