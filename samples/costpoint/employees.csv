@@ -1,0 +1,5 @@
+employee_id,name,email,org_id,labor_category_id,active
+E1001,Pat Morgan,pm@example.com,1.01.10,PM3,Y
+E1002,Sam Rivera,analyst@example.com,1.01.10,BA2,Y
+E1003,Jordan Lee,engineer@example.com,1.02.20,SE2,Y
+E1004,Casey Park,former@example.com,1.01.10,BA2,N

@@ -18,6 +18,7 @@ public static class WorkbenchApi
         v1.MapItemEndpoints();
         v1.MapSchedulingEndpoints();
         v1.MapCollaborationEndpoints();
+        v1.MapCostpointEndpoints();
 
         return app;
     }

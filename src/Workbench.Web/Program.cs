@@ -1,6 +1,7 @@
 using MudBlazor.Services;
 using Workbench.Api;
 using Workbench.Application;
+using Workbench.Costpoint;
 using Workbench.Infrastructure;
 using Workbench.Infrastructure.Persistence;
 using Workbench.Web.Components;
@@ -16,6 +17,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddWorkbenchApplication();
 builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 builder.Services.AddWorkbenchLiveUpdatesHub();
+builder.Services.AddCostpointSource(builder.Configuration);
 
 var app = builder.Build();
 

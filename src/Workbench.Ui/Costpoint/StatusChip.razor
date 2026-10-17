@@ -1,0 +1,15 @@
+@using Workbench.Contracts.Costpoint
+
+<MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Text">@Status</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public CostpointSyncStatus Status { get; set; }
+
+    private Color Color => Status switch
+    {
+        CostpointSyncStatus.Succeeded => MudBlazor.Color.Success,
+        CostpointSyncStatus.Failed => MudBlazor.Color.Error,
+        _ => MudBlazor.Color.Info,
+    };
+}

@@ -1,0 +1,152 @@
+@page "/admin/costpoint"
+@using Workbench.Contracts.Costpoint
+@using Workbench.Ui.Costpoint
+@inject ICostpointService CostpointService
+@inject ISnackbar Snackbar
+
+<PageTitle>Costpoint · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Costpoint integration</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync"
+               Disabled="_syncing || _status is null" OnClick="SyncNowAsync">
+        @(_syncing ? "Syncing…" : "Sync now")
+    </MudButton>
+</MudStack>
+
+<MudText Class="mud-text-secondary mb-4">
+    Workbench mirrors Costpoint projects, WBS, employees, labor categories, budgets and labor actuals read-only.
+    Syncing only refreshes the mirror; nothing is ever written back to Costpoint.
+</MudText>
+
+@if (_syncing)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (_status is { } status)
+{
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.overline">Source</MudText>
+                <MudText Typo="Typo.h6" data-testid="costpoint-source">@status.Source</MudText>
+                @if (!status.Configured)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Set Costpoint:Source to Csv, Rest or Database.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.overline">Last sync</MudText>
+                @if (status.LastRun is { } last)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <StatusChip Status="last.Status" />
+                        <MudText Typo="Typo.body2">@last.StartedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Typo="Typo.h6">Never</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.overline">Projects · WBS</MudText>
+                <MudText Typo="Typo.h6">@status.Projects · @status.WbsElements</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.overline">Employees · actuals</MudText>
+                <MudText Typo="Typo.h6">@status.Employees · @status.Actuals</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Recent runs</MudText>
+<MudDataGrid T="CostpointSyncRunDto" Items="_runs" Loading="_loading" Dense="true" Hover="true">
+    <Columns>
+        <PropertyColumn Property="r => r.StartedAtUtc" Title="Started (UTC)" Format="yyyy-MM-dd HH:mm:ss" />
+        <TemplateColumn Title="Duration" Sortable="false">
+            <CellTemplate>@Duration(context.Item)</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="r => r.Source" />
+        <TemplateColumn Title="Status" Sortable="false">
+            <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="r => r.Projects" />
+        <PropertyColumn Property="r => r.WbsElements" Title="WBS" />
+        <PropertyColumn Property="r => r.Actuals" />
+        <TemplateColumn Title="Changes" Sortable="false">
+            <CellTemplate>+@context.Item.Inserted ~@context.Item.Updated −@context.Item.Deleted</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="r => r.Skipped" />
+        <PropertyColumn Property="r => r.Error" Title="Message" />
+    </Columns>
+    <NoRecordsContent>
+        <MudText>No syncs yet.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private CostpointStatusDto? _status;
+    private IReadOnlyList<CostpointSyncRunDto> _runs = [];
+    private bool _loading = true;
+    private bool _syncing;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _status = await CostpointService.GetStatusAsync();
+            _runs = await CostpointService.ListSyncRunsAsync(20);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load Costpoint status: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SyncNowAsync()
+    {
+        _syncing = true;
+        try
+        {
+            var run = await CostpointService.SyncNowAsync();
+            if (run.Status == CostpointSyncStatus.Succeeded)
+            {
+                Snackbar.Add($"Synced {run.Projects} projects: {run.Inserted} inserted, {run.Updated} updated, {run.Deleted} deleted", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"Sync failed: {run.Error}", Severity.Error);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't run the sync: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _syncing = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private static string Duration(CostpointSyncRunDto run) =>
+        run.FinishedAtUtc is { } finished ? $"{(finished - run.StartedAtUtc).TotalSeconds:0.0} s" : "—";
+}
