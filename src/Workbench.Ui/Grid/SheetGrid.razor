@@ -1,0 +1,947 @@
+@* Spreadsheet-style grid: virtualized rows, hierarchy, inline editing, keyboard navigation, row and column actions. *@
+@inherits SheetViewBase
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IItemService ItemService
+@inject IColumnService ColumnService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<div class="wb-grid" @ref="_container" tabindex="0" role="grid" aria-label="@Sheet.Summary.Name"
+     aria-rowcount="@_rows.Count" aria-colcount="@_columns.Count" style="max-height:@Height"
+     @onkeydown="OnKeyDownAsync">
+    <table class="wb-table" style="width:@(TableWidth)px">
+        <colgroup>
+            <col style="width:@(GutterWidth)px" />
+            @foreach (var column in _columns)
+            {
+                <col data-key="@column.Key" style="width:@(WidthOf(column))px" />
+            }
+            <col style="width:@(AddColumnWidth)px" />
+        </colgroup>
+        <thead>
+            <tr>
+                <th class="wb-gutter wb-sticky">
+                    <MudMenu Icon="@Icons.Material.Filled.UnfoldMore" Size="Size.Small" Dense="true" AriaLabel="Rows">
+                        <MudMenuItem Icon="@Icons.Material.Filled.UnfoldMore" OnClick="ExpandAll">Expand all</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.UnfoldLess" OnClick="CollapseAll">Collapse all</MudMenuItem>
+                    </MudMenu>
+                </th>
+                @for (var c = 0; c < _columns.Count; c++)
+                {
+                    var column = _columns[c];
+                    <th data-col="@c" class="@(column.Kind == GridColumnKind.Title ? "wb-title wb-sticky" : null)" title="@HeaderTooltip(column)">
+                        <div class="wb-th">
+                            @if (column.IsFormula)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Functions" Size="Size.Small" Class="wb-fx" />
+                            }
+                            <span class="wb-th-name">@column.Name</span>
+                            <MudMenu Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small" Dense="true" Class="wb-th-menu"
+                                     AriaLabel="@($"{column.Name} column actions")">
+                                @if (column.Column is { } custom)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="() => EditColumnAsync(custom)">Rename</MudMenuItem>
+                                    @if (custom.Type == ColumnKind.Dropdown)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.List" OnClick="() => EditColumnAsync(custom)">Edit options</MudMenuItem>
+                                    }
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
+                                    <MudDivider />
+                                }
+                                <MudMenuItem Icon="@Icons.Material.Filled.ViewColumn" OnClick="AddColumnAsync">Add column</MudMenuItem>
+                                @if (column.Kind == GridColumnKind.Title)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.UnfoldMore" OnClick="ExpandAll">Expand all</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.UnfoldLess" OnClick="CollapseAll">Collapse all</MudMenuItem>
+                                }
+                            </MudMenu>
+                        </div>
+                        <span class="wb-resize" data-key="@column.Key" aria-hidden="true"></span>
+                    </th>
+                }
+                <th class="wb-add-col">
+                    <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="AddColumnAsync" aria-label="Add column" />
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            <Virtualize Items="_rows" ItemSize="RowHeight" OverscanCount="10" SpacerElement="tr" Context="row">
+                <tr class="@RowClass(row)" aria-rowindex="@(IndexOf(row) + 2)">
+                    <td class="wb-gutter wb-sticky">
+                        <div class="wb-gutter-cell">
+                        <span class="wb-rownum">@(IndexOf(row) + 1)</span>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="wb-row-menu" AriaLabel="Row actions">
+                            <MudMenuItem Icon="@Icons.Material.Filled.OpenInNew" Href="@DetailsHref(row.Item)">Open details</MudMenuItem>
+                            <MudDivider />
+                            <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="() => AddRowBelowAsync(row.Item)">Add row below</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => AddChildAsync(row.Item)">Add child row</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentIncrease" Disabled="!row.HasPreviousSibling" OnClick="() => IndentAsync(row)">Indent</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentDecrease" Disabled="row.Item.ParentId is null" OnClick="() => OutdentAsync(row)">Outdent</MudMenuItem>
+                            <MudDivider />
+                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteRowAsync(row)">Delete row</MudMenuItem>
+                        </MudMenu>
+                        </div>
+                    </td>
+                    @for (var c = 0; c < _columns.Count; c++)
+                    {
+                        var colIndex = c;
+                        var column = _columns[c];
+                        var active = IsActive(row, colIndex);
+                        var editing = active && _editing;
+                        var raw = CellFormat.GetRaw(row.Item, column);
+                        <td class="@CellClass(column, active, editing)" data-col="@colIndex" role="gridcell"
+                            aria-selected="@(active ? "true" : "false")"
+                            @onclick="() => OnCellClickAsync(row, colIndex)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
+                            @if (editing)
+                            {
+                                @Editor(column)
+                            }
+                            else if (column.Kind == GridColumnKind.Title)
+                            {
+                                <div class="wb-title-cell" style="padding-left:@(row.Depth * IndentWidth)px">
+                                    @if (row.HasChildren)
+                                    {
+                                        var expanded = !_collapsed.Contains(row.Item.Id);
+                                        <span class="wb-toggle" role="button" aria-expanded="@(expanded ? "true" : "false")"
+                                              aria-label="@(expanded ? "Collapse" : "Expand")"
+                                              @onclick="() => ToggleExpanded(row.Item.Id)" @onclick:stopPropagation="true">
+                                            <MudIcon Icon="@(expanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)" Size="Size.Small" />
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="wb-toggle-spacer"></span>
+                                    }
+                                    <a class="wb-title-link" href="@DetailsHref(row.Item)" title="Open details">@row.Item.Title</a>
+                                </div>
+                            }
+                            else if (column.ValueKind == ColumnKind.Checkbox)
+                            {
+                                var isChecked = raw == "true";
+                                <span class="wb-check" role="checkbox" aria-checked="@(isChecked ? "true" : "false")"
+                                      @onclick="() => ToggleCheckboxAsync(row, colIndex)" @onclick:stopPropagation="true">
+                                    <MudIcon Icon="@(isChecked ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                                             Size="Size.Small" Color="@(isChecked ? Color.Primary : Color.Default)" />
+                                </span>
+                            }
+                            else
+                            {
+                                @CellFormat.Display(raw, column.ValueKind)
+                            }
+                        </td>
+                    }
+                    <td class="wb-filler"></td>
+                </tr>
+            </Virtualize>
+        </tbody>
+    </table>
+    @if (_rows.Count == 0)
+    {
+        <div class="wb-empty mud-text-secondary">No rows yet.</div>
+    }
+</div>
+
+<div class="wb-grid-footer">
+    <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+               OnClick="AddRowAtEndAsync">Add row</MudButton>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+        @Items.Count @(Items.Count == 1 ? "row" : "rows") · Enter or F2 to edit · Alt+Shift+→/← to indent or outdent
+    </MudText>
+</div>
+
+@code {
+    private const int GutterWidth = 56;
+    private const int AddColumnWidth = 48;
+    private const int IndentWidth = 20;
+    private const float RowHeight = 34;
+    private const int PageRows = 20;
+
+    /// <summary>Maximum height of the scrolling area. Rows beyond it are virtualized.</summary>
+    [Parameter]
+    public string Height { get; set; } = "calc(100vh - 300px)";
+
+    private ElementReference _container;
+    private ElementReference _editorRef;
+    private MudDatePicker? _datePicker;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _handle;
+    private DotNetObjectReference<SheetGrid>? _dotNet;
+
+    private IReadOnlyList<ItemDto>? _lastItems;
+    private SheetDetail? _lastSheet;
+    private IReadOnlyList<GridColumn> _columns = [];
+    private List<GridRow> _rows = [];
+    private Dictionary<Guid, int> _rowIndex = [];
+    private ILookup<Guid?, ItemDto> _children = Array.Empty<ItemDto>().ToLookup(i => i.ParentId);
+    private readonly HashSet<Guid> _collapsed = [];
+    private readonly Dictionary<string, int> _widths = [];
+
+    private Guid? _activeId;
+    private int _activeRow = -1;
+    private int _activeCol;
+    private bool _editing;
+    private int _editSession;
+    private string _editText = string.Empty;
+    private DateTime? _editDate;
+
+    private Guid? _editWhenLoaded;
+    private bool _focusEditor;
+    private bool _selectAllOnFocus;
+    private bool _focusGrid;
+    private bool _scrollToActive;
+
+    private int TableWidth => GutterWidth + AddColumnWidth + _columns.Sum(WidthOf);
+
+    private int WidthOf(GridColumn column) => _widths.TryGetValue(column.Key, out var width) ? width : column.DefaultWidth;
+
+    private GridRow? ActiveRow => _activeRow >= 0 && _activeRow < _rows.Count ? _rows[_activeRow] : null;
+
+    private GridColumn? ActiveColumn => _activeCol >= 0 && _activeCol < _columns.Count ? _columns[_activeCol] : null;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet))
+        {
+            return;
+        }
+
+        _lastItems = Items;
+        _lastSheet = Sheet;
+        _columns = GridColumn.For(Sheet);
+        _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
+        _children = Items.ToLookup(i => i.ParentId);
+        _editing = false;
+        RebuildRows();
+
+        if (_editWhenLoaded is { } newId && _rowIndex.ContainsKey(newId))
+        {
+            _editWhenLoaded = null;
+            _activeId = newId;
+            _activeRow = _rowIndex[newId];
+            _activeCol = 0;
+            _scrollToActive = true;
+            BeginEdit(selectAll: true);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/sheetGrid.js");
+                if (_module is not null)
+                {
+                    _dotNet = DotNetObjectReference.Create(this);
+                    _handle = await _module.InvokeAsync<IJSObjectReference>("init", _container, _dotNet);
+                }
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException)
+            {
+                // Prerendering or a closed circuit: the grid still works, minus the browser niceties.
+            }
+        }
+
+        if (_module is null)
+        {
+            _focusEditor = _focusGrid = _scrollToActive = false;
+            return;
+        }
+
+        try
+        {
+            if (_scrollToActive && _activeRow >= 0)
+            {
+                _scrollToActive = false;
+                await _module.InvokeVoidAsync("ensureVisible", _container, _activeRow, _activeCol);
+            }
+
+            if (_focusEditor && _editing)
+            {
+                _focusEditor = false;
+                if (ActiveColumn?.ValueKind == ColumnKind.Date && _datePicker is not null)
+                {
+                    await _datePicker.FocusAsync();
+                    await _datePicker.OpenAsync();
+                }
+                else
+                {
+                    await _module.InvokeVoidAsync("focusEditor", _editorRef, _selectAllOnFocus);
+                }
+            }
+            else if (_focusGrid)
+            {
+                _focusGrid = false;
+                await _module.InvokeVoidAsync("focusGrid", _container);
+            }
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+        }
+    }
+
+    [JSInvokable]
+    public void SetColumnWidth(string key, int width)
+    {
+        _widths[key] = Math.Max(60, width);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_handle is not null)
+            {
+                await _handle.InvokeVoidAsync("dispose");
+                await _handle.DisposeAsync();
+            }
+
+            if (_module is not null)
+            {
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        _dotNet?.Dispose();
+    }
+
+    // ---- Rows and hierarchy ----
+
+    private void RebuildRows()
+    {
+        var rows = new List<GridRow>(Items.Count);
+        AddRows(null, 0);
+        _rows = rows;
+        _rowIndex = new Dictionary<Guid, int>(rows.Count);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            _rowIndex[rows[i].Item.Id] = i;
+        }
+
+        if (_activeId is { } id && _rowIndex.TryGetValue(id, out var index))
+        {
+            _activeRow = index;
+        }
+        else if (_rows.Count == 0)
+        {
+            _activeRow = -1;
+            _activeId = null;
+        }
+        else if (_activeRow >= 0)
+        {
+            _activeRow = Math.Min(_activeRow, _rows.Count - 1);
+            _activeId = _rows[_activeRow].Item.Id;
+        }
+
+        void AddRows(Guid? parentId, int depth)
+        {
+            var first = true;
+            foreach (var item in _children[parentId].OrderBy(i => i.Order))
+            {
+                var hasChildren = _children.Contains(item.Id);
+                rows.Add(new GridRow(item, depth, hasChildren, !first));
+                first = false;
+                if (hasChildren && !_collapsed.Contains(item.Id))
+                {
+                    AddRows(item.Id, depth + 1);
+                }
+            }
+        }
+    }
+
+    private int IndexOf(GridRow row) => _rowIndex.TryGetValue(row.Item.Id, out var index) ? index : 0;
+
+    private void ToggleExpanded(Guid itemId)
+    {
+        if (!_collapsed.Remove(itemId))
+        {
+            _collapsed.Add(itemId);
+        }
+
+        RebuildRows();
+    }
+
+    private void ExpandAll()
+    {
+        _collapsed.Clear();
+        RebuildRows();
+    }
+
+    private void CollapseAll()
+    {
+        foreach (var group in _children)
+        {
+            if (group.Key is { } parentId)
+            {
+                _collapsed.Add(parentId);
+            }
+        }
+
+        RebuildRows();
+    }
+
+    /// <summary>Swaps in the saved item so the grid shows it before the page finishes reloading.</summary>
+    private void ReplaceItem(ItemDto updated)
+    {
+        if (_rowIndex.TryGetValue(updated.Id, out var index))
+        {
+            _rows[index] = _rows[index] with { Item = updated };
+        }
+    }
+
+    private string DetailsHref(ItemDto item) => $"sheets/{SheetId}?item={item.Id}";
+
+    // ---- Selection and keyboard ----
+
+    private bool IsActive(GridRow row, int colIndex) => _activeId == row.Item.Id && _activeCol == colIndex;
+
+    private void Select(int rowIndex, int colIndex)
+    {
+        if (_rows.Count == 0 || _columns.Count == 0)
+        {
+            return;
+        }
+
+        _activeRow = Math.Clamp(rowIndex, 0, _rows.Count - 1);
+        _activeCol = Math.Clamp(colIndex, 0, _columns.Count - 1);
+        _activeId = _rows[_activeRow].Item.Id;
+        _scrollToActive = true;
+    }
+
+    private void Move(int rows, int cols) => Select(Math.Max(_activeRow, 0) + rows, _activeCol + cols);
+
+    private void MoveNext(int direction)
+    {
+        var col = _activeCol + direction;
+        var row = Math.Max(_activeRow, 0);
+        if (col >= _columns.Count && row < _rows.Count - 1)
+        {
+            (row, col) = (row + 1, 0);
+        }
+        else if (col < 0 && row > 0)
+        {
+            (row, col) = (row - 1, _columns.Count - 1);
+        }
+
+        Select(row, col);
+    }
+
+    private async Task OnCellClickAsync(GridRow row, int colIndex)
+    {
+        if (IsActive(row, colIndex) && _editing)
+        {
+            return;
+        }
+
+        if (_editing && !await CommitEditAsync())
+        {
+            return;
+        }
+
+        Select(IndexOf(row), colIndex);
+        _scrollToActive = false;
+        _focusGrid = true;
+    }
+
+    private void OnCellDoubleClick(GridRow row, int colIndex)
+    {
+        if (IsActive(row, colIndex) && _editing)
+        {
+            return;
+        }
+
+        Select(IndexOf(row), colIndex);
+        _scrollToActive = false;
+        BeginEdit();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (_rows.Count == 0 || _columns.Count == 0)
+        {
+            return;
+        }
+
+        if (_activeRow < 0)
+        {
+            Select(0, 0);
+            return;
+        }
+
+        if (_editing)
+        {
+            switch (e.Key)
+            {
+                case "Escape":
+                    CancelEdit();
+                    break;
+                case "Enter":
+                    if (await CommitEditAsync())
+                    {
+                        Move(1, 0);
+                    }
+
+                    break;
+                case "Tab":
+                    if (await CommitEditAsync())
+                    {
+                        MoveNext(e.ShiftKey ? -1 : 1);
+                    }
+
+                    break;
+            }
+
+            return;
+        }
+
+        var row = ActiveRow!;
+        var column = ActiveColumn!;
+        if (e.AltKey && e.ShiftKey && e.Key is "ArrowRight" or "ArrowLeft")
+        {
+            await (e.Key == "ArrowRight" ? IndentAsync(row) : OutdentAsync(row));
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case "ArrowUp":
+                Move(-1, 0);
+                break;
+            case "ArrowDown":
+                Move(1, 0);
+                break;
+            case "ArrowLeft":
+                Move(0, -1);
+                break;
+            case "ArrowRight":
+                Move(0, 1);
+                break;
+            case "PageUp":
+                Move(-PageRows, 0);
+                break;
+            case "PageDown":
+                Move(PageRows, 0);
+                break;
+            case "Home":
+                Select(e.CtrlKey || e.MetaKey ? 0 : _activeRow, 0);
+                break;
+            case "End":
+                Select(e.CtrlKey || e.MetaKey ? _rows.Count - 1 : _activeRow, _columns.Count - 1);
+                break;
+            case "Tab":
+                MoveNext(e.ShiftKey ? -1 : 1);
+                break;
+            case "Enter" or "F2" or " " when column.ValueKind == ColumnKind.Checkbox:
+                await ToggleCheckboxAsync(row, _activeCol);
+                break;
+            case "Enter" or "F2":
+                BeginEdit();
+                break;
+            case "Delete" or "Backspace":
+                await ClearCellAsync(row, column);
+                break;
+            default:
+                if (e.Key.Length == 1 && !e.CtrlKey && !e.MetaKey && !e.AltKey && e.Key != " ")
+                {
+                    BeginEdit(initialText: e.Key);
+                }
+
+                break;
+        }
+    }
+
+    // ---- Editing ----
+
+    private void BeginEdit(string? initialText = null, bool selectAll = false)
+    {
+        if (ActiveRow is not { } row || ActiveColumn is not { } column)
+        {
+            return;
+        }
+
+        if (column.ReadOnly)
+        {
+            Snackbar.Add($"{column.Name} is a formula column and can't be edited.", Severity.Info);
+            return;
+        }
+
+        if (column.ValueKind == ColumnKind.Checkbox)
+        {
+            return;
+        }
+
+        var raw = CellFormat.GetRaw(row.Item, column);
+        var useInitial = initialText is not null && column.ValueKind is not (ColumnKind.Date or ColumnKind.Dropdown);
+        _editText = useInitial ? initialText! : CellFormat.EditText(raw, column.ValueKind);
+        _editDate = CellFormat.ToDateTime(raw);
+        _datePicker = null;
+        _editSession++;
+        _editing = true;
+        _focusEditor = true;
+        _selectAllOnFocus = selectAll;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _focusGrid = true;
+    }
+
+    /// <summary>Saves the open editor. Returns false (and keeps editing) when the text isn't valid for the column.</summary>
+    private async Task<bool> CommitEditAsync()
+    {
+        if (!_editing || ActiveRow is not { } row || ActiveColumn is not { } column)
+        {
+            _editing = false;
+            return true;
+        }
+
+        var text = column.ValueKind == ColumnKind.Date && _datePicker is not null ? _datePicker.Text : _editText;
+        if (!CellFormat.TryNormalize(text, column.ValueKind, out var value, out var error))
+        {
+            Snackbar.Add(error!, Severity.Warning);
+            return false;
+        }
+
+        if (column.Kind == GridColumnKind.Title && value is null)
+        {
+            Snackbar.Add("Title can't be empty.", Severity.Warning);
+            return false;
+        }
+
+        _editing = false;
+        _focusGrid = true;
+        await SaveAsync(row.Item, column, value);
+        return true;
+    }
+
+    private async Task OnSelectChangedAsync(ChangeEventArgs e)
+    {
+        _editText = e.Value?.ToString() ?? string.Empty;
+        await CommitEditAsync();
+    }
+
+    private async Task OnDatePickedAsync(DateTime? date)
+    {
+        if (!_editing || ActiveRow is not { } row || ActiveColumn is not { } column)
+        {
+            return;
+        }
+
+        _editing = false;
+        _focusGrid = true;
+        await SaveAsync(row.Item, column, CellFormat.FromDateTime(date));
+    }
+
+    private void OnDatePickerClosed()
+    {
+        // Clicking away from the picker without choosing a date ends the edit.
+        if (_editing && ActiveColumn?.ValueKind == ColumnKind.Date)
+        {
+            CancelEdit();
+        }
+    }
+
+    private async Task ToggleCheckboxAsync(GridRow row, int colIndex)
+    {
+        Select(IndexOf(row), colIndex);
+        _scrollToActive = false;
+        _focusGrid = true;
+        var column = _columns[colIndex];
+        if (column.ReadOnly)
+        {
+            return;
+        }
+
+        var current = CellFormat.GetRaw(row.Item, column) == "true";
+        await SaveAsync(row.Item, column, current ? "false" : "true");
+    }
+
+    private async Task ClearCellAsync(GridRow row, GridColumn column)
+    {
+        if (column.ReadOnly || column.Kind == GridColumnKind.Title)
+        {
+            return;
+        }
+
+        await SaveAsync(row.Item, column, null);
+    }
+
+    private async Task SaveAsync(ItemDto item, GridColumn column, string? value)
+    {
+        if (column.ReadOnly || CellFormat.GetRaw(item, column) == value)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await ItemService.UpdateAsync(SheetId, item.Id, CellFormat.WithValue(item, column, value));
+            ReplaceItem(updated);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't save {column.Name}: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private RenderFragment Editor(GridColumn column) => column.ValueKind switch
+    {
+        ColumnKind.Dropdown => @<select class="wb-editor" @ref="_editorRef" value="@_editText" @onchange="OnSelectChangedAsync">
+                                    <option value=""></option>
+                                    @foreach (var option in column.Column?.Options ?? [])
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                    @if (_editText.Length > 0 && !(column.Column?.Options ?? []).Contains(_editText))
+                                    {
+                                        <option value="@_editText">@_editText</option>
+                                    }
+                                </select>,
+        ColumnKind.Date => @<MudDatePicker @ref="_datePicker" Date="_editDate" DateChanged="OnDatePickedAsync"
+                                           PickerClosed="OnDatePickerClosed" PickerVariant="PickerVariant.Inline" ShowToolbar="false"
+                                           Editable="true" DateFormat="MM/dd/yyyy" Margin="Margin.Dense"
+                                           Underline="false" AutoClose="true" Class="wb-date-editor" />,
+        _ => @<input class="wb-editor" @ref="_editorRef" type="@InputType(column.ValueKind)"
+                     inputmode="@(column.ValueKind is ColumnKind.Number or ColumnKind.Currency ? "decimal" : null)"
+                     value="@_editText" @oninput="EditorInputHandler()" aria-label="@column.Name" />,
+    };
+
+    /// <summary>
+    /// Ignores input from an editor that belongs to an earlier edit (keys typed right after Esc or Enter
+    /// can reach the old input before it is removed).
+    /// </summary>
+    private Action<ChangeEventArgs> EditorInputHandler()
+    {
+        var session = _editSession;
+        return e =>
+        {
+            if (_editing && session == _editSession)
+            {
+                _editText = e.Value?.ToString() ?? string.Empty;
+            }
+        };
+    }
+
+    private static string InputType(ColumnKind kind) => kind == ColumnKind.Person ? "email" : "text";
+
+    // ---- Row actions ----
+
+    private Task AddRowAtEndAsync() => CreateRowAsync(new CreateItemRequest("New row"));
+
+    private Task AddRowBelowAsync(ItemDto item) => CreateRowAsync(new CreateItemRequest("New row", item.ParentId, item.Order + 1));
+
+    private Task AddChildAsync(ItemDto item)
+    {
+        _collapsed.Remove(item.Id);
+        return CreateRowAsync(new CreateItemRequest("New row", item.Id));
+    }
+
+    private async Task CreateRowAsync(CreateItemRequest request)
+    {
+        try
+        {
+            var created = await ItemService.CreateAsync(SheetId, request);
+            _editWhenLoaded = created.Id;
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't add the row: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task IndentAsync(GridRow row)
+    {
+        var previous = _children[row.Item.ParentId]
+            .Where(i => i.Order < row.Item.Order)
+            .OrderByDescending(i => i.Order)
+            .FirstOrDefault();
+        if (previous is null)
+        {
+            return;
+        }
+
+        _collapsed.Remove(previous.Id);
+        await MoveAsync(row.Item, new MoveItemRequest(previous.Id, _children[previous.Id].Count()));
+    }
+
+    private async Task OutdentAsync(GridRow row)
+    {
+        if (row.Item.ParentId is not { } parentId || !_rowIndex.TryGetValue(parentId, out var parentIndex))
+        {
+            return;
+        }
+
+        var parent = _rows[parentIndex].Item;
+        await MoveAsync(row.Item, new MoveItemRequest(parent.ParentId, parent.Order + 1));
+    }
+
+    private async Task MoveAsync(ItemDto item, MoveItemRequest request)
+    {
+        try
+        {
+            await ItemService.MoveAsync(SheetId, item.Id, request);
+            _activeId = item.Id;
+            _scrollToActive = true;
+            _focusGrid = true;
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't move the row: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteRowAsync(GridRow row)
+    {
+        if (row.HasChildren)
+        {
+            var descendants = CountDescendants(row.Item.Id);
+            var parameters = new DialogParameters<ConfirmDialog>
+            {
+                { d => d.Message, $"Delete \"{row.Item.Title}\" and its {descendants} sub-{(descendants == 1 ? "row" : "rows")}? This can't be undone." },
+            };
+            var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete row", parameters);
+            var result = await dialog.Result;
+            if (result is null || result.Canceled)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            await ItemService.DeleteAsync(SheetId, row.Item.Id);
+            _focusGrid = true;
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't delete the row: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private int CountDescendants(Guid itemId) =>
+        _children[itemId].Sum(child => 1 + CountDescendants(child.Id));
+
+    // ---- Column actions ----
+
+    private async Task AddColumnAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ColumnDialog>("Add column");
+        if (await dialog.Result is not { Canceled: false, Data: ColumnDialogResult result })
+        {
+            return;
+        }
+
+        try
+        {
+            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options));
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't add the column: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task EditColumnAsync(ColumnDto column)
+    {
+        var parameters = new DialogParameters<ColumnDialog> { { d => d.Column, column } };
+        var dialog = await DialogService.ShowAsync<ColumnDialog>($"Edit {column.Name}", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: ColumnDialogResult result })
+        {
+            return;
+        }
+
+        try
+        {
+            await ColumnService.UpdateAsync(SheetId, column.Id, new UpdateColumnRequest(result.Name, result.Options, column.Formula, column.Order));
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't update the column: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteColumnAsync(ColumnDto column)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { d => d.Message, $"Delete the \"{column.Name}\" column and its values in every row? This can't be undone." },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete column", parameters);
+        var confirmed = await dialog.Result;
+        if (confirmed is null || confirmed.Canceled)
+        {
+            return;
+        }
+
+        try
+        {
+            await ColumnService.DeleteAsync(SheetId, column.Id);
+            _widths.Remove(column.Id.ToString());
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't delete the column: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // ---- Helpers ----
+
+    private static bool IsExpected(Exception ex) =>
+        ex is ArgumentException or InvalidOperationException or HttpRequestException or TaskCanceledException
+            or Workbench.Contracts.WorkbenchNotFoundException;
+
+    private static string? HeaderTooltip(GridColumn column) => column.Column switch
+    {
+        { Formula: { } formula } => $"Formula: {formula}",
+        { } custom => CellFormat.KindName(custom.Type),
+        _ => null,
+    };
+
+    private string RowClass(GridRow row) => row.HasChildren ? "wb-row wb-parent" : "wb-row";
+
+    private static string CellClass(GridColumn column, bool active, bool editing)
+    {
+        var css = column.Kind == GridColumnKind.Title ? "wb-cell wb-title wb-sticky" : "wb-cell";
+        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency)
+        {
+            css += " wb-num";
+        }
+
+        if (column.ValueKind == ColumnKind.Checkbox)
+        {
+            css += " wb-center";
+        }
+
+        if (column.ReadOnly)
+        {
+            css += " wb-readonly";
+        }
+
+        if (active)
+        {
+            css += " wb-active";
+        }
+
+        if (editing)
+        {
+            css += " wb-editing";
+        }
+
+        return css;
+    }
+}
