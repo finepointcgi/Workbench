@@ -63,5 +63,19 @@ public static class DatabaseInitializer
 
         db.AddRange(workspace, schedule, tracker);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Scheduling sample: a finish-to-start chain from kickoff into Phase 2, and an earlier baseline.
+        var tasks = schedule.Items.ToDictionary(i => i.Title);
+        Guid[] chain = [tasks["Kickoff meeting"].Id, tasks["Requirements review"].Id, tasks["Baseline schedule"].Id, tasks["Phase 2: Execution"].Id];
+        db.AddRange(chain.Zip(chain.Skip(1), (p, s) => new Domain.Scheduling.Dependency { SheetId = schedule.Id, PredecessorId = p, SuccessorId = s }));
+        var original = new Domain.Scheduling.Baseline { SheetId = schedule.Id, Name = "Original plan", CapturedAtUtc = now.AddDays(-14) };
+        original.Entries.AddRange(schedule.Items.Select(i => new Domain.Scheduling.BaselineEntry
+        {
+            ItemId = i.Id,
+            Start = i.ParentId is null ? i.Start : i.Start?.AddDays(-3),
+            Finish = i.ParentId is null ? i.Finish : i.Finish?.AddDays(-3),
+        }));
+        db.Add(original);
+        await db.SaveChangesAsync(cancellationToken);
     }
 }

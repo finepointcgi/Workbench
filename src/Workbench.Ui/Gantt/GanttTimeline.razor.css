@@ -1,0 +1,162 @@
+.gantt-timeline {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.gantt-svg {
+    display: block;
+    user-select: none;
+    touch-action: none;
+    font-family: var(--mud-typography-default-family);
+}
+
+.gantt-header-bg {
+    fill: var(--mud-palette-background-gray);
+}
+
+.gantt-header-major {
+    font-size: 12px;
+    font-weight: 600;
+    fill: var(--mud-palette-text-primary);
+}
+
+.gantt-header-minor {
+    font-size: 11px;
+    fill: var(--mud-palette-text-secondary);
+}
+
+    .gantt-header-minor.weekend {
+        opacity: .55;
+    }
+
+.gantt-grid {
+    stroke: var(--mud-palette-lines-default);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.gantt-grid-major {
+    stroke: var(--mud-palette-lines-inputs);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+.gantt-weekend {
+    fill: var(--mud-palette-action-default-hover);
+}
+
+.gantt-today {
+    stroke: var(--mud-palette-warning);
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    pointer-events: none;
+}
+
+.gantt-baseline {
+    fill: var(--mud-palette-text-disabled);
+    opacity: .7;
+}
+
+.gantt-summary path {
+    fill: var(--mud-palette-text-primary);
+    opacity: .8;
+}
+
+.gantt-task [data-role="bar"],
+.gantt-milestone [data-drag="move"] {
+    fill: var(--mud-palette-primary);
+    cursor: grab;
+}
+
+.gantt-milestone [data-drag="move"] {
+    fill: var(--mud-palette-tertiary);
+}
+
+.gantt-task.critical [data-role="bar"],
+.gantt-milestone.critical [data-drag="move"] {
+    fill: var(--mud-palette-error);
+}
+
+.gantt-task.dragging,
+.gantt-milestone.dragging {
+    opacity: .75;
+}
+
+    .gantt-task.dragging [data-role="bar"],
+    .gantt-milestone.dragging [data-drag="move"] {
+        cursor: grabbing;
+    }
+
+.gantt-task.link-target [data-role="bar"],
+.gantt-milestone.link-target [data-drag="move"] {
+    stroke: var(--mud-palette-success);
+    stroke-width: 3;
+}
+
+.gantt-resize-handle {
+    fill: transparent;
+    cursor: ew-resize;
+}
+
+.gantt-link-handle {
+    fill: var(--mud-palette-surface);
+    stroke: var(--mud-palette-primary);
+    stroke-width: 2;
+    cursor: crosshair;
+    opacity: 0;
+    transition: opacity .1s;
+}
+
+.gantt-task:hover .gantt-link-handle,
+.gantt-milestone:hover .gantt-link-handle {
+    opacity: 1;
+}
+
+.gantt-bar-label {
+    font-size: 12px;
+    fill: var(--mud-palette-text-primary);
+    pointer-events: none;
+}
+
+.gantt-link {
+    cursor: pointer;
+}
+
+.gantt-link-line {
+    fill: none;
+    stroke: var(--mud-palette-text-secondary);
+    stroke-width: 1.5;
+}
+
+.gantt-link-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 10;
+}
+
+.gantt-link:hover .gantt-link-line {
+    stroke: var(--mud-palette-primary);
+    stroke-width: 2.5;
+}
+
+.gantt-link.critical .gantt-link-line {
+    stroke: var(--mud-palette-error);
+    stroke-width: 2;
+}
+
+.gantt-arrowhead {
+    fill: var(--mud-palette-text-secondary);
+}
+
+    .gantt-arrowhead.critical {
+        fill: var(--mud-palette-error);
+    }
+
+.gantt-svg ::deep .gantt-link-preview {
+    stroke: var(--mud-palette-success);
+    stroke-width: 2;
+    stroke-dasharray: 5 4;
+    pointer-events: none;
+}

@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddScoped<ISheetService, SheetService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IColumnService, ColumnService>();
+        services.AddWorkbenchScheduling();
         return services;
     }
 }
