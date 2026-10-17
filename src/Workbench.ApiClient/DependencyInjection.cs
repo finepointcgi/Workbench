@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddHttpClient<ISheetService, HttpSheetService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IColumnService, HttpColumnService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IItemService, HttpItemService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddCollaborationClients(serverBaseAddress);
         return services;
     }
 }

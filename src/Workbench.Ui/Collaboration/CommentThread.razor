@@ -1,0 +1,168 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Collaboration
+@inject ICommentService Comments
+@inject ISnackbar Snackbar
+
+@if (_comments is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    @if (_comments.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">No comments yet.</MudText>
+    }
+    <MudStack Spacing="3" Class="mb-4">
+        @foreach (var comment in _comments)
+        {
+            <div>
+                @CommentView(comment)
+                <div class="ml-10 mt-2">
+                    <MudStack Spacing="2">
+                        @foreach (var reply in comment.Replies)
+                        {
+                            @CommentView(reply)
+                        }
+                    </MudStack>
+                    @if (_replyingTo == comment.Id)
+                    {
+                        <div class="mt-2">
+                            <MentionComposer People="People" Placeholder="Write a reply" SubmitText="Reply" Lines="1"
+                                             OnSubmit="text => CreateAsync(text, comment.Id)" OnCancel="() => _replyingTo = null" />
+                        </div>
+                    }
+                    else
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Reply"
+                                   OnClick="() => _replyingTo = comment.Id">Reply</MudButton>
+                    }
+                </div>
+            </div>
+        }
+    </MudStack>
+    <MentionComposer People="People" OnSubmit="text => CreateAsync(text, null)" />
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid ItemId { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<string> People { get; set; } = [];
+
+    /// <summary>Changes when the sheet changed elsewhere, so the thread reloads.</summary>
+    [Parameter]
+    public int Version { get; set; }
+
+    private IReadOnlyList<CommentDto>? _comments;
+    private Guid? _replyingTo;
+    private Guid? _editing;
+    private (Guid ItemId, int Version)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != (ItemId, Version))
+        {
+            if (_loaded?.ItemId != ItemId)
+            {
+                _comments = null;
+                _replyingTo = _editing = null;
+            }
+
+            _loaded = (ItemId, Version);
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _comments = await Comments.ListAsync(SheetId, ItemId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        {
+            _comments = [];
+            Snackbar.Add($"Couldn't load comments: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<bool> CreateAsync(string text, Guid? parentId)
+    {
+        try
+        {
+            await Comments.CreateAsync(SheetId, ItemId, new CreateCommentRequest(text, parentId));
+            _replyingTo = null;
+            await LoadAsync();
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return false;
+        }
+    }
+
+    private async Task<bool> UpdateAsync(Guid commentId, string text)
+    {
+        try
+        {
+            await Comments.UpdateAsync(SheetId, commentId, new UpdateCommentRequest(text));
+            _editing = null;
+            await LoadAsync();
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid commentId)
+    {
+        try
+        {
+            await Comments.DeleteAsync(SheetId, commentId);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private RenderFragment CommentView(CommentDto comment) => __builder =>
+    {
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="comment">
+            <MudAvatar Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@CollaborationFormat.Initials(comment.AuthorEmail)</MudAvatar>
+            <div style="flex:1; min-width:0">
+                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.subtitle2">@comment.AuthorEmail</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" title="@comment.CreatedAtUtc.ToLocalTime().ToString("f")">
+                        @CollaborationFormat.Ago(comment.CreatedAtUtc, DateTime.UtcNow)@(comment.EditedAtUtc is null ? "" : " · edited")
+                    </MudText>
+                    <MudSpacer />
+                    @if (comment.CanEdit && _editing != comment.Id)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" aria-label="Edit comment" OnClick="() => _editing = comment.Id" />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" aria-label="Delete comment" OnClick="() => DeleteAsync(comment.Id)" />
+                    }
+                </MudStack>
+                @if (_editing == comment.Id)
+                {
+                    <MentionComposer People="People" InitialText="@comment.Body" SubmitText="Save" Lines="1"
+                                     OnSubmit="text => UpdateAsync(comment.Id, text)" OnCancel="() => _editing = null" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2"><CommentBody Body="@comment.Body" /></MudText>
+                }
+            </div>
+        </MudStack>
+    };
+}
