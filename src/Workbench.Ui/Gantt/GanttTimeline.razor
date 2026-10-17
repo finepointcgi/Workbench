@@ -1,0 +1,324 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+@using Workbench.Contracts.Scheduling
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="gantt-timeline" @ref="_scroller">
+    <svg @ref="_svg" class="gantt-svg" width="@F(Scale.Width)" height="@F(GanttLayout.HeaderHeight + BodyHeight)"
+         data-day-width="@F(Scale.DayWidth)" role="img" aria-label="Gantt chart">
+        @* Header *@
+        <g class="gantt-header">
+            <rect class="gantt-header-bg" x="0" y="0" width="@F(Scale.Width)" height="@F(GanttLayout.HeaderHeight)" />
+            @foreach (var tick in Scale.MajorTicks())
+            {
+                <g>
+                    <line class="gantt-grid-major" x1="@F(tick.X)" x2="@F(tick.X)" y1="0" y2="@F(GanttLayout.HeaderHeight)" />
+                    @* Partial months at the edges are too narrow for a label. *@
+                    <text class="gantt-header-major" x="@F(tick.X + 6)" y="17" visibility="@(tick.Width >= 90 ? "visible" : "hidden")">@tick.Label</text>
+                </g>
+            }
+            @foreach (var tick in Scale.MinorTicks())
+            {
+                <g>
+                    <line class="gantt-grid" x1="@F(tick.X)" x2="@F(tick.X)" y1="26" y2="@F(GanttLayout.HeaderHeight)" />
+                    <text class="@(tick.IsWeekend ? "gantt-header-minor weekend" : "gantt-header-minor")"
+                          x="@F(tick.X + tick.Width / 2)" y="43" text-anchor="middle">@tick.Label</text>
+                </g>
+            }
+            <line class="gantt-grid" x1="0" x2="@F(Scale.Width)" y1="26" y2="26" />
+        </g>
+
+        <g transform="translate(0,@F(GanttLayout.HeaderHeight))">
+            @* Background: weekends, row lines, column grid *@
+            @foreach (var weekend in Scale.Weekends())
+            {
+                <rect class="gantt-weekend" x="@F(weekend.X)" y="0" width="@F(weekend.Width)" height="@F(BodyHeight)" />
+            }
+            @foreach (var tick in Scale.MinorTicks())
+            {
+                <line class="gantt-grid" x1="@F(tick.X)" x2="@F(tick.X)" y1="0" y2="@F(BodyHeight)" />
+            }
+            @foreach (var row in Rows)
+            {
+                <line class="gantt-grid" x1="0" x2="@F(Scale.Width)" y1="@F(RowTop(row) + GanttLayout.RowHeight)" y2="@F(RowTop(row) + GanttLayout.RowHeight)" />
+            }
+
+            @* Baseline ghosts *@
+            @if (Baseline is not null)
+            {
+                @foreach (var row in Rows)
+                {
+                    if (Baseline.TryGetValue(row.Item.Id, out var b) && b.Start is { } bs && b.Finish is { } bf)
+                    {
+                        if (bs == bf && !row.IsSummary)
+                        {
+                            <path class="gantt-baseline" d="@Diamond(Scale.X(bs) + Scale.DayWidth / 2, RowTop(row) + 28, 4)">
+                                <title>Baseline: @bs.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</title>
+                            </path>
+                        }
+                        else
+                        {
+                            <rect class="gantt-baseline" x="@F(Scale.X(bs))" y="@F(RowTop(row) + 26)"
+                                  width="@F(Math.Max(Scale.X(bf.AddDays(1)) - Scale.X(bs), 2))" height="4" rx="1">
+                                <title>Baseline: @Range(bs, bf)</title>
+                            </rect>
+                        }
+                    }
+                }
+            }
+
+            @* Dependency arrows *@
+            @foreach (var dependency in Dependencies)
+            {
+                if (_rowById.TryGetValue(dependency.PredecessorId, out var from) && from.HasDates
+                    && _rowById.TryGetValue(dependency.SuccessorId, out var to) && to.HasDates)
+                {
+                    var path = ArrowPath(dependency, from, to);
+                    var critical = _critical.Contains(from.Item.Id) && _critical.Contains(to.Item.Id);
+                    <g class="@(critical ? "gantt-link critical" : "gantt-link")" data-dependency="@dependency.Id"
+                       @onclick="() => OnDependencyClick.InvokeAsync(dependency)">
+                        <path class="gantt-link-hit" d="@path" />
+                        <path class="gantt-link-line" d="@path" marker-end="@(critical ? "url(#gantt-arrow-critical)" : "url(#gantt-arrow)")" />
+                        <title>@from.Item.Title → @to.Item.Title (@Abbreviation(dependency.Type)@Lag(dependency.LagDays)). Click to remove.</title>
+                    </g>
+                }
+            }
+
+            @* Bars *@
+            @foreach (var row in Rows.Where(r => r.HasDates))
+            {
+                var start = row.Start!.Value;
+                var finish = row.Finish!.Value;
+                var top = RowTop(row);
+                var x1 = Scale.X(start);
+                var x2 = Scale.X(finish.AddDays(1));
+                if (row.IsSummary)
+                {
+                    <g class="gantt-summary" data-item="@row.Item.Id">
+                        <path d="@SummaryPath(x1, x2, top + 9)" />
+                        <title>@row.Item.Title: @Range(start, finish)</title>
+                    </g>
+                }
+                else if (row.IsMilestone)
+                {
+                    var cx = x1 + Scale.DayWidth / 2;
+                    <g class="@BarClass(row, "gantt-milestone")" data-item="@row.Item.Id" data-link-target>
+                        <path data-drag="move" d="@Diamond(cx, top + 15, 8)" />
+                        <circle class="gantt-link-handle" data-drag="link" data-end cx="@F(cx + 15)" cy="@F(top + 15)" r="4" />
+                        <text class="gantt-bar-label" data-end x="@F(cx + 24)" y="@F(top + 19)">@row.Item.Title</text>
+                        <title>@Tooltip(row)</title>
+                    </g>
+                }
+                else
+                {
+                    <g class="@BarClass(row, "gantt-task")" data-item="@row.Item.Id" data-link-target>
+                        <rect data-role="bar" data-drag="move" x="@F(x1)" y="@F(top + 7)" width="@F(Math.Max(x2 - x1, 2))" height="16" rx="3" />
+                        <rect class="gantt-resize-handle" data-drag="resize" data-end x="@F(x2 - 5)" y="@F(top + 7)" width="8" height="16" />
+                        <circle class="gantt-link-handle" data-drag="link" data-end cx="@F(x2 + 9)" cy="@F(top + 15)" r="4" />
+                        <text class="gantt-bar-label" data-end x="@F(x2 + 18)" y="@F(top + 19)">@row.Item.Title</text>
+                        <title>@Tooltip(row)</title>
+                    </g>
+                }
+            }
+
+            @* Today *@
+            @if (Today >= Scale.Start && Today < Scale.End)
+            {
+                var x = Scale.X(Today) + Scale.DayWidth / 2;
+                <line class="gantt-today" x1="@F(x)" x2="@F(x)" y1="0" y2="@F(BodyHeight)" />
+            }
+        </g>
+
+        <defs>
+            <marker id="gantt-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                <path class="gantt-arrowhead" d="M0,0 L8,4 L0,8 z" />
+            </marker>
+            <marker id="gantt-arrow-critical" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                <path class="gantt-arrowhead critical" d="M0,0 L8,4 L0,8 z" />
+            </marker>
+        </defs>
+
+        @* Drag previews are drawn here by gantt.js; Blazor never renders children into it. *@
+        <g class="gantt-overlay"></g>
+    </svg>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<GanttRow> Rows { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public GanttScale Scale { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<DependencyDto> Dependencies { get; set; } = [];
+
+    [Parameter]
+    public ScheduleAnalysis? Analysis { get; set; }
+
+    /// <summary>Baseline dates per item id (summary rows already spanned), or null for none.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<Guid, (DateOnly? Start, DateOnly? Finish)>? Baseline { get; set; }
+
+    [Parameter]
+    public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    [Parameter]
+    public EventCallback<GanttBarDrop> OnBarDropped { get; set; }
+
+    [Parameter]
+    public EventCallback<(Guid PredecessorId, Guid SuccessorId)> OnLinkDropped { get; set; }
+
+    [Parameter]
+    public EventCallback<DependencyDto> OnDependencyClick { get; set; }
+
+    private ElementReference _svg;
+    private ElementReference _scroller;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _handle;
+    private DotNetObjectReference<GanttTimeline>? _self;
+    private GanttZoom? _scrolledZoom;
+    private Dictionary<Guid, GanttRow> _rowById = [];
+    private HashSet<Guid> _critical = [];
+    private Dictionary<Guid, ItemSlack> _slack = [];
+
+    private double BodyHeight => Math.Max(Rows.Count, 1) * GanttLayout.RowHeight;
+
+    protected override void OnParametersSet()
+    {
+        _rowById = Rows.ToDictionary(r => r.Item.Id);
+        _critical = Analysis?.CriticalPath.ToHashSet() ?? [];
+        _slack = Analysis?.Items.ToDictionary(i => i.ItemId) ?? [];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/gantt.js");
+            _self = DotNetObjectReference.Create(this);
+            if (_module is not null)
+            {
+                _handle = await _module.InvokeAsync<IJSObjectReference>("attach", _svg, _self);
+            }
+        }
+
+        if (_module is not null && _scrolledZoom != Scale.Zoom)
+        {
+            _scrolledZoom = Scale.Zoom;
+            await _module.InvokeVoidAsync("scrollToX", _scroller, Scale.X(Today));
+        }
+    }
+
+    [JSInvokable]
+    public Task BarDropped(string itemId, string mode, int days) =>
+        _rowById.TryGetValue(Guid.Parse(itemId), out var row)
+            ? OnBarDropped.InvokeAsync(new GanttBarDrop(row, mode == "resize" ? GanttDragMode.Resize : GanttDragMode.Move, days))
+            : Task.CompletedTask;
+
+    [JSInvokable]
+    public Task LinkDropped(string predecessorId, string successorId) =>
+        OnLinkDropped.InvokeAsync((Guid.Parse(predecessorId), Guid.Parse(successorId)));
+
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static double RowTop(GanttRow row) => row.Index * GanttLayout.RowHeight;
+
+    private static string Diamond(double cx, double cy, double r) =>
+        $"M{F(cx)},{F(cy - r)} L{F(cx + r)},{F(cy)} L{F(cx)},{F(cy + r)} L{F(cx - r)},{F(cy)} Z";
+
+    /// <summary>A thin bar with downward points at both ends.</summary>
+    private static string SummaryPath(double x1, double x2, double top)
+    {
+        var bottom = top + 7;
+        return $"M{F(x1)},{F(top)} H{F(x2)} V{F(bottom + 5)} L{F(x2 - 6)},{F(bottom)} H{F(x1 + 6)} L{F(x1)},{F(bottom + 5)} Z";
+    }
+
+    private double MidY(GanttRow row) => RowTop(row) + 15;
+
+    private double LeftEdge(GanttRow row) =>
+        row.IsMilestone ? Scale.X(row.Start!.Value) + Scale.DayWidth / 2 - 8 : Scale.X(row.Start!.Value);
+
+    private double RightEdge(GanttRow row) =>
+        row.IsMilestone ? Scale.X(row.Start!.Value) + Scale.DayWidth / 2 + 8 : Scale.X(row.Finish!.Value.AddDays(1));
+
+    /// <summary>
+    /// An orthogonal connector: leave the predecessor from the linked end, enter the successor at its
+    /// linked end, and detour through the row boundary when the target lies behind the source.
+    /// </summary>
+    private string ArrowPath(DependencyDto dependency, GanttRow from, GanttRow to)
+    {
+        const double stub = 8;
+        var fromStart = dependency.Type is DependencyKind.StartToStart or DependencyKind.StartToFinish;
+        var toStart = dependency.Type is DependencyKind.FinishToStart or DependencyKind.StartToStart;
+        var x1 = fromStart ? LeftEdge(from) : RightEdge(from);
+        var x2 = toStart ? LeftEdge(to) : RightEdge(to);
+        var y1 = MidY(from);
+        var y2 = MidY(to);
+        var exit = x1 + (fromStart ? -stub : stub);
+        var entry = x2 + (toStart ? -stub : stub);
+        if (toStart ? exit <= entry : exit >= entry)
+        {
+            return $"M{F(x1)},{F(y1)} H{F(exit)} V{F(y2)} H{F(x2)}";
+        }
+
+        var lane = y2 > y1 ? RowTop(from) + GanttLayout.RowHeight : RowTop(from);
+        return $"M{F(x1)},{F(y1)} H{F(exit)} V{F(lane)} H{F(entry)} V{F(y2)} H{F(x2)}";
+    }
+
+    private static string Range(DateOnly start, DateOnly finish) => start == finish
+        ? start.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)
+        : $"{start.ToString("MMM d", CultureInfo.InvariantCulture)} – {finish.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}";
+
+    private string Tooltip(GanttRow row)
+    {
+        var text = $"{row.Item.Title}\n{Range(row.Start!.Value, row.Finish!.Value)}";
+        if (_slack.TryGetValue(row.Item.Id, out var slack))
+        {
+            text += slack.IsCritical ? "\nCritical path" : $"\nSlack: {slack.SlackDays} working day{(slack.SlackDays == 1 ? "" : "s")}";
+        }
+
+        return text;
+    }
+
+    private string BarClass(GanttRow row, string kind) => _critical.Contains(row.Item.Id) ? $"{kind} critical" : kind;
+
+    private static string Abbreviation(DependencyKind type) => type switch
+    {
+        DependencyKind.FinishToStart => "FS",
+        DependencyKind.StartToStart => "SS",
+        DependencyKind.FinishToFinish => "FF",
+        _ => "SF",
+    };
+
+    private static string Lag(int days) => days switch
+    {
+        0 => string.Empty,
+        > 0 => $" +{days}d",
+        _ => $" {days}d",
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_handle is not null)
+            {
+                await _handle.InvokeVoidAsync("dispose");
+                await _handle.DisposeAsync();
+            }
+
+            if (_module is not null)
+            {
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone; nothing to clean up in the browser.
+        }
+
+        _self?.Dispose();
+    }
+}

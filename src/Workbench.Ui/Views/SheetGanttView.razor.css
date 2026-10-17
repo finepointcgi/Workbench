@@ -1,0 +1,22 @@
+.gantt {
+    display: flex;
+    align-items: flex-start;
+    max-height: 70vh;
+    overflow-y: auto;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: var(--mud-default-borderradius);
+    background: var(--mud-palette-surface);
+}
+
+.gantt-legend {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+
+    .gantt-legend.critical {
+        background: var(--mud-palette-error);
+    }
