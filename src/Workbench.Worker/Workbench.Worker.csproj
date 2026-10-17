@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-Workbench.Worker-752eaa39-9362-4f47-bf2a-1a959131f3a1</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Workbench.Infrastructure\Workbench.Infrastructure.csproj" />
+    <ProjectReference Include="..\Workbench.Costpoint\Workbench.Costpoint.csproj" />
+  </ItemGroup>
+</Project>

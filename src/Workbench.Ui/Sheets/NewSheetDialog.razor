@@ -1,0 +1,28 @@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
+            <MudTextField @bind-Value="_description" Label="Description" Lines="2" />
+            <MudSwitch @bind-Value="_schedulingEnabled" Label="Enable scheduling (Gantt)" Color="Color.Primary" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string _name = string.Empty;
+    private string? _description;
+    private bool _schedulingEnabled;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit() =>
+        MudDialog.Close(DialogResult.Ok(new CreateSheetRequest(_name.Trim(), _description, _schedulingEnabled)));
+}
