@@ -78,5 +78,44 @@ public static class DatabaseInitializer
         }));
         db.Add(original);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Dashboards sample: one dashboard over the schedule, using every widget type.
+        static string Config(Contracts.Dashboards.WidgetConfig config) =>
+            System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        var overview = new Domain.Dashboards.Dashboard
+        {
+            Name = "Program Office overview",
+            Description = "Budget, schedule and status across the Integrated Master Schedule",
+            OwnerEmail = "pm@example.com",
+            WorkspaceId = workspace.Id,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        };
+        Domain.Dashboards.Widget Widget(Domain.Dashboards.WidgetType type, string title, int width, Domain.Dashboards.WidgetHeight height,
+            Contracts.Dashboards.WidgetConfig config) =>
+            new() { DashboardId = overview.Id, Type = type, Title = title, Order = overview.Widgets.Count, Width = width, Height = height, ConfigJson = Config(config) };
+        var sum = Contracts.Dashboards.MetricAggregate.Sum;
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Total budget", 3, Domain.Dashboards.WidgetHeight.Small,
+            new(schedule.Id, sum, budget.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Planned hours", 3, Domain.Dashboards.WidgetHeight.Small,
+            new(schedule.Id, sum, hours.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "In progress", 3, Domain.Dashboards.WidgetHeight.Small,
+            new(schedule.Id, FilterColumnId: status.Id, FilterValue: "In progress")));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Average cost per hour", 3, Domain.Dashboards.WidgetHeight.Small,
+            new(schedule.Id, Contracts.Dashboards.MetricAggregate.Average, costPerHour.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Chart, "Tasks by status", 4, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id, Chart: Contracts.Dashboards.ChartKind.Donut, GroupColumnId: status.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Chart, "Planned hours by owner", 4, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id, ValueColumnId: hours.Id, GroupColumnId: owner.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ScheduleHealth, "Schedule health", 4, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ItemList, "PM's tasks", 6, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id, FilterColumnId: owner.Id, FilterValue: "pm@example.com")));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.PlanVsActual, "Plan vs actual", 6, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.RichText, "About this dashboard", 12, Domain.Dashboards.WidgetHeight.Small,
+            new(Markdown: "## Program Office overview\nFigures come from the **Integrated Master Schedule** and the Costpoint mirror.\n\n- Widgets refresh when the sheet changes\n- Choose *Edit* to add, move or resize widgets")));
+        db.Add(overview);
+        await db.SaveChangesAsync(cancellationToken);
     }
 }
