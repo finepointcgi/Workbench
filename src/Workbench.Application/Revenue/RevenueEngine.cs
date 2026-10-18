@@ -105,10 +105,8 @@ public sealed class RevenueEngine(BillingCostSource costs)
         var priorRevenue = await RevenueThroughAsync(db, projectId, period.Start.AddDays(-1), ct);
         var billedByClin = await BilledByClinAsync(db, contractId, projectId, clinUnits, end, ct);
 
-        // Allowable burdened cost through the period end, from the contract (or project) start.
-        var from = project.Start is { } s && s < contract.PeriodStart ? s : contract.PeriodStart;
-        from = from < Beginning ? Beginning : from;
-        var cost = await costs.GetProjectCostAsync(db, projectId, from, end, RateBasis.Provisional, ct);
+        // Allowable burdened cost to date: everything through the period end (cost can predate the contract's start).
+        var cost = await costs.GetProjectCostAsync(db, projectId, Beginning, end, RateBasis.Provisional, ct);
         if (!costs.HasIndirectRates)
         {
             notes.Add(BillingCostSource.NotConfiguredNote);
