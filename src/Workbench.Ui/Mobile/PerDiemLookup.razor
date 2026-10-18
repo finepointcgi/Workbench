@@ -21,6 +21,10 @@
             <button type="button" class="wb-m-list-link wb-m-input mb-1" style="text-align:left" data-testid="per-diem-location" @onclick="() => SelectAsync(location)">@location.Label</button>
         }
     }
+    else if (_searched && _locations.Count == 0 && _selected is null)
+    {
+        <MudText Typo="Typo.body2" Class="wb-m-muted" data-testid="per-diem-none">No destinations match. If none show at all, Finance hasn't loaded this year's per diem rates yet.</MudText>
+    }
     @if (_rate is { } rate && _selected is { } selected)
     {
         <div data-testid="per-diem-rate">
@@ -50,6 +54,7 @@
     private PerDiemLocationDto? _selected;
     private ResolvedPerDiemRateDto? _rate;
     private string? _problem;
+    private bool _searched;
 
     protected override void OnInitialized() => _date = DefaultDate ?? DateOnly.FromDateTime(DateTime.Today);
 
@@ -60,12 +65,14 @@
         if ((_search ?? "").Trim().Length < 2 || _date is not { } date)
         {
             _locations = [];
+            _searched = false;
             return;
         }
 
         try
         {
             _problem = null;
+            _searched = true;
             _locations = await Rates.ListLocationsAsync(FiscalYearOf(date), null, _search!.Trim());
         }
         catch (Exception ex) when (MobileFormat.IsExpected(ex))
