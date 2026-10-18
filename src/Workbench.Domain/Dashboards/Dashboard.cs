@@ -20,6 +20,7 @@ public enum WidgetType
     ProjectFinancials,
     RichText,
     ContractFunding,
+    EarnedValue,
 }
 
 public enum WidgetHeight

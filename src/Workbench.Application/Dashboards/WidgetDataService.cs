@@ -24,7 +24,8 @@ public sealed class WidgetDataService(
     IProjectService projects,
     IProjectFinancialsService financials,
     IFinancialAccessService financialAccess,
-    TimeProvider clock) : IWidgetDataService
+    TimeProvider clock,
+    Contracts.Evm.IEvmService? evm = null) : IWidgetDataService
 {
     public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default)
     {
@@ -45,6 +46,8 @@ public sealed class WidgetDataService(
                 return await ContractFundingAsync(widget, cancellationToken);
             case WidgetType.ProjectFinancials:
                 return await ProjectFinancialsAsync(widget, cancellationToken);
+            case WidgetType.EarnedValue:
+                return await EarnedValueAsync(widget, cancellationToken);
         }
 
         if (config.SheetId is not { } sheetId)
@@ -150,6 +153,49 @@ public sealed class WidgetDataService(
             return new WidgetDataDto(widget.Id, widget.Type, sheetId, name, null, ProjectFinancials: summary);
         }
         catch (WorkbenchForbiddenException ex)
+        {
+            return Error(widget, sheetId, name, ex.Message);
+        }
+    }
+
+    private async Task<WidgetDataDto> EarnedValueAsync(WidgetDto widget, CancellationToken cancellationToken)
+    {
+        if (widget.Config.SheetId is not { } sheetId)
+        {
+            return Error(widget, null, null, "Pick a project plan sheet for this widget.");
+        }
+
+        var sheet = await sheets.GetAsync(sheetId, cancellationToken);
+        if (sheet is null)
+        {
+            return Error(widget, sheetId, null, "The sheet for this widget no longer exists or isn't shared with you.");
+        }
+
+        var name = sheet.Summary.Name;
+        var project = await projects.GetProjectForSheetAsync(sheetId, cancellationToken);
+        if (project is null || evm is null)
+        {
+            return Error(widget, sheetId, name, $"\"{name}\" isn't a project plan sheet.");
+        }
+
+        if (!await financialAccess.CanReadProjectFinancialsAsync(project.Id, cancellationToken))
+        {
+            return Error(widget, sheetId, name, $"Only Finance and the project's manager can see {project.Code}'s earned value.");
+        }
+
+        try
+        {
+            if (await evm.GetBaselineAsync(project.Id, cancellationToken) is null)
+            {
+                return Error(widget, sheetId, name, $"{project.Code} has no performance measurement baseline yet.");
+            }
+
+            var status = await evm.GetStatusAsync(project.Id, cancellationToken: cancellationToken);
+            var series = await evm.GetSeriesAsync(project.Id, cancellationToken);
+            return new WidgetDataDto(widget.Id, widget.Type, sheetId, name, null, EarnedValue: new Contracts.Evm.EvmWidgetData(
+                project.Id, project.Code, project.Name, status.Period.Name, status.Total, series.Points, status.ControlAccounts.Count(c => c.NeedsVar)));
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or ArgumentException)
         {
             return Error(widget, sheetId, name, ex.Message);
         }

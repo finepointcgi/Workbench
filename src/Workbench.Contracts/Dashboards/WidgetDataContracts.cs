@@ -63,7 +63,8 @@ public sealed record WidgetDataDto(
     ScheduleHealthData? Schedule = null,
     string? Markdown = null,
     ContractFundingData? ContractFunding = null,
-    ProjectFinancialSummaryDto? ProjectFinancials = null);
+    ProjectFinancialSummaryDto? ProjectFinancials = null,
+    Evm.EvmWidgetData? EarnedValue = null);
 
 /// <summary>
 /// Computes widget data on the server. Sheet data is read through <c>ISheetService</c>/<c>IItemService</c>, the

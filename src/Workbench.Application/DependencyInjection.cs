@@ -22,6 +22,7 @@ using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
 using Workbench.Application.Revenue;
 using Workbench.Application.Dashboards;
+using Workbench.Application.Evm;
 using Workbench.Application.MyWork;
 using Workbench.Application.Security;
 using Workbench.Application.Sheets;
@@ -67,6 +68,7 @@ public static class DependencyInjection
         services.AddWorkbenchRevenue(); // Revenue recognition: runs post through the GL (JournalSource.Revenue) and add a close check; after billing, above AddWorkbenchIdentity.
         services.AddWorkbenchIncurredCost(); // Incurred cost submission (ICE schedules): reads the GL, pools, billing and AP; above AddWorkbenchIdentity.
         services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
+        services.AddWorkbenchEvm(); // Earned value (PMB, status, VARs, BCRs, IPMDAR exports); ACWP via IBurdenedCostService; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

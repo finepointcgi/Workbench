@@ -1,0 +1,137 @@
+@* Variance analysis: each control account's variances, and the VAR narrative for flagged ones (cause, impact, corrective action). *@
+@inject IEvmService Evm
+@inject ISnackbar Snackbar
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        A control account needs a variance analysis report when its cumulative SV, CV or VAC is beyond ±@(ThresholdPercent.ToString("0.##"))% and ±@EvmFormat.Money(ThresholdAmount).
+        @(Frozen ? "This period is closed, so its analyses are read-only." : "")
+    </MudText>
+    <MudExpansionPanels MultiExpansion="true" data-testid="var-list">
+        @foreach (var v in _items.OrderByDescending(v => v.NeedsVar).ThenBy(v => v.Code, StringComparer.Ordinal))
+        {
+            var draft = _drafts[v.ControlAccountWbsId];
+            <MudExpansionPanel Expanded="@(v.NeedsVar && !v.IsComplete)">
+                <TitleContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                        <MudText><b>@v.Code</b> @v.Name</MudText>
+                        @if (v.NeedsVar)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="@(v.IsComplete ? Color.Success : Color.Warning)">@(v.IsComplete ? "VAR written" : "VAR required")</MudChip>
+                        }
+                        <MudText Typo="Typo.caption" Class="@EvmFormat.VarianceClass(v.Sv)">SV @EvmFormat.Money(v.Sv) (@EvmFormat.Percent(v.SvPercent))</MudText>
+                        <MudText Typo="Typo.caption" Class="@EvmFormat.VarianceClass(v.Cv)">CV @EvmFormat.Money(v.Cv) (@EvmFormat.Percent(v.CvPercent))</MudText>
+                        <MudText Typo="Typo.caption" Class="@EvmFormat.VarianceClass(v.Vac)">VAC @EvmFormat.Money(v.Vac)</MudText>
+                    </MudStack>
+                </TitleContent>
+                <ChildContent>
+                    @foreach (var reason in v.Reasons)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">@reason</MudAlert>
+                    }
+                    <MudTextField @bind-Value="draft.Cause" Label="Cause" Lines="3" ReadOnly="Frozen" Variant="Variant.Outlined" Class="mb-2" MaxLength="4000" />
+                    <MudTextField @bind-Value="draft.Impact" Label="Impact (schedule, cost, technical)" Lines="3" ReadOnly="Frozen" Variant="Variant.Outlined" Class="mb-2" MaxLength="4000" />
+                    <MudTextField @bind-Value="draft.CorrectiveAction" Label="Corrective action" Lines="3" ReadOnly="Frozen" Variant="Variant.Outlined" Class="mb-2" MaxLength="4000" />
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                        <MudNumericField T="decimal?" @bind-Value="draft.ManagerEac" Label="Manager's EAC" ReadOnly="Frozen" Variant="Variant.Outlined" Min="0" Style="max-width: 220px"
+                                         HelperText="@($"BAC {EvmFormat.Money(v.Bac)} · current EAC {EvmFormat.Money(v.Eac)}")" />
+                        @if (!Frozen)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveAsync(v)" Disabled="_saving">Save</MudButton>
+                        }
+                        @if (v.UpdatedBy is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Last saved by @v.UpdatedBy, @v.UpdatedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                        }
+                    </MudStack>
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid PeriodId { get; set; }
+
+    [Parameter]
+    public bool Frozen { get; set; }
+
+    [Parameter]
+    public decimal ThresholdPercent { get; set; }
+
+    [Parameter]
+    public decimal ThresholdAmount { get; set; }
+
+    [Parameter]
+    public EventCallback Saved { get; set; }
+
+    private IReadOnlyList<EvmVarianceDto>? _items;
+    private readonly Dictionary<Guid, Draft> _drafts = [];
+    private bool _saving;
+    private Guid _loadedFor;
+
+    private sealed class Draft
+    {
+        public string? Cause { get; set; }
+        public string? Impact { get; set; }
+        public string? CorrectiveAction { get; set; }
+        public decimal? ManagerEac { get; set; }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != PeriodId)
+        {
+            _loadedFor = PeriodId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await Evm.ListVariancesAsync(ProjectId, PeriodId);
+            _drafts.Clear();
+            foreach (var v in _items)
+            {
+                _drafts[v.ControlAccountWbsId] = new Draft { Cause = v.Cause, Impact = v.Impact, CorrectiveAction = v.CorrectiveAction, ManagerEac = v.ManagerEac };
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            _items = [];
+            Snackbar.Add($"Couldn't load the variance analyses: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync(EvmVarianceDto v)
+    {
+        var d = _drafts[v.ControlAccountWbsId];
+        _saving = true;
+        try
+        {
+            await Evm.SaveVarianceAsync(ProjectId, PeriodId, v.ControlAccountWbsId, new SaveVarianceRequest(d.Cause, d.Impact, d.CorrectiveAction, d.ManagerEac));
+            Snackbar.Add($"Saved the variance analysis for {v.Code}.", Severity.Success);
+            await LoadAsync();
+            await Saved.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

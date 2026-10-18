@@ -1,0 +1,206 @@
+@* The performance measurement baseline: build it, set techniques and milestones, enter progress, and set the variance thresholds. *@
+@inject IEvmService Evm
+@inject ISnackbar Snackbar
+
+@if (Baseline is null)
+{
+    <MudPaper Outlined="true" Class="pa-4" Style="max-width: 720px" data-testid="create-pmb">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Build the performance measurement baseline</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Uses the project's locked Baseline budget, time-phased by the plan sheet's newest schedule baseline. WBS leaves with budget become
+            work packages; their ancestors at the control account level become control accounts.
+        </MudText>
+        <MudStack Spacing="2">
+            <MudNumericField T="int" @bind-Value="_level" Label="Control account level" Min="1" Max="10" Variant="Variant.Outlined" HelperText="Top-level WBS elements are level 1" />
+            <MudNumericField T="decimal" @bind-Value="_reserve" Label="Management reserve" Min="0" Variant="Variant.Outlined" />
+            <MudNumericField T="decimal" @bind-Value="_undistributed" Label="Undistributed budget" Min="0" Variant="Variant.Outlined" />
+            <MudSelect T="EvTechnique" @bind-Value="_technique" Label="Default technique" Variant="Variant.Outlined" ToStringFunc="t => EvmFormat.Technique(t)">
+                @foreach (var t in new[] { EvTechnique.PercentComplete, EvTechnique.ZeroHundred, EvTechnique.FiftyFifty, EvTechnique.LevelOfEffort })
+                {
+                    <MudSelectItem T="EvTechnique" Value="t">@EvmFormat.Technique(t)</MudSelectItem>
+                }
+            </MudSelect>
+            <div><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="_busy">Build PMB</MudButton></div>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    @foreach (var note in Baseline.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-1">@note</MudAlert>
+    }
+    <MudGrid Spacing="2" Class="mb-3">
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Revision @Baseline.Revision</MudText>
+                <MudText Typo="Typo.body2">
+                    From <b>@Baseline.BudgetVersionName</b>@(Baseline.ScheduleBaselineName is { } s ? $", timed by \"{s}\"" : "") · control accounts at level @Baseline.ControlAccountLevel
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mt-1">
+                    Distributed @EvmFormat.Money(Baseline.DistributedBudget) + undistributed @EvmFormat.Money(Baseline.UndistributedBudget)
+                    = PMB <b>@EvmFormat.Money(Baseline.PerformanceMeasurementBaseline)</b>; + management reserve @EvmFormat.Money(Baseline.ManagementReserve)
+                    = contract budget base <b>@EvmFormat.Money(Baseline.ContractBudgetBase)</b>
+                </MudText>
+                @if (Baseline.HasClosedPeriods)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">A status period is closed: budgets, dates and techniques now change through baseline change requests.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Variance thresholds</MudText>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudNumericField T="decimal" @bind-Value="_thresholdPercent" Label="±%" Min="0" Max="100" Variant="Variant.Outlined" Style="min-width: 90px; max-width: 110px" />
+                    <MudNumericField T="decimal" @bind-Value="_thresholdAmount" Label="±$" Min="0" Variant="Variant.Outlined" Style="min-width: 130px; max-width: 160px" />
+                    <MudButton Variant="Variant.Outlined" OnClick="SaveThresholdsAsync" Disabled="_busy">Save</MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudSimpleTable Dense="true" Hover="true" data-testid="wp-table">
+        <thead>
+            <tr>
+                <th>Control account</th>
+                <th>Work package</th>
+                <th style="text-align:right">Budget</th>
+                <th>Planned</th>
+                <th>Technique</th>
+                <th>Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var wp in Baseline.WorkPackages)
+            {
+                <tr data-wp="@wp.WbsCode">
+                    <td>@wp.ControlAccountCode</td>
+                    <td><b>@wp.WbsCode</b> @wp.WbsName</td>
+                    <td style="text-align:right">@EvmFormat.Money(wp.Budget)</td>
+                    <td>@wp.PlannedStart.ToString("yyyy-MM-dd") – @wp.PlannedFinish.ToString("yyyy-MM-dd")</td>
+                    <td style="min-width: 200px">
+                        <MudSelect T="EvTechnique" Value="wp.Technique" ValueChanged="t => ChangeTechniqueAsync(wp, t)" Dense="true" Disabled="Baseline.HasClosedPeriods || _busy"
+                                   ToStringFunc="t => EvmFormat.Technique(t)">
+                            @foreach (var t in Enum.GetValues<EvTechnique>())
+                            {
+                                <MudSelectItem T="EvTechnique" Value="t">@EvmFormat.Technique(t)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (wp.Technique == EvTechnique.Apportioned)
+                        {
+                            <MudSelect T="Guid?" Value="wp.ApportionedToId" ValueChanged="id => ApportionAsync(wp, id)" Dense="true" Label="Apportioned to" Disabled="Baseline.HasClosedPeriods || _busy"
+                                       ToStringFunc="id => Baseline.WorkPackages.FirstOrDefault(w => w.Id == id)?.WbsCode ?? string.Empty">
+                                @foreach (var other in Baseline.WorkPackages.Where(o => o.Id != wp.Id && o.Technique is not (EvTechnique.Apportioned or EvTechnique.LevelOfEffort)))
+                                {
+                                    <MudSelectItem T="Guid?" Value="other.Id">@other.WbsCode</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                    </td>
+                    <td style="min-width: 260px">
+                        @switch (wp.Technique)
+                        {
+                            case EvTechnique.Milestones:
+                                @foreach (var m in wp.Milestones)
+                                {
+                                    <MudCheckBox T="bool" Value="m.IsComplete" ValueChanged="done => CompleteAsync(m, done)" Dense="true" Disabled="_busy"
+                                                 Label="@($"{m.Name} ({m.Weight:0.##}%){(m.CompletedOn is { } on ? $" · {on:yyyy-MM-dd}" : m.IsComplete ? " · done on the plan" : "")}")" />
+                                }
+                                break;
+                            case EvTechnique.LevelOfEffort:
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Earned as planned</MudText>
+                                break;
+                            case EvTechnique.Apportioned:
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Follows its base work package</MudText>
+                                break;
+                            default:
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudNumericField T="decimal?" Value="wp.PercentCompleteOverride" ValueChanged="p => SetProgressAsync(wp, p)" Label="% complete" Min="0" Max="100"
+                                                     Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 120px" Disabled="_busy" Clearable="true" />
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@(wp.PercentCompleteOverride is null ? "From the plan sheet" : "Entered")</MudText>
+                                </MudStack>
+                                break;
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    [Parameter]
+    public EvmBaselineDto? Baseline { get; set; }
+
+    [Parameter]
+    public EventCallback<EvmBaselineDto> Changed { get; set; }
+
+    private int _level = 2;
+    private decimal _reserve;
+    private decimal _undistributed;
+    private EvTechnique _technique = EvTechnique.PercentComplete;
+    private decimal _thresholdPercent;
+    private decimal _thresholdAmount;
+    private bool _busy;
+    private EvmBaselineDto? _thresholdsFor;
+
+    protected override void OnParametersSet()
+    {
+        if (Baseline is not null && !ReferenceEquals(_thresholdsFor, Baseline))
+        {
+            _thresholdsFor = Baseline;
+            (_thresholdPercent, _thresholdAmount) = (Baseline.ThresholdPercent, Baseline.ThresholdAmount);
+        }
+    }
+
+    private Task CreateAsync() => RunAsync(() => Evm.CreateBaselineAsync(ProjectId, new CreateEvmBaselineRequest(null, null, _level, _reserve, _undistributed, _technique)), "Built the PMB.");
+
+    private Task SaveThresholdsAsync() => RunAsync(() => Evm.SetThresholdsAsync(ProjectId, new SetEvmThresholdsRequest(_thresholdPercent, _thresholdAmount)), "Saved the thresholds.");
+
+    private Task ChangeTechniqueAsync(EvmWorkPackageDto wp, EvTechnique technique)
+    {
+        if (technique == EvTechnique.Apportioned)
+        {
+            var target = Baseline!.WorkPackages.FirstOrDefault(o => o.Id != wp.Id && o.Technique is not (EvTechnique.Apportioned or EvTechnique.LevelOfEffort));
+            return ApportionAsync(wp, target?.Id);
+        }
+
+        return RunAsync(() => Evm.UpdateWorkPackageAsync(wp.Id, new UpdateWorkPackageRequest(technique)), $"{wp.WbsCode} uses {EvmFormat.Technique(technique)}.");
+    }
+
+    private Task ApportionAsync(EvmWorkPackageDto wp, Guid? targetId) =>
+        RunAsync(() => Evm.UpdateWorkPackageAsync(wp.Id, new UpdateWorkPackageRequest(EvTechnique.Apportioned, targetId)), $"{wp.WbsCode} is apportioned.");
+
+    private Task SetProgressAsync(EvmWorkPackageDto wp, decimal? percent) =>
+        RunAsync(() => Evm.SetProgressAsync(wp.Id, new SetWorkPackageProgressRequest(percent)), null);
+
+    private Task CompleteAsync(EvmMilestoneDto m, bool done) =>
+        RunAsync(() => Evm.SetMilestoneCompletionAsync(m.Id, new SetMilestoneCompletionRequest(done ? DateOnly.FromDateTime(DateTime.Today) : null)), null);
+
+    private async Task RunAsync(Func<Task<EvmBaselineDto>> action, string? success)
+    {
+        _busy = true;
+        try
+        {
+            var baseline = await action();
+            if (success is not null)
+            {
+                Snackbar.Add(success, Severity.Success);
+            }
+
+            await Changed.InvokeAsync(baseline);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

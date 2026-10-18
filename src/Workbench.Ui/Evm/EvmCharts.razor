@@ -1,0 +1,96 @@
+@* The S-curve (cumulative BCWS, BCWP, ACWP) and the CPI/SPI trend. *@
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="8">
+        <MudPaper Outlined="true" Class="pa-4" data-testid="evm-scurve">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">Performance (cumulative)</MudText>
+            @if (Series.Points.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">No fiscal periods cover the baseline.</MudText>
+            }
+            else
+            {
+                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_curve" ChartLabels="_labels" ChartOptions="_curveOptions" Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    BCWP and ACWP are shown for closed periods and the reporting period. Close each month to build the history.
+                </MudText>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudPaper Outlined="true" Class="pa-4" data-testid="evm-trend">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">CPI and SPI trend (× 100)</MudText>
+            @if (_indexLabels.Length == 0)
+            {
+                <MudText Class="mud-text-secondary">No statused periods yet.</MudText>
+            }
+            else
+            {
+                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_indices" ChartLabels="_indexLabels" ChartOptions="_indexOptions" Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired]
+    public EvmSeriesDto Series { get; set; } = default!;
+
+    private string[] _labels = [];
+    private string[] _indexLabels = [];
+    private List<ChartSeries<double>> _curve = [];
+    private List<ChartSeries<double>> _indices = [];
+    private EvmSeriesDto? _builtFor;
+
+    // MudChart's default y-axis step suits neither dollars in the hundreds of thousands nor indices around 1.
+    private LineChartOptions _curveOptions = new();
+    private readonly LineChartOptions _indexOptions = new() { YAxisTicks = 25 };
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_builtFor, Series))
+        {
+            return;
+        }
+
+        _builtFor = Series;
+        var points = Series.Points;
+        _labels = points.Select(p => p.Name).ToArray();
+
+        // Earned and actual lines stop at the last statused period, so an unstatused month doesn't read as zero.
+        var last = points.Select((p, i) => (p, i)).LastOrDefault(x => x.p.Bcwp is not null).i;
+        var statused = points.Any(p => p.Bcwp is not null) ? points.Take(last + 1).ToList() : [];
+        _curve =
+        [
+            new() { Name = "BCWS (planned)", Data = new ChartData<double>(points.Select(p => (double)p.Bcws).ToList()) },
+            new() { Name = "BCWP (earned)", Data = new ChartData<double>(Carry(statused.Select(p => p.Bcwp))) },
+            new() { Name = "ACWP (actual)", Data = new ChartData<double>(Carry(statused.Select(p => p.Acwp))) },
+        ];
+
+        var max = (double)points.Select(p => Math.Max(p.Bcws, Math.Max(p.Bcwp ?? 0, p.Acwp ?? 0))).DefaultIfEmpty(0).Max();
+        _curveOptions = new LineChartOptions { YAxisTicks = (int)Math.Max(1, Math.Ceiling(max / 5 / 1000) * 1000) };
+
+        var indexed = points.Where(p => p.Bcwp is not null).ToList();
+        _indexLabels = indexed.Select(p => p.Name).ToArray();
+        _indices =
+        [
+            new() { Name = "CPI", Data = new ChartData<double>(indexed.Select(p => (double)(p.Cpi ?? 0) * 100).ToList()) },
+            new() { Name = "SPI", Data = new ChartData<double>(indexed.Select(p => (double)(p.Spi ?? 0) * 100).ToList()) },
+            new() { Name = "On plan (1.00)", Data = new ChartData<double>(indexed.Select(_ => 100d).ToList()) },
+        ];
+    }
+
+    /// <summary>An unstatused month between statused ones takes the previous cumulative value.</summary>
+    private static List<double> Carry(IEnumerable<decimal?> values)
+    {
+        var list = new List<double>();
+        var last = 0d;
+        foreach (var v in values)
+        {
+            last = v is { } d ? (double)d : last;
+            list.Add(last);
+        }
+
+        return list;
+    }
+}
