@@ -78,7 +78,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
 
     // ---- Definitions ----
 
-    /// <summary>The workflow and its current version for a document type, creating the built-in default the first time.</summary>
+    /// <summary>The workflow and its current version for a document type, creating the built-in default (by "system") the first time.</summary>
     public async Task<(ApprovalWorkflow Workflow, ApprovalWorkflowVersion Version)> CurrentAsync(IWorkbenchDbContext db, string documentType, string actor, CancellationToken ct)
     {
         var workflow = db.Set<ApprovalWorkflow>().Local.FirstOrDefault(w => w.DocumentType == documentType)
@@ -102,7 +102,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
             WorkflowId = workflow.Id,
             Version = 1,
             DefinitionJson = ApprovalDefaults.Serialize(ApprovalDefaults.For(documentType)),
-            CreatedBy = string.IsNullOrWhiteSpace(actor) ? "system" : Normalize(actor),
+            CreatedBy = "system",
             CreatedAtUtc = now,
             Note = "Built-in default",
         };
@@ -420,19 +420,40 @@ public sealed class ApprovalEngine(TimeProvider clock)
 
     /// <summary>Read-only: whether the actor may decide the document now (its pending trip, or a preview for an unrouted one).</summary>
     public async Task<bool> CanDecideAsync(IWorkbenchDbContext db, string documentType, Guid documentId, string actorEmail,
+        Func<CancellationToken, Task<ApprovalSubject>>? subject, CancellationToken ct) =>
+        (await ActionableForAsync(db, documentType, documentId, actorEmail, subject, ct)).Count > 0;
+
+    /// <summary>Read-only: the pending tasks the actor may decide on one document (previewed for an unrouted one).</summary>
+    public async Task<IReadOnlyList<ApprovalTask>> ActionableForAsync(IWorkbenchDbContext db, string documentType, Guid documentId, string actorEmail,
         Func<CancellationToken, Task<ApprovalSubject>>? subject, CancellationToken ct)
     {
         var instance = await db.Set<ApprovalInstance>().AsNoTracking()
             .Where(i => i.DocumentType == documentType && i.DocumentId == documentId && i.Status == ApprovalInstanceStatus.Pending)
             .FirstOrDefaultAsync(ct);
+        var actor = await ActorAsync(db, actorEmail, ct);
+        IEnumerable<ApprovalTask> pending;
         if (instance is null)
         {
-            return subject is not null && await PreviewCanDecideAsync(db, await subject(ct), actorEmail, ct);
+            if (subject is null)
+            {
+                return [];
+            }
+
+            try
+            {
+                pending = (await StartAsync(db, await subject(ct), ct, persist: false)).Active;
+            }
+            catch (ArgumentException)
+            {
+                return [];
+            }
+        }
+        else
+        {
+            pending = await db.Set<ApprovalTask>().AsNoTracking().Where(t => t.InstanceId == instance.Id && t.Status == ApprovalTaskStatus.Pending).ToListAsync(ct);
         }
 
-        var actor = await ActorAsync(db, actorEmail, ct);
-        return (await db.Set<ApprovalTask>().AsNoTracking().Where(t => t.InstanceId == instance.Id && t.Status == ApprovalTaskStatus.Pending).ToListAsync(ct))
-            .Any(t => CanAct(t, actor, documentType).Allowed);
+        return pending.Where(t => CanAct(t, actor, documentType).Allowed).ToList();
     }
 
     /// <summary>Document ids of a type with a pending trip (submitted through the engine).</summary>
@@ -559,7 +580,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
     }
 
     /// <summary>Active delegates (today) of any of the emails, so they hear about work waiting on whoever they stand in for.</summary>
-    private async Task<IReadOnlyList<string>> DelegatesOfAsync(IWorkbenchDbContext db, IReadOnlyCollection<string> emails, string documentType, CancellationToken ct)
+    public async Task<IReadOnlyList<string>> DelegatesOfAsync(IWorkbenchDbContext db, IReadOnlyCollection<string> emails, string documentType, CancellationToken ct)
     {
         if (emails.Count == 0)
         {

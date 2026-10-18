@@ -1,0 +1,84 @@
+@* The approval trail of one document: every trip through its workflow, its tasks and what happened. *@
+@inject IApprovalInboxService Inbox
+
+<MudDialog>
+    <DialogContent>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">@_error</MudAlert>
+        }
+        else if (_history is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_history.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No approval history yet.</MudText>
+        }
+        else
+        {
+            @foreach (var trip in _history)
+            {
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2">
+                    Submitted @Local(trip.StartedAtUtc) by @trip.SubmitterEmail · workflow v@(trip.WorkflowVersion) ·
+                    <ApprovalStateChip State="trip.Status" />
+                </MudText>
+                <MudSimpleTable Dense="true" Elevation="0" Class="mb-2">
+                    <thead><tr><th>Step</th><th>Approvers</th><th>Status</th><th>Decided</th></tr></thead>
+                    <tbody>
+                        @foreach (var task in trip.Tasks)
+                        {
+                            <tr>
+                                <td>@task.Sequence. @task.StepName @(task.ScopeLabel is null ? "" : $"({task.ScopeLabel})")</td>
+                                <td>@Approvers(task)</td>
+                                <td>@task.Status @(task.SkipReason is null ? "" : $"– {task.SkipReason}")</td>
+                                <td>@(task.DecidedBy is null ? "" : $"{task.DecidedBy}{(task.OnBehalfOf is null ? "" : $" for {task.OnBehalfOf}")} {Local(task.DecidedAtUtc)}") @task.Comment</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Trail</MudText>
+                <ul class="mt-1 mb-4">
+                    @foreach (var action in trip.Trail)
+                    {
+                        <li><MudText Typo="Typo.body2">@Local(action.OccurredAtUtc): @action.Action @(action.StepName is null ? "" : $"({action.StepName})") by @action.Actor@(action.OnBehalfOf is null ? "" : $" for {action.OnBehalfOf}")@(action.Comment is null ? "" : $": {action.Comment}")</MudText></li>
+                    }
+                </ul>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string DocumentType { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public Guid DocumentId { get; set; }
+
+    private IReadOnlyList<ApprovalInstanceDto>? _history;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _history = await Inbox.GetHistoryAsync(DocumentType, DocumentId);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string Approvers(ApprovalTaskDto task) =>
+        string.Join(", ", task.Assignees.Concat(task.AssigneeRole is null ? [] : [$"anyone in {task.AssigneeRole}"])) is { Length: > 0 } s ? s : "nobody (ask an administrator)";
+
+    private static string Local(DateTime? utc) => utc is { } u ? u.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "";
+}

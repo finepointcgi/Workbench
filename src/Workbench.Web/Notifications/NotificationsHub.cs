@@ -69,6 +69,7 @@ public static class NotificationsHosting
         services.AddWorkbenchAutomationHosting();
         services.AddWorkbenchTimekeepingHosting();
         Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);
+        Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
         return services;
     }
 

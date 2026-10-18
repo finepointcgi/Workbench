@@ -2,11 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Workbench.Application.Accounting;
+using Workbench.Application.Approvals;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Application.Odcs;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Accounting;
@@ -31,8 +33,11 @@ public sealed class ApBillService(
     INotificationPublisher notifications,
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
-    ILogger<ApBillService> logger) : IApBillService
+    ILogger<ApBillService> logger,
+    ApprovalEngine? approvals = null) : IApBillService
 {
+    private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
+
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
     private string Me => access.Email;
@@ -150,18 +155,19 @@ public sealed class ApBillService(
         // Three-way match (procure-to-pay): mismatches are recorded now and block approval until they clear or Finance overrides.
         await ThreeWayMatch.EvaluateAsync(db, bill, options.Value.MatchPriceTolerancePercent, cancellationToken);
 
-        // Routing.
-        var projectIds = bill.Lines.Where(l => l.ProjectId != null).Select(l => l.ProjectId!.Value).Distinct().ToList();
-        var managers = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id) && p.ProjectManagerId != null)
-            .Join(db.Set<Employee>(), p => p.ProjectManagerId, e => e.Id, (p, e) => new { p.Id, e.Email })
-            .ToDictionaryAsync(x => x.Id, x => x.Email, cancellationToken);
+        // Routing: the AP bill workflow (Setup › Approval workflows). By default project lines go to their PM and
+        // account lines (and lines no other PM can take) to Finance, in parallel.
         foreach (var line in bill.Lines)
         {
             line.Status = ApLineStatus.Pending;
             line.DecidedBy = null;
             line.DecidedAtUtc = null;
-            var pm = line.Kind == ApBillLineKind.Account || line.ProjectId is not { } pid ? null : managers.GetValueOrDefault(pid);
-            line.ApproverEmail = pm is not null && !PurchasingSupport.SameEmail(pm, bill.EnteredBy) ? PurchasingSupport.Normalize(pm) : null;
+        }
+
+        var route = await _approvals.StartAsync(db, await ApprovalSubjects.ApBillAsync(db, bill, cancellationToken), cancellationToken);
+        foreach (var line in bill.Lines)
+        {
+            line.ApproverEmail = line.Kind == ApBillLineKind.Account || line.ProjectId is not { } pid ? null : route.ProjectApprover(pid);
         }
 
         bill.Status = ApBillStatus.PendingApproval;
@@ -183,9 +189,10 @@ public sealed class ApBillService(
             notify.Add((pms, $"{bill.EnteredBy} sent a {vendor.Name} bill for your approval"));
         }
 
-        if (bill.Lines.Any(l => l.ApproverEmail == null))
+        var others = route.NotifyEmails.Where(e => !pms.Contains(e, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (others.Count > 0)
         {
-            notify.Add((await FinanceApproversAsync(db, bill.EnteredBy, cancellationToken), $"{vendor.Name} bill {bill.InvoiceNumber} needs Finance approval"));
+            notify.Add((others, $"{vendor.Name} bill {bill.InvoiceNumber} needs Finance approval"));
         }
 
         foreach (var (to, title) in notify)
@@ -200,14 +207,19 @@ public sealed class ApBillService(
     public async Task<IReadOnlyList<BillApprovalItemDto>> ListApprovalQueueAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
         var bills = await db.Set<ApBill>().AsNoTracking().Include(b => b.Lines).Where(b => b.Status == ApBillStatus.PendingApproval).ToListAsync(cancellationToken);
         var linkedSubmitters = await LinkedOdcSubmittersAsync(db, bills.SelectMany(b => b.Lines), cancellationToken);
-        var mine = bills
-            .Select(b => (Bill: b, Lines: b.Lines.Where(l => l.Status == ApLineStatus.Pending && CanApprove(b, l, roles, linkedSubmitters)).ToList()))
-            .Where(x => x.Lines.Count > 0)
-            .OrderBy(x => x.Bill.DueDate)
-            .ToList();
+        var mine = new List<(ApBill Bill, List<ApBillLine> Lines)>();
+        foreach (var bill in bills)
+        {
+            var lines = await ApprovableLinesAsync(db, bill, linkedSubmitters, cancellationToken);
+            if (lines.Count > 0)
+            {
+                mine.Add((bill, lines));
+            }
+        }
+
+        mine = mine.OrderBy(x => x.Bill.DueDate).ToList();
         var summaries = (await SummariesAsync(db, mine.Select(x => x.Bill).ToList(), cancellationToken)).ToDictionary(s => s.Id);
         var lookups = await LineLookups.LoadAsync(db, mine.SelectMany(x => x.Lines), cancellationToken);
         return mine.Select(x => new BillApprovalItemDto(summaries[x.Bill.Id], x.Lines.OrderBy(l => l.LineNumber).Select(lookups.ToDto).ToList())).ToList();
@@ -230,9 +242,10 @@ public sealed class ApBillService(
                 throw new WorkbenchForbiddenException("You can't approve a bill you entered.");
             }
 
-            var roles = await access.GetOrgRolesAsync(cancellationToken);
             var submitters = await LinkedOdcSubmittersAsync(db, bill.Lines, cancellationToken);
-            var lines = bill.Lines.Where(l => l.Status == ApLineStatus.Pending && CanApprove(bill, l, roles, submitters)).ToList();
+            var check = await _approvals.CheckAsync(db, ApprovalDocumentTypes.ApBill, bill.Id, Me,
+                ct => ApprovalSubjects.ApBillAsync(db, bill, ct), cancellationToken);
+            var lines = LinesOf(bill, check.Actionable.Select(a => a.Task), submitters);
             if (lines.Count == 0)
             {
                 throw new WorkbenchForbiddenException(bill.Lines.Any(l => l.Status == ApLineStatus.Pending && l.OdcEntryId is { } o && PurchasingSupport.SameEmail(submitters.GetValueOrDefault(o), Me))
@@ -250,14 +263,15 @@ public sealed class ApBillService(
                     + " Receive the goods, correct the bill, or have Finance override under Purchasing › Match exceptions.");
             }
 
-            foreach (var line in lines)
+            var outcome = await _approvals.DecideAsync(db, check, ApprovalDecisionKind.Approve, Me, null, cancellationToken);
+            foreach (var line in outcome.IsComplete ? bill.Lines.Where(l => l.Status == ApLineStatus.Pending).ToList() : lines)
             {
                 line.Status = ApLineStatus.Approved;
                 line.DecidedBy = Me;
                 line.DecidedAtUtc = UtcNow;
             }
 
-            complete = bill.Lines.All(l => l.Status == ApLineStatus.Approved);
+            complete = outcome.IsComplete;
             if (complete)
             {
                 bill.Status = ApBillStatus.Approved;
@@ -299,12 +313,14 @@ public sealed class ApBillService(
             throw new WorkbenchForbiddenException("You can't reject a bill you entered; edit or void it instead.");
         }
 
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
         var submitters = await LinkedOdcSubmittersAsync(db, bill.Lines, cancellationToken);
-        if (!bill.Lines.Any(l => l.Status == ApLineStatus.Pending && CanApprove(bill, l, roles, submitters)))
+        var check = await _approvals.CheckAsync(db, ApprovalDocumentTypes.ApBill, bill.Id, Me, ct => ApprovalSubjects.ApBillAsync(db, bill, ct), cancellationToken);
+        if (LinesOf(bill, check.Actionable.Select(a => a.Task), submitters).Count == 0)
         {
             throw new WorkbenchForbiddenException("None of this bill's lines are routed to you.");
         }
+
+        await _approvals.DecideAsync(db, check, ApprovalDecisionKind.Reject, Me, reason, cancellationToken);
 
         bill.Status = ApBillStatus.Rejected;
         bill.RejectionReason = reason;
@@ -349,6 +365,7 @@ public sealed class ApBillService(
 
         bill.Status = ApBillStatus.Void;
         bill.VoidReason = reason;
+        await _approvals.CancelAsync(db, ApprovalDocumentTypes.ApBill, bill.Id, Me, reason, cancellationToken);
         audit.Record(db, PurchasingSupport.BillEntity, bill.Id, "Voided", reason: reason);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, bill.Id, cancellationToken);
@@ -877,29 +894,29 @@ public sealed class ApBillService(
     }
 
     /// <summary>
-    /// The routed approver (the project manager, or anyone in Finance for Finance-routed lines) or an administrator; never
-    /// the person who entered the bill or the linked cost.
+    /// The pending lines the current user may decide: those covered by their workflow tasks (a project task covers that
+    /// project's PM-routed lines; a whole-bill task the Finance-routed ones), never a cost they entered themselves.
     /// </summary>
-    private bool CanApprove(ApBill bill, ApBillLine line, OrgRoles roles, IReadOnlyDictionary<Guid, string> linkedSubmitters)
+    private async Task<List<ApBillLine>> ApprovableLinesAsync(IWorkbenchDbContext db, ApBill bill, IReadOnlyDictionary<Guid, string> linkedSubmitters, CancellationToken ct)
     {
-        if (PurchasingSupport.SameEmail(bill.EnteredBy, Me)
-            || (line.OdcEntryId is { } o && PurchasingSupport.SameEmail(linkedSubmitters.GetValueOrDefault(o), Me)))
+        if (bill.Status != ApBillStatus.PendingApproval || PurchasingSupport.SameEmail(bill.EnteredBy, Me))
         {
-            return false;
+            return [];
         }
 
-        if (roles.HasFlag(OrgRoles.Admin))
-        {
-            return true;
-        }
-
-        return line.ApproverEmail is { } pm ? PurchasingSupport.SameEmail(pm, Me) : roles.IsFinance();
+        var tasks = await _approvals.ActionableForAsync(db, ApprovalDocumentTypes.ApBill, bill.Id, Me, c => ApprovalSubjects.ApBillAsync(db, bill, c), ct);
+        return LinesOf(bill, tasks, linkedSubmitters);
     }
 
-    private static async Task<IReadOnlyList<string>> FinanceApproversAsync(IWorkbenchDbContext db, string enteredBy, CancellationToken ct)
+    private List<ApBillLine> LinesOf(ApBill bill, IEnumerable<Domain.Approvals.ApprovalTask> tasks, IReadOnlyDictionary<Guid, string> linkedSubmitters)
     {
-        var entered = PurchasingSupport.Normalize(enteredBy);
-        return await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive && (u.IsFinance || u.IsAdmin) && u.Email != entered).Select(u => u.Email).ToListAsync(ct);
+        var list = tasks.ToList();
+        var projects = list.Where(t => t.ScopeKey?.StartsWith("project:", StringComparison.Ordinal) == true).Select(t => t.ScopeKey!).ToHashSet();
+        var whole = list.Any(t => t.ScopeKey is null);
+        return bill.Lines.Where(l => l.Status == ApLineStatus.Pending
+                && !(l.OdcEntryId is { } o && PurchasingSupport.SameEmail(linkedSubmitters.GetValueOrDefault(o), Me))
+                && (l.ApproverEmail is null ? whole : l.ProjectId is { } p && projects.Contains(ApprovalEngine.ProjectScope(p))))
+            .ToList();
     }
 
     private static void EnsureEditable(ApBill bill)
@@ -946,8 +963,8 @@ public sealed class ApBillService(
         var duplicates = bill.Status == ApBillStatus.Void ? [] : await DuplicatesAsync(db, bill.VendorId, bill.InvoiceNumber, bill.InvoiceDate, bill.Amount, bill.Id, ct);
         var payments = await db.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id)
             .Join(db.Set<ApPaymentRun>(), p => p.RunId, r => r.Id, (p, r) => new { p, r.Number }).ToListAsync(ct);
-        var roles = access.IsAuthenticated ? await access.GetOrgRolesAsync(ct) : OrgRoles.Employee;
         var submitters = await LinkedOdcSubmittersAsync(db, bill.Lines, ct);
+        var canDecide = access.IsAuthenticated && (await ApprovableLinesAsync(db, bill, submitters, ct)).Count > 0;
         return new BillDto(
             Summary(bill, vendor),
             bill.Description,
@@ -960,7 +977,7 @@ public sealed class ApBillService(
             bill.RejectionReason,
             bill.VoidReason,
             bill.Status is ApBillStatus.Draft or ApBillStatus.Rejected,
-            bill.Status == ApBillStatus.PendingApproval && bill.Lines.Any(l => l.Status == ApLineStatus.Pending && CanApprove(bill, l, roles, submitters)));
+            canDecide);
     }
 
     private sealed class LineLookups

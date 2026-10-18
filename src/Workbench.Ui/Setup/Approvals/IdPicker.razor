@@ -1,0 +1,25 @@
+@* A multi-select of setup records (projects, contracts, org units) by id. *@
+<MudSelect T="Guid" MultiSelection="true" SelectedValues="Selected" SelectedValuesChanged="SelectedChanged" Label="@Label" Dense="true" ReadOnly="ReadOnly"
+           ToStringFunc="@(id => Options.FirstOrDefault(o => o.Id == id).Label ?? id.ToString())">
+    @foreach (var option in Options)
+    {
+        <MudSelectItem Value="option.Id">@option.Label</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<(Guid Id, string Label)> Options { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyCollection<Guid> Selected { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<IReadOnlyCollection<Guid>> SelectedChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "";
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+}
