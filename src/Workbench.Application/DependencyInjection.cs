@@ -15,6 +15,7 @@ using Workbench.Application.Dashboards;
 using Workbench.Application.MyWork;
 using Workbench.Application.Security;
 using Workbench.Application.Sheets;
+using Workbench.Application.Tenancy;
 using Workbench.Application.Time;
 using Workbench.Contracts.Sheets;
 
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddWorkbenchContractDetail();
         services.AddWorkbenchBilling(); // Billing/AR: posts through the GL; must stay above AddWorkbenchIdentity.
         services.AddWorkbenchPurchasing(); // AP bills post through AddWorkbenchAccounting's engine; above AddWorkbenchIdentity.
+        services.AddWorkbenchTenancy(); // SingleTenant defaults; AddWorkbenchInfrastructure replaces them from the Tenancy section.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

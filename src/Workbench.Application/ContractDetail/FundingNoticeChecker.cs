@@ -118,7 +118,7 @@ public sealed class FundingNoticeChecker(
 }
 
 /// <summary>Re-checks every active contract with CLINs hourly, so newly approved cost raises notices without a page visit.</summary>
-public sealed class FundingNoticeBackgroundService(IServiceScopeFactory scopes, TimeProvider clock, ILogger<FundingNoticeBackgroundService> logger)
+public sealed class FundingNoticeBackgroundService(IServiceScopeFactory scopes, Tenancy.ITenantJobRunner tenants, TimeProvider clock, ILogger<FundingNoticeBackgroundService> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -128,25 +128,28 @@ public sealed class FundingNoticeBackgroundService(IServiceScopeFactory scopes, 
         {
             try
             {
-                await using var scope = scopes.CreateAsyncScope();
-                var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync(stoppingToken);
-                List<Guid> contracts;
-                await using (db)
+                await tenants.ForEachTenantAsync(async ct =>
                 {
-                    contracts = await db.Set<Clin>().AsNoTracking()
-                        .Join(db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active), c => c.ContractId, k => k.Id, (c, _) => c.ContractId)
-                        .Distinct().ToListAsync(stoppingToken);
-                }
-
-                var checker = scope.ServiceProvider.GetRequiredService<FundingNoticeChecker>();
-                foreach (var id in contracts)
-                {
-                    var sent = await checker.CheckAsync(id, stoppingToken);
-                    if (sent.Count > 0)
+                    await using var scope = scopes.CreateAsyncScope();
+                    var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync(ct);
+                    List<Guid> contracts;
+                    await using (db)
                     {
-                        logger.LogInformation("Sent {Count} funding notices for contract {ContractId}", sent.Count, id);
+                        contracts = await db.Set<Clin>().AsNoTracking()
+                            .Join(db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active), c => c.ContractId, k => k.Id, (c, _) => c.ContractId)
+                            .Distinct().ToListAsync(ct);
                     }
-                }
+
+                    var checker = scope.ServiceProvider.GetRequiredService<FundingNoticeChecker>();
+                    foreach (var id in contracts)
+                    {
+                        var sent = await checker.CheckAsync(id, ct);
+                        if (sent.Count > 0)
+                        {
+                            logger.LogInformation("Sent {Count} funding notices for contract {ContractId}", sent.Count, id);
+                        }
+                    }
+                }, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

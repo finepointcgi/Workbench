@@ -12,7 +12,9 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Workbench.Application;
 using Workbench.Application.Security;
+using Workbench.Application.Tenancy;
 using Workbench.Domain.Security;
+using Workbench.Infrastructure.Tenancy;
 
 namespace Workbench.Web.Security;
 
@@ -31,8 +33,11 @@ public static class OperationsSetup
         switch (settings.Store.ToLowerInvariant())
         {
             case "database":
+                // MultiTenant: one key ring in the catalog database; tenants are separated by purpose (TenantDataProtectionProvider).
                 services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(sp => new ConfigureOptions<KeyManagementOptions>(o =>
-                    o.XmlRepository = new DatabaseXmlRepository(sp.GetRequiredService<IWorkbenchDbContextFactory>())));
+                    o.XmlRepository = sp.GetRequiredService<TenancyOptions>().IsMultiTenant
+                        ? new CatalogXmlRepository(sp.GetRequiredService<IDbContextFactory<CatalogDbContext>>())
+                        : new DatabaseXmlRepository(sp.GetRequiredService<IWorkbenchDbContextFactory>())));
                 break;
             case "filesystem":
                 if (string.IsNullOrWhiteSpace(settings.KeysFolder))
@@ -130,13 +135,21 @@ public static class OperationsSetup
         }
     }
 
-    private sealed class DatabaseHealthCheck(IWorkbenchDbContextFactory dbFactory) : IHealthCheck
+    private sealed class DatabaseHealthCheck(IServiceProvider services, ITenantContext tenants) : IHealthCheck
     {
         public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
         {
             try
             {
-                await using var db = await dbFactory.CreateAsync(cancellationToken);
+                // The host site (MultiTenant, no tenant) checks the catalog; a tenant address checks that tenant's database.
+                if (tenants.IsHost)
+                {
+                    await using var catalog = await services.GetRequiredService<IDbContextFactory<CatalogDbContext>>().CreateDbContextAsync(cancellationToken);
+                    await catalog.Tenants.AsNoTracking().AnyAsync(cancellationToken);
+                    return HealthCheckResult.Healthy();
+                }
+
+                await using var db = await services.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync(cancellationToken);
                 await db.Set<DataProtectionKeyRecord>().AsNoTracking().AnyAsync(cancellationToken);
                 return HealthCheckResult.Healthy();
             }
@@ -150,7 +163,7 @@ public static class OperationsSetup
 }
 
 /// <summary>Runs the retention purge once a day at <see cref="RetentionOptions.RunHourUtc"/> (A.5.33, A.8.10).</summary>
-public sealed class RetentionBackgroundService(IServiceScopeFactory scopes, RetentionOptions options, TimeProvider clock, ILogger<RetentionBackgroundService> logger)
+public sealed class RetentionBackgroundService(IServiceScopeFactory scopes, ITenantJobRunner tenants, RetentionOptions options, TimeProvider clock, ILogger<RetentionBackgroundService> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -172,8 +185,11 @@ public sealed class RetentionBackgroundService(IServiceScopeFactory scopes, Rete
             await Task.Delay(next - now, clock, stoppingToken);
             try
             {
-                await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<RetentionService>().RunAsync(dryRun: false, "system", stoppingToken);
+                await tenants.ForEachTenantAsync(async ct =>
+                {
+                    await using var scope = scopes.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<RetentionService>().RunAsync(dryRun: false, "system", ct);
+                }, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

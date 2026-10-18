@@ -12,7 +12,7 @@ using Workbench.Web.Identity;
 namespace Workbench.Tests.Identity;
 
 /// <summary>
-/// The real web host. Development runs on a temporary SQLite file with the seeded data. With
+/// The real web host on a migrated test database (see <see cref="TestDb"/>); Development seeds the sample data. With
 /// <c>testAuth</c>, requests carrying <c>X-Test-User: email</c> are signed in as that user, standing in for the
 /// cookie or bearer token.
 /// </summary>
@@ -21,12 +21,16 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
 {
     public const string UserHeader = "X-Test-User";
     public const string ScimToken = "test-scim-token-0123456789abcdef0123456789";
-    private readonly string _database = Path.Combine(Path.GetTempPath(), $"workbench-test-{Guid.NewGuid():N}.db");
+    // A migrated database on the suite's provider (WORKBENCH_TEST_DB): a SQLite file unless PostgreSQL was chosen.
+    private readonly (string Provider, string ConnectionString) _database = TestDb.Provider == TestDatabase.PostgreSql
+        ? ("PostgreSQL", PostgresTemplates.NewDatabase())
+        : ("Sqlite", SqliteTemplates.NewDatabase());
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
-        builder.UseSetting("ConnectionStrings:Workbench", $"Data Source={_database};Pooling=False");
+        builder.UseSetting("Database:Provider", _database.Provider);
+        builder.UseSetting("ConnectionStrings:Workbench", _database.ConnectionString);
         builder.UseSetting("Costpoint:Source", "None");
         builder.UseSetting("Storage:Root", Path.Combine(Path.GetTempPath(), $"workbench-blobs-{Guid.NewGuid():N}"));
 
@@ -67,11 +71,6 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
         return client;
     }
 
-    public override async ValueTask DisposeAsync()
-    {
-        await base.DisposeAsync();
-        File.Delete(_database);
-    }
 
     private sealed class HeaderAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)

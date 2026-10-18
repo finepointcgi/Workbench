@@ -356,7 +356,7 @@ public sealed class BurdenedCostServiceTests
         await using (var db = await kit.Factory.CreateAsync())
         {
             var draft = new Workbench.Domain.ProjectAccounting.Timesheet { EmployeeId = kit.Employee.Id, PeriodStart = IndirectRatesKit.October, PeriodEnd = IndirectRatesKit.October.AddDays(6) };
-            draft.Entries.Add(new() { TimesheetId = draft.Id, WbsElementId = kit.Task1.Id, WorkDate = IndirectRatesKit.October, Hours = 8, LaborCategoryId = Guid.NewGuid() });
+            draft.Entries.Add(new() { TimesheetId = draft.Id, WbsElementId = kit.Task1.Id, WorkDate = IndirectRatesKit.October, Hours = 8, LaborCategoryId = kit.Category.Id });
             db.Set<Workbench.Domain.ProjectAccounting.Timesheet>().Add(draft);
             await db.SaveChangesAsync();
         }

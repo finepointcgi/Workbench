@@ -18,17 +18,19 @@ public sealed class SheetEventHub(ILogger<SheetEventHub>? logger = null) : IShee
 {
     private readonly ILogger _logger = logger ?? NullLogger<SheetEventHub>.Instance;
     private readonly Lock _gate = new();
-    private readonly Dictionary<Guid, List<Func<SheetChange, Task>>> _bySheet = [];
+    // Keyed by tenant as well: two tenants' sheets never share subscribers, even with the same id.
+    private readonly Dictionary<(string Tenant, Guid SheetId), List<Func<SheetChange, Task>>> _bySheet = [];
     private readonly List<Func<SheetChange, Task>> _all = [];
 
     public Task<IAsyncDisposable> SubscribeAsync(Guid sheetId, Func<SheetChange, Task> handler, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        var key = (Tenancy.TenantScope.Key, sheetId);
         lock (_gate)
         {
-            if (!_bySheet.TryGetValue(sheetId, out var handlers))
+            if (!_bySheet.TryGetValue(key, out var handlers))
             {
-                _bySheet[sheetId] = handlers = [];
+                _bySheet[key] = handlers = [];
             }
 
             handlers.Add(handler);
@@ -38,15 +40,15 @@ public sealed class SheetEventHub(ILogger<SheetEventHub>? logger = null) : IShee
         {
             lock (_gate)
             {
-                if (_bySheet.TryGetValue(sheetId, out var handlers) && handlers.Remove(handler) && handlers.Count == 0)
+                if (_bySheet.TryGetValue(key, out var handlers) && handlers.Remove(handler) && handlers.Count == 0)
                 {
-                    _bySheet.Remove(sheetId);
+                    _bySheet.Remove(key);
                 }
             }
         }));
     }
 
-    /// <summary>Receives changes for every sheet until disposed.</summary>
+    /// <summary>Receives changes for every sheet of every tenant until disposed (the publisher's tenant is in <c>TenantScope</c>).</summary>
     public IAsyncDisposable SubscribeAll(Func<SheetChange, Task> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -69,7 +71,7 @@ public sealed class SheetEventHub(ILogger<SheetEventHub>? logger = null) : IShee
     {
         lock (_gate)
         {
-            return _bySheet.TryGetValue(sheetId, out var handlers) ? handlers.Count : 0;
+            return _bySheet.TryGetValue((Tenancy.TenantScope.Key, sheetId), out var handlers) ? handlers.Count : 0;
         }
     }
 
@@ -78,7 +80,7 @@ public sealed class SheetEventHub(ILogger<SheetEventHub>? logger = null) : IShee
         Func<SheetChange, Task>[] targets;
         lock (_gate)
         {
-            targets = [.. _bySheet.TryGetValue(change.SheetId, out var handlers) ? handlers : [], .. _all];
+            targets = [.. _bySheet.TryGetValue((Tenancy.TenantScope.Key, change.SheetId), out var handlers) ? handlers : [], .. _all];
         }
 
         // One failing subscriber (e.g. a disconnected circuit) must not fail the change that was already saved.

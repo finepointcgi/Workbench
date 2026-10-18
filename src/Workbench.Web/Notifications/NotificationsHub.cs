@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Workbench.Application.Automation;
 using Workbench.Application.Notifications;
+using Workbench.Application.Tenancy;
 using Workbench.Application.Time;
 using Workbench.Contracts.Collaboration;
 
@@ -17,7 +18,8 @@ public sealed class NotificationsHub(ICurrentUser currentUser) : Hub
     public const string Path = "/hubs/notifications";
     public const string NotificationMethod = "Notification";
 
-    public static string GroupFor(string email) => $"user:{email.Trim().ToLowerInvariant()}";
+    /// <summary>The SignalR group for a user, qualified by the current tenant: the same email in two tenants is two people.</summary>
+    public static string GroupFor(string email) => $"{TenantScope.Key}:user:{email.Trim().ToLowerInvariant()}";
 
     public override async Task OnConnectedAsync()
     {

@@ -48,8 +48,8 @@ public sealed class TimesheetApprovalService(
 
     public async Task<TeamStatusDto> GetTeamStatusAsync(DateOnly date, CancellationToken cancellationToken = default)
     {
-        var (start, end) = clock.PeriodFor(date);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var (start, end) = await clock.PeriodForAsync(db, date, cancellationToken);
         var everyone = (await access.GetOrgRolesAsync(cancellationToken)).CanViewAllTimesheets();
         var team = everyone ? await db.Set<Employee>().AsNoTracking().ToListAsync(cancellationToken) : await ReportsAsync(db, cancellationToken);
         var reports = team.Where(e => e.HireDate <= end && (e.TerminationDate is null || e.TerminationDate >= start)).ToList();

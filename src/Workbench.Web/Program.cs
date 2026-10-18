@@ -9,6 +9,12 @@ using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
 using Workbench.Web.Notifications;
 using Workbench.Web.Security;
+using Workbench.Web.Tenancy;
+
+// `Workbench.Web --migrate` applies pending migrations (the catalog and every tenant in MultiTenant mode) and exits:
+// the production deploy step. Normal startup only migrates when Database:MigrateOnStartup is true (Development default).
+var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
+args = args.Where(a => !a.Equals("--migrate", StringComparison.OrdinalIgnoreCase)).ToArray();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,18 +29,23 @@ builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 // Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
 builder.AddWorkbenchAuthentication();
 builder.AddWorkbenchSecurity();
+builder.AddWorkbenchTenancyHosting();
 builder.Services.AddWorkbenchLiveUpdatesHub();
 builder.Services.AddWorkbenchNotificationsHub();
 builder.Services.AddCostpointSource(builder.Configuration);
 
 var app = builder.Build();
-app.UseWorkbenchSecurityHeaders();
-
-if (app.Environment.IsDevelopment())
+if (migrateOnly)
 {
-    await app.Services.InitializeWorkbenchDatabaseAsync();
+    await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
+    return;
 }
-else
+
+await app.Services.InitializeWorkbenchDatabaseAsync();
+app.UseWorkbenchSecurityHeaders();
+app.UseWorkbenchTenancy();
+
+if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler();
     app.UseHsts();

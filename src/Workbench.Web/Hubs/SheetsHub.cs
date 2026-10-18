@@ -18,7 +18,8 @@ public sealed class SheetsHub(ISheetPermissions permissions, CurrentPrincipal pr
     public const string Path = "/hubs/sheets";
     public const string ChangedMethod = "SheetChanged";
 
-    public static string GroupFor(Guid sheetId) => $"sheet:{sheetId:N}";
+    /// <summary>The SignalR group for a sheet, qualified by the current tenant (set per hub call and per published change).</summary>
+    public static string GroupFor(Guid sheetId) => $"{Workbench.Application.Tenancy.TenantScope.Key}:sheet:{sheetId:N}";
 
     public async Task JoinSheet(Guid sheetId)
     {

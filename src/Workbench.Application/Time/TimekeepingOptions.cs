@@ -6,8 +6,20 @@ namespace Workbench.Application.Time;
 /// <summary>Configuration section <c>Timekeeping</c>.</summary>
 public sealed class TimekeepingOptions
 {
-    /// <summary><c>Weekly</c> (Monday–Sunday, the default) or <c>SemiMonthly</c> (1st–15th, 16th–end of month).</summary>
+    /// <summary>
+    /// The timesheet period until an Admin saves the organization's setting on <c>/setup/organization</c> (stored in the
+    /// tenant database, which then wins). <c>Weekly</c> (the default), <c>Biweekly</c>, <c>SemiMonthly</c> or <c>Monthly</c>.
+    /// </summary>
     public TimesheetCadence Cadence { get; set; } = TimesheetCadence.Weekly;
+
+    /// <summary>Default first day of a weekly period (Monday).</summary>
+    public DayOfWeek WeekStartDay { get; set; } = DayOfWeek.Monday;
+
+    /// <summary>Default biweekly anchor (the first day of any period).</summary>
+    public DateOnly? BiweeklyAnchor { get; set; }
+
+    public TimesheetPeriodSettings DefaultPeriodSettings =>
+        new(Cadence, WeekStartDay, Cadence == TimesheetCadence.Biweekly ? BiweeklyAnchor ?? new DateOnly(2026, 1, 5) : BiweeklyAnchor);
 
     /// <summary>
     /// IANA or Windows time zone id that decides what "today" is for future-date and late-entry checks.
@@ -42,20 +54,13 @@ public sealed class TimekeepingClock(TimeProvider clock, IOptions<TimekeepingOpt
 
     public DateTime LocalTime(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
 
-    public (DateOnly Start, DateOnly End) PeriodFor(DateOnly date) => PeriodFor(date, options.Value.Cadence);
+    /// <summary>The timesheet period containing <paramref name="date"/> under the organization's setting (tenant database).</summary>
+    public async Task<(DateOnly Start, DateOnly End)> PeriodForAsync(IWorkbenchDbContext db, DateOnly date, CancellationToken cancellationToken = default) =>
+        TimesheetPeriods.For(date, await TimesheetPeriods.LoadScheduleAsync(db, options.Value.DefaultPeriodSettings, cancellationToken));
 
-    public static (DateOnly Start, DateOnly End) PeriodFor(DateOnly date, TimesheetCadence cadence)
-    {
-        if (cadence == TimesheetCadence.SemiMonthly)
-        {
-            return date.Day <= 15
-                ? (new DateOnly(date.Year, date.Month, 1), new DateOnly(date.Year, date.Month, 15))
-                : (new DateOnly(date.Year, date.Month, 16), new DateOnly(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month)));
-        }
-
-        var start = date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
-        return (start, start.AddDays(6));
-    }
+    /// <summary>The period containing <paramref name="date"/> for one cadence with default options (weekly periods start Monday).</summary>
+    public static (DateOnly Start, DateOnly End) PeriodFor(DateOnly date, TimesheetCadence cadence) =>
+        TimesheetPeriods.Natural(date, new TimekeepingOptions { Cadence = cadence }.DefaultPeriodSettings);
 
     /// <summary>
     /// Standard hours expected for the period: the weekly standard spread over the weekdays the employee was employed.

@@ -4,6 +4,9 @@
     <ProjectReference Include="..\Workbench.Ui\Workbench.Ui.csproj" />
     <ProjectReference Include="..\Workbench.Infrastructure\Workbench.Infrastructure.csproj" />
     <ProjectReference Include="..\Workbench.Api\Workbench.Api.csproj" />
+    <!-- Loaded by name (Database:Provider picks one); referenced so both deploy with the host. -->
+    <ProjectReference Include="..\Workbench.Migrations.PostgreSql\Workbench.Migrations.PostgreSql.csproj" />
+    <ProjectReference Include="..\Workbench.Migrations.Sqlite\Workbench.Migrations.Sqlite.csproj" />
   </ItemGroup>
 
   <ItemGroup>
