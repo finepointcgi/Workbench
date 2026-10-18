@@ -5,7 +5,7 @@
 
 <MudDialog>
     <DialogContent>
-        <MudRadioGroup T="EmployeeLinkMode" @bind-Value="_mode">
+        <MudRadioGroup T="EmployeeLinkMode" @bind-Value="_mode" aria-label="Employee record">
             <MudRadio T="EmployeeLinkMode" Value="EmployeeLinkMode.ByEmail" Color="Color.Primary">The employee with the email @User.Email (default)</MudRadio>
             <MudRadio T="EmployeeLinkMode" Value="EmployeeLinkMode.Explicit" Color="Color.Primary">A specific employee</MudRadio>
             <MudRadio T="EmployeeLinkMode" Value="EmployeeLinkMode.Unlinked" Color="Color.Primary">No employee (doesn't record time)</MudRadio>

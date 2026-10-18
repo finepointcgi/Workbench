@@ -5,7 +5,7 @@
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else if (_error is not null)
 {
@@ -66,7 +66,7 @@ else
                                     <span> · with override @CeilingFormat.Amount(m.Metric, m.EffectiveLimit.Value)</span>
                                 }
                             </MudText>
-                            <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" />
+                            <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" aria-label="@($"{CeilingFormat.Metric(m.Metric)} ceiling used")" />
                         </div>
                     }
                 </MudTd>

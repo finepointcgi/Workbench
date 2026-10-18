@@ -15,7 +15,7 @@
                      RowClassFunc="@((e, _) => e.Id == _selected?.Id ? "mud-selected-item" : "")" Style="cursor:pointer">
             <ToolBarContent>
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="flex-grow-1">
-                    <MudTextField @bind-Value="_search" Placeholder="Search name, number or email" Adornment="Adornment.Start"
+                    <MudTextField aria-label="Search people" @bind-Value="_search" Placeholder="Search name, number or email" Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" Style="min-width:200px" />
                     <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Style="max-width:140px">
                         <MudSelectItem T="string" Value="@("Active")">Active</MudSelectItem>

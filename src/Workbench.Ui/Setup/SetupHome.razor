@@ -23,12 +23,12 @@
             </MudAlert>
             @if (_checklist is null)
             {
-                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
             }
             else
             {
-                <MudProgressLinear Value="100.0 * Done / Steps.Count" Color="Color.Success" Class="mb-3" Rounded="true" />
-                <MudList T="string" Dense="true">
+                <MudProgressLinear Value="100.0 * Done / Steps.Count" Color="Color.Success" Class="mb-3" Rounded="true" aria-label="Setup steps done" />
+                <MudList T="string" Dense="true" aria-label="Setup checklist">
                     @foreach (var group in Steps.GroupBy(s => s.Group))
                     {
                         <MudListSubheader Class="pl-0 pt-2 pb-0"><MudText Typo="Typo.overline">@group.Key</MudText></MudListSubheader>

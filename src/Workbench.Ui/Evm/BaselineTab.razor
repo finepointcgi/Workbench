@@ -80,7 +80,7 @@ else
                     <td style="text-align:right">@EvmFormat.Money(wp.Budget)</td>
                     <td>@wp.PlannedStart.ToString("yyyy-MM-dd") – @wp.PlannedFinish.ToString("yyyy-MM-dd")</td>
                     <td style="min-width: 200px">
-                        <MudSelect T="EvTechnique" Value="wp.Technique" ValueChanged="t => ChangeTechniqueAsync(wp, t)" Dense="true" Disabled="Baseline.HasClosedPeriods || _busy"
+                        <MudSelect T="EvTechnique" Value="wp.Technique" aria-label="@($"Earned value technique, {wp.WbsCode}")" ValueChanged="t => ChangeTechniqueAsync(wp, t)" Dense="true" Disabled="Baseline.HasClosedPeriods || _busy"
                                    ToStringFunc="t => EvmFormat.Technique(t)">
                             @foreach (var t in Enum.GetValues<EvTechnique>())
                             {

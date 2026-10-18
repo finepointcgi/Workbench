@@ -14,7 +14,7 @@
 }
 else if (_ws is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -51,7 +51,7 @@ else
                                 }
                                 else
                                 {
-                                    <MudNumericField T="decimal" Value="_balance" ValueChanged="BalanceChangedAsync" Format="N2" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="statement-balance" />
+                                    <MudNumericField T="decimal" Value="_balance" aria-label="Statement ending balance" ValueChanged="BalanceChangedAsync" Format="N2" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="statement-balance" />
                                 }
                             </td>
                         </tr>
@@ -87,7 +87,7 @@ else
     {
         @* Filters and the selection *@
         <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-2">
-            <MudTextField T="string" @bind-Value="_search" Immediate="true" Placeholder="Filter by description, reference or amount" Adornment="Adornment.Start"
+            <MudTextField T="string" @bind-Value="_search" aria-label="Filter transactions" Immediate="true" Placeholder="Filter by description, reference or amount" Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:280px" data-testid="filter" />
             <MudSwitch T="bool" @bind-Value="_showMatched" Label="Show matched" Color="Color.Primary" />
             <MudSpacer />

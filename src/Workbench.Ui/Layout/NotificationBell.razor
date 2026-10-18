@@ -11,8 +11,13 @@
     <ActivatorContent>
         <MudBadge Content="_unread" Max="99" Visible="_unread > 0" Color="Color.Error" Overlap="true" Bordered="true"
                   BadgeAriaLabel="@($"{_unread} unread")">
-            <MudIconButton Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)"
-                           Color="Color.Inherit" OnClick="@(e => context.ToggleAsync(e))" aria-label="@(_unread > 0 ? $"Notifications, {_unread} unread" : "Notifications")" />
+            @* MudMenu's activator is already a focusable role="button" that opens on Enter/Space, so the content is a
+               look-alike span, not a nested button (one tab stop, no nested-interactive). Its text names the button. *@
+            <span class="mud-button-root mud-icon-button mud-inherit-text hover:mud-inherit-hover" data-testid="notification-bell"
+                  @onclick="@(e => context.ToggleAsync(e))">
+                <MudIcon Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)" Color="Color.Inherit" />
+                <span class="wb-sr-only">Notifications</span>
+            </span>
         </MudBadge>
     </ActivatorContent>
     <ChildContent>
@@ -25,7 +30,7 @@
             <MudDivider />
             @if (_latest is null)
             {
-                <MudProgressLinear Indeterminate="true" />
+                <MudProgressLinear aria-label="Loading" Indeterminate="true" />
             }
             else if (_latest.Count == 0)
             {

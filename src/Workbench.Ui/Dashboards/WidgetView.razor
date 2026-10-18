@@ -5,7 +5,7 @@
 
 @if (Data is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
 else if (Data.Error is { } error)
 {
@@ -33,8 +33,10 @@ else
             }
             else
             {
-                <MudChart T="double" ChartType="@ChartTypeFor(c.Kind)" ChartSeries="@Series(c)" ChartLabels="@c.Labels.ToArray()"
-                          ChartOptions="@OptionsFor(c)" Width="100%" Height="@ChartHeight" LegendPosition="Position.Bottom" />
+                <AccessibleChart Title="@c.SeriesName" Labels="@c.Labels" Series="@Series(c)" LabelHeader="Category">
+                    <MudChart T="double" ChartType="@ChartTypeFor(c.Kind)" ChartSeries="@Series(c)" ChartLabels="@c.Labels.ToArray()"
+                              ChartOptions="@OptionsFor(c)" Width="100%" Height="@ChartHeight" LegendPosition="Position.Bottom" />
+                </AccessibleChart>
             }
             break;
 
@@ -104,10 +106,10 @@ else
             </MudGrid>
             @if (f.FundedShare is { } share)
             {
-                <MudProgressLinear Value="@((double)Math.Min(share, 1m) * 100)" Color="Color.Primary" Class="mt-2" />
+                <MudProgressLinear Value="@((double)Math.Min(share, 1m) * 100)" Color="Color.Primary" Class="mt-2" aria-label="Share of ceiling funded" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@share.ToString("P0", Culture) of ceiling funded</MudText>
             }
-            <MudProgressLinear Value="@(f.PeriodElapsed * 100)" Color="@(f.PeriodElapsed > 0.9 ? Color.Warning : Color.Info)" Class="mt-2" />
+            <MudProgressLinear Value="@(f.PeriodElapsed * 100)" Color="@(f.PeriodElapsed > 0.9 ? Color.Warning : Color.Info)" Class="mt-2" aria-label="Period of performance elapsed" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                 Period of performance @f.PeriodStart.ToString("d MMM yyyy") – @f.PeriodEnd.ToString("d MMM yyyy")
                 (@f.PeriodElapsed.ToString("P0", Culture) elapsed)
@@ -132,7 +134,7 @@ else
             </MudGrid>
             @if (pf.Totals.PercentSpent is { } spent)
             {
-                <MudProgressLinear Value="@((double)Math.Min(spent, 1m) * 100)" Color="@(spent > 1m ? Color.Error : spent > 0.9m ? Color.Warning : Color.Primary)" Class="mt-2" data-financials-spent />
+                <MudProgressLinear Value="@((double)Math.Min(spent, 1m) * 100)" Color="@(spent > 1m ? Color.Error : spent > 0.9m ? Color.Warning : Color.Primary)" Class="mt-2" data-financials-spent aria-label="Budget spent" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@spent.ToString("P0", Culture) of budget spent</MudText>
             }
             <MudLink Href="@($"projects/{pf.ProjectId}/financials")" Typo="Typo.caption">Open financials</MudLink>

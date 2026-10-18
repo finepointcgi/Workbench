@@ -333,3 +333,52 @@ await notifications.PublishAsync(
   Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
 - Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
   `InvoiceGenerator`); cost reports keep the real rates.
+
+## Accessibility (WCAG 2.1 AA, Section 508)
+
+Federal customers buy against Section 508, which means WCAG 2.1 AA. The conformance report is
+`docs/compliance/accessibility/vpat.md`; keep it true when you add UI. Rules for new UI:
+
+- **Every control has a name.** `MudIconButton` always gets `aria-label` (a `MudTooltip` around it is not a name). Repeated
+  row actions say what they act on (`aria-label="@($"Delete {line.Description}")"`). Inputs get a `Label` (or `aria-label`
+  when the column header labels them, as in the timesheet grid); a placeholder is not a label.
+- **One tab stop per control.** Never nest a button or link inside another clickable thing. `MudMenu`'s `ActivatorContent`
+  is already a focusable `role="button"`, so its content is a look-alike `<span>` with a visually hidden name
+  (`Layout/NotificationBell.razor`, `Layout/UserMenu.razor`), not a `MudButton`. A clickable card puts a real link on its title
+  (`Board/BoardCard.razor`). Clickable table cells hold a `<button>` (`Resourcing/HeatMapTab.razor`).
+- **Pages** have one `<h1>` (`MudText Typo="Typo.h4" HtmlTag="h1"`) and headings in order below it (`HtmlTag="h2"` for card
+  titles; set `HtmlTag` whenever the Typo is a heading style used as plain text). Layouts provide the landmarks (skip link,
+  `<header>`, `<nav aria-label="Main menu">`, `<main id="main-content">`); a page doesn't add another `<main>`.
+- **Data tables**: `<th scope="col">` headers (MudTable/`MudTh` do this), `scope="row"` for row headers, and a name:
+  `aria-label` on the table or a `<caption>`. Layout tables (rare) get `role="presentation"`.
+- **Color is never the only signal** (1.4.1). Status chips carry text and, where the color matters, an icon; heat maps and
+  critical-path markers add a shape (▲ ● ○). Use the theme colors (`WorkbenchTheme`), which meet 4.5:1 for text in both
+  themes; don't hard-code hex colors or use `Color.Secondary` for text. Text over a tinted background needs 4.5:1 too.
+- **Charts** go inside `<AccessibleChart Title=… Labels=… Series=…>` (`Ui/Accessibility`): the chart becomes one named image and
+  the same numbers are offered as a data table. If the page already shows the figures in a table, pass `ShowTable="false"`.
+- **Progress bars** with a value get an `aria-label` saying what they measure.
+- **Dialogs** come from `IDialogService`; the providers set Escape to close and focus to the first field, and MudBlazor traps
+  focus and returns it to the opener. Give a dialog without a title `AriaLabel`.
+- **Announcements**: snackbars are announced (role="alert"). For a change the user didn't trigger by moving focus (a card
+  moved, a result count) use a visually hidden `role="status"` region (`class="wb-sr-only"`). When an action removes the
+  element that had focus (an approved inbox row), move focus somewhere sensible (`ElementReference.FocusAsync()`).
+- **Drag and drop always has a keyboard way** (board: "Move to" menu; Gantt: dates in the Grid view and the schedule table).
+- **Breadcrumbs** use `<AccessibleBreadcrumbs>` (a labelled `nav`, no `href="#"` items).
+- Helpers: `.wb-sr-only` (visually hidden text) and the focus ring live in `Ui/wwwroot/a11y.css`.
+
+Checks:
+
+- **bUnit**: call `A11yAssert.Check(component)` (`tests/Workbench.Tests/Accessibility`) in component tests. It fails on
+  unnamed buttons/links/inputs, nested interactive controls, unnamed data tables and images without alt.
+- **axe-core**: `tests/a11y/scan.mjs` runs axe (WCAG 2.1 A/AA rules) on every page for each seeded role, light and dark, at
+  1280px and 375px, and exits non-zero on any serious or critical violation. Start a fresh dev server on port 5287 with
+  rate limiting off, then:
+
+  ```bash
+  cd tests/a11y && npm ci && npx playwright install chromium && node scan.mjs
+  ```
+
+  (`RateLimiting__Enabled=false` on the server: the scanner signs in once per role, but session pings add up.) Use
+  `A11Y_PAGES=/time,/expenses` to check a few pages while you work.
+- **Keyboard**: before merging new UI, do the task with the keyboard alone (Tab, Shift+Tab, Enter, Space, Escape, arrows) and
+  check the focus ring is always visible.

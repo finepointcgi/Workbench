@@ -17,7 +17,7 @@
 }
 else if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else if (_accounts.Count == 0)
 {
@@ -60,10 +60,10 @@ else
                             }
                         </td>
                         <td style="text-align:right; white-space:nowrap">
-                            <MudTooltip Text="Edit"><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(a, null)" /></MudTooltip>
+                            <MudTooltip Text="Edit"><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(a, null)" aria-label="@($"Edit {a.Number}")" /></MudTooltip>
                             @if (a.IsActive && !a.HasPostings)
                             {
-                                <MudTooltip Text="Add sub-account"><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => EditAsync(null, a)" /></MudTooltip>
+                                <MudTooltip Text="Add sub-account"><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => EditAsync(null, a)" aria-label="@($"Add sub-account under {a.Number}")" /></MudTooltip>
                             }
                             <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetActiveAsync(a, !a.IsActive)">@(a.IsActive ? "Deactivate" : "Reactivate")</MudButton>
                         </td>

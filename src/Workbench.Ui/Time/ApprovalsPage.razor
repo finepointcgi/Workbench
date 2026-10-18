@@ -15,7 +15,7 @@
 <MudGrid>
     <MudItem xs="12" md="4">
         <MudPaper Outlined="true">
-            <MudList T="TimesheetDto" SelectedValue="_selected" SelectedValueChanged="SelectAsync" data-testid="pending">
+            <MudList T="TimesheetDto" SelectedValue="_selected" SelectedValueChanged="SelectAsync" data-testid="pending" aria-label="Timesheets waiting for you">
                 <MudListSubheader>Waiting for you (@_pending.Count)</MudListSubheader>
                 @foreach (var t in _pending)
                 {

@@ -9,7 +9,9 @@
 </MudGrid>
 @if (_labels.Length > 0)
 {
-    <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_curve" ChartLabels="_labels" ChartOptions="_options" Width="100%" Height="180px" LegendPosition="Position.Bottom" />
+    <AccessibleChart Title="Earned value S-curve" Labels="_labels" Series="_curve" Format="@(v => FinancialFormat.Money((decimal)v))">
+        <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_curve" ChartLabels="_labels" ChartOptions="_options" Width="100%" Height="180px" LegendPosition="Position.Bottom" />
+    </AccessibleChart>
 }
 @if (Data.ControlAccountsNeedingVar > 0)
 {

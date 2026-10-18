@@ -14,7 +14,7 @@
 }
 else if (_projects is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -34,7 +34,9 @@ else
                             }
                             @foreach (var s in p.Setups)
                             {
-                                <MudChip T="string" Size="Size.Small" OnClick="() => EditAsync(p, s)" OnClose="@(_ => DeleteAsync(s))">@RevenueFormat.Unit(s.ClinNumber): @RevenueFormat.Label(s.Method)</MudChip>
+                                @* The chip itself isn't clickable (its close button would be nested in it); the label is the edit button. *@
+                                <MudChip T="string" Size="Size.Small" OnClose="@(_ => DeleteAsync(s))"><MudLink Typo="Typo.body2" Color="Color.Inherit" OnClick="() => EditAsync(p, s)"
+                                    aria-label="@($"Edit {RevenueFormat.Unit(s.ClinNumber)}: {RevenueFormat.Label(s.Method)}")">@RevenueFormat.Unit(s.ClinNumber): @RevenueFormat.Label(s.Method)</MudLink></MudChip>
                             }
                         </td>
                         <td>

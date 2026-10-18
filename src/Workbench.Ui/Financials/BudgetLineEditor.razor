@@ -56,13 +56,13 @@
                 <tr>
                     <td>@WbsCode(row.WbsId)</td>
                     <td>@CategoryName(row.CategoryId)</td>
-                    <td class="num">@Cell(row.Unphased, v => { row.Unphased = v; })</td>
+                    <td class="num">@Cell(row.Unphased, v => { row.Unphased = v; }, $"Unphased hours, {WbsCode(row.WbsId)} {CategoryName(row.CategoryId)}")</td>
                     @if (_phased)
                     {
                         @foreach (var p in YearPeriods)
                         {
                             var start = p.Start;
-                            <td class="num">@Cell(row.ByPeriod.GetValueOrDefault(start), v => { row.ByPeriod[start] = v; })</td>
+                            <td class="num">@Cell(row.ByPeriod.GetValueOrDefault(start), v => { row.ByPeriod[start] = v; }, $"{p.Name} hours, {WbsCode(row.WbsId)} {CategoryName(row.CategoryId)}")</td>
                         }
                     }
                     @if (OtherPeriodsShown)
@@ -125,7 +125,7 @@
                     }
                     else
                     {
-                        <MudSelect T="DateOnly?" Value="row.Period" ValueChanged="v => { row.Period = v; _dirty = true; }" Dense="true" ToStringFunc="PeriodName"
+                        <MudSelect T="DateOnly?" Value="row.Period" aria-label="@($"Period, {row.Type}")" ValueChanged="v => { row.Period = v; _dirty = true; }" Dense="true" ToStringFunc="PeriodName"
                                    Style="min-width: 140px" Margin="Margin.Dense">
                             <MudSelectItem T="DateOnly?" Value="null">Unphased</MudSelectItem>
                             @foreach (var p in Periods)
@@ -135,7 +135,7 @@
                         </MudSelect>
                     }
                 </td>
-                <td class="num">@MoneyCell(row.Amount, v => { row.Amount = v; })</td>
+                <td class="num">@MoneyCell(row.Amount, v => { row.Amount = v; }, $"Amount, {row.Type}")</td>
                 <td>
                     @if (!ReadOnly)
                     {
@@ -282,15 +282,15 @@
     private decimal OtherPeriodHours(LaborRow row) =>
         _phased ? row.ByPeriod.Where(kv => !YearPeriods.Any(p => p.Start == kv.Key)).Sum(kv => kv.Value) : row.ByPeriod.Values.Sum();
 
-    private RenderFragment Cell(decimal value, Action<decimal> set) => ReadOnly
+    private RenderFragment Cell(decimal value, Action<decimal> set, string label) => ReadOnly
         ? @<span>@(value == 0 ? "" : FinancialFormat.Hours(value))</span>
         : @<MudNumericField T="decimal" Value="value" ValueChanged="v => { set(Math.Max(0, v)); _dirty = true; }" HideSpinButtons="true"
-                            Margin="Margin.Dense" Variant="Variant.Text" Class="cell-input" Format="0.##" Culture="FinancialFormat.Culture" />;
+                            Margin="Margin.Dense" Variant="Variant.Text" Class="cell-input" Format="0.##" Culture="FinancialFormat.Culture" aria-label="@label" />;
 
-    private RenderFragment MoneyCell(decimal value, Action<decimal> set) => ReadOnly
+    private RenderFragment MoneyCell(decimal value, Action<decimal> set, string label) => ReadOnly
         ? @<span>@FinancialFormat.MoneyCents(value)</span>
         : @<MudNumericField T="decimal" Value="value" ValueChanged="v => { set(Math.Max(0, v)); _dirty = true; }" HideSpinButtons="true"
-                            Margin="Margin.Dense" Variant="Variant.Text" Class="cell-input" Format="0.00" Culture="FinancialFormat.Culture" Style="width: 120px" />;
+                            Margin="Margin.Dense" Variant="Variant.Text" Class="cell-input" Format="0.00" Culture="FinancialFormat.Culture" Style="width: 120px" aria-label="@label" />;
 
     private void AddLabor()
     {

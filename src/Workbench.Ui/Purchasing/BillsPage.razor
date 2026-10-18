@@ -36,7 +36,7 @@ else
     </MudStack>
     @if (_loading)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
     }
     <MudPaper Outlined="true" Class="pa-2"><BillTable Bills="_bills" /></MudPaper>
 }

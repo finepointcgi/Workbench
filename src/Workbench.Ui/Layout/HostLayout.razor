@@ -3,18 +3,20 @@
 
 <MudThemeProvider Theme="WorkbenchTheme.Default" />
 <MudPopoverProvider />
-<MudDialogProvider />
+<MudDialogProvider CloseOnEscapeKey="true" DefaultFocus="DefaultFocus.FirstChild" />
 <MudSnackbarProvider />
 
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
-        <MudText Typo="Typo.h6">Workbench host administration</MudText>
+        <MudText Typo="Typo.h6" HtmlTag="span">Workbench host administration</MudText>
         <MudSpacer />
         <MudButton Href="account/signout" Color="Color.Inherit" Variant="Variant.Text">Sign out</MudButton>
     </MudAppBar>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
-            @Body
+            <main id="main-content">
+                @Body
+            </main>
         </MudContainer>
     </MudMainContent>
 </MudLayout>

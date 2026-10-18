@@ -1,22 +1,24 @@
 @inherits LayoutComponentBase
 @using Workbench.Ui.Navigation
+@inject NavigationManager Navigation
 
 <MudThemeProvider Theme="WorkbenchTheme.Default" @bind-IsDarkMode="_darkMode" />
 <MudPopoverProvider />
-<MudDialogProvider />
+<MudDialogProvider CloseOnEscapeKey="true" DefaultFocus="DefaultFocus.FirstChild" />
 <MudSnackbarProvider />
 
+<a class="wb-skip-link" href="@SkipHref" @onclick="SkipToMainAsync" @onclick:preventDefault>Skip to main content</a>
 <MudLayout>
     <MudAppBar Elevation="1" Dense="true">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       OnClick="ToggleDrawer" aria-label="Toggle navigation" />
-        <MudText Typo="Typo.h6" Class="ml-2">Workbench</MudText>
+                       OnClick="ToggleDrawer" aria-label="Toggle navigation" aria-expanded="@(_drawerOpen ? "true" : "false")" />
+        <MudText Typo="Typo.h6" HtmlTag="span" Class="ml-2">Workbench</MudText>
         <MudSpacer />
         <CommandPalette Access="_access" />
         <NotificationBell />
         <UserMenu />
         <MudIconButton Icon="@(_darkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                       Color="Color.Inherit" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
+                       Color="Color.Inherit" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" aria-pressed="@(_darkMode ? "true" : "false")" />
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Breakpoint="Breakpoint.Md">
         <NavMenu AccessLoaded="OnAccessLoaded" />
@@ -24,7 +26,9 @@
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
             <PageBreadcrumbs Access="_access" />
-            @Body
+            <main id="main-content" tabindex="-1" @ref="_main" class="wb-main">
+                @Body
+            </main>
         </MudContainer>
     </MudMainContent>
 </MudLayout>
@@ -34,6 +38,12 @@
     private bool _drawerOpen = true;
     private bool _darkMode;
     private NavAccess _access = NavAccess.Anonymous;
+    private ElementReference _main;
+
+    // The skip link names the current page so it still works before the circuit starts (base href is "/").
+    private string SkipHref => $"{Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0]}#main-content";
+
+    private async Task SkipToMainAsync() => await _main.FocusAsync();
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 

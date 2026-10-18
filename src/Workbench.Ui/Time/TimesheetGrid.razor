@@ -4,13 +4,13 @@
 @* Weekly (or semi-monthly) time grid: rows are charge codes, columns are days. Today is highlighted and weekends and
    holidays are dimmed; the footer shows the period's hours against the standard. *@
 <div class="timesheet-grid">
-    <table class="mud-table-root" data-testid="timesheet-grid">
+    <table class="mud-table-root" data-testid="timesheet-grid" aria-label="Hours by charge code and day">
         <thead>
             <tr>
-                <th class="code"><Term Key="charge-code">Charge code</Term></th>
+                <th class="code" scope="col"><Term Key="charge-code">Charge code</Term></th>
                 @foreach (var day in Detail.Days)
                 {
-                    <th class="@DayClass(day)" title="@DayTitle(day)" data-testid="@($"day-{day.Date:yyyy-MM-dd}")" aria-current="@(day.Date == TodayDate ? "date" : null)">
+                    <th scope="col" class="@DayClass(day)" title="@DayTitle(day)" data-testid="@($"day-{day.Date:yyyy-MM-dd}")" aria-current="@(day.Date == TodayDate ? "date" : null)">
                         <div>@day.Date.ToString("ddd", CultureInfo.InvariantCulture)</div>
                         <div class="date">@day.Date.ToString("M/d", CultureInfo.InvariantCulture)</div>
                         @if (day.Date == TodayDate)
@@ -23,11 +23,11 @@
                         }
                         @if (day.EnteredLate)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Warning" title="Entered late" />
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Warning" title="Entered late" aria-hidden="true" /><span class="wb-sr-only">Entered late</span>
                         }
                     </th>
                 }
-                <th class="total">Total</th>
+                <th class="total" scope="col">Total</th>
             </tr>
         </thead>
         <tbody>
@@ -53,7 +53,8 @@
                                    @onclick="() => LockedClickAsync()"
                                    @onchange="e => SetHours(row, day.Date, e.Value?.ToString())" />
                             <button type="button" class="comment @(string.IsNullOrEmpty(cell.Comment) ? "" : "has-comment")"
-                                    title="@(cell.Comment ?? "Add a comment")" aria-label="Comment"
+                                    title="@(cell.Comment ?? "Add a comment")"
+                                    aria-label="@($"{(string.IsNullOrEmpty(cell.Comment) ? "Add a comment" : "Comment")} for {ChargeCodeText.Label(row.Code.Code, row.Code.Name, row.Code.Kind)}, {day.Date:dddd MMMM d}{(string.IsNullOrEmpty(cell.Comment) ? "" : ": " + cell.Comment)}")"
                                     disabled="@(!enabled && string.IsNullOrEmpty(cell.Comment))"
                                     @onclick="() => EditCommentAsync(row, day)">
                                 <MudIcon Icon="@(string.IsNullOrEmpty(cell.Comment) ? Icons.Material.Outlined.ChatBubbleOutline : Icons.Material.Filled.ChatBubble)" Size="Size.Small" />

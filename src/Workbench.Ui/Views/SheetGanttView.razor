@@ -33,7 +33,7 @@
     @if (_analysis?.ProjectFinish is { } projectFinish)
     {
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            <span class="gantt-legend critical"></span>Critical path: @_analysis.CriticalPath.Count task@(_analysis.CriticalPath.Count == 1 ? "" : "s")
+            <span class="gantt-legend critical" aria-hidden="true"></span>Critical path: @_analysis.CriticalPath.Count task@(_analysis.CriticalPath.Count == 1 ? "" : "s")
             · Finish @projectFinish.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)
         </MudText>
     }
@@ -52,7 +52,57 @@ else
     </div>
     <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" hidden="@(!CanEdit)">
         Drag a bar to move it or its right edge to change the finish. Drag the dot after a bar onto another task to link them; click an arrow to remove the link.
+        Without a mouse, change dates in the Grid view.
     </MudText>
+
+    @* The accessible alternative to the timeline (WCAG 1.1.1, 1.3.1): the whole schedule, links and critical path as a table. *@
+    <details class="wb-chart-data mt-2" data-testid="gantt-table">
+        <summary>Show the schedule as a table</summary>
+        <div class="wb-chart-data-scroll">
+            <table class="wb-data-table">
+                <caption>Schedule: dates, links and critical path</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Task</th>
+                        <th scope="col">Start</th>
+                        <th scope="col">Finish</th>
+                        <th scope="col">Days</th>
+                        <th scope="col">Depends on</th>
+                        <th scope="col">Critical path</th>
+                        <th scope="col">Slack (days)</th>
+                        @if (_baseline is not null)
+                        {
+                            <th scope="col">Baseline start</th>
+                            <th scope="col">Baseline finish</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in GanttLayout.BuildRows(Items, new HashSet<Guid>()))
+                    {
+                        var slack = _analysis?.Items.FirstOrDefault(i => i.ItemId == row.Item.Id);
+                        <tr>
+                            <th scope="row" style="padding-left:@((10 + row.Depth * 16).ToString(CultureInfo.InvariantCulture))px">
+                                @row.Item.Title@(row.IsSummary ? " (summary)" : row.IsMilestone ? " (milestone)" : "")
+                            </th>
+                            <td>@TableDate(row.Start)</td>
+                            <td>@TableDate(row.Finish)</td>
+                            <td>@(row.Start is { } s0 && row.Finish is { } f0 ? (f0.DayNumber - s0.DayNumber + 1).ToString(CultureInfo.CurrentCulture) : "—")</td>
+                            <td style="text-align:left; white-space:normal">@Predecessors(row.Item.Id)</td>
+                            <td>@(_critical.Contains(row.Item.Id) ? "Yes" : "No")</td>
+                            <td>@(slack?.SlackDays.ToString(CultureInfo.CurrentCulture) ?? "—")</td>
+                            @if (_baseline is not null)
+                            {
+                                var b = _baseline.TryGetValue(row.Item.Id, out var span) ? span : (null, null);
+                                <td>@TableDate(b.Start)</td>
+                                <td>@TableDate(b.Finish)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
 }
 
 @code {
@@ -112,6 +162,17 @@ else
             .Concat(_baseline?.Values.SelectMany(b => new[] { b.Start, b.Finish }) ?? [])
             .OfType<DateOnly>();
         _scale = GanttScale.Create(_zoom, dates, _today);
+    }
+
+    private static string TableDate(DateOnly? date) => date?.ToString("ddd MMM d, yyyy", CultureInfo.InvariantCulture) ?? "—";
+
+    private string Predecessors(Guid itemId)
+    {
+        var titles = _dependencies.Where(d => d.SuccessorId == itemId)
+            .Select(d => (Title: Items.FirstOrDefault(i => i.Id == d.PredecessorId)?.Title ?? "(hidden)", d))
+            .Select(x => x.Title + (x.d.Type == DependencyKind.FinishToStart ? "" : $" ({x.d.Type})") + (x.d.LagDays != 0 ? $" {x.d.LagDays:+0;-0} d" : ""))
+            .ToList();
+        return titles.Count == 0 ? "—" : string.Join(", ", titles);
     }
 
     private void SetZoom(GanttZoom zoom)
