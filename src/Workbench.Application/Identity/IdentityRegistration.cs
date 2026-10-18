@@ -32,6 +32,7 @@ public static class IdentityRegistration
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<UserProvisioner>();
         services.AddScoped<SystemExecutionContext>(); // Inactive unless a background job's scope switches it on.
+        services.AddScoped<RuleAuthorExecutionContext>(); // Inactive unless the date-trigger job acts for a rule's author.
         services.AddScoped<AccessControl>();
         services.AddScoped<ISheetPermissions, SheetPermissions>();
         services.AddScoped<IUserDirectory, UserDirectory>();

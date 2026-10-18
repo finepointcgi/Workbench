@@ -154,7 +154,7 @@ public sealed class RuleEngineTests
         Assert.Equal("Done", after.Values[status.Id.ToString()]);
         Assert.Equal(host.Clock.Today, after.Finish);
         var activity = await host.Activity.ListAsync(sheetId, item.Id);
-        Assert.Equal(RuleFields.AutomationActor, activity[0].Actor);
+        Assert.Equal($"{RuleFields.AutomationActor} (rule \"Rule\", author alice@example.com)", activity[0].Actor);
         Assert.Contains(activity, a => a.Actor == "alice@example.com" && a.Summary.Contains("Status"));
         Assert.Equal("Set Note to \"Ship closed 2026-10-17\"; Set Finish to \"2026-10-17\"", Assert.Single(await host.RunsAsync(sheetId)).Detail);
     }
@@ -176,7 +176,7 @@ public sealed class RuleEngineTests
         var notification = Assert.Single(await host.AllNotificationsAsync());
         Assert.Equal(NotificationKinds.Assignment, notification.Kind);
         Assert.Equal("lead@example.com", notification.RecipientEmail);
-        Assert.Equal("Workbench Automation assigned you to \"Fix\"", notification.Title);
+        Assert.Equal("Workbench Automation (rule \"Rule\", author alice@example.com) assigned you to \"Fix\"", notification.Title);
     }
 
     [Fact]

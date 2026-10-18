@@ -10,17 +10,23 @@ namespace Workbench.Application.Automation;
 /// </summary>
 public static class AutomationContext
 {
-    private static readonly AsyncLocal<int> CurrentDepth = new();
+    private static readonly AsyncLocal<State?> Current = new();
 
-    public static int Depth => CurrentDepth.Value;
+    public static int Depth => Current.Value?.Depth ?? 0;
 
-    public static bool IsActive => CurrentDepth.Value > 0;
+    public static bool IsActive => Depth > 0;
 
-    /// <summary>Runs the rest of this flow one level deeper until the result is disposed.</summary>
-    public static IDisposable Enter()
+    /// <summary>
+    /// Who changes made now are recorded as: <see cref="RuleFields.AutomationActor"/> with the running rule and its
+    /// author, e.g. <c>Workbench Automation (rule "Escalate", author pm@example.com)</c>. Null outside a rule.
+    /// </summary>
+    public static string? Actor => Current.Value is { Depth: > 0 } state ? state.Actor : null;
+
+    /// <summary>Runs the rest of this flow one level deeper, as <paramref name="ruleName"/> by <paramref name="author"/>, until disposed.</summary>
+    public static IDisposable Enter(string? ruleName = null, string? author = null)
     {
-        var previous = CurrentDepth.Value;
-        CurrentDepth.Value = previous + 1;
+        var previous = Current.Value;
+        Current.Value = new State((previous?.Depth ?? 0) + 1, Describe(ruleName, author));
         return new Restore(previous);
     }
 
@@ -30,25 +36,44 @@ public static class AutomationContext
     /// </summary>
     public static IDisposable Suspend()
     {
-        var previous = CurrentDepth.Value;
-        CurrentDepth.Value = 0;
+        var previous = Current.Value;
+        Current.Value = null;
         return new Restore(previous);
     }
 
-    private sealed class Restore(int previous) : IDisposable
+    internal static string Describe(string? ruleName, string? author)
     {
-        public void Dispose() => CurrentDepth.Value = previous;
+        if (string.IsNullOrWhiteSpace(ruleName))
+        {
+            return RuleFields.AutomationActor;
+        }
+
+        // Actor columns hold 320 characters; emails are at most 254.
+        var name = ruleName.Trim();
+        name = name.Length > 50 ? name[..49] + "…" : name;
+        var by = string.IsNullOrWhiteSpace(author) ? "" : $", author {author.Trim().ToLowerInvariant()}";
+        var actor = $"{RuleFields.AutomationActor} (rule \"{name}\"{by})";
+        return actor.Length > 320 ? actor[..320] : actor;
+    }
+
+    private sealed record State(int Depth, string Actor);
+
+    private sealed class Restore(State? previous) : IDisposable
+    {
+        public void Dispose() => Current.Value = previous;
     }
 }
 
 /// <summary>
-/// Decorates <see cref="ICurrentUser"/> so changes made by rules are attributed to <see cref="RuleFields.AutomationActor"/>
-/// (activity, comments, "you didn't make this change" checks). Registered by <c>AddWorkbenchAutomationHosting</c>
+/// Decorates <see cref="ICurrentUser"/> so changes made by rules are attributed to the automation, naming the rule and
+/// its author (<see cref="AutomationContext.Actor"/>: activity, comments, "you didn't make this change" checks).
+/// Permission checks don't use this name: date rules are checked as their author (see
+/// <see cref="Identity.RuleAuthorExecutionContext"/>). Registered by <c>AddWorkbenchAutomationHosting</c>
 /// after the real <see cref="ICurrentUser"/>.
 /// </summary>
 public sealed class AutomationAwareCurrentUser(ICurrentUser inner) : ICurrentUser
 {
-    public string Email => AutomationContext.IsActive ? RuleFields.AutomationActor : inner.Email;
+    public string Email => AutomationContext.Actor ?? inner.Email;
 }
 
 /// <summary>
