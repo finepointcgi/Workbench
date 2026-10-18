@@ -380,10 +380,15 @@ internal static class CeilingEngine
             CeilingLevel.Contract => $"Contract {(c.ContractId is { } id ? _contracts.GetValueOrDefault(id, "?") : "?")}",
             CeilingLevel.Clin => $"CLIN {(c.ClinId is { } id ? _clins.GetValueOrDefault(id)?.Number ?? "?" : "?")}",
             CeilingLevel.Project => $"Project {(c.ProjectId is { } id ? _projects.GetValueOrDefault(id)?.Code ?? "?" : "?")}",
-            CeilingLevel.Wbs => $"WBS {WbsCode(c.WbsElementId)}",
-            _ => $"WBS {WbsCode(c.WbsElementId)} · {(c.LaborCategoryId is { } l ? _categories.GetValueOrDefault(l, "?") : "?")} labor",
+            CeilingLevel.Wbs => Wbs(c.WbsElementId),
+            _ => $"{Wbs(c.WbsElementId)} · {(c.LaborCategoryId is { } l ? _categories.GetValueOrDefault(l, "?") : "?")} labor",
         };
 
         private string WbsCode(Guid? id) => id is { } x ? _wbs.GetValueOrDefault(x)?.Code ?? "?" : "?";
+
+        /// <summary>The name people know the work by, then its code: "Requirements review (WBS 1001.01.02)".</summary>
+        private string Wbs(Guid? id) => id is { } x && _wbs.GetValueOrDefault(x) is { } w && !string.IsNullOrWhiteSpace(w.Name)
+            ? $"{w.Name} (WBS {w.Code})"
+            : $"WBS {WbsCode(id)}";
     }
 }

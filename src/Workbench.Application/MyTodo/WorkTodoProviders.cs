@@ -37,12 +37,18 @@ public sealed class ReceivingTodoProvider : IMyTodoProvider
             }
 
             var partly = summary.Status == PurchaseOrderState.PartiallyReceived;
+            // PO dollars are Finance's; a receiver only needs to know what's still to come (as on the Receiving page).
+            var finance = context.User.IsFinance;
             items.Add(new MyTodoItem(
                 $"receiving:{summary.Id}", TodoCategories.Receiving,
                 $"Receive {summary.Number} from {summary.VendorName}",
-                partly
-                    ? $"Partly received ({Money(summary.Received)} of {Money(summary.Total)}). Record the rest when it arrives."
-                    : $"Ordered {summary.OrderDate:MMM d} · {Money(summary.Total)}. You're a named receiver: record it when it arrives.",
+                (partly, finance) switch
+                {
+                    (true, true) => $"Partly received ({Money(summary.Received)} of {Money(summary.Total)}). Record the rest when it arrives.",
+                    (true, false) => "Partly received. Record the rest when it arrives.",
+                    (false, true) => $"Ordered {summary.OrderDate:MMM d} · {Money(summary.Total)}. You're a named receiver: record it when it arrives.",
+                    (false, false) => $"Ordered {summary.OrderDate:MMM d}. You're a named receiver: record it when it arrives.",
+                },
                 TodoUrgency.ThisWeek, null, $"purchasing/orders/{summary.Id}", "Record receipt", Priority: 2));
         }
 

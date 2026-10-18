@@ -19,7 +19,7 @@ public sealed class CeilingEnforcementTests
         await kit.WbsHoursAsync(12m); // 8 h already on record
 
         var ex = await Assert.ThrowsAsync<CeilingExceededException>(() => kit.SaveTimeAsync(8m));
-        Assert.Contains("WBS 1001.01", ex.Message);
+        Assert.Contains("Work (WBS 1001.01)", ex.Message); // the name people know, then the code
         Assert.Contains("16 h", ex.Message);
 
         var saved = await kit.SaveTimeAsync(4m);

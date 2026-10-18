@@ -74,7 +74,7 @@ public static class NavCatalog
 
         new(Projects, null, "All projects", "projects", Icons.Material.Filled.Work, Everyone, Keywords: "contracts wbs"),
         new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsResourceManager || a.IsProjectManager, Keywords: "allocations staffing capacity utilization"),
-        new(Projects, null, "Project ODCs", "odcs", Icons.Material.Filled.RequestQuote, a => a.IsFinance || a.IsProjectManager, MatchAll: true, Keywords: "other direct costs vendor"),
+        new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, a => a.IsFinance || a.IsProjectManager, MatchAll: true, Keywords: "other direct costs vendor"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
