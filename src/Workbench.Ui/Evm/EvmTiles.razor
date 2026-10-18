@@ -5,7 +5,7 @@
     {
         <MudItem xs="6" sm="4" md="2">
             <MudPaper Outlined="true" Class="pa-3" Style="height: 100%">
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">@tile.Label</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary"><Term Key="@(tile.TermKey ?? "")">@tile.Label</Term></MudText>
                 <MudText Typo="Typo.h6" Class="@tile.Class">@tile.Value</MudText>
                 @if (tile.Detail is not null)
                 {
@@ -20,25 +20,25 @@
     [Parameter, EditorRequired]
     public EvmStatusDto Status { get; set; } = default!;
 
-    private sealed record Tile(string Label, string Value, string? Detail = null, string Class = "");
+    private sealed record Tile(string Label, string Value, string? Detail = null, string Class = "", string? TermKey = null);
 
     private IEnumerable<Tile> Tiles
     {
         get
         {
             var t = Status.Total;
-            yield return new Tile("BAC", EvmFormat.Money(t.Bac), $"PMB {EvmFormat.Money(Status.PerformanceMeasurementBaseline)} · MR {EvmFormat.Money(Status.ManagementReserve)}");
-            yield return new Tile("BCWS (planned)", EvmFormat.Money(t.Bcws), $"{EvmFormat.Percent(t.Bac == 0 ? null : t.Bcws / t.Bac * 100)} of BAC");
-            yield return new Tile("BCWP (earned)", EvmFormat.Money(t.Bcwp), $"{EvmFormat.Percent(t.PercentComplete)} complete");
-            yield return new Tile("ACWP (actual)", EvmFormat.Money(t.Acwp), $"{EvmFormat.Percent(t.PercentSpent)} spent");
-            yield return new Tile("SV", EvmFormat.Money(t.Sv), EvmFormat.Percent(t.SvPercent), EvmFormat.VarianceClass(t.Sv));
-            yield return new Tile("CV", EvmFormat.Money(t.Cv), EvmFormat.Percent(t.CvPercent), EvmFormat.VarianceClass(t.Cv));
-            yield return new Tile("SPI", EvmFormat.Index(t.Spi), "BCWP ÷ BCWS", EvmFormat.IndexClass(t.Spi));
-            yield return new Tile("CPI", EvmFormat.Index(t.Cpi), "BCWP ÷ ACWP", EvmFormat.IndexClass(t.Cpi));
-            yield return new Tile("EAC", EvmFormat.Money(t.Eac), $"CPI {EvmFormat.Money(t.EacCpi)} · CPI×SPI {EvmFormat.Money(t.EacCpiSpi)}");
-            yield return new Tile("ETC", EvmFormat.Money(t.Etc), "EAC − ACWP");
-            yield return new Tile("VAC", EvmFormat.Money(t.Vac), "BAC − EAC", EvmFormat.VarianceClass(t.Vac));
-            yield return new Tile("TCPI", EvmFormat.Index(t.Tcpi), $"to EAC {EvmFormat.Index(t.TcpiEac)}", t.Tcpi > 1.1m ? "mud-error-text" : "");
+            yield return new Tile("BAC", EvmFormat.Money(t.Bac), $"PMB {EvmFormat.Money(Status.PerformanceMeasurementBaseline)} · MR {EvmFormat.Money(Status.ManagementReserve)}", TermKey: "bac");
+            yield return new Tile("BCWS (planned)", EvmFormat.Money(t.Bcws), $"{EvmFormat.Percent(t.Bac == 0 ? null : t.Bcws / t.Bac * 100)} of BAC", TermKey: "bcws");
+            yield return new Tile("BCWP (earned)", EvmFormat.Money(t.Bcwp), $"{EvmFormat.Percent(t.PercentComplete)} complete", TermKey: "bcwp");
+            yield return new Tile("ACWP (actual)", EvmFormat.Money(t.Acwp), $"{EvmFormat.Percent(t.PercentSpent)} spent", TermKey: "acwp");
+            yield return new Tile("SV", EvmFormat.Money(t.Sv), EvmFormat.Percent(t.SvPercent), EvmFormat.VarianceClass(t.Sv), "sv");
+            yield return new Tile("CV", EvmFormat.Money(t.Cv), EvmFormat.Percent(t.CvPercent), EvmFormat.VarianceClass(t.Cv), "cv");
+            yield return new Tile("SPI", EvmFormat.Index(t.Spi), "BCWP ÷ BCWS", EvmFormat.IndexClass(t.Spi), "spi");
+            yield return new Tile("CPI", EvmFormat.Index(t.Cpi), "BCWP ÷ ACWP", EvmFormat.IndexClass(t.Cpi), "cpi");
+            yield return new Tile("EAC", EvmFormat.Money(t.Eac), $"CPI {EvmFormat.Money(t.EacCpi)} · CPI×SPI {EvmFormat.Money(t.EacCpiSpi)}", TermKey: "eac");
+            yield return new Tile("ETC", EvmFormat.Money(t.Etc), "EAC − ACWP", TermKey: "etc");
+            yield return new Tile("VAC", EvmFormat.Money(t.Vac), "BAC − EAC", EvmFormat.VarianceClass(t.Vac), "vac");
+            yield return new Tile("TCPI", EvmFormat.Index(t.Tcpi), $"to EAC {EvmFormat.Index(t.TcpiEac)}", t.Tcpi > 1.1m ? "mud-error-text" : "", "tcpi");
         }
     }
 }

@@ -30,7 +30,7 @@
         @if (_summary.Clins.Count > 0)
         {
             <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
-                <thead><tr><th>CLIN</th><th style="text-align:right">Billed</th><th style="text-align:right">Funded</th></tr></thead>
+                <thead><tr><th><Term Key="clin">CLIN</Term></th><th style="text-align:right">Billed</th><th style="text-align:right"><Term Key="funded">Funded</Term></th></tr></thead>
                 <tbody>
                     @foreach (var c in _summary.Clins)
                     {

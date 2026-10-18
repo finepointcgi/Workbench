@@ -2,7 +2,16 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
     <MudStack Spacing="0">
         <MudLink Href="@(BackHref ?? "purchasing/bills")" Typo="Typo.caption">@(BackLabel ?? "Purchasing")</MudLink>
-        <MudText Typo="Typo.h4" HtmlTag="h1">@Title</MudText>
+        <MudText Typo="Typo.h4" HtmlTag="h1">
+            @if (TitleTerm is not null)
+            {
+                <Term Key="@TitleTerm">@Title</Term>
+            }
+            else
+            {
+                @Title
+            }
+        </MudText>
     </MudStack>
     <MudSpacer />
     <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">@ChildContent</MudStack>
@@ -15,6 +24,9 @@
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>A glossary key: the title gets that term's explanation as a tooltip (e.g. the technical name).</summary>
+    [Parameter] public string? TitleTerm { get; set; }
     [Parameter] public string? BackHref { get; set; }
     [Parameter] public string? BackLabel { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }

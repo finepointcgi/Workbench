@@ -20,7 +20,7 @@
         <MudTh>Trip</MudTh>
         <MudTh Style="text-align:right">Lines</MudTh>
         <MudTh Style="text-align:right">Total</MudTh>
-        <MudTh Style="text-align:right">Allowable</MudTh>
+        <MudTh Style="text-align:right"><Term Key="allowable">Allowable</Term></MudTh>
         <MudTh>Status</MudTh>
     </HeaderContent>
     <RowTemplate>
@@ -32,7 +32,8 @@
         <MudTd DataLabel="Status"><OdcStatusChip Status="context.Status" /></MudTd>
     </RowTemplate>
     <NoRecordsContent>
-        <MudText>No expense reports yet. Create one for your next trip.</MudText>
+        <MudText data-testid="expenses-empty">No expense reports yet. Start one for your next trip, or for anything you bought for a project.</MudText>
+        <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">Start an expense report</MudButton>
     </NoRecordsContent>
 </MudTable>
 

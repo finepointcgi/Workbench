@@ -31,7 +31,10 @@
     {
         <span style="@ResourcingFormat.CellStyle(status) padding:2px 10px; border-radius:4px; font-size:0.8rem">@ResourcingFormat.Label(status)</span>
     }
-    <MudText Typo="Typo.caption" Class="mud-text-secondary">Allocated / capacity hours. Full from @(_map?.FullThresholdPercent ?? 90)% of capacity.</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="heat-legend">
+        Each cell reads "planned of available" hours for that week: <b>34 of 29 h</b> means 34 hours planned against 29 the person can work
+        (<Term Key="capacity">capacity</Term>). Full from @(_map?.FullThresholdPercent ?? 90)% of capacity.
+    </MudText>
 </MudStack>
 
 @if (_map is null)
@@ -66,10 +69,10 @@ else
                         @foreach (var cell in row.Weeks)
                         {
                             <td style="@ResourcingFormat.CellStyle(cell.Status) text-align:center; cursor:pointer; white-space:nowrap"
-                                title="@($"{ResourcingFormat.Label(cell.Status)}: {cell.Allocated:0.#} h allocated of {cell.Capacity:0.#} h capacity" + (cell.HolidayHours + cell.LeaveHours > 0 ? $" ({cell.HolidayHours + cell.LeaveHours:0.#} h holidays/leave)" : ""))"
+                                title="@($"{ResourcingFormat.Label(cell.Status)}: {cell.Allocated:0.#} h planned of {cell.Capacity:0.#} h available" + (cell.HolidayHours + cell.LeaveHours > 0 ? $" ({cell.HolidayHours + cell.LeaveHours:0.#} h holidays/leave)" : ""))"
                                 data-status="@cell.Status" data-week="@cell.WeekStart.ToString("yyyy-MM-dd")"
                                 @onclick="() => OpenCellAsync(row, cell)">
-                                @ResourcingFormat.Hours(cell.Allocated)<span class="mud-text-secondary">/@ResourcingFormat.Hours(cell.Capacity)</span>
+                                @ResourcingFormat.Hours(cell.Allocated)<span class="mud-text-secondary"> of @ResourcingFormat.Hours(cell.Capacity) h</span>
                             </td>
                         }
                     </tr>

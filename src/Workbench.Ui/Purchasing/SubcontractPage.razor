@@ -64,7 +64,7 @@ else
             <MudPaper Outlined="true" Class="pa-4">
                 <MudText Typo="Typo.h6" Class="mb-2">Funding and modifications</MudText>
                 <MudSimpleTable Dense="true" Elevation="0" data-testid="funding">
-                    <thead><tr><th>Mod</th><th>Effective</th><th>Description</th><th style="text-align:right">Funding</th><th style="text-align:right">Ceiling</th><th>By</th></tr></thead>
+                    <thead><tr><th>Mod</th><th>Effective</th><th>Description</th><th style="text-align:right">Funding</th><th style="text-align:right"><Term Key="ceiling">Ceiling</Term></th><th>By</th></tr></thead>
                     <tbody>
                         @foreach (var f in d.Funding)
                         {
@@ -128,7 +128,7 @@ else
                 else
                 {
                     <MudSimpleTable Dense="true" Elevation="0" data-testid="sub-invoices">
-                        <thead><tr><th>Voucher</th><th>Invoice</th><th>Date</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Voucher</th><th>Invoice</th><th>Date</th><th style="text-align:right">Amount</th><th style="text-align:right"><Term Key="retainage">Retainage</Term></th><th>Status</th></tr></thead>
                         <tbody>
                             @foreach (var i in d.Invoices)
                             {

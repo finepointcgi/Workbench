@@ -11,7 +11,7 @@
 <AssetHeader Title="Asset register" BackHref="" BackLabel="My Work"
              Subtitle="Contractor-owned assets depreciate monthly into the general ledger; government-furnished and contractor-acquired property is tracked for FAR 52.245-1.">
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_error is not null">Export CSV</MudButton>
-    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AddBox" Href="assets/capitalize">Capitalize from AP</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AddBox" Href="assets/capitalize" title="Capitalize purchases from AP bills">Add purchases to fixed assets</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_error is not null" data-testid="new-asset">New asset</MudButton>
 </AssetHeader>
 
@@ -37,7 +37,7 @@ else
     <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
         @if (_assets.Count == 0)
         {
-            <MudText Class="mud-text-secondary">No assets.</MudText>
+            <MudText Class="mud-text-secondary">No fixed assets yet. Add equipment you own, or add purchases from vendor bills.</MudText>
         }
         else
         {

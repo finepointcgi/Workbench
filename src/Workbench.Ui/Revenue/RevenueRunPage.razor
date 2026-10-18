@@ -49,7 +49,7 @@ else
                         <tr>
                             <th>Project</th><th>Method</th>
                             <th style="text-align:right">Recognized to date</th><th style="text-align:right">Billed to date</th>
-                            <th style="text-align:right">Period revenue</th><th style="text-align:right">Unbilled</th>
+                            <th style="text-align:right">Period revenue</th><th style="text-align:right"><Term Key="unbilled">Unbilled</Term></th>
                             <th style="text-align:right">Billings in excess</th><th style="text-align:right">Loss provision</th>
                             <th>Status</th><th></th>
                         </tr>
@@ -132,7 +132,7 @@ else
             <MudText Typo="Typo.h6" Class="mb-2">Runs for @preview.PeriodName</MudText>
             @if (_runs.Count == 0)
             {
-                <MudText Class="mud-text-secondary">No runs yet.</MudText>
+                <MudText Class="mud-text-secondary">No revenue runs yet. Run revenue for the period to record what each project earned.</MudText>
             }
             else
             {

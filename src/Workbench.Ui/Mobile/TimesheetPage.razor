@@ -55,7 +55,7 @@ else
             }
             @foreach (var e in entries)
             {
-                <div class="wb-m-kv wb-m-muted"><span class="wb-m-wrap">@e.WbsCode · @e.WbsName</span><span>@MobileFormat.Hours(e.Hours)</span></div>
+                <div class="wb-m-kv wb-m-muted"><span class="wb-m-wrap">@ChargeCodeText.Label(e.WbsCode, e.WbsName, _detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == e.WbsElementId)?.ChargeCode.Kind)</span><span>@MobileFormat.Hours(e.Hours)</span></div>
             }
         </div>
     }

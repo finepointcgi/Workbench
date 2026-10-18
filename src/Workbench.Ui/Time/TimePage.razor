@@ -5,6 +5,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <PageTitle>Time · Workbench</PageTitle>
 
@@ -31,13 +32,13 @@ else if (_detail is null)
 }
 else
 {
-    <TimesheetStatusBanner Timesheet="_detail.Timesheet" />
+    <TimesheetStatusBanner Timesheet="_detail.Timesheet" WaitingOn="_waitingOn" />
     @if (_leave is not null)
     {
         @if (_leave.Prefill.Count > 0 && !_detail.Timesheet.IsLocked)
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="leave-prefill">
-                Pre-filled from approved leave and holidays: @string.Join(", ", _leave.Prefill.Select(p => $"{p.WbsCode} {p.Date:ddd M/d} {p.Hours:0.##} h ({p.Source})")). Save to keep them.
+                Pre-filled from approved leave and holidays: @string.Join(", ", _leave.Prefill.Select(p => $"{PrefillName(p)} {p.Date:ddd M/d} {p.Hours:0.##} h ({p.Source})")). Save to keep them.
             </MudAlert>
         }
         @foreach (var warning in _leave.Warnings)
@@ -50,20 +51,23 @@ else
         <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
     </MudPaper>
 
-    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap">
-        <MudText Class="mud-text-secondary">
-            Standard for this period: @_detail.Timesheet.StandardHours.ToString("0.##") h
-        </MudText>
-        <MudSpacer />
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap" Spacing="2">
         <MudButton Variant="Variant.Text" Href="@($"time/history/{_detail.Timesheet.Id}")" StartIcon="@Icons.Material.Filled.History">History</MudButton>
+        <MudSpacer />
         @if (!_detail.Timesheet.IsLocked)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(_busy || _grid?.IsDirty != true)" OnClick="SaveAsync"
-                       StartIcon="@Icons.Material.Filled.Save">Save</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SubmitAsync"
-                       StartIcon="@Icons.Material.Filled.Send">Submit</MudButton>
+                       StartIcon="@Icons.Material.Filled.Save" data-testid="save">Save</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Disabled="_busy" OnClick="SubmitAsync"
+                       StartIcon="@Icons.Material.Filled.Send" data-testid="submit">Certify and submit</MudButton>
         }
     </MudStack>
+    @if (!_detail.Timesheet.IsLocked)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" Align="Align.End">
+            Submitting asks you to certify that these hours are complete and accurate. Your supervisor approves them next.
+        </MudText>
+    }
 }
 
 @code {
@@ -72,6 +76,7 @@ else
     private TimesheetGrid? _grid;
     private string? _error;
     private bool _busy;
+    private string? _waitingOn;
 
     /// <summary>The correction reason given when reopening, offered again when saving.</summary>
     private string? _correctionReason;
@@ -92,6 +97,7 @@ else
             var detail = await Timesheets.GetOrCreateMyTimesheetAsync(date);
             _leave = await LeaveFor(detail);
             _detail = detail;
+            _waitingOn = await WaitingOnAsync(detail.Timesheet);
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -232,6 +238,7 @@ else
             if (_detail is not null)
             {
                 _leave = await LeaveFor(_detail);
+                _waitingOn = await WaitingOnAsync(_detail.Timesheet);
             }
 
             return true;
@@ -255,6 +262,54 @@ else
             return await LeaveTimesheets.GetForTimesheetAsync(detail.Timesheet.Id);
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    private string PrefillName(Workbench.Contracts.Leave.LeavePrefillDto p) =>
+        _detail?.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == p.WbsElementId) is { } code ? ChargeCodeText.Label(code.ChargeCode) : p.WbsCode;
+
+    /// <summary>
+    /// Who a submitted timesheet waits on: the open approval step's people, by name where the employee list knows them.
+    /// Best effort; the banner just says "waiting for approval" without it.
+    /// </summary>
+    private async Task<string?> WaitingOnAsync(TimesheetDto sheet)
+    {
+        if (sheet.Status != TimesheetState.Submitted
+            || Services.GetService(typeof(Workbench.Contracts.Approvals.IApprovalInboxService)) is not Workbench.Contracts.Approvals.IApprovalInboxService inbox)
+        {
+            return null;
+        }
+
+        try
+        {
+            var history = await inbox.GetHistoryAsync(Workbench.Contracts.Approvals.ApprovalDocumentTypes.Timesheet, sheet.Id);
+            var emails = history.FirstOrDefault()?.Tasks.FirstOrDefault(t => t.Status == Workbench.Contracts.Approvals.ApprovalTaskState.Pending)?.Assignees ?? [];
+            if (emails.Count == 0)
+            {
+                return null;
+            }
+
+            var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (Services.GetService(typeof(IPeopleService)) is IPeopleService people)
+            {
+                try
+                {
+                    foreach (var e in await people.ListEmployeesAsync())
+                    {
+                        names[e.Email] = e.DisplayName;
+                    }
+                }
+                catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+                {
+                }
+            }
+
+            var shown = emails.Take(2).Select(e => names.GetValueOrDefault(e) ?? e).ToList();
+            return string.Join(" or ", shown) + (emails.Count > 2 ? $" (+{emails.Count - 2})" : "");
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
         {
             return null;
         }
