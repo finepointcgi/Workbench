@@ -44,6 +44,41 @@ public sealed class NavigationGatingTests
     }
 
     [Theory]
+    [InlineData(OrgRoles.Employee, false)]
+    [InlineData(OrgRoles.Timekeeper, false)]
+    [InlineData(OrgRoles.Finance, true)]
+    [InlineData(OrgRoles.Admin, true)]
+    public async Task Accounting_pages_are_for_finance_and_admin(OrgRoles roles, bool allowed)
+    {
+        await using var ctx = NewContext(roles);
+
+        var layout = ctx.Render<AccountingLayout>(p => p.Add(l => l.Body, (RenderFragment)(b => b.AddMarkupContent(0, "<p data-body>Journal</p>"))));
+
+        layout.WaitForAssertion(() =>
+        {
+            Assert.Equal(allowed, layout.FindAll("[data-body]").Count == 1);
+            Assert.Equal(!allowed, layout.FindAll("[data-forbidden]").Count == 1);
+        });
+    }
+
+    [Theory]
+    [InlineData(OrgRoles.Employee, false)]
+    [InlineData(OrgRoles.Finance, false)]
+    [InlineData(OrgRoles.Admin, true)]
+    public async Task Admin_layout_is_for_admins_only(OrgRoles roles, bool allowed)
+    {
+        await using var ctx = NewContext(roles);
+
+        var layout = ctx.Render<AdminLayout>(p => p.Add(l => l.Body, (RenderFragment)(b => b.AddMarkupContent(0, "<p data-body>Costpoint</p>"))));
+
+        layout.WaitForAssertion(() =>
+        {
+            Assert.Equal(allowed, layout.FindAll("[data-body]").Count == 1);
+            Assert.Equal(!allowed, layout.FindAll("[data-forbidden]").Count == 1);
+        });
+    }
+
+    [Theory]
     [InlineData(OrgRoles.Employee, false, false)]
     [InlineData(OrgRoles.Finance, false, false)]
     [InlineData(OrgRoles.Employee, true, true)] // a supervisor
