@@ -174,3 +174,14 @@ await notifications.PublishAsync(
   rows hold it until the invoice is voided. Cost-plus bills cumulative cost less billed cost, so it reads
   `IBurdenedCostService` from the contract start; without a registered implementation it bills direct cost only and says
   so. Other modules can add a period-close checklist item by registering `Application.Accounting.IPeriodCloseCheck`.
+
+## Imports (wave 6)
+
+- `Application/Imports`: `IImportService` (Finance/Admin) runs one `IImporter` per source × kind in three modes
+  (validate, dry run, apply) through `ImportRun`. Importers call the regular services, never write entities directly
+  (exceptions: the plan-sheet/WBS links, as in `PlanSyncService`). Every touched entity is recorded as an
+  `ImportJobRecord` with EF property snapshots; `ImportRollback` reverts them and refuses when anything changed or now
+  references them (found from the EF model's foreign keys). A new entity with a foreign key to an importable entity is
+  picked up automatically; a reference without one (like comments → items) needs an explicit check there.
+- External ids Workbench has no field for (Smartsheet row/sheet ids) live in `ImportKeyMap`. Samples and the expected
+  columns per file: `samples/import/README.md`.
