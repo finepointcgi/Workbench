@@ -12,11 +12,17 @@ public enum NotificationDelivery
     InAppOnly,
 }
 
+/// <summary>Well-known notification kinds (the bell picks an icon by kind). Features may add their own.</summary>
 public static class NotificationKinds
 {
     public const string Rule = "rule";
     public const string Mention = "mention";
     public const string Assignment = "assignment";
+    public const string TimesheetSubmitted = "timesheet.submitted";
+    public const string TimesheetApproved = "timesheet.approved";
+    public const string TimesheetRejected = "timesheet.rejected";
+    public const string TimesheetMissing = "timesheet.missing";
+    public const string ExpenseApproval = "expense.approval";
 }
 
 /// <summary><see cref="Link"/> is app-relative, e.g. <c>sheets/{sheetId}?item={itemId}</c>.</summary>

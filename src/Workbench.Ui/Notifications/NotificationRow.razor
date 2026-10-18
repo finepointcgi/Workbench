@@ -47,6 +47,10 @@
         NotificationKinds.Mention => Icons.Material.Outlined.AlternateEmail,
         NotificationKinds.Assignment => Icons.Material.Outlined.AssignmentInd,
         NotificationKinds.Rule => Icons.Material.Outlined.Bolt,
+        NotificationKinds.TimesheetApproved => Icons.Material.Outlined.TaskAlt,
+        NotificationKinds.TimesheetRejected => Icons.Material.Outlined.Undo,
+        NotificationKinds.ExpenseApproval => Icons.Material.Outlined.ReceiptLong,
+        _ when kind.StartsWith("timesheet.", StringComparison.Ordinal) => Icons.Material.Outlined.Schedule,
         _ => Icons.Material.Outlined.Notifications,
     };
 }
