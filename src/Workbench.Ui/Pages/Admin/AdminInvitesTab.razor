@@ -1,0 +1,150 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Security
+@inject IInviteService Invites
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Invite someone by email. They get the roles below when they first sign in with that email through your identity
+    provider. Invitations expire after 7 days. People provisioned by SCIM don't need one.
+</MudText>
+
+<MudPaper Outlined="true" Class="pa-3 mb-4">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-email" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_name" Label="Name" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-name" />
+        </MudItem>
+        <MudItem xs="12" md="3" Class="d-flex align-center flex-wrap">
+            @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper })
+            {
+                <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@role.ToString()" Dense="true" Color="Color.Primary" />
+            }
+        </MudItem>
+        <MudItem xs="12" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="InviteAsync"
+                       Disabled="_busy || string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_name)" data-testid="invite-send">Invite</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable T="InviteDto" Items="_invites" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Filter="Matches" data-testid="invites-table">
+    <ToolBarContent>
+        <MudChipSet T="InviteStatus?" @bind-SelectedValue="_status" SelectionMode="SelectionMode.ToggleSelection" Size="Size.Small">
+            @foreach (var status in Enum.GetValues<InviteStatus>())
+            {
+                <MudChip T="InviteStatus?" Value="status" Text="@status.ToString()" />
+            }
+        </MudChipSet>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Email</MudTh>
+        <MudTh>Name</MudTh>
+        <MudTh>Roles</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Invited by</MudTh>
+        <MudTh>Sent (UTC)</MudTh>
+        <MudTh>Expires (UTC)</MudTh>
+        <MudTh />
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Name">@context.DisplayName</MudTd>
+        <MudTd DataLabel="Roles">@RoleText(context.Roles)</MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@StatusColor(context.Status)">@context.Status</MudChip>
+            @if (context.AcceptedAtUtc is { } accepted)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@accepted.ToString("yyyy-MM-dd HH:mm")</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Invited by">@context.InvitedBy</MudTd>
+        <MudTd DataLabel="Sent">@context.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+        <MudTd DataLabel="Expires">@context.ExpiresAtUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+        <MudTd>
+            @if (context.Status == InviteStatus.Pending)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RevokeAsync(context)">Revoke</MudButton>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No invitations yet.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<InviteDto> _invites = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _email;
+    private string? _name;
+    private OrgRoles _roles;
+    private InviteStatus? _status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _invites = await Invites.ListAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load invites: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool Matches(InviteDto invite) => _status is null || invite.Status == _status;
+
+    private async Task InviteAsync()
+    {
+        _busy = true;
+        try
+        {
+            var invite = await Invites.CreateAsync(new CreateInviteRequest(_email!, _name!, _roles));
+            _invites = await Invites.ListAsync();
+            Snackbar.Add($"Invited {invite.Email}. The invitation expires {invite.ExpiresAtUtc:MMM d HH:mm} UTC.", Severity.Success);
+            _email = null;
+            _name = null;
+            _roles = OrgRoles.Employee;
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(InviteDto invite)
+    {
+        try
+        {
+            var revoked = await Invites.RevokeAsync(invite.Id);
+            _invites = _invites.Select(i => i.Id == revoked.Id ? revoked : i).ToList();
+            Snackbar.Add($"Revoked the invitation for {invite.Email}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    internal static string RoleText(OrgRoles roles)
+    {
+        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
+        return names.Count == 0 ? "Employee" : string.Join(", ", names);
+    }
+
+    private static Color StatusColor(InviteStatus status) => status switch
+    {
+        InviteStatus.Pending => Color.Info,
+        InviteStatus.Accepted => Color.Success,
+        _ => Color.Default,
+    };
+}

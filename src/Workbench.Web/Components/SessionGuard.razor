@@ -1,0 +1,29 @@
+@* Sends the browser to sign in when the circuit's session ends (deactivated, signed out everywhere, idle or past its
+   lifetime; see RevalidatingAuthenticationStateProvider). Renders nothing. *@
+@using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
+@inject AuthenticationStateProvider AuthenticationState
+@inject NavigationManager Navigation
+
+@code {
+    protected override void OnInitialized() => AuthenticationState.AuthenticationStateChanged += OnChanged;
+
+    public void Dispose() => AuthenticationState.AuthenticationStateChanged -= OnChanged;
+
+    private async void OnChanged(Task<AuthenticationState> task)
+    {
+        try
+        {
+            var state = await task;
+            if (state.User.Identity?.IsAuthenticated != true)
+            {
+                var returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+                await InvokeAsync(() => Navigation.NavigateTo($"account/signout?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true));
+            }
+        }
+        catch (Exception)
+        {
+            // The circuit is going away; nothing to do.
+        }
+    }
+}

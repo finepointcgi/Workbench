@@ -1,0 +1,203 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Security
+@inject IUserAdminService UserAdmin
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Administrators see every workspace and can do everything. Finance manages rates, contracts, budgets, project setup and
+    fiscal close. Timekeepers see everyone's timesheets. Sheet access comes from workspace membership (Share on a sheet).
+    Deactivated people can't sign in; their history stays.
+</MudText>
+
+<MudTable T="UserAdminDto" Items="_users" Loading="_loading" Dense="true" Hover="true" Filter="Matches" Breakpoint="Breakpoint.Sm" data-testid="users-table">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search" Placeholder="Search name or email" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" Style="max-width:320px" />
+        <MudSpacer />
+        <MudSwitch T="bool" @bind-Value="_showInactive" Color="Color.Primary" Label="Show deactivated" />
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Admin</MudTh>
+        <MudTh>Finance</MudTh>
+        <MudTh>Timekeeper</MudTh>
+        <MudTh>Employee</MudTh>
+        <MudTh>Last sign-in (UTC)</MudTh>
+        <MudTh>Last seen (UTC)</MudTh>
+        <MudTh />
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">
+            <div>@context.DisplayName</div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Email</MudText>
+        </MudTd>
+        <MudTd DataLabel="Status">
+            @if (context.IsActive)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Active</MudChip>
+            }
+            else
+            {
+                <MudTooltip Text="@($"Deactivated {context.DeactivatedAtUtc:yyyy-MM-dd HH:mm} by {context.DeactivatedBy}")">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">Deactivated</MudChip>
+                </MudTooltip>
+            }
+            @if (context.ScimManaged)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text">SCIM</MudChip>
+            }
+        </MudTd>
+        @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper })
+        {
+            <MudTd DataLabel="@role.ToString()">
+                <MudSwitch T="bool" Value="context.Roles.HasFlag(role)" ValueChanged="value => SetRoleAsync(context, role, value)" Color="Color.Primary"
+                           Disabled="!context.IsActive || (role == OrgRoles.Admin && IsMe(context))"
+                           aria-label="@($"{role}: {context.Email}")" />
+            </MudTd>
+        }
+        <MudTd DataLabel="Employee">
+            @if (context.EmployeeName is not null)
+            {
+                <span>@context.EmployeeName</span>
+            }
+            else
+            {
+                <span class="mud-text-secondary">None</span>
+            }
+            @if (context.EmployeeLink != EmployeeLinkMode.ByEmail)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@(context.EmployeeLink == EmployeeLinkMode.Explicit ? "Linked manually" : "Unlinked")</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Last sign-in">
+            @(context.LastSignInAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")
+            @if (context.IsActive && IsDormant(context))
+            {
+                <MudTooltip Text="No sign-in in 90 days">
+                    <MudIcon Icon="@Icons.Material.Filled.HourglassBottom" Size="Size.Small" Color="Color.Warning" Class="ml-1" />
+                </MudTooltip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Last seen">@(context.LastSeenAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</MudTd>
+        <MudTd>
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Actions for {context.Email}")" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <MudMenuItem Icon="@Icons.Material.Filled.Badge" OnClick="() => LinkEmployeeAsync(context)">Link employee…</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="() => SignOutEverywhereAsync(context)" Disabled="!context.IsActive">Sign out everywhere</MudMenuItem>
+                @if (context.IsActive)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.PersonOff" OnClick="() => DeactivateAsync(context)" Disabled="IsMe(context)">Deactivate…</MudMenuItem>
+                }
+                else
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.PersonAddAlt1" OnClick="() => ReactivateAsync(context)">Reactivate</MudMenuItem>
+                }
+            </MudMenu>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No users match.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public UserDto Me { get; set; } = null!;
+
+    private IReadOnlyList<UserAdminDto> _users = [];
+    private bool _loading = true;
+    private bool _showInactive;
+    private string? _search;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _users = await UserAdmin.ListUsersAsync(null, includeInactive: true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load users: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool IsMe(UserAdminDto user) => string.Equals(user.Email, Me.Email, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDormant(UserAdminDto user) =>
+        (user.LastSignInAtUtc ?? user.LastSeenAtUtc) is not { } last || DateTime.UtcNow - last > TimeSpan.FromDays(90);
+
+    private bool Matches(UserAdminDto user) =>
+        (_showInactive || user.IsActive)
+        && (string.IsNullOrWhiteSpace(_search)
+            || user.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || user.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private void Replace(UserAdminDto updated) => _users = _users.Select(u => u.Email == updated.Email ? updated : u).ToList();
+
+    private async Task RunAsync(Func<Task<UserAdminDto>> action, Func<UserAdminDto, string> success)
+    {
+        try
+        {
+            var updated = await action();
+            Replace(updated);
+            Snackbar.Add(success(updated), Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private Task SetRoleAsync(UserAdminDto user, OrgRoles role, bool on) =>
+        RunAsync(() => UserAdmin.SetRolesAsync(user.Email, on ? user.Roles | role : user.Roles & ~role),
+            u => $"{u.DisplayName} is {(on ? "now" : "no longer")} {role}.");
+
+    private async Task DeactivateAsync(UserAdminDto user)
+    {
+        var dialog = await Dialogs.ShowAsync<SecurityReasonDialog>($"Deactivate {user.DisplayName}?", new DialogParameters<SecurityReasonDialog>
+        {
+            { d => d.Message, $"{user.Email} will be signed out everywhere at once and can't sign in again until reactivated. Their history stays." },
+            { d => d.ConfirmText, "Deactivate" },
+            { d => d.ReasonRequired, true },
+        });
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => UserAdmin.DeactivateAsync(user.Email, reason), u => $"{u.DisplayName} is deactivated.");
+        }
+    }
+
+    private Task ReactivateAsync(UserAdminDto user) =>
+        RunAsync(() => UserAdmin.ReactivateAsync(user.Email), u => $"{u.DisplayName} can sign in again.");
+
+    private async Task SignOutEverywhereAsync(UserAdminDto user)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Sign out everywhere?",
+            $"Ends every session and token {user.DisplayName} has, on every device. They can sign in again.", yesText: "Sign out", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await RunAsync(() => UserAdmin.SignOutEverywhereAsync(user.Email), u => $"{u.DisplayName} was signed out everywhere.");
+        }
+    }
+
+    private async Task LinkEmployeeAsync(UserAdminDto user)
+    {
+        var dialog = await Dialogs.ShowAsync<EmployeeLinkDialog>($"Employee for {user.DisplayName}", new DialogParameters<EmployeeLinkDialog>
+        {
+            { d => d.User, user },
+        });
+        if (await dialog.Result is { Canceled: false, Data: UserAdminDto updated })
+        {
+            Replace(updated);
+            Snackbar.Add("Employee link saved.", Severity.Success);
+        }
+    }
+}

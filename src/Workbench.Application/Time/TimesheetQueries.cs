@@ -15,11 +15,9 @@ internal static class TimesheetQueries
         await db.Set<Timesheet>().Include(t => t.Entries).FirstOrDefaultAsync(t => t.Id == timesheetId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Timesheet", timesheetId);
 
-    public static async Task<Employee?> FindByEmailAsync(IWorkbenchDbContext db, string email, CancellationToken cancellationToken)
-    {
-        var normalized = email.Trim().ToLowerInvariant();
-        return await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Email == normalized, cancellationToken);
-    }
+    /// <summary>The employee for a sign-in email, honoring an administrator's explicit link (see <see cref="Identity.EmployeeLinks"/>).</summary>
+    public static Task<Employee?> FindByEmailAsync(IWorkbenchDbContext db, string email, CancellationToken cancellationToken) =>
+        Identity.EmployeeLinks.FindForUserAsync(db, email, cancellationToken);
 
     /// <summary>
     /// DCAA: timesheets are approved by the employee's supervisor, or by an admin when the employee has no supervisor.

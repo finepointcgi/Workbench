@@ -1,10 +1,14 @@
 @page "/admin/users"
 @inject IUserDirectory Users
+@inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<PageTitle>Users · Workbench</PageTitle>
+<PageTitle>Users and security · Workbench</PageTitle>
 
-<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">Users</MudText>
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Users and security</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Who can sign in, what they can do, and the evidence an ISO 27001 auditor asks for: access reviews and the security event log.
+</MudText>
 
 @if (_me is null && _loading)
 {
@@ -16,54 +20,43 @@ else if (_me is not { IsAdmin: true })
 }
 else
 {
-    <MudText Class="mud-text-secondary mb-4">
-        People appear here after they first sign in. Administrators see every workspace and can do everything.
-        Finance manages rates, contracts, budgets, project setup and fiscal close. Timekeepers can see everyone's
-        timesheets. Sheet access comes from workspace membership (Share on a sheet).
-    </MudText>
-    <MudTable T="UserDto" Items="_users" Loading="_loading" Dense="true" Hover="true" Filter="Matches">
-        <ToolBarContent>
-            <MudTextField @bind-Value="_search" Placeholder="Search users" Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
-        </ToolBarContent>
-        <HeaderContent>
-            <MudTh>Name</MudTh>
-            <MudTh>Email</MudTh>
-            <MudTh>Last seen (UTC)</MudTh>
-            <MudTh>Admin</MudTh>
-            <MudTh>Finance</MudTh>
-            <MudTh>Timekeeper</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Name">@context.DisplayName</MudTd>
-            <MudTd DataLabel="Email">@context.Email</MudTd>
-            <MudTd DataLabel="Last seen">@(context.LastSeenAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</MudTd>
-            @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper })
-            {
-                <MudTd DataLabel="@role.ToString()">
-                    <MudSwitch T="bool" Value="context.Roles.HasFlag(role)" ValueChanged="value => SetRoleAsync(context, role, value)" Color="Color.Primary"
-                               aria-label="@($"{role}: {context.Email}")" />
-                </MudTd>
-            }
-        </RowTemplate>
-    </MudTable>
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4"
+             ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged" KeepPanelsAlive="false">
+        <MudTabPanel Text="Users" Icon="@Icons.Material.Filled.People">
+            <AdminUsersTab Me="_me" />
+        </MudTabPanel>
+        <MudTabPanel Text="Invites" Icon="@Icons.Material.Filled.PersonAdd">
+            <AdminInvitesTab />
+        </MudTabPanel>
+        <MudTabPanel Text="Access reviews" Icon="@Icons.Material.Filled.FactCheck">
+            <AdminAccessReviewsTab />
+        </MudTabPanel>
+        <MudTabPanel Text="Security events" Icon="@Icons.Material.Filled.Policy">
+            <AdminSecurityEventsTab />
+        </MudTabPanel>
+        <MudTabPanel Text="Retention" Icon="@Icons.Material.Filled.Inventory2">
+            <AdminRetentionTab />
+        </MudTabPanel>
+    </MudTabs>
 }
 
 @code {
+    private static readonly string[] Tabs = ["users", "invites", "reviews", "events", "retention"];
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabQuery { get; set; }
+
     private UserDto? _me;
-    private IReadOnlyList<UserDto> _users = [];
     private bool _loading = true;
-    private string? _search;
+    private int _tab;
+
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "users"));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _me = await Users.GetMeAsync();
-            if (_me.IsAdmin)
-            {
-                _users = await Users.SearchAsync(null, 500);
-            }
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {
@@ -75,22 +68,9 @@ else
         }
     }
 
-    private bool Matches(UserDto user) =>
-        string.IsNullOrWhiteSpace(_search)
-        || user.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)
-        || user.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase);
-
-    private async Task SetRoleAsync(UserDto user, OrgRoles role, bool on)
+    private void OnTabChanged(int index)
     {
-        try
-        {
-            var updated = await Users.SetRolesAsync(user.Email, on ? user.Roles | role : user.Roles & ~role);
-            _users = _users.Select(u => u.Email == updated.Email ? updated : u).ToList();
-            Snackbar.Add($"{updated.DisplayName} is {(on ? "now" : "no longer")} {role}.", Severity.Success);
-        }
-        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
-        {
-            Snackbar.Add(ex.Message, Severity.Warning);
-        }
+        _tab = index;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", Tabs[index]), replace: true);
     }
 }
