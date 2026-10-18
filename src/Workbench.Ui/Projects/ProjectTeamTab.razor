@@ -1,0 +1,85 @@
+@* The Team tab (Finance, administrators and the project's manager): who charges to the project and who is allocated to it. *@
+@inject IProjectHubService HubService
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">@_error</MudAlert>
+}
+else if (_team is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Team</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">People who record time on the project, are assigned to its charge codes or are allocated to it.</MudText>
+        <MudSpacer />
+        <MudButton Href="resourcing" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Groups">Plan allocations in Resourcing</MudButton>
+    </MudStack>
+    <MudTable Items="_team" Dense="true" Hover="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" data-testid="team-table">
+        <HeaderContent>
+            <MudTh>Person</MudTh>
+            <MudTh>Labor category</MudTh>
+            <MudTh Style="text-align: right">
+                <MudTooltip Text="Hours on approved timesheets (submitted, not yet approved, in brackets)."><span>Hours charged</span></MudTooltip>
+            </MudTh>
+            <MudTh>Last charged</MudTh>
+            <MudTh Style="text-align: right">
+                <MudTooltip Text="Allocated hours from this week on (Resourcing)."><span>Allocated ahead</span></MudTooltip>
+            </MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Person">
+                @context.Name
+                @if (context.IsManager)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">Manager</MudChip>
+                }
+                @if (context.IsAssigned)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">Assigned</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Labor category">@(context.LaborCategory ?? "—")</MudTd>
+            <MudTd DataLabel="Hours charged" Style="text-align: right">
+                @FinancialFormat.Hours(context.ApprovedHours)
+                @if (context.PendingHours > 0)
+                {
+                    <span class="mud-text-secondary"> (+@FinancialFormat.Hours(context.PendingHours))</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="Last charged">@(context.LastCharged is { } d ? ProjectsFormat.Date(d) : "—")</MudTd>
+            <MudTd DataLabel="Allocated ahead" Style="text-align: right">
+                @(context.UpcomingAllocatedHours > 0 ? $"{FinancialFormat.Hours(context.UpcomingAllocatedHours)} h" : "—")
+                @if (context.AllocatedThrough is { } through)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">through @ProjectsFormat.Date(through)</MudText>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="mud-text-secondary">Nobody charges to or is allocated to this project yet.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<ProjectTeamMemberDto>? _team;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _team = await HubService.GetTeamAsync(ProjectId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            _error = ex is UnauthorizedAccessException ? ex.Message : $"Couldn't load the team: {ex.Message}";
+        }
+    }
+}

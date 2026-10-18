@@ -1,0 +1,172 @@
+@* The project page's Overview: key numbers in plain language, alerts, schedule health and milestones from the plan sheet, recent activity. *@
+@using Workbench.Contracts.Collaboration
+@inject IActivityService Activity
+
+@if (Hub.Alerts.Count > 0)
+{
+    <MudStack Spacing="1" Class="mb-4" data-testid="project-alerts">
+        @foreach (var alert in Hub.Alerts)
+        {
+            <MudAlert Severity="ProjectsFormat.Severity(alert.Level)" Dense="true">
+                @alert.Message
+                @if (alert.Tab is { } tab && ProjectsFormat.Allows(Hub.Tabs, tab))
+                {
+                    <MudLink Href="@($"projects/{Hub.Project.Id}/{tab}")" Typo="Typo.body2" Class="ml-2">See @ProjectsFormat.Tabs.First(t => t.Slug == tab).Label</MudLink>
+                }
+            </MudAlert>
+        }
+    </MudStack>
+}
+
+@if (Hub.Project.Money is { } m)
+{
+    <MudGrid Spacing="3" Class="mb-2" data-testid="key-numbers">
+        <MudItem xs="12" sm="6" md="3">
+            <NumberTile Label="Spent so far" Value="@FinancialFormat.Money(m.Spent)"
+                        Detail="@(m.PercentSpent is { } ps ? $"{FinancialFormat.Percent(ps)} of the budget" : "No budget yet")"
+                        Term="Actual cost to date: approved hours at each person's cost rate plus approved, allowable ODCs. Direct cost, not burdened (fringe, overhead and G&A are on Financials › Burdened)." />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <NumberTile Label="Budget" Value="@FinancialFormat.Money(m.Budget)"
+                        Detail="@(m.PercentTimeElapsed is { } t ? $"{FinancialFormat.Percent(t)} of the time has gone" : "")"
+                        Term="Budget at completion (BAC) from the Current budget version (or the Baseline), in direct cost." />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <NumberTile Label="Forecast at completion" Value="@FinancialFormat.Money(m.ForecastAtCompletion)"
+                        Detail="@($"{FinancialFormat.Money(m.EstimateToComplete)} still to spend")"
+                        DetailClass="@(m.Budget > 0 && m.ForecastAtCompletion > m.Budget ? "mud-error-text" : "mud-text-secondary")"
+                        Term="Estimate at completion (EAC) = actual cost + estimate to complete (ETC). ETC is the remaining budget unless a forecast version is chosen on Financials. Direct cost." />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <NumberTile Label="Funding left" Value="@(m.FundingLeft is { } left ? FinancialFormat.Money(left) : "—")"
+                        Detail="@(m.FundedValue is { } funded ? $"{FinancialFormat.Money(funded)} funded{(m.PercentFundingUsed is { } u ? $", {FinancialFormat.Percent(u)} used" : "")}" : "Not on a contract")"
+                        Term="Funded (obligated) value of the contract less what all its projects have spent. Spending past it isn't covered by funding (Limitation of Funds)." />
+        </MudItem>
+    </MudGrid>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-4">
+        Figures as of @ProjectsFormat.Date(Hub.AsOf). Hover a number for its accounting term.
+        @if (Hub.Tabs.Financials)
+        {
+            <MudLink Href="@($"projects/{Hub.Project.Id}/financials")" Typo="Typo.caption">Full financials</MudLink>
+        }
+    </MudText>
+}
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+        <MudPaper Outlined="true" Class="pa-4" Style="height: 100%" data-testid="schedule-health">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Schedule</MudText>
+            @if (Hub.Schedule is { } s)
+            {
+                @if (s.TotalTasks == 0)
+                {
+                    <MudText Class="mud-text-secondary">The plan sheet has no tasks yet.</MudText>
+                }
+                else
+                {
+                    <MudStack Row="true" Spacing="4" Wrap="Wrap.Wrap" Class="mb-2">
+                        <Count Label="Open" Value="s.OpenTasks" />
+                        @if (s.HasStatusColumn)
+                        {
+                            <Count Label="Done" Value="s.DoneTasks" />
+                        }
+                        <Count Label="Late" Value="s.LateTasks" Class="@(s.LateTasks > 0 ? "mud-error-text" : "")" />
+                        <Count Label="Due in 2 weeks" Value="s.DueSoonTasks" />
+                        @if (s.BlockedTasks > 0)
+                        {
+                            <Count Label="Blocked" Value="s.BlockedTasks" Class="mud-warning-text" />
+                        }
+                    </MudStack>
+                    @if (s.HasStatusColumn)
+                    {
+                        <MudProgressLinear Value="@(s.TotalTasks == 0 ? 0 : 100.0 * s.DoneTasks / s.TotalTasks)" Color="Color.Success" Rounded="true" Size="Size.Medium" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@s.DoneTasks of @s.TotalTasks tasks done</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Add a Status column (with a Done option) to the plan sheet to track progress.</MudText>
+                    }
+                }
+
+                <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1">Upcoming milestones</MudText>
+                @if (s.UpcomingMilestones.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No open milestones (tasks that start and finish on the same day).</MudText>
+                }
+                else
+                {
+                    <MudList T="string" Dense="true" Padding="false">
+                        @foreach (var ms in s.UpcomingMilestones)
+                        {
+                            <MudListItem T="string" Href="@($"sheets/{s.SheetId}?item={ms.ItemId}")" Icon="@Icons.Material.Filled.Flag" IconColor="@(ms.IsLate ? Color.Error : Color.Primary)">
+                                <span>@ms.Title</span>
+                                <span class="@(ms.IsLate ? "mud-error-text" : "mud-text-secondary")"> · @ProjectsFormat.Date(ms.Date)@(ms.IsLate ? " (late)" : "")</span>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            }
+            else if (Hub.Project.SheetId is null)
+            {
+                <MudText Class="mud-text-secondary">This project has no plan sheet yet.</MudText>
+            }
+            else
+            {
+                <MudText Class="mud-text-secondary">You aren't a member of this project's plan sheet. Ask its owner to share it with you.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Outlined="true" Class="pa-4" Style="height: 100%" data-testid="recent-activity">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Recent activity</MudText>
+            @if (_activity is null)
+            {
+                <MudText Class="mud-text-secondary">@(Hub.Schedule is null ? "Activity comes from the plan sheet." : "Loading…")</MudText>
+            }
+            else if (_activity.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">Nothing has changed in the plan sheet yet.</MudText>
+            }
+            else
+            {
+                @foreach (var a in _activity)
+                {
+                    <div class="mb-2">
+                        <MudText Typo="Typo.body2">@a.Summary</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@a.Actor · @a.OccurredAtUtc.ToLocalTime().ToString("MMM d, h:mm tt", FinancialFormat.Culture)</MudText>
+                    </div>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@if (Hub.Project.Money is null && !Hub.Tabs.Financials)
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3">
+        Budgets and costs are shown to Finance and the project's manager.
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectHubDto Hub { get; set; } = default!;
+
+    private IReadOnlyList<ActivityDto>? _activity;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _activity = null;
+        if (Hub.Schedule is { } schedule)
+        {
+            try
+            {
+                _activity = await Activity.ListAsync(schedule.SheetId, null, 8);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+            {
+                _activity = [];
+            }
+        }
+    }
+}

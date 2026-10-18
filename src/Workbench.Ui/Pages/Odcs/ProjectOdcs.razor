@@ -10,16 +10,22 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
-<PageTitle>ODCs · Workbench</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>ODCs · Workbench</PageTitle>
+}
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
-    <MudText Typo="Typo.h4" HtmlTag="h1">Other direct costs</MudText>
-    <MudSelect T="Guid?" Value="ProjectId" ValueChanged="SelectProject" Label="Project" Dense="true" Style="min-width:280px" Class="ml-4">
-        @foreach (var p in _projects)
-        {
-            <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
-        }
-    </MudSelect>
+    @if (!Embedded)
+    {
+        <MudText Typo="Typo.h4" HtmlTag="h1">Other direct costs</MudText>
+        <MudSelect T="Guid?" Value="ProjectId" ValueChanged="SelectProject" Label="Project" Dense="true" Style="min-width:280px" Class="ml-4">
+            @foreach (var p in _projects)
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
     <MudSpacer />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="ProjectId is null">New vendor ODC</MudButton>
 </MudStack>
@@ -179,6 +185,9 @@ else if (!_loading)
 
 @code {
     [Parameter] public Guid? ProjectId { get; set; }
+
+    /// <summary>Rendered as the Costs tab of the project page: no title or project picker.</summary>
+    [Parameter] public bool Embedded { get; set; }
 
     private IReadOnlyList<ProjectDto> _projects = [];
     private IReadOnlyList<WbsElementDto> _wbs = [];
