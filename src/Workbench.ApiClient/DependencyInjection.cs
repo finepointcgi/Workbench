@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddDashboardClients(serverBaseAddress);
         services.AddTimekeepingClients(serverBaseAddress);
         services.AddOdcClients(serverBaseAddress);
+        services.AddFinancialsClients(serverBaseAddress);
         return services;
     }
 }

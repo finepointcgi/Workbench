@@ -4,6 +4,7 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Odcs;
+using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Dashboards;
 using Workbench.Application.MyWork;
@@ -30,6 +31,7 @@ public static class DependencyInjection
         services.AddWorkbenchDashboards();
         services.AddWorkbenchTimekeeping();
         services.AddWorkbenchOdcs();
+        services.AddWorkbenchFinancials();
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

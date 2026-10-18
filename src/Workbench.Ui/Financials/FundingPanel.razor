@@ -1,0 +1,56 @@
+@* Contract funding across all its projects: funded and ceiling remaining, burn, exhaustion forecast and alerts. *@
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2">Contract funding</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+        @Funding.ContractNumber · @Funding.ContractName · @Funding.ProjectCount project@(Funding.ProjectCount == 1 ? "" : "s")
+    </MudText>
+
+    <MudProgressLinear Value="@((double)Math.Min(Funding.PercentOfFundedSpent ?? 0, 1) * 100)" Color="BarColor" Size="Size.Large" Rounded="true" Class="my-3"
+                       aria-label="Share of funded value spent" />
+    <MudText Typo="Typo.body2">@FinancialFormat.Percent(Funding.PercentOfFundedSpent) of funded value spent</MudText>
+
+    <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+        <tbody>
+            <tr><td>Spent to date</td><td style="text-align: right">@FinancialFormat.Money(Funding.Spent)</td></tr>
+            <tr><td>Funded value</td><td style="text-align: right">@FinancialFormat.Money(Funding.FundedValue)</td></tr>
+            <tr><td>Funded remaining</td><td style="text-align: right" class="@(Funding.FundedRemaining < 0 ? "mud-error-text" : "")">@FinancialFormat.Money(Funding.FundedRemaining)</td></tr>
+            <tr><td>Ceiling</td><td style="text-align: right">@FinancialFormat.Money(Funding.CeilingValue)</td></tr>
+            <tr><td>Ceiling remaining</td><td style="text-align: right">@FinancialFormat.Money(Funding.CeilingRemaining)</td></tr>
+            <tr><td>Avg burn / period (last 3)</td><td style="text-align: right">@FinancialFormat.Money(Funding.AverageBurnPerPeriod)</td></tr>
+            <tr>
+                <td>Funding exhausted</td>
+                <td style="text-align: right">@(Funding.FundingExhaustionDate?.ToString("yyyy-MM-dd") ?? (Funding.FundedRemaining <= 0 && Funding.FundedValue > 0 ? "Now" : "—"))</td>
+            </tr>
+            <tr><td>Period of performance ends</td><td style="text-align: right">@Funding.PeriodEnd.ToString("yyyy-MM-dd")</td></tr>
+        </tbody>
+    </MudSimpleTable>
+
+    @foreach (var alert in Funding.Alerts)
+    {
+        <MudAlert Severity="Severity(alert.Level)" Dense="true" Class="mt-2">@alert.Message</MudAlert>
+    }
+    @if (Funding.Alerts.Count == 0)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">No funding alerts (alerts at 75% and 90% of funded value).</MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContractFundingDto Funding { get; set; } = default!;
+
+    private Color BarColor => Funding.PercentOfFundedSpent switch
+    {
+        >= 0.90m => Color.Error,
+        >= 0.75m => Color.Warning,
+        _ => Color.Primary,
+    };
+
+    private static Severity Severity(FundingAlertLevel level) => level switch
+    {
+        FundingAlertLevel.Critical => MudBlazor.Severity.Error,
+        FundingAlertLevel.Warning => MudBlazor.Severity.Warning,
+        _ => MudBlazor.Severity.Info,
+    };
+}

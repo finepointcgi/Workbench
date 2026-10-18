@@ -227,6 +227,8 @@ internal sealed class BudgetVersionConfiguration : IEntityTypeConfiguration<Budg
         b.Property(v => v.Name).HasMaxLength(200);
         b.Property(v => v.Kind).HasConversion<string>().HasMaxLength(16);
         b.Property(v => v.CreatedBy).HasMaxLength(320);
+        b.Property(v => v.Description).HasMaxLength(2000);
+        b.Property(v => v.LockedBy).HasMaxLength(320);
         b.HasIndex(v => new { v.ProjectId, v.Kind });
         b.HasOne<Project>().WithMany().HasForeignKey(v => v.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(v => v.Lines).WithOne().HasForeignKey(l => l.BudgetVersionId).OnDelete(DeleteBehavior.Cascade);
@@ -240,6 +242,7 @@ internal sealed class BudgetLineConfiguration : IEntityTypeConfiguration<BudgetL
         b.Property(l => l.CostType).HasConversion<string>().HasMaxLength(16);
         b.Property(l => l.OdcType).HasConversion<string>().HasMaxLength(16);
         b.Property(l => l.Hours).Hours();
+        b.Property(l => l.PlanningRate).Rate();
         b.Property(l => l.Amount).Money();
         b.HasIndex(l => new { l.BudgetVersionId, l.WbsElementId });
         b.HasOne<WbsElement>().WithMany().HasForeignKey(l => l.WbsElementId).OnDelete(DeleteBehavior.Restrict);
