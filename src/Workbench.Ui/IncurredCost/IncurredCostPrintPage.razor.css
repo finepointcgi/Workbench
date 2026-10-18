@@ -27,6 +27,10 @@
 
 .page.wide { max-width: 11in; }
 
+@media screen {
+    .page { overflow-x: auto; }
+}
+
 .watermark {
     position: absolute;
     top: 35%;

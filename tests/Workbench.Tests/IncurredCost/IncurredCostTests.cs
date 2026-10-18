@@ -229,7 +229,7 @@ public sealed class IncurredCostTests
         await using (var db = await kit.Rates.Factory.CreateAsync())
         {
             var s = await db.Set<Workbench.Domain.IncurredCost.IncurredCostSubmission>().SingleAsync();
-            s.SchedulesJson = s.SchedulesJson.Replace("\"invoiceRegisterTotal\":1000", "\"invoiceRegisterTotal\":1000.01", StringComparison.Ordinal);
+            s.SchedulesJson = System.Text.RegularExpressions.Regex.Replace(s.SchedulesJson, "\"invoiceRegisterTotal\":1000(\\.0+)?", "\"invoiceRegisterTotal\":1000.01");
             await db.SaveChangesAsync();
         }
 
@@ -258,6 +258,21 @@ public sealed class IncurredCostTests
         Assert.StartsWith("Schedule A", a.Cell(2, 1).GetString());
         Assert.Equal("Claimed pool", a.Cell(6, 3).GetString());
         Assert.Equal(3_000m, a.Cell(7, 3).GetValue<decimal>());
+    }
+
+    [Fact]
+    public async Task A_pool_without_a_base_is_a_warning_not_an_allocation_error()
+    {
+        var kit = await IncurredCostKit.CreateAsync(ledger: false);
+        await kit.PostAsync("5120", 2_000m, "2010");
+        await kit.PostAsync("6120", 500m, "2010", onProject: false); // overhead, but no direct labor to spread it over
+        await kit.PostAsync("6220", 200m, "2010", onProject: false);
+        var p = await CreateAsync(kit);
+
+        Assert.Contains(p.Checks, c => c.Code == "A-BASE-Overhead" && c.Severity == IceCheckSeverity.Warning);
+        Assert.DoesNotContain(p.Checks, c => c.Severity == IceCheckSeverity.Error);
+        Assert.Equal(200m, p.Total("E", "indirect"));
+        Assert.Equal(0m, p.Total("G", "difference"));
     }
 
     [Fact]

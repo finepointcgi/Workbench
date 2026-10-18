@@ -136,6 +136,7 @@ internal static class IceBuilder
         private Dictionary<string, decimal> _cumulative = [];
         private Dictionary<string, decimal> _fee = [];
         private decimal _adjustments;
+        private readonly HashSet<string> _unallocatable = [];
         private string _firm = "";
 
         private void Total(string schedule, string key, string label, decimal value) => _totals.Add(new IceTotalDto(schedule, key, label, value));
@@ -331,6 +332,11 @@ internal static class IceBuilder
                     _odc.TryGetValue(x.Key, out var o) ? o.Values.Sum() : 0, earlier[x.Key]));
                 var total = bases.Values.Sum();
                 var claimed = _poolClaimed.GetValueOrDefault(pool.Pool);
+                if (total == 0)
+                {
+                    _unallocatable.Add(pool.Pool); // Schedule A warns; nothing can be spread over a zero base.
+                }
+
                 var shares = new Dictionary<string, decimal>();
                 decimal running = 0, given = 0;
                 foreach (var bucket in _buckets)
@@ -458,11 +464,16 @@ internal static class IceBuilder
             Total("E", "indirect", "Total indirect cost allocated", indirect);
             Total("E", "claimed", "Total cost claimed on contracts", claimed);
 
-            var pools = _poolClaimed.Values.Sum();
+            var pools = _poolClaimed.Where(kv => !_unallocatable.Contains(kv.Key)).Sum(kv => kv.Value);
             if (indirect != pools && _buckets.Count > 0)
             {
                 Check("E-ALLOCATION", IceCheckSeverity.Error, "E", "Allocated indirect cost doesn't equal the pools",
                     "The indirect cost spread over contracts differs from the claimed pools (Schedules B and C).", pools, indirect);
+            }
+
+            if (_unallocatable.Count > 0)
+            {
+                t.Notes.Add($"Not allocated (zero base, see Schedule A): {string.Join(", ", Pools.Where(p => _unallocatable.Contains(p.Pool)).Select(p => p.Name))}.");
             }
 
             if (_buckets.Any(x => x.Key == None))

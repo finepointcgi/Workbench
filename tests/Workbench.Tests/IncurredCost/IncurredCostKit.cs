@@ -80,6 +80,7 @@ internal sealed class IncurredCostKit
         {
             ContractId = Rates.Contract.Id,
             CustomerId = Rates.Contract.CustomerId,
+            Sequence = await db.Set<Invoice>().CountAsync() + 1,
             Number = $"INV-{Guid.NewGuid():N}"[..12],
             Type = InvoiceType.CostPlus,
             Status = status,
