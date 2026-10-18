@@ -1,3 +1,5 @@
+/* Sized so seven days, the charge code and the total fit about 900px (a 1280px window with the menu open) without
+   scrolling; narrower windows scroll the grid sideways. */
 .timesheet-grid {
     overflow-x: auto;
 }
@@ -5,13 +7,13 @@
 .timesheet-grid table {
     border-collapse: collapse;
     width: 100%;
-    min-width: 760px;
+    table-layout: auto;
 }
 
 .timesheet-grid th,
 .timesheet-grid td {
     border-bottom: 1px solid var(--mud-palette-lines-default);
-    padding: 6px 8px;
+    padding: 6px 3px;
     text-align: center;
     vertical-align: middle;
 }
@@ -19,19 +21,54 @@
 .timesheet-grid th {
     font-weight: 600;
     font-size: 0.85rem;
+    line-height: 1.25;
+}
+
+.timesheet-grid th .date {
+    font-weight: 400;
+    color: var(--mud-palette-text-secondary);
+}
+
+.timesheet-grid th .tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .timesheet-grid .code {
     text-align: left;
-    min-width: 220px;
+    min-width: 150px;
+    max-width: 260px;
+    padding-left: 8px;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .timesheet-grid .code .name {
-    font-size: 0.8rem;
+    font-weight: 500;
 }
 
-.timesheet-grid .weekend {
+.timesheet-grid .code .context {
+    font-size: 0.75rem;
+}
+
+/* Weekends and holidays: dimmed but still usable. */
+.timesheet-grid .nonwork {
     background: var(--mud-palette-background-gray);
+}
+
+.timesheet-grid th.nonwork {
+    color: var(--mud-palette-text-secondary);
+}
+
+.timesheet-grid .today {
+    background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+}
+
+.timesheet-grid th.today {
+    color: var(--mud-palette-primary);
+    box-shadow: inset 0 3px 0 var(--mud-palette-primary);
 }
 
 .timesheet-grid .cell {
@@ -39,14 +76,21 @@
 }
 
 .timesheet-grid input {
-    width: 4.2rem;
-    padding: 4px 6px;
+    width: 3.3rem;
+    padding: 4px 4px;
     font: inherit;
     text-align: right;
     border: 1px solid var(--mud-palette-lines-inputs);
     border-radius: 4px;
     background: var(--mud-palette-surface);
     color: var(--mud-palette-text-primary);
+    -moz-appearance: textfield;
+}
+
+.timesheet-grid input::-webkit-outer-spin-button,
+.timesheet-grid input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 .timesheet-grid input[readonly] {
@@ -61,7 +105,7 @@
 .timesheet-grid .comment {
     border: none;
     background: none;
-    padding: 0 0 0 2px;
+    padding: 0 0 0 1px;
     cursor: pointer;
     color: var(--mud-palette-text-secondary);
     vertical-align: middle;
@@ -77,9 +121,14 @@
 
 .timesheet-grid .total {
     font-variant-numeric: tabular-nums;
+    min-width: 3rem;
 }
 
 .timesheet-grid .total.over {
     color: var(--mud-palette-error);
     font-weight: 700;
+}
+
+.timesheet-summary {
+    max-width: 480px;
 }

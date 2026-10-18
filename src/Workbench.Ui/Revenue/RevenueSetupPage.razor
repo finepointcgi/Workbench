@@ -20,7 +20,7 @@ else
 {
     <MudPaper Outlined="true" Class="pa-4">
         <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-setup">
-            <thead><tr><th>Project</th><th>Contract</th><th>Methods</th><th>Current EAC</th><th>Pending EACs</th><th></th></tr></thead>
+            <thead><tr><th>Project</th><th>Contract</th><th>Methods</th><th><Term Key="eac">Current EAC</Term></th><th><Term Key="eac">Pending EACs</Term></th><th></th></tr></thead>
             <tbody>
                 @foreach (var p in _projects)
                 {

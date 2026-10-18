@@ -25,9 +25,9 @@ public static class ResourcingFormat
 
     public static string Label(LoadStatus status) => status switch
     {
-        LoadStatus.Over => "Over",
-        LoadStatus.Full => "Full",
-        LoadStatus.Under => "Under",
+        LoadStatus.Over => "Overbooked",
+        LoadStatus.Full => "Fully booked",
+        LoadStatus.Under => "Has room",
         _ => "No capacity",
     };
 

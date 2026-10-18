@@ -18,6 +18,30 @@ public sealed class SetupComponentTests
         return ctx;
     }
 
+    [Fact]
+    public async Task Getting_started_covers_the_whole_system_and_lists_every_setup_screen()
+    {
+        await using var ctx = NewContext();
+        var checklist = new SetupChecklistDto(true, true, true, true, false, false, false,
+            HasInvitedUsers: true, HasChartOfAccounts: true, HasBankAccount: false, HasPayrollProvider: true, HasApprovalWorkflows: false,
+            HasIndirectRates: false, HasBillingDetails: false);
+        ctx.Services.AddSingleton(Workbench.Tests.Identity.Fake<ISetupAdminService>.Create(("GetChecklistAsync", _ => checklist)));
+
+        var page = ctx.Render<SetupHome>();
+
+        page.WaitForAssertion(() => Assert.Equal("7 of 14 done", page.Find("[data-testid=checklist-progress]").TextContent.Trim()));
+        var items = page.FindAll("[data-testid=checklist-item]").Select(i => i.TextContent).ToList();
+        foreach (var step in new[] { "Users and sign-in", "Chart of accounts", "Bank accounts", "Payroll provider", "Approval workflows", "Indirect rates", "Billing details" })
+        {
+            Assert.Contains(items, i => i.Contains(step));
+        }
+
+        foreach (var href in new[] { "setup/organization", "setup/per-diem", "setup/approval-workflows" })
+        {
+            Assert.NotEmpty(page.FindAll($"a[href='{href}']"));
+        }
+    }
+
     private static void Type(IRenderedComponent<EmployeeEditor> editor, string testId, string value) =>
         editor.Find($"input[data-testid='{testId}'], [data-testid='{testId}'] input").Input(value);
 

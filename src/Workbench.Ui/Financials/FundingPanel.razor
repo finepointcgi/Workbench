@@ -13,9 +13,9 @@
     <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
         <tbody>
             <tr><td>Spent to date</td><td style="text-align: right">@FinancialFormat.Money(Funding.Spent)</td></tr>
-            <tr><td>Funded value</td><td style="text-align: right">@FinancialFormat.Money(Funding.FundedValue)</td></tr>
+            <tr><td><Term Key="funded">Funded value</Term></td><td style="text-align: right">@FinancialFormat.Money(Funding.FundedValue)</td></tr>
             <tr><td>Funded remaining</td><td style="text-align: right" class="@(Funding.FundedRemaining < 0 ? "mud-error-text" : "")">@FinancialFormat.Money(Funding.FundedRemaining)</td></tr>
-            <tr><td>Ceiling</td><td style="text-align: right">@FinancialFormat.Money(Funding.CeilingValue)</td></tr>
+            <tr><td><Term Key="ceiling">Ceiling</Term></td><td style="text-align: right">@FinancialFormat.Money(Funding.CeilingValue)</td></tr>
             <tr><td>Ceiling remaining</td><td style="text-align: right">@FinancialFormat.Money(Funding.CeilingRemaining)</td></tr>
             <tr><td>Avg burn / period (last 3)</td><td style="text-align: right">@FinancialFormat.Money(Funding.AverageBurnPerPeriod)</td></tr>
             <tr>

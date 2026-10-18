@@ -77,7 +77,7 @@ else
             <RowTemplate>
                 <MudTd DataLabel="Date">@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
                 <MudTd DataLabel="Type">@context.Type</MudTd>
-                <MudTd DataLabel="Charge code">@context.WbsCode</MudTd>
+                <MudTd DataLabel="Charge code">@ChargeCodeText.Label(context.WbsCode, context.WbsName)</MudTd>
                 <MudTd DataLabel="Description">
                     @context.Description
                     @if (context.Vendor is { } vendor)
