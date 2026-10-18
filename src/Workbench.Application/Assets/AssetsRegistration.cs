@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
+using Workbench.Application.Collaboration;
 using Workbench.Contracts.Assets;
 
 namespace Workbench.Application.Assets;
@@ -17,6 +18,7 @@ public static class AssetsRegistration
         services.AddScoped<IAssetService, AssetService>();
         services.AddScoped<IDepreciationService, DepreciationService>();
         services.AddScoped<IAssetReportService, AssetReportService>();
+        services.Decorate<IAssetReportService, SecurityLoggingAssetReportService>(); // export.assets events; the permission decorator wraps it.
         services.AddScoped<IPeriodCloseCheck, DepreciationCloseCheck>();
         return services;
     }

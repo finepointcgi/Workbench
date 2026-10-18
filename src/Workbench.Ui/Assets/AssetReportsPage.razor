@@ -63,6 +63,10 @@ else
             </MudSimpleTable>
         </MudTabPanel>
         <MudTabPanel Text="Categories">
+            <MudStack Row="true" Class="mb-2">
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="assets/categories">Manage categories</MudButton>
+            </MudStack>
             <MudSimpleTable Dense="true" Elevation="0">
                 <thead><tr><th>Code</th><th>Name</th><th>Method</th><th>Life</th><th>MACRS</th><th>Asset</th><th>Accum. depr.</th><th>Expense</th></tr></thead>
                 <tbody>

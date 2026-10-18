@@ -76,7 +76,7 @@ internal static class AssetQueries
             depreciation.OrderBy(x => x.d.PeriodStart).Select(x => new AssetDepreciationDto(x.d.FiscalPeriodId, x.Name, x.d.PeriodStart, x.d.Amount)).ToList(),
             transfers.Select(t => new AssetTransferDto(t.TransferredOn, t.FromLocation, t.ToLocation, names.Employee(t.FromCustodianEmployeeId), names.Employee(t.ToCustodianEmployeeId),
                 names.Org(t.FromOrgUnitId), names.Org(t.ToOrgUnitId), names.Project(t.FromProjectId), names.Project(t.ToProjectId), t.Reason, t.TransferredBy)).ToList(),
-            a.CreatedBy, a.CreatedAtUtc);
+            a.CreatedBy, a.CreatedAtUtc, a.Convention.ToContract(), a.OpeningBalanceDate, a.OpeningAccumulatedDepreciation);
     }
 
     public static async Task<IReadOnlyList<AssetCategoryDto>> CategoriesAsync(IWorkbenchDbContext db, CancellationToken ct)
@@ -84,9 +84,11 @@ internal static class AssetQueries
         var categories = await db.Set<AssetCategory>().AsNoTracking().OrderBy(c => c.Code).ToListAsync(ct);
         var ids = categories.SelectMany(c => new[] { c.AssetAccountId, c.AccumulatedDepreciationAccountId, c.ExpenseAccountId }).Distinct().ToList();
         var accounts = await db.Set<Account>().AsNoTracking().Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Number, ct);
+        var counts = (await db.Set<FixedAsset>().AsNoTracking().Select(a => a.CategoryId).ToListAsync(ct)).CountBy(c => c).ToDictionary(kv => kv.Key, kv => kv.Value);
         return categories.Select(c => new AssetCategoryDto(c.Id, c.Code, c.Name, c.DefaultMethod.ToContract(), c.DefaultLifeYears, c.MacrsRecoveryYears,
             c.AssetAccountId, accounts.GetValueOrDefault(c.AssetAccountId) ?? "", c.AccumulatedDepreciationAccountId, accounts.GetValueOrDefault(c.AccumulatedDepreciationAccountId) ?? "",
-            c.ExpenseAccountId, accounts.GetValueOrDefault(c.ExpenseAccountId) ?? "", c.IsActive)).ToList();
+            c.ExpenseAccountId, accounts.GetValueOrDefault(c.ExpenseAccountId) ?? "", c.IsActive, c.Convention.ToContract(), c.CapitalizationThreshold,
+            counts.GetValueOrDefault(c.Id))).ToList();
     }
 
     /// <summary>Display names for an asset's references.</summary>

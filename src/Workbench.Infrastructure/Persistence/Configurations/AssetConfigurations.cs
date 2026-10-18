@@ -14,6 +14,8 @@ internal sealed class AssetCategoryConfiguration : IEntityTypeConfiguration<Asse
         b.Property(c => c.Code).HasMaxLength(32);
         b.Property(c => c.Name).HasMaxLength(200);
         b.Property(c => c.DefaultMethod).HasConversion<string>().HasMaxLength(24);
+        b.Property(c => c.Convention).HasConversion<string>().HasMaxLength(24);
+        b.Property(c => c.CapitalizationThreshold).HasPrecision(18, 2);
         b.HasIndex(c => c.Code).IsUnique();
         b.HasOne<Account>().WithMany().HasForeignKey(c => c.AssetAccountId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Account>().WithMany().HasForeignKey(c => c.AccumulatedDepreciationAccountId).OnDelete(DeleteBehavior.Restrict);
@@ -32,6 +34,8 @@ internal sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAs
         b.Property(a => a.AccumulatedDepreciation).Money();
         b.Property(a => a.DisposalProceeds).HasPrecision(18, 2);
         b.Property(a => a.Method).HasConversion<string>().HasMaxLength(24);
+        b.Property(a => a.Convention).HasConversion<string>().HasMaxLength(24);
+        b.Property(a => a.OpeningAccumulatedDepreciation).Money();
         b.Property(a => a.Status).HasConversion<string>().HasMaxLength(16);
         b.Property(a => a.Location).HasMaxLength(200);
         b.Property(a => a.SerialNumber).HasMaxLength(100);

@@ -37,10 +37,20 @@ public sealed class AssetReportService(IWorkbenchDbContextFactory dbFactory) : I
         }
 
         // Book: the monthly schedule grouped by calendar year, beside what's actually posted in each year.
-        var schedule = DepreciationCalculator.MonthlySchedule(asset.Cost, asset.SalvageValue, asset.UsefulLifeYears, asset.Method);
+        // An opening balance is one row through the cut-over; the years after it follow.
+        var schedule = AssetSupport.Schedule(asset);
         var start = new DateOnly(asset.InServiceDate.Year, asset.InServiceDate.Month, 1);
-        var byYear = schedule.Select((amount, i) => (Year: start.AddMonths(i).Year, Amount: amount)).GroupBy(x => x.Year).ToList();
+        var skip = 0;
         var bookValue = asset.Cost;
+        if (asset.OpeningBalanceDate is { } cutover)
+        {
+            skip = Math.Max(0, DepreciationCalculator.MonthIndex(asset.InServiceDate, cutover) + 1);
+            var opening = asset.OpeningAccumulatedDepreciation;
+            rows.Add(new DepreciationScheduleRowDto(cutover.Year, $"Opening balance through {cutover:yyyy-MM-dd}", bookValue, opening, bookValue - opening, 0));
+            bookValue -= opening;
+        }
+
+        var byYear = schedule.Select((amount, i) => (Index: i, Year: start.AddMonths(i).Year, Amount: amount)).Where(x => x.Index >= skip).GroupBy(x => x.Year).ToList();
         foreach (var group in byYear)
         {
             var amount = group.Sum(x => x.Amount);
@@ -67,7 +77,15 @@ public sealed class AssetReportService(IWorkbenchDbContextFactory dbFactory) : I
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var assets = await db.Set<FixedAsset>().AsNoTracking().Where(a => !a.IsGovernmentFurnished && !a.IsContractorAcquired).ToListAsync(cancellationToken);
-        var depreciation = (await db.Set<AssetDepreciation>().AsNoTracking().ToListAsync(cancellationToken)).ToLookup(d => d.AssetId);
+        // Opening balances count as depreciation in the cut-over month.
+        var depreciation = (await db.Set<AssetDepreciation>().AsNoTracking().ToListAsync(cancellationToken))
+            .Concat(assets.Where(a => a.OpeningBalanceDate is not null && a.OpeningAccumulatedDepreciation > 0).Select(a => new AssetDepreciation
+            {
+                AssetId = a.Id,
+                PeriodStart = new DateOnly(a.OpeningBalanceDate!.Value.Year, a.OpeningBalanceDate.Value.Month, 1),
+                Amount = a.OpeningAccumulatedDepreciation,
+            }))
+            .ToLookup(d => d.AssetId);
         var categories = await db.Set<AssetCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, cancellationToken);
         var rows = new List<RollForwardRowDto>();
         foreach (var group in assets.GroupBy(a => a.CategoryId).OrderBy(g => categories.GetValueOrDefault(g.Key)?.Code))
