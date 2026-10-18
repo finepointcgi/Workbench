@@ -32,6 +32,7 @@ public static class SecurityEventTypes
     public const string ExportLaborCsv = "export.labor_csv";
     public const string ExportFinancialCsv = "export.financial_csv";
     public const string ExportSecurityEvents = "export.security_events";
+    public const string ExportReport = "export.report";
 
     public const string PeriodStatusChanged = "period.status_changed";
     public const string SettingChanged = "settings.changed";
