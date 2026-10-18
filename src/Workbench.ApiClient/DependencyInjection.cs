@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddProjectAccountingClients(serverBaseAddress);
         services.AddIdentityClients(serverBaseAddress);
         services.AddAutomationClients(serverBaseAddress);
+        services.AddDashboardClients(serverBaseAddress);
         return services;
     }
 }

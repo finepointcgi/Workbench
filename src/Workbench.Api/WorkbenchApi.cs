@@ -23,6 +23,8 @@ public static class WorkbenchApi
         v1.MapIdentityEndpoints();
         v1.MapAutomationEndpoints();
         v1.MapNotificationEndpoints();
+        v1.MapMyWorkEndpoints();
+        v1.MapDashboardEndpoints();
 
         return app;
     }

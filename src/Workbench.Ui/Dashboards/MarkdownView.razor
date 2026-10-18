@@ -1,0 +1,69 @@
+@* Renders SafeMarkdown's model as components and text only; no MarkupString, so source HTML is shown literally. *@
+
+<div class="wb-markdown">
+    @foreach (var block in SafeMarkdown.Parse(Source))
+    {
+        switch (block)
+        {
+            case MdHeading h:
+                <MudText Typo="@(h.Level switch { 1 => Typo.h5, 2 => Typo.h6, _ => Typo.subtitle1 })" HtmlTag="@($"h{Math.Min(h.Level + 2, 6)}")" Class="mb-2">
+                    @Inlines(h.Inlines)
+                </MudText>
+                break;
+            case MdParagraph p:
+                <MudText Typo="Typo.body2" Class="mb-2">@Inlines(p.Inlines)</MudText>
+                break;
+            case MdList { Ordered: true } l:
+                <ol class="mb-2 pl-6">@foreach (var item in l.Items) { <li><MudText Typo="Typo.body2" HtmlTag="span">@Inlines(item)</MudText></li> }</ol>
+                break;
+            case MdList l:
+                <ul class="mb-2 pl-6" style="list-style:disc">@foreach (var item in l.Items) { <li><MudText Typo="Typo.body2" HtmlTag="span">@Inlines(item)</MudText></li> }</ul>
+                break;
+            case MdCode c:
+                <pre class="mb-2 pa-2" style="white-space:pre-wrap;border-radius:4px;background:var(--mud-palette-background-gray)"><code>@c.Text</code></pre>
+                break;
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? Source { get; set; }
+
+    private static RenderFragment Inlines(IReadOnlyList<MdInline> inlines) => builder =>
+    {
+        var seq = 0;
+        foreach (var inline in inlines)
+        {
+            switch (inline.Kind)
+            {
+                case MdInlineKind.Bold:
+                    builder.OpenElement(seq++, "strong");
+                    builder.AddContent(seq++, inline.Text);
+                    builder.CloseElement();
+                    break;
+                case MdInlineKind.Italic:
+                    builder.OpenElement(seq++, "em");
+                    builder.AddContent(seq++, inline.Text);
+                    builder.CloseElement();
+                    break;
+                case MdInlineKind.Code:
+                    builder.OpenElement(seq++, "code");
+                    builder.AddContent(seq++, inline.Text);
+                    builder.CloseElement();
+                    break;
+                case MdInlineKind.Link when inline.Href is not null:
+                    builder.OpenElement(seq++, "a");
+                    builder.AddAttribute(seq++, "href", inline.Href);
+                    builder.AddAttribute(seq++, "rel", "noopener noreferrer");
+                    builder.AddAttribute(seq++, "class", "mud-link mud-primary-text");
+                    builder.AddContent(seq++, inline.Text);
+                    builder.CloseElement();
+                    break;
+                default:
+                    builder.AddContent(seq++, inline.Text);
+                    break;
+            }
+        }
+    };
+}

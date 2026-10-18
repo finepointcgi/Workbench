@@ -1,0 +1,29 @@
+@* A column picker for the widget dialog. Null means "none" (NoneLabel), shown only when NoneLabel is set. *@
+
+<MudSelect T="Guid?" Value="Value" ValueChanged="ValueChanged" Label="@Label" Clearable="false">
+    @if (NoneLabel is not null)
+    {
+        <MudSelectItem T="Guid?" Value="@((Guid?)null)">@NoneLabel</MudSelectItem>
+    }
+    @foreach (var column in Columns)
+    {
+        <MudSelectItem T="Guid?" Value="@column.Id">@column.Name</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public IEnumerable<ColumnDto> Columns { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    [Parameter]
+    public string? NoneLabel { get; set; }
+}
