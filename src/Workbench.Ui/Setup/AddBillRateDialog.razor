@@ -1,0 +1,44 @@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudSelect T="Guid?" @bind-Value="_categoryId" Label="Labor category" Required="true" RequiredError="Labor category is required.">
+                    @foreach (var c in Categories.Where(c => c.IsActive))
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudDatePicker @bind-Date="_from" Label="Effective from" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
+                <MudNumericField T="decimal?" @bind-Value="_rate" Label="Hourly bill rate" Required="true" RequiredError="Rate is required."
+                                 Adornment="Adornment.Start" AdornmentText="$" Immediate="true"
+                                 Validation="@(new Func<decimal?, string?>(r => r is > 0 ? null : "Rate must be greater than zero."))" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Add</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<LaborCategoryDto> Categories { get; set; } = [];
+
+    private MudForm _form = default!;
+    private Guid? _categoryId;
+    private DateTime? _from = DateTime.Today;
+    private decimal? _rate;
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(new AddBillRateRequest(_categoryId!.Value, SetupFormat.ToDateOnly(_from)!.Value, _rate!.Value)));
+        }
+    }
+}

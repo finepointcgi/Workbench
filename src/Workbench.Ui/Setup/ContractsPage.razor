@@ -1,0 +1,65 @@
+@page "/setup/contracts"
+@inject IContractService Contracts
+@inject NavigationManager Navigation
+
+<PageTitle>Contracts · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Contracts" Subtitle="Contract type, period of performance, ceiling and funding, and bill rates by labor category.">
+    <MudButton Variant="Variant.Outlined" Href="setup/customers" StartIcon="@Icons.Material.Filled.Business">Customers</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="setup/contracts/new">New contract</MudButton>
+</SetupHeader>
+
+<MudDataGrid T="ContractDto" Items="_contracts" Loading="_loading" Dense="true" Hover="true" QuickFilter="Matches"
+             RowClick="@(a => Navigation.NavigateTo($"setup/contracts/{a.Item.Id}"))" Style="cursor:pointer">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search" Placeholder="Search number, name or customer" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="c => c.ContractNumber" Title="Number">
+            <CellTemplate><MudLink Href="@($"setup/contracts/{context.Item.Id}")" Typo="Typo.body2">@context.Item.ContractNumber</MudLink></CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="c => c.Name" />
+        <PropertyColumn Property="c => c.CustomerName" Title="Customer" />
+        <TemplateColumn Title="Type" SortBy="@(c => c.Type)">
+            <CellTemplate><span title="@context.Item.Type">@SetupFormat.Label(context.Item.Type)</span></CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Period of performance" SortBy="@(c => c.PeriodStart)">
+            <CellTemplate>@SetupFormat.Date(context.Item.PeriodStart) – @SetupFormat.Date(context.Item.PeriodEnd)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Ceiling" SortBy="@(c => c.CeilingValue)" HeaderStyle="text-align:right" CellStyle="text-align:right">
+            <CellTemplate>@SetupFormat.Money(context.Item.CeilingValue)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Funded" SortBy="@(c => c.FundedValue)" HeaderStyle="text-align:right" CellStyle="text-align:right">
+            <CellTemplate>
+                @SetupFormat.Money(context.Item.FundedValue)
+                @if (context.Item.CeilingValue > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@((context.Item.FundedValue / context.Item.CeilingValue).ToString("P0")) of ceiling</MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Status" SortBy="@(c => c.Status)">
+            <CellTemplate><ContractStatusChip Status="context.Item.Status" /></CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent><MudText>No contracts yet.</MudText></NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private bool _loading = true;
+    private string? _search;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _contracts = await Contracts.ListContractsAsync();
+        _loading = false;
+    }
+
+    private bool Matches(ContractDto c) =>
+        string.IsNullOrWhiteSpace(_search)
+        || c.ContractNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || c.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase);
+}

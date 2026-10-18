@@ -1,0 +1,148 @@
+@page "/setup/audit"
+@inject ISetupAdminService Setup
+@inject NavigationManager Navigation
+
+<PageTitle>Audit log · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Audit log" Subtitle="Append-only record of changes to rates, setup, budgets and approvals." />
+
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" lg="3">
+            <MudSelect T="string" @bind-Value="_entityType" Label="Entity type" Clearable="true" Dense="true" data-testid="audit-type">
+                @foreach (var type in _types)
+                {
+                    <MudSelectItem T="string" Value="type">@type</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudTextField @bind-Value="_entityId" Label="Entity id" Clearable="true" Margin="Margin.Dense"
+                          Validation="@(new Func<string?, string?>(v => string.IsNullOrWhiteSpace(v) || Guid.TryParse(v, out _) ? null : "Not a valid id."))" />
+        </MudItem>
+        <MudItem xs="6" lg="2">
+            <MudDatePicker @bind-Date="_from" Label="From" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="6" lg="2">
+            <MudDatePicker @bind-Date="_to" Label="To" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" lg="2" Class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SearchAsync" data-testid="audit-search">Search</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="ResetAsync">Reset</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-2">@_error</MudAlert>
+}
+
+<MudDataGrid T="AuditEventDto" Items="_events" Loading="_loading" Dense="true" Hover="true" ReadOnly="true">
+    <Columns>
+        <HierarchyColumn T="AuditEventDto" />
+        <PropertyColumn Property="a => a.OccurredAtUtc" Title="When (UTC)" Format="yyyy-MM-dd HH:mm:ss" />
+        <PropertyColumn Property="a => a.EntityType" Title="Entity" />
+        <PropertyColumn Property="a => a.Action" />
+        <TemplateColumn Title="Changes" Sortable="false">
+            <CellTemplate>@Summary(context.Item)</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="a => a.Actor" />
+        <PropertyColumn Property="a => a.Reason" />
+        <TemplateColumn Title="Entity id" Sortable="false">
+            <CellTemplate>
+                <MudLink Typo="Typo.caption" OnClick="() => FilterToEntityAsync(context.Item)" title="Show this entity's history">@context.Item.EntityId.ToString()[..8]…</MudLink>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <ChildRowContent>
+        <MudSimpleTable Dense="true" Bordered="true" Style="max-width:100%;overflow-x:auto">
+            <thead><tr><th style="width:20%">Field</th><th style="width:40%">Before</th><th style="width:40%">After</th></tr></thead>
+            <tbody>
+                @foreach (var field in AuditDiff.Compare(context.Item.BeforeJson, context.Item.AfterJson))
+                {
+                    <tr style="@(field.Changed ? "background:var(--mud-palette-warning-hover)" : "")">
+                        <td>@field.Field</td>
+                        <td style="word-break:break-all">@(field.Before ?? "—")</td>
+                        <td style="word-break:break-all">@(field.After ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </ChildRowContent>
+    <NoRecordsContent><MudText>No audit events match.</MudText></NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    [SupplyParameterFromQuery(Name = "entityId")]
+    public string? EntityIdQuery { get; set; }
+
+    private IReadOnlyList<string> _types = [];
+    private IReadOnlyList<AuditEventDto> _events = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _entityType;
+    private string? _entityId;
+    private DateTime? _from;
+    private DateTime? _to;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _types = await Setup.ListAuditEntityTypesAsync();
+        _entityId = Guid.TryParse(EntityIdQuery, out var id) ? id.ToString() : null;
+        await SearchAsync();
+    }
+
+    private static string Summary(AuditEventDto e)
+    {
+        var changed = AuditDiff.Compare(e.BeforeJson, e.AfterJson).Where(f => f.Changed).Select(f => f.Field).ToList();
+        if (e.BeforeJson is null || e.AfterJson is null)
+        {
+            return changed.Count == 0 ? "" : $"{changed.Count} field{(changed.Count == 1 ? "" : "s")}";
+        }
+
+        return changed.Count == 0 ? "no field changes" : string.Join(", ", changed.Take(4)) + (changed.Count > 4 ? $" +{changed.Count - 4}" : "");
+    }
+
+    private async Task SearchAsync()
+    {
+        _error = null;
+        Guid? id = null;
+        if (!string.IsNullOrWhiteSpace(_entityId))
+        {
+            if (!Guid.TryParse(_entityId, out var parsed))
+            {
+                _error = "Entity id isn't a valid id.";
+                return;
+            }
+
+            id = parsed;
+        }
+
+        _loading = true;
+        try
+        {
+            _events = await Setup.SearchAuditAsync(new AuditQuery(_entityType, id, SetupFormat.ToDateOnly(_from), SetupFormat.ToDateOnly(_to)));
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        (_entityType, _entityId, _from, _to) = (null, null, null, null);
+        await SearchAsync();
+    }
+
+    private async Task FilterToEntityAsync(AuditEventDto e)
+    {
+        (_entityType, _entityId) = (e.EntityType, e.EntityId.ToString());
+        await SearchAsync();
+    }
+}

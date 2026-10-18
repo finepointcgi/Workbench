@@ -1,0 +1,168 @@
+@* Creates the project's plan sheet from its WBS and reconciles the two in either direction. *@
+@inject IPlanSyncService PlanSync
+@inject ISnackbar Snackbar
+
+@if (Project.SheetId is null)
+{
+    <MudText Class="mb-3">
+        The plan sheet and the WBS are one tree. Create a scheduling sheet whose tasks mirror the WBS; each task shows its WBS code
+        and stays linked to its element.
+    </MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ViewTimeline" Disabled="_busy"
+               OnClick="CreateAsync" data-testid="create-plan">Create plan sheet from WBS</MudButton>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Sync WBS ↔ plan</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_busy" OnClick="RefreshAsync" data-testid="plan-check">Check again</MudButton>
+        <MudButton Variant="Variant.Outlined" Href="@($"sheets/{Project.SheetId}")" StartIcon="@Icons.Material.Filled.OpenInNew">Open plan sheet</MudButton>
+    </MudStack>
+    @if (_busy)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+    }
+    @if (_report is { } report)
+    {
+        @if (report.Differences.Count == 0)
+        {
+            <MudAlert Severity="Severity.Success" data-testid="plan-in-sync">The WBS and the plan sheet match.</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                @report.Differences.Count difference@(report.Differences.Count == 1 ? "" : "s"). Select some (or none for all), then choose which side wins.
+            </MudText>
+            <MudTable T="PlanDifferenceDto" Items="report.Differences" Dense="true" Hover="true" MultiSelection="true"
+                      @bind-SelectedItems="_selectedDiffs" Breakpoint="Breakpoint.Sm" data-testid="plan-diffs">
+                <HeaderContent>
+                    <MudTh>Difference</MudTh>
+                    <MudTh>WBS</MudTh>
+                    <MudTh>Plan task</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Difference">@Describe(context.Kind)</MudTd>
+                    <MudTd DataLabel="WBS">@(context.WbsCode is null ? "—" : $"{context.WbsCode} · {context.WbsName}")</MudTd>
+                    <MudTd DataLabel="Plan task">@(context.ItemTitle ?? "—")</MudTd>
+                </RowTemplate>
+            </MudTable>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.East" Disabled="_busy || !Can(PlanSyncDirection.WbsToPlan)"
+                           OnClick="() => ApplyAsync(PlanSyncDirection.WbsToPlan)" data-testid="apply-to-plan">
+                    WBS → plan @(_selectedDiffs.Count > 0 ? $"({Count(PlanSyncDirection.WbsToPlan)})" : "")
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.West" Disabled="_busy || !Can(PlanSyncDirection.PlanToWbs)"
+                           OnClick="() => ApplyAsync(PlanSyncDirection.PlanToWbs)" data-testid="apply-to-wbs">
+                    Plan → WBS @(_selectedDiffs.Count > 0 ? $"({Count(PlanSyncDirection.PlanToWbs)})" : "")
+                </MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+                WBS → plan creates missing tasks and renames tasks. Plan → WBS creates WBS elements for new tasks (next free code under the parent) and renames elements.
+            </MudText>
+        }
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectDto Project { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ProjectDto> ProjectChanged { get; set; }
+
+    private PlanSyncReport? _report;
+    private HashSet<PlanDifferenceDto> _selectedDiffs = [];
+    private bool _busy;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != Project.Id || (_report is null && Project.SheetId is not null))
+        {
+            _loadedFor = Project.Id;
+            await RefreshAsync();
+        }
+    }
+
+    private static string Describe(PlanDifferenceKind kind) => kind switch
+    {
+        PlanDifferenceKind.WbsWithoutTask => "WBS element has no task",
+        PlanDifferenceKind.TaskWithoutWbs => "Task has no WBS element",
+        PlanDifferenceKind.Renamed => "Renamed",
+        PlanDifferenceKind.CodeOutOfDate => "Task shows an old WBS code",
+        _ => kind.ToString(),
+    };
+
+    private IEnumerable<PlanDifferenceDto> Scope => _selectedDiffs.Count > 0 ? _selectedDiffs : _report?.Differences ?? [];
+
+    private int Count(PlanSyncDirection direction) => Scope.Count(d => direction == PlanSyncDirection.WbsToPlan ? d.CanApplyToPlan : d.CanApplyToWbs);
+
+    private bool Can(PlanSyncDirection direction) => Count(direction) > 0;
+
+    private async Task RefreshAsync()
+    {
+        if (Project.SheetId is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _report = await PlanSync.DiffAsync(Project.Id);
+            _selectedDiffs = [];
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var project = await PlanSync.CreatePlanSheetAsync(Project.Id);
+            Snackbar.Add("Plan sheet created from the WBS.", Severity.Success);
+            await ProjectChanged.InvokeAsync(project);
+            Project = project;
+            _busy = false;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApplyAsync(PlanSyncDirection direction)
+    {
+        _busy = true;
+        try
+        {
+            var keys = _selectedDiffs.Count > 0 ? _selectedDiffs.Select(d => d.Key).ToList() : null;
+            var before = _report?.Differences.Count ?? 0;
+            _report = await PlanSync.ApplyAsync(Project.Id, new ApplyPlanSyncRequest(direction, keys));
+            _selectedDiffs = [];
+            Snackbar.Add($"Applied {before - _report.Differences.Count} change(s) {(direction == PlanSyncDirection.WbsToPlan ? "to the plan" : "to the WBS")}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

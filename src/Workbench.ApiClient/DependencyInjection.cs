@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddTimekeepingClients(serverBaseAddress);
         services.AddOdcClients(serverBaseAddress);
         services.AddFinancialsClients(serverBaseAddress);
+        services.AddSetupClients(serverBaseAddress);
         return services;
     }
 }

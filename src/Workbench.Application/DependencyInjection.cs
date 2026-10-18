@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddWorkbenchTimekeeping();
         services.AddWorkbenchOdcs();
         services.AddWorkbenchFinancials();
+        services.AddWorkbenchSetup();
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
