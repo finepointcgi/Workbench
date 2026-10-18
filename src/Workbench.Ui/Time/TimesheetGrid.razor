@@ -38,6 +38,7 @@
                                    aria-label="@($"{row.Code.Code} {day.Date:yyyy-MM-dd}")"
                                    data-testid="@($"cell-{row.Code.Code}-{day.Date:yyyy-MM-dd}")"
                                    value="@Format(cell.Hours)"
+                                   placeholder="@Planned(row, day.Date)"
                                    readonly="@(Locked || !Editable)"
                                    disabled="@(!enabled && !Locked)"
                                    @onclick="() => LockedClickAsync()"
@@ -102,6 +103,14 @@
 
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    /// <summary>
+    /// Leave to pre-fill (approved leave requests and holidays). Enterable days with no hours yet get the hours, unsaved;
+    /// future days show them as a placeholder until the day can be entered.
+    /// </summary>
+    [Parameter] public IReadOnlyList<Workbench.Contracts.Leave.LeavePrefillDto>? Prefill { get; set; }
+
+    private readonly Dictionary<(Guid WbsElementId, DateOnly Date), decimal> _planned = [];
+
     public bool IsDirty { get; private set; }
 
     private bool Locked => Detail.Timesheet.IsLocked;
@@ -144,8 +153,49 @@
             }
         }
 
+        ApplyPrefill();
         _rows.Sort((a, b) => string.CompareOrdinal(a.Code.Code, b.Code.Code));
     }
+
+    private void ApplyPrefill()
+    {
+        _planned.Clear();
+        if (Prefill is null || Locked || !Editable)
+        {
+            return;
+        }
+
+        foreach (var p in Prefill)
+        {
+            var day = Detail.Days.FirstOrDefault(d => d.Date == p.Date);
+            var code = Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == p.WbsElementId);
+            if (day is null || code is null || !code.ChargeableDates.Contains(p.Date))
+            {
+                continue;
+            }
+
+            var row = _rows.FirstOrDefault(r => r.Code.WbsElementId == p.WbsElementId);
+            if (row is null)
+            {
+                row = Row.For(code);
+                _rows.Add(row);
+            }
+
+            // Only days with nothing recorded yet: hours the employee entered or cleared on a worked day win.
+            if (!day.CanEnter)
+            {
+                _planned[(p.WbsElementId, p.Date)] = p.Hours;
+            }
+            else if (DayTotal(p.Date) == 0)
+            {
+                row.Edit(p.Date).Hours = p.Hours;
+                IsDirty = true;
+            }
+        }
+    }
+
+    private string? Planned(Row row, DateOnly date) =>
+        _planned.TryGetValue((row.Code.WbsElementId, date), out var hours) ? Format(hours) : null;
 
     /// <summary>
     /// The grid as entries for <see cref="ITimesheetService.SaveEntriesAsync"/> with whole-period scope: cells left

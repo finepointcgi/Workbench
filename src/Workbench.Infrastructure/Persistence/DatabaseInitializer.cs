@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
 
@@ -8,14 +10,31 @@ namespace Workbench.Infrastructure.Persistence;
 public static class DatabaseInitializer
 {
     /// <summary>
-    /// Creates the schema and seeds sample data for local development.
-    /// TODO: replace EnsureCreated with EF Core migrations before the first shared environment.
+    /// Startup: applies pending migrations when <c>Database:MigrateOnStartup</c> is true (the default in Development
+    /// only), then, in Development, seeds the sample data (every tenant's database in MultiTenant mode). Production
+    /// deploys run <c>Workbench.Web --migrate</c> first instead.
     /// </summary>
     public static async Task InitializeWorkbenchDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
     {
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var environment = services.GetService<IHostEnvironment>();
+        var development = environment?.IsDevelopment() ?? true;
+        if (configuration.GetValue("Database:MigrateOnStartup", development))
+        {
+            await services.GetRequiredService<DatabaseMigrator>().MigrateAsync(cancellationToken);
+        }
+
+        if (development)
+        {
+            await services.GetRequiredService<DatabaseMigrator>().SeedDevelopmentAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>The development sample data, for the database the ambient tenant (or the single database) points at. Idempotent.</summary>
+    public static async Task SeedSampleDataAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
+    {
         var factory = services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>();
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        await db.Database.EnsureCreatedAsync(cancellationToken);
         await SeedUsersAsync(db, cancellationToken);
 
         if (await db.Workspaces.AnyAsync(cancellationToken))
@@ -137,6 +156,13 @@ public static class DatabaseInitializer
         await IndirectRatesSeed.SeedAsync(db, cancellationToken);
         await BillingSeed.SeedAsync(db, factory, cancellationToken);
         await PurchasingSeed.SeedAsync(db, services, cancellationToken);
+        await ProcurementSeed.SeedAsync(db, services, cancellationToken);
+        await AssetsSeed.SeedAsync(db, services, cancellationToken);
+        await CashSeed.SeedAsync(db, services, cancellationToken);
+        await PayrollSeed.SeedAsync(db, cancellationToken);
+        await LeaveSeed.SeedAsync(db, cancellationToken);
+        await PerDiemSeed.SeedAsync(db, cancellationToken);
+        await ResourcingSeed.SeedAsync(db, cancellationToken);
     }
 
     /// <summary>

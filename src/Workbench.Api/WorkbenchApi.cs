@@ -35,6 +35,14 @@ public static class WorkbenchApi
         v1.MapIndirectRateEndpoints();
         v1.MapBillingEndpoints();
         v1.MapPurchasingEndpoints();
+        v1.MapHostAdminEndpoints();
+        v1.MapOrganizationSettingsEndpoints();
+        v1.MapImportEndpoints();
+        v1.MapProcurementEndpoints();
+        v1.MapAssetEndpoints();
+        v1.MapCashEndpoints();
+        v1.MapPayrollLeaveEndpoints();
+        v1.MapPerDiemResourcingEndpoints();
 
         return app;
     }

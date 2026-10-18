@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Components.Authorization;
 using Workbench.Application.Identity;
 using Workbench.Application.Security;
+using Workbench.Application.Tenancy;
 using Workbench.Contracts.Security;
 using Workbench.Web.Security;
 using Workbench.Contracts.Collaboration;
@@ -37,7 +38,10 @@ public static class AuthenticationSetup
                 $"Set {OidcSettings.SectionName}:Authority and :ClientId. The dev sign-in page is only available in Development.");
         }
 
-        var admins = builder.Configuration.GetSection("Authentication:Admins").Get<string[]>() ?? [];
+        var tenancy = builder.Configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new TenancyOptions();
+
+        // MultiTenant: a tenant's first admin comes from provisioning; a global admin list would be an admin of every tenant.
+        var admins = tenancy.IsMultiTenant ? [] : builder.Configuration.GetSection("Authentication:Admins").Get<string[]>() ?? [];
         var signInPolicy = new SignInPolicyOptions
         {
             // Outside Development only invited people (or SCIM-provisioned and bootstrap admins) may sign in.
@@ -45,7 +49,8 @@ public static class AuthenticationSetup
             BootstrapAdmins = admins.Select(a => a.Trim().ToLowerInvariant()).Where(a => a.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase),
         };
         var session = builder.Configuration.GetSection(SessionSettings.SectionName).Get<SessionSettings>() ?? new SessionSettings();
-        var scimEnabled = builder.Configuration.GetSection(ScimSettings.SectionName).Get<ScimSettings>()?.Enabled ?? true;
+        // SCIM has one token for the whole server, so it stays SingleTenant-only for now.
+        var scimEnabled = !tenancy.IsMultiTenant && (builder.Configuration.GetSection(ScimSettings.SectionName).Get<ScimSettings>()?.Enabled ?? true);
 
         var auth = services.AddAuthentication(o =>
             {
@@ -82,6 +87,17 @@ public static class AuthenticationSetup
                     if (context.Principal?.Identity is ClaimsIdentity identity && !identity.HasClaim(c => c.Type == SessionValidation.SignedInAtClaim))
                     {
                         identity.AddClaim(SessionValidation.SignedInAt(context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow()));
+                    }
+
+                    // MultiTenant: the cookie is only good for the tenant (or the host site) it was issued for.
+                    if (tenancy.IsMultiTenant && context.Principal?.Identity is ClaimsIdentity tenantIdentity)
+                    {
+                        foreach (var old in tenantIdentity.FindAll(SessionValidation.TenantClaim).ToList())
+                        {
+                            tenantIdentity.RemoveClaim(old);
+                        }
+
+                        tenantIdentity.AddClaim(new Claim(SessionValidation.TenantClaim, SessionValidation.CurrentTenantClaimValue()));
                     }
 
                     return Task.CompletedTask;

@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Odcs;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Time;
 
 namespace Workbench.Application.Accounting;
@@ -31,6 +32,7 @@ public static class AccountingRegistration
         services.Decorate<ITimesheetApprovalService, PostingTimesheetApprovalService>();
         services.Decorate<ITimesheetService, PostingTimesheetService>();
         services.Decorate<IOdcApprovalService, PostingOdcApprovalService>();
+        services.Decorate<IFiscalCalendarService, ChecklistFiscalCalendarService>(); // Setup's Close runs the close checklist.
         return services;
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Workbench.Application.Automation;
 using Workbench.Application.Notifications;
+using Workbench.Application.Tenancy;
 using Workbench.Application.Time;
 using Workbench.Contracts.Collaboration;
 
@@ -11,17 +12,23 @@ namespace Workbench.Web.Notifications;
 /// carrying a <c>NotificationDto</c>. Each connection joins its user's group on connect. The browser UI subscribes
 /// in-process instead.
 /// </summary>
-// TODO: require auth once identity is wired up; until then the user is whatever ICurrentUser resolves to.
-public sealed class NotificationsHub(ICurrentUser currentUser) : Hub
+[Microsoft.AspNetCore.Authorization.Authorize]
+public sealed class NotificationsHub : Hub
 {
     public const string Path = "/hubs/notifications";
     public const string NotificationMethod = "Notification";
 
-    public static string GroupFor(string email) => $"user:{email.Trim().ToLowerInvariant()}";
+    /// <summary>The SignalR group for a user, qualified by the current tenant: the same email in two tenants is two people.</summary>
+    public static string GroupFor(string email) => $"{TenantScope.Key}:user:{email.Trim().ToLowerInvariant()}";
 
     public override async Task OnConnectedAsync()
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, GroupFor(currentUser.Email));
+        // The connection's own user: hub calls run outside the HTTP pipeline, where ICurrentUser has no principal.
+        if (Workbench.Web.Identity.ClaimsUser.EmailOf(Context.User) is { } email)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, GroupFor(email));
+        }
+
         await base.OnConnectedAsync();
     }
 }
@@ -57,6 +64,8 @@ public static class NotificationsHosting
     {
         services.AddSignalR();
         services.AddHostedService<NotificationRelay>();
+        // Before the automation hosting, so a rule's change inside a background job still reads "Workbench Automation".
+        Workbench.Application.Identity.IdentityRegistration.AddWorkbenchSystemExecutionHosting(services);
         services.AddWorkbenchAutomationHosting();
         services.AddWorkbenchTimekeepingHosting();
         Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);

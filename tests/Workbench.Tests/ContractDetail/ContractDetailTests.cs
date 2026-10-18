@@ -176,9 +176,10 @@ public sealed class ContractDetailTests : IAsyncLifetime
         var category = await db.Set<LaborCategory>().Select(c => c.Id).FirstAsync();
         var now = DateTime.UtcNow;
         var day = _today.AddDays(-1);
-        foreach (var (status, hours) in new[] { (TimesheetStatus.Approved, 10m), (TimesheetStatus.Submitted, 2m) })
+        foreach (var (status, hours, start) in new[] { (TimesheetStatus.Approved, 10m, day), (TimesheetStatus.Submitted, 2m, day.AddDays(-1)) })
         {
-            var sheet = new Timesheet { EmployeeId = _fx.AnalystId, PeriodStart = day, PeriodEnd = day, Status = status, CreatedAtUtc = now, UpdatedAtUtc = now };
+            // Different period starts: one timesheet per employee and period start (a unique index).
+            var sheet = new Timesheet { EmployeeId = _fx.AnalystId, PeriodStart = start, PeriodEnd = day, Status = status, CreatedAtUtc = now, UpdatedAtUtc = now };
             db.Set<Timesheet>().Add(sheet);
             db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = _wbs, LaborCategoryId = category, WorkDate = day, Hours = hours, EnteredAtUtc = now, UpdatedAtUtc = now });
         }

@@ -11,6 +11,14 @@ public enum JournalSource
     AP,
     Allocation,
     Reversal,
+
+    /// <summary>Fixed assets: capitalization reclasses and disposals (source id = the asset).</summary>
+    Asset,
+
+    /// <summary>Monthly depreciation runs (source id = the run).</summary>
+    Depreciation,
+
+    Bank,
 }
 
 public enum JournalStatus

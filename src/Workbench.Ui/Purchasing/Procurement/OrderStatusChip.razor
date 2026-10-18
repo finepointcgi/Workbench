@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Color="@ProcurementFormat.Color(Status)" Variant="Variant.Outlined" Class="ma-0">@ProcurementFormat.Label(Status)</MudChip>
+
+@code {
+    [Parameter] public PurchaseOrderState Status { get; set; }
+}

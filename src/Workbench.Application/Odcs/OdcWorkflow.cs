@@ -144,7 +144,8 @@ public sealed class OdcWorkflow(
     {
         await ValidateLineAsync(db, entry.WbsElementId, entry.IncurredOn, entry.Amount, entry.Description, entry.IsUnallowable,
             entry.UnallowableReason, entry.ExpenseReportId is null ? null : entry.EmployeeId, cancellationToken);
-        if (entry.Amount >= ReceiptThreshold && entry.ReceiptAttachmentId is null)
+        if (entry.Amount >= ReceiptThreshold && entry.ReceiptAttachmentId is null
+            && !await PerDiem.PerDiemReceipts.IsExemptAsync(db, entry.Id, cancellationToken)) // Per diem M&IE needs no receipt.
         {
             throw new ArgumentException($"\"{entry.Description}\" ({entry.Amount:C}) needs a receipt: receipts are required for {ReceiptThreshold:C} or more.");
         }

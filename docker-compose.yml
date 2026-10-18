@@ -1,0 +1,28 @@
+# Local PostgreSQL 17 for Workbench (the default production database).
+#
+#   docker compose up -d
+#   export Database__Provider=PostgreSQL
+#   export ConnectionStrings__Workbench="Host=localhost;Database=workbench;Username=workbench;Password=workbench"
+#   dotnet run --project src/Workbench.Web --launch-profile http
+#
+# The test suite's PostgreSQL tests use the same server (WORKBENCH_TEST_POSTGRES overrides it). Development credentials only.
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workbench
+      POSTGRES_PASSWORD: workbench
+      POSTGRES_DB: workbench
+    ports:
+      - "5432:5432"
+    volumes:
+      - workbench-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workbench -d workbench"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  workbench-postgres:

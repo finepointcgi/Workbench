@@ -9,7 +9,8 @@ namespace Workbench.Application.Purchasing;
 public static class PurchasingRegistration
 {
     /// <summary>
-    /// Vendors, subcontracts, AP bills, payments and AP reports. Binds <see cref="PurchasingOptions"/> from config
+    /// Vendors, subcontracts, AP bills, payments and AP reports, plus requisitions, purchase orders, receiving, the three-way
+    /// match and commitments. Binds <see cref="PurchasingOptions"/> from config
     /// <c>Purchasing</c>. Call after AddWorkbenchAccounting (bills post through its engine) and before AddWorkbenchIdentity,
     /// which adds the permission decorators (<c>AddWorkbenchPurchasingPermissions</c>).
     /// </summary>
@@ -26,6 +27,13 @@ public static class PurchasingRegistration
         services.AddScoped<IApBillService, ApBillService>();
         services.AddScoped<IApPaymentService, ApPaymentService>();
         services.AddScoped<IApReportService, ApReportService>();
+
+        // Procure-to-pay: requisitions, purchase orders and receiving, the three-way match, commitments.
+        services.AddScoped<RequisitionAccess>();
+        services.AddScoped<IRequisitionService, RequisitionService>();
+        services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+        services.AddScoped<IThreeWayMatchService, ThreeWayMatchService>();
+        services.AddScoped<ICommitmentService, CommitmentService>();
         return services;
     }
 }

@@ -9,6 +9,8 @@
       "src/Workbench.Costpoint/Workbench.Costpoint.csproj",
       "src/Workbench.Domain/Workbench.Domain.csproj",
       "src/Workbench.Infrastructure/Workbench.Infrastructure.csproj",
+      "src/Workbench.Migrations.PostgreSql/Workbench.Migrations.PostgreSql.csproj",
+      "src/Workbench.Migrations.Sqlite/Workbench.Migrations.Sqlite.csproj",
       "src/Workbench.Ui/Workbench.Ui.csproj",
       "src/Workbench.Web/Workbench.Web.csproj",
       "src/Workbench.Worker/Workbench.Worker.csproj",

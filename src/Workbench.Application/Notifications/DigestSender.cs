@@ -98,7 +98,7 @@ public sealed class DigestSender(
 }
 
 /// <summary>Checks hourly for digests that are due.</summary>
-public sealed class DigestBackgroundService(IServiceProvider services, TimeProvider clock, ILogger<DigestBackgroundService> logger) : BackgroundService
+public sealed class DigestBackgroundService(IServiceProvider services, Tenancy.ITenantJobRunner tenants, TimeProvider clock, ILogger<DigestBackgroundService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -107,11 +107,14 @@ public sealed class DigestBackgroundService(IServiceProvider services, TimeProvi
         {
             try
             {
-                var sent = await services.GetRequiredService<DigestSender>().SendDueAsync(stoppingToken);
-                if (sent > 0)
+                await tenants.ForEachTenantAsync(async ct =>
                 {
-                    logger.LogInformation("Sent {Count} notification digests", sent);
-                }
+                    var sent = await services.GetRequiredService<DigestSender>().SendDueAsync(ct);
+                    if (sent > 0)
+                    {
+                        logger.LogInformation("Sent {Count} notification digests", sent);
+                    }
+                }, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

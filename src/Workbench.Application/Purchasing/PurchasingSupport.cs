@@ -28,6 +28,14 @@ public sealed class PurchasingOptions
 
     /// <summary>1099 reporting threshold (IRS: $600).</summary>
     public decimal Form1099Threshold { get; set; } = 600m;
+
+    // ---- Procure-to-pay ----
+
+    /// <summary>Requisitions totalling more than this also need Finance approval after the project managers.</summary>
+    public decimal RequisitionFinanceThreshold { get; set; } = 10_000m;
+
+    /// <summary>Three-way match: a billed unit price may differ from the PO price by up to this percent.</summary>
+    public decimal MatchPriceTolerancePercent { get; set; } = 5m;
 }
 
 /// <summary>

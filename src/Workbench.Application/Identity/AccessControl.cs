@@ -13,9 +13,16 @@ namespace Workbench.Application.Identity;
 /// Answers "what may the current user do here" from workspace memberships and the admin flag. Nothing is cached:
 /// a Blazor circuit keeps its scope for hours, and role changes should apply on the next call.
 /// </summary>
-public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null)
+public sealed class AccessControl(
+    IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null, SystemExecutionContext? system = null)
 {
     public string Email => Normalize(currentUser.Email);
+
+    /// <summary>
+    /// True only inside a trusted background job's scope (<see cref="SystemExecutionContext"/>). It passes no role check;
+    /// a permission decorator may accept it on an explicitly listed read method, never on a write.
+    /// </summary>
+    public bool IsSystemReader => system?.IsActive == true;
 
     public bool IsAuthenticated => currentUser is SystemCurrentUser || (currentUser.IsAuthenticated && Email.Length > 0);
 
@@ -40,7 +47,7 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
     {
         if (currentUser is SystemCurrentUser)
         {
-            return OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper;
+            return OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager;
         }
 
         if (!IsAuthenticated)
@@ -52,9 +59,9 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await db.Set<AppUser>().AsNoTracking()
             .Where(u => u.Email == email && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper })
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager })
             .FirstOrDefaultAsync(cancellationToken);
-        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper);
+        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager);
     }
 
     /// <summary>The employee record with the signed-in user's email, if any.</summary>
@@ -79,8 +86,9 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         }
     }
 
-    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper) =>
-        (admin ? OrgRoles.Admin : 0) | (finance ? OrgRoles.Finance : 0) | (timekeeper ? OrgRoles.Timekeeper : 0);
+    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper, bool resourceManager = false) =>
+        (admin ? OrgRoles.Admin : 0) | (finance ? OrgRoles.Finance : 0) | (timekeeper ? OrgRoles.Timekeeper : 0)
+        | (resourceManager ? OrgRoles.ResourceManager : 0);
 
     /// <summary>The user's role on a sheet (Owner for admins), or null when they can't see it or it doesn't exist.</summary>
     public async Task<WorkspaceRole?> GetSheetRoleAsync(Guid sheetId, CancellationToken cancellationToken = default)

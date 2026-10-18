@@ -1,6 +1,7 @@
 @page "/time"
 @using System.Globalization
 @inject ITimesheetService Timesheets
+@inject Workbench.Contracts.Leave.ILeaveTimesheetService LeaveTimesheets
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
@@ -31,9 +32,22 @@ else if (_detail is null)
 else
 {
     <TimesheetStatusBanner Timesheet="_detail.Timesheet" />
+    @if (_leave is not null)
+    {
+        @if (_leave.Prefill.Count > 0 && !_detail.Timesheet.IsLocked)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="leave-prefill">
+                Pre-filled from approved leave and holidays: @string.Join(", ", _leave.Prefill.Select(p => $"{p.WbsCode} {p.Date:ddd M/d} {p.Hours:0.##} h ({p.Source})")). Save to keep them.
+            </MudAlert>
+        }
+        @foreach (var warning in _leave.Warnings)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="leave-warning">@warning</MudAlert>
+        }
+    }
 
     <MudPaper Outlined="true" Class="pa-3">
-        <TimesheetGrid @ref="_grid" Detail="_detail" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
+        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
     </MudPaper>
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap">
@@ -54,6 +68,7 @@ else
 
 @code {
     private TimesheetDetailDto? _detail;
+    private Workbench.Contracts.Leave.TimesheetLeaveDto? _leave;
     private TimesheetGrid? _grid;
     private string? _error;
     private bool _busy;
@@ -74,7 +89,9 @@ else
         try
         {
             _error = null;
-            _detail = await Timesheets.GetOrCreateMyTimesheetAsync(date);
+            var detail = await Timesheets.GetOrCreateMyTimesheetAsync(date);
+            _leave = await LeaveFor(detail);
+            _detail = detail;
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -212,6 +229,11 @@ else
         try
         {
             await action();
+            if (_detail is not null)
+            {
+                _leave = await LeaveFor(_detail);
+            }
+
             return true;
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
@@ -222,6 +244,19 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    /// <summary>Leave pre-fill and balance checks; the timesheet works without them if leave can't be loaded.</summary>
+    private async Task<Workbench.Contracts.Leave.TimesheetLeaveDto?> LeaveFor(TimesheetDetailDto detail)
+    {
+        try
+        {
+            return await LeaveTimesheets.GetForTimesheetAsync(detail.Timesheet.Id);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            return null;
         }
     }
 

@@ -27,6 +27,8 @@
     <ProjectReference Include="..\..\src\Workbench.Ui\Workbench.Ui.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Web\Workbench.Web.csproj" />
     <ProjectReference Include="..\..\src\Workbench.ApiClient\Workbench.ApiClient.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Migrations.PostgreSql\Workbench.Migrations.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Migrations.Sqlite\Workbench.Migrations.Sqlite.csproj" />
   </ItemGroup>
 
 </Project>

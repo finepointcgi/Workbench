@@ -31,6 +31,7 @@ public static class IdentityRegistration
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<UserProvisioner>();
+        services.AddScoped<SystemExecutionContext>(); // Inactive unless a background job's scope switches it on.
         services.AddScoped<AccessControl>();
         services.AddScoped<ISheetPermissions, SheetPermissions>();
         services.AddScoped<IUserDirectory, UserDirectory>();
@@ -66,6 +67,23 @@ public static class IdentityRegistration
         services.AddWorkbenchIndirectRatePermissions(); // Indirect rates: Finance or Admin; burdened cost: Finance, Admin or the project's PM.
         services.AddScoped<BillingAccess>(); services.AddWorkbenchBillingPermissions(); // Billing/AR: Finance or Admin; PMs read their contracts' invoices.
         services.AddWorkbenchPurchasingPermissions(); // Purchasing: Finance or Admin; PMs approve the AP bill lines routed to them.
+        services.Decorate<Workbench.Contracts.Imports.IImportService, PermissionCheckingImportService>(); // Imports: Finance or Admin.
+        services.AddWorkbenchProcurementPermissions(); // Requisitions: any employee for their projects/org; POs and match: Finance/Admin (receivers receive).
+        services.AddWorkbenchAssetPermissions(); // Fixed assets: Finance or Admin only.
+        services.AddWorkbenchCashPermissions(); // Cash management and bank reconciliation: Finance or Admin only.
+        services.AddWorkbenchPayrollPermissions(); // Payroll: Finance or Admin only (pay rates masked unless revealed).
+        services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
+        return services;
+    }
+
+    /// <summary>
+    /// For the server host, after its <see cref="ICurrentUser"/> is registered and before the automation hosting:
+    /// background jobs running in a <see cref="SystemExecutionContext"/> are attributed to "Workbench System".
+    /// </summary>
+    public static IServiceCollection AddWorkbenchSystemExecutionHosting(this IServiceCollection services)
+    {
+        services.TryAddScoped<SystemExecutionContext>();
+        services.Decorate<ICurrentUser, SystemAwareCurrentUser>();
         return services;
     }
 

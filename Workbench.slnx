@@ -8,6 +8,8 @@
     <Project Path="src/Workbench.Desktop/Workbench.Desktop.csproj" />
     <Project Path="src/Workbench.Domain/Workbench.Domain.csproj" />
     <Project Path="src/Workbench.Infrastructure/Workbench.Infrastructure.csproj" />
+    <Project Path="src/Workbench.Migrations.PostgreSql/Workbench.Migrations.PostgreSql.csproj" />
+    <Project Path="src/Workbench.Migrations.Sqlite/Workbench.Migrations.Sqlite.csproj" />
     <Project Path="src/Workbench.Ui/Workbench.Ui.csproj" />
     <Project Path="src/Workbench.Web/Workbench.Web.csproj" />
     <Project Path="src/Workbench.Worker/Workbench.Worker.csproj" />

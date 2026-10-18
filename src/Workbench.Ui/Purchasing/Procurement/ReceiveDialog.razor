@@ -1,0 +1,44 @@
+@* Receive goods (or accept services) against an order's open quantities. *@
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2" Class="mb-2">
+            <MudItem xs="6"><MudDatePicker @bind-Date="_receivedOn" Label="Received on" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6"><MudTextField T="string" @bind-Value="_note" Label="Note (packing slip, condition)" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>#</th><th>Description</th><th style="text-align:right">Ordered</th><th style="text-align:right">Received</th><th style="width:140px">@("Receive now")</th></tr></thead>
+            <tbody>
+                @foreach (var l in Order.Lines.Where(l => l.Quantity > l.QuantityReceived))
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Description@(l.IsService ? " (service: acceptance)" : "")</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.Quantity)</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.QuantityReceived)</td>
+                        <td>
+                            <MudNumericField T="decimal" Value="_quantities.GetValueOrDefault(l.Id)" ValueChanged="@(v => _quantities[l.Id] = v)" Min="0" Max="@(l.Quantity - l.QuantityReceived)"
+                                             Margin="Margin.Dense" data-testid="receive-qty" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_receivedOn is null || _quantities.Values.All(q => q <= 0))" OnClick="Save" data-testid="receive-save">Record receipt</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public PurchaseOrderDto Order { get; set; } = default!;
+
+    private readonly Dictionary<Guid, decimal> _quantities = [];
+    private DateTime? _receivedOn = DateTime.Today;
+    private string? _note;
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new ReceiveRequest(DateOnly.FromDateTime(_receivedOn!.Value),
+        _quantities.Where(q => q.Value > 0).Select(q => new ReceiveLineRequest(q.Key, q.Value)).ToList(), _note)));
+}

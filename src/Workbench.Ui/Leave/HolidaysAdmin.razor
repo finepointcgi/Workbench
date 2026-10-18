@@ -1,0 +1,83 @@
+@* The holiday calendar per year (administrators). *@
+@inject IHolidayService Holidays
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" aria-label="Previous year" OnClick="() => MoveAsync(-1)" />
+    <MudText Typo="Typo.h6">@_year</MudText>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" aria-label="Next year" OnClick="() => MoveAsync(1)" />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Flag" OnClick="FederalAsync" Disabled="_busy" data-testid="federal">Add US federal holidays</MudButton>
+</MudStack>
+<MudSimpleTable Dense="true" Outlined="true" Style="max-width:720px" data-testid="holidays">
+    <thead><tr><th>Date</th><th>Holiday</th><th>Hours</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var h in _holidays)
+        {
+            <tr>
+                <td>@h.Date.ToString("ddd MMM d", CultureInfo.InvariantCulture)</td>
+                <td>@h.Name</td>
+                <td>@(h.Hours is { } hours ? LeavePage.Hours(hours) : "standard day")</td>
+                <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove" OnClick="() => RemoveAsync(h)" /></td>
+            </tr>
+        }
+        @if (_holidays.Count == 0)
+        {
+            <tr><td colspan="4" class="mud-text-secondary">No holidays in @_year.</td></tr>
+        }
+    </tbody>
+</MudSimpleTable>
+<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-3" Style="max-width:720px">
+    <MudDatePicker @bind-Date="_date" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddAsync" Disabled="@(_busy || _date is null || string.IsNullOrWhiteSpace(_name))">Add</MudButton>
+</MudStack>
+
+@code {
+    private int _year = DateTime.Today.Year;
+    private IReadOnlyList<HolidayDto> _holidays = [];
+    private DateTime? _date;
+    private string? _name;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _holidays = await Holidays.ListAsync(_year);
+
+    private async Task MoveAsync(int years)
+    {
+        _year += years;
+        await LoadAsync();
+    }
+
+    private Task FederalAsync() => RunAsync(async () =>
+    {
+        var added = await Holidays.ApplyFederalTemplateAsync(_year);
+        Snackbar.Add(added == 0 ? "The federal holidays are already on the calendar." : $"{added} holidays added.", Severity.Success);
+    });
+
+    private Task AddAsync() => RunAsync(async () =>
+    {
+        await Holidays.AddAsync(new SaveHolidayRequest(DateOnly.FromDateTime(_date!.Value), _name!));
+        (_date, _name) = (null, null);
+    });
+
+    private Task RemoveAsync(HolidayDto h) => RunAsync(() => Holidays.RemoveAsync(h.Id));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (LeavePage.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

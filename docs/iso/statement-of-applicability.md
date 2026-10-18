@@ -100,7 +100,7 @@ work with the data, and the cloud provider's physical controls are evidence for 
 | --- | --- | --- | --- | --- |
 | 8.1 User end point devices | Yes | Laptops and the desktop client | Company: MDM, encryption, patching; Workbench: thin desktop client keeps data on the server | Partial |
 | 8.2 Privileged access rights | Yes | Admin/Finance roles | Workbench: roles, role changes logged, self-demotion and last-admin protection, access reviews; Company: limit admins, separate admin accounts for infrastructure | Implemented (product) |
-| 8.3 Information access restriction | Yes | Need to know | Workbench: workspace membership, Finance-only rates and budgets, permission decorators, 404 for unseen sheets | Implemented (product) |
+| 8.3 Information access restriction | Yes | Need to know | Workbench: workspace membership, Finance-only rates and budgets, permission decorators, 404 for unseen sheets; SaaS: a database per tenant (see the SaaS rows below) | Implemented (product) |
 | 8.4 Access to source code | Yes | Protect code and secrets | Company: GitHub org access, branch protection; Workbench: CODEOWNERS, gitleaks | Partial |
 | 8.5 Secure authentication | Yes | Core control | Workbench: OIDC SSO (PKCE), idle 30 min / absolute 12 h sessions, circuit re-validation, sign out everywhere, rate-limited sign-in; Company: MFA at IdP | Implemented (product) |
 | 8.6 Capacity management | Yes | Availability | Company: monitor capacity; Workbench: OpenTelemetry metrics, health checks | Partial |
@@ -129,9 +129,22 @@ work with the data, and the cloud provider's physical controls are evidence for 
 | 8.29 Security testing in development and acceptance | Yes | | Workbench: automated security tests (permissions, headers, rate limits, SCIM auth, session revocation); Company: pen test before major releases | Partial |
 | 8.30 Outsourced development | `<Yes/No>` | `<if contractors develop>` | Company: same policy and reviews for contractors | Not started |
 | 8.31 Separation of development, test and production environments | Yes | | Workbench: dev sign-in exists only in Development; startup check; Company: separate environments and credentials | Partial |
-| 8.32 Change management | Yes | | Company: PR review, CI gates, release approval; Workbench: CODEOWNERS, CI | Partial |
+| 8.32 Change management | Yes | | Company: PR review, CI gates, release approval; Workbench: CODEOWNERS, CI, schema changes only through reviewed EF Core migrations for both providers (CI fails on model drift), applied by `Workbench.Web --migrate` as a deploy step | Partial |
 | 8.33 Test information | Yes | Production data in tests | Workbench: tests use seeded/synthetic data; Company: no production copies in test without masking | Partial |
 | 8.34 Protection of information systems during audit testing | Yes | Audits and pen tests | Company: plan audit tests, read-only accounts, schedule | Not started |
+
+## SaaS (MultiTenant) deployment
+
+*Extra rows for an organization that runs Workbench as a multi-tenant service (`Tenancy:Mode=MultiTenant`). They add to
+the rows above for the same controls; a self-hosted, single-tenant deployment can mark them "No: single tenant".*
+
+| Control | Applicable | Justification | Implementation | Status |
+| --- | --- | --- | --- | --- |
+| 8.3 Information access restriction (tenants) | `<Yes if SaaS>` | Customers must never see each other's data | Workbench: one database per tenant; tenant resolved from the subdomain before authentication; the database factory opens only the resolved tenant's database and refuses without one; cookies and Data Protection purposes per tenant; tenant-keyed caches, live updates and SignalR groups; background jobs run per tenant; isolation tests in CI on SQLite and PostgreSQL | Implemented (product) |
+| 8.3 Information access restriction (host administration) | `<Yes if SaaS>` | Operating the service is not a customer role | Workbench: host admins listed in `Tenancy:HostAdmins`, only on the base domain (`/host`), separate from every tenant's Admin role; host audit log in the catalog. Company: keep the list short and review it with the quarterly access review | Implemented (product) / Company |
+| 5.23 Information security for use of cloud services (as provider) | `<Yes if SaaS>` | Customers rely on our isolation and operations | Workbench: tenant isolation, provisioning with an invited first Admin, suspension; per-tenant database size and last activity on `/host`. Company: shared-responsibility statement for customers, per-tenant backup/restore runbook, tenant offboarding and data return/deletion procedure | Partial |
+| 8.11 Data masking (tenants) | `<Yes if SaaS>` | Support staff and host admins shouldn't see tenant data | Workbench: the host site shows only tenant names, status, size and activity, never tenant records; tenant connection strings encrypted in the catalog; vendor TINs encrypted per tenant. Company: support access to a tenant only through an invited, audited tenant account | Partial |
+| 8.31 Separation of environments (tenants) | `<Yes if SaaS>` | Development conveniences must not reach production | Workbench: the `X-Tenant` header and development tenants work only in Development; the startup check refuses MultiTenant production without invites, host admins and a real base domain; production migrates only through `--migrate`. Company: separate catalog, tenant databases and Data Protection keys per environment | Partial |
 
 ## Summary
 

@@ -9,7 +9,9 @@
 <PageTitle>Subcontracts · Purchasing · Workbench</PageTitle>
 
 <PurchasingHeader Title="Subcontracts" Subtitle="Subcontracts under our prime contracts: funding, ceilings, flow-down clauses and what has been billed.">
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="_error is not null">New subcontract</MudButton>
+    <FinanceOnly>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="_error is not null" data-testid="new-subcontract">New subcontract</MudButton>
+    </FinanceOnly>
 </PurchasingHeader>
 
 @if (_error is not null)

@@ -50,13 +50,72 @@ dotnet run --project src/Workbench.Web --launch-profile http   # http://localhos
 ```
 
 `Workbench.Server.slnf` excludes the desktop app, which needs Xcode (macOS) or Windows to build.
-The dev database is `src/Workbench.Web/workbench.db` (SQLite, created and seeded on start). Delete it after
-schema changes; migrations come later.
+The dev database is `src/Workbench.Web/workbench.db` (SQLite, migrated and seeded on start). After pulling a schema
+change it is migrated; after a baseline regeneration, delete it (or let Development set it aside on start).
+
+Tests run on EF Core InMemory by default. `WORKBENCH_TEST_DB=Sqlite` or `=PostgreSql` runs the whole suite on a real,
+migrated database per test (CI runs both). PostgreSQL comes from `docker compose up -d` (or `WORKBENCH_TEST_POSTGRES`);
+tests that only make sense there use `[PostgresFact]` and skip when no server answers.
+
+## Database migrations
+
+Schema changes are EF Core migrations, one assembly per provider: `src/Workbench.Migrations.PostgreSql` and
+`src/Workbench.Migrations.Sqlite`, each with a `WorkbenchDb/` (the tenant database) and a `CatalogDb/` folder (the
+MultiTenant catalog). Migrations are provider-specific SQL and EF keeps one model snapshot per context per assembly, so
+one shared assembly can't serve both providers.
+
+- **Until the pilot, the baseline is regenerated instead of adding migrations.** A feature branch adds its entity and
+  configuration and then either runs `scripts/regenerate-baseline.sh` itself, or leaves that to whoever merges it. Until
+  it is regenerated, CI's model-drift check and the SQLite/PostgreSQL test legs fail for the new tables (the InMemory
+  default still passes locally). Never hand-merge generated migration files: on a conflict, take either side and regenerate.
+- **After the pilot** (once any shared or production database exists), every schema change is
+  `scripts/new-migration.sh AddSomething` (`--catalog` for the catalog). It adds the migration to both providers and
+  checks nothing is left over. Commit both folders together; never edit a generated migration after it has shipped.
+- **Regenerating the baseline (pre-pilot only).** There are no production databases yet, so after merging feature
+  branches run `scripts/regenerate-baseline.sh`: it deletes every migration and generates one `InitialCreate` per
+  provider and context from the merged model. Then delete local dev databases (`src/Workbench.Web/*.db`,
+  `src/Workbench.Web/App_Data/catalog.db`, `src/Workbench.Web/App_Data/tenants/`) and run the tests on both providers.
+- Startup migrates only when `Database:MigrateOnStartup` is true (Development). Production deploys run
+  `dotnet Workbench.Web.dll --migrate` (the catalog, then every tenant) before starting the new version.
+- Things that differ by provider, handled for you in `ProviderConventions` (`WorkbenchDbContext.cs`): every `DateTime`
+  is UTC (Npgsql refuses other kinds for `timestamptz`); text uses ordinal collation `C` on PostgreSQL, like SQLite's
+  `BINARY`; decimals round to their column's scale on both. Still yours to get right: string equality and unique
+  indexes are case-sensitive on both providers (store emails and codes normalized; lowercase emails), give every
+  decimal a precision (`HasPrecision`), give strings a `HasMaxLength` (PostgreSQL enforces it), don't rely on how
+  NULLs sort (last on PostgreSQL, first on SQLite), and never use provider-specific SQL outside `Infrastructure`.
+
+## Multi-tenancy
+
+`Tenancy:Mode=MultiTenant` gives every tenant its own database; SingleTenant (the default) is one database. Feature
+code doesn't see tenants, provided it follows these rules:
+
+- Open data only through `IWorkbenchDbContextFactory` (or `IDbContextFactory<WorkbenchDbContext>` in Infrastructure). It
+  opens the current tenant's database and throws `TenantNotResolvedException` without one. Never build `DbContextOptions`
+  or connections yourself.
+- A `BackgroundService` wraps each run in `ITenantJobRunner.ForEachTenantAsync(ct => ...)` and creates its scope inside
+  the callback (see `MissingTimesheetBackgroundService`). In SingleTenant mode it runs once.
+- Singletons must not cache tenant data under a bare key: qualify keys with `TenantScope.Qualify(key)` (see
+  `UserStatusCache`) or key by `TenantScope.Key`. In-process fan-outs (`SheetEventHub`, `NotificationHub`) and SignalR
+  group names are already tenant-qualified. No `static` mutable state.
+- Blob keys are prefixed per tenant by the store; email links use `Notifications:PublicBaseUrl` (which may contain `{tenant}`).
+- Per-tenant settings live in the tenant database (e.g. the timesheet cadence, `/setup/organization`), not in
+  configuration. Server-wide configuration is the same for every tenant.
+- Host administration (`/host`, `IHostAdminService`) is for `Tenancy:HostAdmins` on the base domain only. To try it:
+  `dotnet run --project src/Workbench.Web --launch-profile multitenant` and open `http://acme.localhost:5251`,
+  `http://beta.localhost:5251` and `http://localhost:5251/host` (sign in as host@workbench.local).
+
+## Timesheet periods
+
+The cadence (Weekly with a start day, Biweekly with an anchor, SemiMonthly, Monthly) is an organization setting in the
+tenant database (`TimesheetPeriodRule`, effective-dated, changed from the next period boundary). Get a period with
+`TimekeepingClock.PeriodForAsync(db, date)`; a timesheet keeps the `PeriodStart`/`PeriodEnd` it was opened with, so
+look timesheets up by the date they contain, not by recomputing the period.
 
 ## Shared files
 
 Only append to these, one line per feature, never reorder: `Application/DependencyInjection.cs`,
 `ApiClient/DependencyInjection.cs`, `Api/WorkbenchApi.cs`, `Ui/Layout/NavMenu.razor`, `Ui/_Imports.razor`.
+Generated migrations (`src/Workbench.Migrations.*`) are owned by whoever regenerates the baseline; don't hand-merge them.
 Don't change existing contracts in `Workbench.Contracts/Sheets`; if a feature needs more, add new records or
 interfaces next to them and say so in the commit message.
 
@@ -104,6 +163,7 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - Timesheets are approved by the supervisor, or by Admins for employees without one; Timekeeper/Finance/Admin view all.
 - Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
   analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
+
 ## Security events, user lifecycle and retention
 
 - Record security-relevant actions with `Application.Security.SecurityEventLog.RecordAsync(SecurityEventTypes.X, target,
@@ -174,3 +234,59 @@ await notifications.PublishAsync(
   rows hold it until the invoice is voided. Cost-plus bills cumulative cost less billed cost, so it reads
   `IBurdenedCostService` from the contract start; without a registered implementation it bills direct cost only and says
   so. Other modules can add a period-close checklist item by registering `Application.Accounting.IPeriodCloseCheck`.
+
+## Imports (wave 6)
+
+- `Application/Imports`: `IImportService` (Finance/Admin) runs one `IImporter` per source × kind in three modes
+  (validate, dry run, apply) through `ImportRun`. Importers call the regular services, never write entities directly
+  (exceptions: the plan-sheet/WBS links, as in `PlanSyncService`). Every touched entity is recorded as an
+  `ImportJobRecord` with EF property snapshots; `ImportRollback` reverts them and refuses when anything changed or now
+  references them (found from the EF model's foreign keys). A new entity with a foreign key to an importable entity is
+  picked up automatically; a reference without one (like comments → items) needs an explicit check there.
+- External ids Workbench has no field for (Smartsheet row/sheet ids) live in `ImportKeyMap`. Samples and the expected
+  columns per file: `samples/import/README.md`.
+
+## Procure-to-pay and fixed assets (wave 6)
+
+- Entities: `PurchaseRequisition(Line)`, `RequisitionApproval`, `PurchaseOrder(Line)`, `PurchaseOrderRevision`,
+  `PurchaseReceipt(Line)` (Domain/Purchasing/Procurement.cs); `AssetCategory`, `FixedAsset`, `AssetDepreciationRun`,
+  `AssetDepreciation`, `AssetTransfer` (Domain/Assets/FixedAssets.cs). `ApBillLine` gained `PurchaseOrderLineId`, `Quantity`,
+  `UnitPrice` and the match result/override columns; `PurchaseOrderLine.QuantityReceived` is a running total kept with receipts.
+- Contracts: `IRequisitionService`, `IPurchaseOrderService` (receiving included), `IThreeWayMatchService`, `ICommitmentService`
+  (Contracts/Purchasing/ProcurementContracts.cs); `IAssetService`, `IDepreciationService`, `IAssetReportService` (Contracts/Assets).
+- A bill line with a `PurchaseOrderLineId` takes its charging from the PO line; the match (billed to date on live bills ≤
+  received, price within tolerance) is recorded at submit and re-checked at approval, which it blocks unless Finance overrode it.
+- Commitments are open PO line amounts less what posted bills billed; never posted. `ProcurementSupport.CommitmentsByWbsAsync`
+  feeds CLIN funding status ("committed") and `ICommitmentService` the project financials page.
+- GL sources `Asset` (capitalization reclass and disposal, source id = asset) and `Depreciation` (source id = run). Depreciation
+  is the scheduled amount through the period less what's posted (late additions catch up once), unique per asset and period,
+  so runs are idempotent; closed periods are refused; `DepreciationCloseCheck` adds "Depreciation posted" to the period close.
+  Government-furnished and contractor-acquired property is tracked but never depreciated.
+
+## Payroll and leave (wave 6)
+
+- Workbench never calculates payroll taxes. `Application/Payroll/IPayrollProvider` adapters (Paylocity; ADP, Paychex and Gusto
+  are "coming soon" stubs that throw `NotSupportedException`) format the hours export and parse the provider's register.
+  The Paylocity file formats Workbench assumes are documented on `PaylocityFormats`; sample: `samples/payroll/paylocity-register-sample.csv`.
+- Pay rates (`EmployeePayProfile`) are what employees are paid, not cost rates. Every payroll service is Finance/Admin; rates are
+  masked except `IPayrollProfileService.RevealAsync` (security event `payroll.pay_rate_revealed`); audit rows never hold rates.
+- Payroll hours come from approved timesheets only; missing and unapproved timesheets are flagged. Overtime: non-exempt, over 40
+  worked hours in a Monday–Sunday week (leave doesn't count). The payroll journal (`JournalSource.Payroll`, source id = register)
+  clears 2100 at the GL's accrual, posts gross − accrual to 6050, employer taxes/benefits to 6020/6030 and credits 2120/2130/2140.
+- Leave balances are an append-only `LeaveLedgerEntry` ledger. Usage is never typed: `LeaveEngine.SyncUsageAsync` keeps one net row
+  per approved timesheet on the policy's charge code. Accrual (per pay period, idempotent by `SourceKey`) runs when payroll posts.
+  Holidays aren't a balance. Seeds: `PayrollSeed.cs`, `LeaveSeed.cs`.
+
+## Per diem and resource planning (wave 6)
+
+- Per diem (`Domain/PerDiem`, `Application/PerDiem`, `Contracts/PerDiem`): rate tables are append-only batches (the latest
+  `PerDiemRateBatch` per fiscal year and CONUS/OCONUS is in force). Pick rates through `PerDiemTables.Resolve` (season →
+  standard CONUS → latest earlier year → built-in $110/$68); compute with the pure `PerDiemCalculator`. A travel report's
+  per diem lives in `TravelPerDiem` (one per `ExpenseReport`); "Update expense lines" generates ordinary Travel `OdcEntry`
+  lines through `IExpenseReportService` and links them in `PerDiemLine`. `PerDiemSubmitGuard` decorates
+  `IExpenseReportService.SubmitAsync`; per diem lines other than Lodging need no receipt (`PerDiemReceipts`).
+- Resourcing (`Domain/Resourcing`, `Application/Resourcing`, `Contracts/Resourcing`): `ResourceAllocation` is
+  employee × project (× WBS) × week (Monday). Capacity = standard hours − holidays − approved leave − the non-billable
+  allowance (`Resourcing:*`). Holidays and leave come from `IResourceLeaveCalendar` (no-op `NoLeaveCalendar` TryAdd'ed);
+  the leave module registers its own. Who may do what: `ResourcingAccess` (org role `ResourceManager` manages every
+  project, PMs their own, Finance reads; employees see themselves).

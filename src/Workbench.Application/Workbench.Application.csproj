@@ -12,7 +12,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Tests drive SystemExecution.CreateScope, which is internal so only this assembly's hosted services can use it. -->
+    <InternalsVisibleTo Include="Workbench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <!-- Imports: reads .xlsx exports (Costpoint reports, Smartsheet sheets) incl. outline levels and indentation. MIT. -->
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Per diem: the shipped sample CONUS rates, for "Load sample rates" and the development seed. -->
+    <EmbeddedResource Include="..\..\samples\perdiem\gsa-conus-sample.csv" LogicalName="Workbench.Application.PerDiem.gsa-conus-sample.csv" />
   </ItemGroup>
 
   <PropertyGroup>

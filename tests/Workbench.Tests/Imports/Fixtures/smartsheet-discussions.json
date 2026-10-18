@@ -1,0 +1,12 @@
+{
+  "pageNumber": 1, "pageSize": 100, "totalPages": 1, "totalCount": 2,
+  "data": [
+    { "id": 1111111111111111, "title": "Wireframes", "parentId": 6865355806140292, "parentType": "ROW", "accessLevel": "OWNER",
+      "comments": [
+        { "id": 9001900190019001, "discussionId": 1111111111111111, "text": "Approved by the customer, cc @bob.lee@example.com", "createdBy": { "name": "Jane Smith", "email": "jane.smith@example.com" }, "createdAt": "2026-10-06T15:00:00Z", "modifiedAt": "2026-10-06T15:00:00Z" },
+        { "id": 9002900290029002, "discussionId": 1111111111111111, "text": "Thanks!", "createdBy": { "name": "Bob Lee", "email": "bob.lee@example.com" }, "createdAt": "2026-10-06T16:30:00Z", "modifiedAt": "2026-10-06T16:30:00Z" }
+      ] },
+    { "id": 2222222222222222, "title": "Sheet chatter", "parentId": 4583173393803140, "parentType": "SHEET", "accessLevel": "OWNER",
+      "comments": [ { "id": 9003900390039003, "text": "Sheet-level comment", "createdBy": { "name": "Jane Smith" }, "createdAt": "2026-10-01T09:00:00Z" } ] }
+  ]
+}
