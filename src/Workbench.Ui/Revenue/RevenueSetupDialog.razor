@@ -1,0 +1,107 @@
+@* Sets the revenue method for a project or one of its CLINs. Rates are entered as percentages. *@
+@inject IRevenueSetupService Setup
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudSelect T="Guid?" @bind-Value="_clinId" Label="Applies to" Dense="true">
+                <MudSelectItem T="Guid?" Value="null">The project (WBS not covered by a CLIN setup)</MudSelectItem>
+                @foreach (var c in Clins)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">CLIN @c.Number · @c.Description (@c.Pricing)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="RevenueMethodKind" @bind-Value="_method" Label="Revenue method" Dense="true" data-testid="setup-method">
+                @foreach (var m in Enum.GetValues<RevenueMethodKind>())
+                {
+                    <MudSelectItem T="RevenueMethodKind" Value="m">@RevenueFormat.Label(m)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@Help(_method)</MudText>
+            @if (_method == RevenueMethodKind.CostPlusFee)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_feePercent" Label="Fee % (blank: each CLIN's fee rate)" HideSpinButtons="true" />
+            }
+            @if (_method == RevenueMethodKind.TimeAndMaterialsIncurred)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_markupPercent" Label="ODC markup % (blank: at cost)" HideSpinButtons="true" />
+            }
+            @if (_method == RevenueMethodKind.FixedPriceUnits)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_unitPrice" Label="Unit price" Format="N2" HideSpinButtons="true" />
+            }
+            <MudNumericField T="decimal?" @bind-Value="_price" Label="Transaction price (optional: suggested for estimates; caps units delivered)" Format="N2" HideSpinButtons="true" />
+            <MudTextField @bind-Value="_notes" Label="Notes" Lines="2" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync" data-testid="setup-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+    [Parameter] public IReadOnlyList<RevenueClinOptionDto> Clins { get; set; } = [];
+    [Parameter] public RevenueSetupDto? Existing { get; set; }
+
+    private Guid? _clinId;
+    private RevenueMethodKind _method = RevenueMethodKind.CostPlusFee;
+    private decimal? _feePercent;
+    private decimal? _markupPercent;
+    private decimal? _price;
+    private decimal? _unitPrice;
+    private string? _notes;
+    private string? _error;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } s)
+        {
+            (_clinId, _method, _price, _unitPrice, _notes) = (s.ClinId, s.Method, s.TransactionPrice, s.UnitPrice, s.Notes);
+            _feePercent = s.FeeRate * 100;
+            _markupPercent = s.OdcMarkupRate * 100;
+        }
+    }
+
+    private static string Help(RevenueMethodKind m) => m switch
+    {
+        RevenueMethodKind.CostToCost => "ASC 606 over time: cost to date ÷ approved EAC cost × EAC revenue (fee included). Needs an approved estimate at completion.",
+        RevenueMethodKind.CostPlusFee => "Allowable burdened cost (indirect rates) plus the fee earned on it.",
+        RevenueMethodKind.TimeAndMaterialsIncurred => "Approved hours × the contract's bill rate on the work date, plus allowable ODCs with the markup.",
+        RevenueMethodKind.TimeAndMaterialsBilled => "Revenue equals what was invoiced on T&M.",
+        RevenueMethodKind.FixedPriceMilestones => "The value of billing milestones completed by the period end.",
+        RevenueMethodKind.FixedPriceUnits => "Units delivered × unit price; record deliveries on the project's revenue page.",
+        _ => "Revenue equals what was billed (the default).",
+    };
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var saved = await Setup.SaveSetupAsync(new SaveRevenueSetupRequest(ProjectId, _method, _clinId,
+                _method == RevenueMethodKind.CostPlusFee ? _feePercent / 100 : null,
+                _method == RevenueMethodKind.TimeAndMaterialsIncurred ? _markupPercent / 100 : null,
+                _price, _method == RevenueMethodKind.FixedPriceUnits ? _unitPrice : null, _notes));
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            _error = RevenueFormat.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

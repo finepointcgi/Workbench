@@ -1,0 +1,253 @@
+@page "/accounting/revenue"
+@inject IRevenueRunService Runs
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Revenue run · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Revenue recognition" Subtitle="Each project's revenue to date under its method (cost-to-cost, cost plus fee, T&M, FFP milestones or units, or billings), less what billing and earlier runs already booked. Posting debits AR unbilled (or billings in excess of revenue) and credits revenue, and provides for expected losses. One run per project and period; closed periods are refused." />
+<RevenueTabs Current="run" />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudSelect T="Guid?" Value="_periodId" ValueChanged="PeriodChanged" Label="Fiscal period" Dense="true" Style="min-width:200px" data-testid="revenue-period">
+            @foreach (var p in _periods)
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSpacer />
+        @if (_preview is { } pv)
+        {
+            <MudText>Period revenue: <b>@RevenueFormat.Amount(pv.PeriodRevenue)</b> · @pv.ToPost project(s) to post</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => PostAsync(null)"
+                       Disabled="@(_busy || pv.PeriodIsClosed || pv.ToPost == 0)" data-testid="revenue-post-all">Post revenue run</MudButton>
+        }
+    </MudStack>
+
+    @if (_preview is { } preview)
+    {
+        @if (preview.PeriodIsClosed)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@preview.PeriodName is closed; revenue can't be posted into it.</MudAlert>
+        }
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            @if (preview.Projects.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">No project has revenue, billings or runs for @preview.PeriodName.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-preview">
+                    <thead>
+                        <tr>
+                            <th>Project</th><th>Method</th>
+                            <th style="text-align:right">Recognized to date</th><th style="text-align:right">Billed to date</th>
+                            <th style="text-align:right">Period revenue</th><th style="text-align:right">Unbilled</th>
+                            <th style="text-align:right">Billings in excess</th><th style="text-align:right">Loss provision</th>
+                            <th>Status</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in preview.Projects)
+                        {
+                            var c = row.Computed;
+                            var shown = row.Posted is { } p ? (p.RecognizedToDate, p.BilledToDate, p.PeriodRevenue, p.UnbilledBalance, p.BillingsInExcessBalance, p.LossProvisionBalance)
+                                : (c.RecognizedToDate, c.BilledToDate, c.PeriodRevenue, c.UnbilledBalance, c.BillingsInExcessBalance, c.LossProvisionBalance);
+                            <tr>
+                                <td><MudLink Href="@($"accounting/revenue/projects/{c.ProjectId}")">@c.ProjectCode</MudLink> @c.ProjectName<div class="mud-text-secondary" style="font-size:12px">@c.ContractNumber</div></td>
+                                <td>@string.Join(", ", c.Lines.Select(l => (l.ClinNumber is null ? "" : $"CLIN {l.ClinNumber}: ") + RevenueFormat.Label(l.Method)))</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(shown.Item1)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(shown.Item2)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(shown.Item3)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(shown.Item4)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(shown.Item5)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(shown.Item6)</td>
+                                <td>
+                                    @if (row.Posted is { } posted)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Posted</MudChip>
+                                        @if (posted.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">@posted.JournalEntryNumber</MudLink> }
+                                        @if (row.IsStale) { <div class="mud-text-secondary" style="font-size:12px">Changed since: @RevenueFormat.Amount(c.RevenueAdjustment) more to post</div> }
+                                    }
+                                    else if (c.HasEntry)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">To post</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Up to date</MudText>
+                                    }
+                                </td>
+                                <td style="white-space:nowrap">
+                                    <MudIconButton Size="Size.Small" Icon="@(_open.Contains(c.ProjectId) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" OnClick="() => Toggle(c.ProjectId)" aria-label="Details" />
+                                    @if (row.Posted is { } r)
+                                    {
+                                        <MudButton Size="Size.Small" Disabled="@(_busy || preview.PeriodIsClosed)" OnClick="() => ReverseAsync(r)" data-testid="revenue-reverse">Reverse</MudButton>
+                                    }
+                                    else if (c.HasEntry)
+                                    {
+                                        <MudButton Size="Size.Small" Color="Color.Primary" Disabled="@(_busy || preview.PeriodIsClosed)" OnClick="() => PostAsync(c.ProjectId)">Post</MudButton>
+                                    }
+                                </td>
+                            </tr>
+                            @if (_open.Contains(c.ProjectId))
+                            {
+                                <tr>
+                                    <td colspan="10" style="background:var(--mud-palette-background-gray)">
+                                        <RevenueLinesTable Lines="@(row.Posted?.Lines ?? c.Lines)" />
+                                        @if (c.Entry.Count > 0)
+                                        {
+                                            <MudText Typo="Typo.subtitle2" Class="mt-2">@(row.Posted is null ? "Entry to post" : "Catch-up entry (reverse and run again to post it)")</MudText>
+                                            <MudSimpleTable Dense="true" Elevation="0">
+                                                <thead><tr><th>Account</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th>Memo</th></tr></thead>
+                                                <tbody>
+                                                    @foreach (var e in c.Entry)
+                                                    {
+                                                        <tr><td>@e.AccountNumber @e.AccountName</td><td style="text-align:right">@AccountingFormat.Blank(e.Debit)</td><td style="text-align:right">@AccountingFormat.Blank(e.Credit)</td><td>@e.Memo</td></tr>
+                                                    }
+                                                </tbody>
+                                            </MudSimpleTable>
+                                        }
+                                        @foreach (var n in c.Notes)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@n</MudText>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Runs for @preview.PeriodName</MudText>
+            @if (_runs.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">No runs yet.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-runs">
+                    <thead><tr><th>Project</th><th>Posted</th><th>Status</th><th style="text-align:right">Revenue posted</th><th>Entry</th><th>Reversal</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _runs)
+                        {
+                            <tr>
+                                <td>@r.ProjectCode @r.ProjectName</td>
+                                <td>@r.PostedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") by @r.PostedBy</td>
+                                <td>@r.Status@(r.ReversalReason is null ? "" : $": {r.ReversalReason}")</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.RevenueAdjustment)</td>
+                                <td>@if (r.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">@r.JournalEntryNumber</MudLink> }</td>
+                                <td>@if (r.ReversalEntryId is { } re) { <MudLink Href="@($"accounting/journal/{re}")">@r.ReversalEntryNumber</MudLink> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<RevenueRunDto> _runs = [];
+    private RevenuePreviewDto? _preview;
+    private Guid? _periodId;
+    private readonly HashSet<Guid> _open = [];
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = (await Calendar.ListPeriodsAsync()).OrderBy(p => p.Start).ToList();
+            await PeriodChanged(AccountingFormat.DefaultPeriod(_periods)?.Id);
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (RevenueFormat.Error(ex), RevenueFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task PeriodChanged(Guid? id)
+    {
+        _periodId = id;
+        _open.Clear();
+        if (id is { } p)
+        {
+            _preview = await Runs.PreviewAsync(p);
+            _runs = await Runs.ListRunsAsync(p);
+        }
+        else
+        {
+            (_preview, _runs) = (null, []);
+        }
+    }
+
+    private void Toggle(Guid projectId)
+    {
+        if (!_open.Remove(projectId))
+        {
+            _open.Add(projectId);
+        }
+    }
+
+    private async Task PostAsync(Guid? projectId)
+    {
+        _busy = true;
+        try
+        {
+            var result = await Runs.PostAsync(_periodId!.Value, new PostRevenueRunRequest(projectId is { } id ? [id] : null));
+            var message = result.Posted.Count == 0
+                ? "Nothing posted."
+                : $"Posted {result.Posted.Count} run(s): {string.Join(", ", result.Posted.Select(r => r.JournalEntryNumber))}.";
+            Snackbar.Add(message + (result.Skipped.Count > 0 ? " " + string.Join(" ", result.Skipped) : ""), result.Posted.Count > 0 ? Severity.Success : Severity.Info);
+            await PeriodChanged(_periodId);
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReverseAsync(RevenueRunDto run)
+    {
+        var reason = await ReasonDialog.AskAsync(Dialogs, $"Reverse {run.ProjectCode} revenue for {run.PeriodName}", "Reverse",
+            "Posts a reversing entry in the same period; you can then run the period again.", color: Color.Error);
+        if (reason is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var reversed = await Runs.ReverseAsync(run.Id, new ReverseRevenueRunRequest(reason));
+            Snackbar.Add($"Reversed with {reversed.ReversalEntryNumber}.", Severity.Success);
+            await PeriodChanged(_periodId);
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

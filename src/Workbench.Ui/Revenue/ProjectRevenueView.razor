@@ -1,0 +1,204 @@
+@* One project's revenue: setup, estimates at completion (submit, and approve for Finance), deliveries and runs. Used by Finance and the project's manager. *@
+@inject IRevenueSetupService Setup
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" data-testid="load-error">@_error</MudAlert>
+}
+else if (_project is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var p = _project;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@p.ProjectCode · @p.ProjectName</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Revenue</MudChip>
+        @if (p.ContractNumber is not null)
+        {
+            <MudText Class="mud-text-secondary">@p.ContractNumber · @p.ContractType</MudText>
+        }
+    </MudStack>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">Revenue method</MudText>
+        @if (p.Setups.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Not set up: revenue equals billings.@(p.CanManage ? " Set the method under Revenue › Setup." : "")</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="project-setups">
+                <thead><tr><th>Unit</th><th>Method</th><th>Fee</th><th>ODC markup</th><th style="text-align:right">Transaction price</th><th style="text-align:right">Unit price</th><th>Notes</th></tr></thead>
+                <tbody>
+                    @foreach (var s in p.Setups)
+                    {
+                        <tr>
+                            <td>@RevenueFormat.Unit(s.ClinNumber)</td><td>@RevenueFormat.Label(s.Method)</td><td>@RevenueFormat.Percent(s.FeeRate)</td><td>@RevenueFormat.Percent(s.OdcMarkupRate)</td>
+                            <td style="text-align:right">@(s.TransactionPrice is { } tp ? RevenueFormat.Amount(tp) : "")</td>
+                            <td style="text-align:right">@(s.UnitPrice is { } up ? RevenueFormat.Amount(up) : "")</td><td>@s.Notes</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">Estimates at completion</MudText>
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mb-3">
+            <MudSelect T="Guid?" @bind-Value="_unit" Label="Unit" Dense="true" Style="min-width:160px">
+                <MudSelectItem T="Guid?" Value="null">Project</MudSelectItem>
+                @foreach (var c in p.Clins)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">CLIN @c.Number (@c.Pricing)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudDatePicker @bind-Date="_asOf" Label="As of" Style="max-width:160px" />
+            <MudNumericField T="decimal?" @bind-Value="_eacCost" Label="Estimated cost at completion" Format="N2" HideSpinButtons="true" Style="max-width:220px" data-testid="eac-cost" />
+            <MudNumericField T="decimal?" @bind-Value="_eacRevenue" Label="Estimated revenue (price incl. fee)" Format="N2" HideSpinButtons="true" Style="max-width:240px"
+                             HelperText="@(p.SuggestedTransactionPrice is { } sp ? $"Contract value {RevenueFormat.Amount(sp)}" : null)" data-testid="eac-revenue" />
+            <MudTextField @bind-Value="_eacNotes" Label="Basis of estimate" Style="min-width:220px" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _eacCost is null || _eacRevenue is null || _asOf is null)" OnClick="SubmitAsync" data-testid="eac-submit">Submit estimate</MudButton>
+        </MudStack>
+        @if (p.Estimates.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No estimates yet. Cost-to-cost needs an approved estimate; any approved estimate with cost over revenue books a loss provision.</MudText>
+        }
+        else
+        {
+            <EstimatesTable Estimates="p.Estimates" CanDecide="p.CanManage" Changed="LoadAsync" />
+        }
+    </MudPaper>
+
+    @if (p.Setups.Any(s => s.Method == RevenueMethodKind.FixedPriceUnits) || p.Deliveries.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            <MudText Typo="Typo.h6" Class="mb-2">Units delivered</MudText>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mb-3">
+                <MudDatePicker @bind-Date="_deliveredOn" Label="Delivered on" Style="max-width:160px" />
+                <MudNumericField T="decimal?" @bind-Value="_quantity" Label="Quantity" HideSpinButtons="true" Style="max-width:120px" />
+                <MudTextField @bind-Value="_deliveryNote" Label="What was delivered" Style="min-width:240px" />
+                <MudButton Variant="Variant.Outlined" Disabled="@(_busy || _quantity is null or 0 || string.IsNullOrWhiteSpace(_deliveryNote) || _deliveredOn is null)" OnClick="DeliverAsync">Record delivery</MudButton>
+            </MudStack>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Date</th><th>Unit</th><th style="text-align:right">Quantity</th><th>Description</th><th>Recorded by</th></tr></thead>
+                <tbody>
+                    @foreach (var d in p.Deliveries)
+                    {
+                        <tr><td>@AccountingFormat.Date(d.DeliveredOn)</td><td>@RevenueFormat.Unit(d.ClinNumber)</td><td style="text-align:right">@d.Quantity.ToString("0.####")</td><td>@d.Description</td><td>@d.RecordedBy</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Revenue runs</MudText>
+        @if (p.Runs.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No revenue posted yet.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="project-runs">
+                <thead>
+                    <tr><th>Period</th><th>Status</th><th style="text-align:right">Recognized to date</th><th style="text-align:right">Period revenue</th><th style="text-align:right">Billed to date</th><th style="text-align:right">Unbilled</th><th style="text-align:right">Billings in excess</th><th style="text-align:right">Loss provision</th><th>Entry</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in p.Runs)
+                    {
+                        <tr>
+                            <td>@r.PeriodName</td><td>@r.Status</td>
+                            <td style="text-align:right">@RevenueFormat.Amount(r.RecognizedToDate)</td><td style="text-align:right">@RevenueFormat.Amount(r.PeriodRevenue)</td>
+                            <td style="text-align:right">@RevenueFormat.Amount(r.BilledToDate)</td><td style="text-align:right">@RevenueFormat.Amount(r.UnbilledBalance)</td>
+                            <td style="text-align:right">@RevenueFormat.Amount(r.BillingsInExcessBalance)</td><td style="text-align:right">@RevenueFormat.Amount(r.LossProvisionBalance)</td>
+                            <td>@if (p.CanManage && r.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">@r.JournalEntryNumber</MudLink> } else { @r.JournalEntryNumber }</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (p.Runs.FirstOrDefault(r => r.Status == RevenueRunState.Posted) is { } latest)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-3">How @latest.PeriodName was computed</MudText>
+                <RevenueLinesTable Lines="latest.Lines" />
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    private ProjectRevenueDto? _project;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+    private Guid? _unit;
+    private DateTime? _asOf = DateTime.Today;
+    private decimal? _eacCost;
+    private decimal? _eacRevenue;
+    private string? _eacNotes;
+    private DateTime? _deliveredOn = DateTime.Today;
+    private decimal? _quantity;
+    private string? _deliveryNote;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _project = await Setup.GetProjectAsync(ProjectId);
+            _eacRevenue ??= _project.SuggestedTransactionPrice;
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (RevenueFormat.Error(ex), RevenueFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Setup.SubmitEstimateAsync(new SubmitEstimateRequest(ProjectId, DateOnly.FromDateTime(_asOf!.Value), _eacCost!.Value, _eacRevenue!.Value, _unit, _eacNotes));
+            Snackbar.Add(_project!.CanManage ? "Estimate submitted; approve it below." : "Estimate submitted to Finance for approval.", Severity.Success);
+            (_eacCost, _eacNotes) = (null, null);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeliverAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Setup.RecordDeliveryAsync(new RecordDeliveryRequest(ProjectId, DateOnly.FromDateTime(_deliveredOn!.Value), _quantity!.Value, _deliveryNote!, _unit));
+            Snackbar.Add("Delivery recorded.", Severity.Success);
+            (_quantity, _deliveryNote) = (null, null);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

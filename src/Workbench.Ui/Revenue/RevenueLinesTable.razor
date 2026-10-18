@@ -1,0 +1,32 @@
+@* How each revenue unit (the project or a CLIN) was computed. *@
+<MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-lines">
+    <thead>
+        <tr>
+            <th>Unit</th><th>Method</th><th style="text-align:right">Cost to date</th><th style="text-align:right">EAC cost</th>
+            <th style="text-align:right">EAC revenue</th><th style="text-align:right">% complete</th><th style="text-align:right">Recognized</th>
+            <th style="text-align:right">Billed</th><th style="text-align:right">Loss provision</th><th>Note</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var l in Lines)
+        {
+            <tr>
+                <td>@RevenueFormat.Unit(l.ClinNumber)</td>
+                <td>@RevenueFormat.Label(l.Method)</td>
+                <td style="text-align:right">@RevenueFormat.Amount(l.CostToDate)</td>
+                <td style="text-align:right">@(l.EstimatedCost is { } ec ? RevenueFormat.Amount(ec) : "")</td>
+                <td style="text-align:right">@(l.EstimatedRevenue is { } er ? RevenueFormat.Amount(er) : "")</td>
+                <td style="text-align:right">@RevenueFormat.Percent(l.PercentComplete)</td>
+                <td style="text-align:right">@RevenueFormat.Amount(l.RecognizedToDate)</td>
+                <td style="text-align:right">@RevenueFormat.Amount(l.BilledToDate)</td>
+                <td style="text-align:right">@(l.LossProvision == 0 ? "" : RevenueFormat.Amount(l.LossProvision))</td>
+                <td>@l.Note</td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RevenueLineDto> Lines { get; set; } = [];
+}

@@ -1,0 +1,87 @@
+@* Estimates at completion, with approve and reject for Finance. *@
+@inject IRevenueSetupService Setup
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<MudSimpleTable Dense="true" Elevation="0" data-testid="estimates">
+    <thead>
+        <tr>
+            @if (ShowProject) { <th>Project</th> }
+            <th>Unit</th><th>As of</th><th style="text-align:right">Cost at completion</th><th style="text-align:right">Revenue at completion</th>
+            <th style="text-align:right">Margin</th><th>Status</th><th>Submitted</th><th>Basis / decision</th><th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var e in Estimates)
+        {
+            <tr>
+                @if (ShowProject) { <td><MudLink Href="@($"accounting/revenue/projects/{e.ProjectId}")">@e.ProjectCode</MudLink></td> }
+                <td>@RevenueFormat.Unit(e.ClinNumber)</td>
+                <td>@AccountingFormat.Date(e.AsOf)</td>
+                <td style="text-align:right">@RevenueFormat.Amount(e.EstimatedCost)</td>
+                <td style="text-align:right">@RevenueFormat.Amount(e.EstimatedRevenue)</td>
+                <td style="text-align:right">
+                    @RevenueFormat.Amount(e.EstimatedMargin)
+                    @if (e.IsLoss) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">Loss</MudChip> }
+                </td>
+                <td>@e.Status</td>
+                <td>@e.SubmittedBy<div class="mud-text-secondary" style="font-size:12px">@e.SubmittedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div></td>
+                <td>@e.Notes@if (e.DecidedBy is not null) { <div class="mud-text-secondary" style="font-size:12px">@e.Status by @e.DecidedBy@(e.DecisionNote is null ? "" : $": {e.DecisionNote}")</div> }</td>
+                <td style="white-space:nowrap">
+                    @if (CanDecide && e.Status == EstimateState.Submitted)
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Primary" Disabled="_busy" OnClick="() => ApproveAsync(e)" data-testid="eac-approve">Approve</MudButton>
+                        <MudButton Size="Size.Small" Color="Color.Error" Disabled="_busy" OnClick="() => RejectAsync(e)">Reject</MudButton>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<EstimateDto> Estimates { get; set; } = [];
+
+    [Parameter]
+    public bool CanDecide { get; set; }
+
+    [Parameter]
+    public bool ShowProject { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private bool _busy;
+
+    private Task ApproveAsync(EstimateDto e) => DecideAsync(() => Setup.ApproveEstimateAsync(e.Id, new DecideEstimateRequest()),
+        e.IsLoss ? "Approved. The next revenue run books the loss provision." : "Approved. The next revenue run catches up to it.");
+
+    private async Task RejectAsync(EstimateDto e)
+    {
+        var reason = await ReasonDialog.AskAsync(Dialogs, $"Reject the {e.ProjectCode} estimate", "Reject", color: Color.Error);
+        if (reason is not null)
+        {
+            await DecideAsync(() => Setup.RejectEstimateAsync(e.Id, new DecideEstimateRequest(reason)), "Rejected.");
+        }
+    }
+
+    private async Task DecideAsync(Func<Task<EstimateDto>> action, string message)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(message, Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

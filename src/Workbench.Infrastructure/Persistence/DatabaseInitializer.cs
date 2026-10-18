@@ -164,6 +164,7 @@ public static class DatabaseInitializer
         await LeaveSeed.SeedAsync(db, cancellationToken);
         await PerDiemSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedAsync(db, cancellationToken);
+        await RevenueSeed.SeedAsync(db, services, cancellationToken);
     }
 
     /// <summary>

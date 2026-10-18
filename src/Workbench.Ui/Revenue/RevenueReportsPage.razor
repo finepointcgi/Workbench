@@ -1,0 +1,142 @@
+@page "/accounting/revenue/reports"
+@inject IRevenueReportService Reports
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+
+<PageTitle>Revenue reports · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Revenue reports" Subtitle="From the general ledger, so revenue from invoices, accruals and revenue runs all counts. Contract assets are earned but not billed; contract liabilities are billed ahead of revenue." />
+<RevenueTabs Current="reports" />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" TabPanelsClass="pa-4">
+        <MudTabPanel Text="Revenue by period">
+            <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.End">
+                <MudSelect T="Guid?" @bind-Value="_from" Label="From" Dense="true" Style="min-width:140px"><PeriodItems Periods="_periods" /></MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_to" Label="Through" Dense="true" Style="min-width:140px"><PeriodItems Periods="_periods" /></MudSelect>
+                <MudSelect T="RevenueGrouping" @bind-Value="_grouping" Label="By" Dense="true" Style="min-width:140px">
+                    <MudSelectItem T="RevenueGrouping" Value="RevenueGrouping.Project">Project</MudSelectItem>
+                    <MudSelectItem T="RevenueGrouping" Value="RevenueGrouping.Contract">Contract</MudSelectItem>
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" OnClick="LoadByPeriodAsync" data-testid="report-run">Show</MudButton>
+            </MudStack>
+            @if (_byPeriod is { } bp)
+            {
+                <div style="overflow-x:auto">
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-by-period">
+                        <thead><tr><th>@_grouping</th><th>Method</th>@foreach (var p in bp.Periods) { <th style="text-align:right">@p</th> }<th style="text-align:right">Total</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in bp.Rows)
+                            {
+                                <tr><td>@r.Code @r.Name</td><td>@r.Method</td>@foreach (var a in r.Amounts) { <td style="text-align:right">@RevenueFormat.Amount(a)</td> }<td style="text-align:right"><b>@RevenueFormat.Amount(r.Total)</b></td></tr>
+                            }
+                            <tr><td colspan="2"><b>Total</b></td>@foreach (var t in bp.Totals) { <td style="text-align:right"><b>@RevenueFormat.Amount(t)</b></td> }<td style="text-align:right"><b>@RevenueFormat.Amount(bp.GrandTotal)</b></td></tr>
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Revenue vs billings">
+            <MudSelect T="Guid?" Value="_asOf" ValueChanged="AsOfChanged" Label="As of the end of" Dense="true" Style="max-width:200px" Class="mb-3"><PeriodItems Periods="_periods" /></MudSelect>
+            @if (_vs is { } vs)
+            {
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-vs-billings">
+                    <thead><tr><th>Project</th><th>Contract</th><th>Method</th><th style="text-align:right">Recognized</th><th style="text-align:right">Billed</th><th style="text-align:right">Contract asset (under-billed)</th><th style="text-align:right">Contract liability (over-billed)</th><th style="text-align:right">Loss provision</th><th>Last run</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in vs.Rows)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"accounting/revenue/projects/{r.ProjectId}")">@r.ProjectCode</MudLink> @r.ProjectName</td><td>@r.ContractNumber</td><td>@r.Method</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.RecognizedToDate)</td><td style="text-align:right">@RevenueFormat.Amount(r.BilledToDate)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.ContractAsset)</td><td style="text-align:right">@RevenueFormat.Amount(r.ContractLiability)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.LossProvision)</td><td>@(r.LastRunPeriodEnd is { } d ? AccountingFormat.Date(d) : "")</td>
+                            </tr>
+                        }
+                        <tr><td colspan="3"><b>Total</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(vs.Recognized)</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(vs.Billed)</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(vs.ContractAssets)</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(vs.ContractLiabilities)</b></td><td colspan="2"></td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Backlog">
+            @if (_backlog is { } bl)
+            {
+                <MudText Class="mud-text-secondary mb-2">As of @AccountingFormat.Date(bl.AsOf) (choose the period on the Revenue vs billings tab). Contract value and funding are today's CLIN values.</MudText>
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="backlog">
+                    <thead><tr><th>Contract</th><th>Customer</th><th style="text-align:right">Value</th><th style="text-align:right">Funded</th><th style="text-align:right">Recognized</th><th style="text-align:right">Funded backlog</th><th style="text-align:right">Unfunded backlog</th><th style="text-align:right">Total backlog</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in bl.Rows)
+                        {
+                            <tr>
+                                <td>@r.ContractNumber @r.ContractName</td><td>@r.CustomerName</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.ContractValue)</td><td style="text-align:right">@RevenueFormat.Amount(r.FundedValue)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.RecognizedToDate)</td><td style="text-align:right">@RevenueFormat.Amount(r.FundedBacklog)</td>
+                                <td style="text-align:right">@RevenueFormat.Amount(r.UnfundedBacklog)</td><td style="text-align:right">@RevenueFormat.Amount(r.TotalBacklog)</td>
+                            </tr>
+                        }
+                        <tr><td colspan="5"><b>Total</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(bl.Funded)</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(bl.Unfunded)</b></td><td style="text-align:right"><b>@RevenueFormat.Amount(bl.Funded + bl.Unfunded)</b></td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private Guid? _from, _to, _asOf;
+    private RevenueGrouping _grouping = RevenueGrouping.Project;
+    private RevenueByPeriodDto? _byPeriod;
+    private RevenueVsBillingsDto? _vs;
+    private BacklogDto? _backlog;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = (await Calendar.ListPeriodsAsync()).OrderBy(p => p.Start).ToList();
+            var current = AccountingFormat.DefaultPeriod(_periods);
+            _asOf = _to = current?.Id;
+            _from = current is null ? null : _periods.Where(p => p.Start <= current.Start).TakeLast(6).FirstOrDefault()?.Id;
+            await LoadByPeriodAsync();
+            await AsOfChanged(_asOf);
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (RevenueFormat.Error(ex), RevenueFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadByPeriodAsync()
+    {
+        if (_from is not { } f || _to is not { } t)
+        {
+            return;
+        }
+
+        try
+        {
+            _byPeriod = await Reports.GetRevenueByPeriodAsync(new RevenueByPeriodQuery(f, t, _grouping));
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task AsOfChanged(Guid? id)
+    {
+        _asOf = id;
+        if (id is { } p)
+        {
+            _vs = await Reports.GetRevenueVsBillingsAsync(p);
+            _backlog = await Reports.GetBacklogAsync(p);
+        }
+    }
+}
