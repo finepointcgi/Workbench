@@ -68,3 +68,18 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
 - `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
 - `Timekeeping:Admins`: emails that approve timesheets of employees without a supervisor (until the Admin role exists)
+- Security (ISO 27001 controls; details and every key in `docs/security/configuration.md`):
+  `Authentication:RequireInvite` (default true outside Development), `Authentication:Session:*` (idle 30 min,
+  absolute 12 h), `Scim:Enabled` / `Scim:BearerToken` (secret, 32+ chars), `RateLimiting:*`,
+  `Security:TlsTerminatedByProxy`, `DataProtection:*`, `Retention:*`, `Database:AllowSqliteInProduction`,
+  `OpenTelemetry:Endpoint` (off by default). Outside Development the host refuses to start with a weak configuration.
+  Supply secrets with environment variables or a vault, never in appsettings.
+
+## Security and ISO 27001
+
+- Users and security (`/admin/users`): users and roles, invites, quarterly access reviews, the security event log and
+  records retention with legal holds. SCIM 2.0 provisioning at `/scim/v2/Users`; health at `/health/live` and
+  `/health/ready`.
+- Backups: `scripts/backup.sh` / `scripts/restore.sh` and `docs/operations/backup-restore.md`.
+- `SECURITY.md` (reporting vulnerabilities), `docs/security/threat-model.md`, and the ISMS templates in `docs/iso/`
+  (start with `docs/iso/README.md`).
