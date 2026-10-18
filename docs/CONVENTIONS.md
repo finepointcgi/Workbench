@@ -304,3 +304,16 @@ await notifications.PublishAsync(
   (dashboards, My Work) inherits this; code that reads `Item.Values` straight from the database must not show them to users.
 - Activity is read by everyone on the sheet, so it records restricted changes without names or values
   ("Restricted column changed"). Activity written before a column was restricted keeps what it said.
+
+## Ceilings and closeout
+
+- `Application/Ceilings`: `ICeilingService` (hours/cost/billing ceilings at contract, CLIN, project, WBS and labor-category-per-WBS
+  level, warn or block, overrides with an expiry, threshold alerts `ceiling.threshold`, indirect rate and fee caps) and
+  `ICloseoutService` (Open → Physically complete → Closing → Closed; closing sets the contract or project status to Closed
+  and reopening, with a reason, restores it). Hours = time on record; cost = hours at cost + submitted/approved allowable ODCs +
+  open PO commitments; billed = approved/sent/paid invoice lines.
+- Enforcement is in decorators registered by `AddWorkbenchCeilings` (above `AddWorkbenchIdentity`): timesheets, vendor ODCs,
+  expense reports, AP bills, purchase orders and invoices. New charging paths should call `ChargeGuard` the same way.
+  Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
+- Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
+  `InvoiceGenerator`); cost reports keep the real rates.

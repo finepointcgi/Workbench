@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
 using Workbench.Application.Billing;
+using Workbench.Application.Ceilings;
 using Workbench.Application.Cash;
 using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
@@ -61,6 +62,7 @@ public static class DependencyInjection
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
+        services.AddWorkbenchCeilings(); // Ceilings, rate caps and closeout; decorates time, ODCs, expenses, AP bills, POs and invoices; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
