@@ -1,0 +1,10 @@
+@* Fiscal period options for a MudSelect of Guid?. *@
+@foreach (var p in Periods)
+{
+    <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+}

@@ -1,0 +1,10 @@
+@page "/accounting/revenue/projects/{ProjectId:guid}"
+
+<PageTitle>Project revenue · Accounting · Workbench</PageTitle>
+<RevenueTabs Current="" />
+<ProjectRevenueView ProjectId="ProjectId" />
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+}

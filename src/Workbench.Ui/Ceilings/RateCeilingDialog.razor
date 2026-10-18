@@ -1,0 +1,84 @@
+@* Adds an indirect rate cap, a fee rate cap or a fee ceiling. *@
+@inject ICeilingService Ceilings
+@inject Workbench.Contracts.Contracts.IClinService Clins
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudSelect T="RateCapKind" @bind-Value="_kind" Label="Cap">
+                <MudSelectItem Value="RateCapKind.Fringe">Fringe rate</MudSelectItem>
+                <MudSelectItem Value="RateCapKind.Overhead">Overhead rate</MudSelectItem>
+                <MudSelectItem Value="RateCapKind.GeneralAndAdministrative">G&amp;A rate</MudSelectItem>
+                <MudSelectItem Value="RateCapKind.FeeRate">Fee rate</MudSelectItem>
+                <MudSelectItem Value="RateCapKind.FeeAmount">Total fee ($)</MudSelectItem>
+            </MudSelect>
+            @if (_kind == RateCapKind.FeeAmount)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_amount" Label="Most fee billed ($)" Min="0" />
+            }
+            else
+            {
+                <MudNumericField T="decimal?" @bind-Value="_percent" Label="Cap (%)" Min="0" Max="500" />
+            }
+            @if (_kind is RateCapKind.FeeRate or RateCapKind.FeeAmount)
+            {
+                <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN" Clearable="true" HelperText="Empty: the whole contract.">
+                    @foreach (var c in _clins)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudNumericField T="int?" @bind-Value="_fiscalYear" Label="Fiscal year" Clearable="true" HelperText="Empty: every year." />
+            }
+            <MudTextField @bind-Value="_notes" Label="Notes" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid ContractId { get; set; }
+
+    private RateCapKind _kind = RateCapKind.Overhead;
+    private decimal? _percent, _amount;
+    private Guid? _clinId;
+    private int? _fiscalYear;
+    private string? _notes;
+    private bool _saving;
+    private IReadOnlyList<Workbench.Contracts.Contracts.ClinDto> _clins = [];
+
+    protected override async Task OnInitializedAsync() => _clins = await Clins.ListClinsAsync(ContractId);
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            var isFee = _kind is RateCapKind.FeeRate or RateCapKind.FeeAmount;
+            await Ceilings.CreateRateCeilingAsync(ContractId, new SaveRateCeilingRequest(_kind,
+                _kind == RateCapKind.FeeAmount ? null : _percent / 100m, _kind == RateCapKind.FeeAmount ? _amount : null,
+                isFee ? _clinId : null, isFee ? null : _fiscalYear, _notes));
+            Snackbar.Add("Cap saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

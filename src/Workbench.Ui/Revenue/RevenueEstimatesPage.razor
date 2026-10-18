@@ -1,0 +1,55 @@
+@page "/accounting/revenue/estimates"
+@inject IRevenueSetupService Setup
+
+<PageTitle>Estimates at completion · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Estimates at completion" Subtitle="Project managers and Finance submit estimates on each project's revenue page; Finance approves them here. An approved estimate drives cost-to-cost percent complete (with a cumulative catch-up in the next run) and, when cost exceeds revenue, the loss provision." />
+<RevenueTabs Current="estimates" />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_all is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var pending = _all.Where(e => e.Status == EstimateState.Submitted).ToList();
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">Waiting for approval (@pending.Count)</MudText>
+        @if (pending.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Nothing to review.</MudText>
+        }
+        else
+        {
+            <EstimatesTable Estimates="pending" CanDecide="true" ShowProject="true" Changed="LoadAsync" />
+        }
+    </MudPaper>
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Decided</MudText>
+        <EstimatesTable Estimates="@(_all.Where(e => e.Status != EstimateState.Submitted).ToList())" ShowProject="true" />
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<EstimateDto>? _all;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _all = await Setup.ListEstimatesAsync();
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (RevenueFormat.Error(ex), RevenueFormat.IsForbidden(ex));
+        }
+    }
+}

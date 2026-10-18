@@ -2,12 +2,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
 using Workbench.Application.Billing;
+using Workbench.Application.Ceilings;
 using Workbench.Application.Cash;
 using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Imports;
+using Workbench.Application.IncurredCost;
 using Workbench.Application.IndirectRates;
 using Workbench.Application.Leave;
 using Workbench.Application.Odcs;
@@ -15,10 +17,13 @@ using Workbench.Application.Payroll;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
+using Workbench.Application.Reports;
 using Workbench.Application.Assets;
 using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
+using Workbench.Application.Revenue;
 using Workbench.Application.Dashboards;
+using Workbench.Application.Evm;
 using Workbench.Application.MyWork;
 using Workbench.Application.Security;
 using Workbench.Application.Sheets;
@@ -61,6 +66,12 @@ public static class DependencyInjection
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
+        services.AddWorkbenchRevenue(); // Revenue recognition: runs post through the GL (JournalSource.Revenue) and add a close check; after billing, above AddWorkbenchIdentity.
+        services.AddWorkbenchIncurredCost(); // Incurred cost submission (ICE schedules): reads the GL, pools, billing and AP; above AddWorkbenchIdentity.
+        services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
+        services.AddWorkbenchEvm(); // Earned value (PMB, status, VARs, BCRs, IPMDAR exports); ACWP via IBurdenedCostService; above AddWorkbenchIdentity.
+        services.AddWorkbenchCeilings(); // Ceilings, rate caps and closeout; decorates time, ODCs, expenses, AP bills, POs and invoices; above AddWorkbenchIdentity.
+        Approvals.ApprovalRegistration.AddWorkbenchApprovals(services); // Approval workflow engine, inbox, delegation; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

@@ -1,0 +1,20 @@
+@* Links between the revenue screens. *@
+<MudStack Row="true" Spacing="1" Class="mb-3" Wrap="Wrap.Wrap" data-testid="revenue-tabs">
+    @foreach (var (href, label, key) in Links)
+    {
+        <MudButton Href="@href" Size="Size.Small" Variant="@(Current == key ? Variant.Filled : Variant.Text)" Color="Color.Primary">@label</MudButton>
+    }
+</MudStack>
+
+@code {
+    private static readonly (string Href, string Label, string Key)[] Links =
+    [
+        ("accounting/revenue", "Revenue run", "run"),
+        ("accounting/revenue/setup", "Setup", "setup"),
+        ("accounting/revenue/estimates", "Estimates at completion", "estimates"),
+        ("accounting/revenue/reports", "Reports", "reports"),
+    ];
+
+    [Parameter, EditorRequired]
+    public string Current { get; set; } = "";
+}

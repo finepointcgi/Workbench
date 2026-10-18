@@ -1,0 +1,61 @@
+@* Grants a temporary override: extra hours or dollars until a date, with a reason (audited). *@
+@inject ICeilingService Ceilings
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Leave the amounts empty to stop the ceiling blocking (it still warns) until the override expires.</MudText>
+            @if (Ceiling.Ceiling.HoursCeiling is not null)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_hours" Label="Extra hours" Min="0" Clearable="true" />
+            }
+            @if (Ceiling.Ceiling.CostCeiling is not null)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_cost" Label="Extra cost ($)" Min="0" Clearable="true" data-testid="override-cost" />
+            }
+            @if (Ceiling.Ceiling.BillingCeiling is not null)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_billing" Label="Extra billing ($)" Min="0" Clearable="true" />
+            }
+            <MudDatePicker @bind-Date="_expires" Label="Expires after" DateFormat="yyyy-MM-dd" Editable="true" MinDate="DateTime.Today" />
+            <MudTextField @bind-Value="_reason" Label="Reason" Required="true" Immediate="true" Lines="2" HelperText="Recorded in the audit log." data-testid="override-reason" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || string.IsNullOrWhiteSpace(_reason) || _expires is null)" OnClick="SaveAsync" data-testid="override-save">Grant override</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public CeilingStatusDto Ceiling { get; set; } = default!;
+
+    private decimal? _hours, _cost, _billing;
+    private DateTime? _expires = DateTime.Today.AddDays(30);
+    private string? _reason;
+    private bool _saving;
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await Ceilings.GrantOverrideAsync(Ceiling.Ceiling.Id, new GrantCeilingOverrideRequest(_reason!, DateOnly.FromDateTime(_expires!.Value), _hours, _cost, _billing));
+            Snackbar.Add("Override granted.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

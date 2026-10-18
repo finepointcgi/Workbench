@@ -1,0 +1,11 @@
+@page "/projects/{ProjectId:guid}/revenue"
+@* A project's revenue for its manager (Finance uses Accounting › Revenue). The server checks access. *@
+
+<PageTitle>Project revenue · Workbench</PageTitle>
+<MudButton Href="@($"projects/{ProjectId}/financials")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Financials</MudButton>
+<Workbench.Ui.Revenue.ProjectRevenueView ProjectId="ProjectId" />
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+}

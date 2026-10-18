@@ -1,0 +1,12 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Color="@IceFormat.Color(Status)" data-testid="ice-status">
+    @if (Status == IncurredCostState.Submitted)
+    {
+        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" />
+    }
+    @IceFormat.Label(Status)
+</MudChip>
+
+@code {
+    [Parameter]
+    public IncurredCostState Status { get; set; }
+}

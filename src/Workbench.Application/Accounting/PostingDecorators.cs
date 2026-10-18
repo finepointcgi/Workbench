@@ -24,7 +24,11 @@ public sealed class PostingTimesheetApprovalService(ITimesheetApprovalService in
     {
         await posting.EnsureTimesheetPeriodsOpenAsync(timesheetId, "approve", cancellationToken);
         var result = await inner.ApproveAsync(timesheetId, cancellationToken);
-        await posting.TryPostAsync(JournalSource.Timesheet, timesheetId, cancellationToken);
+        if (result.Status == TimesheetState.Approved) // Not yet when a later workflow step still has to approve.
+        {
+            await posting.TryPostAsync(JournalSource.Timesheet, timesheetId, cancellationToken);
+        }
+
         return result;
     }
 
@@ -86,7 +90,7 @@ public sealed class PostingOdcApprovalService(IOdcApprovalService inner, Posting
         var lines = await LinesAsync(reportId, null, cancellationToken);
         await posting.EnsureOdcPeriodsOpenAsync(lines, "approve this expense report", cancellationToken);
         var result = await inner.ApproveReportAsync(reportId, comment, cancellationToken);
-        foreach (var id in lines)
+        foreach (var id in result.Status == OdcApprovalState.Approved ? lines : [])
         {
             await posting.TryPostAsync(JournalSource.Odc, id, cancellationToken);
         }
@@ -114,7 +118,11 @@ public sealed class PostingOdcApprovalService(IOdcApprovalService inner, Posting
     {
         await posting.EnsureOdcPeriodsOpenAsync([odcId], "approve this ODC", cancellationToken);
         var result = await inner.ApproveOdcAsync(odcId, comment, cancellationToken);
-        await posting.TryPostAsync(JournalSource.Odc, odcId, cancellationToken);
+        if (result.Status == OdcApprovalState.Approved)
+        {
+            await posting.TryPostAsync(JournalSource.Odc, odcId, cancellationToken);
+        }
+
         return result;
     }
 

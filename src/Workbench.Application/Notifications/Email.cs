@@ -1,7 +1,10 @@
 namespace Workbench.Application.Notifications;
 
 /// <summary>An email with a plain-text and an HTML body. Implemented in infrastructure (SMTP or a pickup folder).</summary>
-public sealed record EmailMessage(string To, string Subject, string TextBody, string HtmlBody);
+public sealed record EmailMessage(string To, string Subject, string TextBody, string HtmlBody, IReadOnlyList<EmailAttachment>? Attachments = null);
+
+/// <summary>A file attached to an email (e.g. a scheduled report).</summary>
+public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
 
 public interface IEmailSender
 {

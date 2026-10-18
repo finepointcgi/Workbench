@@ -1,0 +1,19 @@
+@* One workflow step on the package page. *@
+<MudStack Row="true" Spacing="1" AlignItems="AlignItems.Start">
+    <MudIcon Icon="@(Done ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked)" Color="@(Done ? Color.Success : Color.Default)" Size="Size.Small" Class="mt-1" />
+    <MudStack Spacing="0">
+        <MudText Typo="Typo.subtitle2">@Label</MudText>
+        @if (Done)
+        {
+            <MudText Typo="Typo.caption">@Who</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@IceFormat.When(When)</MudText>
+        }
+    </MudStack>
+</MudStack>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Who { get; set; }
+    [Parameter] public DateTime? When { get; set; }
+    [Parameter] public bool Done { get; set; }
+}

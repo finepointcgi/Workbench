@@ -1,0 +1,118 @@
+@* GSA per diem rates for a destination and date: lodging maximum and M&IE (read-only; anyone signed in may look up). *@
+@using Workbench.Contracts.PerDiem
+@inject IPerDiemRateService Rates
+
+<div class="wb-m-card" data-testid="per-diem">
+    <b>Per diem rates</b>
+    <div class="wb-m-row mt-2">
+        <label class="wb-m-field" style="flex:2 1 0">
+            <span>Destination</span>
+            <input class="wb-m-input" type="search" placeholder="City or county" data-testid="per-diem-search" @bind="_search" @bind:event="oninput" @bind:after="SearchAsync" />
+        </label>
+        <label class="wb-m-field">
+            <span>Date</span>
+            <input type="date" class="wb-m-input" data-testid="per-diem-date" @bind="_date" @bind:after="LookupAsync" />
+        </label>
+    </div>
+    @if (_locations.Count > 0 && _selected is null)
+    {
+        @foreach (var location in _locations.Take(8))
+        {
+            <button type="button" class="wb-m-list-link wb-m-input mb-1" style="text-align:left" data-testid="per-diem-location" @onclick="() => SelectAsync(location)">@location.Label</button>
+        }
+    }
+    else if (_searched && _locations.Count == 0 && _selected is null)
+    {
+        <MudText Typo="Typo.body2" Class="wb-m-muted" data-testid="per-diem-none">No destinations match. If none show at all, Finance hasn't loaded this year's per diem rates yet.</MudText>
+    }
+    @if (_rate is { } rate && _selected is { } selected)
+    {
+        <div data-testid="per-diem-rate">
+            <div class="wb-m-kv"><b class="wb-m-wrap">@selected.Label</b><MudLink Typo="Typo.body2" OnClick="Clear">Change</MudLink></div>
+            <div class="wb-m-kv"><span>Lodging (max per night)</span><b>@MobileFormat.Money(rate.LodgingMax)</b></div>
+            <div class="wb-m-kv"><span>M&amp;IE per day</span><b>@MobileFormat.Money(rate.MieRate)</b></div>
+            <div class="wb-m-kv wb-m-muted"><span>First and last day (75%)</span><span>@MobileFormat.Money(rate.Tier.FirstLastDay)</span></div>
+            <div class="wb-m-kv wb-m-muted"><span>Breakfast · lunch · dinner</span><span>@MobileFormat.Money(rate.Tier.Breakfast) · @MobileFormat.Money(rate.Tier.Lunch) · @MobileFormat.Money(rate.Tier.Dinner)</span></div>
+            @if (rate.IsStandardFallback)
+            {
+                <MudText Typo="Typo.caption" Class="wb-m-muted">Standard CONUS rate: the destination has no rate of its own.</MudText>
+            }
+        </div>
+    }
+    @if (_problem is not null)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error">@_problem</MudText>
+    }
+</div>
+
+@code {
+    [Parameter] public DateOnly? DefaultDate { get; set; }
+
+    private string? _search;
+    private DateOnly? _date;
+    private IReadOnlyList<PerDiemLocationDto> _locations = [];
+    private PerDiemLocationDto? _selected;
+    private ResolvedPerDiemRateDto? _rate;
+    private string? _problem;
+    private bool _searched;
+
+    protected override void OnInitialized() => _date = DefaultDate ?? DateOnly.FromDateTime(DateTime.Today);
+
+    private async Task SearchAsync()
+    {
+        _selected = null;
+        _rate = null;
+        if ((_search ?? "").Trim().Length < 2 || _date is not { } date)
+        {
+            _locations = [];
+            _searched = false;
+            return;
+        }
+
+        try
+        {
+            _problem = null;
+            _searched = true;
+            _locations = await Rates.ListLocationsAsync(FiscalYearOf(date), null, _search!.Trim());
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _problem = ex.Message;
+        }
+    }
+
+    private async Task SelectAsync(PerDiemLocationDto location)
+    {
+        _selected = location;
+        _search = location.Label;
+        await LookupAsync();
+    }
+
+    private async Task LookupAsync()
+    {
+        if (_selected is null || _date is not { } date)
+        {
+            return;
+        }
+
+        try
+        {
+            _problem = null;
+            _rate = await Rates.LookupAsync(_selected, date);
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _problem = ex.Message;
+        }
+    }
+
+    private void Clear()
+    {
+        _selected = null;
+        _rate = null;
+        _search = "";
+        _locations = [];
+    }
+
+    private static int FiscalYearOf(DateOnly date) => date.Month >= 10 ? date.Year + 1 : date.Year;
+}

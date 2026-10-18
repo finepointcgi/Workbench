@@ -1,0 +1,4 @@
+.ice-table-wrap { overflow-x: auto; }
+::deep .ice-section td { font-weight: 600; background: var(--mud-palette-background-gray); }
+::deep .ice-subtotal td { font-weight: 600; border-top: 1px solid var(--mud-palette-lines-default); }
+::deep .ice-total td { font-weight: 700; border-top: 1px solid var(--mud-palette-text-primary); border-bottom: 3px double var(--mud-palette-text-primary); }

@@ -305,10 +305,13 @@ public sealed partial class WebSecurityTests
         var current = periods.Where(p => p.Status == FiscalPeriodState.Open).MinBy(p => p.Start)!;
         using var blocked = await pm.PutAsJsonAsync($"/api/v1/fiscal/periods/{current.Id}/status", new { Status = FiscalPeriodState.Closed, Reason = "Month end" });
         var period = periods.Where(p => p.Status == FiscalPeriodState.Open).MaxBy(p => p.Start)!;
-        // The seeded bank account is never reconciled that far and seeded assets depreciate every month: Finance waives and runs them.
+        // The seeded bank account is never reconciled that far and seeded assets depreciate every month: Finance waives and runs them,
         using var waive = await pm.PostAsJsonAsync("/api/v1/cash/close-waivers", new { FiscalPeriodId = period.Id, Reason = "No statement yet" });
         using var depreciate = await pm.PostAsync($"/api/v1/assets/depreciation/{period.Id}/run", null);
-        Assert.True(waive.IsSuccessStatusCode && depreciate.IsSuccessStatusCode, $"{waive.StatusCode} {depreciate.StatusCode}");
+        // ...and revenue is recognized for the period (the run posts nothing where nothing was earned).
+        using var revenue = await pm.PostAsJsonAsync($"/api/v1/revenue/periods/{period.Id}/post", new { });
+        Assert.True(waive.IsSuccessStatusCode && depreciate.IsSuccessStatusCode && revenue.IsSuccessStatusCode,
+            $"{waive.StatusCode} {depreciate.StatusCode} {revenue.StatusCode} {await revenue.Content.ReadAsStringAsync()}");
         using var close = await pm.PutAsJsonAsync($"/api/v1/fiscal/periods/{period.Id}/status", new { Status = FiscalPeriodState.Closed, Reason = "Month end" });
 
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
@@ -316,7 +319,7 @@ public sealed partial class WebSecurityTests
         Assert.Equal(HttpStatusCode.OK, financial.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
         Assert.Contains("can't close yet", (await blocked.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("detail").GetString());
-        Assert.Equal(HttpStatusCode.OK, close.StatusCode);
+        Assert.True(close.StatusCode == HttpStatusCode.OK, await close.Content.ReadAsStringAsync());
 
         var events = await EventsAsync(factory, null);
         Assert.Contains(events, e => e.EventType == SecurityEventTypes.DevSignIn && e.Actor == "viewer@example.com");

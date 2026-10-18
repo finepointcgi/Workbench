@@ -48,6 +48,8 @@ public sealed class TimekeepingClock(TimeProvider clock, IOptions<TimekeepingOpt
 
     public DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
+    public TimeProvider Provider => clock;
+
     public DateOnly Today => LocalDate(UtcNow);
 
     public DateOnly LocalDate(DateTime utc) => DateOnly.FromDateTime(LocalTime(utc));

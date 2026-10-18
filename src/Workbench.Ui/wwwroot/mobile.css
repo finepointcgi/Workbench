@@ -1,0 +1,171 @@
+/* Phone layout (/m): form fields with native pickers and keyboards, big touch targets. Loaded by MobileLayout. */
+.wb-m-card {
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.wb-m-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 12px;
+}
+
+.wb-m-title h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+}
+
+.wb-m-field {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.wb-m-field > span {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 4px;
+}
+
+.wb-m-input,
+.wb-m-select {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 48px;
+    padding: 10px 12px;
+    font-size: 16px; /* 16px stops iOS zooming into the field. */
+    color: var(--mud-palette-text-primary);
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 8px;
+}
+
+textarea.wb-m-input {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.wb-m-input:focus,
+.wb-m-select:focus {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: -1px;
+}
+
+.wb-m-row {
+    display: flex;
+    gap: 8px;
+}
+
+.wb-m-row > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.wb-m-muted {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.85rem;
+}
+
+.wb-m-stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.wb-m-stepper .wb-m-input {
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 600;
+    flex: 1 1 auto;
+}
+
+.wb-m-step {
+    flex: 0 0 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-text-primary);
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.wb-m-step:disabled {
+    opacity: 0.4;
+}
+
+.wb-m-filebtn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: 1px solid var(--mud-palette-primary);
+    color: var(--mud-palette-primary);
+    font-weight: 500;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.wb-m-filebtn input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.wb-m-list-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: inherit;
+    text-decoration: none;
+    min-height: 48px;
+}
+
+.wb-m-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.wb-m-actions > * {
+    flex: 1 1 0;
+    min-height: 48px;
+}
+
+.wb-m-sticky {
+    position: sticky;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    z-index: 2;
+    padding: 8px 0;
+    background: var(--mud-palette-background);
+}
+
+.wb-m-kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.wb-m-kv > :last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.wb-m-wrap {
+    overflow-wrap: anywhere;
+}

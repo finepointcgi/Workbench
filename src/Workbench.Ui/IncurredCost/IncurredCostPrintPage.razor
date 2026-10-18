@@ -1,0 +1,105 @@
+@page "/accounting/incurred-cost/{Id:guid}/print"
+@layout Workbench.Ui.Layout.IncurredCostPrintLayout
+@inject IIncurredCostService IncurredCost
+@inject ICurrentUserContext CurrentUser
+@inject IJSRuntime JS
+
+<PageTitle>@(_package is null ? "Incurred cost" : $"FY{_package.FiscalYear} incurred cost") · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"accounting/incurred-cost/{Id}")">← Back to the package</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="() => IceFormat.PrintAsync(JS)" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_package is null)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var p = _package;
+    var firm = p.Schedule("Cover").Row("contractor")?.TextOf("value");
+    @foreach (var schedule in p.Schedules)
+    {
+        <section class="page @(schedule.Columns.Count > 6 ? "wide" : "")" data-testid="@($"print-{schedule.Code}")">
+            @if (p.Status is not (IncurredCostState.Certified or IncurredCostState.Submitted))
+            {
+                <div class="watermark">DRAFT</div>
+            }
+            <div class="head">
+                <div><b>@(string.IsNullOrWhiteSpace(firm) ? "(contractor name)" : firm)</b></div>
+                <div>FY@(p.FiscalYear) incurred cost submission · @IceFormat.Label(p.Status) · rev. @p.Revision</div>
+            </div>
+            <h1>@(schedule.Code is "Cover" or "U" ? schedule.Title : $"Schedule {schedule.Code} — {schedule.Title}")</h1>
+            <p class="sub">For the fiscal year ended @p.YearEnd.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture). @schedule.Description</p>
+            <table class="items">
+                <thead>
+                    <tr>
+                        @foreach (var column in schedule.Columns)
+                        {
+                            <th class="@(IceFormat.IsNumeric(column) ? "num" : "")">@column.Header</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in schedule.Rows)
+                    {
+                        <tr class="@row.Kind.ToString().ToLowerInvariant()">
+                            @foreach (var column in schedule.Columns)
+                            {
+                                <td class="@(IceFormat.IsNumeric(column) ? "num" : schedule.Code == "N" ? "pre" : "")">@IceFormat.Cell(column, row)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @foreach (var note in schedule.Notes)
+            {
+                <p class="note">@note</p>
+            }
+        </section>
+    }
+    <section class="page">
+        <h1>Checks</h1>
+        <table class="items">
+            <thead><tr><th>Severity</th><th>Schedule</th><th>Check</th><th class="num">Difference</th></tr></thead>
+            <tbody>
+                @foreach (var c in p.Checks)
+                {
+                    <tr><td>@c.Severity</td><td>@c.Schedule</td><td><b>@c.Title.</b> @c.Detail</td><td class="num">@(c.Difference is { } d ? AccountingFormat.Amount(d) : "")</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private IncurredCostPackageDto? _package;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (!(await CurrentUser.GetAsync()).IsFinance)
+            {
+                _error = "Incurred cost submissions are for Finance and administrators.";
+                return;
+            }
+
+            _package = await IncurredCost.GetAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}

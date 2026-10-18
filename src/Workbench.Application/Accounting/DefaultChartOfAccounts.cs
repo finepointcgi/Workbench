@@ -90,6 +90,11 @@ public static class DefaultChartOfAccounts
         new("6090", "Fringe applied", AccountType.Expense, "6000", CostClassification.AppliedBurden, "Contra: fringe allocated to projects"),
         new("6190", "Overhead applied", AccountType.Expense, "6100", CostClassification.AppliedBurden, "Contra: overhead allocated to projects"),
         new("6290", "G&A applied", AccountType.Expense, "6200", CostClassification.AppliedBurden, "Contra: G&A allocated to projects"),
+
+        // Revenue recognition: contract liabilities and loss provisions posted by the monthly revenue runs.
+        new("2300", "Billings in excess of revenue", AccountType.Liability, "2000", Description: "Contract liabilities: billed ahead of revenue recognized (revenue runs)"),
+        new("2310", "Provision for contract losses", AccountType.Liability, "2000", Description: "Expected losses on loss contracts not yet incurred (revenue runs)"),
+        new("7030", "Unallowable - provision for contract losses", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-23: losses on other contracts are unallowable"),
     ];
 
     private static readonly (PostingRuleKind Kind, string Key, string Account)[] Rules =

@@ -1,0 +1,22 @@
+{
+  "name": "Workbench",
+  "short_name": "Workbench",
+  "description": "Time, expenses, approvals and leave on the go.",
+  "id": "/m",
+  "start_url": "/m",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1F5AA6",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Enter today's hours", "short_name": "Today", "url": "/m" },
+    { "name": "Approvals", "url": "/m/approvals" },
+    { "name": "Expenses", "url": "/m/expenses" }
+  ]
+}

@@ -35,9 +35,9 @@ internal sealed class SeededHost : IAsyncDisposable
     public Guid ItemId { get; }
     public Guid FinanceSheetId { get; }
 
-    public static async Task<SeededHost> CreateAsync()
+    public static async Task<SeededHost> CreateAsync(Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? configure = null)
     {
-        var host = new CollaborationHost();
+        var host = new CollaborationHost(configure);
         await using var db = await host.Get<IWorkbenchDbContextFactory>().CreateAsync();
         var programOffice = new Workspace { Name = "Program Office" };
         var finance = new Workspace { Name = "Finance" };

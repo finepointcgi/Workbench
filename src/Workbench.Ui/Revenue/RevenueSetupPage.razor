@@ -1,0 +1,114 @@
+@page "/accounting/revenue/setup"
+@inject IRevenueSetupService Setup
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Revenue setup · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Revenue setup" Subtitle="The revenue method for each project on a contract, or for one of its CLINs. A CLIN setup covers the WBS mapped to that CLIN; the project setup covers the rest. Projects without a setup recognize revenue as billed." />
+<RevenueTabs Current="setup" />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_projects is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-setup">
+            <thead><tr><th>Project</th><th>Contract</th><th>Methods</th><th>Current EAC</th><th>Pending EACs</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _projects)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"accounting/revenue/projects/{p.ProjectId}")">@p.ProjectCode</MudLink> @p.ProjectName</td>
+                        <td>@p.ContractNumber<div class="mud-text-secondary" style="font-size:12px">@p.ContractType</div></td>
+                        <td>
+                            @if (p.Setups.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Revenue = billings (default)</MudText>
+                            }
+                            @foreach (var s in p.Setups)
+                            {
+                                <MudChip T="string" Size="Size.Small" OnClick="() => EditAsync(p, s)" OnClose="@(_ => DeleteAsync(s))">@RevenueFormat.Unit(s.ClinNumber): @RevenueFormat.Label(s.Method)</MudChip>
+                            }
+                        </td>
+                        <td>
+                            @if (p.CurrentEstimate is { } e)
+                            {
+                                <span>@RevenueFormat.Amount(e.EstimatedCost) cost / @RevenueFormat.Amount(e.EstimatedRevenue) revenue</span>
+                                @if (e.IsLoss) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">Loss</MudChip> }
+                            }
+                        </td>
+                        <td>@(p.PendingEstimates == 0 ? "" : p.PendingEstimates.ToString())</td>
+                        <td><MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(p, null)" data-testid="setup-add">Set method</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<RevenueProjectSummaryDto>? _projects;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await Setup.ListProjectsAsync();
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (RevenueFormat.Error(ex), RevenueFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task EditAsync(RevenueProjectSummaryDto project, RevenueSetupDto? existing)
+    {
+        try
+        {
+            var detail = await Setup.GetProjectAsync(project.ProjectId);
+            var parameters = new DialogParameters<RevenueSetupDialog>
+            {
+                { d => d.ProjectId, project.ProjectId },
+                { d => d.Clins, detail.Clins },
+                { d => d.Existing, existing },
+            };
+            var dialog = await Dialogs.ShowAsync<RevenueSetupDialog>($"Revenue method · {project.ProjectCode}", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+            if (await dialog.Result is { Canceled: false })
+            {
+                Snackbar.Add("Saved. The next revenue run uses it.", Severity.Success);
+                _projects = await Setup.ListProjectsAsync();
+            }
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(RevenueSetupDto setup)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Remove setup", $"{RevenueFormat.Unit(setup.ClinNumber)} goes back to revenue = billings; the next run catches up.", yesText: "Remove", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Setup.DeleteSetupAsync(setup.Id);
+            _projects = await Setup.ListProjectsAsync();
+        }
+        catch (Exception ex) when (RevenueFormat.IsExpected(ex))
+        {
+            Snackbar.Add(RevenueFormat.Error(ex), Severity.Error);
+        }
+    }
+}

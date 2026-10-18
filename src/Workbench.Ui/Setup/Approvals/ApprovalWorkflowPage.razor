@@ -1,0 +1,346 @@
+@page "/setup/approval-workflows/{DocumentType}"
+@inject IApprovalWorkflowService Workflows
+@inject IProjectService Projects
+@inject IContractService Contracts
+@inject IPeopleService People
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_workflow?.DocumentLabel ?? "Workflow") approval · Setup · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_workflow is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <SetupHeader Title="@($"{_workflow.DocumentLabel} approval")" Subtitle="@($"Version {_workflow.Version} is used for new submissions. Steps with the same order run in parallel; all of them must approve.")">
+        @if (_workflow.CanEdit)
+        {
+            <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="ResetAsync" data-testid="reset-workflow">Reset to built-in default</MudButton>
+        }
+    </SetupHeader>
+    <MudLink Href="setup/approval-workflows" Typo="Typo.caption" Class="mb-3 d-block">All approval workflows</MudLink>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudTextField @bind-Value="_name" Label="Name" ReadOnly="!_workflow.CanEdit" Class="mb-3" />
+        @foreach (var (step, index) in _steps.Select((s, i) => (s, i)))
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="step">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="5"><MudTextField @bind-Value="step.Name" Label="Step name" ReadOnly="!_workflow.CanEdit" /></MudItem>
+                    <MudItem xs="6" sm="2"><MudNumericField @bind-Value="step.Sequence" Label="Order" Min="1" Max="99" ReadOnly="!_workflow.CanEdit" /></MudItem>
+                    <MudItem xs="6" sm="5" Class="d-flex align-center justify-end">
+                        @if (_workflow.CanEdit)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="index == 0" OnClick="() => Move(index, -1)" title="Move up" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="index == _steps.Count - 1" OnClick="() => Move(index, 1)" title="Move down" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_steps.Count == 1" OnClick="() => _steps.RemoveAt(index)" title="Remove step" />
+                        }
+                    </MudItem>
+                    <MudItem xs="12" sm="5">
+                        <MudSelect T="ApproverRuleKind" @bind-Value="step.Approver.Kind" Label="Approver" ReadOnly="!_workflow.CanEdit">
+                            @foreach (var kind in Enum.GetValues<ApproverRuleKind>())
+                            {
+                                <MudSelectItem Value="kind">@ApprovalText.Rule(kind)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="7">
+                        <RuleDetail Rule="step.Approver" ReadOnly="!_workflow.CanEdit" />
+                    </MudItem>
+                    <MudItem xs="12" sm="5">
+                        <MudSelect T="ApproverRuleKind?" @bind-Value="step.FallbackKind" Label="When nobody is found" Clearable="true" Placeholder="No fallback" ReadOnly="!_workflow.CanEdit">
+                            @foreach (var kind in new[] { ApproverRuleKind.Supervisor, ApproverRuleKind.OrgRole, ApproverRuleKind.AnyOf })
+                            {
+                                <MudSelectItem T="ApproverRuleKind?" Value="kind">@ApprovalText.Rule(kind)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="7">
+                        @if (step.FallbackKind is not null)
+                        {
+                            <RuleDetail Rule="step.Fallback" ReadOnly="!_workflow.CanEdit" />
+                        }
+                    </MudItem>
+                    <MudItem xs="12" sm="5">
+                        <MudSelect T="SelfApprovalPolicy" @bind-Value="step.Self" Label="When the approver is the submitter" ReadOnly="!_workflow.CanEdit">
+                            @foreach (var policy in Enum.GetValues<SelfApprovalPolicy>())
+                            {
+                                <MudSelectItem Value="policy">@ApprovalText.Self(policy)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="7" Class="d-flex align-center flex-wrap gap-2">
+                        <MudCheckBox T="bool" @bind-Value="step.AdminsMayAct" Label="Administrators may decide" ReadOnly="!_workflow.CanEdit" />
+                        <MudNumericField T="int?" @bind-Value="step.RemindAfter" Label="Remind after (business days)" Min="1" Max="60" Clearable="true" Style="max-width:200px" ReadOnly="!_workflow.CanEdit" />
+                        <MudCheckBox T="bool" @bind-Value="step.Escalate" Label="Also tell the approver's supervisor" Disabled="step.RemindAfter is null" ReadOnly="!_workflow.CanEdit" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudText Typo="Typo.subtitle2">Applies</MudText>
+                            <MudSelect T="ConditionMatch" @bind-Value="step.Match" Dense="true" Style="max-width:260px" ReadOnly="!_workflow.CanEdit" Disabled="step.Conditions.Count < 2">
+                                <MudSelectItem Value="ConditionMatch.All">when all conditions match</MudSelectItem>
+                                <MudSelectItem Value="ConditionMatch.Any">when any condition matches</MudSelectItem>
+                            </MudSelect>
+                            @if (step.Conditions.Count == 0)
+                            {
+                                <MudText Class="mud-text-secondary">always</MudText>
+                            }
+                        </MudStack>
+                        @foreach (var (condition, ci) in step.Conditions.Select((c, i) => (c, i)))
+                        {
+                            <MudGrid Spacing="2" Class="mt-1">
+                                <MudItem xs="12" sm="5">
+                                    <MudSelect T="ApprovalConditionKind" @bind-Value="condition.Kind" Dense="true" ReadOnly="!_workflow.CanEdit">
+                                        @foreach (var kind in Enum.GetValues<ApprovalConditionKind>())
+                                        {
+                                            <MudSelectItem Value="kind">@ApprovalText.Condition(kind)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="10" sm="6">
+                                    @switch (condition.Kind)
+                                    {
+                                        case ApprovalConditionKind.AmountOver or ApprovalConditionKind.AmountAtMost:
+                                            <MudNumericField T="decimal?" @bind-Value="condition.Amount" Label="Amount" Min="0" Dense="true" ReadOnly="!_workflow.CanEdit" />
+                                            break;
+                                        case ApprovalConditionKind.ProjectIn:
+                                            <IdPicker Options="_projects" @bind-Selected="condition.Ids" Label="Projects" ReadOnly="!_workflow.CanEdit" />
+                                            break;
+                                        case ApprovalConditionKind.ContractIn:
+                                            <IdPicker Options="_contracts" @bind-Selected="condition.Ids" Label="Contracts" ReadOnly="!_workflow.CanEdit" />
+                                            break;
+                                        case ApprovalConditionKind.OrgUnitIn:
+                                            <IdPicker Options="_orgUnits" @bind-Selected="condition.Ids" Label="Org units" ReadOnly="!_workflow.CanEdit" />
+                                            break;
+                                        case ApprovalConditionKind.CostTypeIn:
+                                            <MudTextField @bind-Value="condition.Values" Label="Cost types (comma-separated, e.g. Travel, Materials)" Dense="true" ReadOnly="!_workflow.CanEdit" />
+                                            break;
+                                    }
+                                </MudItem>
+                                <MudItem xs="2" sm="1">
+                                    @if (_workflow.CanEdit)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="() => step.Conditions.RemoveAt(ci)" title="Remove condition" />
+                                    }
+                                </MudItem>
+                            </MudGrid>
+                        }
+                        @if (_workflow.CanEdit)
+                        {
+                            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => step.Conditions.Add(new ConditionModel())" Class="mt-1">Condition</MudButton>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+
+        @if (_workflow.CanEdit)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddStep" data-testid="add-step">Add step</MudButton>
+            <MudTextField @bind-Value="_note" Label="What changed (kept with the version)" Class="mt-3" />
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync" data-testid="save-workflow">Publish new version</MudButton>
+        }
+        else
+        {
+            <MudText Class="mud-text-secondary">Only administrators can change approval workflows.</MudText>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Versions</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="versions">
+            <thead><tr><th>Version</th><th>Published</th><th>By</th><th>Note</th><th>In flight</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var v in _workflow.Versions)
+                {
+                    <tr>
+                        <td>v@(v.Version) @(v.IsCurrent ? "(current)" : "")</td>
+                        <td>@v.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</td>
+                        <td>@v.CreatedBy</td>
+                        <td>@v.Note</td>
+                        <td>@v.InFlight</td>
+                        <td><MudButton Size="Size.Small" OnClick="() => ShowVersionAsync(v.Version)">Steps</MudButton></td>
+                    </tr>
+                    @if (_shown?.Version == v.Version)
+                    {
+                        <tr><td colspan="6">
+                            @foreach (var s in _shown.Value.Definition.Steps)
+                            {
+                                <MudText Typo="Typo.body2">@ApprovalText.Summary(s)</MudText>
+                            }
+                        </td></tr>
+                    }
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public string DocumentType { get; set; } = "";
+
+    private ApprovalWorkflowDto? _workflow;
+    private List<StepModel> _steps = [];
+    private string _name = "";
+    private string? _note;
+    private string? _error;
+    private bool _busy;
+    private (int Version, ApprovalWorkflowDefinition Definition)? _shown;
+    private IReadOnlyList<(Guid Id, string Label)> _projects = [];
+    private IReadOnlyList<(Guid Id, string Label)> _contracts = [];
+    private IReadOnlyList<(Guid Id, string Label)> _orgUnits = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Load(await Workflows.GetAsync(DocumentType));
+            _projects = (await Projects.ListProjectsAsync()).Select(p => (p.Id, $"{p.Code} {p.Name}")).ToList();
+            _contracts = (await Contracts.ListContractsAsync()).Select(c => (c.Id, c.ContractNumber)).ToList();
+            _orgUnits = (await People.ListOrgUnitsAsync()).Select(u => (u.Id, $"{u.Code} {u.Name}")).ToList();
+        }
+        catch (Exception ex) when (ex is WorkbenchNotFoundException or UnauthorizedAccessException or HttpRequestException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Load(ApprovalWorkflowDto workflow)
+    {
+        _workflow = workflow;
+        _name = workflow.Name;
+        _steps = workflow.Definition.Steps.Select(StepModel.From).ToList();
+    }
+
+    private void AddStep() => _steps.Add(new StepModel { Name = "New step", Sequence = (_steps.Count == 0 ? 0 : _steps.Max(s => s.Sequence)) + 1 });
+
+    private void Move(int index, int by)
+    {
+        var step = _steps[index];
+        _steps.RemoveAt(index);
+        _steps.Insert(index + by, step);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Load(await Workflows.SaveAsync(DocumentType, new SaveApprovalWorkflowRequest(_name, new ApprovalWorkflowDefinition(_steps.Select(s => s.ToDefinition()).ToList()), _note)));
+            _note = null;
+            Snackbar.Add($"Published version {_workflow!.Version}. New submissions use it; documents already submitted keep theirs.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        _busy = true;
+        try
+        {
+            Load(await Workflows.ResetToDefaultAsync(DocumentType));
+            Snackbar.Add($"Published the built-in default as version {_workflow!.Version}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ShowVersionAsync(int version) =>
+        _shown = _shown?.Version == version ? null : (version, await Workflows.GetVersionAsync(DocumentType, version));
+
+    public sealed class RuleModel
+    {
+        public ApproverRuleKind Kind { get; set; }
+        public ApprovalOrgRole? Role { get; set; } = ApprovalOrgRole.Finance;
+        public string? People { get; set; }
+
+        public static RuleModel From(ApproverRule? rule) => rule is null ? new RuleModel() : new RuleModel
+        {
+            Kind = rule.Kind,
+            Role = rule.Role ?? ApprovalOrgRole.Finance,
+            People = rule.People is null ? null : string.Join(", ", rule.People),
+        };
+
+        public ApproverRule ToRule() => new(Kind, Kind == ApproverRuleKind.OrgRole ? Role : null,
+            Kind is ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf ? (People ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : null);
+    }
+
+    public sealed class ConditionModel
+    {
+        public ApprovalConditionKind Kind { get; set; } = ApprovalConditionKind.AmountOver;
+        public decimal? Amount { get; set; }
+        public IReadOnlyCollection<Guid> Ids { get; set; } = [];
+        public string? Values { get; set; }
+
+        public ApprovalCondition ToCondition() => new(Kind, Amount, Ids.ToList(), (Values ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    public sealed class StepModel
+    {
+        public string Name { get; set; } = "";
+        public int Sequence { get; set; } = 1;
+        public RuleModel Approver { get; set; } = new();
+        public ApproverRuleKind? FallbackKind
+        {
+            get => _fallbackKind;
+            set
+            {
+                _fallbackKind = value;
+                if (value is { } kind)
+                {
+                    Fallback.Kind = kind;
+                }
+            }
+        }
+
+        private ApproverRuleKind? _fallbackKind;
+        public RuleModel Fallback { get; set; } = new();
+        public List<ConditionModel> Conditions { get; set; } = [];
+        public ConditionMatch Match { get; set; }
+        public SelfApprovalPolicy Self { get; set; }
+        public bool AdminsMayAct { get; set; }
+        public int? RemindAfter { get; set; }
+        public bool Escalate { get; set; }
+
+        public static StepModel From(ApprovalStepDefinition s) => new()
+        {
+            Name = s.Name,
+            Sequence = s.Sequence,
+            Approver = RuleModel.From(s.Approver),
+            Fallback = RuleModel.From(s.Fallback),
+            FallbackKind = s.Fallback?.Kind,
+            Conditions = (s.Conditions ?? []).Select(c => new ConditionModel
+            {
+                Kind = c.Kind, Amount = c.Amount, Ids = c.Ids ?? [], Values = c.Values is null ? null : string.Join(", ", c.Values),
+            }).ToList(),
+            Match = s.Match,
+            Self = s.WhenSubmitterIsApprover,
+            AdminsMayAct = s.AdminsMayAct,
+            RemindAfter = s.RemindAfterBusinessDays,
+            Escalate = s.EscalateToApproverSupervisor,
+        };
+
+        public ApprovalStepDefinition ToDefinition() => new(Name, Sequence, Approver.ToRule(),
+            FallbackKind is { } fk ? new RuleModel { Kind = fk, Role = Fallback.Role, People = Fallback.People }.ToRule() : null,
+            Conditions.Select(c => c.ToCondition()).ToList(), Match, Self, AdminsMayAct, RemindAfter, Escalate && RemindAfter is not null);
+    }
+}

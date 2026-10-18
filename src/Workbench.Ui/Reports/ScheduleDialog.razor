@@ -1,0 +1,74 @@
+@* A report schedule: it runs as you, with your access, at the chosen time. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="ReportFrequency" @bind-Value="_frequency" Label="Frequency" data-testid="schedule-frequency">
+                @foreach (var f in Enum.GetValues<ReportFrequency>())
+                {
+                    <MudSelectItem T="ReportFrequency" Value="f">@f</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_frequency == ReportFrequency.Weekly)
+            {
+                <MudSelect T="DayOfWeek" @bind-Value="_day" Label="Day">
+                    @foreach (var d in Enum.GetValues<DayOfWeek>())
+                    {
+                        <MudSelectItem T="DayOfWeek" Value="d">@d</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (_frequency == ReportFrequency.Monthly)
+            {
+                <MudNumericField T="int" @bind-Value="_dayOfMonth" Label="Day of the month" Min="1" Max="28" />
+            }
+            <MudNumericField T="int" @bind-Value="_hour" Label="Hour (UTC)" Min="0" Max="23" HelperText="@($"{_hour:00}:00 UTC")" />
+            <MudSelect T="ReportDeliveryMode" @bind-Value="_delivery" Label="Delivery">
+                <MudSelectItem T="ReportDeliveryMode" Value="ReportDeliveryMode.Attachment">Attach the file (to you)</MudSelectItem>
+                <MudSelectItem T="ReportDeliveryMode" Value="ReportDeliveryMode.Link">Email a link</MudSelectItem>
+            </MudSelect>
+            @if (_delivery == ReportDeliveryMode.Attachment)
+            {
+                <MudSelect T="ReportFileFormat" @bind-Value="_format" Label="Format">
+                    <MudSelectItem T="ReportFileFormat" Value="ReportFileFormat.Xlsx">Excel (.xlsx)</MudSelectItem>
+                    <MudSelectItem T="ReportFileFormat" Value="ReportFileFormat.Csv">CSV</MudSelectItem>
+                </MudSelect>
+            }
+            <MudTextField @bind-Value="_recipients" Label="Also send a link to" HelperText="Emails of Workbench users, comma-separated. They get a link and see only what their own access allows." />
+            <MudSwitch T="bool" @bind-Value="_enabled" Label="Enabled" Color="Color.Primary" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" data-testid="schedule-confirm">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public ReportScheduleDto? Existing { get; set; }
+
+    private ReportFrequency _frequency = ReportFrequency.Weekly;
+    private DayOfWeek _day = DayOfWeek.Monday;
+    private int _dayOfMonth = 1;
+    private int _hour = 13;
+    private ReportDeliveryMode _delivery = ReportDeliveryMode.Attachment;
+    private ReportFileFormat _format = ReportFileFormat.Xlsx;
+    private string? _recipients;
+    private bool _enabled = true;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } s)
+        {
+            (_frequency, _day, _dayOfMonth, _hour, _delivery, _format, _enabled) = (s.Frequency, s.DayOfWeek ?? DayOfWeek.Monday, s.DayOfMonth ?? 1, s.HourUtc, s.Delivery, s.Format, s.Enabled);
+            _recipients = string.Join(", ", s.AdditionalRecipients);
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveReportScheduleRequest(_frequency,
+        _frequency == ReportFrequency.Weekly ? _day : null, _frequency == ReportFrequency.Monthly ? _dayOfMonth : null, _hour, _delivery, _format,
+        (_recipients ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), _enabled)));
+}

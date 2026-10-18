@@ -1,0 +1,86 @@
+@* Bottom navigation for the phone layout. Approvals shows how many items wait for the user. *@
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject IServiceProvider Services
+
+<nav class="wb-m-nav" aria-label="Mobile navigation">
+    @foreach (var tab in Tabs)
+    {
+        var active = IsActive(tab.Href);
+        <a href="@tab.Href" class="@(active ? "wb-m-tab active" : "wb-m-tab")" aria-current="@(active ? "page" : null)" data-testid="@($"tab-{tab.Key}")">
+            @if (tab.Key == "approvals" && _pending > 0)
+            {
+                <MudBadge Content="_pending" Max="99" Color="Color.Error" Overlap="true" Dot="false">
+                    <MudIcon Icon="@tab.Icon" />
+                </MudBadge>
+            }
+            else
+            {
+                <MudIcon Icon="@tab.Icon" />
+            }
+            <span>@tab.Label</span>
+        </a>
+    }
+</nav>
+
+@code {
+    private static readonly (string Key, string Href, string Label, string Icon)[] Tabs =
+    [
+        ("today", "m", "Today", Icons.Material.Filled.Today),
+        ("timesheet", "m/timesheet", "Timesheet", Icons.Material.Filled.CalendarViewWeek),
+        ("expenses", "m/expenses", "Expenses", Icons.Material.Filled.Receipt),
+        ("approvals", "m/approvals", "Approvals", Icons.Material.Filled.FactCheck),
+        ("leave", "m/leave", "Leave", Icons.Material.Filled.BeachAccess),
+    ];
+
+    private int _pending;
+
+    [CascadingParameter] public MobileLayout? Shell { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        if (Shell is not null)
+        {
+            Shell.ApprovalsChanged += OnApprovalsChanged;
+        }
+
+        await CountAsync();
+    }
+
+    private async Task CountAsync()
+    {
+        try
+        {
+            _pending = (await MobileApprovalInbox.LoadAsync(Services)).Count;
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _pending = 0;
+        }
+    }
+
+    private bool IsActive(string href)
+    {
+        var path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+        var target = "/" + href;
+        return href == "m" ? path is "/m" or "/m/today" : path == target || path.StartsWith(target + "/", StringComparison.Ordinal);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    private void OnApprovalsChanged() => InvokeAsync(async () =>
+    {
+        await CountAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        if (Shell is not null)
+        {
+            Shell.ApprovalsChanged -= OnApprovalsChanged;
+        }
+    }
+}

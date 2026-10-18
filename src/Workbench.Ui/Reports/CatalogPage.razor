@@ -1,0 +1,93 @@
+@page "/reports"
+@inject IStandardReportService Standard
+@inject ISavedReportService Saved
+
+<PageTitle>Reports · Workbench</PageTitle>
+
+<ReportsHeader Title="Reports" Subtitle="Standard government-contractor reports, your saved reports and the report writer. Every report shows only what your access allows.">
+    <MudButton Href="reports/writer" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" data-testid="new-report">New report</MudButton>
+</ReportsHeader>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" data-testid="load-error">@_error</MudAlert>
+}
+else if (_reports is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Standard reports</MudText>
+    <MudGrid Spacing="2" Class="mb-6" data-testid="standard-reports">
+        @foreach (var r in _reports)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Outlined="true" Style="height:100%" data-testid="@($"report-{r.Key}")">
+                    <MudCardContent>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@r.Category</MudText>
+                        <MudText Typo="Typo.subtitle1" HtmlTag="h3" Style="font-weight:600">@r.Name</MudText>
+                        <MudText Typo="Typo.body2">@r.Description</MudText>
+                        @if (!r.Available)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">@r.UnavailableReason</MudText>
+                        }
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Href="@($"reports/standard/{r.Key}")" Disabled="!r.Available" Variant="Variant.Text" Color="Color.Primary">Run</MudButton>
+                        @if (r.PageLink is not null && r.Available)
+                        {
+                            <MudButton Href="@r.PageLink" Variant="Variant.Text">Open page</MudButton>
+                        }
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Saved reports</MudText>
+    @if (_saved!.Count == 0)
+    {
+        <MudText Class="mud-text-secondary" data-testid="no-saved">No saved reports yet. Run a standard report or build one in the report writer, then save it.</MudText>
+    }
+    else
+    {
+        <MudPaper Outlined="true">
+            <MudSimpleTable Dense="true" Hover="true" data-testid="saved-reports">
+                <thead><tr><th>Name</th><th>Kind</th><th>Owner</th><th>Shared</th><th>Schedules</th><th>Updated</th></tr></thead>
+                <tbody>
+                    @foreach (var s in _saved)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"reports/saved/{s.Id}")">@s.Name</MudLink></td>
+                            <td>@(s.StandardKey is { } k ? _reports.FirstOrDefault(r => r.Key == k)?.Name ?? k : "Report writer")</td>
+                            <td>@(s.IsMine ? "You" : s.OwnerEmail)</td>
+                            <td>@(s.Visibility == ReportVisibility.Shared ? string.Join(", ", s.SharedWith.Select(r => r == OrgRoles.Employee ? "Everyone" : r.ToString())) : "Private")</td>
+                            <td>@s.Schedules.Count</td>
+                            <td>@s.UpdatedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<StandardReportDto>? _reports;
+    private IReadOnlyList<SavedReportDto>? _saved;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports = await Standard.ListAsync();
+            _saved = await Saved.ListAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            _error = ReportFormat.Error(ex);
+        }
+    }
+}

@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Workbench.Application.Approvals;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Accounting;
@@ -93,9 +95,10 @@ public sealed class RequisitionAccess(IWorkbenchDbContextFactory dbFactory, Acce
 }
 
 /// <summary>
-/// Purchase requisitions: entry by any employee, routing to the project managers of the projects charged (never the
-/// requester), then Finance when the total is over <see cref="PurchasingOptions.RequisitionFinanceThreshold"/>, a line
-/// charges a GL account, or a project has no other manager. Every change and decision is audited.
+/// Purchase requisitions: entry by any employee, routed by the requisition approval workflow (Setup › Approval
+/// workflows). By default: the project managers of the projects charged (never the requester), then Finance when the
+/// total is over <see cref="PurchasingOptions.RequisitionFinanceThreshold"/>, a line charges a GL account, or a project
+/// has no other manager. Every change and decision is audited.
 /// </summary>
 public sealed class RequisitionService(
     IWorkbenchDbContextFactory dbFactory,
@@ -104,8 +107,11 @@ public sealed class RequisitionService(
     RequisitionAccess requisitionAccess,
     INotificationPublisher notifications,
     IOptions<PurchasingOptions> options,
-    TimeProvider clock) : IRequisitionService
+    TimeProvider clock,
+    ApprovalEngine? approvals = null) : IRequisitionService
 {
+    private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
+
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
     private string Me => access.Email;
@@ -225,24 +231,21 @@ public sealed class RequisitionService(
             await ProcurementSupport.ValidateChargeAsync(db, $"Line {line.LineNumber}", line.WbsElementId, line.OdcType, line.AccountId, line.OrgUnitId, req.OrgUnitId, cancellationToken);
         }
 
-        var projectIds = req.Lines.Where(l => l.ProjectId != null).Select(l => l.ProjectId!.Value).Distinct().ToList();
-        var managers = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id) && p.ProjectManagerId != null)
-            .Join(db.Set<Employee>(), p => p.ProjectManagerId, e => e.Id, (p, e) => new { p.Id, e.Email })
-            .ToDictionaryAsync(x => x.Id, x => x.Email, cancellationToken);
-        var financeNeeded = req.Total > options.Value.RequisitionFinanceThreshold;
         foreach (var line in req.Lines)
         {
             line.ApprovedBy = null;
             line.ApprovedAtUtc = null;
-            var pm = line.ProjectId is { } pid ? managers.GetValueOrDefault(pid) : null;
-            line.ApproverEmail = pm is not null && !PurchasingSupport.SameEmail(pm, req.RequesterEmail) ? PurchasingSupport.Normalize(pm) : null;
-
-            // Account lines, and project lines with no other manager, need Finance.
-            financeNeeded |= line.ApproverEmail is null;
         }
 
-        req.NeedsFinance = financeNeeded;
-        req.Stage = req.Lines.Any(l => l.ApproverEmail != null) ? RequisitionStage.ProjectManager : RequisitionStage.Finance;
+        var route = await _approvals.StartAsync(db, Subject(req), cancellationToken);
+        foreach (var line in req.Lines)
+        {
+            // A line goes to its project's manager, or (no manager, the requester's own project, an account) to Finance.
+            line.ApproverEmail = line.ProjectId is { } pid ? route.ProjectApprover(pid) : null;
+        }
+
+        req.NeedsFinance = route.Tasks.Any(t => t.Status != Domain.Approvals.ApprovalTaskStatus.Skipped && !IsProjectTask(t));
+        req.Stage = StageOf(route.Active);
         req.Status = RequisitionStatus.PendingApproval;
         req.SubmittedAtUtc = UtcNow;
         req.RejectedBy = null;
@@ -255,17 +258,24 @@ public sealed class RequisitionService(
             Routes = req.Lines.Select(l => l.ApproverEmail ?? PurchasingSupport.FinanceRoute).Distinct(),
         });
         await db.SaveChangesAsync(cancellationToken);
-        await NotifyStageAsync(db, req, cancellationToken);
+        await NotifyStageAsync(req, route.NotifyEmails);
         return await DetailAsync(db, req.Id, cancellationToken);
     }
 
     public async Task<IReadOnlyList<RequisitionSummaryDto>> ListApprovalQueueAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
         var pending = await db.Set<PurchaseRequisition>().AsNoTracking().Include(r => r.Lines)
             .Where(r => r.Status == RequisitionStatus.PendingApproval).ToListAsync(cancellationToken);
-        var mine = pending.Where(r => ApprovableLines(r, roles).Count > 0).OrderBy(r => r.SubmittedAtUtc).ToList();
+        var mine = new List<PurchaseRequisition>();
+        foreach (var req in pending.OrderBy(r => r.SubmittedAtUtc))
+        {
+            if (await CanDecideAsync(db, req, cancellationToken))
+            {
+                mine.Add(req);
+            }
+        }
+
         return await SummariesAsync(db, mine, cancellationToken);
     }
 
@@ -274,35 +284,24 @@ public sealed class RequisitionService(
         var comment = PurchasingSupport.Optional(request?.Comment, "The comment", 1000);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var req = await LoadPendingAsync(db, requisitionId, cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
         var stage = req.Stage!.Value;
-        var lines = RequireApprovable(req, roles);
+        var check = await RequireDecidableAsync(db, req, cancellationToken);
+        var outcome = await _approvals.DecideAsync(db, check, ApprovalDecisionKind.Approve, Me, comment, cancellationToken);
+        var lines = LinesOf(req, outcome.Decided);
+        foreach (var line in lines)
+        {
+            line.ApprovedBy = Me;
+            line.ApprovedAtUtc = UtcNow;
+        }
+
         if (stage == RequisitionStage.ProjectManager)
         {
-            foreach (var line in lines)
-            {
-                line.ApprovedBy = Me;
-                line.ApprovedAtUtc = UtcNow;
-            }
-
             foreach (var projectId in lines.Select(l => l.ProjectId).Distinct())
             {
                 db.Set<RequisitionApproval>().Add(new RequisitionApproval
                 {
                     RequisitionId = req.Id, Stage = stage, Decision = "Approved", DecidedBy = Me, DecidedAtUtc = UtcNow, ProjectId = projectId, Comment = comment,
                 });
-            }
-
-            if (req.Lines.Where(l => l.ApproverEmail != null).All(l => l.ApprovedBy != null))
-            {
-                if (req.NeedsFinance)
-                {
-                    req.Stage = RequisitionStage.Finance;
-                }
-                else
-                {
-                    Approve(req);
-                }
             }
         }
         else
@@ -311,6 +310,10 @@ public sealed class RequisitionService(
             {
                 RequisitionId = req.Id, Stage = stage, Decision = "Approved", DecidedBy = Me, DecidedAtUtc = UtcNow, Comment = comment,
             });
+        }
+
+        if (outcome.IsComplete)
+        {
             foreach (var line in req.Lines.Where(l => l.ApprovedBy is null))
             {
                 line.ApprovedBy = Me;
@@ -318,6 +321,10 @@ public sealed class RequisitionService(
             }
 
             Approve(req);
+        }
+        else if (outcome.Activated.Count > 0)
+        {
+            req.Stage = StageOf(outcome.Activated);
         }
 
         audit.Record(db, ProcurementSupport.RequisitionEntity, req.Id, req.Status == RequisitionStatus.Approved ? "Approved" : "StageApproved",
@@ -331,9 +338,9 @@ public sealed class RequisitionService(
             await notifications.PublishAsync((await FinanceUsersAsync(db, cancellationToken)).Where(e => !PurchasingSupport.SameEmail(e, Me)),
                 "purchasing.requisition_to_order", $"Requisition {req.Number} is ready to order", $"{req.Total:C}", link: "purchasing/orders");
         }
-        else if (req.Stage != stage)
+        else if (outcome.Activated.Count > 0)
         {
-            await NotifyStageAsync(db, req, cancellationToken);
+            await NotifyStageAsync(req, outcome.NotifyEmails);
         }
 
         return await DetailAsync(db, req.Id, cancellationToken);
@@ -344,8 +351,8 @@ public sealed class RequisitionService(
         var reason = PurchasingSupport.Required(request?.Comment, "A reason", 1000);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var req = await LoadPendingAsync(db, requisitionId, cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        var lines = RequireApprovable(req, roles);
+        var check = await RequireDecidableAsync(db, req, cancellationToken);
+        var outcome = await _approvals.DecideAsync(db, check, ApprovalDecisionKind.Reject, Me, reason, cancellationToken);
         db.Set<RequisitionApproval>().Add(new RequisitionApproval
         {
             RequisitionId = req.Id,
@@ -353,7 +360,7 @@ public sealed class RequisitionService(
             Decision = "Rejected",
             DecidedBy = Me,
             DecidedAtUtc = UtcNow,
-            ProjectId = req.Stage == RequisitionStage.ProjectManager ? lines.Select(l => l.ProjectId).FirstOrDefault() : null,
+            ProjectId = req.Stage == RequisitionStage.ProjectManager ? LinesOf(req, outcome.Decided).Select(l => l.ProjectId).FirstOrDefault() : null,
             Comment = reason,
         });
         req.Status = RequisitionStatus.Rejected;
@@ -385,6 +392,7 @@ public sealed class RequisitionService(
 
         req.Status = RequisitionStatus.Cancelled;
         req.Stage = null;
+        await _approvals.CancelAsync(db, ApprovalDocumentTypes.Requisition, req.Id, Me, reason ?? "Cancelled", cancellationToken);
         audit.Record(db, ProcurementSupport.RequisitionEntity, req.Id, "Cancelled", reason: reason);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, req.Id, cancellationToken);
@@ -399,35 +407,36 @@ public sealed class RequisitionService(
         req.ApprovedAtUtc = UtcNow;
     }
 
-    /// <summary>
-    /// The lines the current user can decide at the current stage: at the PM stage the pending lines routed to them (an
-    /// administrator can decide any); at the Finance stage everything, for Finance. Never on one's own requisition.
-    /// </summary>
-    private List<PurchaseRequisitionLine> ApprovableLines(PurchaseRequisition req, OrgRoles roles)
+    private ApprovalSubject Subject(PurchaseRequisition req) => ApprovalSubjects.Requisition(req, options.Value.RequisitionFinanceThreshold);
+
+    private static bool IsProjectTask(Domain.Approvals.ApprovalTask t) => t.ScopeKey?.StartsWith("project:", StringComparison.Ordinal) == true;
+
+    /// <summary>The module's stage for the active tasks: project managers while any project approval is pending, else Finance.</summary>
+    private static RequisitionStage StageOf(IEnumerable<Domain.Approvals.ApprovalTask> active) =>
+        active.Any(IsProjectTask) ? RequisitionStage.ProjectManager : RequisitionStage.Finance;
+
+    /// <summary>The lines a set of decided tasks covers: a project task its project's lines routed to a PM.</summary>
+    private static List<PurchaseRequisitionLine> LinesOf(PurchaseRequisition req, IEnumerable<Domain.Approvals.ApprovalTask> tasks)
     {
-        if (req.Status != RequisitionStatus.PendingApproval || PurchasingSupport.SameEmail(req.RequesterEmail, Me))
-        {
-            return [];
-        }
-
-        if (req.Stage == RequisitionStage.Finance)
-        {
-            return roles.IsFinance() ? req.Lines.ToList() : [];
-        }
-
-        return req.Lines.Where(l => l.ApproverEmail != null && l.ApprovedBy == null && (PurchasingSupport.SameEmail(l.ApproverEmail, Me) || roles.HasFlag(OrgRoles.Admin))).ToList();
+        var projects = tasks.Where(IsProjectTask).Select(t => t.ScopeKey!).ToHashSet();
+        return req.Lines.Where(l => l.ApproverEmail != null && l.ApprovedBy == null && l.ProjectId is { } p && projects.Contains(ApprovalEngine.ProjectScope(p))).ToList();
     }
 
-    private List<PurchaseRequisitionLine> RequireApprovable(PurchaseRequisition req, OrgRoles roles)
+    /// <summary>Whether the current user may decide the requisition now (never their own).</summary>
+    private async Task<bool> CanDecideAsync(IWorkbenchDbContext db, PurchaseRequisition req, CancellationToken ct) =>
+        req.Status == RequisitionStatus.PendingApproval && !PurchasingSupport.SameEmail(req.RequesterEmail, Me)
+        && await _approvals.CanDecideAsync(db, ApprovalDocumentTypes.Requisition, req.Id, Me, _ => Task.FromResult(Subject(req)), ct);
+
+    private async Task<ApprovalCheck> RequireDecidableAsync(IWorkbenchDbContext db, PurchaseRequisition req, CancellationToken ct)
     {
         if (PurchasingSupport.SameEmail(req.RequesterEmail, Me))
         {
             throw new WorkbenchForbiddenException("You can't approve or reject your own requisition.");
         }
 
-        var lines = ApprovableLines(req, roles);
-        return lines.Count > 0
-            ? lines
+        var check = await _approvals.CheckAsync(db, ApprovalDocumentTypes.Requisition, req.Id, Me, _ => Task.FromResult(Subject(req)), ct);
+        return check.CanDecide
+            ? check
             : throw new WorkbenchForbiddenException(req.Stage == RequisitionStage.Finance
                 ? "This requisition is waiting on Finance."
                 : "None of this requisition's lines are waiting on you.");
@@ -504,15 +513,10 @@ public sealed class RequisitionService(
         }
     }
 
-    private async Task NotifyStageAsync(IWorkbenchDbContext db, PurchaseRequisition req, CancellationToken ct)
-    {
-        var to = req.Stage == RequisitionStage.ProjectManager
-            ? req.Lines.Where(l => l.ApproverEmail != null && l.ApprovedBy == null).Select(l => l.ApproverEmail!).Distinct().ToList()
-            : (await FinanceUsersAsync(db, ct)).ToList();
+    private async Task NotifyStageAsync(PurchaseRequisition req, IReadOnlyList<string> to) =>
         await notifications.PublishAsync(to.Where(e => !PurchasingSupport.SameEmail(e, req.RequesterEmail) && !PurchasingSupport.SameEmail(e, Me)),
             "purchasing.requisition_approval", $"{req.RequesterEmail} sent requisition {req.Number} for your approval",
             $"{req.Total:C}: {req.Justification}", link: $"purchasing/requisitions/{req.Id}");
-    }
 
     private static async Task<IReadOnlyList<string>> FinanceUsersAsync(IWorkbenchDbContext db, CancellationToken ct) =>
         await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive && (u.IsFinance || u.IsAdmin)).Select(u => u.Email).ToListAsync(ct);
@@ -561,7 +565,7 @@ public sealed class RequisitionService(
         var history = await db.Set<RequisitionApproval>().AsNoTracking().Where(a => a.RequisitionId == id).OrderBy(a => a.DecidedAtUtc).ToListAsync(ct);
         var historyProjects = await ProcurementSupport.Lookups.LoadAsync(db, history.Select(h => h.ProjectId), [], [], [], [], ct);
         var name = await db.Set<Employee>().AsNoTracking().Where(e => e.Email == r.RequesterEmail).Select(e => e.DisplayName).FirstOrDefaultAsync(ct);
-        var roles = access.IsAuthenticated ? await access.GetOrgRolesAsync(ct) : OrgRoles.Employee;
+        var canDecide = access.IsAuthenticated && await CanDecideAsync(db, r, ct);
         return new RequisitionDto(
             Summary(r, name),
             r.OrgUnitId,
@@ -572,7 +576,7 @@ public sealed class RequisitionService(
             r.Lines.OrderBy(l => l.LineNumber).Select(l => LineDto(l, lookups, poNumbers)).ToList(),
             history.Select(h => new RequisitionApprovalDto(h.Stage.ToContract(), h.Decision, h.DecidedBy, h.DecidedAtUtc, historyProjects.Project(h.ProjectId), h.Comment)).ToList(),
             r.Status is RequisitionStatus.Draft or RequisitionStatus.Rejected && PurchasingSupport.SameEmail(r.RequesterEmail, Me),
-            ApprovableLines(r, roles).Count > 0);
+            canDecide);
     }
 
     internal static RequisitionLineDto LineDto(PurchaseRequisitionLine l, ProcurementSupport.Lookups lookups, IReadOnlyDictionary<Guid, string> poNumbers) => new(
