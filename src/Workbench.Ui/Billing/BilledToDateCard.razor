@@ -1,0 +1,65 @@
+@* Billed to date on a contract: funded, billed, paid and outstanding, by CLIN. Used on the contract setup page. *@
+@inject IInvoiceService Invoices
+
+@if (_summary is not null)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="billed-to-date">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Billed to date</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Text" Href="@($"billing/contracts/{ContractId}")" EndIcon="@Icons.Material.Filled.ArrowForward">Billing</MudButton>
+        </MudStack>
+        <MudProgressLinear Value="@Percent" Color="@(_summary.BilledToDate > _summary.FundedValue ? Color.Error : Color.Primary)" Size="Size.Large" Rounded="true" Class="mb-2"
+                           aria-label="Share of funded value billed" />
+        <MudSimpleTable Dense="true" Elevation="0">
+            <tbody>
+                <tr><td>Billed to date</td><td style="text-align:right" data-testid="billed-amount">@BillingFormat.Money(_summary.BilledToDate)</td></tr>
+                <tr><td>Funded value</td><td style="text-align:right">@BillingFormat.Money(_summary.FundedValue)</td></tr>
+                <tr><td>Paid</td><td style="text-align:right">@BillingFormat.Money(_summary.Paid)</td></tr>
+                <tr><td>Outstanding (AR)</td><td style="text-align:right">@BillingFormat.Money(_summary.Outstanding)</td></tr>
+                @if (_summary.WithheldToDate > 0)
+                {
+                    <tr><td>Fee withheld to date</td><td style="text-align:right">@BillingFormat.Money(_summary.WithheldToDate)</td></tr>
+                }
+                @if (_summary.DraftTotal != 0)
+                {
+                    <tr><td>In draft invoices</td><td style="text-align:right">@BillingFormat.Money(_summary.DraftTotal)</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (_summary.Clins.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+                <thead><tr><th>CLIN</th><th style="text-align:right">Billed</th><th style="text-align:right">Funded</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _summary.Clins)
+                    {
+                        <tr><td>@c.Number <span class="mud-text-secondary">@c.Pricing</span></td><td style="text-align:right">@BillingFormat.Amount(c.BilledToDate)</td><td style="text-align:right">@BillingFormat.Amount(c.FundedValue)</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_summary.InvoiceCount invoice@(_summary.InvoiceCount == 1 ? "" : "s")@(_summary.LastInvoiceDate is { } d ? $", last {BillingFormat.Date(d)}" : "")</MudText>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ContractId { get; set; }
+
+    private ContractBillingSummaryDto? _summary;
+
+    private double Percent => _summary is null || _summary.FundedValue <= 0 ? 0 : (double)Math.Min(1, _summary.BilledToDate / _summary.FundedValue) * 100;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _summary = await Invoices.GetContractSummaryAsync(ContractId);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or InvalidOperationException or WorkbenchNotFoundException)
+        {
+            _summary = null;
+        }
+    }
+}

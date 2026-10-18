@@ -1,0 +1,118 @@
+@page "/billing/accrual"
+@inject IInvoiceService Invoices
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+
+<PageTitle>Unbilled accrual · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="Unbilled revenue accrual" Subtitle="Optional month-end entry for cost-plus and T&M revenue earned but not yet invoiced: debit AR unbilled (1120), credit revenue, dated the period's last day and reversed automatically on the first day of the next period. It's also on the period-close checklist." />
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudSelect T="Guid?" Value="_periodId" ValueChanged="PeriodChanged" Label="Period" Dense="true" Style="max-width:240px" Class="mb-3">
+        @foreach (var p in _periods.OrderByDescending(p => p.Start))
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+        }
+    </MudSelect>
+    @if (_accrual is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        @foreach (var n in _accrual.Notes)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@n</MudAlert>
+        }
+        <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-3">
+            <MudSimpleTable Dense="true" data-testid="accrual-lines">
+                <thead><tr><th>Contract</th><th>CLIN</th><th>Description</th><th style="text-align:right">Unbilled at @BillingFormat.Date(_accrual.PeriodEnd)</th></tr></thead>
+                <tbody>
+                    @if (_accrual.Lines.Count == 0)
+                    {
+                        <tr><td colspan="4" class="mud-text-secondary">Nothing earned and unbilled.</td></tr>
+                    }
+                    @foreach (var l in _accrual.Lines)
+                    {
+                        <tr><td>@l.ContractNumber</td><td>@l.ClinNumber</td><td>@l.Description</td><td style="text-align:right">@BillingFormat.Amount(l.Amount)</td></tr>
+                    }
+                </tbody>
+                <tfoot><tr><td colspan="3"><strong>Total</strong></td><td style="text-align:right"><strong>@BillingFormat.Money(_accrual.Amount)</strong></td></tr></tfoot>
+            </MudSimpleTable>
+        </MudPaper>
+        @if (_accrual.IsPosted)
+        {
+            <MudAlert Severity="Severity.Success">
+                Posted by @_accrual.PostedBy @(_accrual.PostedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)):
+                <MudLink Href="@($"accounting/journal/{_accrual.JournalEntryId}")">accrual</MudLink> and
+                <MudLink Href="@($"accounting/journal/{_accrual.ReversalEntryId}")">reversal</MudLink>.
+            </MudAlert>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PostAsync" Disabled="@(_busy || _accrual.Amount <= 0)">Post accrual and reversal</MudButton>
+        }
+    }
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private Guid? _periodId;
+    private UnbilledAccrualDto? _accrual;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var pick = _periods.Where(p => p.End < today).MaxBy(p => p.Start) ?? _periods.FirstOrDefault();
+            await PeriodChanged(pick?.Id);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task PeriodChanged(Guid? id)
+    {
+        _periodId = id;
+        _accrual = null;
+        if (id is { } p)
+        {
+            try
+            {
+                _accrual = await Invoices.GetUnbilledAccrualAsync(p);
+            }
+            catch (Exception ex)
+            {
+                (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+            }
+        }
+    }
+
+    private async Task PostAsync()
+    {
+        _busy = true;
+        try
+        {
+            _accrual = await Invoices.PostUnbilledAccrualAsync(_periodId!.Value);
+            Snackbar.Add("Accrual posted, with its reversal in the next period.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+}

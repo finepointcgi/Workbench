@@ -13,7 +13,8 @@ namespace Workbench.Application.Accounting;
 /// change dated in it (the timesheet and ODC services check the period, and the posting decorators refuse approvals
 /// and reopens there).
 /// </summary>
-public sealed class PeriodCloseService(IWorkbenchDbContextFactory dbFactory, PostingEngine engine, AuditRecorder audit) : IPeriodCloseService
+public sealed class PeriodCloseService(IWorkbenchDbContextFactory dbFactory, PostingEngine engine, AuditRecorder audit, IEnumerable<IPeriodCloseCheck>? moduleChecks = null)
+    : IPeriodCloseService
 {
     private const int MaxDetails = 25;
 
@@ -109,7 +110,13 @@ public sealed class PeriodCloseService(IWorkbenchDbContextFactory dbFactory, Pos
         var trial = Check(CloseCheckKind.TrialBalanceBalanced, "Trial balance balanced", debits == credits ? 0 : 1,
             debits == credits ? $"Debits and credits both {debits:N2}" : $"Debits {debits:N2} vs credits {credits:N2}", []);
 
-        return new PeriodCloseChecklistDto(period.Id, period.Name, start, end, period.Status == PeriodStatus.Closed, [timesheets, odcs, posting, trial]);
+        List<CloseCheckDto> checks = [timesheets, odcs, posting, trial];
+        foreach (var check in moduleChecks ?? [])
+        {
+            checks.Add(await check.CheckAsync(db, period, ct));
+        }
+
+        return new PeriodCloseChecklistDto(period.Id, period.Name, start, end, period.Status == PeriodStatus.Closed, checks);
     }
 
     private static CloseCheckDto Check(CloseCheckKind kind, string title, int count, string summary, IEnumerable<string> details) =>
@@ -120,4 +127,10 @@ public sealed class PeriodCloseService(IWorkbenchDbContextFactory dbFactory, Pos
 
     private static string RequireReason(string? reason) =>
         string.IsNullOrWhiteSpace(reason) ? throw new ArgumentException("A reason is required.") : reason.Trim();
+}
+
+/// <summary>A checklist item another module adds to the period close (for example billing's unbilled accrual).</summary>
+public interface IPeriodCloseCheck
+{
+    Task<CloseCheckDto> CheckAsync(IWorkbenchDbContext db, FiscalPeriod period, CancellationToken ct);
 }

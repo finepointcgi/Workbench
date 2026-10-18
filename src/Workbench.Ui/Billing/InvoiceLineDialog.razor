@@ -1,0 +1,63 @@
+@* A manual line: an adjustment on a draft, or a credit on a credit memo (with its reason). *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (IsCredit)
+            {
+                <MudText>The credit memo is a draft until approved; approving it posts it and reduces the invoice's open balance.</MudText>
+                <MudTextField @bind-Value="_reason" Label="Reason" Required="true" Immediate="true" Lines="2" HelperText="Recorded in the audit log and on the credit memo." />
+            }
+            <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN" Clearable="true">
+                @foreach (var c in Clins)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="@(IsCredit ? "Amount to credit" : "Amount (negative to reduce)")" Format="N2" HideSpinButtons="true" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!Valid)" OnClick="Save">@(IsCredit ? "Create credit memo" : "Add line")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<BillingClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public bool IsCredit { get; set; }
+
+    [Parameter]
+    public Guid? DefaultClinId { get; set; }
+
+    [Parameter]
+    public decimal DefaultAmount { get; set; }
+
+    private Guid? _clinId;
+    private string? _description;
+    private string? _reason;
+    private decimal _amount;
+
+    private bool Valid => !string.IsNullOrWhiteSpace(_description) && _amount != 0 && (!IsCredit || (_amount > 0 && !string.IsNullOrWhiteSpace(_reason)));
+
+    protected override void OnInitialized()
+    {
+        _clinId = DefaultClinId;
+        _amount = DefaultAmount;
+        _description = IsCredit ? "Credit" : null;
+    }
+
+    private void Save()
+    {
+        object result = IsCredit
+            ? new CreditMemoRequest(_reason!.Trim(), [new CreditMemoLine(_clinId, _description!.Trim(), _amount)])
+            : new AddInvoiceLineRequest(_clinId, _description!.Trim(), _amount);
+        MudDialog.Close(DialogResult.Ok(result));
+    }
+}
