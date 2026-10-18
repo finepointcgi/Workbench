@@ -67,7 +67,8 @@ public sealed record RequisitionDto(
     IReadOnlyList<RequisitionLineDto> Lines,
     IReadOnlyList<RequisitionApprovalDto> History,
     bool CanEdit,
-    bool CanApprove);
+    bool CanApprove,
+    IReadOnlyList<string>? CeilingWarnings = null);
 
 /// <summary>
 /// One requisition line: a project WBS element (and ODC type, default Materials), or a GL account (charged to the

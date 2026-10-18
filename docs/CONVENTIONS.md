@@ -333,3 +333,4 @@ await notifications.PublishAsync(
   Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
 - Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
   `InvoiceGenerator`); cost reports keep the real rates.
+- Threshold alerts also go out hourly from `CeilingAlertBackgroundService` (Workbench System, every tenant); requisitions warn against cost ceilings unless the ceiling blocks and has `CheckAtRequisition`; fee caps may name a fiscal year, and billing then splits the CLIN's fee by the fiscal year of the cost (`InvoiceLine.FiscalYear`/`CostBasis`).
