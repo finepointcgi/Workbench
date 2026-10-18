@@ -213,8 +213,9 @@ public sealed partial class WebSecurityTests
         // SCIM users sign in without an invite; a deactivated one can't.
         using var admin = factory.CreateClientAs(Admin);
         var users = await admin.GetFromJsonAsync<List<UserAdminDto>>("/api/v1/admin/users?query=jordan");
-        Assert.True(users!.Single().ScimManaged);
-        Assert.False(users.Single().IsActive);
+        var jordan = Assert.Single(users!);
+        Assert.True(jordan.ScimManaged);
+        Assert.False(jordan.IsActive);
 
         var scimEvents = await EventsAsync(factory, SecurityEventTypes.Scim);
         Assert.Contains(scimEvents, e => e.Outcome == SecurityOutcomes.Denied && e.Detail!.Contains("bearer token"));
