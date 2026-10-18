@@ -163,6 +163,7 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - Timesheets are approved by the supervisor, or by Admins for employees without one; Timekeeper/Finance/Admin view all.
 - Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
   analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
+
 ## Security events, user lifecycle and retention
 
 - Record security-relevant actions with `Application.Security.SecurityEventLog.RecordAsync(SecurityEventTypes.X, target,
@@ -244,6 +245,7 @@ await notifications.PublishAsync(
   picked up automatically; a reference without one (like comments → items) needs an explicit check there.
 - External ids Workbench has no field for (Smartsheet row/sheet ids) live in `ImportKeyMap`. Samples and the expected
   columns per file: `samples/import/README.md`.
+
 ## Procure-to-pay and fixed assets (wave 6)
 
 - Entities: `PurchaseRequisition(Line)`, `RequisitionApproval`, `PurchaseOrder(Line)`, `PurchaseOrderRevision`,
@@ -260,4 +262,18 @@ await notifications.PublishAsync(
   is the scheduled amount through the period less what's posted (late additions catch up once), unique per asset and period,
   so runs are idempotent; closed periods are refused; `DepreciationCloseCheck` adds "Depreciation posted" to the period close.
   Government-furnished and contractor-acquired property is tracked but never depreciated.
+
+## Payroll and leave (wave 6)
+
+- Workbench never calculates payroll taxes. `Application/Payroll/IPayrollProvider` adapters (Paylocity; ADP, Paychex and Gusto
+  are "coming soon" stubs that throw `NotSupportedException`) format the hours export and parse the provider's register.
+  The Paylocity file formats Workbench assumes are documented on `PaylocityFormats`; sample: `samples/payroll/paylocity-register-sample.csv`.
+- Pay rates (`EmployeePayProfile`) are what employees are paid, not cost rates. Every payroll service is Finance/Admin; rates are
+  masked except `IPayrollProfileService.RevealAsync` (security event `payroll.pay_rate_revealed`); audit rows never hold rates.
+- Payroll hours come from approved timesheets only; missing and unapproved timesheets are flagged. Overtime: non-exempt, over 40
+  worked hours in a Monday–Sunday week (leave doesn't count). The payroll journal (`JournalSource.Payroll`, source id = register)
+  clears 2100 at the GL's accrual, posts gross − accrual to 6050, employer taxes/benefits to 6020/6030 and credits 2120/2130/2140.
+- Leave balances are an append-only `LeaveLedgerEntry` ledger. Usage is never typed: `LeaveEngine.SyncUsageAsync` keeps one net row
+  per approved timesheet on the policy's charge code. Accrual (per pay period, idempotent by `SourceKey`) runs when payroll posts.
+  Holidays aren't a balance. Seeds: `PayrollSeed.cs`, `LeaveSeed.cs`.
 
