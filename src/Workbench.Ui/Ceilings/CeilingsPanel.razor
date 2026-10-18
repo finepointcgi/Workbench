@@ -1,0 +1,270 @@
+@* Ceilings on a contract (with its rate caps) or on a project: consumed vs ceiling, overrides, and Finance's edits. *@
+@inject ICeilingService Ceilings
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">@_error</MudAlert>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Ceilings</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            Hours = time on record · cost = labor at cost + submitted/approved ODCs + open PO commitments · billed = approved invoices
+        </MudText>
+        <MudSpacer />
+        @if (_canManage && !ReadOnly)
+        {
+            @if (ContractId is not null)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="CheckAlertsAsync" data-testid="ceiling-check-alerts">Check alerts</MudButton>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="ceiling-add">Add ceiling</MudButton>
+        }
+    </MudStack>
+
+    @if (_ceilings.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No ceilings yet.</MudText></MudPaper>
+    }
+    else
+    {
+        <MudTable Items="_ceilings" Dense="true" Hover="true" Outlined="true" Elevation="0" data-testid="ceiling-table">
+            <HeaderContent>
+                <MudTh>Ceiling</MudTh>
+                <MudTh>Mode</MudTh>
+                <MudTh>Consumed</MudTh>
+                <MudTh>Overrides</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="@(context.Ceiling.IsActive ? "" : "mud-text-secondary")"><b>@context.Ceiling.Label</b></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@CeilingFormat.Scope(context.Ceiling.Scope)@(context.Ceiling.IsActive ? "" : " · inactive")@(context.Ceiling.Notes is { } n ? $" · {n}" : "")</MudText>
+                </MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Ceiling.Mode == CeilingMode.Block ? Color.Error : Color.Default)">@context.Ceiling.Mode</MudChip>
+                </MudTd>
+                <MudTd Style="min-width:260px">
+                    @foreach (var m in context.Measures)
+                    {
+                        <div data-testid="ceiling-measure">
+                            <MudText Typo="Typo.caption">
+                                @CeilingFormat.Metric(m.Metric): @CeilingFormat.Amount(m.Metric, m.Consumed) of @CeilingFormat.Amount(m.Metric, m.Limit) (@m.PercentConsumed.ToString("0.#")%)
+                                @if (m.EffectiveLimit is null)
+                                {
+                                    <span> · override lifts it</span>
+                                }
+                                else if (m.EffectiveLimit != m.Limit)
+                                {
+                                    <span> · with override @CeilingFormat.Amount(m.Metric, m.EffectiveLimit.Value)</span>
+                                }
+                            </MudText>
+                            <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" />
+                        </div>
+                    }
+                </MudTd>
+                <MudTd>
+                    @foreach (var o in context.ActiveOverrides)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block">
+                            Until @o.ExpiresAtUtc.AddDays(-1).ToString("yyyy-MM-dd") by @o.ApprovedBy: @o.Reason
+                            @if (context.CanOverride && !ReadOnly)
+                            {
+                                <MudLink Typo="Typo.caption" Class="ml-1" OnClick="() => RevokeAsync(o)">Revoke</MudLink>
+                            }
+                        </MudText>
+                    }
+                </MudTd>
+                <MudTd Style="text-align:right; white-space:nowrap">
+                    @if (!ReadOnly && context.Ceiling.IsActive)
+                    {
+                        @if (context.CanOverride)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => OverrideAsync(context)" data-testid="ceiling-override">Override</MudButton>
+                        }
+                        @if (_canManage)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit" OnClick="() => EditAsync(context.Ceiling)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" aria-label="Deactivate" OnClick="() => DeactivateAsync(context.Ceiling)" />
+                        }
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+    @if (ContractId is not null)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-6 mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Rate and fee caps</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Billing applies the lower of the indirect rate and its cap, and stops fee at the caps.</MudText>
+            <MudSpacer />
+            @if (_canManage && !ReadOnly)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRateAsync" data-testid="rate-ceiling-add">Add cap</MudButton>
+            }
+        </MudStack>
+        @if (_rates.Count == 0)
+        {
+            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No rate or fee caps.</MudText></MudPaper>
+        }
+        else
+        {
+            <MudPaper Outlined="true">
+                <MudList T="string" Dense="true">
+                    @foreach (var r in _rates)
+                    {
+                        <MudListItem T="string">
+                            <MudStack Row="true" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.body2" Class="@(r.IsActive ? "" : "mud-text-secondary")" data-testid="rate-ceiling">@r.Label@(r.IsActive ? "" : " (inactive)")</MudText>
+                                <MudSpacer />
+                                @if (_canManage && r.IsActive && !ReadOnly)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" aria-label="Deactivate cap" OnClick="() => DeactivateRateAsync(r)" />
+                                }
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+        }
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid? ContractId { get; set; }
+
+    [Parameter]
+    public Guid? ProjectId { get; set; }
+
+    /// <summary>Shows the ceilings without edit or override actions.</summary>
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private bool _canManage;
+    private IReadOnlyList<CeilingStatusDto> _ceilings = [];
+    private IReadOnlyList<RateCeilingDto> _rates = [];
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            if (ContractId is { } c)
+            {
+                var status = await Ceilings.GetContractStatusAsync(c);
+                (_ceilings, _rates, _canManage) = (status.Ceilings, status.RateCeilings, status.CanManage);
+            }
+            else if (ProjectId is { } p)
+            {
+                var status = await Ceilings.GetProjectStatusAsync(p);
+                (_ceilings, _canManage) = (status.Ceilings, status.CanManage);
+            }
+
+            _error = null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _error = "Only Finance, administrators and the project's manager can see its ceilings.";
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+
+        _loading = false;
+    }
+
+    private async Task EditAsync(CeilingDto? existing)
+    {
+        var parameters = new DialogParameters<CeilingDialog>
+        {
+            { d => d.ContractId, ContractId },
+            { d => d.ProjectId, ProjectId },
+            { d => d.Existing, existing },
+        };
+        var dialog = await DialogService.ShowAsync<CeilingDialog>(existing is null ? "Add ceiling" : "Edit ceiling", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OverrideAsync(CeilingStatusDto ceiling)
+    {
+        var parameters = new DialogParameters<CeilingOverrideDialog> { { d => d.Ceiling, ceiling } };
+        var dialog = await DialogService.ShowAsync<CeilingOverrideDialog>($"Override: {ceiling.Ceiling.Label}", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task RevokeAsync(CeilingOverrideDto o)
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog> { { d => d.Message, "Revoke this override? The ceiling applies again at once." }, { d => d.ConfirmText, "Revoke" } };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>("Revoke override", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => Ceilings.RevokeOverrideAsync(o.Id, new CeilingReasonRequest(reason)), "Override revoked.");
+        }
+    }
+
+    private async Task DeactivateAsync(CeilingDto ceiling)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Deactivate ceiling", $"Deactivate {ceiling.Label}? It stops counting and blocking.", yesText: "Deactivate", cancelText: "Cancel") == true)
+        {
+            await RunAsync(() => Ceilings.DeactivateAsync(ceiling.Id), "Ceiling deactivated.");
+        }
+    }
+
+    private async Task AddRateAsync()
+    {
+        var parameters = new DialogParameters<RateCeilingDialog> { { d => d.ContractId, ContractId!.Value } };
+        var dialog = await DialogService.ShowAsync<RateCeilingDialog>("Add rate or fee cap", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private Task DeactivateRateAsync(RateCeilingDto r) => RunAsync(() => Ceilings.DeactivateRateCeilingAsync(r.Id), "Cap deactivated.");
+
+    private async Task CheckAlertsAsync()
+    {
+        try
+        {
+            var sent = await Ceilings.CheckAlertsAsync(ContractId!.Value);
+            Snackbar.Add(sent == 0 ? "No new alerts." : $"Sent {sent} alert{(sent == 1 ? "" : "s")}.", sent == 0 ? Severity.Info : Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string done)
+    {
+        try
+        {
+            await action();
+            Snackbar.Add(done, Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

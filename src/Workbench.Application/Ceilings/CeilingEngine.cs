@@ -211,6 +211,37 @@ internal static class CeilingEngine
         return warnings;
     }
 
+    /// <summary>
+    /// For something already on record being submitted: blocking ceilings it touches that are already past their limit (and
+    /// overrides) refuse it; warning ceilings past their limit come back as warnings.
+    /// </summary>
+    public static List<string> CheckStanding(IEnumerable<CeilingState> states, IReadOnlyCollection<ChargeDelta> own, string what)
+    {
+        var warnings = new List<string>();
+        foreach (var s in states.Where(s => s.Ceiling.IsActive))
+        {
+            var covered = own.Where(d => s.Covers(d.WbsElementId, d.LaborCategoryId)).ToList();
+            foreach (var m in new[] { CeilingMeasure.Hours, CeilingMeasure.Cost })
+            {
+                if (s.Limit(m) is not { } limit || covered.Sum(d => m == CeilingMeasure.Hours ? d.Hours : d.Cost) <= 0 || s.Consumed(m) <= limit)
+                {
+                    continue;
+                }
+
+                var effective = s.EffectiveLimit(m);
+                var message = $"{s.Label}: {Noun(m)} are at {Format(m, s.Consumed(m))}, past the ceiling of {Format(m, limit)}";
+                if (s.Ceiling.Enforcement == CeilingEnforcement.Block && effective is { } e && s.Consumed(m) > e)
+                {
+                    throw new CeilingExceededException(message + $", so {what} can't go ahead. The ceiling blocks it: ask Finance for an override or a higher ceiling.");
+                }
+
+                warnings.Add(message + ".");
+            }
+        }
+
+        return warnings;
+    }
+
     public static List<string> CheckBilling(IEnumerable<CeilingState> states, IReadOnlyCollection<BillingDelta> deltas, string what)
     {
         var warnings = new List<string>();

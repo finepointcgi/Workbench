@@ -78,9 +78,23 @@ public sealed class ChargeGuard(
         return CeilingEngine.CheckCharges(states, deltas, what);
     }
 
+    internal async Task<List<string>> CheckStandingAsync(IReadOnlyCollection<ChargeDelta> own, string what, CancellationToken ct)
+    {
+        var mine = own.Where(d => d.Hours > 0 || d.Cost > 0).ToList();
+        if (mine.Count == 0)
+        {
+            return [];
+        }
+
+        await using var db = await dbFactory.CreateAsync(ct);
+        await EnsureOpenAsync(db, mine.Select(d => d.WbsElementId), what, ct);
+        var states = await CeilingEngine.ForWbsAsync(db, mine.Select(d => d.WbsElementId).Distinct().ToList(), UtcNow, ct);
+        return CeilingEngine.CheckStanding(states, mine, what);
+    }
+
     internal async Task<List<string>> CheckBillingAsync(Guid contractId, IReadOnlyCollection<BillingDelta> deltas, string what, CancellationToken ct)
     {
-        if (deltas.Sum(d => d.Amount) <= 0 && deltas.All(d => d.Amount <= 0))
+        if (deltas.All(d => d.Amount <= 0))
         {
             return [];
         }

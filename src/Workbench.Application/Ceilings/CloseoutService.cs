@@ -4,6 +4,7 @@ using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Closeout;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Assets;

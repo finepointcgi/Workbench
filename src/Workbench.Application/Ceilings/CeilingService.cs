@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Ceilings;
 using Workbench.Domain.Ceilings;
 using Workbench.Domain.ProjectAccounting;
