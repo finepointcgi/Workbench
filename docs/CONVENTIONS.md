@@ -39,6 +39,7 @@ branches, so these rules keep merges small and predictable.
 - `MudText` uses `HtmlTag="h1"` (not `Component`). `MudTabs` uses `TabPanelsClass` (not `PanelClass`).
 - Avoid `Color.Secondary` for quiet text (it is pink); use `Class="mud-text-secondary"`.
 - Dialogs: `[CascadingParameter] IMudDialogInstance MudDialog`, `DialogService.ShowAsync<T>()`, `await dialog.Result`.
+- `MudMenu` with `ActivatorContent`: the activator must call `context.ToggleAsync(e)`; it isn't wired automatically.
 - Treat MudBlazor analyzer warnings (`MUD0002`) as errors: they flag removed parameters.
 
 ## Build and verify

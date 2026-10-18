@@ -1,0 +1,301 @@
+@using Workbench.Contracts.Automation
+@inject IRuleService Rules
+@inject ISnackbar Snackbar
+
+@* Creates or edits a rule: trigger → conditions → actions, with a dry run against one of the sheet's items. *@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(Rule is null ? "New rule" : "Edit rule")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="4" Style="min-width:min(640px, 90vw)">
+            <MudTextField @bind-Value="_name" Label="Rule name" Required="true" AutoFocus="true" Immediate="true" />
+
+            <section aria-labelledby="rule-when">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" id="rule-when">When</MudText>
+                <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" AlignItems="AlignItems.End">
+                    <MudSelect T="RuleTriggerKind" Value="_trigger" ValueChanged="OnTriggerChanged" Label="Trigger" Dense="true" Style="min-width:200px">
+                        @foreach (var kind in Enum.GetValues<RuleTriggerKind>())
+                        {
+                            <MudSelectItem T="RuleTriggerKind" Value="kind">@RuleFormat.TriggerName(kind)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    @if (_trigger == RuleTriggerKind.ColumnChanged)
+                    {
+                        <MudSelect T="string" @bind-Value="_triggerField" Label="Field" Dense="true" Style="min-width:160px">
+                            @foreach (var f in _fields.Where(f => !f.IsFormula))
+                            {
+                                <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <div style="min-width:160px">
+                            <RuleValueInput Field="FieldFor(_triggerField)" @bind-Value="_toValue" Label="Changes to (optional)" />
+                        </div>
+                    }
+                    else if (_trigger == RuleTriggerKind.DateReached)
+                    {
+                        <MudNumericField T="int" @bind-Value="_offsetAbs" Label="Days" Min="0" Max="365" Margin="Margin.Dense" Style="max-width:90px" />
+                        <MudSelect T="int" @bind-Value="_offsetSign" Label="" Dense="true" Style="max-width:110px" aria-label="Before, on or after">
+                            <MudSelectItem T="int" Value="-1">before</MudSelectItem>
+                            <MudSelectItem T="int" Value="1">after</MudSelectItem>
+                        </MudSelect>
+                        <MudSelect T="string" @bind-Value="_triggerField" Label="Date" Dense="true" Style="min-width:160px">
+                            @foreach (var f in _fields.Where(f => f.Kind == ColumnKind.Date))
+                            {
+                                <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </MudStack>
+            </section>
+
+            <section aria-labelledby="rule-if">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" id="rule-if">Only if (all of these)</MudText>
+                @foreach (var condition in _conditions)
+                {
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-1">
+                        <MudSelect T="string" @bind-Value="condition.Field" Label="Field" Dense="true" Style="min-width:150px">
+                            @foreach (var f in _fields)
+                            {
+                                <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect T="RuleConditionOperator" @bind-Value="condition.Operator" Label="Is" Dense="true" Style="min-width:140px">
+                            @foreach (var op in Enum.GetValues<RuleConditionOperator>())
+                            {
+                                <MudSelectItem T="RuleConditionOperator" Value="op">@RuleFormat.OperatorName(op)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (condition.Operator != RuleConditionOperator.IsBlank)
+                        {
+                            <div style="min-width:150px">
+                                <RuleValueInput Field="FieldFor(condition.Field)" @bind-Value="condition.Value" />
+                            </div>
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Remove condition"
+                                       OnClick="() => _conditions.Remove(condition)" />
+                    </MudStack>
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="() => _conditions.Add(new ConditionModel())">Add condition</MudButton>
+            </section>
+
+            <section aria-labelledby="rule-then">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" id="rule-then">Then</MudText>
+                @foreach (var action in _actions)
+                {
+                    <MudPaper Outlined="true" Class="pa-3 mb-2">
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                            <MudSelect T="RuleActionKind" @bind-Value="action.Kind" Label="Action" Dense="true" Style="min-width:170px">
+                                @foreach (var kind in Enum.GetValues<RuleActionKind>())
+                                {
+                                    <MudSelectItem T="RuleActionKind" Value="kind">@RuleFormat.ActionName(kind)</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @switch (action.Kind)
+                            {
+                                case RuleActionKind.Notify:
+                                    <MudTextField @bind-Value="action.Emails" Label="Emails" HelperText="Separate with commas" Immediate="true" Margin="Margin.Dense" Style="min-width:200px" />
+                                    @if (_people.Count > 0)
+                                    {
+                                        <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="action.PersonFields" Label="People in" Dense="true" Style="min-width:150px"
+                                                   MultiSelectionTextFunc="@(keys => string.Join(", ", keys.Select(k => RuleFormat.FieldName(Sheet, k))))">
+                                            @foreach (var f in _people)
+                                            {
+                                                <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    }
+                                    <MudTextField @bind-Value="action.Message" Label="Message (optional)" HelperText="Default: rule name and item title" Immediate="true" Margin="Margin.Dense" Style="min-width:200px" />
+                                    break;
+                                case RuleActionKind.SetValue:
+                                    <MudSelect T="string" @bind-Value="action.Field" Label="Field" Dense="true" Style="min-width:150px">
+                                        @foreach (var f in _fields.Where(f => !f.IsFormula))
+                                        {
+                                            <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <div style="min-width:180px">
+                                        <RuleValueInput Field="FieldFor(action.Field)" @bind-Value="action.Value" Label="To" AllowTemplates="true" />
+                                    </div>
+                                    break;
+                                case RuleActionKind.AssignPerson:
+                                    <MudSelect T="string" @bind-Value="action.Field" Label="Person column" Dense="true" Style="min-width:150px">
+                                        @foreach (var f in _people)
+                                        {
+                                            <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudTextField @bind-Value="action.Value" Label="Email" Immediate="true" Margin="Margin.Dense" Style="min-width:200px" />
+                                    break;
+                                default:
+                                    <MudTextField @bind-Value="action.Value" Label="Subitem title" HelperText="You can use {Title} or {Column name}" Immediate="true" Margin="Margin.Dense" Style="min-width:260px" />
+                                    break;
+                            }
+                            <MudSpacer />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Remove action"
+                                           Disabled="_actions.Count == 1" OnClick="() => _actions.Remove(action)" />
+                        </MudStack>
+                    </MudPaper>
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="() => _actions.Add(new ActionModel())">Add action</MudButton>
+            </section>
+
+            <section aria-labelledby="rule-test">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" id="rule-test">Test</MudText>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
+                    <MudSelect T="Guid?" @bind-Value="_testItem" Label="Against item" Dense="true" Style="min-width:220px">
+                        @foreach (var item in Items)
+                        {
+                            <MudSelectItem T="Guid?" Value="item.Id">@item.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Science" Disabled="_testItem is null" OnClick="TestAsync">Dry run</MudButton>
+                </MudStack>
+                @if (_test is not null)
+                {
+                    <MudAlert Severity="@(_test.WouldRun ? Severity.Success : Severity.Info)" Dense="true" Class="mt-2">
+                        <strong>@(_test.WouldRun ? "This rule would run." : "This rule wouldn't run.")</strong>
+                        <ul class="mt-1 mb-0 pl-4">
+                            @foreach (var step in _test.Steps)
+                            {
+                                <li>@step</li>
+                            }
+                            @foreach (var planned in _test.PlannedActions)
+                            {
+                                <li>Action: @planned</li>
+                            }
+                        </ul>
+                    </MudAlert>
+                }
+            </section>
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_name) || _saving" OnClick="SaveAsync">
+            @(Rule is null ? "Create" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public SheetDetail Sheet { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ItemDto> Items { get; set; } = [];
+
+    /// <summary>The rule to edit, or null for a new one.</summary>
+    [Parameter]
+    public RuleDto? Rule { get; set; }
+
+    private IReadOnlyList<RuleField> _fields = [];
+    private IReadOnlyList<RuleField> _people = [];
+    private string _name = "";
+    private bool _enabled = true;
+    private RuleTriggerKind _trigger = RuleTriggerKind.ColumnChanged;
+    private string? _triggerField;
+    private string? _toValue;
+    private int _offsetAbs;
+    private int _offsetSign = -1;
+    private List<ConditionModel> _conditions = [];
+    private List<ActionModel> _actions = [new()];
+    private Guid? _testItem;
+    private RuleTestResult? _test;
+    private string? _error;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        _fields = RuleFormat.Fields(Sheet);
+        _people = _fields.Where(f => f.Kind == ColumnKind.Person).ToList();
+        _testItem = Items.FirstOrDefault()?.Id;
+        _triggerField = _fields.FirstOrDefault(f => f.Kind == ColumnKind.Dropdown)?.Key ?? RuleFields.Title;
+        if (Rule is { } rule)
+        {
+            _name = rule.Name;
+            _enabled = rule.Enabled;
+            _trigger = rule.Trigger.Kind;
+            _triggerField = rule.Trigger.Field ?? _triggerField;
+            _toValue = rule.Trigger.ToValue;
+            _offsetAbs = Math.Abs(rule.Trigger.OffsetDays);
+            _offsetSign = rule.Trigger.OffsetDays > 0 ? 1 : -1;
+            _conditions = rule.Conditions.Select(c => new ConditionModel { Field = c.Field, Operator = c.Operator, Value = c.Value }).ToList();
+            _actions = rule.Actions.Select(ActionModel.From).ToList();
+        }
+    }
+
+    private RuleField? FieldFor(string? key) => _fields.FirstOrDefault(f => f.Key == key);
+
+    private void OnTriggerChanged(RuleTriggerKind kind)
+    {
+        _trigger = kind;
+        _toValue = null;
+        if (kind == RuleTriggerKind.DateReached && FieldFor(_triggerField)?.Kind != ColumnKind.Date)
+        {
+            _triggerField = RuleFields.Finish;
+        }
+        else if (kind == RuleTriggerKind.ColumnChanged && _triggerField is null)
+        {
+            _triggerField = RuleFields.Title;
+        }
+    }
+
+    private SaveRuleRequest BuildRequest() => new(
+        _name.Trim(),
+        _enabled,
+        new RuleTriggerDto(_trigger, _trigger == RuleTriggerKind.ItemCreated ? null : _triggerField, _toValue, _trigger == RuleTriggerKind.DateReached ? _offsetSign * _offsetAbs : 0),
+        _conditions.Select(c => new RuleConditionDto(c.Field, c.Operator, c.Value)).ToList(),
+        _actions.Select(a => a.ToDto()).ToList());
+
+    private async Task TestAsync()
+    {
+        _error = null;
+        _test = null;
+        try
+        {
+            _test = await Rules.TestAsync(Sheet.Summary.Id, new TestRuleRequest(BuildRequest() with { Name = string.IsNullOrWhiteSpace(_name) ? "Test" : _name.Trim() }, _testItem!.Value));
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (HttpRequestException ex)
+        {
+            Snackbar.Add($"Couldn't test the rule: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        _saving = true;
+        try
+        {
+            var saved = Rule is null
+                ? await Rules.CreateAsync(Sheet.Summary.Id, BuildRequest())
+                : await Rules.UpdateAsync(Sheet.Summary.Id, Rule.Id, BuildRequest());
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (HttpRequestException ex)
+        {
+            Snackbar.Add($"Couldn't save the rule: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

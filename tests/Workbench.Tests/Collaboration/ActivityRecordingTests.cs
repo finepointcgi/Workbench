@@ -13,7 +13,8 @@ public sealed class ActivityRecordingTests
     {
         await using var host = new CollaborationHost();
 
-        Assert.IsType<ActivityRecordingItemService>(host.Items);
+        // Automation wraps the activity decorator (AutomationItemService → ActivityRecordingItemService → ItemService).
+        Assert.IsType<Workbench.Application.Automation.AutomationItemService>(host.Items);
         Assert.IsType<ActivityRecordingColumnService>(host.Columns);
     }
 
