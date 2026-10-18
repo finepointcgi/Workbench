@@ -1,6 +1,7 @@
 @* Pages under /billing. Finance and administrators use everything; a project manager can open their contracts' invoices.
-   The server enforces both, so this layout only needs a signed-in user; each page explains a refusal. *@
+   The server enforces both, so this layout only needs a signed-in user; each page explains a refusal and wraps
+   Finance-only actions in FinanceOnly (FinanceAccess is cascaded here). *@
 @inherits LayoutComponentBase
 @layout Workbench.Ui.Layout.MainLayout
 
-@Body
+<FinanceAccessScope>@Body</FinanceAccessScope>
