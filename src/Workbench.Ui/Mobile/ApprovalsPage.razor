@@ -1,0 +1,254 @@
+@page "/m/approvals"
+@* Everything routed to me for approval on one phone screen: timesheets, expense reports, leave, requisitions and AP bills.
+   The approval services decide what's routed to the user and enforce who may approve; this page only shows and forwards. *@
+@inject IServiceProvider Services
+@inject ITimesheetService Timesheets
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Approvals · Workbench</PageTitle>
+
+<div class="wb-m-title"><h1>Approvals</h1></div>
+
+@if (_inbox is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_inbox.Count == 0)
+{
+    <MudText Class="wb-m-muted" Align="Align.Center" data-testid="empty">Nothing is waiting for your approval.</MudText>
+}
+else
+{
+    @if (_inbox.Timesheets.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2"><b>Timesheets (@_inbox.Timesheets.Count)</b></MudText>
+        @foreach (var t in _inbox.Timesheets)
+        {
+            <div class="wb-m-card" data-testid="timesheet-item">
+                <div class="wb-m-kv"><b class="wb-m-wrap">@t.EmployeeName</b><b>@MobileFormat.Hours(t.TotalHours) h</b></div>
+                <div class="wb-m-muted">@MobileFormat.Period(t.PeriodStart, t.PeriodEnd)@(t.Revision > 0 ? $" · revision {t.Revision}" : "")</div>
+                @if (t.TotalHours < t.StandardHours)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Warning">Below the standard @MobileFormat.Hours(t.StandardHours) h</MudText>
+                }
+                @if (_timesheetDetails.TryGetValue(t.Id, out var detail))
+                {
+                    <div class="mt-2" data-testid="timesheet-detail">
+                        @foreach (var day in detail.Days.Where(d => detail.Entries.Any(e => e.WorkDate == d.Date)))
+                        {
+                            <div class="wb-m-kv"><span>@MobileFormat.Day(day.Date)@(day.EnteredLate ? " · entered late" : "")</span><b>@MobileFormat.Hours(detail.Entries.Where(e => e.WorkDate == day.Date).Sum(e => e.Hours)) h</b></div>
+                            @foreach (var e in detail.Entries.Where(e => e.WorkDate == day.Date))
+                            {
+                                <div class="wb-m-kv wb-m-muted"><span class="wb-m-wrap">&nbsp;&nbsp;@e.WbsCode · @e.WbsName</span><span>@MobileFormat.Hours(e.Hours)</span></div>
+                            }
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="ml-n2" OnClick="() => ShowTimesheetAsync(t)">Show hours</MudButton>
+                }
+                @Actions($"timesheet-{t.Id}",
+                    () => Decide(s => s.GetRequiredService<ITimesheetApprovalService>().ApproveAsync(t.Id), $"Approved {t.EmployeeName}'s timesheet."),
+                    "Reject timesheet", "The employee sees your reason and can correct and resubmit.",
+                    reason => Decide(s => s.GetRequiredService<ITimesheetApprovalService>().RejectAsync(t.Id, reason), "Timesheet rejected."))
+            </div>
+        }
+    }
+
+    @if (_inbox.Expenses.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2"><b>Expense reports (@_inbox.Expenses.Count)</b></MudText>
+        @foreach (var x in _inbox.Expenses)
+        {
+            var r = x.Report;
+            <div class="wb-m-card" data-testid="expense-item">
+                <div class="wb-m-kv"><b class="wb-m-wrap">@r.EmployeeName</b><b>@MobileFormat.Money(r.Total)</b></div>
+                <div class="wb-m-muted wb-m-wrap">@r.Title@(r.Purpose is { } p ? $" · {p}" : "")</div>
+                @foreach (var line in x.Lines)
+                {
+                    <div class="wb-m-kv wb-m-muted">
+                        <span class="wb-m-wrap">
+                            @MobileFormat.Day(line.IncurredOn) · @line.Description
+                            @if (line.ReceiptFileId is not null)
+                            {
+                                <MudLink Href="@ReceiptUrl(line.Id)" Target="_blank" Typo="Typo.body2"> receipt</MudLink>
+                            }
+                            @if (line.IsUnallowable)
+                            {
+                                <text> · unallowable</text>
+                            }
+                        </span>
+                        <span>@MobileFormat.Money(line.Amount)</span>
+                    </div>
+                }
+                @Actions($"expense-{r.Id}",
+                    () => Decide(s => s.GetRequiredService<IOdcApprovalService>().ApproveReportAsync(r.Id), $"Approved {r.EmployeeName}'s expenses."),
+                    "Reject expense report", "The employee sees your reason and can fix the report and submit it again.",
+                    reason => Decide(s => s.GetRequiredService<IOdcApprovalService>().RejectReportAsync(r.Id, reason), "Expense report rejected."))
+            </div>
+        }
+    }
+
+    @if (_inbox.Leave.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2"><b>Leave requests (@_inbox.Leave.Count)</b></MudText>
+        @foreach (var l in _inbox.Leave)
+        {
+            <div class="wb-m-card" data-testid="leave-item">
+                <div class="wb-m-kv"><b class="wb-m-wrap">@l.EmployeeName</b><b>@MobileFormat.Hours(l.Hours) h</b></div>
+                <div class="wb-m-muted">@l.PolicyName · @MobileFormat.Day(l.StartDate)@(l.EndDate != l.StartDate ? $" – {MobileFormat.Day(l.EndDate)}" : "")</div>
+                @if (l.Comment is { Length: > 0 } comment)
+                {
+                    <div class="wb-m-wrap">“@comment”</div>
+                }
+                @foreach (var warning in l.Warnings)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Warning">@warning</MudText>
+                }
+                @Actions($"leave-{l.Id}",
+                    () => Decide(s => s.GetRequiredService<ILeaveRequestService>().ApproveAsync(l.Id, new DecideLeaveRequest()), $"Approved {l.EmployeeName}'s leave."),
+                    "Reject leave request", "The employee sees your reason.",
+                    reason => Decide(s => s.GetRequiredService<ILeaveRequestService>().RejectAsync(l.Id, new DecideLeaveRequest(reason)), "Leave request rejected."))
+            </div>
+        }
+    }
+
+    @if (_inbox.Requisitions.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2"><b>Requisitions (@_inbox.Requisitions.Count)</b></MudText>
+        @foreach (var q in _inbox.Requisitions)
+        {
+            <div class="wb-m-card" data-testid="requisition-item">
+                <div class="wb-m-kv"><b>@q.Number</b><b>@MobileFormat.Money(q.Total)</b></div>
+                <div class="wb-m-muted wb-m-wrap">@(q.RequesterName ?? q.RequesterEmail) · @q.Justification</div>
+                @if (_requisitionDetails.TryGetValue(q.Id, out var detail))
+                {
+                    @foreach (var line in detail.Lines)
+                    {
+                        <div class="wb-m-kv wb-m-muted"><span class="wb-m-wrap">@line.Description (@MobileFormat.Hours(line.Quantity) × @MobileFormat.Money(line.UnitCost))@(line.ProjectCode is { } pc ? $" · {pc}" : "")</span><span>@MobileFormat.Money(line.Amount)</span></div>
+                    }
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="ml-n2" OnClick="() => ShowRequisitionAsync(q)">Show lines (@q.LineCount)</MudButton>
+                }
+                @Actions($"requisition-{q.Id}",
+                    () => Decide(s => s.GetRequiredService<IRequisitionService>().ApproveAsync(q.Id, new RequisitionDecisionRequest()), $"Approved {q.Number}."),
+                    "Reject requisition", "The requester sees your reason.",
+                    reason => Decide(s => s.GetRequiredService<IRequisitionService>().RejectAsync(q.Id, new RequisitionDecisionRequest(reason)), $"{q.Number} rejected."))
+            </div>
+        }
+    }
+
+    @if (_inbox.Bills.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2"><b>Vendor bills (@_inbox.Bills.Count)</b></MudText>
+        @foreach (var item in _inbox.Bills)
+        {
+            var b = item.Bill;
+            <div class="wb-m-card" data-testid="bill-item">
+                <div class="wb-m-kv"><b class="wb-m-wrap">@b.VendorName</b><b>@MobileFormat.Money(b.Amount)</b></div>
+                <div class="wb-m-muted">@b.Number · invoice @b.InvoiceNumber · due @MobileFormat.Day(b.DueDate)</div>
+                @foreach (var line in item.Lines)
+                {
+                    <div class="wb-m-kv wb-m-muted"><span class="wb-m-wrap">@line.Description@(line.ProjectCode is { } pc ? $" · {pc} {line.WbsCode}" : "")</span><span>@MobileFormat.Money(line.Amount)</span></div>
+                    @if (line.MatchProblem is { } problem)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Warning">@problem</MudText>
+                    }
+                }
+                @Actions($"bill-{b.Id}",
+                    () => Decide(s => s.GetRequiredService<IApBillService>().ApproveAsync(b.Id), $"Approved {b.Number}."),
+                    "Reject bill", "The bill goes back to the person who entered it, with your reason.",
+                    reason => Decide(s => s.GetRequiredService<IApBillService>().RejectAsync(b.Id, new BillReasonRequest(reason)), $"{b.Number} rejected."))
+            </div>
+        }
+    }
+}
+
+@code {
+    private MobileApprovalInbox? _inbox;
+    private readonly Dictionary<Guid, TimesheetDetailDto> _timesheetDetails = [];
+    private readonly Dictionary<Guid, RequisitionDto> _requisitionDetails = [];
+    private bool _busy;
+
+    [CascadingParameter] public MobileLayout? Shell { get; set; }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _inbox = await MobileApprovalInbox.LoadAsync(Services);
+
+    private string ReceiptUrl(Guid odcId) => Services.GetRequiredService<IOdcService>().GetReceiptUrl(odcId);
+
+    private RenderFragment Actions(string key, Func<Task> approve, string rejectTitle, string rejectMessage, Func<string, Task> reject) => __builder =>
+    {
+        <div class="wb-m-actions">
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Large" Disabled="_busy" data-testid="@($"reject-{key}")"
+                       OnClick="() => RejectAsync(rejectTitle, rejectMessage, reject)">Reject</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" Disabled="_busy" data-testid="@($"approve-{key}")"
+                       OnClick="approve">Approve</MudButton>
+        </div>
+    };
+
+    private async Task RejectAsync(string title, string message, Func<string, Task> reject)
+    {
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { x => x.Message, message },
+            { x => x.Label, "Reason for rejecting" },
+            { x => x.ConfirmText, "Reject" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>(title, parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await reject(reason);
+        }
+    }
+
+    private async Task Decide<T>(Func<IServiceProvider, Task<T>> action, string success)
+    {
+        _busy = true;
+        try
+        {
+            await action(Services);
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+        Shell?.NotifyApprovalsChanged();
+    }
+
+    private async Task ShowTimesheetAsync(TimesheetDto timesheet)
+    {
+        try
+        {
+            _timesheetDetails[timesheet.Id] = await Timesheets.GetAsync(timesheet.Id);
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ShowRequisitionAsync(RequisitionSummaryDto requisition)
+    {
+        try
+        {
+            _requisitionDetails[requisition.Id] = await Services.GetRequiredService<IRequisitionService>().GetAsync(requisition.Id);
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

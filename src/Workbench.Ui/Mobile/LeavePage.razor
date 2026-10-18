@@ -1,0 +1,178 @@
+@page "/m/leave"
+@* Leave on a phone: balances, a request form and the employee's requests. *@
+@inject ILeaveBalanceService Balances
+@inject ILeaveRequestService Requests
+@inject ILeavePolicyService Policies
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Leave · Workbench</PageTitle>
+
+<div class="wb-m-title"><h1>Leave</h1></div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" data-testid="error">@_error</MudAlert>
+}
+else if (_balances is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <div class="wb-m-row" style="flex-wrap:wrap">
+        @foreach (var b in _balances)
+        {
+            <div class="wb-m-card" style="flex:1 1 140px" data-testid="@($"balance-{b.PolicyCode}")">
+                <div class="wb-m-muted">@b.PolicyName</div>
+                <div style="font-size:1.6rem;font-weight:600" data-testid="@($"available-{b.PolicyCode}")">@MobileFormat.Hours(b.Available) h</div>
+                <div class="wb-m-muted">available@(b.Planned > 0 ? $" · {MobileFormat.Hours(b.Planned)} h planned" : "")</div>
+            </div>
+        }
+    </div>
+
+    <div class="wb-m-card" data-testid="request-form">
+        <b>Request leave</b>
+        <label class="wb-m-field mt-2">
+            <span>Leave type</span>
+            <select class="wb-m-select" data-testid="request-policy" @bind="_policyId">
+                <option value="">Choose…</option>
+                @foreach (var p in _policies.Where(p => p.Type != LeaveTypeKind.Holiday))
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+        </label>
+        <div class="wb-m-row">
+            <label class="wb-m-field"><span>From</span><input type="date" class="wb-m-input" data-testid="request-start" @bind="_start" /></label>
+            <label class="wb-m-field"><span>To</span><input type="date" class="wb-m-input" data-testid="request-end" @bind="_end" /></label>
+        </div>
+        <div class="wb-m-row">
+            <label class="wb-m-field"><span>Hours per day</span><input class="wb-m-input" inputmode="decimal" placeholder="standard" data-testid="request-hours" @bind="_hoursPerDay" /></label>
+        </div>
+        <label class="wb-m-field">
+            <span>Comment (optional)</span>
+            <input class="wb-m-input" maxlength="500" @bind="_comment" />
+        </label>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Disabled="@(!CanRequest)" OnClick="RequestAsync"
+                   data-testid="request-submit">Send request</MudButton>
+        <MudText Typo="Typo.caption" Class="wb-m-muted d-block mt-1">Weekends and holidays are skipped. Your supervisor approves; approved days are pre-filled on your timesheet.</MudText>
+    </div>
+
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2"><b>My requests</b></MudText>
+    @if (_mine.Count == 0)
+    {
+        <MudText Class="wb-m-muted" data-testid="no-requests">No leave requests yet.</MudText>
+    }
+    @foreach (var r in _mine)
+    {
+        <div class="wb-m-card" data-testid="my-request">
+            <div class="wb-m-kv"><b>@r.PolicyName</b><MudChip T="string" Size="Size.Small" Color="StatusColor(r.Status)">@r.Status</MudChip></div>
+            <div class="wb-m-muted">@MobileFormat.Day(r.StartDate)@(r.EndDate != r.StartDate ? $" – {MobileFormat.Day(r.EndDate)}" : "") · @MobileFormat.Hours(r.Hours) h</div>
+            @if (r.DecisionComment is { Length: > 0 } decision)
+            {
+                <div class="wb-m-muted wb-m-wrap">@r.DecidedBy: “@decision”</div>
+            }
+            @if (r.Status is LeaveRequestState.Pending or LeaveRequestState.Approved)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" Class="ml-n2" Disabled="_busy" OnClick="() => CancelAsync(r)">Cancel request</MudButton>
+            }
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<LeaveBalanceDto>? _balances;
+    private IReadOnlyList<LeavePolicyDto> _policies = [];
+    private IReadOnlyList<LeaveRequestDto> _mine = [];
+    private string? _error;
+    private bool _busy;
+
+    private string? _policyId;
+    private DateOnly? _start;
+    private DateOnly? _end;
+    private string? _hoursPerDay;
+    private string? _comment;
+
+    private decimal? HoursPerDay => string.IsNullOrWhiteSpace(_hoursPerDay) ? null : MobileFormat.ParseHours(_hoursPerDay);
+
+    private bool CanRequest => !_busy && Guid.TryParse(_policyId, out _) && _start is not null
+        && (_end is null || _end >= _start) && (string.IsNullOrWhiteSpace(_hoursPerDay) || HoursPerDay is > 0);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _balances = await Balances.GetMyBalancesAsync();
+            _mine = await Requests.ListMineAsync();
+            _policies = await Policies.ListAsync();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task RequestAsync()
+    {
+        _busy = true;
+        try
+        {
+            var created = await Requests.CreateAsync(new CreateLeaveRequest(Guid.Parse(_policyId!), _start!.Value, _end ?? _start.Value, HoursPerDay,
+                string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim()));
+            Snackbar.Add($"Requested {MobileFormat.Hours(created.Hours)} h of {created.PolicyName}. Your supervisor has been told.", Severity.Success);
+            foreach (var warning in created.Warnings)
+            {
+                Snackbar.Add(warning, Severity.Warning);
+            }
+
+            _policyId = null;
+            _start = _end = null;
+            _hoursPerDay = _comment = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CancelAsync(LeaveRequestDto request)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Cancel request", $"Cancel your {request.PolicyName} request for {MobileFormat.Hours(request.Hours)} h?",
+                yesText: "Cancel request", cancelText: "Keep it") != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Requests.CancelAsync(request.Id);
+            Snackbar.Add("Request cancelled.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color StatusColor(LeaveRequestState status) => status switch
+    {
+        LeaveRequestState.Approved => Color.Success,
+        LeaveRequestState.Pending => Color.Info,
+        LeaveRequestState.Rejected => Color.Error,
+        _ => Color.Default,
+    };
+}
