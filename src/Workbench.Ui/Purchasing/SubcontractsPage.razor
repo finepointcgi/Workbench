@@ -1,0 +1,58 @@
+@page "/purchasing/subcontracts"
+@inject ISubcontractService Subcontracts
+@inject IVendorService Vendors
+@inject IContractService ContractService
+@inject IProjectService Projects
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+
+<PageTitle>Subcontracts · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Subcontracts" Subtitle="Subcontracts under our prime contracts: funding, ceilings, flow-down clauses and what has been billed.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="_error is not null">New subcontract</MudButton>
+</PurchasingHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <SubcontractStatusTable Subcontracts="_subs" Loading="_loading" />
+}
+
+@code {
+    private IReadOnlyList<SubcontractDto> _subs = [];
+    private bool _loading = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _subs = await Subcontracts.ListAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        var parameters = new DialogParameters<SubcontractDialog>
+        {
+            { d => d.Vendors, await Vendors.ListAsync(includeInactive: false) },
+            { d => d.Contracts, await ContractService.ListContractsAsync() },
+            { d => d.Projects, await Projects.ListProjectsAsync() },
+        };
+        var dialog = await DialogService.ShowAsync<SubcontractDialog>("New subcontract", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SubcontractDetailDto created })
+        {
+            Navigation.NavigateTo($"purchasing/subcontracts/{created.Subcontract.Id}");
+        }
+    }
+}

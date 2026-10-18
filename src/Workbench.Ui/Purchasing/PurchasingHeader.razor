@@ -1,0 +1,21 @@
+@* Page heading for the purchasing screens: breadcrumb, title, subtitle and actions. *@
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+    <MudStack Spacing="0">
+        <MudLink Href="@(BackHref ?? "purchasing/bills")" Typo="Typo.caption">@(BackLabel ?? "Purchasing")</MudLink>
+        <MudText Typo="Typo.h4" HtmlTag="h1">@Title</MudText>
+    </MudStack>
+    <MudSpacer />
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">@ChildContent</MudStack>
+</MudStack>
+@if (Subtitle is not null)
+{
+    <MudText Class="mud-text-secondary mb-4">@Subtitle</MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? BackHref { get; set; }
+    [Parameter] public string? BackLabel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

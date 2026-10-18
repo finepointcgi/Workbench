@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Color="@PurchasingFormat.Color(Status)" Variant="Variant.Outlined" Class="ma-0">@PurchasingFormat.Label(Status)</MudChip>
+
+@code {
+    [Parameter] public BillState Status { get; set; }
+}

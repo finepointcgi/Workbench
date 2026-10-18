@@ -1,0 +1,231 @@
+@page "/purchasing/reports"
+@inject IApReportService Reports
+@inject IVendorService Vendors
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>AP reports · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="AP reports" />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" Outlined="true">
+        <MudTabPanel Text="AP aging">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                <MudDatePicker @bind-Date="_asOf" Label="As of" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                <MudButton Variant="Variant.Outlined" OnClick="LoadAgingAsync">Run</MudButton>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAgingAsync">Export CSV</MudButton>
+            </MudStack>
+            @if (_aging is { } aging)
+            {
+                <MudSimpleTable Dense="true" Outlined="true" data-testid="aging">
+                    <thead><tr><th>Vendor</th><th style="text-align:right">Current</th><th style="text-align:right">1-30</th><th style="text-align:right">31-60</th><th style="text-align:right">61-90</th><th style="text-align:right">Over 90</th><th style="text-align:right">Total</th><th style="text-align:right">Retainage held</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in aging.Rows)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"purchasing/vendors/{r.VendorId}")">@r.VendorCode</MudLink> @r.VendorName</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(r.Current)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(r.Days1To30)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(r.Days31To60)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(r.Days61To90)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(r.Over90)</td>
+                                <td style="text-align:right"><b>@PurchasingFormat.Amount(r.Total)</b></td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(r.Retainage)</td>
+                            </tr>
+                        }
+                        <tr style="font-weight:600">
+                            <td>Total</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Current))</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Days1To30))</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Days31To60))</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Days61To90))</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Over90))</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Total)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Retainage))</td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Vendor ledger">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3" Wrap="Wrap.Wrap">
+                <MudSelect T="Guid?" @bind-Value="_ledgerVendor" Label="Vendor" Style="min-width:240px">
+                    @foreach (var v in _vendors)
+                    {
+                        <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudDatePicker @bind-Date="_ledgerFrom" Label="From" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" Style="max-width:170px" />
+                <MudDatePicker @bind-Date="_ledgerTo" Label="To" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" Style="max-width:170px" />
+                <MudButton Variant="Variant.Outlined" OnClick="LoadLedgerAsync" Disabled="_ledgerVendor is null">Run</MudButton>
+            </MudStack>
+            @if (_ledger is { } ledger)
+            {
+                <MudSimpleTable Dense="true" Outlined="true" data-testid="vendor-ledger">
+                    <thead><tr><th>Date</th><th>Kind</th><th>Reference</th><th>Description</th><th style="text-align:right">Charges</th><th style="text-align:right">Payments</th><th style="text-align:right">Balance</th></tr></thead>
+                    <tbody>
+                        <tr><td colspan="6" class="mud-text-secondary">Opening balance</td><td style="text-align:right">@PurchasingFormat.Amount(ledger.OpeningBalance)</td></tr>
+                        @foreach (var l in ledger.Lines)
+                        {
+                            <tr>
+                                <td>@PurchasingFormat.Date(l.Date)</td><td>@l.Kind</td><td>@l.Reference</td><td>@l.Description</td>
+                                <td style="text-align:right">@(l.Charges == 0 ? "" : PurchasingFormat.Amount(l.Charges))</td>
+                                <td style="text-align:right">@(l.Payments == 0 ? "" : PurchasingFormat.Amount(l.Payments))</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(l.Balance)</td>
+                            </tr>
+                        }
+                        <tr style="font-weight:600"><td colspan="6">Closing balance</td><td style="text-align:right">@PurchasingFormat.Amount(ledger.ClosingBalance)</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="1099">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                <MudNumericField T="int" @bind-Value="_year" Label="Calendar year" Style="max-width:140px" />
+                <MudButton Variant="Variant.Outlined" OnClick="Load1099Async">Run</MudButton>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="Export1099Async">Export CSV</MudButton>
+            </MudStack>
+            @if (_form1099 is { } f)
+            {
+                <MudText Class="mud-text-secondary mb-2">Payments made in @f.Year to 1099 vendors; vendors paid @PurchasingFormat.Amount(f.Threshold) or more are reported. TINs are masked; the export never contains full TINs.</MudText>
+                <MudSimpleTable Dense="true" Outlined="true" data-testid="form1099">
+                    <thead><tr><th>Vendor</th><th>TIN</th><th>Box</th><th style="text-align:right">Payments</th><th style="text-align:right">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in f.Rows)
+                        {
+                            <tr><td>@r.VendorCode · @r.VendorName</td><td style="font-family:monospace">@r.TaxIdMasked</td><td>@r.Box</td><td style="text-align:right">@r.Payments</td><td style="text-align:right">@PurchasingFormat.Amount(r.Amount)</td></tr>
+                        }
+                        @if (f.Rows.Count == 0)
+                        {
+                            <tr><td colspan="5" class="mud-text-secondary">No 1099 vendors at or over the threshold.</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                @if (f.BelowThreshold.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Below the threshold: @string.Join(", ", f.BelowThreshold.Select(r => $"{r.VendorCode} {PurchasingFormat.Amount(r.Amount)}"))</MudText>
+                }
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Subcontract status">
+            <SubcontractStatusTable Subcontracts="_subs" />
+        </MudTabPanel>
+
+        <MudTabPanel Text="Small business">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                <MudDatePicker @bind-Date="_sbFrom" Label="From" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                <MudDatePicker @bind-Date="_sbTo" Label="To" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                <MudButton Variant="Variant.Outlined" OnClick="LoadSmallBusinessAsync">Run</MudButton>
+            </MudStack>
+            @if (_sb is { } sb)
+            {
+                <MudText Class="mb-2">Posted AP dollars by invoice date, @PurchasingFormat.Date(sb.From) to @PurchasingFormat.Date(sb.To): <b>@PurchasingFormat.Amount(sb.Total)</b></MudText>
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudSimpleTable Dense="true" Outlined="true" data-testid="sb-size">
+                            <thead><tr><th>Business size</th><th style="text-align:right">Vendors</th><th style="text-align:right">Amount</th><th style="text-align:right">%</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in sb.BySize)
+                                {
+                                    <tr><td>@r.Category</td><td style="text-align:right">@r.Vendors</td><td style="text-align:right">@PurchasingFormat.Amount(r.Amount)</td><td style="text-align:right">@r.Percent.ToString("0.0")</td></tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSimpleTable Dense="true" Outlined="true">
+                            <thead><tr><th>Socio-economic category</th><th style="text-align:right">Vendors</th><th style="text-align:right">Amount</th><th style="text-align:right">%</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in sb.BySocioEconomic)
+                                {
+                                    <tr><td>@r.Category</td><td style="text-align:right">@r.Vendors</td><td style="text-align:right">@PurchasingFormat.Amount(r.Amount)</td><td style="text-align:right">@r.Percent.ToString("0.0")</td></tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">A vendor counts in every category it holds.</MudText>
+                    </MudItem>
+                </MudGrid>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "vendor")] public Guid? VendorQuery { get; set; }
+
+    private int _tab;
+    private IReadOnlyList<VendorDto> _vendors = [];
+    private IReadOnlyList<SubcontractDto> _subs = [];
+    private DateTime? _asOf = DateTime.Today;
+    private AgingReportDto? _aging;
+    private Guid? _ledgerVendor;
+    private DateTime? _ledgerFrom;
+    private DateTime? _ledgerTo;
+    private VendorLedgerDto? _ledger;
+    private int _year = DateTime.Today.Year;
+    private Form1099ReportDto? _form1099;
+    private DateTime? _sbFrom = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime? _sbTo = DateTime.Today;
+    private SmallBusinessReportDto? _sb;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tab = TabQuery switch { "ledger" => 1, "1099" => 2, "subcontracts" => 3, "small-business" => 4, _ => 0 };
+        _ledgerVendor = VendorQuery;
+        try
+        {
+            _vendors = await Vendors.ListAsync();
+            _subs = await Reports.GetSubcontractStatusAsync();
+            await LoadAgingAsync();
+            await Load1099Async();
+            await LoadSmallBusinessAsync();
+            if (_ledgerVendor is not null)
+            {
+                await LoadLedgerAsync();
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex) || ex is JSException)
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private Task LoadAgingAsync() => GuardAsync(async () => _aging = await Reports.GetAgingAsync(DateOnly.FromDateTime(_asOf ?? DateTime.Today)));
+
+    private Task LoadLedgerAsync() => GuardAsync(async () => _ledger = await Reports.GetVendorLedgerAsync(_ledgerVendor!.Value, PurchasingFormat.ToDateOnly(_ledgerFrom), PurchasingFormat.ToDateOnly(_ledgerTo)));
+
+    private Task Load1099Async() => GuardAsync(async () => _form1099 = await Reports.Get1099Async(_year));
+
+    private Task LoadSmallBusinessAsync() => GuardAsync(async () =>
+        _sb = await Reports.GetSmallBusinessAsync(DateOnly.FromDateTime(_sbFrom ?? DateTime.Today), DateOnly.FromDateTime(_sbTo ?? DateTime.Today)));
+
+    private Task ExportAgingAsync() => GuardAsync(async () => await PurchasingFormat.DownloadAsync(JS, await Reports.ExportAgingCsvAsync(DateOnly.FromDateTime(_asOf ?? DateTime.Today))));
+
+    private Task Export1099Async() => GuardAsync(async () => await PurchasingFormat.DownloadAsync(JS, await Reports.Export1099CsvAsync(_year)));
+}
