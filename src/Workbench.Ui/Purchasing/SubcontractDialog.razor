@@ -1,0 +1,102 @@
+@* Creates or edits a subcontract; returns the saved detail. Funding changes go through modifications. *@
+@inject ISubcontractService Subcontracts
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudStack Row="true" Spacing="3">
+                <MudTextField T="string" @bind-Value="_number" Label="Number" Required="true" Style="max-width:200px" data-testid="sub-number" />
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Subcontractor" Required="true" Disabled="@(Existing is not null && Existing.Status != SubcontractState.Draft)">
+                    @foreach (var v in Vendors.Where(v => v.Status != VendorState.Inactive || v.Id == _vendorId))
+                    {
+                        <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_description" Label="Description" Required="true" />
+            <MudStack Row="true" Spacing="3">
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Prime contract" Clearable="true">
+                    @foreach (var c in Contracts)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Clearable="true">
+                    @foreach (var p in Projects.Where(p => _contractId is null || p.ContractId == _contractId))
+                    {
+                        <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+            <MudStack Row="true" Spacing="3">
+                <MudSelect T="SubcontractPricing" @bind-Value="_pricing" Label="Type">
+                    @foreach (var p in Enum.GetValues<SubcontractPricing>())
+                    {
+                        <MudSelectItem Value="p">@PurchasingFormat.Label(p)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudDatePicker @bind-Date="_start" Label="Period start" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+                <MudDatePicker @bind-Date="_end" Label="Period end" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+            </MudStack>
+            <MudStack Row="true" Spacing="3">
+                <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Ceiling" Format="N2" Min="0" Disabled="@(Existing is not null && Existing.Status != SubcontractState.Draft)"
+                                 HelperText="@(Existing is not null && Existing.Status != SubcontractState.Draft ? "Change it with a modification." : null)" />
+                <MudNumericField T="decimal" @bind-Value="_retainage" Label="Retainage %" Format="0.##" Min="0" Max="100" HelperText="Held back from each invoice" />
+            </MudStack>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="@(_vendorId is null || _start is null || _end is null)" data-testid="save-sub">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public SubcontractDto? Existing { get; set; }
+    [Parameter] public IReadOnlyList<VendorDto> Vendors { get; set; } = [];
+    [Parameter] public IReadOnlyList<ContractDto> Contracts { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
+
+    private string? _number;
+    private Guid? _vendorId;
+    private string? _description;
+    private Guid? _contractId;
+    private Guid? _projectId;
+    private SubcontractPricing _pricing = SubcontractPricing.TimeAndMaterials;
+    private DateTime? _start = DateTime.Today;
+    private DateTime? _end = DateTime.Today.AddYears(1);
+    private decimal _ceiling;
+    private decimal _retainage;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } s)
+        {
+            (_number, _vendorId, _description, _contractId, _projectId, _pricing) = (s.Number, s.VendorId, s.Description, s.PrimeContractId, s.ProjectId, s.Pricing);
+            (_start, _end, _ceiling, _retainage) = (PurchasingFormat.ToDateTime(s.PeriodStart), PurchasingFormat.ToDateTime(s.PeriodEnd), s.CeilingValue, s.RetainagePercent);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        var request = new SaveSubcontractRequest(_vendorId!.Value, _number ?? "", _description ?? "", _pricing,
+            DateOnly.FromDateTime(_start!.Value), DateOnly.FromDateTime(_end!.Value), _ceiling, _contractId, _projectId, _retainage);
+        try
+        {
+            var saved = Existing is null ? await Subcontracts.CreateAsync(request) : await Subcontracts.UpdateAsync(Existing.Id, request);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+}

@@ -1,0 +1,86 @@
+@page "/purchasing"
+@page "/purchasing/bills"
+@inject IApBillService Bills
+@inject IVendorService Vendors
+
+<PageTitle>Bills · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="AP bills" Subtitle="Vendor invoices: enter them, route them for approval, and they post to the general ledger when approved.">
+    <MudButton Variant="Variant.Outlined" Href="purchasing/approvals" StartIcon="@Icons.Material.Filled.FactCheck">Approval queue</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="purchasing/bills/new" Disabled="_error is not null" data-testid="new-bill">New bill</MudButton>
+</PurchasingHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudSelect T="BillState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
+            @foreach (var s in Enum.GetValues<BillState>())
+            {
+                <MudSelectItem T="BillState?" Value="s">@PurchasingFormat.Label(s)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="Guid?" Value="_vendorId" ValueChanged="v => SetAsync(() => _vendorId = v)" Label="Vendor" Clearable="true" Dense="true" Style="min-width:220px">
+            @foreach (var v in _vendors)
+            {
+                <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+    </MudStack>
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    <MudPaper Outlined="true" Class="pa-2"><BillTable Bills="_bills" /></MudPaper>
+}
+
+@code {
+    private IReadOnlyList<BillSummaryDto> _bills = [];
+    private IReadOnlyList<VendorDto> _vendors = [];
+    private BillState? _status;
+    private Guid? _vendorId;
+    private string? _search;
+    private bool _loading = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _vendors = await Vendors.ListAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _bills = await Bills.ListAsync(new BillQuery(_status, _vendorId, _search));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+}

@@ -1,0 +1,177 @@
+@page "/purchasing/payments/{RunId:guid}"
+@inject IApPaymentService Payments
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>@(_run?.Number ?? "Payment run") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Payment run" BackHref="purchasing/payments" BackLabel="Payment runs" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_run is not { } run)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <PurchasingHeader Title="@($"{run.Number} · {run.Method} · {PurchasingFormat.Date(run.PaymentDate)}")" BackHref="purchasing/payments" BackLabel="Payment runs">
+        <MudChip T="string" Variant="Variant.Outlined" Color="@(run.Status == PaymentRunState.Completed ? Color.Success : run.Status == PaymentRunState.Approved ? Color.Info : Color.Default)">@run.Status</MudChip>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => ExportAsync(false))">ACH CSV</MudButton>
+        @if (run.Method == PaymentKind.Check)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => ExportAsync(true))">Positive pay CSV</MudButton>
+        }
+        @if (run.Status == PaymentRunState.Draft)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(() => Payments.ApproveRunAsync(run.Id), "Run approved."))" data-testid="approve-run">Approve</MudButton>
+        }
+        @if (run.Status is PaymentRunState.Draft or PaymentRunState.Approved)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="@(() => RunAsync(() => Payments.CancelRunAsync(run.Id), "Run cancelled."))">Cancel run</MudButton>
+        }
+    </PurchasingHeader>
+    <MudText Class="mud-text-secondary mb-3">Created by @run.CreatedBy@(run.ApprovedBy is null ? "; needs approval by another Finance user." : $"; approved by {run.ApprovedBy}.") Total @PurchasingFormat.Amount(run.Total).</MudText>
+
+    @if (run.Status == PaymentRunState.Approved)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            <MudText Typo="Typo.h6" Class="mb-2">Record payment</MudText>
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                <MudDatePicker @bind-Date="_paidOn" Label="Paid on" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                @if (run.Method == PaymentKind.Check)
+                {
+                    <MudTextField T="string" Value="_firstCheck" ValueChanged="FirstCheckChanged" Label="First check number" Immediate="true" Style="max-width:180px" data-testid="first-check" />
+                }
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RecordAsync" data-testid="record-payments"
+                           Disabled="@(_paidOn is null || run.Payments.Where(p => p.Status == PaymentState.Scheduled).Any(p => string.IsNullOrWhiteSpace(_refs.GetValueOrDefault(p.Id))))">Record payments and post</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="run-payments">
+            <thead><tr><th>Vendor</th><th>Bill</th><th>Invoice</th><th style="text-align:right">Amount</th><th>@(run.Method == PaymentKind.Check ? "Check" : "ACH reference")</th><th>Paid on</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in run.Payments)
+                {
+                    <tr>
+                        <td>@p.VendorCode · @p.VendorName</td>
+                        <td><MudLink Href="@($"purchasing/bills/{p.BillId}")">@p.BillNumber</MudLink></td>
+                        <td>@p.InvoiceNumber</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(p.Amount)</td>
+                        <td>
+                            @if (run.Status == PaymentRunState.Approved && p.Status == PaymentState.Scheduled)
+                            {
+                                <MudTextField T="string" Value="@_refs.GetValueOrDefault(p.Id)" ValueChanged="@(v => _refs[p.Id] = v)" Margin="Margin.Dense" Immediate="true" />
+                            }
+                            else
+                            {
+                                @p.Reference
+                            }
+                        </td>
+                        <td>@PurchasingFormat.Date(p.PaidOn)</td>
+                        <td>@p.Status@(p.VoidReason is null ? "" : $": {p.VoidReason}")</td>
+                        <td>
+                            @if (p.Status == PaymentState.Paid)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => VoidAsync(p))" data-testid="void-payment">Void</MudButton>
+                            }
+                            @if (p.JournalEntryId is { } je)
+                            {
+                                <MudLink Href="@($"accounting/journal/{je}")" Typo="Typo.caption">Entry</MudLink>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+
+    private PaymentRunDto? _run;
+    private readonly Dictionary<Guid, string?> _refs = [];
+    private DateTime? _paidOn = DateTime.Today;
+    private string? _firstCheck;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _run = await Payments.GetRunAsync(RunId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<PaymentRunDto>> action, string success)
+    {
+        try
+        {
+            _run = await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    /// <summary>Numbers the checks in order from the first one.</summary>
+    private void FirstCheckChanged(string? value)
+    {
+        _firstCheck = value;
+        if (long.TryParse(value, out var first))
+        {
+            var i = 0;
+            foreach (var p in _run!.Payments.Where(p => p.Status == PaymentState.Scheduled))
+            {
+                _refs[p.Id] = (first + i++).ToString(CultureInfo.InvariantCulture);
+            }
+        }
+    }
+
+    private Task RecordAsync() => RunAsync(() => Payments.RecordPaymentsAsync(RunId, new RecordPaymentsRequest(DateOnly.FromDateTime(_paidOn!.Value),
+        _run!.Payments.Where(p => p.Status == PaymentState.Scheduled).Select(p => new PaymentReferenceRequest(p.Id, _refs.GetValueOrDefault(p.Id) ?? "")).ToList())), "Payments recorded and posted.");
+
+    private async Task VoidAsync(PaymentDto payment)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, $"Void {payment.Reference}", "Void payment", "The payment's journal entry is reversed and the bill's balance reopens.", color: Color.Error) is not { } reason)
+        {
+            return;
+        }
+
+        try
+        {
+            await Payments.VoidPaymentAsync(payment.Id, new VoidPaymentRequest(reason));
+            _run = await Payments.GetRunAsync(RunId);
+            Snackbar.Add("Payment voided.", Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ExportAsync(bool positivePay)
+    {
+        try
+        {
+            await PurchasingFormat.DownloadAsync(JS, positivePay ? await Payments.ExportPositivePayAsync(RunId) : await Payments.ExportAchAsync(RunId));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex) || ex is JSException)
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

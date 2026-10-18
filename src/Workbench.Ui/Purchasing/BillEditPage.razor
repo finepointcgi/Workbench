@@ -1,0 +1,479 @@
+@page "/purchasing/bills/new"
+@page "/purchasing/bills/{BillId:guid}/edit"
+@inject IApBillService Bills
+@inject IVendorService Vendors
+@inject ISubcontractService Subcontracts
+@inject IProjectService Projects
+@inject IChartOfAccountsService Chart
+@inject IPeopleService People
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(BillId is null ? "New bill" : "Edit bill") · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="@(BillId is null ? "New bill" : $"Edit {_number}")" BackHref="purchasing/bills" BackLabel="Bills"
+                  Subtitle="Project cost lines become vendor ODCs on the project (approved by its manager); GL account lines are overhead (approved by Finance); subcontract lines bill a subcontract." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudSelect T="Guid?" Value="_vendorId" ValueChanged="VendorChanged" Label="Vendor" Required="true" data-testid="bill-vendor">
+                    @foreach (var v in _vendors.Where(v => v.Status != VendorState.Inactive || v.Id == _vendorId))
+                    {
+                        <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name@(v.Status == VendorState.OnHold ? " (on hold)" : "")</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudTextField T="string" Value="_invoiceNumber" ValueChanged="InvoiceNumberChanged" Label="Invoice number" Required="true" DebounceInterval="400" Immediate="true" data-testid="bill-invoice" />
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudDatePicker Date="_invoiceDate" DateChanged="InvoiceDateChanged" Label="Invoice date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudDatePicker @bind-Date="_dueDate" Label="Due date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true"
+                               HelperText="@(_dueDate is null && Vendor is { } v ? $"Net {v.PaymentTermsDays}: {PurchasingFormat.Date(DefaultDue)}" : null)" />
+            </MudItem>
+            <MudItem xs="12" md="10">
+                <MudTextField T="string" @bind-Value="_description" Label="Description" />
+            </MudItem>
+        </MudGrid>
+        @if (Vendor?.Status == VendorState.OnHold)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@Vendor.Code is on hold: bills can't be entered or submitted until the hold is released.</MudAlert>
+        }
+        @if (_duplicates.Count > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2" data-testid="duplicate-warning">
+                Possible duplicate invoice:
+                @foreach (var d in _duplicates)
+                {
+                    <span> <MudLink Href="@($"purchasing/bills/{d.BillId}")">@d.Number</MudLink> (@d.InvoiceNumber, @PurchasingFormat.Date(d.InvoiceDate), @PurchasingFormat.Amount(d.Amount): @d.Reason.ToLowerInvariant())</span>
+                }
+            </MudAlert>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6">Lines</MudText>
+            <MudSpacer />
+            <MudText Class="mr-4">Total <b>@PurchasingFormat.Amount(_lines.Sum(l => l.Amount))</b></MudText>
+            <MudMenu Label="Add line" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" data-testid="add-line">
+                @foreach (var kind in Enum.GetValues<BillLineKind>())
+                {
+                    <MudMenuItem OnClick="@(() => AddLine(kind))">@PurchasingFormat.Label(kind)</MudMenuItem>
+                }
+            </MudMenu>
+        </MudStack>
+        @foreach (var line in _lines)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="bill-line">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="2">
+                        <MudSelect T="BillLineKind" @bind-Value="line.Kind" Label="Type" Dense="true">
+                            @foreach (var kind in Enum.GetValues<BillLineKind>())
+                            {
+                                <MudSelectItem Value="kind">@PurchasingFormat.Label(kind)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    @if (line.Kind == BillLineKind.Account)
+                    {
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="Guid?" @bind-Value="line.AccountId" Label="GL account" Dense="true">
+                                @foreach (var a in _accounts)
+                                {
+                                    <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect T="Guid?" @bind-Value="line.OrgUnitId" Label="Organization" Dense="true">
+                                @foreach (var o in _orgs)
+                                {
+                                    <MudSelectItem T="Guid?" Value="o.Id">@o.Code · @o.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+                    else
+                    {
+                        @if (line.Kind == BillLineKind.Subcontract)
+                        {
+                            <MudItem xs="12" md="2">
+                                <MudSelect T="Guid?" Value="line.SubcontractId" ValueChanged="@(v => SubcontractChanged(line, v))" Label="Subcontract" Dense="true">
+                                    @foreach (var s in _subcontracts.Where(s => s.VendorId == _vendorId && s.Status == SubcontractState.Active))
+                                    {
+                                        <MudSelectItem T="Guid?" Value="s.Id">@s.Number (@PurchasingFormat.Amount(s.RemainingFunding) left)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                        }
+                        <MudItem xs="12" md="@(line.Kind == BillLineKind.Subcontract ? 3 : 5)">
+                            <MudSelect T="Guid?" Value="line.OdcEntryId" ValueChanged="@(v => LinkOdc(line, v))" Label="Link an existing vendor ODC" Dense="true" Clearable="true"
+                                       HelperText="Reuse a cost already entered on the project (it isn't posted twice)">
+                                @foreach (var o in _linkable.Where(o => line.Kind != BillLineKind.Subcontract || o.Type == OdcCostType.Subcontract))
+                                {
+                                    <MudSelectItem T="Guid?" Value="o.OdcEntryId">@o.ProjectCode @o.WbsCode · @o.Description · @PurchasingFormat.Amount(o.Amount) (@o.Status)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        @if (line.OdcEntryId is null)
+                        {
+                            <MudItem xs="12" md="2">
+                                <MudSelect T="Guid?" Value="line.ProjectId" ValueChanged="@(v => ProjectChanged(line, v))" Label="Project" Dense="true" Disabled="@(line.Kind == BillLineKind.Subcontract && SubFor(line)?.ProjectId is not null)">
+                                    @foreach (var p in _projects)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="2">
+                                <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Label="WBS" Dense="true" Clearable="@(line.Kind == BillLineKind.Subcontract)">
+                                    @foreach (var w in Leaves(line.ProjectId))
+                                    {
+                                        <MudSelectItem T="Guid?" Value="w.Id">@w.Code @w.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            @if (line.Kind == BillLineKind.ProjectCost)
+                            {
+                                <MudItem xs="12" md="2">
+                                    <MudSelect T="OdcCostType" @bind-Value="line.OdcType" Label="ODC type" Dense="true">
+                                        @foreach (var t in Enum.GetValues<OdcCostType>())
+                                        {
+                                            <MudSelectItem Value="t">@t</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                            }
+                        }
+                    }
+                    <MudItem xs="12" md="@(line.Kind == BillLineKind.Account ? 3 : 4)">
+                        <MudTextField T="string" @bind-Value="line.Description" Label="Description" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="8" md="2">
+                        <MudNumericField T="decimal" Value="line.Amount" ValueChanged="@(v => AmountChanged(line, v))" Label="Amount" Format="N2" Min="0" Margin="Margin.Dense" Disabled="@(line.OdcEntryId is not null)" />
+                    </MudItem>
+                    <MudItem xs="4" md="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" aria-label="Remove line" OnClick="@(() => RemoveLine(line))" />
+                    </MudItem>
+                </MudGrid>
+                @if (line.Kind == BillLineKind.Subcontract && SubFor(line) is { RetainagePercent: > 0 } sub)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Retainage @sub.RetainagePercent.ToString("0.##")% (@PurchasingFormat.Amount(Math.Round(line.Amount * sub.RetainagePercent / 100m, 2, MidpointRounding.AwayFromZero))) is held back from payment.</MudText>
+                }
+            </MudPaper>
+        }
+        @if (_lines.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Add a line.</MudText>
+        }
+    </MudPaper>
+
+    @if (_needsOverride)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            <MudTextField T="string" @bind-Value="_overrideReason" Label="Funding override reason (Finance)" Lines="2"
+                          HelperText="This invoice is over the subcontract's funded value. Finance can submit it anyway with a reason; it's recorded on the bill." data-testid="override-reason" />
+        </MudPaper>
+    }
+
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        @if (_duplicates.Any(d => d.Reason != "Same invoice number"))
+        {
+            <MudCheckBox T="bool" @bind-Value="_confirmDuplicate" Label="This isn't a duplicate" data-testid="confirm-duplicate" />
+        }
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => SaveAsync(false))" Disabled="@(!CanSave)" data-testid="save-bill">Save draft</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => SaveAsync(true))" Disabled="@(!CanSave)" data-testid="submit-bill">Save and submit</MudButton>
+    </MudStack>
+    @if (_saveError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-3" data-testid="bill-error">@_saveError</MudAlert>
+    }
+}
+
+@code {
+    [Parameter] public Guid? BillId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "vendor")] public Guid? VendorQuery { get; set; }
+
+    private sealed class LineModel
+    {
+        public BillLineKind Kind { get; set; }
+        public string? Description { get; set; }
+        public decimal Amount { get; set; }
+        public Guid? ProjectId { get; set; }
+        public Guid? WbsElementId { get; set; }
+        public OdcCostType OdcType { get; set; } = OdcCostType.Materials;
+        public Guid? SubcontractId { get; set; }
+        public Guid? OdcEntryId { get; set; }
+        public Guid? AccountId { get; set; }
+        public Guid? OrgUnitId { get; set; }
+    }
+
+    private IReadOnlyList<VendorDto> _vendors = [];
+    private IReadOnlyList<SubcontractDto> _subcontracts = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private IReadOnlyList<OrgUnitDto> _orgs = [];
+    private IReadOnlyList<LinkableOdcDto> _linkable = [];
+    private readonly Dictionary<Guid, IReadOnlyList<WbsElementDto>> _wbs = [];
+    private readonly List<LineModel> _lines = [];
+    private IReadOnlyList<BillDuplicateDto> _duplicates = [];
+    private string? _number;
+    private Guid? _vendorId;
+    private string? _invoiceNumber;
+    private DateTime? _invoiceDate = DateTime.Today;
+    private DateTime? _dueDate;
+    private string? _description;
+    private bool _confirmDuplicate;
+    private bool _needsOverride;
+    private string? _overrideReason;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private bool _forbidden;
+    private string? _saveError;
+
+    private VendorDto? Vendor => _vendors.FirstOrDefault(v => v.Id == _vendorId);
+
+    private DateOnly DefaultDue => DateOnly.FromDateTime(_invoiceDate ?? DateTime.Today).AddDays(Vendor?.PaymentTermsDays ?? 30);
+
+    private bool CanSave => !_saving && _vendorId is not null && !string.IsNullOrWhiteSpace(_invoiceNumber) && _invoiceDate is not null && _lines.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _vendors = await Vendors.ListAsync();
+            _subcontracts = await Subcontracts.ListAsync();
+            _projects = (await Projects.ListProjectsAsync()).Where(p => p.Status == ProjectState.Active).ToList();
+            var accounts = await Chart.ListAccountsAsync(includeInactive: false);
+            _accounts = accounts.Where(a => !a.HasChildren && a.Type is AccountKind.Expense or AccountKind.Asset).ToList();
+            _orgs = await People.ListOrgUnitsAsync();
+            if (BillId is { } id)
+            {
+                var bill = await Bills.GetAsync(id);
+                if (!bill.CanEdit)
+                {
+                    Navigation.NavigateTo($"purchasing/bills/{id}", replace: true);
+                    return;
+                }
+
+                var b = bill.Bill;
+                (_number, _vendorId, _invoiceNumber, _invoiceDate, _dueDate, _description) =
+                    (b.Number, b.VendorId, b.InvoiceNumber, PurchasingFormat.ToDateTime(b.InvoiceDate), PurchasingFormat.ToDateTime(b.DueDate), bill.Description);
+                foreach (var l in bill.Lines)
+                {
+                    _lines.Add(new LineModel
+                    {
+                        Kind = l.Kind, Description = l.Description, Amount = l.Amount, ProjectId = l.ProjectId, WbsElementId = l.WbsElementId,
+                        OdcType = l.OdcType ?? OdcCostType.Materials, SubcontractId = l.SubcontractId, OdcEntryId = l.OdcEntryId, AccountId = l.AccountId, OrgUnitId = l.OrgUnitId,
+                    });
+                    await EnsureWbsAsync(l.ProjectId);
+                }
+            }
+            else if (VendorQuery is { } vendor)
+            {
+                _vendorId = vendor;
+            }
+
+            await LoadLinkableAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+
+    private async Task LoadLinkableAsync()
+    {
+        _linkable = _vendorId is { } v ? await Bills.ListLinkableOdcsAsync(v) : [];
+
+        // Lines already linked keep their ODC in the list.
+        if (BillId is not null)
+        {
+            var current = await Bills.GetAsync(BillId.Value);
+            _linkable = _linkable.Concat(current.Lines.Where(l => l.OdcEntryId is not null && _linkable.All(o => o.OdcEntryId != l.OdcEntryId))
+                .Select(l => new LinkableOdcDto(l.OdcEntryId!.Value, l.ProjectCode ?? "", l.WbsCode ?? "", l.OdcType ?? OdcCostType.Other, current.Bill.InvoiceDate, l.Amount, l.Description, current.Bill.InvoiceNumber, OdcApprovalState.Submitted)))
+                .ToList();
+        }
+    }
+
+    private async Task EnsureWbsAsync(Guid? projectId)
+    {
+        if (projectId is { } p && !_wbs.ContainsKey(p))
+        {
+            _wbs[p] = await Projects.ListWbsAsync(p);
+        }
+    }
+
+    private IEnumerable<WbsElementDto> Leaves(Guid? projectId)
+    {
+        if (projectId is not { } p || !_wbs.TryGetValue(p, out var all))
+        {
+            return [];
+        }
+
+        var parents = all.Where(w => w.ParentId is not null).Select(w => w.ParentId!.Value).ToHashSet();
+        return all.Where(w => w.IsOpen && w.IsChargeable && !parents.Contains(w.Id)).OrderBy(w => w.Code, StringComparer.Ordinal);
+    }
+
+    private SubcontractDto? SubFor(LineModel line) => _subcontracts.FirstOrDefault(s => s.Id == line.SubcontractId);
+
+    private async Task VendorChanged(Guid? vendorId)
+    {
+        _vendorId = vendorId;
+        foreach (var line in _lines.Where(l => l.OdcEntryId is not null || l.SubcontractId is not null))
+        {
+            (line.OdcEntryId, line.SubcontractId) = (null, null);
+        }
+
+        await LoadLinkableAsync();
+        await CheckDuplicatesAsync();
+    }
+
+    private async Task InvoiceNumberChanged(string? value)
+    {
+        _invoiceNumber = value;
+        await CheckDuplicatesAsync();
+    }
+
+    private async Task InvoiceDateChanged(DateTime? value)
+    {
+        _invoiceDate = value;
+        await CheckDuplicatesAsync();
+    }
+
+    private async Task AmountChanged(LineModel line, decimal value)
+    {
+        line.Amount = value;
+        await CheckDuplicatesAsync();
+    }
+
+    private async Task CheckDuplicatesAsync()
+    {
+        if (_vendorId is not { } vendor || _invoiceDate is null)
+        {
+            _duplicates = [];
+            return;
+        }
+
+        try
+        {
+            _duplicates = await Bills.CheckDuplicatesAsync(new DuplicateCheckRequest(vendor, _invoiceNumber, DateOnly.FromDateTime(_invoiceDate.Value), _lines.Sum(l => l.Amount), BillId));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _duplicates = [];
+        }
+    }
+
+    private async Task AddLine(BillLineKind kind)
+    {
+        var line = new LineModel { Kind = kind, Description = _description };
+        if (kind == BillLineKind.Subcontract && _subcontracts.FirstOrDefault(s => s.VendorId == _vendorId && s.Status == SubcontractState.Active) is { } sub)
+        {
+            line.SubcontractId = sub.Id;
+            line.ProjectId = sub.ProjectId;
+            await EnsureWbsAsync(sub.ProjectId);
+        }
+
+        _lines.Add(line);
+    }
+
+    private async Task RemoveLine(LineModel line)
+    {
+        _lines.Remove(line);
+        await CheckDuplicatesAsync();
+    }
+
+    private async Task ProjectChanged(LineModel line, Guid? projectId)
+    {
+        line.ProjectId = projectId;
+        line.WbsElementId = null;
+        await EnsureWbsAsync(projectId);
+    }
+
+    private async Task SubcontractChanged(LineModel line, Guid? subId)
+    {
+        line.SubcontractId = subId;
+        if (SubFor(line)?.ProjectId is { } p)
+        {
+            await ProjectChanged(line, p);
+        }
+    }
+
+    private async Task LinkOdc(LineModel line, Guid? odcId)
+    {
+        line.OdcEntryId = odcId;
+        if (_linkable.FirstOrDefault(o => o.OdcEntryId == odcId) is { } odc)
+        {
+            line.Amount = odc.Amount;
+            line.Description = string.IsNullOrWhiteSpace(line.Description) ? odc.Description : line.Description;
+        }
+
+        await CheckDuplicatesAsync();
+    }
+
+    private async Task SaveAsync(bool submit)
+    {
+        _saving = true;
+        _saveError = null;
+        var request = new SaveBillRequest(_vendorId!.Value, _invoiceNumber!, DateOnly.FromDateTime(_invoiceDate!.Value),
+            _lines.Select(l => new SaveBillLineRequest(l.Kind, l.Description ?? "", l.Amount,
+                l.Kind == BillLineKind.Account || l.OdcEntryId is not null ? null : l.WbsElementId,
+                l.Kind == BillLineKind.ProjectCost ? l.OdcType : null,
+                l.Kind == BillLineKind.Subcontract ? l.SubcontractId : null,
+                l.Kind == BillLineKind.Account ? null : l.OdcEntryId,
+                l.Kind == BillLineKind.Account ? l.AccountId : null,
+                l.Kind == BillLineKind.Account ? l.OrgUnitId : null)).ToList(),
+            PurchasingFormat.ToDateOnly(_dueDate), _description);
+        try
+        {
+            var saved = BillId is { } id ? await Bills.UpdateAsync(id, request) : await Bills.CreateAsync(request);
+            if (BillId is null)
+            {
+                // Later saves on this page update the same draft.
+                BillId = saved.Bill.Id;
+                _number = saved.Bill.Number;
+            }
+
+            if (submit)
+            {
+                await Bills.SubmitAsync(saved.Bill.Id, new SubmitBillRequest(_confirmDuplicate, string.IsNullOrWhiteSpace(_overrideReason) ? null : _overrideReason));
+                Snackbar.Add($"{saved.Bill.Number} submitted for approval.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"{saved.Bill.Number} saved as a draft.", Severity.Success);
+            }
+
+            Navigation.NavigateTo($"purchasing/bills/{saved.Bill.Id}");
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _saveError = PurchasingFormat.Error(ex);
+            _needsOverride |= _saveError.Contains("funded value", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

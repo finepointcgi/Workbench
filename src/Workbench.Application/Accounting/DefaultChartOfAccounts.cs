@@ -23,6 +23,7 @@ public static class DefaultChartOfAccounts
 
         new("2000", "Liabilities", AccountType.Liability),
         new("2010", "Accounts payable", AccountType.Liability, "2000", Description: "Vendor ODCs and subcontract invoices"),
+        new("2020", "AP retainage", AccountType.Liability, "2000", Description: "Subcontract retainage withheld from AP bills until release"),
         new("2100", "Accrued payroll", AccountType.Liability, "2000", Description: "Labor cost from approved timesheets until payroll is paid"),
         new("2110", "Accrued employee reimbursements", AccountType.Liability, "2000", Description: "Approved expense reports not yet reimbursed"),
         new("2200", "Accrued liabilities", AccountType.Liability, "2000"),

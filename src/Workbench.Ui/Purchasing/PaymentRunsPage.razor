@@ -1,0 +1,150 @@
+@page "/purchasing/payments"
+@inject IApPaymentService Payments
+@inject IVendorService Vendors
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Payment runs · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Payment runs" Subtitle="Choose due bills (partial payments are fine), create a run, have another Finance user approve it, then record the checks or ACH references." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">Bills to pay</MudText>
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mb-2">
+            <MudDatePicker Date="_dueBy" DateChanged="@(async d => { _dueBy = d; await LoadDueAsync(); })" Label="Due on or before" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" Style="max-width:190px" />
+            <MudSelect T="Guid?" Value="_vendorId" ValueChanged="@(async v => { _vendorId = v; await LoadDueAsync(); })" Label="Vendor" Clearable="true" Style="min-width:220px">
+                @foreach (var v in _vendors)
+                {
+                    <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name@(v.Status == VendorState.OnHold ? " (on hold)" : "")</MudSelectItem>
+                }
+            </MudSelect>
+        </MudStack>
+        @if (_due.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No posted bills with an open balance match.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="due-bills">
+                <thead><tr><th></th><th>Voucher</th><th>Vendor</th><th>Invoice</th><th>Due</th><th style="text-align:right">Balance</th><th style="text-align:right">In open runs</th><th style="text-align:right; width:160px">Pay</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _due)
+                    {
+                        var onHold = _vendors.FirstOrDefault(v => v.Id == d.Bill.VendorId)?.Status != VendorState.Active;
+                        <tr>
+                            <td><MudCheckBox T="bool" Value="_selected.ContainsKey(d.Bill.Id)" ValueChanged="@(v => Toggle(d, v))" Disabled="@(onHold || d.Available <= 0)" Dense="true" /></td>
+                            <td><MudLink Href="@($"purchasing/bills/{d.Bill.Id}")">@d.Bill.Number</MudLink></td>
+                            <td>@d.Bill.VendorCode @(onHold ? "(on hold)" : "")</td>
+                            <td>@d.Bill.InvoiceNumber</td>
+                            <td style="@(d.Bill.DueDate < DateOnly.FromDateTime(DateTime.Today) ? "color:var(--mud-palette-error)" : "")">@PurchasingFormat.Date(d.Bill.DueDate)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(d.Bill.Balance)</td>
+                            <td style="text-align:right">@(d.ScheduledAmount == 0 ? "" : PurchasingFormat.Amount(d.ScheduledAmount))</td>
+                            <td>
+                                @if (_selected.ContainsKey(d.Bill.Id))
+                                {
+                                    <MudNumericField T="decimal" Value="_selected[d.Bill.Id]" ValueChanged="@(v => _selected[d.Bill.Id] = v)" Format="N2" Min="0.01m" Max="d.Available" Margin="Margin.Dense" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mt-3" Wrap="Wrap.Wrap">
+                <MudSelect T="PaymentKind" @bind-Value="_method" Label="Method" Style="max-width:140px">
+                    <MudSelectItem Value="PaymentKind.Check">Check</MudSelectItem>
+                    <MudSelectItem Value="PaymentKind.Ach">ACH</MudSelectItem>
+                </MudSelect>
+                <MudDatePicker @bind-Date="_paymentDate" Label="Payment date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                <MudSpacer />
+                <MudText>@_selected.Count bills · <b>@PurchasingFormat.Amount(_selected.Values.Sum())</b></MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="@(_selected.Count == 0 || _paymentDate is null)" data-testid="create-run">Create payment run</MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Runs</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="runs">
+            <thead><tr><th>Run</th><th>Date</th><th>Method</th><th>Payments</th><th style="text-align:right">Total</th><th>Status</th><th>Created by</th><th>Approved by</th></tr></thead>
+            <tbody>
+                @foreach (var r in _runs)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"purchasing/payments/{r.Id}")">@r.Number</MudLink></td>
+                        <td>@PurchasingFormat.Date(r.PaymentDate)</td><td>@r.Method</td><td>@r.Payments.Count</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(r.Total)</td><td>@r.Status</td><td>@r.CreatedBy</td><td>@r.ApprovedBy</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<VendorDto> _vendors = [];
+    private IReadOnlyList<DueBillDto> _due = [];
+    private IReadOnlyList<PaymentRunDto> _runs = [];
+    private readonly Dictionary<Guid, decimal> _selected = [];
+    private DateTime? _dueBy;
+    private Guid? _vendorId;
+    private PaymentKind _method = PaymentKind.Check;
+    private DateTime? _paymentDate = DateTime.Today;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _vendors = await Vendors.ListAsync();
+            _runs = await Payments.ListRunsAsync();
+            await LoadDueAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadDueAsync()
+    {
+        _due = await Payments.ListDueBillsAsync(new DueBillQuery(PurchasingFormat.ToDateOnly(_dueBy), _vendorId));
+        foreach (var id in _selected.Keys.Where(k => _due.All(d => d.Bill.Id != k)).ToList())
+        {
+            _selected.Remove(id);
+        }
+    }
+
+    private void Toggle(DueBillDto bill, bool selected)
+    {
+        if (selected)
+        {
+            _selected[bill.Bill.Id] = bill.Available;
+        }
+        else
+        {
+            _selected.Remove(bill.Bill.Id);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            var run = await Payments.CreateRunAsync(new CreatePaymentRunRequest(DateOnly.FromDateTime(_paymentDate!.Value), _method,
+                _selected.Select(s => new PaymentRunItemRequest(s.Key, s.Value)).ToList()));
+            Snackbar.Add($"{run.Number} created; another Finance user approves it next.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/payments/{run.Id}");
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

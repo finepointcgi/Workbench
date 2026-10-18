@@ -1,0 +1,40 @@
+@* The Purchasing menu: everything for Finance and administrators; others see Bill approvals when bills wait on them. *@
+@inject ICurrentUserContext UserContext
+@inject IApBillService Bills
+
+@if (_finance)
+{
+    <MudNavGroup Title="Purchasing" Icon="@Icons.Material.Filled.ShoppingCart" data-testid="purchasing-nav">
+        <MudNavLink Href="purchasing/bills" Icon="@Icons.Material.Filled.ReceiptLong">Bills</MudNavLink>
+        <MudNavLink Href="purchasing/approvals" Icon="@Icons.Material.Filled.FactCheck">Bill approvals</MudNavLink>
+        <MudNavLink Href="purchasing/payments" Icon="@Icons.Material.Filled.Payments">Payment runs</MudNavLink>
+        <MudNavLink Href="purchasing/vendors" Icon="@Icons.Material.Filled.Storefront">Vendors</MudNavLink>
+        <MudNavLink Href="purchasing/subcontracts" Icon="@Icons.Material.Filled.Handshake">Subcontracts</MudNavLink>
+        <MudNavLink Href="purchasing/reports" Icon="@Icons.Material.Filled.Assessment">AP reports</MudNavLink>
+    </MudNavGroup>
+}
+else if (_approvals > 0)
+{
+    <MudNavLink Href="purchasing/approvals" Icon="@Icons.Material.Filled.FactCheck">Bill approvals (@_approvals)</MudNavLink>
+}
+
+@code {
+    private bool _finance;
+    private int _approvals;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _finance = (await UserContext.GetAsync()).IsFinance;
+            if (!_finance)
+            {
+                _approvals = (await Bills.ListApprovalQueueAsync()).Count;
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _finance = false;
+        }
+    }
+}

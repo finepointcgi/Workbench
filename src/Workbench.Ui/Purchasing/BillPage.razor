@@ -1,0 +1,191 @@
+@page "/purchasing/bills/{BillId:guid}"
+@inject IApBillService Bills
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@(_bill?.Bill.Number ?? "Bill") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Bill" BackHref="purchasing/bills" BackLabel="Bills" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_bill is not { } bill)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var b = bill.Bill;
+    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="purchasing/bills" BackLabel="Bills">
+        <BillStatusChip Status="b.Status" />
+        @if (bill.CanEdit)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/bills/{b.Id}/edit")" data-testid="edit-bill">Edit</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" data-testid="submit">Submit</MudButton>
+        }
+        @if (bill.CanApprove)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" data-testid="reject">Reject</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(() => Bills.ApproveAsync(b.Id), "Approved."))" data-testid="approve">Approve</MudButton>
+        }
+        @if (b.Status == BillState.Approved)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
+        }
+        @if (b.Status is BillState.Draft or BillState.Rejected or BillState.PendingApproval)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="VoidAsync">Void</MudButton>
+        }
+    </PurchasingHeader>
+
+    @if (b.PostingProblem is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3">Approved but not posted: @b.PostingProblem</MudAlert>
+    }
+    @if (bill.RejectionReason is not null && b.Status == BillState.Rejected)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">Rejected: @bill.RejectionReason</MudAlert>
+    }
+    @if (bill.PossibleDuplicates.Count > 0 && b.Status is not BillState.Void)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="duplicate-warning">
+            Possible duplicate of
+            @foreach (var d in bill.PossibleDuplicates)
+            {
+                <span> <MudLink Href="@($"purchasing/bills/{d.BillId}")">@d.Number</MudLink> (@d.Reason.ToLowerInvariant())</span>
+            }
+        </MudAlert>
+    }
+    @if (bill.FundingOverrideReason is not null)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">Over the subcontract's funded value; overridden by @bill.FundingOverrideBy: @bill.FundingOverrideReason</MudAlert>
+    }
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[] { ("Invoice date", PurchasingFormat.Date(b.InvoiceDate)), ("Due", PurchasingFormat.Date(b.DueDate)), ("Amount", PurchasingFormat.Amount(b.Amount)),
+            ("Retainage held", PurchasingFormat.Amount(b.RetainageAmount)), ("Paid", PurchasingFormat.Amount(b.PaidAmount)), ("Balance", b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "—") })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6">Lines</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                <MudLink Href="@($"purchasing/vendors/{b.VendorId}")" Typo="Typo.caption">@b.VendorCode</MudLink> · entered by @b.EnteredBy
+                @if (bill.JournalEntryId is { } je) { <span> · <MudLink Href="@($"accounting/journal/{je}")" Typo="Typo.caption">AP journal entry</MudLink></span> }
+            </MudText>
+        </MudStack>
+        @if (bill.Description is not null)
+        {
+            <MudText Class="mb-2">@bill.Description</MudText>
+        }
+        <BillLinesTable Lines="bill.Lines" />
+    </MudPaper>
+
+    @if (bill.Payments.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Payments</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Run</th><th>Paid on</th><th>Method</th><th>Reference</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var p in bill.Payments)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"purchasing/payments/{p.RunId}")">@p.RunNumber</MudLink></td>
+                            <td>@PurchasingFormat.Date(p.PaidOn)</td><td>@p.Method</td><td>@p.Reference</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(p.Amount)</td><td>@p.Status</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public Guid BillId { get; set; }
+
+    private BillDto? _bill;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _bill = await Bills.GetAsync(BillId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<BillDto>> action, string success)
+    {
+        try
+        {
+            _bill = await action();
+            Snackbar.Add(_bill.Bill.PostingProblem is { } problem ? $"Saved, but posting failed: {problem}" : success,
+                _bill.Bill.PostingProblem is null ? Severity.Success : Severity.Warning);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        var confirm = _bill!.PossibleDuplicates.Count > 0;
+        if (confirm && await DialogService.ShowMessageBoxAsync("Possible duplicate", "This looks like an invoice that's already entered. Submit it anyway?", yesText: "Submit", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _bill = await Bills.SubmitAsync(BillId, new SubmitBillRequest(confirm));
+            Snackbar.Add("Submitted for approval.", Severity.Success);
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("funded value", StringComparison.OrdinalIgnoreCase))
+        {
+            var reason = await ReasonDialog.AskAsync(DialogService, "Over funded value", "Override and submit", ex.Message, label: "Override reason (Finance)");
+            if (reason is not null)
+            {
+                await RunAsync(() => Bills.SubmitAsync(BillId, new SubmitBillRequest(confirm, reason)), "Submitted with a funding override.");
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reject bill", "Reject", "The person who entered it is notified.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Bills.RejectAsync(BillId, new BillReasonRequest(reason)), "Rejected.");
+        }
+    }
+
+    private async Task VoidAsync()
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Void bill", "Void", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Bills.VoidAsync(BillId, new BillReasonRequest(reason)), "Voided.");
+        }
+    }
+}

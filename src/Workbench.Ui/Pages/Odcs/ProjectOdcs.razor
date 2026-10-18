@@ -4,6 +4,7 @@
 @using Workbench.Contracts.ProjectAccounting
 @using Workbench.Ui.Odcs
 @inject IOdcService Odcs
+@inject Workbench.Contracts.Purchasing.IApBillService ApBills
 @inject IProjectService Projects
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -113,7 +114,26 @@
             <MudTd DataLabel="Type">@context.Type</MudTd>
             <MudTd DataLabel="WBS">@context.WbsCode</MudTd>
             <MudTd DataLabel="Vendor">
-                @(context.ExpenseReportId is null ? $"{context.Vendor} · {context.InvoiceNumber}" : $"Expense: {context.SubmittedBy}")
+                @if (context.ExpenseReportId is null && _apLinks.GetValueOrDefault(context.Id) is { } ap)
+                {
+                    @if (ap.VendorId is { } vendorId)
+                    {
+                        <MudLink Href="@($"purchasing/vendors/{vendorId}")" Typo="Typo.body2">@context.Vendor</MudLink>
+                    }
+                    else
+                    {
+                        @context.Vendor
+                    }
+                    <span> · @context.InvoiceNumber</span>
+                    @if (ap.BillId is { } billId)
+                    {
+                        <MudLink Href="@($"purchasing/bills/{billId}")" Typo="Typo.caption" Class="d-block">AP bill @ap.BillNumber</MudLink>
+                    }
+                }
+                else
+                {
+                    @(context.ExpenseReportId is null ? $"{context.Vendor} · {context.InvoiceNumber}" : $"Expense: {context.SubmittedBy}")
+                }
             </MudTd>
             <MudTd DataLabel="Description">
                 @context.Description
@@ -171,6 +191,7 @@ else if (!_loading)
     private OdcApprovalState? _status;
     private bool _includeExpenses;
     private Guid? _loadedProject;
+    private Dictionary<Guid, Workbench.Contracts.Purchasing.OdcBillLinkDto> _apLinks = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -226,6 +247,7 @@ else if (!_loading)
         {
             _list = await Odcs.ListProjectOdcsAsync(projectId,
                 new OdcListQuery(OdcFormat.ToDateOnly(_from), OdcFormat.ToDateOnly(_to), _type, _status, _includeExpenses));
+            await LoadApLinksAsync();
         }
         catch (Exception ex) when (OdcFormat.IsExpected(ex))
         {
@@ -234,6 +256,20 @@ else if (!_loading)
         finally
         {
             _loading = false;
+        }
+    }
+
+    /// <summary>The vendor record and AP bill behind each vendor ODC (purchasing); the page works without them.</summary>
+    private async Task LoadApLinksAsync()
+    {
+        try
+        {
+            var ids = (_list?.Entries ?? []).Where(e => e.ExpenseReportId is null).Select(e => e.Id).ToList();
+            _apLinks = ids.Count == 0 ? [] : (await ApBills.GetOdcLinksAsync(ids)).ToDictionary(l => l.OdcEntryId);
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            _apLinks = [];
         }
     }
 

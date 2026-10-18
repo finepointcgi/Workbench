@@ -34,6 +34,7 @@ public static class WorkbenchApi
         v1.MapContractDetailEndpoints();
         v1.MapIndirectRateEndpoints();
         v1.MapBillingEndpoints();
+        v1.MapPurchasingEndpoints();
 
         return app;
     }
