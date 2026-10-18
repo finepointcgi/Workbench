@@ -1,0 +1,101 @@
+@page "/setup/approval-workflows"
+@inject IApprovalWorkflowService Workflows
+@inject IPeopleService People
+@inject ICurrentUserContext CurrentUser
+@inject ISnackbar Snackbar
+
+<PageTitle>Approval workflows · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Approval workflows"
+             Subtitle="Who approves each kind of document, in what order and when. Saving publishes a new version; documents already submitted keep the version they started with." />
+
+@if (_workflows is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="workflows">
+            <thead><tr><th>Document</th><th>Workflow</th><th>Version</th><th>Steps</th><th>In flight</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var w in _workflows)
+                {
+                    <tr>
+                        <td>@w.DocumentLabel</td>
+                        <td>@w.Name</td>
+                        <td>v@(w.Version)</td>
+                        <td>@w.StepCount</td>
+                        <td>@w.InFlight</td>
+                        <td>@w.UpdatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</td>
+                        <td><MudButton Size="Size.Small" Href="@($"setup/approval-workflows/{w.DocumentType}")">@(_isAdmin ? "Edit" : "View")</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Org-unit approvers</MudText>
+        <MudText Class="mud-text-secondary mb-3">Used by steps whose approver is "the org unit's manager".</MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>Org unit</th><th>Approver</th></tr></thead>
+            <tbody>
+                @foreach (var unit in _units ?? [])
+                {
+                    <tr>
+                        <td>@unit.OrgUnitCode @unit.OrgUnitName</td>
+                        <td style="min-width:280px">
+                            @if (_isAdmin)
+                            {
+                                <MudSelect T="Guid?" Value="unit.EmployeeId" ValueChanged="v => SetApproverAsync(unit, v)" Dense="true" Clearable="true" Placeholder="Nobody">
+                                    @foreach (var e in _employees)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                @(unit.EmployeeName ?? "Nobody")
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_units is { Count: 0 })
+                {
+                    <tr><td colspan="2" class="mud-text-secondary">No org units yet.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<ApprovalWorkflowSummaryDto>? _workflows;
+    private IReadOnlyList<OrgUnitApproverDto>? _units;
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isAdmin = (await CurrentUser.GetAsync()).IsAdmin;
+        _workflows = await Workflows.ListAsync();
+        _units = await Workflows.ListOrgUnitApproversAsync();
+        _employees = (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName).ToList();
+    }
+
+    private async Task SetApproverAsync(OrgUnitApproverDto unit, Guid? employeeId)
+    {
+        try
+        {
+            await Workflows.SetOrgUnitApproverAsync(unit.OrgUnitId, employeeId);
+            _units = await Workflows.ListOrgUnitApproversAsync();
+            Snackbar.Add($"Approver for {unit.OrgUnitCode} saved", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

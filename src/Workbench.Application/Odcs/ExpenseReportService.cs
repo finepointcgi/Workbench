@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Approvals;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Odcs;
 using Workbench.Domain.ProjectAccounting;
 
@@ -24,8 +26,9 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var report = await FindAsync(db, reportId, cancellationToken);
-        var me = await workflow.RequireCurrentEmployeeAsync(db, cancellationToken);
-        if (report.EmployeeId != me.Id && (await OdcWorkflow.ResolveReportApproverAsync(db, report, cancellationToken))?.Id != me.Id)
+        var me = await workflow.FindCurrentEmployeeAsync(db, cancellationToken);
+        if ((me is null || (report.EmployeeId != me.Id && (await OdcWorkflow.ResolveReportApproverAsync(db, report, cancellationToken))?.Id != me.Id))
+            && !await workflow.Approvals.IsParticipantAsync(db, ApprovalDocumentTypes.ExpenseReport, report.Id, workflow.Actor, cancellationToken))
         {
             throw new UnauthorizedAccessException("Only the employee and their supervisor can see this expense report.");
         }
@@ -137,9 +140,6 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
             await workflow.ValidateForSubmitAsync(db, line, cancellationToken);
         }
 
-        var approver = await OdcWorkflow.ResolveReportApproverAsync(db, report, cancellationToken)
-            ?? throw new ArgumentException("You have no supervisor to approve expense reports. Ask an administrator to set one.");
-
         var now = workflow.UtcNow;
         var before = report.Status;
         report.Status = OdcStatus.Submitted;
@@ -157,13 +157,23 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
             line.RejectedAtUtc = null;
         }
 
+        // The workflow (Setup › Approval workflows; by default the employee's supervisor) routes it.
+        var route = await workflow.Approvals.StartAsync(db, await ApprovalSubjects.ExpenseReportAsync(db, report, lines, cancellationToken), cancellationToken);
+        if (route.HasUnassigned)
+        {
+            throw new ArgumentException("You have no supervisor to approve expense reports. Ask an administrator to set one.");
+        }
+
         workflow.Audit.Record(db, OdcWorkflow.ReportEntityType, report.Id, "Submitted",
             new { Status = before.ToString() },
-            new { Status = report.Status.ToString(), ApproverEmail = approver.Email, Lines = lines.Count, Total = lines.Sum(l => l.Amount) });
+            new { Status = report.Status.ToString(), ApproverEmail = string.Join(", ", route.NotifyEmails), Lines = lines.Count, Total = lines.Sum(l => l.Amount) });
         await db.SaveChangesAsync(cancellationToken);
 
-        await workflow.NotifyAsync(OdcNotificationKind.NeedsApproval, approver.Email, $"Expense report needs approval: {report.Title}",
-            $"{workflow.Actor} submitted \"{report.Title}\" for {lines.Sum(l => l.Amount):C}.", "odcs/approvals", cancellationToken);
+        foreach (var approver in route.NotifyEmails)
+        {
+            await workflow.NotifyAsync(OdcNotificationKind.NeedsApproval, approver, $"Expense report needs approval: {report.Title}",
+                $"{workflow.Actor} submitted \"{report.Title}\" for {lines.Sum(l => l.Amount):C}.", "odcs/approvals", cancellationToken);
+        }
         return (await OdcWorkflow.ToDetailAsync(db, report, cancellationToken)).Report;
     }
 

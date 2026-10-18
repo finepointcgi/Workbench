@@ -70,6 +70,7 @@ public static class NotificationsHosting
         services.AddWorkbenchTimekeepingHosting();
         Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);
         Workbench.Application.Reports.ReportsRegistration.AddWorkbenchReportsHosting(services); // Scheduled reports run as their owner.
+        Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
         return services;
     }
 

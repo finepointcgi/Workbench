@@ -79,6 +79,7 @@ public static class IdentityRegistration
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
         services.AddWorkbenchEvmPermissions(); // Earned value: Finance, Admin or the project's PM; BCR approval and period reopen Finance/Admin.
         services.AddWorkbenchCeilingPermissions(); // Ceilings and closeout: reads Finance/Admin/PMs; changes Finance/Admin (PMs may override where allowed).
+        services.Decorate<Workbench.Contracts.Approvals.IApprovalWorkflowService, Approvals.PermissionCheckingApprovalWorkflowService>(); // Approval workflows: read Finance/Admin, change Admin.
         return services;
     }
 

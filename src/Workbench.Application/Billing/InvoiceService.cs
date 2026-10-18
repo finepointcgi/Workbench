@@ -16,7 +16,8 @@ public sealed partial class InvoiceService(
     TimeProvider clock,
     InvoiceDocuments documents,
     UnbilledAccruals accruals,
-    Security.SecurityEventLog? securityLog = null) : IInvoiceService
+    Security.SecurityEventLog? securityLog = null,
+    Approvals.ApprovalEngine? approvals = null) : IInvoiceService
 {
     public const string AuditEntityType = nameof(Invoice);
 
@@ -311,6 +312,26 @@ public sealed partial class InvoiceService(
         else if (invoice.Total < 0)
         {
             throw new InvalidOperationException("The invoice total is negative; use a credit memo against the invoice instead.");
+        }
+
+        // The invoice workflow (Setup › Approval workflows; by default Finance, as before). Without the engine registered
+        // (tests, seeding) the caller's permission check is the only gate.
+        if (approvals is not null)
+        {
+            var check = await approvals.CheckAsync(db, Contracts.Approvals.ApprovalDocumentTypes.Invoice, invoice.Id, audit.Actor,
+                _ => Task.FromResult(Approvals.ApprovalSubjects.Invoice(invoice)), cancellationToken);
+            if (!check.CanDecide)
+            {
+                throw new WorkbenchForbiddenException("This invoice is waiting on another approver.");
+            }
+
+            var outcome = await approvals.DecideAsync(db, check, Contracts.Approvals.ApprovalDecisionKind.Approve, audit.Actor, null, cancellationToken);
+            if (!outcome.IsComplete)
+            {
+                audit.Record(db, AuditEntityType, invoice.Id, "StepApproved", after: new { Step = string.Join(", ", outcome.Decided.Select(t => t.StepName).Distinct()) });
+                await db.SaveChangesAsync(cancellationToken);
+                return await DetailAsync(db, invoice, cancellationToken);
+            }
         }
 
         var entry = await ledger.PostInvoiceAsync(db, invoice, ctx.Contract, ctx.Clins, cancellationToken);
