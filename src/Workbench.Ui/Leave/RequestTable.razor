@@ -25,7 +25,7 @@
         </MudTd>
         <MudTd>@Actions?.Invoke(context)</MudTd>
     </RowTemplate>
-    <NoRecordsContent><MudText Class="mud-text-secondary">@(ShowEmployee ? "Nothing waiting for you." : "No requests yet.")</MudText></NoRecordsContent>
+    <NoRecordsContent><MudText Class="mud-text-secondary">@(ShowEmployee ? "No leave requests are waiting for you." : "No leave requests yet. Planning time off? Request it here so your timesheet fills in by itself.")</MudText></NoRecordsContent>
 </MudTable>
 
 @code {

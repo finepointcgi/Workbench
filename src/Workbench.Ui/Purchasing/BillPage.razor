@@ -206,7 +206,7 @@ else
 
     private async Task CapitalizeAsync(BillLineDto line)
     {
-        var dialog = await DialogService.ShowAsync<Workbench.Ui.Assets.CapitalizeDialog>($"Capitalize {_bill!.Bill.Number} line {line.LineNumber}",
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Assets.CapitalizeDialog>($"Add {_bill!.Bill.Number} line {line.LineNumber} to fixed assets",
             new DialogParameters<Workbench.Ui.Assets.CapitalizeDialog> { { d => d.BillLineId, line.Id }, { d => d.Description, line.Description }, { d => d.Amount, line.Amount } },
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: Workbench.Contracts.Assets.CapitalizeBillLineRequest request })
@@ -214,7 +214,7 @@ else
             try
             {
                 var asset = await AssetService.CapitalizeAsync(request);
-                Snackbar.Add($"Capitalized as {asset.Asset.TagNumber}.", Severity.Success);
+                Snackbar.Add($"Added to fixed assets as {asset.Asset.TagNumber}.", Severity.Success);
                 Navigation.NavigateTo($"assets/{asset.Asset.Id}");
             }
             catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

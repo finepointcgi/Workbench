@@ -1,4 +1,4 @@
-@page "/projects/{ProjectId:guid}/budgets"
+@* The Budgets tab of the project page (/projects/{id}/budgets routes to ProjectHubPage). *@
 @inject IProjectService Projects
 @inject IPeopleService People
 @inject IFiscalCalendarService Calendar
@@ -6,7 +6,10 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_project?.Code ?? "Project") budgets · Workbench</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>@(_project?.Code ?? "Project") budgets · Workbench</PageTitle>
+}
 
 @if (_forbidden is not null)
 {
@@ -23,11 +26,17 @@ else if (_project is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-        <MudIconButton Href="@($"projects/{ProjectId}/financials")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to financials" />
-        <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Budgets</MudChip>
+        @if (!Embedded)
+        {
+            <MudIconButton Href="@($"projects/{ProjectId}/financials")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to financials" />
+            <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Budgets</MudChip>
+        }
         <MudSpacer />
-        <MudButton Href="@($"projects/{ProjectId}/financials")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Insights">Financials</MudButton>
+        @if (!Embedded)
+        {
+            <MudButton Href="@($"projects/{ProjectId}/financials")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Insights">Financials</MudButton>
+        }
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => NewVersionAsync(BudgetVersionSource.Empty, null)">New version</MudButton>
     </MudStack>
 
@@ -91,6 +100,10 @@ else
 @code {
     [Parameter]
     public Guid ProjectId { get; set; }
+
+    /// <summary>Rendered as a tab of the project page (/projects/{id}), which shows the project's name and the other tabs.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
 
     private ProjectDto? _project;
     private IReadOnlyList<BudgetVersionDto> _versions = [];

@@ -22,49 +22,52 @@
         }
         else if (_items.Count == 0)
         {
-            <MudText Class="mud-text-secondary" data-testid="inbox-empty">Nothing is waiting on you.</MudText>
+            <MudText Class="mud-text-secondary" data-testid="inbox-empty">
+                Nothing is waiting on you. Timesheets, expenses, purchases and invoices you need to approve will show up here.
+            </MudText>
         }
         else
         {
-            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0" data-testid="inbox">
+            @* Wide windows: a compact table whose action column never scrolls away. Below 960px (Sm and smaller) each row becomes
+               a card (MudTable's DataLabel layout), with the actions full width at the bottom. *@
+            <div class="wb-inbox-host">
+            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="wb-inbox" data-testid="inbox">
                 <HeaderContent>
-                    <MudTh>Type</MudTh>
-                    <MudTh>Document</MudTh>
-                    <MudTh>Submitted by</MudTh>
-                    <MudTh>Step</MudTh>
+                    <MudTh>What</MudTh>
+                    <MudTh>From</MudTh>
                     <MudTh Style="text-align:right">Amount</MudTh>
                     <MudTh>Waiting</MudTh>
-                    <MudTh></MudTh>
+                    <MudTh Style="text-align:right">Decide</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd><MudChip T="string" Size="Size.Small">@context.DocumentLabel</MudChip></MudTd>
-                    <MudTd>
+                    <MudTd DataLabel="What" data-testid="inbox-item">
+                        <MudChip T="string" Size="Size.Small" Class="ml-0">@context.DocumentLabel</MudChip>
                         <MudLink Href="@context.Link">@context.Title</MudLink>
                         @if (context.Summary is not null)
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.Summary</MudText>
                         }
                     </MudTd>
-                    <MudTd>@context.SubmitterEmail</MudTd>
-                    <MudTd>
-                        @context.StepName @(context.ScopeLabel is null ? "" : $"({context.ScopeLabel})")
-                        @if (context.OnBehalfOf is not null)
-                        {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">for @context.OnBehalfOf</MudText>
-                        }
+                    <MudTd DataLabel="From">
+                        <div class="wb-inbox-wrap">@context.SubmitterEmail</div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                            @context.StepName @(context.ScopeLabel is null ? "" : $"({context.ScopeLabel})")@(context.OnBehalfOf is null ? "" : $" · for {context.OnBehalfOf}")
+                        </MudText>
                     </MudTd>
-                    <MudTd Style="text-align:right">@(context.DocumentType == ApprovalDocumentTypes.Timesheet ? $"{context.Amount:0.0} h" : context.Amount?.ToString("C"))</MudTd>
-                    <MudTd>@(context.BusinessDaysWaiting == 0 ? "Today" : $"{context.BusinessDaysWaiting} business day(s)")</MudTd>
-                    <MudTd>
-                        <MudStack Row="true" Spacing="1">
+                    <MudTd DataLabel="Amount" Style="text-align:right; white-space:nowrap">@(context.DocumentType == ApprovalDocumentTypes.Timesheet ? $"{context.Amount:0.0} h" : context.Amount?.ToString("C"))</MudTd>
+                    <MudTd DataLabel="Waiting" Style="white-space:nowrap">@(context.BusinessDaysWaiting == 0 ? "Today" : context.BusinessDaysWaiting == 1 ? "1 business day" : $"{context.BusinessDaysWaiting} business days")</MudTd>
+                    <MudTd DataLabel="Decide" Class="wb-inbox-actions">
+                        <div class="d-flex flex-wrap gap-1 justify-end">
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="() => ApproveAsync(context)" data-testid="approve">Approve</MudButton>
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Return)" data-testid="return">Return</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Return)" data-testid="return"
+                                       title="Send it back so the submitter can fix it">Return</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Reject)" data-testid="reject">Reject</MudButton>
-                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.History" title="Approval history" OnClick="() => HistoryAsync(context)" />
-                        </MudStack>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.History" title="Approval history" aria-label="Approval history" OnClick="() => HistoryAsync(context)" />
+                        </div>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
+            </div>
         }
     </MudTabPanel>
     <MudTabPanel Text="Delegations">
@@ -111,7 +114,7 @@
                 }
                 @if (_delegations is { Count: 0 })
                 {
-                    <tr><td colspan="7" class="mud-text-secondary">No delegations.</td></tr>
+                    <tr><td colspan="7" class="mud-text-secondary">No delegations. Going on leave? Pick someone above to approve for you while you're away.</td></tr>
                 }
             </tbody>
         </MudSimpleTable>

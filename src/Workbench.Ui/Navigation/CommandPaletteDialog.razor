@@ -1,0 +1,139 @@
+@* The Ctrl+K / Cmd+K palette: type to find a page you may open, a project, a sheet, a dashboard or something you
+   opened recently. Arrow keys move, Enter opens, Escape closes. *@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Dashboards
+@using Workbench.Contracts.ProjectAccounting
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+
+<MudDialog ContentClass="pa-0" data-testid="command-palette">
+    <DialogContent>
+        <div class="pa-3">
+            <MudTextField T="string" @bind-Value="_query" @bind-Value:after="Refresh" Immediate="true" AutoFocus="true"
+                          Placeholder="Search pages, projects, sheets…" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          OnKeyDown="OnKeyDown" aria-label="Search" data-testid="palette-input" />
+        </div>
+        <div id="wb-palette-results" role="listbox" aria-label="Results" style="max-height:min(420px, 60vh);overflow-y:auto" class="pb-2">
+            @if (_results.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary px-4 py-3" data-testid="palette-empty">Nothing matches “@_query”.</MudText>
+            }
+            @for (var i = 0; i < _results.Count; i++)
+            {
+                var index = i;
+                var item = _results[i];
+                var selected = index == _selected;
+                <div role="option" aria-selected="@(selected ? "true" : "false")" data-testid="palette-result" data-href="@item.Href"
+                     class="@($"d-flex align-center gap-3 px-4 py-2 cursor-pointer {(selected ? "mud-theme-primary" : "")}")"
+                     @onclick="() => Open(item)" @onmousemove="() => Select(index)">
+                    <MudIcon Icon="@item.Icon" Size="Size.Small" />
+                    <div style="min-width:0">
+                        <MudText Typo="Typo.body2" Class="text-truncate">@item.Title</MudText>
+                        @if (item.Subtitle is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="@(selected ? "" : "mud-text-secondary")">@item.Subtitle</MudText>
+                        }
+                    </div>
+                    <MudSpacer />
+                    <MudText Typo="Typo.caption" Class="@(selected ? "" : "mud-text-secondary")">@KindLabel(item.Kind)</MudText>
+                </div>
+            }
+        </div>
+        <MudDivider />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 py-2 d-block">↑ ↓ to move · Enter to open · Esc to close</MudText>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    /// <summary>Recently visited pages, newest first (read from this device by the host).</summary>
+    [Parameter] public IReadOnlyList<PaletteItem> Recent { get; set; } = [];
+
+    private string? _query;
+    private int _selected;
+    private List<PaletteItem> _items = [];
+    private IReadOnlyList<PaletteItem> _results = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = [.. Recent, .. PaletteSearch.Pages(Access)];
+        Refresh();
+        if (!Access.IsSignedIn)
+        {
+            return;
+        }
+
+        // Records come from the same services the pages use, so they hold only what the user may see.
+        var projects = await TryAsync(Services.GetService<IProjectService>(), async s =>
+            (await s.ListProjectsAsync()).Select(p => new PaletteItem(PaletteKind.Project, p.Name, $"projects/{p.Id}", PaletteSearch.IconFor(PaletteKind.Project), p.Code, p.ContractNumber)));
+        var sheets = await TryAsync(Services.GetService<ISheetService>(), async s =>
+            (await s.ListAsync()).Select(x => new PaletteItem(PaletteKind.Sheet, x.Name, $"sheets/{x.Id}", PaletteSearch.IconFor(PaletteKind.Sheet), x.Workspace)));
+        var dashboards = await TryAsync(Services.GetService<IDashboardService>(), async s =>
+            (await s.ListAsync()).Select(d => new PaletteItem(PaletteKind.Dashboard, d.Name, $"dashboards/{d.Id}", PaletteSearch.IconFor(PaletteKind.Dashboard), d.Description)));
+        _items = [.. _items, .. projects, .. sheets, .. dashboards];
+        Refresh();
+    }
+
+    private static async Task<IEnumerable<PaletteItem>> TryAsync<T>(T? service, Func<T, Task<IEnumerable<PaletteItem>>> read) where T : class
+    {
+        if (service is null)
+        {
+            return [];
+        }
+
+        try
+        {
+            return (await read(service)).ToList();
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+            return [];
+        }
+    }
+
+    private void Refresh()
+    {
+        _results = PaletteSearch.Search(_query, _items);
+        _selected = 0;
+    }
+
+    private void Select(int index) => _selected = index;
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown" when _results.Count > 0:
+                _selected = (_selected + 1) % _results.Count;
+                break;
+            case "ArrowUp" when _results.Count > 0:
+                _selected = (_selected - 1 + _results.Count) % _results.Count;
+                break;
+            case "Enter" when _results.Count > 0:
+                Open(_results[Math.Clamp(_selected, 0, _results.Count - 1)]);
+                break;
+            case "Escape":
+                MudDialog.Cancel();
+                break;
+        }
+    }
+
+    private void Open(PaletteItem item)
+    {
+        MudDialog.Close(DialogResult.Ok(item));
+        Navigation.NavigateTo(item.Href);
+    }
+
+    private static string KindLabel(PaletteKind kind) => kind switch
+    {
+        PaletteKind.Recent => "Recent",
+        PaletteKind.Project => "Project",
+        PaletteKind.Sheet => "Sheet",
+        PaletteKind.Dashboard => "Dashboard",
+        _ => "Page",
+    };
+}

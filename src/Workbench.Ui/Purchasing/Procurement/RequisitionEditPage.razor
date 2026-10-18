@@ -74,10 +74,10 @@ else
                     @if (line.IsProject)
                     {
                         <MudItem xs="12" md="4">
-                            <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Label="Project / WBS" Dense="true" data-testid="req-line-wbs">
+                            <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Label="Project task (charge code)" Dense="true" data-testid="req-line-wbs">
                                 @foreach (var c in _options.ChargeCodes)
                                 {
-                                    <MudSelectItem T="Guid?" Value="c.WbsElementId">@c.WbsCode @c.Name</MudSelectItem>
+                                    <MudSelectItem T="Guid?" Value="c.WbsElementId">@ChargeCodeText.Label(c.WbsCode, c.Name)</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>

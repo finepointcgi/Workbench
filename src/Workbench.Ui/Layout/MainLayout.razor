@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using Workbench.Ui.Navigation
 
 <MudThemeProvider Theme="WorkbenchTheme.Default" @bind-IsDarkMode="_darkMode" />
 <MudPopoverProvider />
@@ -11,26 +12,32 @@
                        OnClick="ToggleDrawer" aria-label="Toggle navigation" />
         <MudText Typo="Typo.h6" Class="ml-2">Workbench</MudText>
         <MudSpacer />
+        <CommandPalette Access="_access" />
         <NotificationBell />
         <UserMenu />
         <MudIconButton Icon="@(_darkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1">
-        <NavMenu />
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Breakpoint="Breakpoint.Md">
+        <NavMenu AccessLoaded="OnAccessLoaded" />
     </MudDrawer>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+            <PageBreadcrumbs Access="_access" />
             @Body
         </MudContainer>
     </MudMainContent>
 </MudLayout>
+<MobileRedirect />
 
 @code {
     private bool _drawerOpen = true;
     private bool _darkMode;
+    private NavAccess _access = NavAccess.Anonymous;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
     private void ToggleDarkMode() => _darkMode = !_darkMode;
+
+    private void OnAccessLoaded(NavAccess access) => _access = access;
 }

@@ -37,7 +37,7 @@ else
             <MudTd>@(context.Is1099 ? context.Form1099Box : "")</MudTd>
             <MudTd>@(context.W9FileId is null ? "" : "On file")</MudTd>
         </RowTemplate>
-        <NoRecordsContent><MudText Class="mud-text-secondary">No vendors match.</MudText></NoRecordsContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No vendors match. Vendors are the companies you buy from; add one before entering its bills or purchase orders.</MudText></NoRecordsContent>
     </MudTable>
 }
 

@@ -1,0 +1,85 @@
+@* Where the current page sits in the menu (Finance › Payables & purchasing › Bills › Bill), for nested and detail
+   pages. Built from NavCatalog, so pages don't each repeat it. Pages that draw their own breadcrumbs are skipped. *@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@if (_items.Count > 0)
+{
+    <MudBreadcrumbs Items="_items" Class="px-0 pt-0 pb-2" data-testid="page-breadcrumbs" />
+}
+
+@code {
+    // These draw their own breadcrumbs or own their header (project pages belong to the Projects hub).
+    private static readonly string[] OwnBreadcrumbs = ["expenses/", "payroll/runs/", "projects/"];
+
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    private List<BreadcrumbItem> _items = [];
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    protected override void OnParametersSet() => _items = Build(Navigation.ToBaseRelativePath(Navigation.Uri), Access);
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(() =>
+        {
+            _items = Build(Navigation.ToBaseRelativePath(e.Location), Access);
+            StateHasChanged();
+        });
+
+    /// <summary>The trail for <paramref name="relativePath"/>, or nothing for top-level pages.</summary>
+    public static List<BreadcrumbItem> Build(string relativePath, NavAccess access)
+    {
+        var path = string.Join('/', NavCatalog.Segments(relativePath));
+        if (path.Length == 0 || path == "m" || path.StartsWith("m/", StringComparison.Ordinal) || path.EndsWith("/print", StringComparison.Ordinal)
+            || OwnBreadcrumbs.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        if (NavCatalog.Match(path, access) is not var (entry, tail) || entry.Href.Length == 0)
+        {
+            return [];
+        }
+
+        var nested = entry.Group is not null || entry.Section is NavCatalog.Finance or NavCatalog.Admin;
+        if (tail.Length == 0 && !nested)
+        {
+            return [];
+        }
+
+        var section = NavCatalog.Sections.First(s => s.Key == entry.Section);
+        var sectionTitle = NavCatalog.TitleFor(section, access);
+        var items = new List<BreadcrumbItem> { new(sectionTitle, section.Href, disabled: section.Href is null) };
+        if (entry.Group is not null && entry.Group != entry.Title)
+        {
+            items.Add(new BreadcrumbItem(entry.Group, null, disabled: true));
+        }
+
+        if (entry.Title != sectionTitle || tail.Length > 0)
+        {
+            items.Add(new BreadcrumbItem(entry.Title, entry.Href, disabled: tail.Length == 0));
+        }
+
+        if (tail.Length > 0)
+        {
+            items.Add(new BreadcrumbItem(DetailLabel(entry, tail), null, disabled: true));
+        }
+
+        return items;
+    }
+
+    private static string DetailLabel(NavEntry entry, string[] tail)
+    {
+        var noun = entry.Detail ?? "Details";
+        if (tail.Contains("new", StringComparer.OrdinalIgnoreCase))
+        {
+            return entry.Detail is null ? "New" : $"New {noun.ToLowerInvariant()}";
+        }
+
+        var edit = tail[^1].Equals("edit", StringComparison.OrdinalIgnoreCase);
+        return edit ? $"Edit {noun.ToLowerInvariant()}" : noun;
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

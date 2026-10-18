@@ -115,6 +115,16 @@ public sealed class SetupAdminService(IWorkbenchDbContextFactory dbFactory, Audi
             await db.Set<EmployeeCostRate>().AnyAsync(cancellationToken),
             await db.Set<Customer>().AnyAsync(cancellationToken) && await db.Set<Contract>().AnyAsync(cancellationToken),
             await db.Set<WbsElement>().AnyAsync(cancellationToken),
-            await db.Set<ChargeAssignment>().AnyAsync(cancellationToken));
+            await db.Set<ChargeAssignment>().AnyAsync(cancellationToken),
+            // Someone besides the first administrator can sign in (or has been invited).
+            await db.Set<Domain.Identity.AppUser>().CountAsync(u => u.IsActive, cancellationToken) > 1
+                || await db.Set<Domain.Security.UserInvite>().AnyAsync(cancellationToken),
+            await db.Set<Domain.Accounting.Account>().AnyAsync(a => a.IsActive, cancellationToken),
+            await db.Set<Domain.Cash.BankAccount>().AnyAsync(cancellationToken),
+            await db.Set<Domain.Payroll.PayrollProviderSetting>().AnyAsync(cancellationToken),
+            await db.Set<Domain.Approvals.ApprovalWorkflow>().AnyAsync(w => w.CurrentVersionId != null, cancellationToken),
+            await db.Set<Domain.Accounting.IndirectRate>().AnyAsync(cancellationToken),
+            await db.Set<Domain.Billing.ContractBillingSettings>().AnyAsync(cancellationToken)
+                || await db.Set<Domain.Billing.CustomerBillingProfile>().AnyAsync(cancellationToken));
     }
 }

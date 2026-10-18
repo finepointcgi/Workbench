@@ -1,0 +1,231 @@
+@page "/projects"
+@* The Projects list: Finance and administrators see every project; others the projects they manage (with money) or charge to. *@
+@inject IProjectHubService Hub
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Projects · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@(_list is { ShowsMoney: false } ? "My projects" : "Projects")</MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
+</MudStack>
+
+@if (_list is null)
+{
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error">@_error</MudAlert>
+    }
+    else
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudTextField T="string" @bind-Value="_search" Immediate="true" DebounceInterval="200" Placeholder="Search by code, name, manager or contract"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Style="min-width: 300px" data-testid="project-search" />
+        @if (_list.SeesAll)
+        {
+            <MudToggleGroup T="bool" @bind-Value="_mineOnly" Color="Color.Primary" Size="Size.Small" Style="max-width: 220px" data-testid="mine-toggle">
+                <MudToggleItem Value="true" Text="Mine" />
+                <MudToggleItem Value="false" Text="All" />
+            </MudToggleGroup>
+        }
+        <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Style="max-width: 180px" data-testid="status-filter">
+            <MudSelectItem T="string" Value="@OpenStatus">Open (not closed)</MudSelectItem>
+            <MudSelectItem T="string" Value="@AnyStatus">Any status</MudSelectItem>
+            @foreach (var state in Enum.GetValues<ProjectState>())
+            {
+                <MudSelectItem T="string" Value="@state.ToString()">@ProjectsFormat.Status(state)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSpacer />
+        @if (_list.ShowsMoney)
+        {
+            <MudTooltip Arrow="true">
+                <ChildContent>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Outlined.Info">How health is judged</MudButton>
+                </ChildContent>
+                <TooltipContent>
+                    <div style="max-width: 340px; text-align: left">
+                        @foreach (var line in ProjectHealthRules.Explanation)
+                        {
+                            <MudText Typo="Typo.caption" Class="d-block">@line</MudText>
+                        }
+                    </div>
+                </TooltipContent>
+            </MudTooltip>
+        }
+    </MudStack>
+
+    @if (_list.Projects.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-6">
+            <MudText Class="mud-text-secondary">
+                You aren't on any projects yet. Projects show here once you manage one, are assigned to it or record time on it.
+            </MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudTable T="ProjectHubRowDto" Items="Visible" Dense="true" Hover="true" Outlined="true" Elevation="0" OnRowClick="Open" RowStyle="cursor: pointer"
+                  Breakpoint="Breakpoint.Sm" data-testid="project-table">
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Code" InitialDirection="SortDirection.Ascending">Project</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.ProjectManagerName ?? string.Empty">Manager</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.ContractNumber ?? string.Empty">Contract</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Status">Status</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Finish ?? DateOnly.MaxValue">Period</MudTableSortLabel></MudTh>
+                @if (_list.ShowsMoney)
+                {
+                    <MudTh>
+                        <MudTooltip Text="How much of the contract's funding is spent (all its projects). Hover a value for the funded share of the contract.">
+                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.PercentFundingUsed ?? -1m">Funding used</MudTableSortLabel>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh>
+                        <MudTooltip Text="Spent so far (actual cost: labor at cost plus allowable ODCs, direct) against the budget.">
+                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.PercentSpent ?? -1m">Spent of budget</MudTableSortLabel>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh>
+                        <MudTooltip Text="Forecast at completion (EAC = spent + estimate to complete) against the budget.">
+                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.ForecastVsBudget ?? -1m">Forecast vs budget</MudTableSortLabel>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money == null ? -1 : (int)p.Money.Health">Health</MudTableSortLabel></MudTh>
+                    <MudTh>
+                        <MudTooltip Text="Tasks in the plan sheet that aren't Done.">
+                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.OpenItems ?? -1">Open tasks</MudTableSortLabel>
+                        </MudTooltip>
+                    </MudTh>
+                }
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Project">
+                    <MudLink Href="@($"projects/{context.Id}")" Typo="Typo.body2"><b>@context.Code</b> · @context.Name</MudLink>
+                    @if (context.IsManager)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">You manage</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Manager">@(context.ProjectManagerName ?? "—")</MudTd>
+                <MudTd DataLabel="Contract">@(context.ContractNumber ?? "No contract")</MudTd>
+                <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(context.Status)">@ProjectsFormat.Status(context.Status)</MudChip></MudTd>
+                <MudTd DataLabel="Period">@ProjectsFormat.Period(context.Start, context.Finish)</MudTd>
+                @if (_list.ShowsMoney)
+                {
+                    @if (context.Money is { } m)
+                    {
+                        <MudTd DataLabel="Funding used">
+                            @if (m.PercentFundingUsed is { } used)
+                            {
+                                <MudTooltip Text="@($"{FinancialFormat.Percent(m.PercentFunded)} of the contract is funded; {FinancialFormat.Money(m.FundingLeft ?? 0)} funding left")">
+                                    <span>@FinancialFormat.Percent(used)</span>
+                                </MudTooltip>
+                                <MudProgressLinear Value="ProjectsFormat.Bar(used)" Color="ProjectsFormat.BurnColor(used)" Size="Size.Small" Rounded="true" />
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">—</span>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Spent of budget">
+                            <span>@FinancialFormat.Money(m.Spent) of @FinancialFormat.Money(m.Budget)</span>
+                            @if (m.PercentSpent is { } spent)
+                            {
+                                <MudProgressLinear Value="ProjectsFormat.Bar(spent)" Color="ProjectsFormat.BurnColor(spent)" Size="Size.Small" Rounded="true" />
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Forecast vs budget">
+                            <span class="@(m.ForecastAtCompletion > m.Budget && m.Budget > 0 ? "mud-error-text" : "")">@FinancialFormat.Money(m.ForecastAtCompletion)</span>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@(m.ForecastVsBudget is { } r ? $"{FinancialFormat.Percent(r)} of budget" : "no budget")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Health"><ProjectHealthChip Money="m" /></MudTd>
+                        <MudTd DataLabel="Open tasks">@(context.OpenItems?.ToString() ?? "—")</MudTd>
+                    }
+                    else
+                    {
+                        <MudTd DataLabel="Funding used" /><MudTd DataLabel="Spent of budget" /><MudTd DataLabel="Forecast vs budget" /><MudTd DataLabel="Health" /><MudTd DataLabel="Open tasks" />
+                    }
+                }
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="mud-text-secondary">No projects match these filters.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+        @if (!_list.ShowsMoney)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">These are the projects you're assigned to or record time on.</MudText>
+        }
+    }
+}
+
+@code {
+    private const string OpenStatus = "open";
+    private const string AnyStatus = "any";
+
+    private ProjectHubListDto? _list;
+    private string? _error;
+    private string? _search;
+    private bool _mineOnly; // Finance sees every project by default; "Mine" narrows to what they manage or charge to.
+    private string _status = OpenStatus;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _list = await Hub.ListProjectsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            _error = $"Couldn't load projects: {ex.Message}";
+            Snackbar.Add(_error, Severity.Error);
+        }
+    }
+
+    private IEnumerable<ProjectHubRowDto> Visible => (_list?.Projects ?? []).Where(Matches);
+
+    private bool Matches(ProjectHubRowDto p)
+    {
+        if (_mineOnly && !p.IsMine)
+        {
+            return false;
+        }
+
+        var statusOk = _status switch
+        {
+            OpenStatus => p.Status != ProjectState.Closed,
+            AnyStatus => true,
+            var s => p.Status.ToString() == s,
+        };
+        if (!statusOk)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            return true;
+        }
+
+        var term = _search.Trim();
+        return new[] { p.Code, p.Name, p.ProjectManagerName, p.ContractNumber }
+            .Any(v => v?.Contains(term, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private void Open(TableRowClickEventArgs<ProjectHubRowDto> args)
+    {
+        if (args.Item is { } row)
+        {
+            Navigation.NavigateTo($"projects/{row.Id}");
+        }
+    }
+}

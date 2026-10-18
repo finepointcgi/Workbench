@@ -1,0 +1,18 @@
+.wb-inbox-host ::deep .wb-inbox .wb-inbox-wrap {
+    overflow-wrap: anywhere;
+}
+
+/* The decision buttons keep their own column on wide windows, so they never scroll out of view. */
+.wb-inbox-host ::deep .wb-inbox .wb-inbox-actions {
+    min-width: 250px;
+}
+
+@media (max-width: 959.98px) {
+    .wb-inbox-host ::deep .wb-inbox .wb-inbox-actions {
+        min-width: 0;
+    }
+
+    .wb-inbox-host ::deep .wb-inbox .wb-inbox-actions > div {
+        justify-content: flex-start !important;
+    }
+}

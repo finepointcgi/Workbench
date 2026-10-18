@@ -1,0 +1,47 @@
+@* The to-do list on the phone's Today tab, above time entry: the first few items, with the rest one tap away.
+   Hidden when the host has no to-do service, so the mobile pages still render without it. *@
+@inject IServiceProvider Services
+
+@if (_todo is not null)
+{
+    <section class="mb-4" data-testid="mobile-todo">
+        <div class="d-flex align-center mb-1">
+            <MudText Typo="Typo.h6" HtmlTag="h2">To do</MudText>
+            <MudSpacer />
+            @if (_todo.Items.Count > Limit)
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _all = !_all" data-testid="todo-more">
+                    @(_all ? "Show less" : $"Show all {_todo.Items.Count}")
+                </MudButton>
+            }
+        </div>
+        <TodoList Items="@(_all ? _todo.Items : _todo.Items.Take(Limit).ToList())" Today="_todo.Today" Compact="true" OnChanged="LoadAsync" />
+    </section>
+}
+
+@code {
+    /// <summary>Items shown before "Show all".</summary>
+    public const int Limit = 3;
+
+    private MyTodoDto? _todo;
+    private bool _all;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (Services.GetService<IMyTodoService>() is not { } todo)
+        {
+            return;
+        }
+
+        try
+        {
+            _todo = await todo.GetAsync();
+        }
+        catch (Exception ex) when (TodoFormat.IsExpected(ex))
+        {
+            _todo = null; // the time entry below still works
+        }
+    }
+}
