@@ -1,0 +1,155 @@
+@* Manages the members of a sheet's workspace. Everyone who can see the sheet can see who has access; owners can change it. *@
+@inject IWorkspaceMembershipService Memberships
+@inject IUserDirectory Users
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Share</MudText>
+        @if (_workspace is { } workspace)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Access comes from the workspace "@workspace.Name", so it applies to all of its sheets.
+            </MudText>
+        }
+    </TitleContent>
+    <DialogContent>
+        @if (_members is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            @if (CanManage)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+                    <MudAutocomplete T="string" @bind-Value="_email" Label="Add people by email" SearchFunc="SearchAsync"
+                                     CoerceValue="true" ResetValueOnEmptyText="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     DebounceInterval="250" Style="flex:1" />
+                    <MudSelect T="WorkspaceRole" @bind-Value="_role" Label="Role" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:150px">
+                        @foreach (var role in Enum.GetValues<WorkspaceRole>())
+                        {
+                            <MudSelectItem T="WorkspaceRole" Value="role">@role</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="string.IsNullOrWhiteSpace(_email) || _busy" OnClick="AddAsync">Add</MudButton>
+                </MudStack>
+            }
+
+            <MudList T="string" Dense="true">
+                @foreach (var member in _members)
+                {
+                    <MudListItem T="string">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <div style="flex:1; min-width:0">
+                                <MudText Typo="Typo.body2">@(member.DisplayName ?? member.UserEmail)</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@member.UserEmail</MudText>
+                            </div>
+                            @if (CanManage)
+                            {
+                                <MudSelect T="WorkspaceRole" Value="member.Role" ValueChanged="role => ChangeRoleAsync(member, role)" Dense="true"
+                                           Margin="Margin.Dense" Style="max-width:140px" aria-label="@($"Role for {member.UserEmail}")">
+                                    @foreach (var role in Enum.GetValues<WorkspaceRole>())
+                                    {
+                                        <MudSelectItem T="WorkspaceRole" Value="role">@role</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudIconButton Icon="@Icons.Material.Outlined.PersonRemove" Size="Size.Small" OnClick="() => RemoveAsync(member)"
+                                               aria-label="@($"Remove {member.UserEmail}")" Disabled="_busy" />
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@member.Role</MudChip>
+                            }
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+            @if (!CanManage)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Only the workspace's owners can change who has access.</MudText>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    private WorkspaceSummary? _workspace;
+    private IReadOnlyList<WorkspaceMemberDto>? _members;
+    private string? _email;
+    private WorkspaceRole _role = WorkspaceRole.Editor;
+    private bool _busy;
+
+    private bool CanManage => ((WorkspaceRole?)_workspace?.MyRole).CanManage();
+
+    protected override async Task OnInitializedAsync() => await RunAsync(async () =>
+    {
+        _workspace = await Memberships.GetForSheetAsync(SheetId);
+        _members = await Memberships.ListMembersAsync(_workspace.Id);
+    });
+
+    private async Task<IEnumerable<string>> SearchAsync(string? text, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        try
+        {
+            var users = await Users.SearchAsync(text, 10, cancellationToken);
+            return users.Select(u => u.Email).Where(e => _members?.All(m => m.UserEmail != e) ?? true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private Task AddAsync() => RunAsync(async () =>
+    {
+        var added = await Memberships.SetMemberAsync(_workspace!.Id, new SetWorkspaceMemberRequest(_email!.Trim(), _role));
+        _email = null;
+        _members = await Memberships.ListMembersAsync(_workspace.Id);
+        Snackbar.Add($"{added.UserEmail} is now a {added.Role}.", Severity.Success);
+    });
+
+    private Task ChangeRoleAsync(WorkspaceMemberDto member, WorkspaceRole role) => RunAsync(async () =>
+    {
+        await Memberships.SetMemberAsync(member.WorkspaceId, new SetWorkspaceMemberRequest(member.UserEmail, role));
+        _members = await Memberships.ListMembersAsync(member.WorkspaceId);
+    });
+
+    private Task RemoveAsync(WorkspaceMemberDto member) => RunAsync(async () =>
+    {
+        await Memberships.RemoveMemberAsync(member.WorkspaceId, member.UserEmail);
+        _members = await Memberships.ListMembersAsync(member.WorkspaceId);
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+            _members ??= [];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

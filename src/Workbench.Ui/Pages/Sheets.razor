@@ -91,7 +91,7 @@
             Snackbar.Add($"Created \"{created.Name}\"", Severity.Success);
             await LoadAsync();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't create the sheet: {ex.Message}", Severity.Error);
         }

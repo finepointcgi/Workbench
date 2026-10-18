@@ -1,6 +1,7 @@
 using Workbench.Application.Collaboration;
 using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
+using Workbench.Domain.Identity;
 
 namespace Workbench.Tests.Collaboration;
 
@@ -51,6 +52,7 @@ public sealed class CommentServiceTests
         await using var host = new CollaborationHost();
         var (sheetId, item) = await host.NewSheetWithItemAsync();
         var comment = await host.Comments.CreateAsync(sheetId, item.Id, new CreateCommentRequest("Mine"));
+        await host.AddMemberAsync(sheetId, "bob@example.com", WorkspaceRole.Commenter);
 
         host.User.Email = "bob@example.com";
         Assert.False((await host.Comments.ListAsync(sheetId, item.Id))[0].CanEdit);

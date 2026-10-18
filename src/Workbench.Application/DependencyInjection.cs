@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Costpoint;
+using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Sheets;
@@ -19,6 +20,10 @@ public static class DependencyInjection
         services.AddWorkbenchCollaboration();
         services.AddWorkbenchCostpoint();
         services.AddWorkbenchProjectAccounting();
+
+        // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
+        // (activity recording and any later feature's), so new decorators belong above this line.
+        services.AddWorkbenchIdentity();
         return services;
     }
 }
