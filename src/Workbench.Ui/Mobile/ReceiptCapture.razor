@@ -71,7 +71,7 @@
     }
 
     /// <summary>Camera pictures sometimes come without a usable extension; name them by their type.</summary>
-    internal static string? NameFor(string fileName, string? contentType)
+    public static string? NameFor(string fileName, string? contentType)
     {
         if (AttachmentRules.IsAllowed(fileName) && (Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".pdf"))
         {

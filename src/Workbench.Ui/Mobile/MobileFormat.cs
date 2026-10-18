@@ -3,7 +3,7 @@ using Workbench.Contracts;
 
 namespace Workbench.Ui.Mobile;
 
-internal static class MobileFormat
+public static class MobileFormat
 {
     private static readonly CultureInfo Us = CultureInfo.GetCultureInfo("en-US");
 
