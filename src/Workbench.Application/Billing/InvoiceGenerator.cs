@@ -58,7 +58,7 @@ internal sealed record BillingContext(
 /// on another live invoice are skipped); cost-plus bills cumulative allowable cost through the period end less what was
 /// billed before, so late approvals and corrections are picked up; FFP bills completed, unbilled milestones.
 /// </summary>
-public sealed class InvoiceGenerator(BillingCostSource costs)
+public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBillingLimits>? limits = null)
 {
     private static readonly InvoiceLineKind[] CostKinds = [InvoiceLineKind.Labor, InvoiceLineKind.Burden, InvoiceLineKind.Odc];
 
@@ -310,12 +310,33 @@ public sealed class InvoiceGenerator(BillingCostSource costs)
         // Fee on cost, less the withhold (none on the final invoice, which releases what was withheld).
         var settings = ctx.Settings;
         var billedInvoices = prior.Where(i => i.IsBilled).ToList();
+        var priorFee = prior.SelectMany(i => i.Lines).Where(l => l.Kind == InvoiceLineKind.Fee && l.ClinId != null)
+            .GroupBy(l => l.ClinId!.Value).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
         foreach (var clin in clins)
         {
             var costHere = lines.Where(l => l.ClinId == clin.Id).Sum(l => l.Amount);
             if (clin.Pricing != ClinPricing.CostNoFee && clin.FeeRate is > 0 and var feeRate && costHere != 0)
             {
                 var fee = Money.Round(costHere * feeRate);
+                foreach (var limit in limits ?? [])
+                {
+                    // Contract fee caps (ceilings module): a lower fee rate, or no more than the fee left under a fee ceiling.
+                    var cap = await limit.FeeLimitAsync(db, ctx.Contract.Id, clin.Id, feeRate, priorFee, ct);
+                    var uncapped = fee;
+                    feeRate = cap.FeeRate;
+                    fee = Money.Round(costHere * feeRate);
+                    if (cap.MaxFee is { } max && fee > max)
+                    {
+                        fee = Math.Max(0, max);
+                    }
+
+                    if (fee != uncapped && cap.Note is not null)
+                    {
+                        warnings.Add(cap.Note);
+                    }
+                }
+
+                priorFee[clin.Id] = priorFee.GetValueOrDefault(clin.Id) + fee;
                 lines.Add(new DraftLine(clin.Id, InvoiceLineKind.Fee, $"{(type == InvoiceType.TrueUp ? "True-up: fee" : "Fee")} {feeRate:P2} on {costHere:N2}",
                     null, null, null, null, 1, feeRate, fee, []));
                 if (!releaseWithhold && fee > 0 && settings?.FeeWithholdRate is > 0 and var withholdRate)

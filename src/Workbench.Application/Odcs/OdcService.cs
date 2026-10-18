@@ -150,23 +150,30 @@ public sealed class OdcService(IWorkbenchDbContextFactory dbFactory, OdcWorkflow
         var entry = await FindVendorAsync(db, odcId, cancellationToken);
         OdcWorkflow.EnsureEditable(entry.Status, "ODC");
         await workflow.ValidateForSubmitAsync(db, entry, cancellationToken);
-        var approver = await OdcWorkflow.ResolveVendorApproverAsync(db, entry, cancellationToken)
-            ?? throw new ArgumentException(workflow.IsMe(entry.SubmittedBy)
-                ? "Nobody else can approve this: you entered it and either the project has no manager or you are its manager with no supervisor."
-                : "This project has no project manager to approve it. Set the project manager first.");
-
         var before = entry.Status;
         entry.Status = OdcStatus.Submitted;
         entry.SubmittedAtUtc = workflow.UtcNow;
         entry.RejectionReason = null;
         entry.RejectedBy = null;
         entry.RejectedAtUtc = null;
+        // The workflow (Setup › Approval workflows; by default the PM, or the PM's supervisor when they entered it) routes it.
+        var route = await workflow.Approvals.StartAsync(db, Workbench.Application.Approvals.ApprovalSubjects.VendorOdc(entry), cancellationToken);
+        if (route.HasUnassigned)
+        {
+            throw new ArgumentException(workflow.IsMe(entry.SubmittedBy)
+                ? "Nobody else can approve this: you entered it and either the project has no manager or you are its manager with no supervisor."
+                : "This project has no project manager to approve it. Set the project manager first.");
+        }
+
         workflow.Audit.Record(db, OdcWorkflow.OdcEntityType, entry.Id, "Submitted",
-            new { Status = before.ToString() }, new { Status = entry.Status.ToString(), ApproverEmail = approver.Email });
+            new { Status = before.ToString() }, new { Status = entry.Status.ToString(), ApproverEmail = string.Join(", ", route.NotifyEmails) });
         await db.SaveChangesAsync(cancellationToken);
 
-        await workflow.NotifyAsync(OdcNotificationKind.NeedsApproval, approver.Email, $"ODC needs approval: {entry.Vendor} {entry.Amount:C}",
-            $"{workflow.Actor} submitted {entry.Vendor} invoice {entry.InvoiceNumber} for {entry.Amount:C}.", "odcs/approvals", cancellationToken);
+        foreach (var approver in route.NotifyEmails)
+        {
+            await workflow.NotifyAsync(OdcNotificationKind.NeedsApproval, approver, $"ODC needs approval: {entry.Vendor} {entry.Amount:C}",
+                $"{workflow.Actor} submitted {entry.Vendor} invoice {entry.InvoiceNumber} for {entry.Amount:C}.", "odcs/approvals", cancellationToken);
+        }
         return await OdcWorkflow.ToDtoAsync(db, entry, cancellationToken);
     }
 

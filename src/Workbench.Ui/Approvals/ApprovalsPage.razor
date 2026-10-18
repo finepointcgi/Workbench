@@ -1,0 +1,218 @@
+@page "/approvals"
+@inject IApprovalInboxService Inbox
+@inject IApprovalDelegationService Delegations
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Approvals · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Approvals</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Everything waiting on you (or on someone you're standing in for), across timesheets, expenses, ODCs, purchasing,
+    bills, invoices and journal entries. The module pages still work:
+    <MudLink Href="time/approvals">timesheets</MudLink>, <MudLink Href="odcs/approvals">ODCs and expenses</MudLink>,
+    <MudLink Href="purchasing/approvals">AP bills</MudLink>, <MudLink Href="purchasing/requisitions">requisitions</MudLink>.
+</MudText>
+
+<MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
+    <MudTabPanel Text="@($"Waiting on me ({_items?.Count ?? 0})")">
+        @if (_items is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_items.Count == 0)
+        {
+            <MudText Class="mud-text-secondary" data-testid="inbox-empty">Nothing is waiting on you.</MudText>
+        }
+        else
+        {
+            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0" data-testid="inbox">
+                <HeaderContent>
+                    <MudTh>Type</MudTh>
+                    <MudTh>Document</MudTh>
+                    <MudTh>Submitted by</MudTh>
+                    <MudTh>Step</MudTh>
+                    <MudTh Style="text-align:right">Amount</MudTh>
+                    <MudTh>Waiting</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><MudChip T="string" Size="Size.Small">@context.DocumentLabel</MudChip></MudTd>
+                    <MudTd>
+                        <MudLink Href="@context.Link">@context.Title</MudLink>
+                        @if (context.Summary is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.Summary</MudText>
+                        }
+                    </MudTd>
+                    <MudTd>@context.SubmitterEmail</MudTd>
+                    <MudTd>
+                        @context.StepName @(context.ScopeLabel is null ? "" : $"({context.ScopeLabel})")
+                        @if (context.OnBehalfOf is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">for @context.OnBehalfOf</MudText>
+                        }
+                    </MudTd>
+                    <MudTd Style="text-align:right">@(context.DocumentType == ApprovalDocumentTypes.Timesheet ? $"{context.Amount:0.0} h" : context.Amount?.ToString("C"))</MudTd>
+                    <MudTd>@(context.BusinessDaysWaiting == 0 ? "Today" : $"{context.BusinessDaysWaiting} business day(s)")</MudTd>
+                    <MudTd>
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="() => ApproveAsync(context)" data-testid="approve">Approve</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Return)" data-testid="return">Return</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Reject)" data-testid="reject">Reject</MudButton>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.History" title="Approval history" OnClick="() => HistoryAsync(context)" />
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudTabPanel>
+    <MudTabPanel Text="Delegations">
+        <MudText Class="mud-text-secondary mb-3">
+            Out of office? Let someone decide your approvals between two dates. Each decision records that it was made on your behalf.
+        </MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_delegate" Label="Delegate's email" data-testid="delegate-email" /></MudItem>
+            <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="_from" Label="From" /></MudItem>
+            <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="_to" Label="To" /></MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string" @bind-Value="_type" Label="Documents" Clearable="true" Placeholder="All approvals">
+                    @foreach (var type in ApprovalDocumentTypes.All)
+                    {
+                        <MudSelectItem Value="type">@ApprovalDocumentTypes.Label(type)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="8"><MudTextField @bind-Value="_reason" Label="Reason (optional)" /></MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || string.IsNullOrWhiteSpace(_delegate) || _from is null || _to is null"
+                           OnClick="DelegateAsync" data-testid="add-delegation">Delegate</MudButton>
+            </MudItem>
+        </MudGrid>
+        <MudSimpleTable Dense="true" Elevation="0" Class="mt-4">
+            <thead><tr><th>From</th><th>To</th><th>Dates</th><th>Documents</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in _delegations ?? [])
+                {
+                    <tr>
+                        <td>@d.DelegatorEmail</td>
+                        <td>@d.DelegateEmail</td>
+                        <td>@d.StartsOn.ToString("MMM d") – @d.EndsOn.ToString("MMM d, yyyy")</td>
+                        <td>@(d.DocumentType is null ? "All" : ApprovalDocumentTypes.Label(d.DocumentType))</td>
+                        <td>@d.Reason</td>
+                        <td>@(d.RevokedAtUtc is not null ? "Ended" : d.IsActive ? "Active" : d.EndsOn < DateOnly.FromDateTime(DateTime.Today) ? "Over" : "Scheduled")</td>
+                        <td>
+                            @if (d.RevokedAtUtc is null)
+                            {
+                                <MudButton Size="Size.Small" Disabled="_busy" OnClick="() => RevokeAsync(d)">End</MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_delegations is { Count: 0 })
+                {
+                    <tr><td colspan="7" class="mud-text-secondary">No delegations.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private IReadOnlyList<ApprovalInboxItemDto>? _items;
+    private IReadOnlyList<ApprovalDelegationDto>? _delegations;
+    private bool _busy;
+    private string? _delegate;
+    private DateTime? _from = DateTime.Today;
+    private DateTime? _to = DateTime.Today.AddDays(7);
+    private string? _type;
+    private string? _reason;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _items = await Inbox.ListMineAsync();
+        _delegations = await Delegations.ListAsync();
+    }
+
+    private Task ApproveAsync(ApprovalInboxItemDto item) => RunAsync(item, new ApprovalDecisionRequest(ApprovalDecisionKind.Approve), "Approved");
+
+    private async Task DecideWithReasonAsync(ApprovalInboxItemDto item, ApprovalDecisionKind kind)
+    {
+        var parameters = new DialogParameters<ApprovalReasonDialog>
+        {
+            { d => d.Message, $"{item.DocumentLabel}: {item.Title}" },
+            { d => d.Label, kind == ApprovalDecisionKind.Return ? "What needs to change?" : "Reason" },
+            { d => d.ConfirmText, kind == ApprovalDecisionKind.Return ? "Return" : "Reject" },
+        };
+        var dialog = await DialogService.ShowAsync<ApprovalReasonDialog>(kind == ApprovalDecisionKind.Return ? "Return for changes" : "Reject", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(item, new ApprovalDecisionRequest(kind, reason), kind == ApprovalDecisionKind.Return ? "Returned for changes" : "Rejected");
+        }
+    }
+
+    private async Task RunAsync(ApprovalInboxItemDto item, ApprovalDecisionRequest request, string done)
+    {
+        _busy = true;
+        try
+        {
+            await Inbox.DecideAsync(item.DocumentType, item.DocumentId, request);
+            Snackbar.Add($"{done}: {item.Title}", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HistoryAsync(ApprovalInboxItemDto item)
+    {
+        var parameters = new DialogParameters<ApprovalHistoryDialog> { { d => d.DocumentType, item.DocumentType }, { d => d.DocumentId, item.DocumentId } };
+        await DialogService.ShowAsync<ApprovalHistoryDialog>($"Approval history: {item.Title}", parameters, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+    }
+
+    private async Task DelegateAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Delegations.CreateAsync(new SaveApprovalDelegationRequest(_delegate!, DateOnly.FromDateTime(_from!.Value), DateOnly.FromDateTime(_to!.Value), _type, _reason));
+            Snackbar.Add($"Delegated to {_delegate}", Severity.Success);
+            _delegate = null;
+            _reason = null;
+            _delegations = await Delegations.ListAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(ApprovalDelegationDto d)
+    {
+        try
+        {
+            await Delegations.RevokeAsync(d.Id);
+            _delegations = await Delegations.ListAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

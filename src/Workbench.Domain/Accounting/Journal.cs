@@ -19,6 +19,9 @@ public enum JournalSource
     Depreciation,
 
     Bank,
+
+    /// <summary>Monthly revenue recognition runs (source id = the project's revenue run).</summary>
+    Revenue,
 }
 
 public enum JournalStatus

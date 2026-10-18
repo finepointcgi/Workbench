@@ -1,0 +1,33 @@
+@* Asks for the reason when rejecting or returning a document from the approvals inbox. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <MudText>@Message</MudText>
+            }
+            <MudTextField @bind-Value="_reason" Label="@Label" AutoFocus="true" Immediate="true" Lines="3" data-testid="approval-reason" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_reason)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_reason!.Trim()))" data-testid="approval-reason-ok">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Reason";
+
+    [Parameter]
+    public string ConfirmText { get; set; } = "Reject";
+
+    private string? _reason;
+}

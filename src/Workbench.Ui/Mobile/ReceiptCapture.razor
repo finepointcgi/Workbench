@@ -1,0 +1,91 @@
+@* Receipt from the phone's camera (capture) or its files. Reads the picked file at once, so the caller can save it later. *@
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Collaboration
+
+<div class="wb-m-row" style="flex-wrap:wrap">
+    <label class="wb-m-filebtn">
+        <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Size="Size.Small" /> @(Compact ? "Photo" : "Take photo")
+        <InputFile OnChange="PickAsync" accept="image/*" capture="environment" disabled="@Disabled" data-testid="@($"{TestId}-camera")" aria-label="Take a photo of the receipt" />
+    </label>
+    <label class="wb-m-filebtn">
+        <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" /> @(Compact ? "File" : "Choose file")
+        <InputFile OnChange="PickAsync" accept="image/*,application/pdf" disabled="@Disabled" data-testid="@($"{TestId}-file")" aria-label="Choose a receipt file" />
+    </label>
+</div>
+@if (_reading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mt-2" />
+}
+@if (_problem is not null)
+{
+    <MudText Typo="Typo.caption" Color="Color.Error" data-testid="@($"{TestId}-problem")">@_problem</MudText>
+}
+
+@code {
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public string TestId { get; set; } = "receipt";
+
+    /// <summary>The file name and content of the picked receipt.</summary>
+    [Parameter] public EventCallback<PickedReceipt> Picked { get; set; }
+
+    private bool _reading;
+    private string? _problem;
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _problem = null;
+        var file = e.File;
+        var name = NameFor(file.Name, file.ContentType);
+        if (name is null)
+        {
+            _problem = $"\"{file.Name}\" isn't a picture or PDF.";
+            return;
+        }
+
+        if (file.Size > AttachmentRules.MaxSizeBytes)
+        {
+            _problem = $"The file is larger than {AttachmentRules.MaxSizeBytes / (1024 * 1024)} MB.";
+            return;
+        }
+
+        _reading = true;
+        try
+        {
+            using var buffer = new MemoryStream();
+            await using (var stream = file.OpenReadStream(AttachmentRules.MaxSizeBytes))
+            {
+                await stream.CopyToAsync(buffer);
+            }
+
+            await Picked.InvokeAsync(new PickedReceipt(name, buffer.ToArray()));
+        }
+        catch (IOException ex)
+        {
+            _problem = $"Couldn't read the file: {ex.Message}";
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    /// <summary>Camera pictures sometimes come without a usable extension; name them by their type.</summary>
+    public static string? NameFor(string fileName, string? contentType)
+    {
+        if (AttachmentRules.IsAllowed(fileName) && (Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".pdf"))
+        {
+            return fileName;
+        }
+
+        var extension = contentType?.ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            "application/pdf" => ".pdf",
+            _ => null,
+        };
+        return extension is null ? null : $"receipt-{DateTime.UtcNow:yyyyMMdd-HHmmss}{extension}";
+    }
+}

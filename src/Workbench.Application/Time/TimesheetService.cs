@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Approvals;
 using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
@@ -22,8 +24,11 @@ public sealed class TimesheetService(
     IProjectService projects,
     TimekeepingClock clock,
     AccessControl access,
-    ITimesheetNotifier notifier) : ITimesheetService
+    ITimesheetNotifier notifier,
+    ApprovalEngine? approvals = null) : ITimesheetService
 {
+    private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock.Provider);
+
     public const decimal MaxHoursPerDay = 24m;
 
     public async Task<TimesheetDetailDto> GetOrCreateMyTimesheetAsync(DateOnly date, CancellationToken cancellationToken = default)
@@ -69,7 +74,8 @@ public sealed class TimesheetService(
         var owner = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == sheet.EmployeeId, cancellationToken);
         var isOwner = string.Equals(owner.Email, currentUser.Email, StringComparison.OrdinalIgnoreCase);
         var roles = await access.GetOrgRolesAsync(cancellationToken);
-        if (!isOwner && !roles.CanViewAllTimesheets() && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, roles, cancellationToken))
+        if (!isOwner && !roles.CanViewAllTimesheets() && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, roles, cancellationToken)
+            && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.Timesheet, sheet.Id, currentUser.Email, cancellationToken))
         {
             throw new UnauthorizedAccessException("Only the employee, their approver, timekeepers, Finance and administrators can view this timesheet.");
         }
@@ -342,9 +348,12 @@ public sealed class TimesheetService(
         }
 
         audit.Record(db, TimesheetQueries.AuditEntityType, sheet.Id, "Submitted", before, sheet.Snapshot(), warnings.Count > 0 ? string.Join(" ", warnings) : null);
+
+        // The workflow (Setup › Approval workflows; by default the supervisor, or the administrators without one) routes it.
+        var route = await _approvals.StartAsync(db, await ApprovalSubjects.TimesheetAsync(db, sheet, cancellationToken), cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
-        var approvers = await TimesheetQueries.ApproverEmailsAsync(db, me, cancellationToken);
+        var approvers = route.NotifyEmails;
         await notifier.NotifyAsync(new TimesheetNotification(TimesheetEvent.Submitted, sheet.Id, me.DisplayName, me.Email, approvers,
             sheet.PeriodStart, sheet.Total(), me.DisplayName, null), cancellationToken);
         return new SubmitTimesheetResult(await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, cancellationToken), warnings);
@@ -357,7 +366,8 @@ public sealed class TimesheetService(
         var sheet = await TimesheetQueries.LoadAsync(db, timesheetId, cancellationToken);
         var owner = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == sheet.EmployeeId, cancellationToken);
         var isOwner = string.Equals(owner.Email, currentUser.Email, StringComparison.OrdinalIgnoreCase);
-        if (!isOwner && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetOrgRolesAsync(cancellationToken), cancellationToken))
+        if (!isOwner && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetOrgRolesAsync(cancellationToken), cancellationToken)
+            && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.Timesheet, sheet.Id, currentUser.Email, cancellationToken))
         {
             throw new UnauthorizedAccessException("Only the employee or their approver can reopen this timesheet.");
         }
@@ -383,6 +393,7 @@ public sealed class TimesheetService(
         sheet.ReviewedBy = null;
         sheet.UpdatedAtUtc = clock.UtcNow;
         audit.Record(db, TimesheetQueries.AuditEntityType, sheet.Id, wasApproved ? "Reopened" : "Recalled", before, sheet.Snapshot(), why);
+        await _approvals.CancelAsync(db, ApprovalDocumentTypes.Timesheet, sheet.Id, currentUser.Email, why, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         // The employee and their approvers hear about it, except whoever reopened it.
         var recipients = (await TimesheetQueries.ApproverEmailsAsync(db, owner, cancellationToken)).Prepend(owner.Email)

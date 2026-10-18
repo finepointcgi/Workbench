@@ -1,0 +1,49 @@
+@* Name, description and sharing for a saved report. Returns a SaveReportRequest without the report itself. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" Immediate="true" MaxLength="200" AutoFocus="true" data-testid="save-name" />
+            <MudTextField @bind-Value="_description" Label="Description" Lines="2" MaxLength="1000" />
+            <MudSwitch T="bool" @bind-Value="_shared" Label="Share with roles" Color="Color.Primary" data-testid="save-shared" />
+            @if (_shared)
+            {
+                <MudSelect T="OrgRoles" MultiSelection="true" @bind-SelectedValues="_roles" Label="Shared with" data-testid="save-roles">
+                    <MudSelectItem T="OrgRoles" Value="OrgRoles.Employee">Everyone</MudSelectItem>
+                    <MudSelectItem T="OrgRoles" Value="OrgRoles.Timekeeper">Timekeepers</MudSelectItem>
+                    <MudSelectItem T="OrgRoles" Value="OrgRoles.Finance">Finance</MudSelectItem>
+                    <MudSelectItem T="OrgRoles" Value="OrgRoles.ResourceManager">Resource managers</MudSelectItem>
+                    <MudSelectItem T="OrgRoles" Value="OrgRoles.Admin">Administrators</MudSelectItem>
+                </MudSelect>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Readers run the report with their own access: sharing never shares data they can't see.</MudText>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_name) || (_shared && !_roles.Any()))" OnClick="Save" data-testid="save-confirm">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public SavedReportDto? Existing { get; set; }
+
+    private string? _name;
+    private string? _description;
+    private bool _shared;
+    private IReadOnlyCollection<OrgRoles> _roles = [];
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            (_name, _description, _shared, _roles) = (Existing.Name, Existing.Description, Existing.Visibility == ReportVisibility.Shared, Existing.SharedWith.ToList());
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveReportRequest(_name!.Trim(), _description,
+        _shared ? ReportVisibility.Shared : ReportVisibility.Private, _shared ? _roles.ToList() : null, null, null, null)));
+}

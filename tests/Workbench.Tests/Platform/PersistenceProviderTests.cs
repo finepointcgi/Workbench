@@ -46,7 +46,8 @@ public sealed class PersistenceProviderTests
         // A brand-new database: every migration applies, and nothing in the model is missing from them.
         var connection = provider == DatabaseProvider.Sqlite
             ? $"Data Source={Path.Combine(Path.GetTempPath(), $"workbench-migrate-{Guid.NewGuid():N}.db")};Pooling=False"
-            : PostgresTemplates.ConnectionString($"wbtest_migrate_{Guid.NewGuid():N}");
+            // CREATE/DROP DATABASE queue behind the rest of the suite's databases on a busy server: allow more than 30 s.
+            : PostgresTemplates.ConnectionString($"wbtest_migrate_{Guid.NewGuid():N}") + ";Command Timeout=300";
         await using (var db = new WorkbenchDbContext(TestDb.Options(provider, connection)))
         {
             try
@@ -69,7 +70,7 @@ public sealed class PersistenceProviderTests
         var catalogOptions = new DbContextOptionsBuilder<CatalogDbContext>();
         catalogOptions.Use(provider, provider == DatabaseProvider.Sqlite
             ? $"Data Source={Path.Combine(Path.GetTempPath(), $"workbench-catalog-{Guid.NewGuid():N}.db")};Pooling=False"
-            : PostgresTemplates.ConnectionString($"wbtest_catalog_{Guid.NewGuid():N}"));
+            : PostgresTemplates.ConnectionString($"wbtest_catalog_{Guid.NewGuid():N}") + ";Command Timeout=300");
         await using var catalog = new CatalogDbContext(catalogOptions.Options);
         try
         {
