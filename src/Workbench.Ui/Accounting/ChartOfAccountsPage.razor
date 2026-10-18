@@ -1,0 +1,182 @@
+@page "/accounting/accounts"
+@inject IChartOfAccountsService Chart
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Chart of accounts · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Chart of accounts" Subtitle="Accounts with sub-accounts are summary accounts: they roll up and take no postings. Accounts are deactivated, never deleted.">
+    <MudSwitch T="bool" @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null, null)"
+               Disabled="_error is not null" data-testid="new-account">New account</MudButton>
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_accounts.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Class="mb-3">No accounts yet. Start from the standard chart for a government services contractor and adjust it.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="InstallAsync">Install the default chart</MudButton>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="accounts">
+            <thead>
+                <tr><th>Account</th><th>Type</th><th>Cost class</th><th>Normal</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var (a, depth) in Visible)
+                {
+                    <tr data-testid="@($"account-{a.Number}")" class="@(a.IsActive ? "" : "mud-text-disabled")">
+                        <td style="@($"padding-left:{8 + depth * 22}px; white-space:nowrap")">
+                            @if (a.HasChildren)
+                            {
+                                <MudIconButton Size="Size.Small" Icon="@(_collapsed.Contains(a.Id) ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ExpandMore)"
+                                               OnClick="() => Toggle(a.Id)" aria-label="@($"Expand or collapse {a.Number}")" />
+                                <b>@a.Number @a.Name</b>
+                            }
+                            else
+                            {
+                                <span style="display:inline-block;width:34px"></span>
+                                <span>@a.Number @a.Name</span>
+                            }
+                        </td>
+                        <td>@a.Type</td>
+                        <td>@AccountingFormat.Label(a.CostClass)</td>
+                        <td>@a.NormalBalance</td>
+                        <td>
+                            @if (!a.IsActive)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0">Inactive</MudChip>
+                            }
+                        </td>
+                        <td style="text-align:right; white-space:nowrap">
+                            <MudTooltip Text="Edit"><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(a, null)" /></MudTooltip>
+                            @if (a.IsActive && !a.HasPostings)
+                            {
+                                <MudTooltip Text="Add sub-account"><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => EditAsync(null, a)" /></MudTooltip>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetActiveAsync(a, !a.IsActive)">@(a.IsActive ? "Deactivate" : "Reactivate")</MudButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private readonly HashSet<Guid> _collapsed = [];
+    private bool _loading = true;
+    private bool _showInactive;
+    private string? _error;
+    private bool _forbidden;
+
+    private IEnumerable<(AccountDto Account, int Depth)> Visible
+    {
+        get
+        {
+            var shown = _accounts.Where(a => _showInactive || a.IsActive).ToList();
+            var hiddenUnder = new HashSet<Guid>();
+            foreach (var (a, depth) in SetupFormat.Flatten(shown, a => a.Id, a => a.ParentId, a => a.Number))
+            {
+                if (a.ParentId is { } p && (hiddenUnder.Contains(p) || _collapsed.Contains(p)))
+                {
+                    hiddenUnder.Add(a.Id);
+                    continue;
+                }
+
+                yield return (a, depth);
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _accounts = await Chart.ListAccountsAsync(includeInactive: true);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!_collapsed.Remove(id))
+        {
+            _collapsed.Add(id);
+        }
+    }
+
+    private async Task InstallAsync()
+    {
+        try
+        {
+            var count = await Chart.InstallDefaultChartAsync();
+            Snackbar.Add($"Installed {count} accounts and the default posting rules.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(AccountDto? account, AccountDto? parent)
+    {
+        var parameters = new DialogParameters<AccountDialog>
+        {
+            { d => d.Account, account },
+            { d => d.Parent, parent },
+            { d => d.Accounts, _accounts },
+        };
+        var dialog = await DialogService.ShowAsync<AccountDialog>(account is null ? "New account" : $"Edit {account.Number}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveAccountRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            var saved = account is null ? await Chart.CreateAccountAsync(request) : await Chart.UpdateAccountAsync(account.Id, request);
+            Snackbar.Add($"Saved {saved.Number} {saved.Name}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SetActiveAsync(AccountDto account, bool active)
+    {
+        try
+        {
+            await Chart.SetActiveAsync(account.Id, active);
+            Snackbar.Add($"{account.Number} {(active ? "reactivated" : "deactivated")}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

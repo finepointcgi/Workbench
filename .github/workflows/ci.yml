@@ -1,0 +1,88 @@
+# Build, test and supply-chain checks (ISO 27001 A.8.25–A.8.29, A.8.8). Every pull request and every push to main
+# must pass before merge; make the "build-test" and "supply-chain" checks required in the branch protection rules.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  GITLEAKS_VERSION: "8.24.2"
+
+jobs:
+  build-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore Workbench.Server.slnf
+      - name: Build
+        # The MAUI desktop app is excluded: it needs Xcode or Windows.
+        run: dotnet build Workbench.Server.slnf --no-restore --configuration Release
+      - name: Test
+        run: dotnet test Workbench.Server.slnf --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory test-results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+          retention-days: 30
+
+  supply-chain:
+    name: Vulnerabilities, secrets and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore Workbench.Server.slnf
+
+      - name: Vulnerable packages (fail on High or Critical)
+        run: |
+          dotnet list Workbench.Server.slnf package --vulnerable --include-transitive --format json > vulnerable.json
+          jq -r '.projects[]?.frameworks[]? | (.topLevelPackages // []) + (.transitivePackages // []) | .[]
+                 | select(.vulnerabilities != null) | .id as $id | .resolvedVersion as $v
+                 | .vulnerabilities[] | "\(.severity)\t\($id) \($v)\t\(.advisoryurl)"' vulnerable.json | sort -u | tee vulnerable.txt
+          if grep -E '^(High|Critical)' vulnerable.txt; then
+            echo "::error::High or critical vulnerabilities in NuGet dependencies. Update the packages above."
+            exit 1
+          fi
+
+      - name: Secret scanning (gitleaks)
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks git --redact --verbose --exit-code 1 .
+
+      - name: SBOM (CycloneDX)
+        run: |
+          dotnet tool install --global CycloneDX
+          dotnet-CycloneDX Workbench.Server.slnf --exclude-test-projects --output sbom --filename workbench.cdx.json --output-format Json \
+            --set-name Workbench --set-version "0.0.0-${GITHUB_SHA::7}"
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom/workbench.cdx.json
+          retention-days: 90

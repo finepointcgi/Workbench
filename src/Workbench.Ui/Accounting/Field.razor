@@ -1,0 +1,13 @@
+@* A small labelled value. *@
+<MudStack Spacing="0">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Label</MudText>
+    <MudText Typo="Typo.body1">@ChildContent</MudText>
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,13 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Color="@Color">@Status</MudChip>
+
+@code {
+    [Parameter]
+    public JournalEntryState Status { get; set; }
+
+    private Color Color => Status switch
+    {
+        JournalEntryState.Posted => Color.Success,
+        JournalEntryState.Reversed => Color.Warning,
+        _ => Color.Default,
+    };
+}

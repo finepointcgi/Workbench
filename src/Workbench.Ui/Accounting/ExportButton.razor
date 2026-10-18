@@ -1,0 +1,30 @@
+@* Downloads a report as CSV. *@
+@inject IAccountingReportService Reports
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy">Export CSV</MudButton>
+
+@code {
+    [Parameter, EditorRequired]
+    public AccountingExportRequest Request { get; set; } = default!;
+
+    private bool _busy;
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        try
+        {
+            await AccountingFormat.DownloadAsync(JS, await Reports.ExportCsvAsync(Request));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

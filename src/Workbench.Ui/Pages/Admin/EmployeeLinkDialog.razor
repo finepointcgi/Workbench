@@ -1,0 +1,76 @@
+@* Links a user to an employee record: by matching email (the default), a chosen employee, or none. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Security
+@inject IUserAdminService UserAdmin
+
+<MudDialog>
+    <DialogContent>
+        <MudRadioGroup T="EmployeeLinkMode" @bind-Value="_mode">
+            <MudRadio T="EmployeeLinkMode" Value="EmployeeLinkMode.ByEmail" Color="Color.Primary">The employee with the email @User.Email (default)</MudRadio>
+            <MudRadio T="EmployeeLinkMode" Value="EmployeeLinkMode.Explicit" Color="Color.Primary">A specific employee</MudRadio>
+            <MudRadio T="EmployeeLinkMode" Value="EmployeeLinkMode.Unlinked" Color="Color.Primary">No employee (doesn't record time)</MudRadio>
+        </MudRadioGroup>
+        @if (_mode == EmployeeLinkMode.Explicit)
+        {
+            <MudSelect T="Guid?" @bind-Value="_employeeId" Label="Employee" Variant="Variant.Outlined" Class="mt-3" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var employee in _employees)
+                {
+                    <MudSelectItem T="Guid?" Value="employee.Id">@employee.EmployeeNumber · @employee.DisplayName (@employee.Email)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy || (_mode == EmployeeLinkMode.Explicit && _employeeId is null)" OnClick="SaveAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public UserAdminDto User { get; set; } = null!;
+
+    private IReadOnlyList<LinkableEmployeeDto> _employees = [];
+    private EmployeeLinkMode _mode;
+    private Guid? _employeeId;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _mode = User.EmployeeLink;
+        _employeeId = User.EmployeeLink == EmployeeLinkMode.Explicit ? User.EmployeeId : null;
+        try
+        {
+            _employees = await UserAdmin.ListLinkableEmployeesAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            MudDialog.Close(DialogResult.Ok(await UserAdmin.SetEmployeeLinkAsync(User.Email, _mode, _employeeId)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
