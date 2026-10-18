@@ -9,7 +9,10 @@
 @inject Workbench.Contracts.ProjectAccounting.IProjectService ProjectService
 @inject Workbench.Contracts.Financials.IFinancialAccessService FinancialAccess
 
-<PageTitle>@(_sheet?.Summary.Name ?? "Sheet") · Workbench</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>@(_sheet?.Summary.Name ?? "Sheet") · Workbench</PageTitle>
+}
 
 @if (_loading && _sheet is null)
 {
@@ -23,8 +26,15 @@ else if (_sheet is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
-        <MudIconButton Href="sheets" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Sheets" />
-        <MudText Typo="Typo.h4" HtmlTag="h1">@_sheet.Summary.Name</MudText>
+        @if (Embedded)
+        {
+            <MudButton Href="@($"sheets/{SheetId}")" Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">Open the plan sheet</MudButton>
+        }
+        else
+        {
+            <MudIconButton Href="sheets" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Sheets" />
+            <MudText Typo="Typo.h4" HtmlTag="h1">@_sheet.Summary.Name</MudText>
+        }
         <MudSpacer />
         @if (!_access.CanEdit)
         {
@@ -56,7 +66,7 @@ else
                 <SheetGanttView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
             </MudTabPanel>
         }
-        @if (_project is not null)
+        @if (_project is not null && !Embedded)
         {
             <MudTabPanel Text="Financials" Icon="@Icons.Material.Filled.AttachMoney">
                 <Workbench.Ui.Financials.ProjectFinancialsCompact ProjectId="_project.Id" />
@@ -79,6 +89,10 @@ else
 @code {
     [Parameter]
     public Guid SheetId { get; set; }
+
+    /// <summary>Rendered as the Plan tab of the project page, which has its own title and Financials tab.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
 
     private SheetDetail? _sheet;
     private IReadOnlyList<ItemDto> _items = [];

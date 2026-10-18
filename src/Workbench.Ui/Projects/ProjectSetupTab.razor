@@ -1,0 +1,20 @@
+@* The Setup tab (Finance and administrators): where the project's setup, WBS and contract are edited. *@
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Project setup</MudText>
+    <MudText Class="mud-text-secondary mb-3">
+        The project's code, manager, dates and status, its WBS (charge codes and who may charge them) and plan sheet syncing are edited under Setup.
+    </MudText>
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+        <MudButton Href="@($"setup/projects/{Hub.Project.Id}")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Settings" data-testid="setup-link">Open in Setup › Projects</MudButton>
+        @if (Hub.Project.ContractId is { } contractId)
+        {
+            <MudButton Href="@($"setup/contracts/{contractId}")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description">Contract @Hub.Project.ContractNumber</MudButton>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectHubDto Hub { get; set; } = default!;
+}

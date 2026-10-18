@@ -1,4 +1,4 @@
-@page "/projects/{ProjectId:guid}/evm"
+@* The Earned value tab of the project page (/projects/{id}/evm routes to ProjectHubPage). *@
 @using Workbench.Contracts.Evm
 @using Workbench.Ui.Evm
 @inject IProjectService Projects
@@ -9,7 +9,10 @@
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_project?.Code ?? "Project") earned value · Workbench</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>@(_project?.Code ?? "Project") earned value · Workbench</PageTitle>
+}
 
 @if (_forbidden is not null)
 {
@@ -26,9 +29,12 @@ else if (_project is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
-        <MudIconButton Href="@($"projects/{ProjectId}/financials")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the project's financials" />
-        <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Earned value</MudChip>
+        @if (!Embedded)
+        {
+            <MudIconButton Href="@($"projects/{ProjectId}/financials")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the project's financials" />
+            <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Earned value</MudChip>
+        }
         <MudSpacer />
         @if (_baseline is not null && _status is not null)
         {
@@ -103,6 +109,10 @@ else
 @code {
     [Parameter]
     public Guid ProjectId { get; set; }
+
+    /// <summary>Rendered as a tab of the project page (/projects/{id}), which shows the project's name and the other tabs.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
 
     private ProjectDto? _project;
     private EvmBaselineDto? _baseline;
