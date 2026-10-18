@@ -1,0 +1,247 @@
+@* The closeout of a contract or a project: status, checklist (with waivers), records and history. *@
+@inject ICloseoutService Closeouts
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_closeout is null)
+{
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">@_error</MudAlert>
+    }
+    else
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+}
+else
+{
+    var c = _closeout;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Closeout</MudText>
+        <MudChip T="string" Color="@(c.IsClosed ? Color.Error : c.Status == CloseoutState.Open ? Color.Default : Color.Warning)" data-testid="closeout-status">@CeilingFormat.State(c.Status)</MudChip>
+        @if (c.PhysicallyCompleteOn is { } pc)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Physically complete @SetupFormat.Date(pc)</MudText>
+        }
+        @if (c.ClosedAtUtc is { } closed)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Closed @closed.ToLocalTime().ToString("yyyy-MM-dd") by @c.ClosedBy · new charges are refused</MudText>
+        }
+        <MudSpacer />
+        @if (c.CanManage)
+        {
+            @switch (c.Status)
+            {
+                case CloseoutState.Open:
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PhysicallyCompleteAsync" data-testid="closeout-pc">Mark physically complete</MudButton>
+                    break;
+                case CloseoutState.PhysicallyComplete:
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartClosingAsync" data-testid="closeout-start">Start closing</MudButton>
+                    break;
+                case CloseoutState.Closing:
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="!c.ChecklistComplete" OnClick="CloseAsync" data-testid="closeout-close">Close @(Scope == CloseoutScope.Contract ? "contract" : "project")</MudButton>
+                    break;
+            }
+            @if (c.Status != CloseoutState.Open)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ReopenAsync" data-testid="closeout-reopen">Reopen</MudButton>
+            }
+        }
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="7">
+            <MudPaper Outlined="true" Class="pa-2">
+                <MudList T="string" Dense="true">
+                    @foreach (var item in c.Items)
+                    {
+                        <MudListItem T="string" data-testid="closeout-item">
+                            <MudStack Row="true" AlignItems="AlignItems.Start">
+                                <MudIcon Icon="@(item.IsSatisfied ? Icons.Material.Filled.CheckCircle : item.IsWaived ? Icons.Material.Filled.RemoveCircle : Icons.Material.Outlined.Circle)"
+                                         Color="@(item.IsSatisfied ? Color.Success : item.IsWaived ? Color.Info : Color.Default)" Size="Size.Small" />
+                                <div style="flex:1">
+                                    <MudText Typo="Typo.body2"><b>@item.Label</b>
+                                        @if (item.Link is { } link)
+                                        {
+                                            <MudLink Href="@link" Typo="Typo.caption" Class="ml-2">Open</MudLink>
+                                        }
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.Detail@(item.IsWaived ? $" · waived: {item.WaiverReason}" : "")</MudText>
+                                </div>
+                                @if (c.CanManage && !c.IsClosed)
+                                {
+                                    @if (item.IsWaived)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => RemoveWaiverAsync(item)">Remove waiver</MudButton>
+                                    }
+                                    else if (!item.IsSatisfied)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => WaiveAsync(item)">Waive</MudButton>
+                                    }
+                                }
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="5">
+            @if (Scope == CloseoutScope.Contract)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mb-3">
+                    <MudText Typo="Typo.subtitle2">Funds de-obligation</MudText>
+                    <MudText Typo="Typo.body2">Funded @SetupFormat.Money(c.Funded) − billed @SetupFormat.Money(c.Billed) = <b>@c.DeobligationCalculated.ToString("C2")</b></MudText>
+                    @if (c.DeobligationRecorded is { } rec)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Recorded @rec.ToString("C2") by @c.DeobligationRecordedBy</MudText>
+                    }
+                    @if (c.CanManage && !c.IsClosed)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2" OnClick="RecordDeobligationAsync" data-testid="closeout-deob">Record de-obligation</MudButton>
+                    }
+                </MudPaper>
+                <MudPaper Outlined="true" Class="pa-4 mb-3">
+                    <MudText Typo="Typo.subtitle2">Final invoice</MudText>
+                    <MudSelect T="Guid?" Value="c.FinalInvoiceId" ValueChanged="FinalInvoiceAsync" Label="Final invoice" Clearable="true" Disabled="@(!c.CanManage || c.IsClosed)" data-testid="closeout-final-invoice">
+                        @foreach (var i in c.BilledInvoices)
+                        {
+                            <MudSelectItem T="Guid?" Value="i.Id">@i.Number · @i.Status · through @SetupFormat.Date(i.PeriodTo) · @SetupFormat.Money(i.Total)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudPaper>
+            }
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.subtitle2">Records</MudText>
+                @if (Scope == CloseoutScope.Contract)
+                {
+                    <MudDatePicker @bind-Date="_claims" Label="Release of claims signed" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" Disabled="@(!c.CanManage || c.IsClosed)" />
+                    <MudTextField @bind-Value="_claimsNote" Label="Note" Disabled="@(!c.CanManage || c.IsClosed)" />
+                    <MudDatePicker @bind-Date="_refunds" Label="Assignment of refunds signed" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" Disabled="@(!c.CanManage || c.IsClosed)" />
+                    <MudTextField @bind-Value="_refundsNote" Label="Note" Disabled="@(!c.CanManage || c.IsClosed)" />
+                }
+                <MudDatePicker @bind-Date="_retention" Label="Keep records until" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" Disabled="@(!c.CanManage || c.IsClosed)" data-testid="closeout-retention" />
+                @if (c.CanManage && !c.IsClosed)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2" OnClick="SaveRecordsAsync" data-testid="closeout-save-records">Save records</MudButton>
+                }
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.subtitle2">History</MudText>
+                @if (c.History.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Nothing yet.</MudText>
+                }
+                @foreach (var h in c.History)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block">@h.OccurredAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · @h.Action · @h.Actor@(h.Reason is { } r ? $": {r}" : "")</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public CloseoutScope Scope { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid TargetId { get; set; }
+
+    /// <summary>Raised after the status changed (closing or reopening changes the contract or project status too).</summary>
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private CloseoutDto? _closeout;
+    private string? _error;
+    private DateTime? _claims, _refunds, _retention;
+    private string? _claimsNote, _refundsNote;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            Set(await Closeouts.GetAsync(Scope, TargetId));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _error = "Only Finance, administrators and the project managers can see the closeout.";
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+    }
+
+    private void Set(CloseoutDto c)
+    {
+        _closeout = c;
+        (_claims, _refunds, _retention) = (SetupFormat.ToDateTime(c.ReleaseOfClaimsOn), SetupFormat.ToDateTime(c.AssignmentOfRefundsOn), SetupFormat.ToDateTime(c.RecordsRetentionUntil));
+        (_claimsNote, _refundsNote) = (c.ReleaseOfClaimsNote, c.AssignmentOfRefundsNote);
+    }
+
+    private Task StartClosingAsync() => RunAsync(() => Closeouts.StartClosingAsync(Scope, TargetId), "Closing started.");
+
+    private Task RemoveWaiverAsync(CloseoutItemDto item) => RunAsync(() => Closeouts.RemoveWaiverAsync(Scope, TargetId, item.Check), "Waiver removed.");
+
+    private Task RecordDeobligationAsync() => RunAsync(() => Closeouts.RecordDeobligationAsync(TargetId), "De-obligation recorded.");
+
+    private Task PhysicallyCompleteAsync() =>
+        RunAsync(() => Closeouts.MarkPhysicallyCompleteAsync(Scope, TargetId, new PhysicallyCompleteRequest()), "Marked physically complete.");
+
+    private async Task CloseAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Close", "Close it? New time, ODCs, purchase orders and bills will be refused until it's reopened.", yesText: "Close", cancelText: "Cancel") == true)
+        {
+            await RunAsync(() => Closeouts.CloseAsync(Scope, TargetId), "Closed.", notify: true);
+        }
+    }
+
+    private async Task ReopenAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog> { { d => d.Message, "Reopening sets the closeout back to Open and allows charges again." }, { d => d.ConfirmText, "Reopen" } };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>("Reopen closeout", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => Closeouts.ReopenAsync(Scope, TargetId, new CloseoutReasonRequest(reason)), "Reopened.", notify: true);
+        }
+    }
+
+    private async Task WaiveAsync(CloseoutItemDto item)
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog> { { d => d.Message, $"Waive \"{item.Label}\"? Say why it doesn't apply or was done outside Workbench." }, { d => d.ConfirmText, "Waive" } };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>("Waive checklist item", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => Closeouts.WaiveAsync(Scope, TargetId, new WaiveCloseoutItemRequest(item.Check, reason)), "Item waived.");
+        }
+    }
+
+    private Task FinalInvoiceAsync(Guid? invoiceId) =>
+        RunAsync(() => Closeouts.MarkFinalInvoiceAsync(TargetId, new MarkFinalInvoiceRequest(invoiceId)), invoiceId is null ? "Final invoice cleared." : "Final invoice marked.");
+
+    private Task SaveRecordsAsync() =>
+        RunAsync(() => Closeouts.SaveRecordsAsync(Scope, TargetId, new SaveCloseoutRecordsRequest(
+            Scope == CloseoutScope.Contract ? SetupFormat.ToDateOnly(_claims) : null, Scope == CloseoutScope.Contract ? _claimsNote : null,
+            Scope == CloseoutScope.Contract ? SetupFormat.ToDateOnly(_refunds) : null, Scope == CloseoutScope.Contract ? _refundsNote : null,
+            SetupFormat.ToDateOnly(_retention))), "Records saved.");
+
+    private async Task RunAsync(Func<Task<CloseoutDto>> action, string done, bool notify = false)
+    {
+        try
+        {
+            Set(await action());
+            Snackbar.Add(done, Severity.Success);
+            if (notify)
+            {
+                await Changed.InvokeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

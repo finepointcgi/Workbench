@@ -1,0 +1,41 @@
+@* The ceilings that apply to a project (its own and its contract's), for the project financials page. *@
+@inject ICeilingService Ceilings
+
+@if (_status is { Ceilings.Count: > 0 } status)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="project-ceilings">
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Ceilings</MudText>
+        @foreach (var c in status.Ceilings.Where(c => c.Ceiling.IsActive))
+        {
+            <MudText Typo="Typo.body2" Class="mt-2"><b>@c.Ceiling.Label</b> <MudChip T="string" Size="Size.Small" Color="@(c.Ceiling.Mode == CeilingMode.Block ? Color.Error : Color.Default)">@c.Ceiling.Mode</MudChip></MudText>
+            @foreach (var m in c.Measures)
+            {
+                <MudText Typo="Typo.caption">@CeilingFormat.Metric(m.Metric): @CeilingFormat.Amount(m.Metric, m.Consumed) of @CeilingFormat.Amount(m.Metric, m.Limit) (@m.PercentConsumed.ToString("0.#")%)</MudText>
+                <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" />
+            }
+            @foreach (var o in c.ActiveOverrides)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Override until @o.ExpiresAtUtc.AddDays(-1).ToString("yyyy-MM-dd"): @o.Reason</MudText>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    private ProjectCeilingStatusDto? _status;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _status = await Ceilings.GetProjectStatusAsync(ProjectId);
+        }
+        catch (Exception)
+        {
+            _status = null; // Not allowed or not available: the card just doesn't show.
+        }
+    }
+}

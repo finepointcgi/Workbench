@@ -47,6 +47,7 @@ public static class WorkbenchApi
         v1.MapIncurredCostEndpoints();
         v1.MapReportEndpoints();
         v1.MapEvmEndpoints();
+        v1.MapCeilingEndpoints();
 
         return app;
     }

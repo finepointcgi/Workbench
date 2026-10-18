@@ -1,0 +1,167 @@
+@* Adds or edits a ceiling. On edit only the amounts, mode, thresholds and notes change. *@
+@inject ICeilingService Ceilings
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject Workbench.Contracts.Contracts.IClinService Clins
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            @if (Existing is null)
+            {
+                <MudSelect T="CeilingScope" @bind-Value="_scope" Label="Level" data-testid="ceiling-scope">
+                    @foreach (var s in Scopes)
+                    {
+                        <MudSelectItem Value="s">@CeilingFormat.Scope(s)</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_scope == CeilingScope.Clin)
+                {
+                    <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN">
+                        @foreach (var c in _clins)
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (_scope is CeilingScope.Project or CeilingScope.Wbs or CeilingScope.LaborCategory && ProjectId is null)
+                {
+                    <MudSelect T="Guid?" Value="_projectId" ValueChanged="ProjectChangedAsync" Label="Project">
+                        @foreach (var p in _projects)
+                        {
+                            <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (_scope is CeilingScope.Wbs or CeilingScope.LaborCategory)
+                {
+                    <MudSelect T="Guid?" @bind-Value="_wbsId" Label="WBS element" HelperText="Covers the element and everything under it.">
+                        @foreach (var w in _wbs)
+                        {
+                            <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (_scope == CeilingScope.LaborCategory)
+                {
+                    <MudSelect T="Guid?" @bind-Value="_categoryId" Label="Labor category">
+                        @foreach (var c in _categories)
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            }
+            <MudNumericField T="decimal?" @bind-Value="_hours" Label="Hours ceiling" Min="0" Clearable="true" data-testid="ceiling-hours" />
+            <MudNumericField T="decimal?" @bind-Value="_cost" Label="Cost ceiling ($)" Min="0" Clearable="true" data-testid="ceiling-cost" />
+            @if (Scope is CeilingScope.Contract or CeilingScope.Clin)
+            {
+                <MudNumericField T="decimal?" @bind-Value="_billing" Label="Billing ceiling ($)" Min="0" Clearable="true" HelperText="Invoices may not bill past it (when blocking)." />
+            }
+            <MudRadioGroup T="CeilingMode" @bind-Value="_mode">
+                <MudRadio T="CeilingMode" Value="CeilingMode.Warn">Warn</MudRadio>
+                <MudRadio T="CeilingMode" Value="CeilingMode.Block" data-testid="ceiling-block">Block</MudRadio>
+            </MudRadioGroup>
+            <MudTextField @bind-Value="_thresholds" Label="Alert thresholds (%)" HelperText="Comma separated, for example 80,95,100." />
+            <MudCheckBox T="bool" @bind-Value="_pmMayOverride" Label="The project manager may grant overrides" />
+            <MudTextField @bind-Value="_notes" Label="Notes" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync" data-testid="ceiling-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid? ContractId { get; set; }
+
+    [Parameter]
+    public Guid? ProjectId { get; set; }
+
+    [Parameter]
+    public CeilingDto? Existing { get; set; }
+
+    private CeilingScope _scope;
+    private Guid? _clinId, _projectId, _wbsId, _categoryId;
+    private decimal? _hours, _cost, _billing;
+    private CeilingMode _mode = CeilingMode.Warn;
+    private string? _thresholds = "80,95,100";
+    private bool _pmMayOverride;
+    private string? _notes;
+    private bool _saving;
+    private IReadOnlyList<Workbench.Contracts.Contracts.ClinDto> _clins = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+
+    private CeilingScope Scope => Existing?.Scope ?? _scope;
+
+    private IEnumerable<CeilingScope> Scopes => ContractId is not null
+        ? Enum.GetValues<CeilingScope>()
+        : [CeilingScope.Project, CeilingScope.Wbs, CeilingScope.LaborCategory];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } e)
+        {
+            (_hours, _cost, _billing, _mode) = (e.HoursCeiling, e.CostCeiling, e.BillingCeiling, e.Mode);
+            (_thresholds, _pmMayOverride, _notes) = (string.Join(",", e.AlertThresholds), e.ProjectManagerMayOverride, e.Notes);
+            return;
+        }
+
+        _scope = ContractId is not null ? CeilingScope.Contract : CeilingScope.Project;
+        _categories = (await People.ListLaborCategoriesAsync()).Where(c => c.IsActive).ToList();
+        if (ContractId is { } c)
+        {
+            _clins = await Clins.ListClinsAsync(c);
+            _projects = (await Projects.ListProjectsAsync()).Where(p => p.ContractId == c).ToList();
+        }
+
+        if (ProjectId is { } p)
+        {
+            await ProjectChangedAsync(p);
+        }
+    }
+
+    private async Task ProjectChangedAsync(Guid? projectId)
+    {
+        _projectId = projectId;
+        _wbsId = null;
+        _wbs = projectId is { } id ? await Projects.ListWbsAsync(id) : [];
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            var request = new SaveCeilingRequest(Scope, ContractId, _clinId, _projectId ?? ProjectId, _wbsId, _categoryId,
+                _hours, _cost, Scope is CeilingScope.Contract or CeilingScope.Clin ? _billing : null, _mode, _thresholds, _pmMayOverride, _notes);
+            if (Existing is { } e)
+            {
+                await Ceilings.UpdateAsync(e.Id, request);
+            }
+            else
+            {
+                await Ceilings.CreateAsync(request);
+            }
+
+            Snackbar.Add("Ceiling saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

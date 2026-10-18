@@ -84,6 +84,14 @@ else
                 <PlanSyncPanel Project="_project" ProjectChanged="p => _project = p" />
             }
         </MudTabPanel>
+        <MudTabPanel Text="Ceilings and closeout" Disabled="_project is null" data-testid="tab-project-ceilings">
+            @if (_project is not null)
+            {
+                <Workbench.Ui.Ceilings.CeilingsPanel ProjectId="_project.Id" />
+                <MudDivider Class="my-6" />
+                <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="_project.Id" />
+            }
+        </MudTabPanel>
     </MudTabs>
 }
 

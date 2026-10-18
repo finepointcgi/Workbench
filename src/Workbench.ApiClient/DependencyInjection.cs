@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddIncurredCostClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
         services.AddEvmClients(serverBaseAddress);
+        services.AddCeilingClients(serverBaseAddress);
         return services;
     }
 }

@@ -320,3 +320,16 @@ await notifications.PublishAsync(
   `ReportScheduleRunner` outside HTTP requests), never as Workbench System. The next run is saved before sending (no repeats);
   deactivated owners' schedules stop. The attachment goes only to the owner; extra recipients (active users) get a link.
   `EmailMessage` takes optional `Attachments`. Exports record `export.report` security events.
+
+## Ceilings and closeout
+
+- `Application/Ceilings`: `ICeilingService` (hours/cost/billing ceilings at contract, CLIN, project, WBS and labor-category-per-WBS
+  level, warn or block, overrides with an expiry, threshold alerts `ceiling.threshold`, indirect rate and fee caps) and
+  `ICloseoutService` (Open → Physically complete → Closing → Closed; closing sets the contract or project status to Closed
+  and reopening, with a reason, restores it). Hours = time on record; cost = hours at cost + submitted/approved allowable ODCs +
+  open PO commitments; billed = approved/sent/paid invoice lines.
+- Enforcement is in decorators registered by `AddWorkbenchCeilings` (above `AddWorkbenchIdentity`): timesheets, vendor ODCs,
+  expense reports, AP bills, purchase orders and invoices. New charging paths should call `ChargeGuard` the same way.
+  Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
+- Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
+  `InvoiceGenerator`); cost reports keep the real rates.

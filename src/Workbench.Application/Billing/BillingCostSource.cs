@@ -10,7 +10,7 @@ namespace Workbench.Application.Billing;
 /// registered; without it, falls back to direct cost only (approved labor at the employee's cost rate plus approved,
 /// allowable ODCs) and says so in <see cref="RateNote"/>.
 /// </summary>
-public sealed class BillingCostSource(IEnumerable<IBurdenedCostService> providers)
+public sealed class BillingCostSource(IEnumerable<IBurdenedCostService> providers, IEnumerable<IBillingLimits>? limits = null)
 {
     public const string NotConfiguredNote = "Indirect rates not configured: direct cost only (no fringe, overhead or G&A).";
 
@@ -18,10 +18,21 @@ public sealed class BillingCostSource(IEnumerable<IBurdenedCostService> provider
 
     public bool HasIndirectRates => _provider is not null;
 
-    public async Task<BurdenedCostResult> GetProjectCostAsync(IWorkbenchDbContext db, Guid projectId, DateOnly from, DateOnly to, RateBasis basis, CancellationToken ct) =>
-        _provider is not null
-            ? await _provider.GetProjectCostAsync(projectId, from, to, basis, ct)
-            : await DirectCostAsync(db, projectId, from, to, ct);
+    public async Task<BurdenedCostResult> GetProjectCostAsync(IWorkbenchDbContext db, Guid projectId, DateOnly from, DateOnly to, RateBasis basis, CancellationToken ct)
+    {
+        if (_provider is null)
+        {
+            return await DirectCostAsync(db, projectId, from, to, ct);
+        }
+
+        var cost = await _provider.GetProjectCostAsync(projectId, from, to, basis, ct);
+        foreach (var limit in limits ?? [])
+        {
+            cost = await limit.AdjustCostAsync(db, projectId, from, to, basis, cost, ct); // Contract rate ceilings (ceilings module).
+        }
+
+        return cost;
+    }
 
     public static string RateNote(BurdenedCostResult? result, bool hasIndirectRates)
     {
