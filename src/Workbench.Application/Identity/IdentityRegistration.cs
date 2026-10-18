@@ -31,6 +31,7 @@ public static class IdentityRegistration
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<UserProvisioner>();
+        services.AddScoped<SystemExecutionContext>(); // Inactive unless a background job's scope switches it on.
         services.AddScoped<AccessControl>();
         services.AddScoped<ISheetPermissions, SheetPermissions>();
         services.AddScoped<IUserDirectory, UserDirectory>();
@@ -66,6 +67,17 @@ public static class IdentityRegistration
         services.AddWorkbenchIndirectRatePermissions(); // Indirect rates: Finance or Admin; burdened cost: Finance, Admin or the project's PM.
         services.AddScoped<BillingAccess>(); services.AddWorkbenchBillingPermissions(); // Billing/AR: Finance or Admin; PMs read their contracts' invoices.
         services.AddWorkbenchPurchasingPermissions(); // Purchasing: Finance or Admin; PMs approve the AP bill lines routed to them.
+        return services;
+    }
+
+    /// <summary>
+    /// For the server host, after its <see cref="ICurrentUser"/> is registered and before the automation hosting:
+    /// background jobs running in a <see cref="SystemExecutionContext"/> are attributed to "Workbench System".
+    /// </summary>
+    public static IServiceCollection AddWorkbenchSystemExecutionHosting(this IServiceCollection services)
+    {
+        services.TryAddScoped<SystemExecutionContext>();
+        services.Decorate<ICurrentUser, SystemAwareCurrentUser>();
         return services;
     }
 

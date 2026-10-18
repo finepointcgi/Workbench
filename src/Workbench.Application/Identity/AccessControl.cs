@@ -13,9 +13,16 @@ namespace Workbench.Application.Identity;
 /// Answers "what may the current user do here" from workspace memberships and the admin flag. Nothing is cached:
 /// a Blazor circuit keeps its scope for hours, and role changes should apply on the next call.
 /// </summary>
-public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null)
+public sealed class AccessControl(
+    IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null, SystemExecutionContext? system = null)
 {
     public string Email => Normalize(currentUser.Email);
+
+    /// <summary>
+    /// True only inside a trusted background job's scope (<see cref="SystemExecutionContext"/>). It passes no role check;
+    /// a permission decorator may accept it on an explicitly listed read method, never on a write.
+    /// </summary>
+    public bool IsSystemReader => system?.IsActive == true;
 
     public bool IsAuthenticated => currentUser is SystemCurrentUser || (currentUser.IsAuthenticated && Email.Length > 0);
 
