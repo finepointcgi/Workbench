@@ -1,0 +1,23 @@
+@* Payroll: Finance and administrators only. *@
+@inject ICurrentUserContext UserContext
+
+@if (_finance)
+{
+    <MudNavLink Href="payroll" Icon="@Icons.Material.Filled.Payments" data-testid="payroll-nav">Payroll</MudNavLink>
+}
+
+@code {
+    private bool _finance;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _finance = (await UserContext.GetAsync()).IsFinance;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _finance = false;
+        }
+    }
+}

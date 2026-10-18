@@ -137,6 +137,8 @@ public static class DatabaseInitializer
         await IndirectRatesSeed.SeedAsync(db, cancellationToken);
         await BillingSeed.SeedAsync(db, factory, cancellationToken);
         await PurchasingSeed.SeedAsync(db, services, cancellationToken);
+        await PayrollSeed.SeedAsync(db, cancellationToken);
+        await LeaveSeed.SeedAsync(db, cancellationToken);
     }
 
     /// <summary>
