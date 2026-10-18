@@ -27,6 +27,13 @@ public enum ImportKind
     BillRates,
     Budgets,
     Sheets,
+
+    // Go-live migration path (dryrun-tools): chart of accounts, vendors, GL opening balances and open AR/AP.
+    Accounts,
+    Vendors,
+    OpeningBalances,
+    OpenArInvoices,
+    OpenApBills,
 }
 
 public enum ImportJobStatus

@@ -34,6 +34,12 @@ public static class ImportRegistration
         services.AddScoped<IImporter, BudgetImporter>();
         services.AddScoped<IImporter, SmartsheetApiSheetImporter>();
         services.AddScoped<IImporter, SmartsheetExcelImporter>();
+        services.AddScoped<IImporter, AccountImporter>();
+        services.AddScoped<IImporter, VendorImporter>();
+        services.AddScoped<IImporter, OpeningBalanceImporter>();
+        services.AddScoped<IImporter, OpenArInvoiceImporter>();
+        services.AddScoped<IImporter, OpenApBillImporter>();
+        services.AddScoped<OpenItemConversion>();
         services.AddScoped<ImportRollback>();
         services.AddScoped<IImportService, ImportService>();
         return services;

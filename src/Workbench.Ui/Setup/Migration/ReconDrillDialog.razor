@@ -1,0 +1,85 @@
+@* What makes up one compared key: Workbench's detail lines and the Costpoint file rows. *@
+@inject IReconciliationService Reconciliation
+
+<MudDialog>
+    <DialogContent>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else if (_drill is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudStack Spacing="3" data-testid="drill-down">
+                @if (Row is not null)
+                {
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <thead><tr><th>Amount</th><th style="text-align:right">Costpoint</th><th style="text-align:right">Workbench</th><th style="text-align:right">Difference</th></tr></thead>
+                        <tbody>
+                            @foreach (var value in Row.Values)
+                            {
+                                var measure = Measures.FirstOrDefault(m => m.Name == value.Field);
+                                <tr>
+                                    <td>@(measure?.Label ?? value.Field)</td>
+                                    <td style="text-align:right">@MigrationFormat.Amount(value.Costpoint, measure?.Format ?? ReconValueFormat.Money)</td>
+                                    <td style="text-align:right">@MigrationFormat.Amount(value.Workbench, measure?.Format ?? ReconValueFormat.Money)</td>
+                                    <td style="text-align:right" class="@(value.WithinTolerance ? "" : "mud-error-text")"><b>@MigrationFormat.Amount(value.Difference, measure?.Format ?? ReconValueFormat.Money)</b></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                <div>
+                    <MudText Typo="Typo.subtitle2">Workbench (@_drill.WorkbenchRows.Count line(s))</MudText>
+                    @if (_drill.Note is { } note)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@note</MudText>
+                    }
+                    <Grid Columns="_drill.WorkbenchColumns" Rows="_drill.WorkbenchRows" Empty="Nothing in Workbench for this key." />
+                </div>
+                <div>
+                    <MudText Typo="Typo.subtitle2">Costpoint file (@_drill.CostpointRows.Count row(s))</MudText>
+                    <Grid Columns="_drill.CostpointColumns" Rows="_drill.CostpointRows" Empty="The Costpoint report has no row for this key." />
+                </div>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid RunId { get; set; }
+
+    [Parameter]
+    public string Key { get; set; } = "";
+
+    [Parameter]
+    public ReconRowDto? Row { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ReconFieldDto> Measures { get; set; } = [];
+
+    private ReconDrillDownDto? _drill;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _drill = await Reconciliation.DrillDownAsync(RunId, Key);
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+    }
+}

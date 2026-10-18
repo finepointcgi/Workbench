@@ -1,0 +1,25 @@
+Trial Balance - Fiscal Year 2027 Period 1,,,
+Account,Account Description,Debit Balance,Credit Balance
+1010,Cash - operating,412350.17,
+1110,Accounts receivable - billed,186420.55,
+1510,Computer equipment,48900.00,
+1590,Accumulated depreciation,,12225.00
+2010,Accounts payable,,38617.42
+2020,AP retainage,,2500.00
+2100,Accrued payroll,,61880.00
+3100,Paid-in capital,,250000.00
+3200,Retained earnings,,291480.84
+4010,Revenue - cost-plus contracts,,171600.00
+5010,Direct labor,73040.00,
+5110,Direct travel,3412.88,
+5140,Subcontracts,25000.00,
+6010,Paid leave and holidays,6150.00,
+6020,Payroll taxes,7825.12,
+6030,Health and retirement benefits,9500.00,
+6110,Overhead labor,4200.00,
+6120,Facilities and rent,12500.00,
+6130,Overhead supplies,1804.54,
+6210,G&A labor,8900.00,
+6220,Professional fees,3500.00,
+6230,Office and IT,24800.00,
+Total,,828303.26,828303.26
