@@ -1,0 +1,149 @@
+@* Year-end true-up: cost at provisional vs actual rates per contract, project and WBS, and the optional adjusting entry. *@
+@inject IIndirectRateService Rates
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudSelect T="int" Value="_year" ValueChanged="SelectYearAsync" Label="Fiscal year" Dense="true" Style="max-width:160px" data-testid="trueup-year">
+        @foreach (var y in IndirectRatesFormat.FiscalYears(Periods))
+        {
+            <MudSelectItem T="int" Value="y">FY@(y)</MudSelectItem>
+        }
+    </MudSelect>
+    @if (_report is { } r)
+    {
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(r.HasActualRates ? Color.Success : Color.Default)">
+            @(r.HasActualRates ? "Actual rates entered" : "No actual rates yet")
+        </MudChip>
+        <MudSpacer />
+        <MudDatePicker Label="Entry date" @bind-Date="_date" DateFormat="yyyy-MM-dd" Style="max-width:170px" HelperText="Must be in an open period" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || !r.HasActualRates)" OnClick="PostAsync" data-testid="post-trueup">
+            @(r.Posted is null ? "Post adjusting entry" : "Re-post adjusting entry")
+        </MudButton>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var r = _report;
+    <MudText Typo="Typo.body2" Class="mb-1">@IndirectRatesFormat.Rates(r.Provisional)</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3">@IndirectRatesFormat.Rates(r.Actual)</MudText>
+    @if (r.Posted is { } posted)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">True-up posted as @posted.EntryNumber on @AccountingFormat.Date(posted.Date) (@AccountingFormat.Amount(posted.Total)).</MudAlert>
+    }
+    @foreach (var note in r.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By contract</MudText>
+            <TrueUpTotals Rows="r.Contracts" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By project</MudText>
+            <TrueUpTotals Rows="r.Projects" />
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By WBS</MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="trueup-lines">
+            <thead>
+                <tr><th>Contract</th><th>Project</th><th>WBS</th><th style="text-align:right">Direct labor</th><th style="text-align:right">Direct ODC</th>
+                    <th style="text-align:right">At provisional</th><th style="text-align:right">At actual</th><th style="text-align:right">Fringe Δ</th>
+                    <th style="text-align:right">Overhead Δ</th><th style="text-align:right">G&amp;A Δ</th><th style="text-align:right">Difference</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var l in r.Lines)
+                {
+                    <tr>
+                        <td>@l.ContractNumber</td>
+                        <td>@l.ProjectCode</td>
+                        <td>@l.WbsCode</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.DirectLabor)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.DirectOdc)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.ProvisionalBurden)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.ActualBurden)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.FringeDifference)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.OverheadDifference)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.GeneralAndAdministrativeDifference)</td>
+                        <td style="text-align:right"><b>@AccountingFormat.Amount(l.Difference)</b></td>
+                    </tr>
+                }
+                <tr>
+                    <td colspan="10"><b>Total difference</b></td>
+                    <td style="text-align:right" data-testid="trueup-total"><b>@AccountingFormat.Amount(r.Difference)</b></td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+        Burden only (direct cost doesn't change). A positive difference is additional cost to bill on a true-up invoice; negative is a credit.
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+
+    private int _year;
+    private TrueUpDto? _report;
+    private DateTime? _date;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _year = IndirectRatesFormat.DefaultYear(Periods);
+        await LoadAsync();
+    }
+
+    private async Task SelectYearAsync(int year)
+    {
+        _year = year;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _report = await Rates.GetTrueUpAsync(_year);
+            var last = Periods.Where(p => p.FiscalYear == _year).MaxBy(p => p.End);
+            _date = last?.End.ToDateTime(TimeOnly.MinValue);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    private async Task PostAsync()
+    {
+        _busy = true;
+        try
+        {
+            _report = await Rates.PostTrueUpAsync(_year, new PostTrueUpRequest(_date is { } d ? DateOnly.FromDateTime(d) : null));
+            Snackbar.Add(_report.Posted is { } p ? $"True-up posted as {p.EntryNumber}." : "No differences to post.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

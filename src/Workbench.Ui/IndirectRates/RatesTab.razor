@@ -1,0 +1,198 @@
+@* Rates by fiscal year and basis, with the history of changes. *@
+@inject IIndirectRateService Rates
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudSelect T="int" Value="_year" ValueChanged="SelectAsync" Label="Fiscal year" Dense="true" Style="max-width:160px" data-testid="rates-year">
+        @foreach (var y in IndirectRatesFormat.FiscalYears(Periods))
+        {
+            <MudSelectItem T="int" Value="y">FY@(y)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSwitch T="bool" Value="_history" ValueChanged="ToggleHistoryAsync" Color="Color.Primary" Label="Show history" />
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null, null)" data-testid="set-rate">Set rate</MudButton>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
+        <MudSimpleTable Dense="true" data-testid="rates-table">
+            <thead>
+                <tr><th>Pool</th>@foreach (var b in IndirectRatesFormat.Bases) { <th style="text-align:right">@b</th> }</tr>
+            </thead>
+            <tbody>
+                @foreach (var pool in IndirectRatesFormat.Pools)
+                {
+                    <tr>
+                        <td>@AccountingFormat.Label(pool)</td>
+                        @foreach (var b in IndirectRatesFormat.Bases)
+                        {
+                            var rate = Current(pool, b);
+                            <td style="text-align:right">
+                                <MudLink OnClick="() => EditAsync(pool, b)" data-testid="@($"rate-{pool}-{b}")">@IndirectRatesFormat.Percent(rate?.Rate)</MudLink>
+                                @if (rate is { ApprovedAtUtc: null })
+                                {
+                                    <MudTooltip Text="Not approved"><MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Small" Color="Color.Warning" /></MudTooltip>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+        Provisional rates are set at the start of the year (often the last DCAA-approved rates) and drive the monthly allocation and provisional billing.
+        Actual rates come from closing the year and drive the true-up. Click a rate to change it; changes supersede the old rate, which stays in the history.
+    </MudText>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">@(_history ? "All rates, including superseded" : "Rates in force")</MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>Pool</th><th>Basis</th><th style="text-align:right">Rate</th><th>Effective</th><th>Approved</th><th>Set by</th><th>Note</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _rates)
+                {
+                    var current = _current.Contains(r.Id);
+                    <tr class="@(current ? "" : "mud-text-secondary")">
+                        <td>@AccountingFormat.Label(r.Pool)</td>
+                        <td>@r.Basis</td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(r.Rate)</td>
+                        <td>@AccountingFormat.Date(r.EffectiveFrom)</td>
+                        <td>@(r.ApprovedBy is null ? "—" : $"{r.ApprovedBy} {r.ApprovedAtUtc:yyyy-MM-dd}")</td>
+                        <td>@r.CreatedBy</td>
+                        <td>@r.Note @(current ? "" : "(superseded)")</td>
+                        <td style="white-space:nowrap">
+                            @if (current)
+                            {
+                                @if (r.ApprovedAtUtc is null)
+                                {
+                                    <MudButton Size="Size.Small" OnClick="() => ApproveAsync(r)">Approve</MudButton>
+                                }
+                                <MudButton Size="Size.Small" Color="Color.Warning" OnClick="() => WithdrawAsync(r)">Withdraw</MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+
+    private int _year;
+    private bool _history;
+    private IReadOnlyList<IndirectRateDto> _rates = [];
+    private HashSet<Guid> _current = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _year = IndirectRatesFormat.DefaultYear(Periods);
+        await LoadAsync();
+    }
+
+    private async Task SelectAsync(int year)
+    {
+        _year = year;
+        await LoadAsync();
+    }
+
+    private async Task ToggleHistoryAsync(bool value)
+    {
+        _history = value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rates = await Rates.ListRatesAsync(_year, _history);
+            _current = (_history ? await Rates.ListRatesAsync(_year) : _rates).Select(r => r.Id).ToHashSet();
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    private IndirectRateDto? Current(CostPool pool, RateBasis basis) =>
+        _rates.FirstOrDefault(r => r.Pool == pool && r.Basis == basis && _current.Contains(r.Id));
+
+    private async Task EditAsync(CostPool? pool, RateBasis? basis)
+    {
+        var existing = pool is { } p && basis is { } b ? Current(p, b) : null;
+        var parameters = new DialogParameters<RateDialog>
+        {
+            { d => d.FiscalYear, _year },
+            { d => d.Pool, pool ?? CostPool.Fringe },
+            { d => d.Basis, basis ?? RateBasis.Provisional },
+            { d => d.Existing, existing },
+            { d => d.Lookup, (Func<CostPool, RateBasis, IndirectRateDto?>)Current },
+        };
+        var dialog = await DialogService.ShowAsync<RateDialog>($"Set FY{_year} rate", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveIndirectRateRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            await Rates.SaveRateAsync(request);
+            Snackbar.Add($"{AccountingFormat.Label(request.Pool)} {request.Basis.ToString().ToLowerInvariant()} rate for FY{request.FiscalYear} set to {IndirectRatesFormat.Percent(request.Rate)}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ApproveAsync(IndirectRateDto rate)
+    {
+        try
+        {
+            await Rates.ApproveRateAsync(rate.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task WithdrawAsync(IndirectRateDto rate)
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog>
+        {
+            { d => d.Message, $"Withdraw the {rate.Basis.ToString().ToLowerInvariant()} {AccountingFormat.Label(rate.Pool)} rate of {IndirectRatesFormat.Percent(rate.Rate)}? It stays in the history." },
+            { d => d.ConfirmText, "Withdraw" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>("Withdraw rate", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        try
+        {
+            await Rates.WithdrawRateAsync(rate.Id, new WithdrawIndirectRateRequest(reason));
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

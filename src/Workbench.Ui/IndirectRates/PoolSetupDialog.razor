@@ -1,0 +1,83 @@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField T="string" @bind-Value="_name" Label="Name" Required="true" Immediate="true" />
+            <MudSelect T="AllocationBaseKind" @bind-Value="_base" Label="Allocation base" Dense="true">
+                @foreach (var b in Enum.GetValues<AllocationBaseKind>())
+                {
+                    <MudSelectItem T="AllocationBaseKind" Value="b">@IndirectRatesFormat.Label(b)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField T="int" @bind-Value="_order" Label="Cascade order" Min="0" />
+            <MudSelect T="CostClass" @bind-SelectedValues="_classes" MultiSelection="true" Label="Cost classes in the pool" Dense="true">
+                @foreach (var c in PoolClasses)
+                {
+                    <MudSelectItem T="CostClass" Value="c">@AccountingFormat.Label(c)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudCheckBox T="bool" @bind-Value="_mapped" Label="Include the indirect labor the posting rules map to this pool" />
+            <MudSelect T="Guid" @bind-SelectedValues="_explicit" MultiSelection="true" Label="Also these accounts (summary accounts bring their children)" Dense="true"
+                       ToStringFunc="Label">
+                @foreach (var a in Expense)
+                {
+                    <MudSelectItem T="Guid" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid" @bind-Value="_applied" Label="Applied burden account (debit, with project/WBS)" Dense="true" ToStringFunc="Label">
+                @foreach (var a in Expense.Where(a => !a.HasChildren))
+                {
+                    <MudSelectItem T="Guid" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid" @bind-Value="_absorbed" Label="Applied contra account (credit)" Dense="true" ToStringFunc="Label">
+                @foreach (var a in Expense.Where(a => !a.HasChildren))
+                {
+                    <MudSelectItem T="Guid" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="Active" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly CostClass[] PoolClasses = [CostClass.Fringe, CostClass.Overhead, CostClass.GeneralAndAdministrative, CostClass.IndirectLabor, CostClass.Other];
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public PoolSetupDto Setup { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<AccountDto> Accounts { get; set; } = [];
+
+    private string? _name;
+    private AllocationBaseKind _base;
+    private int _order;
+    private bool _mapped;
+    private bool _active;
+    private IReadOnlyCollection<CostClass> _classes = [];
+    private IReadOnlyCollection<Guid> _explicit = [];
+    private Guid _applied;
+    private Guid _absorbed;
+
+    private IEnumerable<AccountDto> Expense => Accounts.Where(a => a.Type == AccountKind.Expense);
+
+    protected override void OnInitialized()
+    {
+        (_name, _base, _order, _mapped, _active) = (Setup.Name, Setup.Base, Setup.CascadeOrder, Setup.IncludeMappedIndirectLabor, Setup.IsActive);
+        _classes = Setup.CostClasses.ToHashSet();
+        _explicit = Setup.AccountIds.ToHashSet();
+        (_applied, _absorbed) = (Setup.AppliedAccountId, Setup.AbsorbedAccountId);
+    }
+
+    private string Label(Guid id) => Accounts.FirstOrDefault(a => a.Id == id) is { } a ? AccountingFormat.AccountLabel(a) : "";
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SavePoolSetupRequest(_name!.Trim(), _base, _order, _active, _classes.ToList(), _mapped,
+        _explicit.ToList(), _applied, _absorbed)));
+}

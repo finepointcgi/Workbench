@@ -3,6 +3,7 @@
 @inject IBudgetService Budgets
 @inject IProjectFinancialsService Financials
 @inject IFinancialExportService Exports
+@inject Workbench.Contracts.IndirectRates.IBurdenedFinancialsService Burdened
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
@@ -66,10 +67,23 @@ else
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
     }
 
+    @* Indirect rates: Direct / Burdened view (default Burdened when rates exist). *@
+    <MudToggleGroup T="bool" Value="_showBurdened" ValueChanged="v => _showBurdened = v" Color="Color.Primary" Size="Size.Small" Class="mb-2" Style="max-width:260px"
+                    Disabled="_burdened is null" data-testid="cost-view">
+        <MudToggleItem Value="false" Text="Direct" />
+        <MudToggleItem Value="true" Text="Burdened" />
+    </MudToggleGroup>
+    @if (_showBurdened && _burdened is not null)
+    {
+        <Workbench.Ui.IndirectRates.BurdenedFinancialsView Data="_burdened" />
+    }
+    else
+    {
     <FinancialTiles Summary="_summary" />
 
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">By WBS</MudText>
     <WbsFinancialsGrid Rows="_rows" Totals="_summary.Totals" ShowBillable="_summary.ShowsBillableValue" />
+    }
 
     <MudGrid Spacing="3" Class="mt-2">
         <MudItem xs="12" md="8">
@@ -100,6 +114,8 @@ else
     private ProjectFinancialSummaryDto? _summary;
     private IReadOnlyList<WbsFinancialRowDto> _rows = [];
     private TimePhasedBurnDto? _burn;
+    private Workbench.Contracts.IndirectRates.BurdenedFinancialsDto? _burdened;
+    private bool _showBurdened;
     private Guid? _budgetVersionId;
     private Guid? _forecastVersionId;
     private bool _loading = true;
@@ -123,6 +139,7 @@ else
             _summary = await Financials.GetProjectSummaryAsync(ProjectId, _budgetVersionId, _forecastVersionId);
             _rows = await Financials.GetWbsFinancialsAsync(ProjectId, _budgetVersionId, _forecastVersionId);
             _burn = await Financials.GetTimePhasedBurnAsync(ProjectId, _budgetVersionId);
+            await LoadBurdenedAsync();
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -135,6 +152,20 @@ else
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task LoadBurdenedAsync()
+    {
+        var first = _burdened is null;
+        try
+        {
+            _burdened = await Burdened.GetProjectAsync(ProjectId, _budgetVersionId, _forecastVersionId);
+            _showBurdened = first ? _burdened.HasRates : _showBurdened;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            (_burdened, _showBurdened) = (null, false);
         }
     }
 

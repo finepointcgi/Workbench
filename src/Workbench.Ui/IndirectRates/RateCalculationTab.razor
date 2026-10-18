@@ -1,0 +1,152 @@
+@* Actual pool cost, base and rate from GL balances over a period range, against the provisional rates. *@
+@inject IIndirectRateService Rates
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudSelect T="Guid?" Value="_from" ValueChanged="v => ChangeAsync(v, _to)" Label="From period" Dense="true" Style="max-width:200px">
+        @foreach (var p in Periods.OrderByDescending(p => p.Start))
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="Guid?" Value="_to" ValueChanged="v => ChangeAsync(_from, v)" Label="To period" Dense="true" Style="max-width:200px">
+        @foreach (var p in Periods.OrderByDescending(p => p.Start))
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Recalculate" />
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @foreach (var note in _report.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
+        <MudSimpleTable Dense="true" data-testid="rate-calculation">
+            <thead>
+                <tr><th>Pool</th><th>Base</th><th style="text-align:right">Pool cost</th><th style="text-align:right">Base</th><th style="text-align:right">Actual rate</th>
+                    <th style="text-align:right">Provisional</th><th style="text-align:right">Variance</th><th style="text-align:right">Applied</th><th style="text-align:right">Under (over) applied</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _report.Pools)
+                {
+                    <tr>
+                        <td>@p.Name</td>
+                        <td>@IndirectRatesFormat.Label(p.Base)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.PoolCost)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.BaseAmount)</td>
+                        <td style="text-align:right"><b>@IndirectRatesFormat.Percent(p.ActualRate)</b></td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(p.ProvisionalRate)</td>
+                        <td style="text-align:right" class="@(p.Variance > 0 ? "mud-error-text" : "")">@IndirectRatesFormat.Percent(p.Variance)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.Applied)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.UnderApplied)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Year-to-date actual vs provisional rate (%)</MudText>
+        @if (_labels.Length == 0)
+        {
+            <MudText Class="mud-text-secondary">No periods in the range.</MudText>
+        }
+        else
+        {
+            <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_series" ChartLabels="_labels" Width="100%" Height="300px" LegendPosition="Position.Bottom"
+                      data-testid="rate-chart" />
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By month</MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead>
+                <tr><th>Period</th><th>Pool</th><th style="text-align:right">Pool cost</th><th style="text-align:right">Base</th><th style="text-align:right">Month rate</th>
+                    <th style="text-align:right">YTD cost</th><th style="text-align:right">YTD base</th><th style="text-align:right">YTD rate</th><th style="text-align:right">Provisional</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var t in _report.Trend)
+                {
+                    <tr>
+                        <td>@t.PeriodName</td>
+                        <td>@AccountingFormat.Label(t.Pool)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(t.PoolCost)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(t.BaseAmount)</td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(t.MonthRate)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(t.YtdPoolCost)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(t.YtdBase)</td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(t.YtdRate)</td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(t.ProvisionalRate)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+
+    private Guid? _from;
+    private Guid? _to;
+    private RateCalculationDto? _report;
+    private string[] _labels = [];
+    private List<ChartSeries<double>> _series = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = AccountingFormat.DefaultPeriod(Periods);
+        _to = current?.Id;
+        _from = Periods.Where(p => p.FiscalYear == current?.FiscalYear).MinBy(p => p.Start)?.Id;
+        await LoadAsync();
+    }
+
+    private async Task ChangeAsync(Guid? from, Guid? to)
+    {
+        (_from, _to) = (from, to);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_from is not { } from || _to is not { } to)
+        {
+            return;
+        }
+
+        try
+        {
+            _report = await Rates.GetRateCalculationAsync(from, to);
+            _error = null;
+            var periods = _report.Trend.Select(t => t.PeriodName).Distinct().ToList();
+            _labels = periods.ToArray();
+            _series = [];
+            foreach (var pool in _report.Trend.Select(t => t.Pool).Distinct())
+            {
+                var points = _report.Trend.Where(t => t.Pool == pool).ToList();
+                var label = AccountingFormat.Label(pool);
+                _series.Add(new() { Name = $"{label} actual YTD", Data = new ChartData<double>(points.Select(t => (double)((t.YtdRate ?? 0) * 100)).ToList()) });
+                _series.Add(new() { Name = $"{label} provisional", Data = new ChartData<double>(points.Select(t => (double)((t.ProvisionalRate ?? 0) * 100)).ToList()) });
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}
