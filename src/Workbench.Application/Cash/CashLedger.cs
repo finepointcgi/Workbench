@@ -70,7 +70,7 @@ internal static class CashLedger
                     isAch = payment.Method == Domain.Purchasing.PaymentMethod.Ach;
                 }
 
-                var description = string.IsNullOrWhiteSpace(r.Memo) || r.Memo == r.Description ? r.Description : $"{r.Description} · {r.Memo}";
+                var description = string.IsNullOrWhiteSpace(r.Memo) || r.Description.Contains(r.Memo, StringComparison.OrdinalIgnoreCase) ? r.Description : $"{r.Description} · {r.Memo}";
                 return (Line: new GlCashLine(r.Id, r.EntryId, r.Number, r.Date, r.Source, r.SourceId, description, r.Debit - r.Credit,
                     r.ReversalOfId, r.ReversedById, reference, isCheck, isAch), r.Sequence);
             })

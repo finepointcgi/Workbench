@@ -173,8 +173,12 @@ else
 
     @* Matches *@
     <MudPaper Outlined="true" Class="pa-4 mb-3">
-        <MudText Typo="Typo.h6" Class="mb-2">Matches (@_ws.Matches.Count)</MudText>
-        @if (_ws.Matches.Count == 0)
+        <MudText Typo="Typo.h6" Class="mb-2">@(completed ? "Matches" : $"Matches ({_ws.Matches.Count})")</MudText>
+        @if (_ws.Matches.Count == 0 && completed)
+        {
+            <MudText Class="mud-text-secondary">This reconciliation locked its matches; the report lists every item it cleared.</MudText>
+        }
+        else if (_ws.Matches.Count == 0)
         {
             <MudText Class="mud-text-secondary">Nothing matched yet. Auto-match pairs AR receipts by payment reference, AP checks by number and ACH payments by reference, then amounts within @_ws.MatchDateWindowDays days.</MudText>
         }

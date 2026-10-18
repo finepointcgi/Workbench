@@ -41,7 +41,7 @@ else
         <MudSimpleTable Dense="true" Hover="true" data-testid="forecast-table">
             <thead>
                 <tr><th>Week</th><th>Starting</th><th style="text-align:right">Opening</th><th style="text-align:right">Receivables</th><th style="text-align:right">Payables</th>
-                    <th style="text-align:right">Payroll</th><th style="text-align:right">Other</th><th style="text-align:right; width:150px">What-if</th><th style="text-align:right">Closing</th></tr>
+                    <th style="text-align:right">Payroll</th><th style="text-align:right">Other</th><th style="text-align:right; min-width:120px">What-if</th><th style="text-align:right">Closing</th></tr>
             </thead>
             <tbody>
                 @foreach (var w in Weeks)
@@ -49,7 +49,7 @@ else
                     var week = w.Week;
                     <tr>
                         <td><MudLink OnClick="() => _detailWeek = _detailWeek == week ? null : week">@week</MudLink></td>
-                        <td>@CashFormat.Date(w.Start)</td>
+                        <td style="white-space:nowrap">@CashFormat.Date(w.Start)</td>
                         <td style="text-align:right">@CashFormat.Amount(w.Opening)</td>
                         <td style="text-align:right">@AccountingFormat.Blank(w.Receivables)</td>
                         <td style="text-align:right">@AccountingFormat.Blank(w.Payables)</td>
