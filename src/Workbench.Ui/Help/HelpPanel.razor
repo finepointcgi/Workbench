@@ -1,0 +1,102 @@
+@* The side panel the "?" button opens: help for the page you're on (from HelpRouteMap), search, and links to the help
+   center, glossary, What's new, the welcome tour and "Report a problem". *@
+@inject NavigationManager Navigation
+@inject IServiceProvider Services
+
+<MudDialog Style="height:100dvh;max-height:100dvh;margin:0;border-radius:0" data-testid="help-panel">
+    <TitleContent>
+        <MudText Typo="Typo.h6" HtmlTag="h2">Help</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div role="search" class="mb-3">
+            <MudTextField T="string" @bind-Value="_query" Immediate="true" DebounceInterval="150" Label="Search help" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" data-testid="help-panel-search" />
+        </div>
+
+        @if (_showWhatsNew)
+        {
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="() => _showWhatsNew = false" Class="ml-n2 mb-2">Back</MudButton>
+            <MudText Typo="Typo.h6" HtmlTag="h3" Class="mb-2">What's new</MudText>
+            <WhatsNewList HeadingLevel="4" Max="5" />
+            <MudLink Href="help/whats-new" OnClick="Close" Typo="Typo.body2">See all changes</MudLink>
+        }
+        else if (!string.IsNullOrWhiteSpace(_query))
+        {
+            var results = HelpLibrary.Search(_query, 10);
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mb-1" aria-live="polite">@(results.Count == 0 ? "No articles match" : $"{results.Count} {(results.Count == 1 ? "article" : "articles")}")</MudText>
+            @if (results.Count > 0)
+            {
+                <ArticleList Articles="results" Opened="_ => Close()" />
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Try other words, or report the problem below.</MudText>
+            }
+        }
+        else if (_article is { } article)
+        {
+            <MudText Typo="Typo.overline" Class="mud-text-secondary d-block">@(_ownArticle ? "Help for this page" : "Getting started")</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="h3" Class="mb-1" data-testid="help-panel-title">@article.Title</MudText>
+            <HelpMarkdown Document="article.Document" HeadingOffset="2" />
+            <MudLink Href="@article.Href" OnClick="Close" Typo="Typo.body2" data-testid="help-panel-open">Open this article in the help center</MudLink>
+        }
+
+        <MudDivider Class="my-4" />
+        <nav aria-label="More help">
+            <MudStack Spacing="1">
+                <MudButton Href="help" OnClick="Close" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.MenuBook" Class="justify-start" data-testid="help-panel-center">Help center</MudButton>
+                <MudButton Href="help/glossary" OnClick="Close" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Translate" Class="justify-start">Glossary</MudButton>
+                <MudButton OnClick="ShowWhatsNew" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.NewReleases" Class="justify-start" data-testid="help-panel-whats-new">
+                    What's new
+                    @if (HasNews)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2 my-0">New</MudChip>
+                    }
+                </MudButton>
+                <MudButton OnClick="RestartTour" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Tour" Class="justify-start" data-testid="help-panel-tour">Take the welcome tour</MudButton>
+                <MudButton OnClick="Report" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.BugReport" Class="justify-start" data-testid="help-panel-report">Report a problem or send feedback</MudButton>
+            </MudStack>
+        </nav>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3">Workbench @AppInfo.Version</MudText>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    public const string TourAction = "tour";
+    public const string ReportAction = "report";
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The app-relative path of the page the panel was opened on.</summary>
+    [Parameter] public string PagePath { get; set; } = "";
+
+    [Parameter] public bool HasNews { get; set; }
+
+    /// <summary>Raised once What's new has been opened (the button's dot goes away).</summary>
+    [Parameter] public EventCallback NewsSeen { get; set; }
+
+    private HelpArticle? _article;
+    private bool _ownArticle;
+    private string? _query;
+    private bool _showWhatsNew;
+
+    protected override void OnParametersSet()
+    {
+        _ownArticle = HelpRouteMap.HasArticle(PagePath);
+        _article = HelpLibrary.Find(HelpRouteMap.SlugFor(PagePath)) ?? HelpLibrary.Find(HelpRouteMap.Fallback);
+    }
+
+    private async Task ShowWhatsNew()
+    {
+        _showWhatsNew = true;
+        _query = null;
+        await WhatsNewList.MarkSeenAsync(Services);
+        await NewsSeen.InvokeAsync();
+    }
+
+    private void Close() => MudDialog.Close();
+
+    private void RestartTour() => MudDialog.Close(DialogResult.Ok(TourAction));
+
+    private void Report() => MudDialog.Close(DialogResult.Ok(ReportAction));
+}

@@ -153,6 +153,11 @@ public static class NavCatalog
         new(Approvals, null, "Timesheet approvals", "time/approvals", Icons.Material.Filled.FactCheck, a => a.ShowTeamTime, InMenu: false),
         new(Approvals, null, "ODC approvals", "odcs/approvals", Icons.Material.Filled.FactCheck, a => a.ShowApprovals, InMenu: false),
         new(Approvals, null, "Bill approvals", "purchasing/approvals", Icons.Material.Filled.FactCheck, a => a.ShowApprovals, InMenu: false),
+        new(Home, null, "Help center", "help", Icons.Material.Filled.MenuBook, _ => true, Detail: "Article", Keywords: "how to guide support faq", InMenu: false),
+        new(Home, null, "Glossary", "help/glossary", Icons.Material.Filled.Translate, _ => true, Keywords: "terms definitions acronyms", InMenu: false),
+        new(Home, null, "What's new", "help/whats-new", Icons.Material.Filled.NewReleases, _ => true, Keywords: "changes release notes changelog", InMenu: false),
+        new(Home, null, "My support requests", "support", Icons.Material.Filled.SupportAgent, Everyone, Keywords: "report problem feedback bug help", InMenu: false),
+        new(Admin, null, "Support requests", "admin/support", Icons.Material.Filled.SupportAgent, AdminOnly, Keywords: "help desk problems feedback bug reports", InMenu: false),
         new(MyWork, null, "My allocations", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsSignedIn && !a.IsResourceManager && !a.IsProjectManager, Keywords: "resourcing staffing", InMenu: false),
     ];
 

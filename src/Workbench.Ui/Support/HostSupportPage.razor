@@ -1,0 +1,97 @@
+@page "/host/support"
+@layout Workbench.Ui.Layout.HostLayout
+@* Host administrators (MultiTenant): support requests from every organization, newest first. Read-only here; each
+   organization's administrators reply from their own Admin › Support requests page. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Support
+@using Workbench.Contracts.Tenancy
+@inject IHostAdminService Host
+@inject IHostSupportService HostSupport
+
+<PageTitle>Support requests · Host · Workbench</PageTitle>
+
+@if (_access is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Loading" />
+}
+else if (!_access.IsMultiTenant || !_access.IsHostSite || !_access.IsHostAdmin)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+        @(!_access.IsMultiTenant ? "This server runs a single organization; its support requests are under Admin › Support requests."
+          : "Only host administrators can see support requests across organizations, on the host site.")
+    </MudAlert>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.h4" HtmlTag="h1">Support requests</MudText>
+        <MudSpacer />
+        <MudButton Href="host" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Tenants</MudButton>
+    </MudStack>
+    <MudText Class="mud-text-secondary mb-4">From every active organization. Each organization's administrators reply from their own Admin › Support requests page.</MudText>
+
+    <MudSwitch T="bool" @bind-Value="_openOnly" Color="Color.Primary" Label="Open requests only" Class="mb-2" />
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" role="alert">@_error</MudAlert>
+    }
+    <MudTable Items="Shown()" Dense="true" Hover="true" Outlined="true" Loading="_items is null" Breakpoint="Breakpoint.Sm" data-testid="host-support-table">
+        <HeaderContent>
+            <MudTh>Organization</MudTh>
+            <MudTh>Reference</MudTh>
+            <MudTh>What happened</MudTh>
+            <MudTh>From</MudTh>
+            <MudTh>Page</MudTh>
+            <MudTh>Version</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Sent</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Organization">@context.TenantName <span class="mud-text-secondary">(@context.TenantSlug)</span></MudTd>
+            <MudTd DataLabel="Reference" Style="white-space:nowrap">@context.Request.Reference</MudTd>
+            <MudTd DataLabel="What happened">
+                @context.Request.Summary
+                @if (context.Request.Details is not null)
+                {
+                    <div class="mud-text-secondary" style="white-space:pre-wrap;font-size:0.8125rem">@context.Request.Details</div>
+                }
+            </MudTd>
+            <MudTd DataLabel="From">@(context.Request.ReporterName ?? context.Request.ReporterEmail)</MudTd>
+            <MudTd DataLabel="Page"><code>@(context.Request.PagePath ?? "—")</code></MudTd>
+            <MudTd DataLabel="Version">@context.Request.AppVersion</MudTd>
+            <MudTd DataLabel="Status"><SupportStatusChip Status="context.Request.Status" /></MudTd>
+            <MudTd DataLabel="Sent">@context.Request.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">No support requests.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private HostAccessDto? _access;
+    private IReadOnlyList<HostSupportRequestDto>? _items;
+    private bool _openOnly = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _access = await Host.GetAccessAsync();
+            if (_access is { IsMultiTenant: true, IsHostSite: true, IsHostAdmin: true })
+            {
+                _items = await HostSupport.ListAsync();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _access ??= new HostAccessDto(false, false, false, "");
+            _error = "Support requests couldn't be loaded.";
+            _items = [];
+        }
+    }
+
+    private IEnumerable<HostSupportRequestDto> Shown() =>
+        (_items ?? []).Where(i => !_openOnly || i.Request.Status is SupportStatus.New or SupportStatus.InProgress);
+}
