@@ -1,0 +1,47 @@
+@page "/setup/import"
+@page "/setup/import/{JobId:guid}"
+@page "/setup/import/history/{HistoryJobId:guid}"
+@inject NavigationManager Navigation
+
+<PageTitle>Import · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Import" Subtitle="Move from Costpoint and Smartsheet: upload exports (or connect to Smartsheet), map the columns, check a dry run, then import. Every import can be rolled back while nothing has used what it created.">
+</SetupHeader>
+
+<MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Rounded="true" TabPanelsClass="pt-4" data-testid="import-tabs">
+    <MudTabPanel Text="New import" Icon="@Icons.Material.Filled.UploadFile">
+        <ImportWizard JobId="JobId" Done="ShowInHistory" />
+    </MudTabPanel>
+    <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
+        @if (_tab == 1)
+        {
+            <ImportHistory SelectedJobId="_historyJob" />
+        }
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [Parameter]
+    public Guid? JobId { get; set; }
+
+    [Parameter]
+    public Guid? HistoryJobId { get; set; }
+
+    private int _tab;
+    private Guid? _historyJob;
+
+    protected override void OnParametersSet()
+    {
+        if (HistoryJobId is { } id)
+        {
+            _historyJob = id;
+            _tab = 1;
+        }
+    }
+
+    private void ShowInHistory(Guid jobId)
+    {
+        _historyJob = jobId;
+        _tab = 1;
+    }
+}
