@@ -18,6 +18,8 @@ public static class ApprovalRegistration
         services.AddScoped<IApprovalInboxService, ApprovalInboxService>();
         services.AddScoped<IApprovalDelegationService, ApprovalDelegationService>();
         services.AddScoped<ApprovalReminderCheck>();
+        services.AddSingleton<ApprovalBackfillGate>();
+        services.AddScoped<ApprovalBackfill>();
         services.AddScoped<IApprovalDocumentHandler, TimesheetApprovalHandler>();
         services.AddScoped<IApprovalDocumentHandler, ExpenseReportApprovalHandler>();
         services.AddScoped<IApprovalDocumentHandler, VendorOdcApprovalHandler>();
@@ -28,9 +30,10 @@ public static class ApprovalRegistration
         return services;
     }
 
-    /// <summary>For the server host: hourly escalation reminders.</summary>
+    /// <summary>For the server host: routing documents pending from before workflows (once per tenant at start) and hourly escalation reminders.</summary>
     public static IServiceCollection AddWorkbenchApprovalsHosting(this IServiceCollection services)
     {
+        services.AddHostedService<ApprovalBackfillBackgroundService>();
         services.AddHostedService<ApprovalReminderBackgroundService>();
         return services;
     }
