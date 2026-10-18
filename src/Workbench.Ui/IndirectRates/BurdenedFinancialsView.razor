@@ -1,0 +1,70 @@
+@* Project financials at burdened cost: tiles and a WBS table (used by the project financials page's Burdened view). *@
+@using Workbench.Ui.Financials
+
+<MudGrid Spacing="2" Class="mb-2" data-testid="burdened-tiles">
+    @foreach (var (label, value, detail) in Tiles)
+    {
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Outlined="true" Class="pa-3" Style="height: 100%">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                <MudText Typo="Typo.h6">@value</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@detail</MudText>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+@foreach (var rates in Data.Rates)
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@IndirectRatesFormat.Rates(rates)</MudText>
+}
+@foreach (var note in Data.Notes)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@note</MudAlert>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">By WBS (burdened)</MudText>
+<MudPaper Outlined="true" Style="overflow-x:auto">
+    <MudSimpleTable Dense="true" Hover="true" data-testid="burdened-wbs">
+        <thead>
+            <tr><th>WBS</th><th style="text-align:right">Budget (direct)</th><th style="text-align:right">Direct actual</th><th style="text-align:right">Fringe</th>
+                <th style="text-align:right">Overhead</th><th style="text-align:right">G&amp;A</th><th style="text-align:right">Burdened actual</th>
+                <th style="text-align:right">Direct EAC</th><th style="text-align:right">Burdened EAC</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Data.Rows)
+            {
+                var f = r.Figures;
+                <tr>
+                    <td style="@($"padding-left:{8 + r.Depth * 16}px")">@(r.IsLeaf ? "" : "▸ ")@r.Code @r.Name</td>
+                    <td style="text-align:right">@FinancialFormat.Money(f.BudgetAmount)</td>
+                    <td style="text-align:right">@FinancialFormat.Money(f.DirectActual)</td>
+                    <td style="text-align:right">@FinancialFormat.Money(f.Fringe)</td>
+                    <td style="text-align:right">@FinancialFormat.Money(f.Overhead)</td>
+                    <td style="text-align:right">@FinancialFormat.Money(f.GeneralAndAdministrative)</td>
+                    <td style="text-align:right"><b>@FinancialFormat.Money(f.BurdenedActual)</b></td>
+                    <td style="text-align:right">@FinancialFormat.Money(f.DirectEac)</td>
+                    <td style="text-align:right"><b>@FinancialFormat.Money(f.BurdenedEac)</b></td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public BurdenedFinancialsDto Data { get; set; } = default!;
+
+    private IEnumerable<(string Label, string Value, string Detail)> Tiles
+    {
+        get
+        {
+            var t = Data.Totals;
+            yield return ("Budget (direct)", FinancialFormat.Money(t.BudgetAmount), "Budgets are direct cost");
+            yield return ("Direct actual", FinancialFormat.Money(t.DirectActual), "Labor at cost + allowable ODCs");
+            yield return ("Burden", FinancialFormat.Money(t.Burden), $"Fringe {FinancialFormat.Money(t.Fringe)} · OH {FinancialFormat.Money(t.Overhead)} · G&A {FinancialFormat.Money(t.GeneralAndAdministrative)}");
+            yield return ("Burdened actual", FinancialFormat.Money(t.BurdenedActual), "Direct + indirect");
+            yield return ("Direct EAC", FinancialFormat.Money(t.DirectEac), $"ETC {FinancialFormat.Money(t.DirectEtc)}");
+            yield return ("Burdened EAC", FinancialFormat.Money(t.BurdenedEac), $"ETC {FinancialFormat.Money(t.BurdenedEtc)} burdened");
+        }
+    }
+}

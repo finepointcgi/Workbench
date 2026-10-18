@@ -62,6 +62,7 @@ public static class IdentityRegistration
         services.Decorate<IRuleService, PermissionCheckingRuleService>();
         services.Decorate<IDashboardService, PermissionCheckingDashboardService>();
         services.AddWorkbenchAccountingPermissions(); // General ledger (accounting branch): Finance or Admin only on all five GL services.
+        services.AddWorkbenchIndirectRatePermissions(); // Indirect rates: Finance or Admin; burdened cost: Finance, Admin or the project's PM.
         return services;
     }
 
