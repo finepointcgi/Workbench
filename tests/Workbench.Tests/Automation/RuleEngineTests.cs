@@ -15,7 +15,8 @@ public sealed class RuleEngineTests
     {
         await using var host = new AutomationHost();
 
-        Assert.IsType<AutomationItemService>(host.Items);
+        // Permission checks are the outermost decorator; automation runs inside them (the trigger tests below prove it fires).
+        Assert.IsType<Workbench.Application.Identity.PermissionCheckingItemService>(host.Items);
         Assert.IsType<AutomationAwareCurrentUser>(host.Get<ICurrentUser>());
     }
 

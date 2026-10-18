@@ -76,6 +76,15 @@ internal sealed class AutomationHost : IAsyncDisposable
         return await Items.UpdateAsync(sheetId, item.Id, new UpdateItemRequest(current.Title, current.Start, current.Finish, current.CostpointWbsId, merged));
     }
 
+    /// <summary>Gives <paramref name="email"/> a role in the sheet's workspace (the sheet's creator is its Owner).</summary>
+    public async Task AddMemberAsync(Guid sheetId, string email, Workbench.Contracts.Identity.WorkspaceRole role)
+    {
+        await using var db = await Db.CreateAsync();
+        var workspaceId = await db.Sheets.Where(s => s.Id == sheetId).Select(s => s.WorkspaceId).SingleAsync();
+        db.Set<Workbench.Domain.Identity.WorkspaceMember>().Add(new Workbench.Domain.Identity.WorkspaceMember { WorkspaceId = workspaceId, UserEmail = email, Role = (Workbench.Domain.Identity.WorkspaceRole)(int)role });
+        await db.SaveChangesAsync();
+    }
+
     public async Task<IReadOnlyList<RuleRunDto>> RunsAsync(Guid sheetId) => await Rules.ListRunsAsync(sheetId, limit: 500);
 
     public async Task<List<Notification>> AllNotificationsAsync()
