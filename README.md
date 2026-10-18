@@ -54,3 +54,6 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Costpoint:Source`: `None` (default), `Csv`, `Rest` or `Database` (see `src/Workbench.Costpoint/README.md`)
 - `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)
+- `Email:Mode`: `Pickup` (write `.eml` files to `Email:PickupFolder`, default `App_Data/mail`; Development default) or `Smtp`
+  (`Email:Smtp:Host`, `Port`, `EnableSsl`, `UserName`, `Password`); `Email:From` sets the sender
+- `Notifications:PublicBaseUrl`: makes links in emails absolute; `Notifications:DigestHourLocal`: daily digest hour (default 7)

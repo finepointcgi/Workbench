@@ -1,0 +1,52 @@
+@using Workbench.Contracts.Notifications
+@using Workbench.Ui.Collaboration
+
+@* One notification: icon, title (a button that opens its link), body, time and a mark-read button. *@
+<div class="d-flex align-start gap-2 px-3 py-2" style="@(Notification.IsRead ? "" : "background:var(--mud-palette-action-default-hover)")">
+    <MudIcon Icon="@Icon(Notification.Kind)" Size="Size.Small" Class="mt-1" aria-hidden="true" />
+    <div style="flex:1;min-width:0">
+        <MudLink Typo="Typo.body2" Underline="Underline.Hover" OnClick="() => OnOpen.InvokeAsync(Notification)"
+                 Style="@($"overflow-wrap:anywhere;{(Notification.IsRead ? "" : "font-weight:600")}")">
+            @Notification.Title
+        </MudLink>
+        @if (!string.IsNullOrWhiteSpace(Notification.Body))
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="@(Compact ? "display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" : "white-space:pre-wrap;overflow-wrap:anywhere")">
+                @Notification.Body
+            </MudText>
+        }
+        <MudText Typo="Typo.caption" Class="mud-text-secondary" title="@Notification.CreatedAtUtc.ToLocalTime().ToString("f")">
+            @CollaborationFormat.Ago(Notification.CreatedAtUtc, DateTime.UtcNow)@(Notification.IsRead ? "" : " · Unread")
+        </MudText>
+    </div>
+    @if (!Notification.IsRead)
+    {
+        <MudTooltip Text="Mark read">
+            <MudIconButton Icon="@Icons.Material.Filled.Done" Size="Size.Small" aria-label="@($"Mark read: {Notification.Title}")"
+                           OnClick="() => OnMarkRead.InvokeAsync(Notification)" />
+        </MudTooltip>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public NotificationDto Notification { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<NotificationDto> OnOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<NotificationDto> OnMarkRead { get; set; }
+
+    /// <summary>Clamp the body to two lines (the bell popover).</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private static string Icon(string kind) => kind switch
+    {
+        NotificationKinds.Mention => Icons.Material.Outlined.AlternateEmail,
+        NotificationKinds.Assignment => Icons.Material.Outlined.AssignmentInd,
+        NotificationKinds.Rule => Icons.Material.Outlined.Bolt,
+        _ => Icons.Material.Outlined.Notifications,
+    };
+}

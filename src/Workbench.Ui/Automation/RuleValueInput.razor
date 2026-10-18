@@ -1,0 +1,47 @@
+@* A value for a rule field: a list for dropdowns and checkboxes, text otherwise. *@
+@if (Field?.Kind == ColumnKind.Dropdown && Field.Options.Count > 0)
+{
+    <MudSelect T="string" Value="Value" ValueChanged="ValueChanged" Label="@Label" Dense="true" Clearable="true">
+        @foreach (var option in Field.Options)
+        {
+            <MudSelectItem T="string" Value="option">@option</MudSelectItem>
+        }
+    </MudSelect>
+}
+else if (Field?.Kind == ColumnKind.Checkbox)
+{
+    <MudSelect T="string" Value="Value" ValueChanged="ValueChanged" Label="@Label" Dense="true">
+        <MudSelectItem T="string" Value="@("true")">Checked</MudSelectItem>
+        <MudSelectItem T="string" Value="@("false")">Unchecked</MudSelectItem>
+    </MudSelect>
+}
+else
+{
+    <MudTextField T="string" Value="Value" ValueChanged="ValueChanged" Label="@Label" Immediate="true" Margin="Margin.Dense"
+                  HelperText="@Helper" />
+}
+
+@code {
+    [Parameter]
+    public RuleField? Field { get; set; }
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Value";
+
+    /// <summary>Templates are allowed (e.g. in set-value actions), so mention them in the hint.</summary>
+    [Parameter]
+    public bool AllowTemplates { get; set; }
+
+    private string? Helper => Field?.Kind switch
+    {
+        ColumnKind.Date => AllowTemplates ? "yyyy-MM-dd or {Today}" : "yyyy-MM-dd",
+        ColumnKind.Person => "Email",
+        _ => AllowTemplates ? "You can use {Title} or {Column name}" : null,
+    };
+}

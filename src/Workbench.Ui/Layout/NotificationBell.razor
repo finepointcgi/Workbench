@@ -1,0 +1,134 @@
+@using Workbench.Contracts.Notifications
+@using Workbench.Ui.Notifications
+@using Workbench.Ui.Collaboration
+@implements IAsyncDisposable
+@inject INotificationService Notifications
+@inject INotificationFeed Feed
+@inject NavigationManager Navigation
+
+@* App-bar bell: unread badge, and a popover with the latest 10 that updates live. *@
+<MudMenu @bind-Open="_open" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" PopoverClass="notification-popover">
+    <ActivatorContent>
+        <MudBadge Content="_unread" Max="99" Visible="_unread > 0" Color="Color.Error" Overlap="true" Bordered="true"
+                  BadgeAriaLabel="@($"{_unread} unread")">
+            <MudIconButton Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)"
+                           Color="Color.Inherit" OnClick="@(e => context.ToggleAsync(e))" aria-label="@(_unread > 0 ? $"Notifications, {_unread} unread" : "Notifications")" />
+        </MudBadge>
+    </ActivatorContent>
+    <ChildContent>
+        <div style="width:min(380px, 92vw)" role="region" aria-label="Notifications">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="px-3 pt-2 pb-1">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Notifications</MudText>
+                <MudSpacer />
+                <MudButton Size="Size.Small" Disabled="_unread == 0" OnClick="MarkAllReadAsync">Mark all read</MudButton>
+            </MudStack>
+            <MudDivider />
+            @if (_latest is null)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_latest.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary pa-3">You're all caught up.</MudText>
+            }
+            else
+            {
+                <div style="max-height:420px;overflow-y:auto">
+                    @foreach (var n in _latest)
+                    {
+                        <NotificationRow @key="n.Id" Notification="n" OnOpen="OpenAsync" OnMarkRead="MarkReadAsync" Compact="true" />
+                    }
+                </div>
+            }
+            <MudDivider />
+            <div class="pa-2 d-flex justify-center">
+                <MudButton Size="Size.Small" Href="notifications" OnClick="() => _open = false">See all and settings</MudButton>
+            </div>
+        </div>
+    </ChildContent>
+</MudMenu>
+
+@code {
+    private bool _open;
+    private int _unread;
+    private IReadOnlyList<NotificationDto>? _latest;
+    private IAsyncDisposable? _subscription;
+    private bool _disposed;
+
+    // Load and subscribe after the first interactive render so prerendering doesn't leave a subscription behind.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await RefreshAsync();
+        try
+        {
+            _subscription = await Feed.SubscribeAsync(_ => InvokeAsync(async () =>
+            {
+                if (!_disposed)
+                {
+                    await RefreshAsync();
+                }
+            }));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or IOException)
+        {
+            // Live updates are a convenience; the bell refreshes when opened.
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            var page = await Notifications.ListMineAsync(0, 10);
+            _latest = page.Items;
+            _unread = page.UnreadCount;
+        }
+        catch (HttpRequestException)
+        {
+            _latest ??= [];
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OpenAsync(NotificationDto n)
+    {
+        if (!n.IsRead)
+        {
+            await Notifications.MarkReadAsync(n.Id);
+        }
+
+        _open = false;
+        await RefreshAsync();
+        if (n.Link is { } link)
+        {
+            Navigation.NavigateTo(link);
+        }
+    }
+
+    private async Task MarkReadAsync(NotificationDto n)
+    {
+        await Notifications.MarkReadAsync(n.Id);
+        await RefreshAsync();
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await Notifications.MarkAllReadAsync();
+        await RefreshAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_subscription is not null)
+        {
+            await _subscription.DisposeAsync();
+        }
+    }
+}

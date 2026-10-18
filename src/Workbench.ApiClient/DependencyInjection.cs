@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.AddWorkbenchSchedulingClients(serverBaseAddress);
         services.AddCollaborationClients(serverBaseAddress);
         services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddAutomationClients(serverBaseAddress);
         return services;
     }
 }
