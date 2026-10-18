@@ -333,3 +333,18 @@ await notifications.PublishAsync(
   Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
 - Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
   `InvoiceGenerator`); cost reports keep the real rates.
+
+## Operations (production)
+
+- A new configuration key goes in `docs/operations/configuration.md` (mark secrets **Secret**; secrets never in
+  `appsettings*.json`). A setting that would be unsafe in Production belongs in `ProductionConfigurationCheck`.
+- Background work runs through `ITenantJobRunner.ForEachTenantAsync`: that is what counts and times job runs
+  (`workbench.jobs.runs`) for the failed-job alert. Let unexpected exceptions escape the callback instead of only logging them.
+- Data that must stay secret at rest (TINs, bank accounts, tokens) is protected with `IDataProtectionProvider` and a
+  versioned purpose (`Workbench.<Feature>.<Field>.v1`); the key ring is encrypted in Production
+  (`docs/operations/data-protection-keys.md`). Never delete Data Protection key rows.
+- Logs: structured templates (`{Count}`, not interpolation), no emails, names, amounts or secrets. Console JSON and OTLP
+  redact emails and secret-named properties as a safety net only. Custom metrics go on `WorkbenchTelemetry.Meter`
+  with low-cardinality tags (never people, tenants' data or amounts).
+- Health: a dependency the app can't serve without is a `ready` health check returning Unhealthy; an optional one
+  (like email) returns Degraded.
