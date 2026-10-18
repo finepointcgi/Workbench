@@ -85,7 +85,7 @@ public sealed class MissingTimesheetCheck(IWorkbenchDbContextFactory dbFactory, 
 }
 
 /// <summary>Runs <see cref="MissingTimesheetCheck"/> hourly; the check itself decides whether anything is due.</summary>
-public sealed class MissingTimesheetBackgroundService(IServiceScopeFactory scopes, TimeProvider clock, ILogger<MissingTimesheetBackgroundService> logger)
+public sealed class MissingTimesheetBackgroundService(IServiceScopeFactory scopes, Tenancy.ITenantJobRunner tenants, TimeProvider clock, ILogger<MissingTimesheetBackgroundService> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -95,12 +95,15 @@ public sealed class MissingTimesheetBackgroundService(IServiceScopeFactory scope
         {
             try
             {
-                await using var scope = scopes.CreateAsyncScope();
-                var sent = await scope.ServiceProvider.GetRequiredService<MissingTimesheetCheck>().RunAsync(stoppingToken);
-                if (sent > 0)
+                await tenants.ForEachTenantAsync(async ct =>
                 {
-                    logger.LogInformation("Sent {Count} missing-timesheet reminders", sent);
-                }
+                    await using var scope = scopes.CreateAsyncScope();
+                    var sent = await scope.ServiceProvider.GetRequiredService<MissingTimesheetCheck>().RunAsync(ct);
+                    if (sent > 0)
+                    {
+                        logger.LogInformation("Sent {Count} missing-timesheet reminders", sent);
+                    }
+                }, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

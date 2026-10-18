@@ -37,7 +37,7 @@ public sealed record UserSecurityState(bool Exists, bool IsActive, DateTime? Ses
 /// is cheap. Changes made through <see cref="UserLifecycle"/> invalidate the entry at once; other server instances
 /// pick them up within <see cref="Ttl"/>.
 /// </summary>
-public sealed class UserStatusCache(IWorkbenchDbContextFactory dbFactory, TimeProvider clock)
+public sealed class UserStatusCache(IWorkbenchDbContextFactory dbFactory, TimeProvider clock, Tenancy.TenancyOptions? tenancy = null)
 {
     public static readonly TimeSpan Ttl = TimeSpan.FromSeconds(15);
     private readonly ConcurrentDictionary<string, (UserSecurityState State, DateTime FetchedAtUtc)> _entries = new(StringComparer.OrdinalIgnoreCase);
@@ -45,8 +45,16 @@ public sealed class UserStatusCache(IWorkbenchDbContextFactory dbFactory, TimePr
     public async Task<UserSecurityState> GetAsync(string email, CancellationToken cancellationToken = default)
     {
         email = AccessControl.Normalize(email);
+
+        // The MultiTenant host admin site has no user table: its users are the configured host admins.
+        if (tenancy?.IsMultiTenant == true && Tenancy.TenantScope.Current is null)
+        {
+            return tenancy.IsHostAdmin(email) ? new UserSecurityState(true, true, null) : UserSecurityState.Missing;
+        }
+
+        var key = Tenancy.TenantScope.Qualify(email);
         var now = clock.GetUtcNow().UtcDateTime;
-        if (_entries.TryGetValue(email, out var cached) && now - cached.FetchedAtUtc < Ttl)
+        if (_entries.TryGetValue(key, out var cached) && now - cached.FetchedAtUtc < Ttl)
         {
             return cached.State;
         }
@@ -57,11 +65,11 @@ public sealed class UserStatusCache(IWorkbenchDbContextFactory dbFactory, TimePr
             .Select(u => new { u.IsActive, u.SessionsRevokedAtUtc })
             .FirstOrDefaultAsync(cancellationToken);
         var state = row is null ? UserSecurityState.Missing : new UserSecurityState(true, row.IsActive, row.SessionsRevokedAtUtc);
-        _entries[email] = (state, now);
+        _entries[key] = (state, now);
         return state;
     }
 
-    public void Invalidate(string email) => _entries.TryRemove(AccessControl.Normalize(email), out _);
+    public void Invalidate(string email) => _entries.TryRemove(Tenancy.TenantScope.Qualify(AccessControl.Normalize(email)), out _);
 }
 
 /// <summary>

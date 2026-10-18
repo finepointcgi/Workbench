@@ -1,3 +1,5 @@
+using Workbench.Application.Tenancy;
+using Workbench.Infrastructure.Persistence;
 using Workbench.Web.Identity;
 
 namespace Workbench.Web.Security;
@@ -39,17 +41,37 @@ public static class ProductionConfigurationCheck
             problems.Add("The server only listens on plain HTTP. Add an https:// URL with a certificate, or set Security:TlsTerminatedByProxy=true behind a TLS-terminating proxy.");
         }
 
+        var tenancy = configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new TenancyOptions();
         var scim = configuration.GetSection(ScimSettings.SectionName).Get<ScimSettings>() ?? new ScimSettings();
-        if (scim.Enabled && (scim.BearerToken?.Trim().Length ?? 0) < ScimSettings.MinimumTokenLength)
+        if (!tenancy.IsMultiTenant && scim.Enabled && (scim.BearerToken?.Trim().Length ?? 0) < ScimSettings.MinimumTokenLength)
         {
             problems.Add($"Scim:BearerToken is empty or shorter than {ScimSettings.MinimumTokenLength} characters. Set a random token from a vault or environment variable (Scim__BearerToken), or set Scim:Enabled=false.");
         }
 
-        var provider = configuration["Database:Provider"] ?? "Sqlite";
-        if (environment.IsProduction() && provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase)
+        var provider = DatabaseProviders.FromConfiguration(configuration);
+        if (environment.IsProduction() && provider == DatabaseProvider.Sqlite
             && !configuration.GetValue("Database:AllowSqliteInProduction", false))
         {
             problems.Add("Database:Provider is Sqlite in Production. Use PostgreSQL, or set Database:AllowSqliteInProduction=true for a single-user evaluation.");
+        }
+
+        if (tenancy.IsMultiTenant)
+        {
+            // MultiTenant (A.8.3, A.5.23): tenants only admit invited people, and the host site needs its own admins.
+            if (!configuration.GetValue("Authentication:RequireInvite", true))
+            {
+                problems.Add("Authentication:RequireInvite is false in MultiTenant mode. Anyone the identity provider vouches for could join any tenant; keep invites required.");
+            }
+
+            if (!tenancy.HostAdmins.Any(a => !string.IsNullOrWhiteSpace(a)))
+            {
+                problems.Add("Tenancy:HostAdmins is empty. List the emails of the people who may create and suspend tenants.");
+            }
+
+            if (string.IsNullOrWhiteSpace(tenancy.BaseDomain) || tenancy.BaseDomain.Trim().Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                problems.Add("Tenancy:BaseDomain is localhost. Set the domain tenants are subdomains of (e.g. workbench.example).");
+            }
         }
 
         return problems;

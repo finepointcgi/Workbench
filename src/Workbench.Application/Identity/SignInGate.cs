@@ -23,7 +23,8 @@ public sealed class SignInGate(
     UserStatusCache statusCache,
     SecurityEventLog securityLog,
     SignInPolicyOptions options,
-    TimeProvider clock)
+    TimeProvider clock,
+    Tenancy.TenancyOptions? tenancy = null)
 {
     /// <param name="method">How they signed in, for the log: <c>oidc</c>, <c>dev</c> or <c>bearer</c>.</param>
     /// <param name="interactive">
@@ -36,6 +37,18 @@ public sealed class SignInGate(
         if (email.Length == 0)
         {
             return await DenyAsync(email, method, "The identity provider sent no email.", cancellationToken);
+        }
+
+        if (tenancy?.IsMultiTenant == true && Tenancy.TenantScope.Current is null)
+        {
+            // The host admin site: only the configured host admins, and no tenant database is touched.
+            if (!tenancy.IsHostAdmin(email))
+            {
+                return await DenyAsync(email, method, "Only host administrators can sign in here.", cancellationToken);
+            }
+
+            await securityLog.RecordAsync(SecurityEventTypes.SignInSuccess, email, detail: $"{method} (host)", actor: email, cancellationToken: cancellationToken);
+            return new SignInDecision(true, null, new AppUser { Email = email, DisplayName = displayName ?? email, CreatedAtUtc = clock.GetUtcNow().UtcDateTime });
         }
 
         var isBootstrapAdmin = options.BootstrapAdmins.Contains(email);

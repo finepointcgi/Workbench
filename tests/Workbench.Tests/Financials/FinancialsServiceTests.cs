@@ -278,12 +278,20 @@ public sealed class FinancialsServiceTests
         var kickoff = new Item { SheetId = sheetId, ParentId = phase.Id, Title = "Kickoff", Values = new() { [hours.Id.ToString()] = "8", [budget.Id.ToString()] = "1200", [owner.Id.ToString()] = "alex@example.com" } };
         var review = new Item { SheetId = sheetId, ParentId = phase.Id, Title = "Review", Values = new() { [hours.Id.ToString()] = "60.5", [budget.Id.ToString()] = "9000" } };
         var travel = new Item { SheetId = sheetId, Title = "Travel", Values = new() { [budget.Id.ToString()] = "2500" } };
+        await using (var db = await _factory.CreateAsync())
+        {
+            // The sheet first: the project's plan-sheet link is a foreign key.
+            var workspace = new Workspace { Name = "General" };
+            db.Workspaces.Add(workspace);
+            db.Sheets.Add(new Sheet { Id = sheetId, Name = "Plan", WorkspaceId = workspace.Id });
+            db.Columns.AddRange(hours, budget, owner);
+            db.Items.AddRange(phase, kickoff, review, travel);
+            await db.SaveChangesAsync();
+        }
+
         var s = await SeedAsync(sheetId: sheetId);
         await using (var db = await _factory.CreateAsync())
         {
-            db.Sheets.Add(new Sheet { Id = sheetId, Name = "Plan", WorkspaceId = Guid.NewGuid() });
-            db.Columns.AddRange(hours, budget, owner);
-            db.Items.AddRange(phase, kickoff, review, travel);
             var leaf = await db.Set<WbsElement>().SingleAsync(w => w.Id == s.Leaf.Id);
             leaf.ItemId = phase.Id;
             var leaf2 = await db.Set<WbsElement>().SingleAsync(w => w.Id == s.Leaf2.Id);

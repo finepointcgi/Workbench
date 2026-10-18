@@ -25,8 +25,16 @@ public static class DevSignIn
 
     internal static void Map(IEndpointRouteBuilder app)
     {
-        app.MapGet(Path, async (HttpContext http, IAntiforgery antiforgery, IWorkbenchDbContextFactory dbFactory, TimeProvider clock, string? returnUrl) =>
+        app.MapGet(Path, async (HttpContext http, IAntiforgery antiforgery, IWorkbenchDbContextFactory dbFactory, TimeProvider clock, Application.Tenancy.ITenantContext tenants,
+            Application.Tenancy.TenancyOptions tenancy, string? returnUrl) =>
         {
+            if (tenants.IsHost)
+            {
+                // The host admin site has no user table: offer the configured host admins.
+                var hostAdmins = tenancy.HostAdmins.Select(e => new AppUser { Email = e.Trim().ToLowerInvariant(), DisplayName = e.Trim(), CreatedAtUtc = DateTime.UtcNow }).ToList();
+                return Results.Content(RenderPage(hostAdmins, [], antiforgery.GetAndStoreTokens(http), AccountEndpoints.SafeReturnUrl(returnUrl), host: true), "text/html; charset=utf-8");
+            }
+
             await using var db = await dbFactory.CreateAsync(http.RequestAborted);
             var users = await db.Set<AppUser>().AsNoTracking().OrderByDescending(u => u.IsActive).ThenByDescending(u => u.IsAdmin).ThenBy(u => u.Email).ToListAsync(http.RequestAborted);
             var now = clock.GetUtcNow().UtcDateTime;
@@ -60,8 +68,13 @@ public static class DevSignIn
         }).AllowAnonymous().ExcludeFromDescription();
     }
 
-    private static string RoleLabel(AppUser user)
+    private static string RoleLabel(AppUser user, bool host)
     {
+        if (host)
+        {
+            return "Host admin";
+        }
+
         if (!user.IsActive)
         {
             return "Deactivated";
@@ -71,7 +84,7 @@ public static class DevSignIn
         return roles.Length == 0 ? "Employee" : roles;
     }
 
-    private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl)
+    private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false)
     {
         static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
         var html = new StringBuilder("""
@@ -95,7 +108,7 @@ public static class DevSignIn
                 <form method="post" action="{Path}">
                   <input type="hidden" name="{E(tokens.FormFieldName)}" value="{E(tokens.RequestToken)}" />
                   <input type="hidden" name="returnUrl" value="{E(returnUrl)}" />
-                  <button type="submit" name="email" value="{E(user.Email)}">{E(user.DisplayName)}<span class="admin">{E(RoleLabel(user))}</span><small>{E(user.Email)}</small></button>
+                  <button type="submit" name="email" value="{E(user.Email)}">{E(user.DisplayName)}<span class="admin">{E(RoleLabel(user, host))}</span><small>{E(user.Email)}</small></button>
                 </form>
                 """);
         }

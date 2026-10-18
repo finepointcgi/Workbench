@@ -111,6 +111,7 @@ public sealed partial class WebSecurityTests
             ["Authentication:Oidc:Authority"] = "https://login.example.test/",
             ["urls"] = "http://0.0.0.0:8080",
             ["Scim:BearerToken"] = "short",
+            ["Database:Provider"] = "Sqlite",
         });
         var strong = Problems("Production", new()
         {

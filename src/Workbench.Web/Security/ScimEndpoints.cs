@@ -39,7 +39,7 @@ public static partial class ScimEndpoints
     public static IEndpointRouteBuilder MapWorkbenchScim(this IEndpointRouteBuilder app)
     {
         var settings = app.ServiceProvider.GetRequiredService<IConfiguration>().GetSection(ScimSettings.SectionName).Get<ScimSettings>() ?? new ScimSettings();
-        if (!settings.Enabled)
+        if (!settings.Enabled || app.ServiceProvider.GetRequiredService<Workbench.Application.Tenancy.TenancyOptions>().IsMultiTenant)
         {
             return app;
         }

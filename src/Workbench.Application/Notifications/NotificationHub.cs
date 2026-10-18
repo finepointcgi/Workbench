@@ -19,11 +19,13 @@ public sealed class NotificationHub(ILogger<NotificationHub>? logger = null)
     public IAsyncDisposable Subscribe(string email, Func<NotificationDto, Task> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        // Keyed by tenant as well: the same email in two tenants is two different people.
+        var key = Tenancy.TenantScope.Qualify(email);
         lock (_gate)
         {
-            if (!_byUser.TryGetValue(email, out var handlers))
+            if (!_byUser.TryGetValue(key, out var handlers))
             {
-                _byUser[email] = handlers = [];
+                _byUser[key] = handlers = [];
             }
 
             handlers.Add(handler);
@@ -33,9 +35,9 @@ public sealed class NotificationHub(ILogger<NotificationHub>? logger = null)
         {
             lock (_gate)
             {
-                if (_byUser.TryGetValue(email, out var handlers) && handlers.Remove(handler) && handlers.Count == 0)
+                if (_byUser.TryGetValue(key, out var handlers) && handlers.Remove(handler) && handlers.Count == 0)
                 {
-                    _byUser.Remove(email);
+                    _byUser.Remove(key);
                 }
             }
         });
@@ -65,7 +67,7 @@ public sealed class NotificationHub(ILogger<NotificationHub>? logger = null)
         Func<string, NotificationDto, Task>[] all;
         lock (_gate)
         {
-            users = _byUser.TryGetValue(recipientEmail, out var handlers) ? [.. handlers] : [];
+            users = _byUser.TryGetValue(Tenancy.TenantScope.Qualify(recipientEmail), out var handlers) ? [.. handlers] : [];
             all = [.. _all];
         }
 
