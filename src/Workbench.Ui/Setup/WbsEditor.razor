@@ -5,8 +5,8 @@
 @inject ISnackbar Snackbar
 
 <MudGrid Spacing="3">
-    <MudItem xs="12" md="7">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudItem xs="12" lg="7">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
             <MudText Typo="Typo.h6" HtmlTag="h2">Work breakdown structure</MudText>
             <MudSpacer />
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddAsync(null)" data-testid="wbs-add-root">
@@ -26,11 +26,11 @@
             </MudPaper>
         }
     </MudItem>
-    <MudItem xs="12" md="5">
+    <MudItem xs="12" lg="5">
         @if (_selected is { } el)
         {
             <MudPaper Outlined="true" Class="pa-4 mb-3">
-                <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
                     <MudText Typo="Typo.h6" HtmlTag="h3">@el.Code</MudText>
                     <MudSpacer />
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(el)">Edit</MudButton>
