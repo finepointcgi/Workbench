@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Workbench.Infrastructure.Collaboration;
 
 namespace Workbench.Tests.Collaboration;
@@ -36,16 +35,6 @@ public sealed class InfrastructureTests : IDisposable
         var store = new LocalDiskBlobStore(_root);
 
         await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(key, new MemoryStream([1])));
-    }
-
-    [Fact]
-    public void Dev_user_reads_config_or_falls_back()
-    {
-        var empty = new ConfigurationBuilder().Build();
-        var configured = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Dev:UserEmail"] = " PM@Example.com " }).Build();
-
-        Assert.Equal(DevCurrentUser.DefaultEmail, new DevCurrentUser(empty).Email);
-        Assert.Equal("pm@example.com", new DevCurrentUser(configured).Email);
     }
 
     public void Dispose()

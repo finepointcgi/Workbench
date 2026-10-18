@@ -23,9 +23,12 @@
             <MudSelectItem Value="baseline.Id">@baseline.Name (@baseline.CapturedAtUtc.ToLocalTime().ToString("MMM d", CultureInfo.InvariantCulture))</MudSelectItem>
         }
     </MudSelect>
-    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CameraAlt" OnClick="CaptureBaselineAsync">
-        Capture baseline
-    </MudButton>
+    @if (CanEdit)
+    {
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CameraAlt" OnClick="CaptureBaselineAsync">
+            Capture baseline
+        </MudButton>
+    }
     <MudSpacer />
     @if (_analysis?.ProjectFinish is { } projectFinish)
     {
@@ -47,7 +50,7 @@ else
         <GanttTimeline Rows="_rows" Scale="_scale" Dependencies="_dependencies" Analysis="_analysis" Baseline="_baseline"
                        Today="_today" OnBarDropped="MoveBarAsync" OnLinkDropped="LinkAsync" OnDependencyClick="UnlinkAsync" />
     </div>
-    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" hidden="@(!CanEdit)">
         Drag a bar to move it or its right edge to change the finish. Drag the dot after a bar onto another task to link them; click an arrow to remove the link.
     </MudText>
 }
@@ -154,6 +157,11 @@ else
 
     private async Task MoveBarAsync(GanttBarDrop drop)
     {
+        if (!CanEdit)
+        {
+            return;
+        }
+
         var item = drop.Row.Item;
         DateOnly? start = item.Start, finish = item.Finish;
         if (drop.Mode == GanttDragMode.Move)
@@ -179,6 +187,11 @@ else
 
     private async Task LinkAsync((Guid PredecessorId, Guid SuccessorId) link)
     {
+        if (!CanEdit)
+        {
+            return;
+        }
+
         await RunAsync(async () =>
         {
             await DependencyService.AddAsync(SheetId, new CreateDependencyRequest(link.PredecessorId, link.SuccessorId));
@@ -188,6 +201,11 @@ else
 
     private async Task UnlinkAsync(DependencyDto dependency)
     {
+        if (!CanEdit)
+        {
+            return;
+        }
+
         var from = Items.FirstOrDefault(i => i.Id == dependency.PredecessorId)?.Title;
         var to = Items.FirstOrDefault(i => i.Id == dependency.SuccessorId)?.Title;
         var confirmed = await DialogService.ShowMessageBoxAsync(
@@ -211,7 +229,7 @@ else
         {
             await action();
         }
-        catch (Exception ex) when (ex is ArgumentException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchNotFoundException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
         {
             Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
         }

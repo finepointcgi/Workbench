@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.ApiClient.Identity;
 using Workbench.Contracts.Collaboration;
 
 namespace Workbench.ApiClient;
@@ -15,7 +16,7 @@ public static class CollaborationClients
             client.Timeout = TimeSpan.FromMinutes(5);
         });
         services.AddHttpClient<IActivityService, HttpActivityService>(client => client.BaseAddress = serverBaseAddress);
-        services.AddSingleton<ISheetLiveUpdates>(_ => new SignalRSheetLiveUpdates(serverBaseAddress));
+        services.AddSingleton<ISheetLiveUpdates>(sp => new SignalRSheetLiveUpdates(serverBaseAddress, sp.GetService<IAccessTokenProvider>()));
         return services;
     }
 }

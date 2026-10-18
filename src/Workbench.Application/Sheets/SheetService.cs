@@ -4,7 +4,7 @@ using Workbench.Domain;
 
 namespace Workbench.Application.Sheets;
 
-public sealed class SheetService(IWorkbenchDbContextFactory dbFactory, TimeProvider clock) : ISheetService
+public sealed class SheetService(IWorkbenchDbContextFactory dbFactory, TimeProvider clock, ISheetWorkspacePicker? workspacePicker = null) : ISheetService
 {
     public const string DefaultWorkspaceName = "General";
 
@@ -60,7 +60,8 @@ public sealed class SheetService(IWorkbenchDbContextFactory dbFactory, TimeProvi
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var workspace = await db.Workspaces.OrderBy(w => w.Name).FirstOrDefaultAsync(cancellationToken)
+        var workspace = (workspacePicker is null ? null : await workspacePicker.PickAsync(db, cancellationToken))
+            ?? await db.Workspaces.OrderBy(w => w.Name).FirstOrDefaultAsync(cancellationToken)
             ?? db.Workspaces.Add(new Workspace { Name = DefaultWorkspaceName }).Entity;
 
         var now = clock.GetUtcNow().UtcDateTime;

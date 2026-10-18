@@ -40,7 +40,7 @@
                             <span class="wb-th-name">@column.Name</span>
                             <MudMenu Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small" Dense="true" Class="wb-th-menu"
                                      AriaLabel="@($"{column.Name} column actions")">
-                                @if (column.Column is { } custom)
+                                @if (column.Column is { } custom && CanEdit)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="() => EditColumnAsync(custom)">Rename</MudMenuItem>
                                     @if (custom.Type == ColumnKind.Dropdown)
@@ -50,7 +50,10 @@
                                     <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
                                     <MudDivider />
                                 }
-                                <MudMenuItem Icon="@Icons.Material.Filled.ViewColumn" OnClick="AddColumnAsync">Add column</MudMenuItem>
+                                @if (CanEdit)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.ViewColumn" OnClick="AddColumnAsync">Add column</MudMenuItem>
+                                }
                                 @if (column.Kind == GridColumnKind.Title)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.UnfoldMore" OnClick="ExpandAll">Expand all</MudMenuItem>
@@ -62,7 +65,10 @@
                     </th>
                 }
                 <th class="wb-add-col">
-                    <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="AddColumnAsync" aria-label="Add column" />
+                    @if (CanEdit)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="AddColumnAsync" aria-label="Add column" />
+                    }
                 </th>
             </tr>
         </thead>
@@ -74,13 +80,16 @@
                         <span class="wb-rownum">@(IndexOf(row) + 1)</span>
                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="wb-row-menu" AriaLabel="Row actions">
                             <MudMenuItem Icon="@Icons.Material.Filled.OpenInNew" Href="@DetailsHref(row.Item)">Open details</MudMenuItem>
-                            <MudDivider />
-                            <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="() => AddRowBelowAsync(row.Item)">Add row below</MudMenuItem>
-                            <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => AddChildAsync(row.Item)">Add child row</MudMenuItem>
-                            <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentIncrease" Disabled="!row.HasPreviousSibling" OnClick="() => IndentAsync(row)">Indent</MudMenuItem>
-                            <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentDecrease" Disabled="row.Item.ParentId is null" OnClick="() => OutdentAsync(row)">Outdent</MudMenuItem>
-                            <MudDivider />
-                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteRowAsync(row)">Delete row</MudMenuItem>
+                            @if (CanEdit)
+                            {
+                                <MudDivider />
+                                <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="() => AddRowBelowAsync(row.Item)">Add row below</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => AddChildAsync(row.Item)">Add child row</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentIncrease" Disabled="!row.HasPreviousSibling" OnClick="() => IndentAsync(row)">Indent</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentDecrease" Disabled="row.Item.ParentId is null" OnClick="() => OutdentAsync(row)">Outdent</MudMenuItem>
+                                <MudDivider />
+                                <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteRowAsync(row)">Delete row</MudMenuItem>
+                            }
                         </MudMenu>
                         </div>
                     </td>
@@ -144,10 +153,13 @@
 </div>
 
 <div class="wb-grid-footer">
-    <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-               OnClick="AddRowAtEndAsync">Add row</MudButton>
+    @if (CanEdit)
+    {
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                   OnClick="AddRowAtEndAsync">Add row</MudButton>
+    }
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-        @Items.Count @(Items.Count == 1 ? "row" : "rows") · Enter or F2 to edit · Alt+Shift+→/← to indent or outdent
+        @Items.Count @(Items.Count == 1 ? "row" : "rows") · @(CanEdit ? "Enter or F2 to edit · Alt+Shift+→/← to indent or outdent" : "View only")
     </MudText>
 </div>
 
@@ -561,6 +573,11 @@
 
     private void BeginEdit(string? initialText = null, bool selectAll = false)
     {
+        if (!CanEdit)
+        {
+            return;
+        }
+
         if (ActiveRow is not { } row || ActiveColumn is not { } column)
         {
             return;
@@ -655,7 +672,7 @@
         _scrollToActive = false;
         _focusGrid = true;
         var column = _columns[colIndex];
-        if (column.ReadOnly)
+        if (column.ReadOnly || !CanEdit)
         {
             return;
         }
@@ -676,7 +693,7 @@
 
     private async Task SaveAsync(ItemDto item, GridColumn column, string? value)
     {
-        if (column.ReadOnly || CellFormat.GetRaw(item, column) == value)
+        if (column.ReadOnly || !CanEdit || CellFormat.GetRaw(item, column) == value)
         {
             return;
         }
@@ -903,7 +920,7 @@
 
     private static bool IsExpected(Exception ex) =>
         ex is ArgumentException or InvalidOperationException or HttpRequestException or TaskCanceledException
-            or Workbench.Contracts.WorkbenchNotFoundException;
+            or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException;
 
     private static string? HeaderTooltip(GridColumn column) => column.Column switch
     {

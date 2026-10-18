@@ -1,0 +1,90 @@
+@page "/admin/users"
+@inject IUserDirectory Users
+@inject ISnackbar Snackbar
+
+<PageTitle>Users · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">Users</MudText>
+
+@if (_me is null && _loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_me is not { IsAdmin: true })
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Only administrators can manage users.</MudAlert>
+}
+else
+{
+    <MudText Class="mud-text-secondary mb-4">
+        People appear here after they first sign in. Administrators see every workspace and can do everything;
+        everyone else gets access through workspace membership (Share on a sheet).
+    </MudText>
+    <MudTable T="UserDto" Items="_users" Loading="_loading" Dense="true" Hover="true" Filter="Matches">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_search" Placeholder="Search users" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Last seen (UTC)</MudTh>
+            <MudTh>Admin</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.DisplayName</MudTd>
+            <MudTd DataLabel="Email">@context.Email</MudTd>
+            <MudTd DataLabel="Last seen">@(context.LastSeenAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</MudTd>
+            <MudTd DataLabel="Admin">
+                <MudSwitch T="bool" Value="context.IsAdmin" ValueChanged="value => SetAdminAsync(context, value)" Color="Color.Primary"
+                           aria-label="@($"Administrator: {context.Email}")" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private UserDto? _me;
+    private IReadOnlyList<UserDto> _users = [];
+    private bool _loading = true;
+    private string? _search;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _me = await Users.GetMeAsync();
+            if (_me.IsAdmin)
+            {
+                _users = await Users.SearchAsync(null, 500);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load users: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool Matches(UserDto user) =>
+        string.IsNullOrWhiteSpace(_search)
+        || user.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || user.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase);
+
+    private async Task SetAdminAsync(UserDto user, bool isAdmin)
+    {
+        try
+        {
+            var updated = await Users.SetAdminAsync(user.Email, isAdmin);
+            _users = _users.Select(u => u.Email == updated.Email ? updated : u).ToList();
+            Snackbar.Add($"{updated.DisplayName} is {(updated.IsAdmin ? "now" : "no longer")} an administrator.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+}

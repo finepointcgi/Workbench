@@ -5,8 +5,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Duende.IdentityModel.OidcClient" Version="7.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Workbench.Tests" />
   </ItemGroup>
 
   <PropertyGroup>

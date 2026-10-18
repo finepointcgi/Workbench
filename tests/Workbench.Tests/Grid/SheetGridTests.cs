@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Sheets;
 using Workbench.Ui.Grid;
 using Workbench.Ui.Views;
@@ -120,6 +121,28 @@ public sealed class SheetGridTests
         Assert.InRange(grid.FindAll("tr.wb-row").Count, 1, 200);
         Assert.Contains("10000 rows", grid.Markup);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"Rendering took {stopwatch.Elapsed}.");
+    }
+
+    [Theory]
+    [InlineData(WorkspaceRole.Viewer)]
+    [InlineData(WorkspaceRole.Commenter)]
+    public async Task Viewers_and_commenters_get_a_read_only_grid(WorkspaceRole role)
+    {
+        await using var ctx = CreateContext(out var items);
+        var task = Item("Kickoff", order: 0, values: new() { [Hours.Id.ToString()] = "8" });
+        var grid = ctx.Render<SheetGridView>(p => p
+            .Add(v => v.Sheet, Sheet())
+            .Add(v => v.Items, [task])
+            .AddCascadingValue(new SheetAccess(role)));
+
+        grid.WaitForElement("td[data-col='1']").DoubleClick();
+        grid.Find(".wb-grid").KeyDown("Delete");
+
+        Assert.Empty(grid.FindAll("input.wb-editor"));
+        Assert.DoesNotContain("Add row", grid.Markup);
+        Assert.Empty(grid.FindAll("button[aria-label='Add column']"));
+        Assert.Contains("View only", grid.Markup);
+        Assert.Empty(items.Updates);
     }
 
     private static readonly Guid SheetId = Guid.NewGuid();
