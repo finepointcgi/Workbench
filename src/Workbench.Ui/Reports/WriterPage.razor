@@ -1,0 +1,343 @@
+@page "/reports/writer"
+@page "/reports/writer/{ReportId:guid}"
+@inject IReportWriterService Writer
+@inject ISavedReportService Saved
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Report writer · Reports · Workbench</PageTitle>
+
+<ReportsHeader Title="@(_saved?.Name ?? "Report writer")" Subtitle="Pick a data source, the columns, filters, grouping and sort. You only see the sources and fields your access allows.">
+    @if (_result is not null)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.GridOn" OnClick="() => ExportAsync(ReportFileFormat.Xlsx)" data-testid="export-xlsx">Excel</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description" OnClick="() => ExportAsync(ReportFileFormat.Csv)" data-testid="export-csv">CSV</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"reports/print?def={ReportFormat.Encode(Definition())}")" Target="_blank">Print</MudButton>
+    }
+    @if (_source is not null)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="_columns.Count == 0" data-testid="save-report">@(_saved is { CanEdit: true } ? "Save" : "Save as")</MudButton>
+    }
+</ReportsHeader>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" data-testid="load-error">@_error</MudAlert>
+}
+
+@if (_sources is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4">
+        <MudStack Spacing="3">
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" AlignItems="AlignItems.End">
+                <MudSelect T="string" Value="_source?.Key" ValueChanged="SourceChanged" Label="Data source" Style="min-width:240px" data-testid="writer-source">
+                    @foreach (var s in _sources)
+                    {
+                        <MudSelectItem T="string" Value="s.Key">@s.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_title" Label="Title" Placeholder="@(_source?.Name)" Style="min-width:220px" />
+                @if (_source?.DateField is not null)
+                {
+                    <MudSelect T="ReportDateRange" @bind-Value="_range" Label="@($"{FieldLabel(_source.DateField)} range")" Style="min-width:180px" data-testid="writer-range">
+                        @foreach (var r in Enum.GetValues<ReportDateRange>())
+                        {
+                            <MudSelectItem T="ReportDateRange" Value="r">@(r == ReportDateRange.Custom ? "Custom dates" : ReportFormat.Words(r.ToString()))</MudSelectItem>
+                        }
+                    </MudSelect>
+                    @if (_range == ReportDateRange.Custom)
+                    {
+                        <MudDatePicker @bind-Date="_from" Label="From" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+                        <MudDatePicker @bind-Date="_to" Label="To" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+                    }
+                }
+            </MudStack>
+
+            @if (_source is not null)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@_source.Description</MudText>
+
+                <div>
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h2">Columns</MudText>
+                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="0" data-testid="writer-fields">
+                        @foreach (var f in _source.Fields)
+                        {
+                            <MudCheckBox T="bool" Value="_columns.Any(c => c.Field == f.Key)" ValueChanged="v => ToggleColumn(f.Key, v)" Label="@(f.Restricted ? $"{f.Label} (restricted)" : f.Label)" Dense="true" data-testid="@($"field-{f.Key}")" />
+                        }
+                    </MudStack>
+                    @if (_columns.Count > 0)
+                    {
+                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mt-2">
+                            @foreach (var c in _columns.ToList())
+                            {
+                                var field = c.Field;
+                                <MudPaper Outlined="true" Class="pa-1 d-flex align-center gap-1">
+                                    <MudText Typo="Typo.body2" Class="px-1">@FieldLabel(field)</MudText>
+                                    <MudSelect T="ReportAggregate" Value="c.Aggregate" ValueChanged="a => SetAggregate(field, a)" Dense="true" Margin="Margin.Dense" Style="width:110px">
+                                        @foreach (var a in Enum.GetValues<ReportAggregate>())
+                                        {
+                                            <MudSelectItem T="ReportAggregate" Value="a">@(a == ReportAggregate.None ? "Value" : a.ToString())</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" aria-label="Move left" OnClick="() => Move(field, -1)" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" aria-label="Move right" OnClick="() => Move(field, 1)" />
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    }
+                </div>
+
+                <div>
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h2">Filters</MudText>
+                    @foreach (var f in _filters)
+                    {
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-1">
+                            <MudSelect T="string" @bind-Value="f.Field" Label="Field" Dense="true" Style="min-width:180px">
+                                @foreach (var x in _source.Fields)
+                                {
+                                    <MudSelectItem T="string" Value="x.Key">@x.Label</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudSelect T="ReportFilterOperator" @bind-Value="f.Operator" Label="Condition" Dense="true" Style="min-width:150px">
+                                @foreach (var o in Enum.GetValues<ReportFilterOperator>())
+                                {
+                                    <MudSelectItem T="ReportFilterOperator" Value="o">@ReportFormat.Words(o.ToString())</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @if (f.Operator is not (ReportFilterOperator.IsBlank or ReportFilterOperator.IsNotBlank))
+                            {
+                                <MudTextField @bind-Value="f.Value" Label="Value" Margin="Margin.Dense" HelperText="@ValueHint(f.Field)" data-testid="filter-value" />
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="Remove filter" OnClick="() => _filters.Remove(f)" />
+                        </MudStack>
+                    }
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _filters.Add(new FilterRow { Field = _source.Fields[0].Key })" data-testid="add-filter">Add filter</MudButton>
+                </div>
+
+                <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" AlignItems="AlignItems.End">
+                    <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_groups" Label="Group by (up to 3, in order)" Style="min-width:240px" data-testid="writer-group">
+                        @foreach (var x in _source.Fields)
+                        {
+                            <MudSelectItem T="string" Value="x.Key">@x.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="string" @bind-Value="_sortField" Label="Sort by" Clearable="true" Style="min-width:180px">
+                        @foreach (var x in _source.Fields)
+                        {
+                            <MudSelectItem T="string" Value="x.Key">@x.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSwitch T="bool" @bind-Value="_descending" Label="Descending" />
+                    <MudSwitch T="bool" @bind-Value="_details" Label="Show detail rows" Color="Color.Primary" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="RunAsync" Disabled="_columns.Count == 0 || _running" data-testid="run-report">Run</MudButton>
+                </MudStack>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
+@if (_running)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+@if (_result is not null)
+{
+    <MudText Typo="Typo.subtitle2" Class="mb-2">@_result.Title · @_result.Subtitle</MudText>
+    <ReportTable Result="_result" />
+}
+
+@code {
+    [Parameter]
+    public Guid? ReportId { get; set; }
+
+    private sealed class FilterRow
+    {
+        public string Field { get; set; } = "";
+        public ReportFilterOperator Operator { get; set; } = ReportFilterOperator.Equals;
+        public string? Value { get; set; }
+    }
+
+    private IReadOnlyList<ReportDataSourceDto>? _sources;
+    private ReportDataSourceDto? _source;
+    private SavedReportDto? _saved;
+    private ReportResultDto? _result;
+    private string? _error;
+    private bool _running;
+    private string? _title;
+    private ReportDateRange _range = ReportDateRange.ThisMonth;
+    private DateTime? _from;
+    private DateTime? _to;
+    private List<ReportColumnSpec> _columns = [];
+    private List<FilterRow> _filters = [];
+    private IReadOnlyCollection<string> _groups = [];
+    private string? _sortField;
+    private bool _descending;
+    private bool _details = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _sources = await Writer.ListSourcesAsync();
+            if (ReportId is { } id)
+            {
+                _saved = await Saved.GetAsync(id);
+                if (_saved.Definition is { } d)
+                {
+                    Load(d);
+                    await RunAsync();
+                }
+            }
+            else
+            {
+                _source = _sources.FirstOrDefault(s => s.Key == ReportSourceKeys.TimeEntries) ?? _sources.FirstOrDefault();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            _error = ReportFormat.Error(ex);
+        }
+    }
+
+    private void Load(ReportDefinition d)
+    {
+        _source = _sources!.FirstOrDefault(s => s.Key == d.Source);
+        if (_source is null)
+        {
+            _error = "You don't have access to this report's data source.";
+            return;
+        }
+
+        var visible = _source.Fields.Select(f => f.Key).ToHashSet();
+        _title = d.Title;
+        (_range, _from, _to, _details) = (d.Range, ReportFormat.ToDateTime(d.From), ReportFormat.ToDateTime(d.To), d.ShowDetails);
+        _columns = d.Columns.Where(c => visible.Contains(c.Field)).ToList();
+        _filters = (d.Filters ?? []).Where(f => visible.Contains(f.Field)).Select(f => new FilterRow { Field = f.Field, Operator = f.Operator, Value = f.Value }).ToList();
+        _groups = (d.GroupBy ?? []).Where(visible.Contains).ToList();
+        var sort = d.Sort?.FirstOrDefault(s => visible.Contains(s.Field));
+        (_sortField, _descending) = (sort?.Field, sort?.Descending ?? false);
+    }
+
+    private void SourceChanged(string key)
+    {
+        _source = _sources!.First(s => s.Key == key);
+        (_columns, _filters, _groups, _sortField, _result) = ([], [], [], null, null);
+    }
+
+    private string FieldLabel(string key) => _source?.Fields.FirstOrDefault(f => f.Key == key)?.Label ?? key;
+
+    private string? ValueHint(string key) => _source?.Fields.FirstOrDefault(f => f.Key == key)?.Type switch
+    {
+        ReportColumnType.Date => "yyyy-MM-dd",
+        ReportColumnType.Boolean => "yes or no",
+        _ => null,
+    };
+
+    private void ToggleColumn(string key, bool on)
+    {
+        _columns.RemoveAll(c => c.Field == key);
+        if (on)
+        {
+            _columns.Add(new ReportColumnSpec(key));
+        }
+    }
+
+    private void SetAggregate(string key, ReportAggregate aggregate)
+    {
+        var i = _columns.FindIndex(c => c.Field == key);
+        _columns[i] = _columns[i] with { Aggregate = aggregate };
+    }
+
+    private void Move(string key, int by)
+    {
+        var i = _columns.FindIndex(c => c.Field == key);
+        var j = i + by;
+        if (j >= 0 && j < _columns.Count)
+        {
+            (_columns[i], _columns[j]) = (_columns[j], _columns[i]);
+        }
+    }
+
+    private ReportDefinition Definition() => new(
+        _source!.Key, _columns.ToList(),
+        _filters.Select(f => new ReportFilterSpec(f.Field, f.Operator, f.Value)).ToList(),
+        _groups.Take(3).ToList(),
+        _sortField is null ? null : [new ReportSortSpec(_sortField, _descending)],
+        _range,
+        _range == ReportDateRange.Custom ? ReportFormat.ToDateOnly(_from) : null,
+        _range == ReportDateRange.Custom ? ReportFormat.ToDateOnly(_to) : null,
+        _details,
+        string.IsNullOrWhiteSpace(_title) ? null : _title.Trim());
+
+    private async Task RunAsync()
+    {
+        if (_source is null || _columns.Count == 0)
+        {
+            return;
+        }
+
+        _running = true;
+        _error = null;
+        try
+        {
+            _result = await Writer.RunAsync(Definition());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            (_error, _result) = (ReportFormat.Error(ex), null);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task ExportAsync(ReportFileFormat format)
+    {
+        try
+        {
+            await ReportFormat.DownloadAsync(JS, await Writer.ExportAsync(Definition(), format));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var editing = _saved is { CanEdit: true } ? _saved : null;
+        var dialog = await DialogService.ShowAsync<SaveReportDialog>(editing is null ? "Save report" : "Save changes",
+            new DialogParameters<SaveReportDialog> { { d => d.Existing, editing } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveReportRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            request = request with { Definition = Definition() };
+            if (editing is null)
+            {
+                var created = await Saved.CreateAsync(request);
+                Snackbar.Add($"Saved \"{created.Name}\".", Severity.Success);
+                Nav.NavigateTo($"reports/saved/{created.Id}");
+            }
+            else
+            {
+                _saved = await Saved.UpdateAsync(editing.Id, request);
+                Snackbar.Add("Saved.", Severity.Success);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+}

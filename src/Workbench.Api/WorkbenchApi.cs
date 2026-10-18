@@ -43,6 +43,7 @@ public static class WorkbenchApi
         v1.MapCashEndpoints();
         v1.MapPayrollLeaveEndpoints();
         v1.MapPerDiemResourcingEndpoints();
+        v1.MapReportEndpoints();
 
         return app;
     }

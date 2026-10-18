@@ -1,0 +1,104 @@
+@page "/reports/print"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@inject IStandardReportService Standard
+@inject IReportWriterService Writer
+@inject ISavedReportService Saved
+@inject IJSRuntime JS
+
+<PageTitle>@(_result?.Title ?? "Report") · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="reports">← Reports</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="() => ReportFormat.PrintAsync(JS)" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+<div class="page" data-testid="print-view">
+    @if (_error is not null)
+    {
+        <p class="error" data-testid="load-error">@_error</p>
+    }
+    else if (_result is null)
+    {
+        <p>Loading…</p>
+    }
+    else
+    {
+        <h1>@_result.Title</h1>
+        @if (_result.Subtitle is not null)
+        {
+            <p class="small">@_result.Subtitle</p>
+        }
+        <p class="small">Generated @_result.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC</p>
+        <table class="lines">
+            <thead>
+                <tr>
+                    @foreach (var c in _result.Columns)
+                    {
+                        <th class="@(ReportFormat.IsNumeric(c.Type) ? "num" : "")">@c.Label</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _result.Rows)
+                {
+                    <tr class="@(row.Kind == ReportRowKind.Detail ? "" : "total")">
+                        @for (var i = 0; i < _result.Columns.Count; i++)
+                        {
+                            var c = _result.Columns[i];
+                            <td class="@(ReportFormat.IsNumeric(c.Type) ? "num" : "")" style="@(i == 0 && row.Level > 0 ? $"padding-left:{6 + row.Level * 12}px" : "")">@ReportFormat.Display(c.Type, row.Values[i])</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @foreach (var note in _result.Notes)
+        {
+            <p class="small">@note</p>
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "key")]
+    public string? Key { get; set; }
+
+    [SupplyParameterFromQuery(Name = "p")]
+    public string? EncodedParameters { get; set; }
+
+    [SupplyParameterFromQuery(Name = "def")]
+    public string? EncodedDefinition { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    public Guid? SavedId { get; set; }
+
+    private ReportResultDto? _result;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (SavedId is { } id)
+            {
+                _result = await Saved.RunAsync(id);
+            }
+            else if (Key is not null)
+            {
+                _result = await Standard.RunAsync(Key, ReportFormat.Decode<ReportParameters>(EncodedParameters) ?? new ReportParameters());
+            }
+            else if (ReportFormat.Decode<ReportDefinition>(EncodedDefinition) is { } definition)
+            {
+                _result = await Writer.RunAsync(definition);
+            }
+            else
+            {
+                _error = "Nothing to print.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            _error = ReportFormat.Error(ex);
+        }
+    }
+}

@@ -1,0 +1,79 @@
+@* A report result: totals and subtotals in bold, indented levels, drill-down and row links. *@
+@if (Result.Rows.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="report-empty">No rows.</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-2">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="report-table">
+            <thead>
+                <tr>
+                    @foreach (var c in Result.Columns)
+                    {
+                        <th style="@(ReportFormat.IsNumeric(c.Type) ? "text-align:right" : "")">@c.Label</th>
+                    }
+                    @if (HasActions)
+                    {
+                        <th class="no-print"></th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Result.Rows)
+                {
+                    var bold = row.Kind != ReportRowKind.Detail;
+                    <tr style="@(bold ? "font-weight:600;background:var(--mud-palette-background-gray)" : "")" data-kind="@row.Kind">
+                        @for (var i = 0; i < Result.Columns.Count; i++)
+                        {
+                            var c = Result.Columns[i];
+                            var v = row.Values[i];
+                            var style = (ReportFormat.IsNumeric(c.Type) ? "text-align:right;white-space:nowrap;" : "") + (i == 0 && row.Level > 0 ? $"padding-left:{8 + row.Level * 16}px;" : "");
+                            <td style="@style" class="@(ReportFormat.IsNegative(c.Type, v) ? "mud-error-text" : "")">
+                                @if (i == 0 && row.Link is not null && !Print)
+                                {
+                                    <MudLink Href="@row.Link">@ReportFormat.Display(c.Type, v)</MudLink>
+                                }
+                                else
+                                {
+                                    @ReportFormat.Display(c.Type, v)
+                                }
+                            </td>
+                        }
+                        @if (HasActions)
+                        {
+                            <td class="no-print" style="white-space:nowrap">
+                                @if (row.DrillKey is not null && OnDrill.HasDelegate)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" Size="Size.Small" aria-label="Show source rows"
+                                                   OnClick="() => OnDrill.InvokeAsync(row)" data-testid="drill" />
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+@foreach (var note in Result.Notes)
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@note</MudText>
+}
+@if (Result.Truncated)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">The data source had more rows than a report may hold; narrow the filters.</MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ReportResultDto Result { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ReportRowDto> OnDrill { get; set; }
+
+    [Parameter]
+    public bool Print { get; set; }
+
+    private bool HasActions => !Print && OnDrill.HasDelegate && Result.Rows.Any(r => r.DrillKey is not null);
+}

@@ -15,6 +15,7 @@ using Workbench.Application.Payroll;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
+using Workbench.Application.Reports;
 using Workbench.Application.Assets;
 using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
@@ -61,6 +62,7 @@ public static class DependencyInjection
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
+        services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
