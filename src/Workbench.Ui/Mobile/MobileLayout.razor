@@ -1,0 +1,36 @@
+@* The phone layout for /m: a compact app bar, the page, and a bottom navigation bar with big touch targets. *@
+@inherits LayoutComponentBase
+
+<HeadContent>
+    <link rel="stylesheet" href="_content/Workbench.Ui/mobile.css" />
+</HeadContent>
+
+<MudThemeProvider Theme="WorkbenchTheme.Default" />
+<MudPopoverProvider />
+<MudDialogProvider FullWidth="true" MaxWidth="MaxWidth.Small" />
+<MudSnackbarProvider />
+
+<CascadingValue Value="this" IsFixed="true">
+<div class="wb-m" data-testid="mobile-layout">
+    <MudAppBar Elevation="1" Dense="true" Fixed="true" Class="wb-m-appbar">
+        <MudText Typo="Typo.h6" HtmlTag="span">Workbench</MudText>
+        <MudSpacer />
+        <NotificationBell />
+        <MudIconButton Icon="@Icons.Material.Filled.DesktopWindows" Color="Color.Inherit" Href="" aria-label="Full site" title="Full site" />
+        <UserMenu />
+    </MudAppBar>
+
+    <main class="wb-m-main">
+        @Body
+    </main>
+
+    <MobileBottomNav />
+</div>
+</CascadingValue>
+
+@code {
+    /// <summary>Raised after the user approves or rejects something, so the Approvals badge recounts.</summary>
+    public event Action? ApprovalsChanged;
+
+    public void NotifyApprovalsChanged() => ApprovalsChanged?.Invoke();
+}
