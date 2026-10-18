@@ -56,3 +56,7 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Costpoint:Source`: `None` (default), `Csv`, `Rest` or `Database` (see `src/Workbench.Costpoint/README.md`)
 - `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)
+- `Timekeeping:Cadence`: timesheet period, `Weekly` (Monday–Sunday, default) or `SemiMonthly` (1st–15th, 16th–end)
+- `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
+- `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
+- `Timekeeping:Admins`: emails that approve timesheets of employees without a supervisor (until the Admin role exists)
