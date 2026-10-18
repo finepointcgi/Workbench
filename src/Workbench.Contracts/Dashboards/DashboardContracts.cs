@@ -15,8 +15,8 @@ public enum WidgetType
     ScheduleHealth,
 
     /// <summary>
-    /// Extension point, not built yet: budget, actuals and burn for a project from native project financials.
-    /// TODO(financials): compute in WidgetDataService once the financials contracts land, then offer it in WidgetDialog.
+    /// Budget, actual cost, EAC and % spent for the project whose plan sheet is <c>Config.SheetId</c>.
+    /// Only Finance, Admin and the project's manager see the figures.
     /// </summary>
     ProjectFinancials,
 

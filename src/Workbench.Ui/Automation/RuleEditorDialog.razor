@@ -268,7 +268,7 @@
         {
             _error = ex.Message;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't test the rule: {ex.Message}", Severity.Error);
         }
@@ -289,7 +289,7 @@
         {
             _error = ex.Message;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't save the rule: {ex.Message}", Severity.Error);
         }

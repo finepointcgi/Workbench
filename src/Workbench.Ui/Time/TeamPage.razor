@@ -63,7 +63,7 @@
         {
             _status = await Approvals.GetTeamStatusAsync(date);
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException)
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add(ex.Message, Severity.Error);
         }

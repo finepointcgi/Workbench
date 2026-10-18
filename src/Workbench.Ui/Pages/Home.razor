@@ -117,7 +117,7 @@ else if (_work is not null)
         {
             _work = await MyWorkService.GetAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
         }
@@ -184,7 +184,7 @@ else if (_work is not null)
                 new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values));
             Snackbar.Add($"\"{item.Title}\" is now {(value.Length == 0 ? "unset" : value)}", Severity.Success);
         }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't update the status: {ex.Message}", Severity.Error);
         }

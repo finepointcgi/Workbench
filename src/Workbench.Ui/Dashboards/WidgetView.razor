@@ -118,6 +118,26 @@ else
             }
             break;
 
+        case WidgetType.ProjectFinancials when Data.ProjectFinancials is { } pf:
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                @pf.ProjectCode · @pf.ProjectName@(pf.BudgetVersionName is { } v ? $" · {v}" : "")
+            </MudText>
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="6" sm="3"><Stat Label="Budget" Value="@FormatNumber(pf.Totals.BudgetAmount, true)" /></MudItem>
+                <MudItem xs="6" sm="3"><Stat Label="Actual" Value="@FormatNumber(pf.Totals.ActualCost, true)" /></MudItem>
+                <MudItem xs="6" sm="3"><Stat Label="EAC" Value="@FormatNumber(pf.Totals.EacAmount, true)" /></MudItem>
+                <MudItem xs="6" sm="3">
+                    <Stat Label="VAC" Value="@FormatNumber(pf.Totals.VacAmount, true)" Color="@(pf.Totals.VacAmount < 0 ? Color.Error : Color.Default)" />
+                </MudItem>
+            </MudGrid>
+            @if (pf.Totals.PercentSpent is { } spent)
+            {
+                <MudProgressLinear Value="@((double)Math.Min(spent, 1m) * 100)" Color="@(spent > 1m ? Color.Error : spent > 0.9m ? Color.Warning : Color.Primary)" Class="mt-2" data-financials-spent />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@spent.ToString("P0", Culture) of budget spent</MudText>
+            }
+            <MudLink Href="@($"projects/{pf.ProjectId}/financials")" Typo="Typo.caption">Open financials</MudLink>
+            break;
+
         case WidgetType.RichText:
             <MarkdownView Source="@Data.Markdown" />
             break;

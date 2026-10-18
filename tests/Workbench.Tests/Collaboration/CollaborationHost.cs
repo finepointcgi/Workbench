@@ -21,6 +21,7 @@ internal sealed class CollaborationHost : IAsyncDisposable
         services.AddSingleton(TestDb.CreateFactory());
         services.AddSingleton<IBlobStore>(Blobs);
         services.AddSingleton<ICurrentUser>(User);
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddWorkbenchApplication();
         _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _scope = _provider.CreateAsyncScope();

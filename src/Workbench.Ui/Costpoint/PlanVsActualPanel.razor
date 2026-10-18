@@ -106,7 +106,7 @@ else
                 new() { Name = "Actual cost", Data = new ChartData<double>(_data.Rows.Select(r => (double)r.ActualCost).ToList()) },
             ];
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load plan vs actual: {ex.Message}", Severity.Error);
         }

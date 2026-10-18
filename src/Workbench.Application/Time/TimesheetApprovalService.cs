@@ -1,21 +1,25 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
+using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Time;
 using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Time;
 
 /// <summary>
-/// Supervisor approval. DCAA expects an independent review: the employee's supervisor (or an admin when there is none)
+/// Supervisor approval. DCAA expects an independent review: the employee's supervisor (or an Admin when there is none)
 /// approves or rejects with a reason, never edits the hours, and never approves their own timesheet.
+/// Timekeeper, Finance and Admin see every employee's team status; approving still follows the supervisor rule.
 /// </summary>
 public sealed class TimesheetApprovalService(
     IWorkbenchDbContextFactory dbFactory,
     ICurrentUser currentUser,
     AuditRecorder audit,
     TimekeepingClock clock,
-    ITimekeepingRoles roles,
+    AccessControl access,
     ITimesheetNotifier notifier) : ITimesheetApprovalService
 {
     public async Task<bool> IsApproverAsync(CancellationToken cancellationToken = default)
@@ -46,7 +50,9 @@ public sealed class TimesheetApprovalService(
     {
         var (start, end) = clock.PeriodFor(date);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var reports = (await ReportsAsync(db, cancellationToken)).Where(e => e.HireDate <= end && (e.TerminationDate is null || e.TerminationDate >= start)).ToList();
+        var everyone = (await access.GetOrgRolesAsync(cancellationToken)).CanViewAllTimesheets();
+        var team = everyone ? await db.Set<Employee>().AsNoTracking().ToListAsync(cancellationToken) : await ReportsAsync(db, cancellationToken);
+        var reports = team.Where(e => e.HireDate <= end && (e.TerminationDate is null || e.TerminationDate >= start)).ToList();
         var ids = reports.Select(e => e.Id).ToList();
         var sheets = await db.Set<Timesheet>().AsNoTracking().Include(t => t.Entries)
             .Where(t => t.PeriodStart == start && ids.Contains(t.EmployeeId))
@@ -72,9 +78,9 @@ public sealed class TimesheetApprovalService(
             throw new UnauthorizedAccessException("You can't approve or reject your own timesheet.");
         }
 
-        if (!await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, roles, cancellationToken))
+        if (!await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetOrgRolesAsync(cancellationToken), cancellationToken))
         {
-            throw new UnauthorizedAccessException("Only the employee's supervisor (or an admin when there's no supervisor) can review this timesheet.");
+            throw new UnauthorizedAccessException("Only the employee's supervisor (or an administrator when there's no supervisor) can review this timesheet.");
         }
 
         if (sheet.Status != TimesheetStatus.Submitted)
@@ -103,8 +109,8 @@ public sealed class TimesheetApprovalService(
 
         audit.Record(db, TimesheetQueries.AuditEntityType, sheet.Id, approve ? "Approved" : "Rejected", before, sheet.Snapshot(), reason);
         await db.SaveChangesAsync(cancellationToken);
-        await notifier.NotifyAsync(new TimesheetNotification(approve ? TimesheetEvent.Approved : TimesheetEvent.Rejected, sheet.Id, owner.Email, owner.Email,
-            sheet.PeriodStart, reason), cancellationToken);
+        await notifier.NotifyAsync(new TimesheetNotification(approve ? TimesheetEvent.Approved : TimesheetEvent.Rejected, sheet.Id, owner.DisplayName, owner.Email,
+            [owner.Email], sheet.PeriodStart, sheet.Total(), reviewer?.DisplayName ?? currentUser.Email, reason), cancellationToken);
         return sheet.ToDto(owner);
     }
 
@@ -113,7 +119,7 @@ public sealed class TimesheetApprovalService(
     {
         var email = currentUser.Email.Trim().ToLowerInvariant();
         var me = await TimesheetQueries.FindByEmailAsync(db, email, cancellationToken);
-        var isAdmin = roles.IsAdmin(email);
+        var isAdmin = (await access.GetOrgRolesAsync(cancellationToken)).IsAdmin();
         var myId = me?.Id;
         return await db.Set<Employee>().AsNoTracking()
             .Where(e => e.Email != email && ((myId != null && e.SupervisorId == myId) || (isAdmin && e.SupervisorId == null)))

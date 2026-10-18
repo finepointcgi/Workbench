@@ -1,3 +1,5 @@
+using Workbench.Contracts.Financials;
+
 namespace Workbench.Contracts.Dashboards;
 
 /// <param name="Label">What was measured, e.g. "Sum of Budget".</param>
@@ -60,11 +62,14 @@ public sealed record WidgetDataDto(
     ItemListData? ItemList = null,
     ScheduleHealthData? Schedule = null,
     string? Markdown = null,
-    ContractFundingData? ContractFunding = null);
+    ContractFundingData? ContractFunding = null,
+    ProjectFinancialSummaryDto? ProjectFinancials = null);
 
 /// <summary>
 /// Computes widget data on the server. Sheet data is read through <c>ISheetService</c>/<c>IItemService</c>, the
 /// scheduling contract and the project-accounting contracts, so it's limited to what the current user can see.
+/// Project financials and contract funding follow <c>IFinancialAccessService</c>: a widget the viewer may not read
+/// comes back with an <c>Error</c> instead of figures.
 /// </summary>
 public interface IWidgetDataService
 {

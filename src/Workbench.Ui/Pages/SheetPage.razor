@@ -7,6 +7,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject Workbench.Contracts.ProjectAccounting.IProjectService ProjectService
+@inject Workbench.Contracts.Financials.IFinancialAccessService FinancialAccess
 
 <PageTitle>@(_sheet?.Summary.Name ?? "Sheet") · Workbench</PageTitle>
 
@@ -96,9 +97,12 @@ else
             _sheet = await SheetService.GetAsync(SheetId);
             _items = _sheet is null ? [] : await ItemService.ListAsync(SheetId);
             _access = new SheetAccess(_sheet is null ? null : await Permissions.GetMyRoleAsync(SheetId));
-            _project = _sheet is null ? null : await ProjectService.GetProjectForSheetAsync(SheetId);
+            var project = _sheet is null ? null : await ProjectService.GetProjectForSheetAsync(SheetId);
+
+            // The Financials tab only for those who may read the project's financials (Finance, Admin, its manager).
+            _project = project is not null && await FinancialAccess.CanReadProjectFinancialsAsync(project.Id) ? project : null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load the sheet: {ex.Message}", Severity.Error);
         }

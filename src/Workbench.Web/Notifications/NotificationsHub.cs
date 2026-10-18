@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Workbench.Application.Automation;
 using Workbench.Application.Notifications;
+using Workbench.Application.Time;
 using Workbench.Contracts.Collaboration;
 
 namespace Workbench.Web.Notifications;
@@ -50,13 +51,14 @@ public static class NotificationsHosting
 {
     /// <summary>
     /// Server-side automation: the notifications hub relay, rule actions attributed to "Workbench Automation",
-    /// and the hourly date-trigger and digest services. Call after the infrastructure (which registers ICurrentUser).
+    /// the hourly date-trigger and digest services, and the daily missing-timesheet reminder. Call after the infrastructure (which registers ICurrentUser).
     /// </summary>
     public static IServiceCollection AddWorkbenchNotificationsHub(this IServiceCollection services)
     {
         services.AddSignalR();
         services.AddHostedService<NotificationRelay>();
         services.AddWorkbenchAutomationHosting();
+        services.AddWorkbenchTimekeepingHosting();
         return services;
     }
 

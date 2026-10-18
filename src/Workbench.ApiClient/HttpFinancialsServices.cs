@@ -60,6 +60,15 @@ public sealed class HttpFinancialExportService(HttpClient http) : IFinancialExpo
             .ReadAsync<FinancialExportFile>(cancellationToken);
 }
 
+public sealed class HttpFinancialAccessService(HttpClient http) : IFinancialAccessService
+{
+    public async Task<bool> CanReadProjectFinancialsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/projects/{projectId}/financials/access", cancellationToken)).ReadAsync<bool>(cancellationToken);
+
+    public async Task<bool> CanReadContractFundingAsync(Guid contractId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/contracts/{contractId}/funding/access", cancellationToken)).ReadAsync<bool>(cancellationToken);
+}
+
 internal static class FinancialsUrls
 {
     public static string With(string path, Guid? budgetVersionId, Guid? forecastVersionId)
@@ -86,6 +95,7 @@ public static class FinancialsClientRegistration
         services.AddHttpClient<IBudgetService, HttpBudgetService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProjectFinancialsService, HttpProjectFinancialsService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IFinancialExportService, HttpFinancialExportService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IFinancialAccessService, HttpFinancialAccessService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }
 }

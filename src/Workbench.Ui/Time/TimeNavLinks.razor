@@ -1,23 +1,26 @@
 @inject ITimesheetApprovalService Approvals
+@inject ICurrentUserContext CurrentUser
 
 <MudNavLink Href="time" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.AccessTime">Time</MudNavLink>
-@if (_isApprover)
+@if (_showApprovals)
 {
     <MudNavLink Href="time/approvals" Icon="@Icons.Material.Filled.FactCheck">Approvals</MudNavLink>
 }
 
 @code {
-    private bool _isApprover;
+    private bool _showApprovals;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _isApprover = await Approvals.IsApproverAsync();
+            // Supervisors (anyone with timesheets to approve), administrators and timekeepers.
+            var me = await CurrentUser.GetAsync();
+            _showApprovals = me.IsAdmin || me.Roles.HasFlag(OrgRoles.Timekeeper) || await Approvals.IsApproverAsync();
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {
-            // Server unreachable: leave the approvals link hidden.
+            // Server unreachable or not signed in: leave the approvals link hidden.
         }
     }
 }

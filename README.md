@@ -67,4 +67,5 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Timekeeping:Cadence`: timesheet period, `Weekly` (Monday–Sunday, default) or `SemiMonthly` (1st–15th, 16th–end)
 - `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
 - `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
-- `Timekeeping:Admins`: emails that approve timesheets of employees without a supervisor (until the Admin role exists)
+- `Timekeeping:MissingTimeReminderHour`: local hour from which employees with no hours for the previous business day get a reminder (default 9)
+- Timesheet approval follows roles, not configuration: the supervisor approves; administrators approve for employees without a supervisor; Timekeeper, Finance and Admin can view every timesheet

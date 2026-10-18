@@ -19,10 +19,10 @@ public sealed class TimekeepingOptions
     public int LateEntryBusinessDays { get; set; } = 1;
 
     /// <summary>
-    /// Emails allowed to approve timesheets of employees who have no supervisor.
-    /// TODO: replace with the Admin role once authentication and roles land.
+    /// Local hour (0–23, in <see cref="TimeZone"/>) from which the daily "no hours entered for the previous business day"
+    /// reminder goes out.
     /// </summary>
-    public List<string> Admins { get; set; } = [];
+    public int MissingTimeReminderHour { get; set; } = 9;
 }
 
 /// <summary>Today's date in the configured time zone, and the derived timesheet periods (periods are never stored).</summary>
@@ -38,7 +38,9 @@ public sealed class TimekeepingClock(TimeProvider clock, IOptions<TimekeepingOpt
 
     public DateOnly Today => LocalDate(UtcNow);
 
-    public DateOnly LocalDate(DateTime utc) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone));
+    public DateOnly LocalDate(DateTime utc) => DateOnly.FromDateTime(LocalTime(utc));
+
+    public DateTime LocalTime(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
 
     public (DateOnly Start, DateOnly End) PeriodFor(DateOnly date) => PeriodFor(date, options.Value.Cadence);
 
@@ -94,32 +96,25 @@ public sealed class TimekeepingClock(TimeProvider clock, IOptions<TimekeepingOpt
         BusinessDaysAfter(workDate, LocalDate(firstEnteredAtUtc)) > options.Value.LateEntryBusinessDays;
 }
 
-/// <summary>Who may act as a timekeeping admin. The default reads <see cref="TimekeepingOptions.Admins"/>.</summary>
-public interface ITimekeepingRoles
-{
-    bool IsAdmin(string email);
-}
-
-public sealed class ConfiguredTimekeepingRoles(IOptions<TimekeepingOptions> options) : ITimekeepingRoles
-{
-    public bool IsAdmin(string email) => options.Value.Admins.Any(a => string.Equals(a.Trim(), email, StringComparison.OrdinalIgnoreCase));
-}
-
 public enum TimesheetEvent { Submitted, Approved, Rejected, Reopened }
 
-/// <summary>A timesheet event worth telling someone about: the approver on submit, the employee otherwise.</summary>
-public sealed record TimesheetNotification(TimesheetEvent Event, Guid TimesheetId, string EmployeeEmail, string? RecipientEmail, DateOnly PeriodStart, string? Reason);
-
 /// <summary>
-/// Sends timesheet notifications. The default does nothing.
-/// TODO: wire to INotificationPublisher once the rules/notifications work is merged.
+/// A timesheet event worth telling someone about. <see cref="Recipients"/> are already worked out by the service
+/// (the approvers on submit, the employee on approve or reject, both on reopen) and never include the actor.
 /// </summary>
+public sealed record TimesheetNotification(
+    TimesheetEvent Event,
+    Guid TimesheetId,
+    string EmployeeName,
+    string EmployeeEmail,
+    IReadOnlyList<string> Recipients,
+    DateOnly PeriodStart,
+    decimal Hours,
+    string ActorName,
+    string? Reason);
+
+/// <summary>Sends timesheet notifications. The registered implementation is <see cref="PublishingTimesheetNotifier"/>.</summary>
 public interface ITimesheetNotifier
 {
     Task NotifyAsync(TimesheetNotification notification, CancellationToken cancellationToken = default);
-}
-
-public sealed class NoOpTimesheetNotifier : ITimesheetNotifier
-{
-    public Task NotifyAsync(TimesheetNotification notification, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

@@ -50,6 +50,8 @@
         NotificationKinds.TimesheetApproved => Icons.Material.Outlined.TaskAlt,
         NotificationKinds.TimesheetRejected => Icons.Material.Outlined.Undo,
         NotificationKinds.ExpenseApproval => Icons.Material.Outlined.ReceiptLong,
+        NotificationKinds.ExpenseApproved => Icons.Material.Outlined.TaskAlt,
+        NotificationKinds.ExpenseRejected => Icons.Material.Outlined.Undo,
         _ when kind.StartsWith("timesheet.", StringComparison.Ordinal) => Icons.Material.Outlined.Schedule,
         _ => Icons.Material.Outlined.Notifications,
     };

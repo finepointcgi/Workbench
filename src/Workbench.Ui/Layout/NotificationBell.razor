@@ -88,7 +88,7 @@
             _latest = page.Items;
             _unread = page.UnreadCount;
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             _latest ??= [];
         }

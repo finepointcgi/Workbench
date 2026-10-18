@@ -66,7 +66,7 @@
         {
             _sheets = await SheetService.ListAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
         }

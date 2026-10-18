@@ -94,6 +94,14 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
   `WorkbenchForbiddenException` (403, a subclass of `UnauthorizedAccessException`). UI catch filters should include it.
 - Views get the user's sheet role as a cascading `SheetAccess` (`CanEdit`, `CanComment`) from `SheetPage`; hide edit
   affordances with it. A missing cascade means full access, so components still render in tests.
+- Project accounting rules (`ProjectAccess`, also `IFinancialAccessService` for the UI): labor cost (the labor distribution)
+  is Finance/Admin; project financials, budgets (reads and writes) and financial exports are Finance, Admin or the project's
+  manager; contract funding is Finance, Admin or the manager of a project on that contract; hours and daily-entry reports
+  show everyone to Timekeeper/Finance/Admin, direct reports to a supervisor, and only yourself otherwise; a project's ODC
+  list is Finance/Admin/PM, others see only their own entries. Automation rules: Viewer reads, Editor changes. Dashboards:
+  the owner (or an admin) edits; workspace members view workspace dashboards. Pages under `/setup` use `SetupLayout`
+  (Finance/Admin, friendly 403 via `ForbiddenNotice`).
+- Timesheets are approved by the supervisor, or by Admins for employees without one; Timekeeper/Finance/Admin view all.
 - Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
   analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
 ## Notifications (any feature)

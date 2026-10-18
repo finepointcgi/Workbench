@@ -2,12 +2,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Sheets;
+using Workbench.Contracts.Automation;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Costpoint;
+using Workbench.Contracts.Dashboards;
+using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
+using Workbench.Contracts.Time;
 
 namespace Workbench.Application.Identity;
 
@@ -32,6 +37,8 @@ public static class IdentityRegistration
         services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         services.AddScoped<IWorkspaceMembershipService, WorkspaceMembershipService>();
         services.AddScoped<ISheetWorkspacePicker, EditableWorkspacePicker>();
+        services.AddScoped<ProjectAccess>();
+        services.AddScoped<IFinancialAccessService>(sp => sp.GetRequiredService<ProjectAccess>());
 
         services.Decorate<ISheetService, PermissionCheckingSheetService>();
         services.Decorate<IItemService, PermissionCheckingItemService>();
@@ -47,6 +54,13 @@ public static class IdentityRegistration
         services.Decorate<IProjectService, PermissionCheckingProjectService>();
         services.Decorate<IFiscalCalendarService, PermissionCheckingFiscalCalendarService>();
         services.Decorate<IAuditLogService, PermissionCheckingAuditLogService>();
+        services.Decorate<ITimeReportService, PermissionCheckingTimeReportService>();
+        services.Decorate<IProjectFinancialsService, PermissionCheckingProjectFinancialsService>();
+        services.Decorate<IBudgetService, PermissionCheckingBudgetService>();
+        services.Decorate<IFinancialExportService, PermissionCheckingFinancialExportService>();
+        services.Decorate<IOdcService, PermissionCheckingOdcService>();
+        services.Decorate<IRuleService, PermissionCheckingRuleService>();
+        services.Decorate<IDashboardService, PermissionCheckingDashboardService>();
         return services;
     }
 

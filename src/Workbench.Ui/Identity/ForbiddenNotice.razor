@@ -1,0 +1,15 @@
+@* A friendly 403 for pages the signed-in user may not open. The server refuses the underlying calls as well. *@
+<PageTitle>No access · Workbench</PageTitle>
+<MudPaper Outlined="true" Class="pa-6 mt-4" data-forbidden>
+    <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">@Title</MudText>
+    <MudText Class="mud-text-secondary mb-4">@Message</MudText>
+    <MudButton Href="" Variant="Variant.Outlined" Color="Color.Primary">Back to My Work</MudButton>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "You don't have access to this page";
+
+    [Parameter]
+    public string? Message { get; set; }
+}

@@ -162,9 +162,7 @@
     private Guid? _contractId;
     private IReadOnlyList<ContractDto>? _contracts;
 
-    // ProjectFinancials is an extension point with no data yet. TODO(financials): offer it once it computes.
-    private static readonly WidgetType[] OfferedTypes =
-        Enum.GetValues<WidgetType>().Where(t => t != WidgetType.ProjectFinancials).ToArray();
+    private static readonly WidgetType[] OfferedTypes = Enum.GetValues<WidgetType>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -210,6 +208,7 @@
     private string? SheetHelp() => _type switch
     {
         WidgetType.ScheduleHealth => "Sheets with scheduling turned on",
+        WidgetType.ProjectFinancials => "A project's plan sheet. Only Finance and the project's manager see the figures.",
         _ => null,
     };
 

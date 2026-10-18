@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Time;
+using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Time;
@@ -22,10 +24,10 @@ internal static class TimesheetQueries
     }
 
     /// <summary>
-    /// DCAA: timesheets are approved by the employee's supervisor, or by an admin when the employee has no supervisor.
-    /// Nobody approves their own timesheet.
+    /// DCAA: timesheets are approved by the employee's supervisor, or by an Admin when the employee has no supervisor.
+    /// Nobody approves their own timesheet. Timekeeper and Finance can view timesheets but never approve them as such.
     /// </summary>
-    public static async Task<bool> CanApproveAsync(IWorkbenchDbContext db, Employee owner, string actorEmail, ITimekeepingRoles roles, CancellationToken cancellationToken)
+    public static async Task<bool> CanApproveAsync(IWorkbenchDbContext db, Employee owner, string actorEmail, OrgRoles actorRoles, CancellationToken cancellationToken)
     {
         if (string.Equals(owner.Email, actorEmail, StringComparison.OrdinalIgnoreCase))
         {
@@ -38,7 +40,19 @@ internal static class TimesheetQueries
             return supervisor is not null && string.Equals(supervisor.Email, actorEmail, StringComparison.OrdinalIgnoreCase);
         }
 
-        return roles.IsAdmin(actorEmail);
+        return actorRoles.IsAdmin();
+    }
+
+    /// <summary>
+    /// Who approves the employee's timesheets: their supervisor, or every administrator when they have none.
+    /// The employee is never their own approver.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> ApproverEmailsAsync(IWorkbenchDbContext db, Employee owner, CancellationToken cancellationToken)
+    {
+        var emails = owner.SupervisorId is { } supervisorId
+            ? await db.Set<Employee>().AsNoTracking().Where(e => e.Id == supervisorId).Select(e => e.Email).ToListAsync(cancellationToken)
+            : await db.Set<AppUser>().AsNoTracking().Where(u => u.IsAdmin).Select(u => u.Email).ToListAsync(cancellationToken);
+        return emails.Where(e => !string.Equals(e, owner.Email, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     public static decimal Total(this Timesheet sheet) => sheet.Entries.Sum(e => e.Hours);

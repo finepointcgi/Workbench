@@ -110,7 +110,7 @@
             _status = await CostpointService.GetStatusAsync();
             _runs = await CostpointService.ListSyncRunsAsync(20);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load Costpoint status: {ex.Message}", Severity.Error);
         }

@@ -9,7 +9,7 @@ namespace Workbench.Application.Time;
 /// <summary>
 /// Timekeeping reports. "Approved hours" are entries on timesheets whose status is Approved; a reopened timesheet drops
 /// out until it is approved again.
-/// TODO: restrict to the Finance role once authentication and roles land.
+/// Access rules live in <c>PermissionCheckingTimeReportService</c>.
 /// </summary>
 public sealed class TimeReportService(IWorkbenchDbContextFactory dbFactory, TimekeepingClock clock) : ITimeReportService
 {

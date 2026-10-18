@@ -30,6 +30,8 @@ internal static class FinancialsEndpoints
             s.GetWbsFinancialsAsync(id, budgetVersionId, forecastVersionId, ct));
         financials.MapGet("/projects/{id:guid}/financials/time-phased", (Guid id, Guid? budgetVersionId, IProjectFinancialsService s, CancellationToken ct) =>
             s.GetTimePhasedBurnAsync(id, budgetVersionId, ct));
+        financials.MapGet("/projects/{id:guid}/financials/access", (Guid id, IFinancialAccessService s, CancellationToken ct) => s.CanReadProjectFinancialsAsync(id, ct));
+        financials.MapGet("/contracts/{id:guid}/funding/access", (Guid id, IFinancialAccessService s, CancellationToken ct) => s.CanReadContractFundingAsync(id, ct));
         financials.MapGet("/contracts/funding", (IProjectFinancialsService s, CancellationToken ct) => s.ListContractFundingAsync(ct));
         financials.MapGet("/contracts/{id:guid}/funding", (Guid id, IProjectFinancialsService s, CancellationToken ct) => s.GetContractFundingAsync(id, ct));
 
