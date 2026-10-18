@@ -1941,6 +1941,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<string>("Formula")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsRestricted")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)

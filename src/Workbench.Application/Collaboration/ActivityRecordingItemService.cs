@@ -103,16 +103,31 @@ public sealed class ActivityRecordingItemService(
         Add("Finish", before.Finish?.ToString("yyyy-MM-dd"), after.Finish?.ToString("yyyy-MM-dd"));
         Add("WBS", before.CostpointWbsId, after.CostpointWbsId);
 
+        // Everyone on the sheet reads its activity, so a restricted column's change is recorded without its name or values.
+        var restricted = Sheets.RestrictedColumns.Of(columns);
+        var restrictedChanged = false;
         var keys = before.Values.Keys.Union(after.Values.Keys);
         foreach (var key in keys)
         {
-            var name = columns.FirstOrDefault(c => c.Id.ToString() == key)?.Name;
-            if (name is null)
+            var column = columns.FirstOrDefault(c => c.Id.ToString() == key);
+            if (column is null)
             {
                 continue;
             }
 
-            Add(name, before.Values.GetValueOrDefault(key), after.Values.GetValueOrDefault(key));
+            if (restricted.Contains(column.Id))
+            {
+                restrictedChanged |= (string.IsNullOrEmpty(before.Values.GetValueOrDefault(key)) ? null : before.Values.GetValueOrDefault(key))
+                    != (string.IsNullOrEmpty(after.Values.GetValueOrDefault(key)) ? null : after.Values.GetValueOrDefault(key));
+                continue;
+            }
+
+            Add(column.Name, before.Values.GetValueOrDefault(key), after.Values.GetValueOrDefault(key));
+        }
+
+        if (restrictedChanged)
+        {
+            changes.Add("Restricted column changed");
         }
 
         return changes;

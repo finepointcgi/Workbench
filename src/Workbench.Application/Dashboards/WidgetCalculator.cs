@@ -135,7 +135,8 @@ public static class WidgetCalculator
         }
 
         return sheet.Columns.FirstOrDefault(c => c.Id == columnId)
-            ?? throw new WidgetConfigException($"{what} no longer exists on \"{sheet.Summary.Name}\". Edit the widget to pick another.");
+            ?? throw new WidgetConfigException(
+                $"{what} isn't on \"{sheet.Summary.Name}\" any more, or it's restricted to Finance and the workspace's owners.");
     }
 
     private static ColumnDto NumericColumn(SheetDetail sheet, Guid? columnId, string missing)

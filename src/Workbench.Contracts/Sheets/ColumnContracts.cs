@@ -13,12 +13,24 @@ public enum ColumnKind
     CostpointLookup,
 }
 
-public sealed record ColumnDto(Guid Id, string Name, ColumnKind Type, int Order, IReadOnlyList<string> Options, string? Formula);
+/// <summary>
+/// A sheet column. <paramref name="IsRestricted"/>: marked "Finance and owners only". <paramref name="ReadsRestricted"/>: a
+/// formula column that reads a restricted column, so it is restricted too. Only people who may see restricted columns
+/// (Finance, administrators, the workspace's owners) ever receive such columns.
+/// </summary>
+public sealed record ColumnDto(
+    Guid Id, string Name, ColumnKind Type, int Order, IReadOnlyList<string> Options, string? Formula, bool IsRestricted = false, bool ReadsRestricted = false)
+{
+    public bool IsEffectivelyRestricted => IsRestricted || ReadsRestricted;
+}
 
-public sealed record CreateColumnRequest(string Name, ColumnKind Type, IReadOnlyList<string>? Options = null, string? Formula = null);
+public sealed record CreateColumnRequest(string Name, ColumnKind Type, IReadOnlyList<string>? Options = null, string? Formula = null, bool IsRestricted = false);
 
-/// <summary>Replaces the editable fields of a column. The type can't be changed after creation.</summary>
-public sealed record UpdateColumnRequest(string Name, IReadOnlyList<string> Options, string? Formula, int Order);
+/// <summary>
+/// Replaces the editable fields of a column. The type can't be changed after creation. <paramref name="IsRestricted"/>
+/// null leaves the restriction as it is; changing it needs Finance, Admin or Owner.
+/// </summary>
+public sealed record UpdateColumnRequest(string Name, IReadOnlyList<string> Options, string? Formula, int Order, bool? IsRestricted = null);
 
 public interface IColumnService
 {

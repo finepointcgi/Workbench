@@ -97,6 +97,10 @@ public static partial class RuleLogic
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>The names in a template's <c>{placeholders}</c>.</summary>
+    public static IEnumerable<string> PlaceholderNames(string? template) =>
+        Placeholder().Matches(template ?? "").Select(m => m.Groups[1].Value.Trim());
+
     [GeneratedRegex(@"\{([^{}]{1,100})\}")]
     private static partial Regex Placeholder();
 }

@@ -290,3 +290,17 @@ await notifications.PublishAsync(
   allowance (`Resourcing:*`). Holidays and leave come from `IResourceLeaveCalendar` (no-op `NoLeaveCalendar` TryAdd'ed);
   the leave module registers its own. Who may do what: `ResourcingAccess` (org role `ResourceManager` manages every
   project, PMs their own, Finance reads; employees see themselves).
+
+## Restricted columns
+
+- `Column.IsRestricted` ("Finance and owners only"): Finance, administrators and the workspace's Owners see the column;
+  for everyone else it doesn't exist. `RestrictedColumns.Of(columns)` adds every formula column that reads a restricted
+  one (directly, through `CHILDREN`, or through another formula), so derived figures stay hidden too.
+- Enforcement is in the permission decorators (`RestrictedColumnAccess`): sheet reads drop the columns, item reads drop
+  their values, item writes ignore them and keep the stored values (updates send the full set the user can see),
+  column changes and deletes of a hidden column are "not found", and only those who can see them restrict or lift a
+  restriction. Rules that touch a restricted column (trigger, conditions, action fields or `{Column}` placeholders) are
+  hidden from, and closed to, everyone else. Anything that reads sheet data through `ISheetService`/`IItemService`
+  (dashboards, My Work) inherits this; code that reads `Item.Values` straight from the database must not show them to users.
+- Activity is read by everyone on the sheet, so it records restricted changes without names or values
+  ("Restricted column changed"). Activity written before a column was restricted keeps what it said.

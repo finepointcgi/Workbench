@@ -81,7 +81,12 @@ public sealed class PermissionCheckingPeopleService(IPeopleService inner, Access
     }
 }
 
-public sealed class PermissionCheckingContractService(IContractService inner, AccessControl access) : IContractService
+/// <summary>
+/// Anyone signed in can list contracts (pickers and labels need their numbers and names), but ceiling and funded values
+/// are funding data: only Finance, administrators and the managers of a project on the contract see them; everyone else
+/// gets zeros.
+/// </summary>
+public sealed class PermissionCheckingContractService(IContractService inner, AccessControl access, ProjectAccess projects) : IContractService
 {
     public Task<IReadOnlyList<CustomerDto>> ListCustomersAsync(CancellationToken cancellationToken = default)
     {
@@ -95,17 +100,24 @@ public sealed class PermissionCheckingContractService(IContractService inner, Ac
         return await inner.CreateCustomerAsync(request, cancellationToken);
     }
 
-    public Task<IReadOnlyList<ContractDto>> ListContractsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ContractDto>> ListContractsAsync(CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        return inner.ListContractsAsync(cancellationToken);
+        var contracts = await inner.ListContractsAsync(cancellationToken);
+        var managed = await projects.ManagedContractIdsAsync(cancellationToken);
+        return managed is null ? contracts : contracts.Select(c => WithoutFunding(c, managed)).ToList();
     }
 
-    public Task<ContractDto?> GetContractAsync(Guid contractId, CancellationToken cancellationToken = default)
+    public async Task<ContractDto?> GetContractAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        return inner.GetContractAsync(contractId, cancellationToken);
+        var contract = await inner.GetContractAsync(contractId, cancellationToken);
+        var managed = contract is null ? null : await projects.ManagedContractIdsAsync(cancellationToken);
+        return contract is null || managed is null ? contract : WithoutFunding(contract, managed);
     }
+
+    private static ContractDto WithoutFunding(ContractDto contract, IReadOnlySet<Guid> managed) =>
+        managed.Contains(contract.Id) ? contract : contract with { CeilingValue = 0, FundedValue = 0 };
 
     public async Task<ContractDto> CreateContractAsync(SaveContractRequest request, CancellationToken cancellationToken = default)
     {

@@ -5,56 +5,115 @@ using Workbench.Contracts.Identity;
 
 namespace Workbench.Application.Identity;
 
-/// <summary>Automation rules: viewing rules and runs needs Viewer on the sheet; creating, changing, enabling or deleting them needs Editor.</summary>
-public sealed class PermissionCheckingRuleService(IRuleService inner, AccessControl access) : IRuleService
+/// <summary>
+/// Automation rules: viewing rules and runs needs Viewer on the sheet; creating, changing, enabling or deleting them needs
+/// Editor. A rule that reads or writes a restricted column (in its trigger, conditions, actions or a <c>{Column}</c>
+/// placeholder) is for those who can see restricted columns: to everyone else it, and its runs, don't exist.
+/// </summary>
+public sealed class PermissionCheckingRuleService(IRuleService inner, AccessControl access, RestrictedColumnAccess restricted) : IRuleService
 {
     public async Task<IReadOnlyList<RuleDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
-        return await inner.ListAsync(sheetId, cancellationToken);
+        var rules = await inner.ListAsync(sheetId, cancellationToken);
+        var touches = await RestrictedTouchAsync(sheetId, cancellationToken);
+        return touches is null ? rules : rules.Where(r => !touches(r.Trigger, r.Conditions, r.Actions)).ToList();
     }
 
     public async Task<RuleDto> GetAsync(Guid sheetId, Guid ruleId, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
-        return await inner.GetAsync(sheetId, ruleId, cancellationToken);
+        var rule = await inner.GetAsync(sheetId, ruleId, cancellationToken);
+        await RequireVisibleAsync(sheetId, rule, cancellationToken);
+        return rule;
     }
 
     public async Task<RuleDto> CreateAsync(Guid sheetId, SaveRuleRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireAllowedAsync(sheetId, request, cancellationToken);
         return await inner.CreateAsync(sheetId, request, cancellationToken);
     }
 
     public async Task<RuleDto> UpdateAsync(Guid sheetId, Guid ruleId, SaveRuleRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireVisibleAsync(sheetId, await inner.GetAsync(sheetId, ruleId, cancellationToken), cancellationToken);
+        await RequireAllowedAsync(sheetId, request, cancellationToken);
         return await inner.UpdateAsync(sheetId, ruleId, request, cancellationToken);
     }
 
     public async Task<RuleDto> SetEnabledAsync(Guid sheetId, Guid ruleId, bool enabled, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireVisibleAsync(sheetId, await inner.GetAsync(sheetId, ruleId, cancellationToken), cancellationToken);
         return await inner.SetEnabledAsync(sheetId, ruleId, enabled, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid sheetId, Guid ruleId, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireVisibleAsync(sheetId, await inner.GetAsync(sheetId, ruleId, cancellationToken), cancellationToken);
         await inner.DeleteAsync(sheetId, ruleId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<RuleRunDto>> ListRunsAsync(Guid sheetId, Guid? ruleId = null, int limit = 50, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
-        return await inner.ListRunsAsync(sheetId, ruleId, limit, cancellationToken);
+        var runs = await inner.ListRunsAsync(sheetId, ruleId, limit, cancellationToken);
+        var touches = await RestrictedTouchAsync(sheetId, cancellationToken);
+        if (touches is null)
+        {
+            return runs;
+        }
+
+        var hidden = (await inner.ListAsync(sheetId, cancellationToken)).Where(r => touches(r.Trigger, r.Conditions, r.Actions)).Select(r => r.Id).ToHashSet();
+        return runs.Where(r => !hidden.Contains(r.RuleId)).ToList();
     }
 
     /// <summary>A dry run changes nothing, but it's part of editing a rule, so it needs Editor too.</summary>
     public async Task<RuleTestResult> TestAsync(Guid sheetId, TestRuleRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireAllowedAsync(sheetId, request.Rule, cancellationToken);
         return await inner.TestAsync(sheetId, request, cancellationToken);
+    }
+
+    private async Task RequireVisibleAsync(Guid sheetId, RuleDto rule, CancellationToken cancellationToken)
+    {
+        if (await RestrictedTouchAsync(sheetId, cancellationToken) is { } touches && touches(rule.Trigger, rule.Conditions, rule.Actions))
+        {
+            throw WorkbenchNotFoundException.For("Rule", rule.Id);
+        }
+    }
+
+    private async Task RequireAllowedAsync(Guid sheetId, SaveRuleRequest rule, CancellationToken cancellationToken)
+    {
+        if (await RestrictedTouchAsync(sheetId, cancellationToken) is { } touches && touches(rule.Trigger, rule.Conditions, rule.Actions))
+        {
+            throw new WorkbenchForbiddenException("Only Finance, administrators and the workspace's owners can use restricted columns in rules.");
+        }
+    }
+
+    /// <summary>Null when the user sees every column; otherwise a test for "this rule touches a column hidden from them".</summary>
+    private async Task<Func<RuleTriggerDto, IReadOnlyList<RuleConditionDto>, IReadOnlyList<RuleActionDto>, bool>?> RestrictedTouchAsync(
+        Guid sheetId, CancellationToken cancellationToken)
+    {
+        var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
+        if (hidden.Count == 0)
+        {
+            return null;
+        }
+
+        var ids = hidden.Select(h => h.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = (await restricted.ColumnsAsync(sheetId, cancellationToken)).Where(c => hidden.Contains(c.Id)).Select(c => c.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool Field(string? field) => field is not null && ids.Contains(field);
+        bool Template(string? text) => Automation.RuleLogic.PlaceholderNames(text).Any(names.Contains);
+        return (trigger, conditions, actions) =>
+            Field(trigger.Field)
+            || conditions.Any(c => Field(c.Field))
+            || actions.Any(a => Field(a.Field) || (a.PersonFields ?? []).Any(Field) || Template(a.Value) || Template(a.Message));
     }
 }
 

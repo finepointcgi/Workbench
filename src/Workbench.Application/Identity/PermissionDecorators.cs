@@ -1,3 +1,4 @@
+using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Identity;
@@ -10,7 +11,7 @@ namespace Workbench.Application.Identity;
 // (Blazor UI, REST API, hub). A sheet the user can't see is "not found"; a sheet they can see but not change
 // is "forbidden". Registered last in AddWorkbenchIdentity so they wrap every other decorator.
 
-public sealed class PermissionCheckingSheetService(ISheetService inner, AccessControl access) : ISheetService
+public sealed class PermissionCheckingSheetService(ISheetService inner, AccessControl access, RestrictedColumnAccess restricted) : ISheetService
 {
     public async Task<IReadOnlyList<SheetSummary>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -26,8 +27,17 @@ public sealed class PermissionCheckingSheetService(ISheetService inner, AccessCo
         return sheets.Where(s => allowed.Contains(s.Id)).ToList();
     }
 
-    public async Task<SheetDetail?> GetAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
-        await access.GetSheetRoleAsync(sheetId, cancellationToken) is null ? null : await inner.GetAsync(sheetId, cancellationToken);
+    public async Task<SheetDetail?> GetAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        if (await access.GetSheetRoleAsync(sheetId, cancellationToken) is null || await inner.GetAsync(sheetId, cancellationToken) is not { } sheet)
+        {
+            return null;
+        }
+
+        return await restricted.CanSeeRestrictedAsync(sheetId, cancellationToken)
+            ? sheet with { CanSeeRestricted = true }
+            : RestrictedColumnAccess.Strip(sheet, await restricted.HiddenColumnsAsync(sheetId, cancellationToken));
+    }
 
     /// <summary>The Editor check happens in <see cref="EditableWorkspacePicker"/>, which also picks the workspace.</summary>
     public Task<SheetSummary> CreateAsync(CreateSheetRequest request, CancellationToken cancellationToken = default)
@@ -37,30 +47,46 @@ public sealed class PermissionCheckingSheetService(ISheetService inner, AccessCo
     }
 }
 
-public sealed class PermissionCheckingItemService(IItemService inner, AccessControl access) : IItemService
+/// <summary>Restricted columns' values never reach, and can't be written by, people who can't see them.</summary>
+public sealed class PermissionCheckingItemService(IItemService inner, AccessControl access, RestrictedColumnAccess restricted) : IItemService
 {
     public async Task<IReadOnlyList<ItemDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
-        return await inner.ListAsync(sheetId, cancellationToken);
+        var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
+        var items = await inner.ListAsync(sheetId, cancellationToken);
+        return hidden.Count == 0 ? items : items.Select(i => RestrictedColumnAccess.Strip(i, hidden)).ToList();
     }
 
     public async Task<ItemDto> CreateAsync(Guid sheetId, CreateItemRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
-        return await inner.CreateAsync(sheetId, request, cancellationToken);
+        var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
+        if (hidden.Count > 0 && request.Values is not null)
+        {
+            request = request with { Values = RestrictedColumnAccess.Without(request.Values, hidden) };
+        }
+
+        return RestrictedColumnAccess.Strip(await inner.CreateAsync(sheetId, request, cancellationToken), hidden);
     }
 
     public async Task<ItemDto> UpdateAsync(Guid sheetId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
-        return await inner.UpdateAsync(sheetId, itemId, request, cancellationToken);
+        var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
+        if (hidden.Count > 0)
+        {
+            request = request with { Values = await restricted.MergeHiddenAsync(sheetId, itemId, request.Values, hidden, cancellationToken) };
+        }
+
+        return RestrictedColumnAccess.Strip(await inner.UpdateAsync(sheetId, itemId, request, cancellationToken), hidden);
     }
 
     public async Task<ItemDto> MoveAsync(Guid sheetId, Guid itemId, MoveItemRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
-        return await inner.MoveAsync(sheetId, itemId, request, cancellationToken);
+        var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
+        return RestrictedColumnAccess.Strip(await inner.MoveAsync(sheetId, itemId, request, cancellationToken), hidden);
     }
 
     public async Task DeleteAsync(Guid sheetId, Guid itemId, CancellationToken cancellationToken = default)
@@ -70,24 +96,49 @@ public sealed class PermissionCheckingItemService(IItemService inner, AccessCont
     }
 }
 
-public sealed class PermissionCheckingColumnService(IColumnService inner, AccessControl access) : IColumnService
+/// <summary>
+/// Columns need Editor. Restricting a column (or lifting it), and changing or deleting a column hidden from the user,
+/// needs Finance, Admin or the workspace's Owner role; to everyone else a hidden column doesn't exist.
+/// </summary>
+public sealed class PermissionCheckingColumnService(IColumnService inner, AccessControl access, RestrictedColumnAccess restricted) : IColumnService
 {
     public async Task<ColumnDto> CreateAsync(Guid sheetId, CreateColumnRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        if (request.IsRestricted)
+        {
+            await restricted.RequireCanSeeRestrictedAsync(sheetId, "restrict columns", cancellationToken);
+        }
+
+        // A formula over a restricted column is restricted too: its creator gets it back, but reads leave it out from now on.
         return await inner.CreateAsync(sheetId, request, cancellationToken);
     }
 
     public async Task<ColumnDto> UpdateAsync(Guid sheetId, Guid columnId, UpdateColumnRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireVisibleAsync(sheetId, columnId, cancellationToken);
+        if (request.IsRestricted is not null)
+        {
+            await restricted.RequireCanSeeRestrictedAsync(sheetId, "restrict columns or lift a restriction", cancellationToken);
+        }
+
         return await inner.UpdateAsync(sheetId, columnId, request, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid sheetId, Guid columnId, CancellationToken cancellationToken = default)
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await RequireVisibleAsync(sheetId, columnId, cancellationToken);
         await inner.DeleteAsync(sheetId, columnId, cancellationToken);
+    }
+
+    private async Task RequireVisibleAsync(Guid sheetId, Guid columnId, CancellationToken cancellationToken)
+    {
+        if ((await restricted.HiddenColumnsAsync(sheetId, cancellationToken)).Contains(columnId))
+        {
+            throw WorkbenchNotFoundException.For("Column", columnId);
+        }
     }
 }
 
