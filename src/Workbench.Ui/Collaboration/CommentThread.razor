@@ -93,7 +93,7 @@ else
         {
             _comments = await Comments.ListAsync(SheetId, ItemId);
         }
-        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             _comments = [];
             Snackbar.Add($"Couldn't load comments: {ex.Message}", Severity.Error);

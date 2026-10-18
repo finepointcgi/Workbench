@@ -1,15 +1,20 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Workbench.Application;
+using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Time;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Time;
+using Workbench.Domain.Identity;
 
 namespace Workbench.Tests.Time;
 
 /// <summary>
 /// A small org for timekeeping tests: supervisor Pat, employee Dana (reports to Pat), and Sam with no supervisor.
+/// admin@example.com has the Admin role (no employee record); <see cref="GrantAsync"/> gives others roles.
 /// "Today" is Wednesday 2026-10-21, so the current week is Mon 10-19 to Sun 10-25.
 /// </summary>
 internal sealed class TimeTestHost
@@ -18,7 +23,7 @@ internal sealed class TimeTestHost
 
     public TimeTestHost(TimekeepingOptions? options = null)
     {
-        Options = options ?? new TimekeepingOptions { Admins = ["admin@example.com"] };
+        Options = options ?? new TimekeepingOptions();
         Options.TimeZone ??= "UTC";
         Factory = TestDb.CreateFactory();
         var recorder = new AuditRecorder(User, Clock);
@@ -26,9 +31,9 @@ internal sealed class TimeTestHost
         Projects = new ProjectService(Factory, recorder);
         Calendar = new FiscalCalendarService(Factory, recorder);
         var tk = new TimekeepingClock(Clock, Microsoft.Extensions.Options.Options.Create(Options));
-        var roles = new ConfiguredTimekeepingRoles(Microsoft.Extensions.Options.Options.Create(Options));
-        Timesheets = new TimesheetService(Factory, User, recorder, Projects, tk, roles, Notifier);
-        Approvals = new TimesheetApprovalService(Factory, User, recorder, tk, roles, Notifier);
+        var access = new AccessControl(Factory, User);
+        Timesheets = new TimesheetService(Factory, User, recorder, Projects, tk, access, Notifier);
+        Approvals = new TimesheetApprovalService(Factory, User, recorder, tk, access, Notifier);
         Reports = new TimeReportService(Factory, tk);
     }
 
@@ -55,8 +60,24 @@ internal sealed class TimeTestHost
     public static async Task<TimeTestHost> CreateAsync(TimekeepingOptions? options = null)
     {
         var host = new TimeTestHost(options);
+        await host.GrantAsync("admin@example.com", OrgRoles.Admin);
         await host.SeedAsync();
         return host;
+    }
+
+    /// <summary>Gives a user organization roles (an <see cref="AppUser"/> row, as the admin screen would).</summary>
+    public async Task GrantAsync(string email, OrgRoles roles)
+    {
+        await using var db = await Factory.CreateAsync();
+        var user = await db.Set<AppUser>().FirstOrDefaultAsync(u => u.Email == email);
+        if (user is null)
+        {
+            user = new AppUser { Email = email, DisplayName = email };
+            db.Set<AppUser>().Add(user);
+        }
+
+        (user.IsAdmin, user.IsFinance, user.IsTimekeeper) = (roles.HasFlag(OrgRoles.Admin), roles.HasFlag(OrgRoles.Finance), roles.HasFlag(OrgRoles.Timekeeper));
+        await db.SaveChangesAsync();
     }
 
     private async Task SeedAsync()

@@ -53,7 +53,7 @@ else
             _summary = await Financials.GetProjectSummaryAsync(ProjectId);
             _rows = await Financials.GetWbsFinancialsAsync(ProjectId);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load financials: {ex.Message}", Severity.Error);
         }

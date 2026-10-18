@@ -88,7 +88,7 @@
         {
             _pending = await Approvals.ListPendingAsync();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add(ex.Message, Severity.Error);
         }

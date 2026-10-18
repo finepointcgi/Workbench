@@ -22,7 +22,10 @@ public static class NotificationKinds
     public const string TimesheetApproved = "timesheet.approved";
     public const string TimesheetRejected = "timesheet.rejected";
     public const string TimesheetMissing = "timesheet.missing";
+    public const string TimesheetReopened = "timesheet.reopened";
     public const string ExpenseApproval = "expense.approval";
+    public const string ExpenseApproved = "expense.approved";
+    public const string ExpenseRejected = "expense.rejected";
 }
 
 /// <summary><see cref="Link"/> is app-relative, e.g. <c>sheets/{sheetId}?item={itemId}</c>.</summary>

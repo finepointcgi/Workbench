@@ -1,11 +1,13 @@
 using Workbench.Application;
 using Workbench.Application.Dashboards;
+using Workbench.Application.Financials;
 using Workbench.Application.Scheduling;
 using Workbench.Application.Sheets;
 using Workbench.Contracts;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Dashboards;
+using Workbench.Contracts.Financials;
 using Workbench.Contracts.Sheets;
 using Workbench.Tests.Collaboration;
 using static Workbench.Tests.MyWork.MyWorkServiceTests;
@@ -81,8 +83,8 @@ public sealed class DashboardServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.ReorderWidgetsAsync(dashboard.Id, new ReorderWidgetsRequest([a.Id, a.Id])));
         await Assert.ThrowsAsync<ArgumentException>(() => service.AddWidgetAsync(dashboard.Id,
             new SaveWidgetRequest("No contract", WidgetType.ContractFunding, 6, WidgetHeight.Medium, new WidgetConfig())));
-        await Assert.ThrowsAsync<ArgumentException>(() => service.AddWidgetAsync(dashboard.Id, // extension point, not built yet
-            new SaveWidgetRequest("Financials", WidgetType.ProjectFinancials, 6, WidgetHeight.Medium, new WidgetConfig(Guid.NewGuid()))));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddWidgetAsync(dashboard.Id,
+            new SaveWidgetRequest("Financials", WidgetType.ProjectFinancials, 6, WidgetHeight.Medium, new WidgetConfig())));
         await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => service.DeleteWidgetAsync(dashboard.Id, Guid.NewGuid()));
     }
 
@@ -119,7 +121,7 @@ public sealed class DashboardServiceTests
             new WidgetConfig(ContractId: contract.Id)));
 
         var data = new WidgetDataService(dashboards, new FilteringSheetService(sheets, hidden.Id), items,
-            new DependencyService(_db), contracts, projects, _clock);
+            new DependencyService(_db), contracts, projects, new ProjectFinancialsService(_db, _clock), new AllowAllFinancialAccess(), _clock);
 
         var metric = await data.GetAsync(dashboard.Id, open.Id);
         Assert.Equal((1m, "Tracker", tracker.Id), (metric.Metric!.Value, metric.SheetName, metric.SheetId));
@@ -131,4 +133,11 @@ public sealed class DashboardServiceTests
         Assert.Equal(["P-1"], f.Projects);
         await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => data.GetAsync(dashboard.Id, Guid.NewGuid()));
     }
+}
+
+internal sealed class AllowAllFinancialAccess : IFinancialAccessService
+{
+    public Task<bool> CanReadProjectFinancialsAsync(Guid projectId, CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+    public Task<bool> CanReadContractFundingAsync(Guid contractId, CancellationToken cancellationToken = default) => Task.FromResult(true);
 }

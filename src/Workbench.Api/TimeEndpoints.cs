@@ -24,7 +24,7 @@ internal static class TimeEndpoints
         time.MapPost("/approvals/{id:guid}/reject", (Guid id, ReasonRequest r, ITimesheetApprovalService s, CancellationToken ct) => s.RejectAsync(id, r.Reason, ct));
         time.MapGet("/team", (DateOnly date, ITimesheetApprovalService s, CancellationToken ct) => s.GetTeamStatusAsync(date, ct));
 
-        // TODO: restrict reports to the Finance role once authentication and roles land.
+        // PermissionCheckingTimeReportService limits rows to who the caller may see; the labor CSV is Finance only.
         time.MapGet("/reports/hours", (DateOnly from, DateOnly to, bool? approvedOnly, ITimeReportService s, CancellationToken ct) =>
             s.GetHoursByChargeCodeAsync(from, to, approvedOnly ?? true, ct));
         time.MapGet("/reports/daily-entry", (DateOnly from, DateOnly to, ITimeReportService s, CancellationToken ct) => s.GetDailyEntryComplianceAsync(from, to, ct));

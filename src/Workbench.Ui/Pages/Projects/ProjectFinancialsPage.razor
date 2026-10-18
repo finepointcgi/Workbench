@@ -8,7 +8,11 @@
 
 <PageTitle>@(_project?.Code ?? "Project") financials · Workbench</PageTitle>
 
-@if (_loading && _summary is null)
+@if (_forbidden is not null)
+{
+    <ForbiddenNotice Title="You don't have access to this project's financials" Message="@_forbidden" />
+}
+else if (_loading && _summary is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
@@ -99,12 +103,14 @@ else
     private Guid? _budgetVersionId;
     private Guid? _forecastVersionId;
     private bool _loading = true;
+    private string? _forbidden;
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
         _loading = true;
+        _forbidden = null;
         try
         {
             _project = await Projects.GetProjectAsync(ProjectId);
@@ -118,7 +124,11 @@ else
             _rows = await Financials.GetWbsFinancialsAsync(ProjectId, _budgetVersionId, _forecastVersionId);
             _burn = await Financials.GetTimePhasedBurnAsync(ProjectId, _budgetVersionId);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException)
+        catch (UnauthorizedAccessException ex)
+        {
+            _forbidden = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load financials: {ex.Message}", Severity.Error);
         }
@@ -158,7 +168,7 @@ else
             await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/financials.js");
             await module.InvokeVoidAsync("downloadText", file.FileName, file.ContentType, file.Content);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or JSException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or JSException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't export: {ex.Message}", Severity.Error);
         }

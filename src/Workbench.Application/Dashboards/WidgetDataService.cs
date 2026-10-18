@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 using Workbench.Contracts.Dashboards;
+using Workbench.Contracts.Financials;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
@@ -10,7 +11,8 @@ namespace Workbench.Application.Dashboards;
 /// <summary>
 /// Computes widget data. Sheet data comes only from <see cref="ISheetService"/>, <see cref="IItemService"/>,
 /// <see cref="IDependencyService"/>, <see cref="IContractService"/> and <see cref="IProjectService"/>, never EF, so
-/// visibility rules apply.
+/// visibility rules apply. Financial figures come from <see cref="IProjectFinancialsService"/> and contract funding is
+/// checked with <see cref="IFinancialAccessService"/>, so they follow the same rules as the financials pages.
 /// A sheet the user can't see is reported as missing.
 /// </summary>
 public sealed class WidgetDataService(
@@ -20,6 +22,8 @@ public sealed class WidgetDataService(
     IDependencyService dependencies,
     IContractService contracts,
     IProjectService projects,
+    IProjectFinancialsService financials,
+    IFinancialAccessService financialAccess,
     TimeProvider clock) : IWidgetDataService
 {
     public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default)
@@ -40,9 +44,7 @@ public sealed class WidgetDataService(
             case WidgetType.ContractFunding:
                 return await ContractFundingAsync(widget, cancellationToken);
             case WidgetType.ProjectFinancials:
-                // TODO(financials): build from the native project financials contracts (budget, actuals, burn for the
-                // project whose plan sheet is config.SheetId) once that session lands. Never from ICostpointService.
-                return Error(widget, config.SheetId, null, "Project financials widgets aren't available yet.");
+                return await ProjectFinancialsAsync(widget, cancellationToken);
         }
 
         if (config.SheetId is not { } sheetId)
@@ -101,6 +103,11 @@ public sealed class WidgetDataService(
             return Error(widget, null, null, "Pick a contract for this widget.");
         }
 
+        if (!await financialAccess.CanReadContractFundingAsync(contractId, cancellationToken))
+        {
+            return Error(widget, null, null, "Only Finance and the managers of this contract's projects can see its funding.");
+        }
+
         var contract = await contracts.GetContractAsync(contractId, cancellationToken);
         if (contract is null)
         {
@@ -110,6 +117,42 @@ public sealed class WidgetDataService(
         var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
         var data = WidgetCalculator.ContractFunding(contract, await projects.ListProjectsAsync(cancellationToken), today);
         return new WidgetDataDto(widget.Id, widget.Type, null, null, null, ContractFunding: data);
+    }
+
+    private async Task<WidgetDataDto> ProjectFinancialsAsync(WidgetDto widget, CancellationToken cancellationToken)
+    {
+        if (widget.Config.SheetId is not { } sheetId)
+        {
+            return Error(widget, null, null, "Pick a project plan sheet for this widget.");
+        }
+
+        var sheet = await sheets.GetAsync(sheetId, cancellationToken);
+        if (sheet is null)
+        {
+            return Error(widget, sheetId, null, "The sheet for this widget no longer exists or isn't shared with you.");
+        }
+
+        var name = sheet.Summary.Name;
+        var project = await projects.GetProjectForSheetAsync(sheetId, cancellationToken);
+        if (project is null)
+        {
+            return Error(widget, sheetId, name, $"\"{name}\" isn't a project plan sheet.");
+        }
+
+        if (!await financialAccess.CanReadProjectFinancialsAsync(project.Id, cancellationToken))
+        {
+            return Error(widget, sheetId, name, $"Only Finance and the project's manager can see {project.Code}'s financials.");
+        }
+
+        try
+        {
+            var summary = await financials.GetProjectSummaryAsync(project.Id, cancellationToken: cancellationToken);
+            return new WidgetDataDto(widget.Id, widget.Type, sheetId, name, null, ProjectFinancials: summary);
+        }
+        catch (WorkbenchForbiddenException ex)
+        {
+            return Error(widget, sheetId, name, ex.Message);
+        }
     }
 
     private static WidgetDataDto Error(WidgetDto widget, Guid? sheetId, string? sheetName, string message) =>

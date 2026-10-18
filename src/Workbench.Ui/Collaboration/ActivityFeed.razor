@@ -55,7 +55,7 @@ else
             {
                 _events = await Activity.ListAsync(SheetId, ItemId, Limit);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
             {
                 _events = [];
                 Snackbar.Add($"Couldn't load activity: {ex.Message}", Severity.Error);

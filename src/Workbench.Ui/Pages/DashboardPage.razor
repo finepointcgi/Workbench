@@ -141,7 +141,7 @@ else
         {
             _notFound = true;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
         }
@@ -168,7 +168,7 @@ else
         {
             _data.Remove(widget.Id);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             _data[widget.Id] = new WidgetDataDto(widget.Id, widget.Type, widget.Config.SheetId, null, $"Couldn't load: {ex.Message}");
         }
@@ -253,7 +253,7 @@ else
         {
             await action();
         }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't save the dashboard: {ex.Message}", Severity.Error);
         }

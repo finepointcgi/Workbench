@@ -74,7 +74,7 @@
         {
             _delivery = (await Service.GetPreferenceAsync()).Delivery;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load your settings: {ex.Message}", Severity.Error);
         }
@@ -98,7 +98,7 @@
                 }
             }));
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or IOException)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
         }
     }
@@ -112,7 +112,7 @@
             _total = page.TotalCount;
             _unread = page.UnreadCount;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             _items ??= [];
             Snackbar.Add($"Couldn't load notifications: {ex.Message}", Severity.Error);
@@ -169,7 +169,7 @@
             _delivery = (await Service.SetPreferenceAsync(new NotificationPreferenceDto(delivery))).Delivery;
             Snackbar.Add("Saved", Severity.Success);
         }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't save: {ex.Message}", Severity.Error);
         }

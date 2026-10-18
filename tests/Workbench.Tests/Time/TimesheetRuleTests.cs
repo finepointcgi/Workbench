@@ -1,3 +1,4 @@
+using Workbench.Contracts.Identity;
 using Workbench.Application.Time;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Time;
@@ -126,7 +127,8 @@ public sealed class TimesheetRuleTests
         Assert.Equal(host.Clock.UtcNow, result.Detail.Timesheet.CertifiedAtUtc);
         Assert.Contains(result.Detail.Audit, a => a.Action == "Submitted" && a.Actor == "dana@example.com");
         var sent = Assert.Single(host.Notifier.Sent);
-        Assert.Equal(("pat@example.com", TimesheetEvent.Submitted), (sent.RecipientEmail, sent.Event));
+        Assert.Equal(TimesheetEvent.Submitted, sent.Event);
+        Assert.Equal(["pat@example.com"], sent.Recipients);
     }
 
     [Fact]
@@ -181,7 +183,9 @@ public sealed class TimesheetRuleTests
     [Fact]
     public async Task Admin_approves_when_there_is_no_supervisor_but_not_their_own()
     {
-        var host = await TimeTestHost.CreateAsync(new TimekeepingOptions { Admins = ["sam@example.com", "pat@example.com"] });
+        var host = await TimeTestHost.CreateAsync();
+        await host.GrantAsync("sam@example.com", OrgRoles.Admin);
+        await host.GrantAsync("pat@example.com", OrgRoles.Admin);
         host.SignInAs(host.Sam);
         var sheet = await host.Timesheets.GetOrCreateMyTimesheetAsync(Monday);
         await host.Timesheets.SaveEntriesAsync(sheet.Timesheet.Id, Cell(host.Overhead.Id, Monday, 8m));

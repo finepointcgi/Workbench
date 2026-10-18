@@ -8,7 +8,11 @@
 
 <PageTitle>@(_project?.Code ?? "Project") budgets · Workbench</PageTitle>
 
-@if (_loading && _project is null)
+@if (_forbidden is not null)
+{
+    <ForbiddenNotice Title="You don't have access to this project's budgets" Message="@_forbidden" />
+}
+else if (_loading && _project is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
@@ -95,6 +99,7 @@ else
     private IReadOnlyList<LaborCategoryDto> _categories = [];
     private IReadOnlyList<FiscalPeriodDto> _periods = [];
     private bool _loading = true;
+    private string? _forbidden;
     private bool _busy;
 
     private bool CanLock => _selected?.Version is { Kind: BudgetVersionKind.Baseline, IsLocked: false };
@@ -104,6 +109,7 @@ else
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        _forbidden = null;
         try
         {
             _project = await Projects.GetProjectAsync(ProjectId);
@@ -117,7 +123,11 @@ else
             _periods = await Calendar.ListPeriodsAsync();
             await RefreshAsync(null);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (UnauthorizedAccessException ex)
+        {
+            _forbidden = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load budgets: {ex.Message}", Severity.Error);
         }
@@ -238,7 +248,7 @@ else
         {
             await action();
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or Workbench.Contracts.WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add(ex.Message, Severity.Error);
         }

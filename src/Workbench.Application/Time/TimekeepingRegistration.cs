@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Contracts.Time;
 
 namespace Workbench.Application.Time;
@@ -11,13 +10,19 @@ public static class TimekeepingRegistration
         services.AddOptions<TimekeepingOptions>().BindConfiguration("Timekeeping");
         services.AddSingleton<TimekeepingClock>();
 
-        // Defaults that the auth and notifications work can replace by registering their own implementation.
-        services.TryAddSingleton<ITimekeepingRoles, ConfiguredTimekeepingRoles>();
-        services.TryAddScoped<ITimesheetNotifier, NoOpTimesheetNotifier>();
+        services.AddScoped<ITimesheetNotifier, PublishingTimesheetNotifier>();
+        services.AddScoped<MissingTimesheetCheck>();
 
         services.AddScoped<ITimesheetService, TimesheetService>();
         services.AddScoped<ITimesheetApprovalService, TimesheetApprovalService>();
         services.AddScoped<ITimeReportService, TimeReportService>();
+        return services;
+    }
+
+    /// <summary>For the server host: the daily "timesheet missing for yesterday" reminder.</summary>
+    public static IServiceCollection AddWorkbenchTimekeepingHosting(this IServiceCollection services)
+    {
+        services.AddHostedService<MissingTimesheetBackgroundService>();
         return services;
     }
 }

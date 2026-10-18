@@ -115,7 +115,7 @@
             _rules = await Rules.ListAsync(Sheet.Summary.Id);
             _runs = await Rules.ListRunsAsync(Sheet.Summary.Id, limit: 25);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             _rules ??= [];
             _runs ??= [];
@@ -146,7 +146,7 @@
             await Rules.SetEnabledAsync(Sheet.Summary.Id, rule.Id, enabled);
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't update the rule: {ex.Message}", Severity.Error);
         }
@@ -166,7 +166,7 @@
             await Rules.DeleteAsync(Sheet.Summary.Id, rule.Id);
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't delete the rule: {ex.Message}", Severity.Error);
         }

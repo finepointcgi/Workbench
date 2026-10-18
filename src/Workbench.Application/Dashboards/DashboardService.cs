@@ -182,9 +182,6 @@ public sealed class DashboardService(IWorkbenchDbContextFactory dbFactory, ICurr
         {
             case WidgetType.RichText:
                 break;
-            case WidgetType.ProjectFinancials:
-                // TODO(financials): accept once WidgetDataService can compute it.
-                throw new ArgumentException("Project financials widgets aren't available yet.", nameof(request));
             case WidgetType.ContractFunding when request.Config.ContractId is null:
                 throw new ArgumentException("A contracts and funding widget needs a contract.", nameof(request));
             case WidgetType.ContractFunding:
