@@ -54,8 +54,8 @@ else
                                 }
                             </MudSelect>
                         </MudItem>
-                        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_form.Start" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-start" /></MudItem>
-                        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_form.End" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-end" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_form.Start" Editable="true" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-start" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_form.End" Editable="true" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-end" /></MudItem>
                         <MudItem xs="12" sm="2"><MudNumericField T="decimal?" @bind-Value="_form.HoursPerDay" Label="Hours/day" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="standard" /></MudItem>
                         <MudItem xs="12"><MudTextField @bind-Value="_form.Comment" Label="Comment (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
                     </MudGrid>
