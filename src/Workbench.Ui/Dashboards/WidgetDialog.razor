@@ -1,0 +1,265 @@
+@using Workbench.Contracts.Dashboards
+@inject ISheetService SheetService
+
+@* Configures a widget: type, title and size, then a sheet, then that sheet's columns. Closes with a SaveWidgetRequest. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3" Style="min-width:min(520px, 80vw)">
+            <MudSelect T="WidgetType" Value="_type" ValueChanged="TypeChanged" Label="Widget type" Disabled="Widget is not null" data-field="type">
+                @foreach (var type in Enum.GetValues<WidgetType>())
+                {
+                    <MudSelectItem T="WidgetType" Value="type">@TypeLabel(type)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" data-field="title" />
+            <MudStack Row="true" Spacing="3">
+                <MudSelect T="int" @bind-Value="_width" Label="Width" Style="flex:1">
+                    @foreach (var (cols, label) in Widths)
+                    {
+                        <MudSelectItem T="int" Value="cols">@label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="WidgetHeight" @bind-Value="_height" Label="Height" Style="flex:1">
+                    @foreach (var height in Enum.GetValues<WidgetHeight>())
+                    {
+                        <MudSelectItem T="WidgetHeight" Value="height">@height</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+
+            @if (_type == WidgetType.RichText)
+            {
+                <MudTextField @bind-Value="_markdown" Label="Text (Markdown)" Lines="8" Variant="Variant.Outlined"
+                              HelperText="Headings (#), lists (-, 1.), **bold**, *italic*, `code` and [links](https://…). HTML is shown as text." />
+            }
+            else
+            {
+                <MudSelect T="Guid?" Value="_sheetId" ValueChanged="SheetChangedAsync" Label="Sheet" data-field="sheet"
+                           HelperText="@SheetHelp()">
+                    @foreach (var sheet in SheetsFor(_type))
+                    {
+                        <MudSelectItem T="Guid?" Value="sheet.Id">@sheet.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (_loadingColumns)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_sheet is not null)
+                {
+                    @if (_type == WidgetType.Metric)
+                    {
+                        <MudSelect T="MetricAggregate" @bind-Value="_aggregate" Label="Calculation">
+                            @foreach (var aggregate in Enum.GetValues<MetricAggregate>())
+                            {
+                                <MudSelectItem T="MetricAggregate" Value="aggregate">@aggregate</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (_aggregate != MetricAggregate.Count)
+                        {
+                            <ColumnSelect Label="Of column" Columns="NumericColumns" @bind-Value="_valueColumnId" />
+                        }
+                    }
+
+                    @if (_type == WidgetType.Chart)
+                    {
+                        <MudSelect T="ChartKind" @bind-Value="_chart" Label="Chart">
+                            @foreach (var kind in Enum.GetValues<ChartKind>())
+                            {
+                                <MudSelectItem T="ChartKind" Value="kind">@kind</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <ColumnSelect Label="Group by" Columns="GroupColumns" @bind-Value="_groupColumnId" />
+                        <ColumnSelect Label="Value" Columns="NumericColumns" @bind-Value="_valueColumnId" NoneLabel="Count of items" />
+                    }
+
+                    @if (_type is WidgetType.Metric or WidgetType.Chart or WidgetType.ItemList)
+                    {
+                        <MudStack Row="true" Spacing="3">
+                            <div style="flex:1">
+                                <ColumnSelect Label="Only where column" Columns="_sheet.Columns" @bind-Value="_filterColumnId" NoneLabel="All items" />
+                            </div>
+                            @if (FilterColumn is { } filter)
+                            {
+                                <div style="flex:1">
+                                    @if (filter.Options.Count > 0)
+                                    {
+                                        <MudSelect T="string" @bind-Value="_filterValue" Label="equals">
+                                            <MudSelectItem T="string" Value="@string.Empty">(blank)</MudSelectItem>
+                                            @foreach (var option in filter.Options)
+                                            {
+                                                <MudSelectItem T="string" Value="option">@option</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    }
+                                    else
+                                    {
+                                        <MudTextField @bind-Value="_filterValue" Label="equals" Immediate="true" />
+                                    }
+                                </div>
+                            }
+                        </MudStack>
+                    }
+
+                    @if (_type == WidgetType.ItemList)
+                    {
+                        <MudNumericField T="int" @bind-Value="_maxItems" Label="Show up to" Min="1" Max="100" />
+                    }
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!CanSave" OnClick="Submit" data-action="save-widget">
+            @(Widget is null ? "Add widget" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly (int Cols, string Label)[] Widths =
+        [(3, "Quarter"), (4, "Third"), (6, "Half"), (8, "Two thirds"), (12, "Full width")];
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The widget to edit, or null to add one.</summary>
+    [Parameter]
+    public WidgetDto? Widget { get; set; }
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SheetSummary> Sheets { get; set; } = [];
+
+    private WidgetType _type = WidgetType.Metric;
+    private string _title = string.Empty;
+    private int _width = 6;
+    private WidgetHeight _height = WidgetHeight.Medium;
+    private Guid? _sheetId;
+    private SheetDetail? _sheet;
+    private bool _loadingColumns;
+    private MetricAggregate _aggregate;
+    private Guid? _valueColumnId;
+    private Guid? _filterColumnId;
+    private string? _filterValue;
+    private ChartKind _chart;
+    private Guid? _groupColumnId;
+    private int _maxItems = 10;
+    private string? _markdown;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Widget is not { } w)
+        {
+            _title = TypeLabel(_type);
+            return;
+        }
+
+        (_type, _title, _width, _height) = (w.Type, w.Title, w.Width, w.Height);
+        var c = w.Config;
+        (_aggregate, _valueColumnId, _filterColumnId, _filterValue, _chart, _groupColumnId, _maxItems, _markdown) =
+            (c.Aggregate, c.ValueColumnId, c.FilterColumnId, c.FilterValue, c.Chart, c.GroupColumnId, c.MaxItems, c.Markdown);
+        _sheetId = c.SheetId;
+        await LoadColumnsAsync();
+    }
+
+    private IEnumerable<ColumnDto> NumericColumns =>
+        _sheet?.Columns.Where(c => c.Type is ColumnKind.Number or ColumnKind.Currency) ?? [];
+
+    private IEnumerable<ColumnDto> GroupColumns =>
+        _sheet?.Columns.Where(c => c.Type is ColumnKind.Dropdown or ColumnKind.Person) ?? [];
+
+    private ColumnDto? FilterColumn => _sheet?.Columns.FirstOrDefault(c => c.Id == _filterColumnId);
+
+    private bool CanSave =>
+        !string.IsNullOrWhiteSpace(_title) && (_type == WidgetType.RichText || (_sheet is not null && _type switch
+        {
+            WidgetType.Metric => _aggregate == MetricAggregate.Count || _valueColumnId is not null,
+            WidgetType.Chart => _groupColumnId is not null,
+            _ => true,
+        }));
+
+    private IEnumerable<SheetSummary> SheetsFor(WidgetType type) => type switch
+    {
+        WidgetType.ScheduleHealth => Sheets.Where(s => s.SchedulingEnabled),
+        WidgetType.PlanVsActual => Sheets.Where(s => s.CostpointProjectId is not null),
+        _ => Sheets,
+    };
+
+    private string? SheetHelp() => _type switch
+    {
+        WidgetType.ScheduleHealth => "Sheets with scheduling turned on",
+        WidgetType.PlanVsActual => "Sheets linked to a Costpoint project",
+        _ => null,
+    };
+
+    public static string TypeLabel(WidgetType type) => type switch
+    {
+        WidgetType.Metric => "Metric",
+        WidgetType.Chart => "Chart",
+        WidgetType.ItemList => "Item list",
+        WidgetType.ScheduleHealth => "Schedule health",
+        WidgetType.PlanVsActual => "Plan vs actual",
+        _ => "Rich text",
+    };
+
+    private void TypeChanged(WidgetType type)
+    {
+        if (_title == TypeLabel(_type))
+        {
+            _title = TypeLabel(type);
+        }
+
+        _type = type;
+        if (_sheetId is { } id && !SheetsFor(type).Any(s => s.Id == id))
+        {
+            _sheetId = null;
+            _sheet = null;
+        }
+    }
+
+    private async Task SheetChangedAsync(Guid? sheetId)
+    {
+        _sheetId = sheetId;
+        _valueColumnId = _filterColumnId = _groupColumnId = null;
+        _filterValue = null;
+        await LoadColumnsAsync();
+    }
+
+    private async Task LoadColumnsAsync()
+    {
+        _sheet = null;
+        if (_sheetId is not { } id)
+        {
+            return;
+        }
+
+        _loadingColumns = true;
+        try
+        {
+            _sheet = await SheetService.GetAsync(id);
+        }
+        finally
+        {
+            _loadingColumns = false;
+        }
+    }
+
+    private void Submit()
+    {
+        var config = _type == WidgetType.RichText
+            ? new WidgetConfig(Markdown: _markdown ?? string.Empty)
+            : new WidgetConfig(
+                SheetId: _sheetId,
+                Aggregate: _aggregate,
+                ValueColumnId: _type == WidgetType.Metric && _aggregate == MetricAggregate.Count ? null : _valueColumnId,
+                FilterColumnId: _filterColumnId,
+                FilterValue: _filterColumnId is null || string.IsNullOrWhiteSpace(_filterValue) ? null : _filterValue.Trim(),
+                Chart: _chart,
+                GroupColumnId: _type == WidgetType.Chart ? _groupColumnId : null,
+                MaxItems: Math.Clamp(_maxItems, 1, 100));
+        MudDialog.Close(DialogResult.Ok(new SaveWidgetRequest(_title.Trim(), _type, _width, _height, config)));
+    }
+}

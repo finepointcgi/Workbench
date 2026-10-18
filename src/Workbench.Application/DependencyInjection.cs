@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Costpoint;
+using Workbench.Application.Dashboards;
+using Workbench.Application.MyWork;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Sheets;
 
@@ -17,6 +19,8 @@ public static class DependencyInjection
         services.AddWorkbenchScheduling();
         services.AddWorkbenchCollaboration();
         services.AddWorkbenchCostpoint();
+        services.AddWorkbenchMyWork();
+        services.AddWorkbenchDashboards();
         return services;
     }
 }
