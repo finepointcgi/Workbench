@@ -15,7 +15,7 @@ namespace Workbench.Application.Automation;
 /// Ordering: registered after <c>AddWorkbenchCollaboration</c>, so it wraps <c>ActivityRecordingItemService</c>:
 /// <c>AutomationItemService → ActivityRecordingItemService → ItemService</c>. The person's change is saved and
 /// recorded first; rule actions then run through this decorator again (passing itself to the engine), so they
-/// are recorded too, as "Workbench Automation", and can chain. A permission decorator should wrap this one
+/// are recorded too, as "Workbench Automation" naming the rule and its author, and can chain. A permission decorator should wrap this one
 /// (register it later) so people are checked but rule actions, which act for the rule's author, are not.
 /// </para>
 /// </summary>
