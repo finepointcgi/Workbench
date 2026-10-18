@@ -1,0 +1,101 @@
+{
+  "id": 4583173393803140,
+  "name": "Website Relaunch",
+  "version": 42,
+  "totalRowCount": 6,
+  "accessLevel": "OWNER",
+  "dependenciesEnabled": true,
+  "ganttEnabled": true,
+  "projectSettings": { "workingDays": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"], "nonWorkingDays": [], "lengthOfDay": 8 },
+  "columns": [
+    { "id": 7960873114331012, "version": 0, "index": 0, "title": "Task Name", "type": "TEXT_NUMBER", "primary": true, "validation": false, "width": 250 },
+    { "id": 642523719853956, "version": 0, "index": 1, "title": "Status", "type": "PICKLIST", "options": ["Not Started", "In Progress", "Complete"], "validation": true, "width": 120 },
+    { "id": 5146123347224452, "version": 0, "index": 2, "title": "Assigned To", "type": "CONTACT_LIST", "validation": false, "width": 150 },
+    { "id": 2894323533539204, "version": 0, "index": 3, "title": "Start", "type": "ABSTRACT_DATETIME", "tags": ["GANTT_START_DATE"], "validation": false, "width": 100 },
+    { "id": 7397923160909700, "version": 0, "index": 4, "title": "Finish", "type": "ABSTRACT_DATETIME", "tags": ["GANTT_END_DATE"], "validation": false, "width": 100 },
+    { "id": 1768423626696580, "version": 0, "index": 5, "title": "Duration", "type": "DURATION", "tags": ["GANTT_DURATION"], "validation": false, "width": 80 },
+    { "id": 6272023254067076, "version": 0, "index": 6, "title": "Predecessors", "type": "PREDECESSOR", "tags": ["GANTT_PREDECESSOR"], "validation": false, "width": 120 },
+    { "id": 4020223440381828, "version": 0, "index": 7, "title": "Done", "type": "CHECKBOX", "symbol": "STAR", "validation": false, "width": 60 },
+    { "id": 8523823067752324, "version": 0, "index": 8, "title": "Budget", "type": "TEXT_NUMBER", "validation": false, "width": 100 },
+    { "id": 205473719853900, "version": 0, "index": 9, "title": "Modified", "type": "DATETIME", "systemColumnType": "MODIFIED_DATE", "validation": false, "width": 120 },
+    { "id": 3020223440381111, "version": 0, "index": 10, "title": "WBS", "type": "TEXT_NUMBER", "validation": false, "width": 90 }
+  ],
+  "rows": [
+    {
+      "id": 2361756178769796, "rowNumber": 1, "expanded": true, "createdAt": "2026-08-01T14:01:00Z", "modifiedAt": "2026-10-10T18:22:11Z",
+      "cells": [
+        { "columnId": 7960873114331012, "value": "Design", "displayValue": "Design" },
+        { "columnId": 642523719853956, "value": "In Progress", "displayValue": "In Progress" },
+        { "columnId": 2894323533539204, "value": "2026-10-05T08:00:00", "displayValue": "10/05/26" },
+        { "columnId": 7397923160909700, "value": "2026-10-16T16:59:59", "displayValue": "10/16/26" },
+        { "columnId": 1768423626696580, "value": "10d", "displayValue": "10d", "objectValue": { "objectType": "DURATION", "days": 10 } },
+        { "columnId": 8523823067752324, "value": 5000, "displayValue": "$5,000.00" },
+        { "columnId": 205473719853900, "value": "2026-10-10T18:22:11Z", "displayValue": "10/10/26 11:22 AM" },
+        { "columnId": 3020223440381111, "value": "3001.01", "displayValue": "3001.01" }
+      ]
+    },
+    {
+      "id": 6865355806140292, "rowNumber": 2, "parentId": 2361756178769796, "createdAt": "2026-08-01T14:02:00Z", "modifiedAt": "2026-10-09T10:00:00Z",
+      "cells": [
+        { "columnId": 7960873114331012, "value": "Wireframes", "displayValue": "Wireframes" },
+        { "columnId": 642523719853956, "value": "Complete", "displayValue": "Complete" },
+        { "columnId": 5146123347224452, "value": "jane.smith@example.com", "displayValue": "Jane Smith", "objectValue": { "objectType": "CONTACT", "email": "jane.smith@example.com", "name": "Jane Smith" } },
+        { "columnId": 2894323533539204, "value": "2026-10-05T08:00:00", "displayValue": "10/05/26" },
+        { "columnId": 7397923160909700, "value": "2026-10-09T16:59:59", "displayValue": "10/09/26" },
+        { "columnId": 1768423626696580, "value": "5d", "displayValue": "5d", "objectValue": { "objectType": "DURATION", "days": 5 } },
+        { "columnId": 4020223440381828, "value": true, "displayValue": "true" },
+        { "columnId": 8523823067752324, "value": 1200, "displayValue": "$1,200.00" },
+        { "columnId": 3020223440381111, "value": "3001.01.01", "displayValue": "3001.01.01" }
+      ]
+    },
+    {
+      "id": 1235856271927172, "rowNumber": 3, "parentId": 2361756178769796, "createdAt": "2026-08-01T14:03:00Z", "modifiedAt": "2026-10-09T10:00:00Z",
+      "cells": [
+        { "columnId": 7960873114331012, "value": "Visual design", "displayValue": "Visual design" },
+        { "columnId": 642523719853956, "value": "In Progress", "displayValue": "In Progress" },
+        { "columnId": 5146123347224452, "value": "bob.lee@example.com", "displayValue": "Bob Lee", "objectValue": { "objectType": "CONTACT", "email": "bob.lee@example.com", "name": "Bob Lee" } },
+        { "columnId": 2894323533539204, "value": "2026-10-14T08:00:00", "displayValue": "10/14/26" },
+        { "columnId": 1768423626696580, "value": "3d", "displayValue": "3d", "objectValue": { "objectType": "DURATION", "days": 3 } },
+        { "columnId": 6272023254067076, "value": "2FS +2d", "displayValue": "2FS +2d",
+          "objectValue": { "objectType": "PREDECESSOR_LIST", "predecessors": [ { "rowId": 6865355806140292, "rowNumber": 2, "type": "FS", "lag": { "objectType": "DURATION", "days": 2 }, "inCriticalPath": true } ] } },
+        { "columnId": 4020223440381828, "value": false, "displayValue": "false" },
+        { "columnId": 8523823067752324, "value": 2400, "displayValue": "$2,400.00" },
+        { "columnId": 3020223440381111, "value": "3001.01.02", "displayValue": "3001.01.02" }
+      ]
+    },
+    {
+      "id": 5739455899297668, "rowNumber": 4, "createdAt": "2026-08-01T14:04:00Z", "modifiedAt": "2026-10-09T10:00:00Z",
+      "cells": [
+        { "columnId": 7960873114331012, "value": "Build", "displayValue": "Build" },
+        { "columnId": 642523719853956, "value": "Not Started", "displayValue": "Not Started" },
+        { "columnId": 8523823067752324, "value": 9000, "displayValue": "$9,000.00" }
+      ]
+    },
+    {
+      "id": 3487656085612420, "rowNumber": 5, "parentId": 5739455899297668, "createdAt": "2026-08-01T14:05:00Z", "modifiedAt": "2026-10-09T10:00:00Z",
+      "cells": [
+        { "columnId": 7960873114331012, "value": "Front end", "displayValue": "Front end" },
+        { "columnId": 642523719853956, "value": "Blocked", "displayValue": "Blocked" },
+        { "columnId": 5146123347224452, "value": "jane.smith@example.com", "displayValue": "Jane Smith", "objectValue": { "objectType": "CONTACT", "email": "jane.smith@example.com", "name": "Jane Smith" } },
+        { "columnId": 2894323533539204, "value": "2026-10-19T08:00:00", "displayValue": "10/19/26" },
+        { "columnId": 7397923160909700, "value": "2026-10-30T16:59:59", "displayValue": "10/30/26" },
+        { "columnId": 6272023254067076, "value": "3, 2SS -1d", "displayValue": "3, 2SS -1d",
+          "objectValue": { "objectType": "PREDECESSOR_LIST", "predecessors": [
+            { "rowId": 1235856271927172, "rowNumber": 3, "type": "FS" },
+            { "rowId": 6865355806140292, "rowNumber": 2, "type": "SS", "lag": { "objectType": "DURATION", "days": 1, "negative": true } } ] } },
+        { "columnId": 8523823067752324, "value": 7000, "displayValue": "$7,000.00" }
+      ]
+    },
+    {
+      "id": 7991255712982916, "rowNumber": 6, "parentId": 3487656085612420, "createdAt": "2026-08-01T14:06:00Z", "modifiedAt": "2026-10-09T10:00:00Z",
+      "cells": [
+        { "columnId": 7960873114331012, "value": "Accessibility review", "displayValue": "Accessibility review" },
+        { "columnId": 2894323533539204, "value": "2026-10-26T08:00:00", "displayValue": "10/26/26" },
+        { "columnId": 7397923160909700, "value": "2026-10-28T16:59:59", "displayValue": "10/28/26" },
+        { "columnId": 6272023254067076, "value": "5FF +1w", "displayValue": "5FF +1w",
+          "objectValue": { "objectType": "PREDECESSOR_LIST", "predecessors": [ { "rowId": 3487656085612420, "rowNumber": 5, "type": "FF", "lag": { "objectType": "DURATION", "weeks": 1 } } ] } },
+        { "columnId": 8523823067752324, "value": 2000, "displayValue": "$2,000.00" }
+      ]
+    }
+  ]
+}
