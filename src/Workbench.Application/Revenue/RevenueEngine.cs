@@ -262,48 +262,89 @@ public sealed class RevenueEngine(BillingCostSource costs)
     internal static async Task<LedgerPosition> LedgerAsync(IWorkbenchDbContext db, Guid projectId, DateOnly end, CancellationToken ct)
     {
         var tracked = RevenueAccounts.Concat([ArUnbilled, BillingsInExcess, LossProvisionLiability]).ToList();
-        var lines = await (
+        var lines = (await LinesAsync(db, null, end, tracked, ct)).Where(l => l.ProjectId == projectId).ToList();
+        var other = lines.Where(l => RevenueAccounts.Contains(l.Account) && !l.IsRun)
+            .GroupBy(l => l.Account).ToDictionary(g => g.Key, g => g.Sum(l => l.Credit - l.Debit), StringComparer.Ordinal);
+        var runs = lines.Where(l => l.IsRun).ToList();
+        var runRevenue = runs.Where(l => RevenueAccounts.Contains(l.Account))
+            .GroupBy(l => l.Account).ToDictionary(g => g.Key, g => g.Sum(l => l.Credit - l.Debit), StringComparer.Ordinal);
+        return new LedgerPosition(other, runRevenue,
+            runs.Where(l => l.Account == ArUnbilled).Sum(l => l.Debit - l.Credit),
+            runs.Where(l => l.Account == BillingsInExcess).Sum(l => l.Credit - l.Debit),
+            runs.Where(l => l.Account == LossProvisionLiability).Sum(l => l.Credit - l.Debit));
+    }
+
+    /// <summary>
+    /// A posted ledger line on one of the tracked accounts, with the project it belongs to. Invoice lines billed across
+    /// projects (fees, CLIN-level ODC lines) carry no project segment; they belong to the invoice contract's primary
+    /// project (its lowest project code). <see cref="IsRun"/> marks revenue-run entries and their reversals;
+    /// <see cref="OriginalSource"/>/<see cref="OriginalSourceId"/> are the reversed entry's for a reversal.
+    /// </summary>
+    internal sealed record LedgerLine(
+        Guid? ProjectId,
+        string Account,
+        DateOnly Date,
+        JournalSource OriginalSource,
+        Guid? OriginalSourceId,
+        bool IsRun,
+        decimal Debit,
+        decimal Credit);
+
+    internal static async Task<List<LedgerLine>> LinesAsync(IWorkbenchDbContext db, DateOnly? since, DateOnly end, IReadOnlyCollection<string> accounts, CancellationToken ct)
+    {
+        var numbers = accounts.ToList();
+        var raw = await (
                 from l in db.Set<JournalLine>().AsNoTracking()
                 join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
                 join a in db.Set<Account>().AsNoTracking() on l.AccountId equals a.Id
-                where l.ProjectId == projectId && e.Status != JournalStatus.Draft && e.Date <= end && tracked.Contains(a.Number)
-                select new { a.Number, e.Source, e.Status, e.ReversalOfId, l.Debit, l.Credit })
+                where e.Status != JournalStatus.Draft && e.Date <= end && (since == null || e.Date >= since) && numbers.Contains(a.Number)
+                select new { l.ProjectId, a.Number, e.Date, e.Source, e.SourceId, e.ReversalOfId, l.Debit, l.Credit })
             .ToListAsync(ct);
 
-        // Reversals of revenue-run entries belong to the runs: the reversed run and its reversal net to zero there.
-        var reversedIds = lines.Where(l => l.ReversalOfId != null).Select(l => l.ReversalOfId!.Value).Distinct().ToList();
-        var revenueRunEntries = (await db.Set<JournalEntry>().AsNoTracking()
-            .Where(e => reversedIds.Contains(e.Id) && e.Source == JournalSource.Revenue).Select(e => e.Id).ToListAsync(ct)).ToHashSet();
-        bool IsRun(JournalSource source, Guid? reversalOf) => source == JournalSource.Revenue || (reversalOf is { } r && revenueRunEntries.Contains(r));
+        var reversedIds = raw.Where(l => l.ReversalOfId != null).Select(l => l.ReversalOfId!.Value).Distinct().ToList();
+        var reversed = reversedIds.Count == 0
+            ? []
+            : await db.Set<JournalEntry>().AsNoTracking().Where(e => reversedIds.Contains(e.Id))
+                .ToDictionaryAsync(e => e.Id, e => (e.Source, e.SourceId), ct);
+        (JournalSource Source, Guid? SourceId) Original(JournalSource source, Guid? sourceId, Guid? reversalOf) =>
+            reversalOf is { } r && reversed.TryGetValue(r, out var o) ? o : (source, sourceId);
 
-        var other = lines.Where(l => RevenueAccounts.Contains(l.Number) && !IsRun(l.Source, l.ReversalOfId))
-            .GroupBy(l => l.Number).ToDictionary(g => g.Key, g => g.Sum(l => l.Credit - l.Debit), StringComparer.Ordinal);
-        var runs = lines.Where(l => IsRun(l.Source, l.ReversalOfId)).ToList();
-        var runRevenue = runs.Where(l => RevenueAccounts.Contains(l.Number))
-            .GroupBy(l => l.Number).ToDictionary(g => g.Key, g => g.Sum(l => l.Credit - l.Debit), StringComparer.Ordinal);
-        return new LedgerPosition(other, runRevenue,
-            runs.Where(l => l.Number == ArUnbilled).Sum(l => l.Debit - l.Credit),
-            runs.Where(l => l.Number == BillingsInExcess).Sum(l => l.Credit - l.Debit),
-            runs.Where(l => l.Number == LossProvisionLiability).Sum(l => l.Credit - l.Debit));
+        // Project-less billing lines: invoice → contract → primary project.
+        var invoiceIds = raw.Where(l => l.ProjectId == null)
+            .Select(l => Original(l.Source, l.SourceId, l.ReversalOfId))
+            .Where(o => o.Source == JournalSource.Billing && o.SourceId != null).Select(o => o.SourceId!.Value).Distinct().ToList();
+        var primary = new Dictionary<Guid, Guid>();
+        if (invoiceIds.Count > 0)
+        {
+            var invoices = await db.Set<Invoice>().AsNoTracking().Where(i => invoiceIds.Contains(i.Id)).Select(i => new { i.Id, i.ContractId }).ToListAsync(ct);
+            var contractIds = invoices.Select(i => i.ContractId).Distinct().ToList();
+            var projects = (await db.Set<Project>().AsNoTracking().Where(p => p.ContractId != null && contractIds.Contains(p.ContractId.Value))
+                    .Select(p => new { p.Id, p.Code, ContractId = p.ContractId!.Value }).ToListAsync(ct))
+                .GroupBy(p => p.ContractId).ToDictionary(g => g.Key, g => g.OrderBy(p => p.Code, StringComparer.Ordinal).First().Id);
+            foreach (var i in invoices)
+            {
+                if (projects.TryGetValue(i.ContractId, out var projectId))
+                {
+                    primary[i.Id] = projectId;
+                }
+            }
+        }
+
+        return raw.Select(l =>
+        {
+            var o = Original(l.Source, l.SourceId, l.ReversalOfId);
+            var projectId = l.ProjectId ?? (o.Source == JournalSource.Billing && o.SourceId is { } inv && primary.TryGetValue(inv, out var p) ? p : null);
+            return new LedgerLine(projectId, l.Number, l.Date, o.Source, o.SourceId, o.Source == JournalSource.Revenue, l.Debit, l.Credit);
+        }).ToList();
     }
 
     /// <summary>Revenue booked for a project (every source) through <paramref name="end"/>.</summary>
     internal static async Task<decimal> RevenueThroughAsync(IWorkbenchDbContext db, Guid projectId, DateOnly end, CancellationToken ct) =>
-        (await RevenueByProjectAsync(db, [projectId], end, ct)).GetValueOrDefault(projectId);
+        (await RevenueByProjectAsync(db, end, ct)).GetValueOrDefault(projectId);
 
-    internal static async Task<Dictionary<Guid, decimal>> RevenueByProjectAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid>? projectIds, DateOnly end, CancellationToken ct)
-    {
-        var accounts = RevenueAccounts.ToList();
-        var rows = await (
-                from l in db.Set<JournalLine>().AsNoTracking()
-                join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
-                join a in db.Set<Account>().AsNoTracking() on l.AccountId equals a.Id
-                where l.ProjectId != null && e.Status != JournalStatus.Draft && e.Date <= end && accounts.Contains(a.Number)
-                select new { ProjectId = l.ProjectId!.Value, l.Debit, l.Credit })
-            .ToListAsync(ct);
-        return rows.Where(r => projectIds is null || projectIds.Contains(r.ProjectId))
-            .GroupBy(r => r.ProjectId).ToDictionary(g => g.Key, g => g.Sum(r => r.Credit - r.Debit));
-    }
+    internal static async Task<Dictionary<Guid, decimal>> RevenueByProjectAsync(IWorkbenchDbContext db, DateOnly end, CancellationToken ct) =>
+        (await LinesAsync(db, null, end, RevenueAccounts.ToList(), ct)).Where(l => l.ProjectId != null)
+            .GroupBy(l => l.ProjectId!.Value).ToDictionary(g => g.Key, g => g.Sum(l => l.Credit - l.Debit));
 
     /// <summary>
     /// Billed to date on CLINs with their own revenue unit: approved invoice lines (credit memos negative) dated through
