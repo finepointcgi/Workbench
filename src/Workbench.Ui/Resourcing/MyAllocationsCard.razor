@@ -1,0 +1,69 @@
+@* My Work: the signed-in employee's allocations for the next four weeks. Hidden when there are none (or when the host has
+   no resourcing service, so pages and tests without it still render). *@
+@inject IServiceProvider Services
+
+@if (_rows.Count > 0)
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true" data-card="allocations">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Primary" />
+            <MudText Typo="Typo.subtitle1">My allocations</MudText>
+            <MudSpacer />
+            <MudButton Href="resourcing" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Resourcing</MudButton>
+        </MudStack>
+        <MudSimpleTable Dense="true">
+            <thead>
+                <tr>
+                    <th>Project</th>
+                    @foreach (var week in _weeks)
+                    {
+                        <th style="text-align:right">@week.ToString("MMM d")</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in _rows.GroupBy(r => r.ProjectCode + (r.WbsCode is { } w ? " · " + w : "")))
+                {
+                    <tr>
+                        <td>@group.Key</td>
+                        @foreach (var week in _weeks)
+                        {
+                            <td style="text-align:right">@ResourcingFormat.Hours(group.Where(r => r.WeekStart == week).Sum(r => r.Hours))</td>
+                        }
+                    </tr>
+                }
+                <tr>
+                    <td><b>Total</b></td>
+                    @foreach (var week in _weeks)
+                    {
+                        <td style="text-align:right"><b>@ResourcingFormat.Hours(_rows.Where(r => r.WeekStart == week).Sum(r => r.Hours))</b></td>
+                    }
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<AllocationDto> _rows = [];
+    private IReadOnlyList<DateOnly> _weeks = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var start = ResourcingFormat.ThisWeek;
+        _weeks = Enumerable.Range(0, 4).Select(i => start.AddDays(7 * i)).ToList();
+        if (Services.GetService(typeof(IResourceAllocationService)) is not IResourceAllocationService allocations)
+        {
+            return;
+        }
+
+        try
+        {
+            _rows = await allocations.ListMineAsync(start, start.AddDays(27));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is InvalidOperationException)
+        {
+            _rows = [];
+        }
+    }
+}

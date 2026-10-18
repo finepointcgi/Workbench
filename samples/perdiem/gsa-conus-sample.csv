@@ -1,0 +1,9 @@
+Country,State,Destination,County,Season Begin,Season End,Lodging,M&IE
+US,,Standard CONUS,All locations not listed,October 1,September 30,110,68
+US,DC,District of Columbia,"Washington DC (also the cities of Alexandria, Falls Church and Fairfax, and the counties of Arlington and Fairfax, in Virginia; and the counties of Montgomery and Prince George's in Maryland)",October 1,June 30,258,92
+US,DC,District of Columbia,"Washington DC (also the cities of Alexandria, Falls Church and Fairfax, and the counties of Arlington and Fairfax, in Virginia; and the counties of Montgomery and Prince George's in Maryland)",July 1,August 31,195,92
+US,DC,District of Columbia,"Washington DC (also the cities of Alexandria, Falls Church and Fairfax, and the counties of Arlington and Fairfax, in Virginia; and the counties of Montgomery and Prince George's in Maryland)",September 1,September 30,258,92
+US,AL,Huntsville,Madison,October 1,September 30,121,74
+US,CA,San Diego,San Diego,October 1,June 30,205,86
+US,CA,San Diego,San Diego,July 1,August 31,252,86
+US,CA,San Diego,San Diego,September 1,September 30,205,86
