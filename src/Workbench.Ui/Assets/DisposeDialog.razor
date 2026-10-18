@@ -1,0 +1,33 @@
+@* Dispose of an asset: the gain or loss is proceeds less net book value. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">Net book value @AssetFormat.Amount(Asset.Asset.NetBookValue). Depreciation must be posted through the month before the disposal date.</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="6"><MudDatePicker @bind-Date="_on" Label="Disposal date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_proceeds" Label="Proceeds" Format="N2" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Required="true" Margin="Margin.Dense" /></MudItem>
+            @if (!(Asset.Asset.IsGovernmentFurnished || Asset.Asset.IsContractorAcquired))
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2">@(_proceeds - Asset.Asset.NetBookValue >= 0 ? "Gain" : "Loss") on disposal: <b>@AssetFormat.Amount(Math.Abs(_proceeds - Asset.Asset.NetBookValue))</b></MudText>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(_on is null || string.IsNullOrWhiteSpace(_reason))" OnClick="Save" data-testid="dispose-save">Dispose</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public AssetDto Asset { get; set; } = default!;
+
+    private DateTime? _on = DateTime.Today;
+    private decimal _proceeds;
+    private string? _reason;
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new DisposeAssetRequest(DateOnly.FromDateTime(_on!.Value), _proceeds, _reason!)));
+}

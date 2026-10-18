@@ -1,0 +1,33 @@
+@page "/purchasing/receiving"
+@inject IPurchaseOrderService Orders
+
+<PageTitle>Receiving · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Receiving" BackHref="purchasing/orders" BackLabel="Purchase orders"
+                  Subtitle="Issued orders you can receive against (Finance, or the receivers named on the order). Record what arrived, or accept services, with partial receipts as they come in." />
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-2"><OrderTable Orders="_orders" /></MudPaper>
+}
+
+@code {
+    private IReadOnlyList<PurchaseOrderSummaryDto> _orders = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _orders = await Orders.ListReceivableAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+}

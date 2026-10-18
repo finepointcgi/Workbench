@@ -20,6 +20,10 @@
     [Parameter, EditorRequired]
     public ProjectFinancialSummaryDto Summary { get; set; } = default!;
 
+    /// <summary>Open purchase order amounts (procure-to-pay commitments); the tile shows only when set.</summary>
+    [Parameter]
+    public decimal? Committed { get; set; }
+
     private sealed record Tile(string Label, string Value, string? Detail = null, string Class = "");
 
     private IEnumerable<Tile> Tiles
@@ -36,6 +40,11 @@
             {
                 yield return new Tile("Funded remaining", FinancialFormat.Money(funding.FundedRemaining), $"of {FinancialFormat.Money(funding.FundedValue)} funded",
                     funding.FundedRemaining < 0 ? "mud-error-text" : "");
+            }
+
+            if (Committed is { } committed)
+            {
+                yield return new Tile("Committed", FinancialFormat.Money(committed), "Open purchase orders");
             }
 
             if (Summary.ShowsBillableValue)

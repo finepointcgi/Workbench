@@ -244,3 +244,20 @@ await notifications.PublishAsync(
   picked up automatically; a reference without one (like comments → items) needs an explicit check there.
 - External ids Workbench has no field for (Smartsheet row/sheet ids) live in `ImportKeyMap`. Samples and the expected
   columns per file: `samples/import/README.md`.
+## Procure-to-pay and fixed assets (wave 6)
+
+- Entities: `PurchaseRequisition(Line)`, `RequisitionApproval`, `PurchaseOrder(Line)`, `PurchaseOrderRevision`,
+  `PurchaseReceipt(Line)` (Domain/Purchasing/Procurement.cs); `AssetCategory`, `FixedAsset`, `AssetDepreciationRun`,
+  `AssetDepreciation`, `AssetTransfer` (Domain/Assets/FixedAssets.cs). `ApBillLine` gained `PurchaseOrderLineId`, `Quantity`,
+  `UnitPrice` and the match result/override columns; `PurchaseOrderLine.QuantityReceived` is a running total kept with receipts.
+- Contracts: `IRequisitionService`, `IPurchaseOrderService` (receiving included), `IThreeWayMatchService`, `ICommitmentService`
+  (Contracts/Purchasing/ProcurementContracts.cs); `IAssetService`, `IDepreciationService`, `IAssetReportService` (Contracts/Assets).
+- A bill line with a `PurchaseOrderLineId` takes its charging from the PO line; the match (billed to date on live bills ≤
+  received, price within tolerance) is recorded at submit and re-checked at approval, which it blocks unless Finance overrode it.
+- Commitments are open PO line amounts less what posted bills billed; never posted. `ProcurementSupport.CommitmentsByWbsAsync`
+  feeds CLIN funding status ("committed") and `ICommitmentService` the project financials page.
+- GL sources `Asset` (capitalization reclass and disposal, source id = asset) and `Depreciation` (source id = run). Depreciation
+  is the scheduled amount through the period less what's posted (late additions catch up once), unique per asset and period,
+  so runs are idempotent; closed periods are refused; `DepreciationCloseCheck` adds "Depreciation posted" to the period close.
+  Government-furnished and contractor-acquired property is tracked but never depreciated.
+

@@ -1,0 +1,150 @@
+@* Record an asset by hand (nothing is posted): description, category, cost and life, location and custody, and FAR 52.245-1 property details. *@
+@inject IAssetService Assets
+@inject IPeopleService People
+@inject IProjectService Projects
+@inject IContractService Contracts
+
+<MudDialog>
+    <DialogContent>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+        }
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="8"><MudTextField T="string" @bind-Value="_description" Label="Description" Required="true" Margin="Margin.Dense" data-testid="asset-description" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="_tag" Label="Tag (blank: next FA- number)" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="Guid?" Value="_categoryId" ValueChanged="CategoryChanged" Label="Category" Required="true" Dense="true">
+                    @foreach (var c in _categories.Where(c => c.IsActive))
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="3"><MudDatePicker @bind-Date="_acquired" Label="Acquired" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField T="decimal" @bind-Value="_cost" Label="Cost" Format="N2" Min="0" Margin="Margin.Dense" data-testid="asset-cost" /></MudItem>
+            <MudItem xs="6" md="4">
+                <MudSelect T="AssetDepreciationMethod" @bind-Value="_method" Label="Method" Dense="true">
+                    @foreach (var m in Enum.GetValues<AssetDepreciationMethod>())
+                    {
+                        <MudSelectItem Value="m">@AssetFormat.Label(m)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="3" md="2"><MudNumericField T="int" @bind-Value="_life" Label="Life (yrs)" Min="1" Max="50" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="3" md="3"><MudNumericField T="decimal" @bind-Value="_salvage" Label="Salvage" Format="N2" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="3"><MudTextField T="string" @bind-Value="_serial" Label="Serial number" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="4"><MudTextField T="string" @bind-Value="_location" Label="Location" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6" md="4">
+                <MudSelect T="Guid?" @bind-Value="_custodianId" Label="Custodian" Dense="true" Clearable="true">
+                    @foreach (var e in _employees)
+                    {
+                        <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="4">
+                <MudSelect T="Guid?" @bind-Value="_orgId" Label="Organization" Dense="true" Clearable="true">
+                    @foreach (var o in _orgs)
+                    {
+                        <MudSelectItem T="Guid?" Value="o.Id">@o.Code · @o.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="4">
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project (depreciation segment)" Dense="true" Clearable="true">
+                    @foreach (var p in _projects)
+                    {
+                        <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2">Government property (FAR 52.245-1)</MudText>
+            </MudItem>
+            <MudItem xs="6" md="3"><MudCheckBox T="bool" @bind-Value="_gfp" Label="Government-furnished" Dense="true" /></MudItem>
+            <MudItem xs="6" md="3"><MudCheckBox T="bool" @bind-Value="_cap" Label="Contractor-acquired" Dense="true" Disabled="_gfp" /></MudItem>
+            @if (_gfp || _cap)
+            {
+                <MudItem xs="6" md="3">
+                    <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Dense="true" Required="true">
+                        @foreach (var c in _contracts)
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" md="3"><MudTextField T="string" @bind-Value="_govNumber" Label="Government property no." Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="12"><MudText Typo="Typo.caption" Class="mud-text-secondary">Government property is tracked for the property records but not depreciated by us.</MudText></MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanSave)" OnClick="Save" data-testid="asset-save">Save asset</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private IReadOnlyList<AssetCategoryDto> _categories = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private IReadOnlyList<OrgUnitDto> _orgs = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private string? _description;
+    private string? _tag;
+    private Guid? _categoryId;
+    private DateTime? _acquired = DateTime.Today;
+    private decimal _cost;
+    private AssetDepreciationMethod _method;
+    private int _life = 5;
+    private decimal _salvage;
+    private string? _serial;
+    private string? _location;
+    private Guid? _custodianId;
+    private Guid? _orgId;
+    private Guid? _projectId;
+    private bool _gfp;
+    private bool _cap;
+    private Guid? _contractId;
+    private string? _govNumber;
+    private string? _error;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_description) && _categoryId is not null && _acquired is not null && _cost > 0 && (!(_gfp || _cap) || _contractId is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _categories = await Assets.ListCategoriesAsync();
+            _employees = await People.ListEmployeesAsync();
+            _orgs = await People.ListOrgUnitsAsync();
+            _projects = await Projects.ListProjectsAsync();
+            _contracts = await Contracts.ListContractsAsync();
+            if (_categories.FirstOrDefault(c => c.IsActive) is { } first)
+            {
+                CategoryChanged(first.Id);
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private void CategoryChanged(Guid? id)
+    {
+        _categoryId = id;
+        if (_categories.FirstOrDefault(c => c.Id == id) is { } c)
+        {
+            (_method, _life) = (c.DefaultMethod, c.DefaultLifeYears);
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveAssetRequest(
+        _description!, _categoryId!.Value, DateOnly.FromDateTime(_acquired!.Value), _cost, _salvage, _life, _method, string.IsNullOrWhiteSpace(_tag) ? null : _tag,
+        SerialNumber: _serial, Location: _location, CustodianEmployeeId: _custodianId, OrgUnitId: _orgId, ProjectId: _projectId,
+        IsGovernmentFurnished: _gfp, IsContractorAcquired: _cap && !_gfp, ContractId: _gfp || _cap ? _contractId : null, GovernmentPropertyNumber: _govNumber)));
+}

@@ -147,6 +147,9 @@ public sealed class ApBillService(
         bill.DuplicateConfirmedBy = duplicates.Count > 0 ? Me : null;
         await CheckSubcontractFundingAsync(db, bill, request.FundingOverrideReason, cancellationToken);
 
+        // Three-way match (procure-to-pay): mismatches are recorded now and block approval until they clear or Finance overrides.
+        await ThreeWayMatch.EvaluateAsync(db, bill, options.Value.MatchPriceTolerancePercent, cancellationToken);
+
         // Routing.
         var projectIds = bill.Lines.Where(l => l.ProjectId != null).Select(l => l.ProjectId!.Value).Distinct().ToList();
         var managers = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id) && p.ProjectManagerId != null)
@@ -170,6 +173,7 @@ public sealed class ApBillService(
             Routes = bill.Lines.Select(l => l.ApproverEmail ?? PurchasingSupport.FinanceRoute).Distinct(),
             bill.FundingOverrideReason,
             bill.DuplicateConfirmedBy,
+            MatchProblems = bill.Lines.Where(l => l.MatchProblem != null).Select(l => new { l.LineNumber, l.MatchProblem }),
         });
         await db.SaveChangesAsync(cancellationToken);
 
@@ -234,6 +238,16 @@ public sealed class ApBillService(
                 throw new WorkbenchForbiddenException(bill.Lines.Any(l => l.Status == ApLineStatus.Pending && l.OdcEntryId is { } o && PurchasingSupport.SameEmail(submitters.GetValueOrDefault(o), Me))
                     ? "You can't approve a cost you entered yourself."
                     : "None of this bill's lines are routed to you.");
+            }
+
+            // Three-way match: receipts may have arrived since submission, so re-check; mismatches block unless Finance overrode them.
+            await ThreeWayMatch.EvaluateAsync(db, bill, options.Value.MatchPriceTolerancePercent, cancellationToken);
+            var blocked = ThreeWayMatch.Blocking(lines);
+            if (blocked.Count > 0)
+            {
+                await db.SaveChangesAsync(cancellationToken);
+                throw new ArgumentException("Three-way match failed: " + string.Join(" ", blocked.Select(l => $"Line {l.LineNumber}: {l.MatchProblem}"))
+                    + " Receive the goods, correct the bill, or have Finance override under Purchasing › Match exceptions.");
             }
 
             foreach (var line in lines)
@@ -620,6 +634,9 @@ public sealed class ApBillService(
                 OdcEntryId = input.OdcEntryId,
                 AccountId = input.AccountId,
                 OrgUnitId = input.OrgUnitId,
+                PurchaseOrderLineId = input.PurchaseOrderLineId,
+                Quantity = input.Quantity,
+                UnitPrice = input.UnitPrice,
             };
             bill.Lines.Add(line);
             await ValidateLineAsync(db, bill, vendor, line, ct);
@@ -639,6 +656,17 @@ public sealed class ApBillService(
     private async Task ValidateLineAsync(IWorkbenchDbContext db, ApBill bill, Vendor vendor, ApBillLine line, CancellationToken ct)
     {
         var n = line.LineNumber;
+        if (line.PurchaseOrderLineId is not null)
+        {
+            // Billed from a purchase order: the PO line decides the charging and price (procure-to-pay).
+            await ThreeWayMatch.ApplyPoLineAsync(db, bill, line, ct);
+        }
+        else
+        {
+            line.Quantity = null;
+            line.UnitPrice = null;
+        }
+
         Subcontract? sub = null;
         if (line.Kind == ApBillLineKind.Subcontract)
         {
@@ -894,7 +922,7 @@ public sealed class ApBillService(
         b.DueDate,
         b.Amount,
         b.RetainageAmount,
-        Lines = b.Lines.Select(l => new { l.LineNumber, Kind = l.Kind.ToString(), l.Amount, l.WbsElementId, l.SubcontractId, l.AccountId, l.OdcEntryId }),
+        Lines = b.Lines.Select(l => new { l.LineNumber, Kind = l.Kind.ToString(), l.Amount, l.WbsElementId, l.SubcontractId, l.AccountId, l.OdcEntryId, l.PurchaseOrderLineId, l.Quantity }),
     };
 
     // ---- DTOs ----
@@ -942,6 +970,7 @@ public sealed class ApBillService(
         private Dictionary<Guid, string> _subs = [];
         private Dictionary<Guid, Account> _accounts = [];
         private Dictionary<Guid, string> _orgs = [];
+        private Dictionary<Guid, string> _poNumbers = [];
 
         public static async Task<LineLookups> LoadAsync(IWorkbenchDbContext db, IEnumerable<ApBillLine> lines, CancellationToken ct)
         {
@@ -952,6 +981,7 @@ public sealed class ApBillService(
             var subIds = Ids(l => l.SubcontractId);
             var accountIds = Ids(l => l.AccountId);
             var orgIds = Ids(l => l.OrgUnitId);
+            var poLineIds = Ids(l => l.PurchaseOrderLineId);
             return new LineLookups
             {
                 _projects = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Code, ct),
@@ -959,6 +989,9 @@ public sealed class ApBillService(
                 _subs = await db.Set<Subcontract>().AsNoTracking().Where(s => subIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Number, ct),
                 _accounts = await db.Set<Account>().AsNoTracking().Where(a => accountIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct),
                 _orgs = await db.Set<OrgUnit>().AsNoTracking().Where(o => orgIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Code, ct),
+                _poNumbers = await db.Set<PurchaseOrderLine>().AsNoTracking().Where(l => poLineIds.Contains(l.Id))
+                    .Join(db.Set<PurchaseOrder>(), l => l.PurchaseOrderId, o => o.Id, (l, o) => new { l.Id, Number = o.Number + " line " + l.LineNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.Number, ct),
             };
         }
 
@@ -972,7 +1005,9 @@ public sealed class ApBillService(
                 l.OdcType?.ToContract(), l.SubcontractId, l.SubcontractId is { } s ? _subs.GetValueOrDefault(s) : null,
                 l.OdcEntryId, l.AccountId, account?.Number, account?.Name,
                 l.OrgUnitId, l.OrgUnitId is { } o ? _orgs.GetValueOrDefault(o) : null,
-                l.RetainageAmount, l.Status.ToContract(), l.ApproverEmail ?? PurchasingSupport.FinanceRoute, l.DecidedBy, l.DecidedAtUtc);
+                l.RetainageAmount, l.Status.ToContract(), l.ApproverEmail ?? PurchasingSupport.FinanceRoute, l.DecidedBy, l.DecidedAtUtc,
+                l.PurchaseOrderLineId, l.PurchaseOrderLineId is { } po ? _poNumbers.GetValueOrDefault(po) : null, l.Quantity, l.UnitPrice,
+                l.MatchProblem, l.MatchOverrideBy, l.MatchOverrideReason);
         }
     }
 }
