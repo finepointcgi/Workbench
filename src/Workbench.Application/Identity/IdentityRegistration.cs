@@ -75,6 +75,7 @@ public static class IdentityRegistration
         services.AddWorkbenchPayrollPermissions(); // Payroll: Finance or Admin only (pay rates masked unless revealed).
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
         services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
+        services.AddWorkbenchIncurredCostPermissions(); // Incurred cost submissions: Finance or Admin only.
         return services;
     }
 
