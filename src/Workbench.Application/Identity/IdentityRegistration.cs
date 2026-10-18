@@ -39,6 +39,7 @@ public static class IdentityRegistration
         services.AddScoped<IWorkspaceMembershipService, WorkspaceMembershipService>();
         services.AddScoped<ISheetWorkspacePicker, EditableWorkspacePicker>();
         services.AddScoped<ProjectAccess>();
+        services.AddScoped<RestrictedColumnAccess>();
         services.AddScoped<IFinancialAccessService>(sp => sp.GetRequiredService<ProjectAccess>());
 
         services.Decorate<ISheetService, PermissionCheckingSheetService>();

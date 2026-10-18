@@ -52,7 +52,8 @@ public sealed class SheetService(IWorkbenchDbContextFactory dbFactory, TimeProvi
             .Where(c => c.SheetId == sheetId)
             .OrderBy(c => c.Order)
             .ToListAsync(cancellationToken);
-        return new SheetDetail(summary, columns.Select(c => c.ToDto()).ToList());
+        var restricted = RestrictedColumns.Of(columns);
+        return new SheetDetail(summary, columns.Select(c => RestrictedColumns.ToDto(c, restricted)).ToList());
     }
 
     public async Task<SheetSummary> CreateAsync(CreateSheetRequest request, CancellationToken cancellationToken = default)

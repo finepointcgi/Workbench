@@ -37,12 +37,21 @@
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Functions" Size="Size.Small" Class="wb-fx" />
                             }
+                            @if (column.IsRestricted)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="wb-fx" aria-label="Restricted column" data-testid="restricted-icon" />
+                            }
                             <span class="wb-th-name">@column.Name</span>
                             <MudMenu Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small" Dense="true" Class="wb-th-menu"
                                      AriaLabel="@($"{column.Name} column actions")">
                                 @if (column.Column is { } custom && CanEdit)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="() => EditColumnAsync(custom)">Rename</MudMenuItem>
+                                    @if (Sheet.CanSeeRestricted && !custom.ReadsRestricted)
+                                    {
+                                        <MudMenuItem Icon="@(custom.IsRestricted ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
+                                                     OnClick="() => EditColumnAsync(custom)">@(custom.IsRestricted ? "Lift restriction" : "Restrict to Finance and owners")</MudMenuItem>
+                                    }
                                     @if (custom.Type == ColumnKind.Dropdown)
                                     {
                                         <MudMenuItem Icon="@Icons.Material.Filled.List" OnClick="() => EditColumnAsync(custom)">Edit options</MudMenuItem>
@@ -854,7 +863,8 @@
 
     private async Task AddColumnAsync()
     {
-        var dialog = await DialogService.ShowAsync<ColumnDialog>("Add column");
+        var dialog = await DialogService.ShowAsync<ColumnDialog>("Add column",
+            new DialogParameters<ColumnDialog> { { d => d.CanRestrict, Sheet.CanSeeRestricted } });
         if (await dialog.Result is not { Canceled: false, Data: ColumnDialogResult result })
         {
             return;
@@ -862,7 +872,7 @@
 
         try
         {
-            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options));
+            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options, IsRestricted: result.IsRestricted));
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -873,7 +883,7 @@
 
     private async Task EditColumnAsync(ColumnDto column)
     {
-        var parameters = new DialogParameters<ColumnDialog> { { d => d.Column, column } };
+        var parameters = new DialogParameters<ColumnDialog> { { d => d.Column, column }, { d => d.CanRestrict, Sheet.CanSeeRestricted } };
         var dialog = await DialogService.ShowAsync<ColumnDialog>($"Edit {column.Name}", parameters);
         if (await dialog.Result is not { Canceled: false, Data: ColumnDialogResult result })
         {
@@ -882,7 +892,8 @@
 
         try
         {
-            await ColumnService.UpdateAsync(SheetId, column.Id, new UpdateColumnRequest(result.Name, result.Options, column.Formula, column.Order));
+            await ColumnService.UpdateAsync(SheetId, column.Id, new UpdateColumnRequest(result.Name, result.Options, column.Formula, column.Order,
+                Sheet.CanSeeRestricted && result.IsRestricted != column.IsRestricted ? result.IsRestricted : null));
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -924,6 +935,9 @@
 
     private static string? HeaderTooltip(GridColumn column) => column.Column switch
     {
+        { } custom when custom.IsEffectivelyRestricted =>
+            (custom.Formula is { } f ? $"Formula: {f}" : CellFormat.KindName(custom.Type))
+            + (custom.IsRestricted ? " · Finance and owners only" : " · Restricted: reads a restricted column"),
         { Formula: { } formula } => $"Formula: {formula}",
         { } custom => CellFormat.KindName(custom.Type),
         _ => null,

@@ -57,7 +57,8 @@ public static class DatabaseInitializer
         var status = new Column { Name = "Status", Type = ColumnType.Dropdown, Order = 0, Options = ["Not started", "In progress", "Blocked", "Done"] };
         var owner = new Column { Name = "Owner", Type = ColumnType.Person, Order = 1 };
         var hours = new Column { Name = "Planned hours", Type = ColumnType.Number, Order = 2 };
-        var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 3 };
+        // Finance and owners only; "Cost per hour" reads it, so it is restricted too.
+        var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 3, IsRestricted = true };
         var costPerHour = new Column { Name = "Cost per hour", Type = ColumnType.Currency, Order = 4, Formula = "[Budget] / [Planned hours]" };
         schedule.Columns.AddRange([status, owner, hours, budget, costPerHour]);
 

@@ -1,6 +1,7 @@
 using Workbench.Contracts;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.Odcs;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Time;
 using static Workbench.Tests.Identity.ProjectAccountingFixture;
 using static Workbench.Tests.Identity.SeededHost;
@@ -149,6 +150,29 @@ public sealed class FinancialPermissionTests
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => analyst.GetContractFundingAsync(f.Contract1));
         Assert.Empty(await analyst.ListContractFundingAsync());
         Assert.False(await seeded.Host.Get<IFinancialAccessService>().CanReadContractFundingAsync(f.Contract1));
+    }
+
+    [Fact]
+    public async Task Contract_lists_show_ceiling_and_funding_only_to_finance_and_the_pms_of_its_projects()
+    {
+        await using var seeded = await CreateAsync();
+        var f = await SeedAsync(seeded);
+        static (decimal, decimal) Values(ContractDto c) => (c.CeilingValue, c.FundedValue);
+
+        var finance = seeded.As(Finance).Host.Get<IContractService>();
+        Assert.Equal((1_000_000m, 400_000m), Values((await finance.ListContractsAsync()).Single(c => c.Id == f.Contract1)));
+
+        var pm = seeded.As(Owner).Host.Get<IContractService>();
+        var pmContracts = await pm.ListContractsAsync();
+        Assert.Equal((1_000_000m, 400_000m), Values(pmContracts.Single(c => c.Id == f.Contract1)));
+        Assert.Equal((0m, 0m), Values(pmContracts.Single(c => c.Id == f.Contract2)));
+        Assert.Equal((0m, 0m), Values((await pm.GetContractAsync(f.Contract2))!));
+
+        var analyst = seeded.As(Editor).Host.Get<IContractService>();
+        var listed = await analyst.ListContractsAsync();
+        Assert.Equal(2, listed.Count); // still listed by number and name, for pickers
+        Assert.All(listed, c => Assert.Equal((0m, 0m), Values(c)));
+        Assert.Equal((0m, 0m), Values((await analyst.GetContractAsync(f.Contract1))!));
     }
 
     [Fact]

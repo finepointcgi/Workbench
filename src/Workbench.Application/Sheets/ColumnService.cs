@@ -26,11 +26,12 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
             Order = nextOrder + 1,
             Options = request.Options?.ToList() ?? [],
             Formula = formula,
+            IsRestricted = request.IsRestricted,
         };
         db.Columns.Add(column);
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);
-        return column.ToDto();
+        return await ToDtoAsync(db, column, cancellationToken);
     }
 
     public async Task<ColumnDto> UpdateAsync(Guid sheetId, Guid columnId, UpdateColumnRequest request, CancellationToken cancellationToken = default)
@@ -45,6 +46,7 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
         column.Options = request.Options.ToList();
         column.Formula = await ValidateFormulaAsync(db, sheetId, columnId, column.Name, request.Formula, cancellationToken);
         column.Order = request.Order;
+        column.IsRestricted = request.IsRestricted ?? column.IsRestricted;
         if (column.Formula is not null)
         {
             // Formula values are computed on read; drop anything typed into the column before it became one.
@@ -53,7 +55,14 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
 
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        return column.ToDto();
+        return await ToDtoAsync(db, column, cancellationToken);
+    }
+
+    /// <summary>The column's DTO, with whether it reads a restricted column (that depends on the sheet's other columns).</summary>
+    private static async Task<ColumnDto> ToDtoAsync(IWorkbenchDbContext db, Column column, CancellationToken cancellationToken)
+    {
+        var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == column.SheetId && c.Id != column.Id).ToListAsync(cancellationToken);
+        return RestrictedColumns.ToDto(column, RestrictedColumns.Of([.. columns, column]));
     }
 
     public async Task DeleteAsync(Guid sheetId, Guid columnId, CancellationToken cancellationToken = default)

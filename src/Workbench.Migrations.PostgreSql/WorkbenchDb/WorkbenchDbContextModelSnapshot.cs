@@ -2050,6 +2050,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("text")
                         .UseCollation("C");
 
+                    b.Property<bool>("IsRestricted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)

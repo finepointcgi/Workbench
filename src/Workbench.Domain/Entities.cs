@@ -49,6 +49,12 @@ public sealed class Column : Entity
     public int Order { get; set; }
     public List<string> Options { get; set; } = [];
     public string? Formula { get; set; }
+
+    /// <summary>
+    /// Only Finance, administrators and the workspace's owners see this column and its values (and any formula column
+    /// reading it); everyone else's reads leave it out.
+    /// </summary>
+    public bool IsRestricted { get; set; }
 }
 
 /// <summary>A row in a sheet, which is also a task on boards and the Gantt.</summary>

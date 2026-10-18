@@ -10,7 +10,8 @@ public sealed record SheetSummary(
     string? CostpointProjectId,
     DateTime UpdatedAtUtc);
 
-public sealed record SheetDetail(SheetSummary Summary, IReadOnlyList<ColumnDto> Columns);
+/// <summary>A sheet and the columns the user may see. <paramref name="CanSeeRestricted"/>: they see restricted columns and may restrict columns.</summary>
+public sealed record SheetDetail(SheetSummary Summary, IReadOnlyList<ColumnDto> Columns, bool CanSeeRestricted = false);
 
 public sealed record CreateSheetRequest(string Name, string? Description, bool SchedulingEnabled);
 
