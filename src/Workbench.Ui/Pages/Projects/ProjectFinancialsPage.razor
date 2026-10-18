@@ -4,6 +4,7 @@
 @inject IProjectFinancialsService Financials
 @inject IFinancialExportService Exports
 @inject Workbench.Contracts.IndirectRates.IBurdenedFinancialsService Burdened
+@inject Workbench.Contracts.Resourcing.IAllocationForecastService AllocationForecast
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
@@ -51,6 +52,7 @@ else
         <MudSelect T="Guid?" Label="Estimate to complete" Value="_forecastVersionId" ValueChanged="OnForecastChangedAsync" Dense="true" Style="min-width: 260px"
                    ToStringFunc="ForecastLabel">
             <MudSelectItem T="Guid?" Value="null">Remaining budget</MudSelectItem>
+            <MudSelectItem T="Guid?" Value="AllocationEtc">Allocation-based (resourcing)</MudSelectItem>
             @foreach (var v in _versions.Where(v => v.Kind == BudgetVersionKind.Forecast))
             {
                 <MudSelectItem T="Guid?" Value="v.Id">Forecast: @v.Name</MudSelectItem>
@@ -137,8 +139,18 @@ else
             }
 
             _versions = await Budgets.ListVersionsAsync(ProjectId);
-            _summary = await Financials.GetProjectSummaryAsync(ProjectId, _budgetVersionId, _forecastVersionId);
-            _rows = await Financials.GetWbsFinancialsAsync(ProjectId, _budgetVersionId, _forecastVersionId);
+            if (_forecastVersionId == AllocationEtc)
+            {
+                // Resourcing: ETC from future allocations × cost rates plus remaining ODC budget.
+                _summary = await AllocationForecast.GetProjectSummaryAsync(ProjectId, _budgetVersionId);
+                _rows = await AllocationForecast.GetWbsFinancialsAsync(ProjectId, _budgetVersionId);
+            }
+            else
+            {
+                _summary = await Financials.GetProjectSummaryAsync(ProjectId, _budgetVersionId, _forecastVersionId);
+                _rows = await Financials.GetWbsFinancialsAsync(ProjectId, _budgetVersionId, _forecastVersionId);
+            }
+
             _burn = await Financials.GetTimePhasedBurnAsync(ProjectId, _budgetVersionId);
             await LoadBurdenedAsync();
         }
@@ -161,8 +173,8 @@ else
         var first = _burdened is null;
         try
         {
-            _burdened = await Burdened.GetProjectAsync(ProjectId, _budgetVersionId, _forecastVersionId);
-            _showBurdened = first ? _burdened.HasRates : _showBurdened;
+            _burdened = await Burdened.GetProjectAsync(ProjectId, _budgetVersionId, _forecastVersionId == AllocationEtc ? null : _forecastVersionId);
+            _showBurdened = first ? _burdened.HasRates : _showBurdened && _forecastVersionId != AllocationEtc;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
         {
@@ -179,16 +191,24 @@ else
     private async Task OnForecastChangedAsync(Guid? id)
     {
         _forecastVersionId = id;
+        if (id == AllocationEtc)
+        {
+            _showBurdened = false;
+        }
+
         await LoadAsync();
     }
 
     private string VersionLabel(Guid? id) =>
         id is null ? "Current (default)" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"{v.Kind}: {v.Name}" : "";
 
-    private string ForecastLabel(Guid? id) =>
-        id is null ? "Remaining budget" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"Forecast: {v.Name}" : "";
+    /// <summary>Stands for the allocation-based ETC in the estimate-to-complete picker (not a budget version).</summary>
+    private static readonly Guid AllocationEtc = new("a110ca7e-0000-4000-8000-000000000e7c");
 
-    private async Task ExportWbsAsync() => await DownloadAsync(() => Exports.ExportWbsCsvAsync(ProjectId, _budgetVersionId, _forecastVersionId));
+    private string ForecastLabel(Guid? id) =>
+        id is null ? "Remaining budget" : id == AllocationEtc ? "Allocation-based (resourcing)" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"Forecast: {v.Name}" : "";
+
+    private async Task ExportWbsAsync() => await DownloadAsync(() => Exports.ExportWbsCsvAsync(ProjectId, _budgetVersionId, _forecastVersionId == AllocationEtc ? null : _forecastVersionId));
 
     private async Task ExportBurnAsync() => await DownloadAsync(() => Exports.ExportTimePhasedCsvAsync(ProjectId, _budgetVersionId));
 

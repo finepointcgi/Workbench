@@ -14,7 +14,7 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
         access.RequireSignedIn();
         if (currentUser is SystemCurrentUser system)
         {
-            return new UserDto(system.Email, system.DisplayName, OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper, DateTime.MinValue, null);
+            return new UserDto(system.Email, system.DisplayName, OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager, DateTime.MinValue, null);
         }
 
         var user = await provisioner.EnsureUserAsync(access.Email, currentUser.DisplayName == currentUser.Email ? null : currentUser.DisplayName, cancellationToken: cancellationToken);
@@ -46,5 +46,5 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
     }
 
     internal static UserDto ToDto(AppUser u) =>
-        new(u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper), u.CreatedAtUtc, u.LastSeenAtUtc);
+        new(u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager), u.CreatedAtUtc, u.LastSeenAtUtc);
 }

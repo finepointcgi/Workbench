@@ -101,8 +101,9 @@ public sealed class SignInGate(
         user.IsAdmin |= invite.IsAdmin;
         user.IsFinance |= invite.IsFinance;
         user.IsTimekeeper |= invite.IsTimekeeper;
+        user.IsResourceManager |= invite.IsResourceManager;
         await db.SaveChangesAsync(cancellationToken);
-        var roles = AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper);
+        var roles = AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager);
         await securityLog.RecordAsync(SecurityEventTypes.InviteAccepted, email, detail: $"Invited by {invite.InvitedBy}; roles: {UserLifecycle.RoleText(roles)}", actor: email, cancellationToken: cancellationToken);
     }
 

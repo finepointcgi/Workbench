@@ -65,6 +65,9 @@ dotnet build src/Workbench.Desktop -t:Run
   (`Email:Smtp:Host`, `Port`, `EnableSsl`, `UserName`, `Password`); `Email:From` sets the sender
 - `Notifications:PublicBaseUrl`: makes links in emails absolute; `Notifications:DigestHourLocal`: daily digest hour (default 7)
 - `Billing:CompanyName`, `Billing:RemitToAddress`, `Billing:CageCode`, `Billing:Uei`: the contractor details printed on invoices (SF 1034 and commercial)
+- `PerDiem:LodgingOveragePolicy`: lodging above the GSA maximum is `RequiresJustification` (default; allowable up to `PerDiem:JustifiedLodgingCapPercent`, 300) or `Unallowable`
+- `PerDiem:Gsa:ApiKey` (secret, an api.data.gov key) and `PerDiem:Gsa:BaseUrl`: enables "Import from GSA API" on `/setup/per-diem`
+- `Resourcing:NonBillableAllowancePercent` (10), `Resourcing:FullThresholdPercent` (90), `Resourcing:StaffingTolerancePercent` (10): capacity, heat map and staffing-gap thresholds
 - `Timekeeping:Cadence`: timesheet period, `Weekly` (Monday–Sunday, default) or `SemiMonthly` (1st–15th, 16th–end)
 - `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
 - `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)

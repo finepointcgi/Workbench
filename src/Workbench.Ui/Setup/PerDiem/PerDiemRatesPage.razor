@@ -1,0 +1,204 @@
+@page "/setup/per-diem"
+@inject IPerDiemRateService Rates
+@inject ISnackbar Snackbar
+
+<PageTitle>Per diem rates · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Per diem rates"
+             Subtitle="GSA CONUS and DoD/State OCONUS lodging and M&IE rates by fiscal year and season. Each import becomes the table in force for its fiscal year; earlier imports are kept as history.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Science" OnClick="InstallSampleAsync" Disabled="_busy" data-testid="load-sample">Load sample rates</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CloudDownload" OnClick="ImportFromApiAsync"
+               Disabled="@(_busy || _table?.GsaApiConfigured != true)" title="@(_table?.GsaApiConfigured == true ? null : "Set PerDiem:Gsa:ApiKey to enable")">Import from GSA API</MudButton>
+</SetupHeader>
+
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Import a file</MudText>
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+        <MudNumericField T="int" Label="Fiscal year" @bind-Value="_importYear" Min="2000" Max="2100" Style="max-width:140px" />
+        <MudSelect T="PerDiemTable" Label="Table" @bind-Value="_importKind" Style="max-width:260px">
+            <MudSelectItem Value="PerDiemTable.Conus">CONUS (GSA CSV or Excel)</MudSelectItem>
+            <MudSelectItem Value="PerDiemTable.Oconus">OCONUS (DoD/State CSV)</MudSelectItem>
+        </MudSelect>
+        <MudFileUpload T="IBrowserFile" FilesChanged="ImportFileAsync" Accept=".csv,.xlsx" Disabled="_busy">
+            <CustomContent>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync" Disabled="_busy">
+                    @(_busy ? "Importing…" : "Choose file and import")
+                </MudButton>
+            </CustomContent>
+            <SelectedTemplate />
+        </MudFileUpload>
+    </MudStack>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+        Columns: State, Destination, County, Season Begin, Season End, Lodging, M&amp;IE (GSA's own headers work too; add Country for OCONUS).
+        A row named "Standard CONUS" is the standard rate. Lodging above the maximum: @(_table?.Policy == LodgingOveragePolicy.Unallowable ? "unallowable" : "allowed with a justification (up to 300%)").
+    </MudText>
+    @foreach (var warning in _warnings)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">@warning</MudAlert>
+    }
+</MudPaper>
+
+<MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-3">
+    <MudTabPanel Text="Rates">
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-2" Wrap="Wrap.Wrap">
+            <MudSelect T="int?" Label="Fiscal year" Value="_year" ValueChanged="async v => { _year = v; await LoadAsync(); }" Style="max-width:160px">
+                <MudSelectItem T="int?" Value="null">All</MudSelectItem>
+                @foreach (var y in _years)
+                {
+                    <MudSelectItem T="int?" Value="y">FY@(y)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="PerDiemTable?" Label="Table" Value="_kind" ValueChanged="async v => { _kind = v; await LoadAsync(); }" Style="max-width:160px">
+                <MudSelectItem T="PerDiemTable?" Value="null">All</MudSelectItem>
+                <MudSelectItem T="PerDiemTable?" Value="PerDiemTable.Conus">CONUS</MudSelectItem>
+                <MudSelectItem T="PerDiemTable?" Value="PerDiemTable.Oconus">OCONUS</MudSelectItem>
+            </MudSelect>
+            <MudTextField T="string" Label="Search" Value="_search" ValueChanged="async v => { _search = v; await LoadAsync(); }" DebounceInterval="300"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Style="max-width:280px" />
+        </MudStack>
+        <MudTable T="PerDiemRateDto" Items="_table?.Rates ?? []" Dense="true" Hover="true" Loading="_loading" Elevation="0" data-testid="rate-table">
+            <HeaderContent>
+                <MudTh>FY</MudTh>
+                <MudTh>Table</MudTh>
+                <MudTh>Destination</MudTh>
+                <MudTh>State / country</MudTh>
+                <MudTh>County / locations</MudTh>
+                <MudTh>Season</MudTh>
+                <MudTh Style="text-align:right">Lodging max</MudTh>
+                <MudTh Style="text-align:right">M&amp;IE</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="FY">@context.FiscalYear</MudTd>
+                <MudTd DataLabel="Table">@context.Kind</MudTd>
+                <MudTd DataLabel="Destination">
+                    @context.Destination
+                    @if (context.IsStandard)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">Standard</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="State / country">@(context.Kind == PerDiemTable.Conus ? context.State : string.Join(", ", new[] { context.State, context.Country }.Where(s => s.Length > 0)))</MudTd>
+                <MudTd DataLabel="County"><span class="mud-text-secondary" style="font-size:0.8rem">@context.County</span></MudTd>
+                <MudTd DataLabel="Season">@PerDiemFormat.Season(context)</MudTd>
+                <MudTd DataLabel="Lodging max" Style="text-align:right">@PerDiemFormat.Money(context.LodgingMax)</MudTd>
+                <MudTd DataLabel="M&IE" Style="text-align:right">@PerDiemFormat.Money(context.MieRate)</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="mud-text-secondary">No rates yet. Import a GSA file or load the sample rates.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudTabPanel>
+    <MudTabPanel Text="M&amp;IE breakdown">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Provided meals are deducted at these amounts; the first and last travel day get 75% of the M&amp;IE rate.</MudText>
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>FY</th><th style="text-align:right">M&amp;IE</th><th style="text-align:right">Breakfast</th><th style="text-align:right">Lunch</th><th style="text-align:right">Dinner</th><th style="text-align:right">Incidentals</th><th style="text-align:right">First / last day</th></tr></thead>
+            <tbody>
+                @foreach (var t in _table?.Tiers ?? [])
+                {
+                    <tr>
+                        <td>@t.FiscalYear</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(t.Total)</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(t.Breakfast)</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(t.Lunch)</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(t.Dinner)</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(t.Incidentals)</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(t.FirstLastDay)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudTabPanel>
+    <MudTabPanel Text="Import history">
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>Imported (UTC)</th><th>FY</th><th>Table</th><th>Source</th><th>File</th><th style="text-align:right">Rates</th><th style="text-align:right">Tiers</th><th>By</th></tr></thead>
+            <tbody>
+                @foreach (var b in _table?.Batches ?? [])
+                {
+                    <tr>
+                        <td>@b.ImportedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@b.FiscalYear</td>
+                        <td>@b.Kind</td>
+                        <td>@b.Source</td>
+                        <td>@b.FileName</td>
+                        <td style="text-align:right">@b.RateCount</td>
+                        <td style="text-align:right">@b.TierCount</td>
+                        <td>@b.ImportedBy</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private PerDiemRateTableDto? _table;
+    private IReadOnlyList<int> _years = [];
+    private int? _year;
+    private PerDiemTable? _kind;
+    private string? _search;
+    private int _importYear = PerDiemFormat.FiscalYearOf(DateOnly.FromDateTime(DateTime.Today));
+    private PerDiemTable _importKind = PerDiemTable.Conus;
+    private IReadOnlyList<string> _warnings = [];
+    private bool _loading = true;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _table = await Rates.GetTableAsync(new PerDiemRateQuery(_year, _kind, _search));
+            _years = _table.Batches.Select(b => b.FiscalYear).Distinct().OrderByDescending(y => y).ToList();
+        }
+        catch (Exception ex) when (PerDiemFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the rates: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Task<PerDiemImportResultDto>> import)
+    {
+        _busy = true;
+        try
+        {
+            var result = await import();
+            _warnings = result.Warnings;
+            Snackbar.Add($"Imported {result.Batch.RateCount} FY{result.Batch.FiscalYear} {result.Batch.Kind} rates ({result.Batch.Source}).", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PerDiemFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportFileAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return await Rates.ImportFileAsync(new ImportPerDiemFileRequest(_importKind, _importYear, file.Name, copy.ToArray()));
+        });
+    }
+
+    private Task ImportFromApiAsync() => RunAsync(() => Rates.ImportFromGsaApiAsync(_importYear));
+
+    private Task InstallSampleAsync() => RunAsync(() => Rates.InstallSampleRatesAsync(_importYear));
+}

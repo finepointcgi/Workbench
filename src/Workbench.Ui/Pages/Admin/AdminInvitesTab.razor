@@ -17,7 +17,7 @@
             <MudTextField @bind-Value="_name" Immediate="true" Label="Name" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-name" />
         </MudItem>
         <MudItem xs="12" md="3" Class="d-flex align-center flex-wrap">
-            @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper })
+            @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager })
             {
                 <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@role.ToString()" Dense="true" Color="Color.Primary" />
             }
@@ -137,7 +137,7 @@
 
     internal static string RoleText(OrgRoles roles)
     {
-        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
+        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
         return names.Count == 0 ? "Employee" : string.Join(", ", names);
     }
 
