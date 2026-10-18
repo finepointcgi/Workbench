@@ -36,11 +36,21 @@ public sealed class OdcEntry : Entity
     /// <summary>Unallowable costs (FAR 31.205) are recorded but excluded from billable cost.</summary>
     public bool IsUnallowable { get; set; }
 
+    /// <summary>Why the cost is unallowable (e.g. "Alcohol, FAR 31.205-51"). Required when <see cref="IsUnallowable"/>.</summary>
+    public string? UnallowableReason { get; set; }
+
+    /// <summary>The expense report this line belongs to; null for vendor ODCs.</summary>
+    public Guid? ExpenseReportId { get; set; }
+
+    /// <summary>The receipt or invoice copy: a <c>StoredFile</c> id (see <c>Workbench.Domain.Files</c>).</summary>
     public Guid? ReceiptAttachmentId { get; set; }
     public OdcStatus Status { get; set; } = OdcStatus.Draft;
     public required string SubmittedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+    public DateTime? SubmittedAtUtc { get; set; }
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedAtUtc { get; set; }
     public string? RejectionReason { get; set; }
+    public string? RejectedBy { get; set; }
+    public DateTime? RejectedAtUtc { get; set; }
 }

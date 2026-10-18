@@ -20,6 +20,7 @@ public static class WorkbenchApi
         v1.MapCollaborationEndpoints();
         v1.MapCostpointEndpoints();
         v1.MapProjectAccountingEndpoints();
+        v1.MapOdcEndpoints();
 
         return app;
     }

@@ -208,7 +208,11 @@ internal sealed class OdcEntryConfiguration : IEntityTypeConfiguration<OdcEntry>
         b.Property(o => o.SubmittedBy).HasMaxLength(320);
         b.Property(o => o.ApprovedBy).HasMaxLength(320);
         b.Property(o => o.RejectionReason).HasMaxLength(1000);
+        b.Property(o => o.RejectedBy).HasMaxLength(320);
+        b.Property(o => o.UnallowableReason).HasMaxLength(500);
         b.HasIndex(o => new { o.ProjectId, o.IncurredOn });
+        b.HasIndex(o => o.ExpenseReportId);
+        b.HasOne<ExpenseReport>().WithMany().HasForeignKey(o => o.ExpenseReportId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(o => o.Status);
         b.HasOne<Project>().WithMany().HasForeignKey(o => o.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(o => o.WbsElementId).OnDelete(DeleteBehavior.Restrict);
