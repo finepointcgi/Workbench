@@ -7,7 +7,9 @@
 
 <PurchasingHeader Title="AP bills" Subtitle="Vendor invoices: enter them, route them for approval, and they post to the general ledger when approved.">
     <MudButton Variant="Variant.Outlined" Href="purchasing/approvals" StartIcon="@Icons.Material.Filled.FactCheck">Approval queue</MudButton>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="purchasing/bills/new" Disabled="_error is not null" data-testid="new-bill">New bill</MudButton>
+    <FinanceOnly>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="purchasing/bills/new" Disabled="_error is not null" data-testid="new-bill">New bill</MudButton>
+    </FinanceOnly>
 </PurchasingHeader>
 
 @if (_error is not null)

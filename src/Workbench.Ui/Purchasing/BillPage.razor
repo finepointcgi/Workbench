@@ -8,7 +8,7 @@
 
 @if (_error is not null)
 {
-    <PurchasingHeader Title="Bill" BackHref="purchasing/bills" BackLabel="Bills" />
+    <PurchasingHeader Title="Bill" BackHref="@BackHref" BackLabel="@BackLabel" />
     <PurchasingError Message="@_error" Forbidden="_forbidden" />
 }
 else if (_bill is not { } bill)
@@ -18,26 +18,30 @@ else if (_bill is not { } bill)
 else
 {
     var b = bill.Bill;
-    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="purchasing/bills" BackLabel="Bills">
+    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="@BackHref" BackLabel="@BackLabel">
         <BillStatusChip Status="b.Status" />
-        @if (bill.CanEdit)
-        {
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/bills/{b.Id}/edit")" data-testid="edit-bill">Edit</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" data-testid="submit">Submit</MudButton>
-        }
+        <FinanceOnly>
+            @if (bill.CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/bills/{b.Id}/edit")" data-testid="edit-bill">Edit</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" data-testid="submit">Submit</MudButton>
+            }
+        </FinanceOnly>
         @if (bill.CanApprove)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" data-testid="reject">Reject</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(() => Bills.ApproveAsync(b.Id), "Approved."))" data-testid="approve">Approve</MudButton>
         }
-        @if (b.Status == BillState.Approved)
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
-        }
-        @if (b.Status is BillState.Draft or BillState.Rejected or BillState.PendingApproval)
-        {
-            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="VoidAsync">Void</MudButton>
-        }
+        <FinanceOnly>
+            @if (b.Status == BillState.Approved)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
+            }
+            @if (b.Status is BillState.Draft or BillState.Rejected or BillState.PendingApproval)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="VoidAsync" data-testid="void">Void</MudButton>
+            }
+        </FinanceOnly>
     </PurchasingHeader>
 
     @if (b.PostingProblem is not null)
@@ -114,6 +118,13 @@ else
 }
 
 @code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
+    // Someone outside Finance gets here from Bill approvals; the bill list is Finance's.
+    private string BackHref => Access?.IsFinance == true ? "purchasing/bills" : "purchasing/approvals";
+    private string BackLabel => Access?.IsFinance == true ? "Bills" : "Bill approvals";
+
     [Parameter] public Guid BillId { get; set; }
 
     private BillDto? _bill;

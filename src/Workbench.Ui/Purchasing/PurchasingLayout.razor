@@ -1,0 +1,6 @@
+@* Pages under /purchasing. Finance and administrators use everything; anyone can open Bill approvals for the AP lines
+   routed to them. The server enforces both; Finance-only actions are wrapped in FinanceOnly (FinanceAccess is cascaded here). *@
+@inherits LayoutComponentBase
+@layout Workbench.Ui.Layout.MainLayout
+
+<FinanceAccessScope>@Body</FinanceAccessScope>

@@ -1,7 +1,6 @@
 @page "/billing/contracts/{ContractId:guid}"
 @inject IInvoiceService Invoices
 @inject IBillingMilestoneService Milestones
-@inject ICurrentUserContext UserContext
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -129,13 +128,16 @@ else
 }
 
 @code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
     [Parameter]
     public Guid ContractId { get; set; }
 
     private BillingContractDto? _contract;
     private IReadOnlyList<BillingMilestoneDto>? _milestones;
     private ContractBillingSettingsDto? _settings;
-    private bool _isFinance;
+    private bool _isFinance => Access?.IsFinance == true;
     private bool _busy;
     private int _refresh;
     private string? _error;
@@ -157,7 +159,6 @@ else
     {
         try
         {
-            _isFinance = (await UserContext.GetAsync()).IsFinance;
             _contract = (await Invoices.ListBillingContractsAsync()).FirstOrDefault(c => c.Id == ContractId)
                 ?? throw new WorkbenchNotFoundException("That contract doesn't exist or you can't see it.");
             _milestones = await Milestones.ListAsync(ContractId);
