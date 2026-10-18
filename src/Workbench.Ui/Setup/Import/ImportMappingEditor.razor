@@ -1,0 +1,198 @@
+@* Edits a job's mapping (source column per target field, and for Smartsheet the columns to create) and its options. *@
+@using Workbench.Contracts.ProjectAccounting
+@inject IProjectService Projects
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="@(IsSheets ? 5 : 7)">
+        <MudText Typo="Typo.subtitle2" Class="mb-1">Fields</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Columns were matched by name; Costpoint's own headers (EMPL_ID, PROJ_ID...) and common variants map automatically. Pick another column if a match is wrong.</MudText>
+        <MudSimpleTable Dense="true" data-testid="mapping-fields">
+            <thead><tr><th>Field</th><th>Source column</th></tr></thead>
+            <tbody>
+                @foreach (var field in Definition.Fields)
+                {
+                    <tr>
+                        <td style="vertical-align:top;padding-top:14px">
+                            <MudText Typo="Typo.body2"><b>@field.Label</b>@(field.Required ? " *" : "")</MudText>
+                            @if (!string.IsNullOrEmpty(field.Description))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@field.Description</MudText>
+                            }
+                        </td>
+                        <td style="min-width:200px">
+                            <MudSelect T="string" Value="@Selected(field.Name)" ValueChanged="v => SetField(field.Name, v)" Dense="true" Margin="Margin.Dense"
+                                       Variant="Variant.Outlined" aria-label="@($"Source column for {field.Label}")"
+                                       Error="@(field.Required && Selected(field.Name) == NotMapped)">
+                                <MudSelectItem T="string" Value="@NotMapped">(not mapped)</MudSelectItem>
+                                @foreach (var header in Headers)
+                                {
+                                    <MudSelectItem T="string" Value="@header">@header</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudItem>
+
+    @if (IsSheets)
+    {
+        <MudItem xs="12" md="7">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Columns to create</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Smartsheet types convert: PICKLIST → Dropdown (with its options), CONTACT_LIST → Person, CHECKBOX, DATE. Duration and predecessors aren't columns: they set finish dates and Gantt dependencies.</MudText>
+            <MudSimpleTable Dense="true" data-testid="mapping-columns">
+                <thead><tr><th>Import</th><th>Source</th><th>Name in Workbench</th><th>Type</th></tr></thead>
+                <tbody>
+                    @foreach (var column in _columns)
+                    {
+                        <tr>
+                            <td><MudCheckBox T="bool" Value="column.Include" ValueChanged="v => Update(column, column with { Include = v })" Dense="true" aria-label="@($"Import {column.Source}")" /></td>
+                            <td>
+                                <MudText Typo="Typo.body2">@column.Source</MudText>
+                                @if (column.SourceType is not null)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@column.SourceType</MudText>
+                                }
+                            </td>
+                            <td><MudTextField T="string" Value="column.Name" ValueChanged="v => Update(column, column with { Name = v })" Margin="Margin.Dense" Disabled="!column.Include" aria-label="@($"Name for {column.Source}")" /></td>
+                            <td>
+                                <MudSelect T="ColumnKind" Value="column.Type" ValueChanged="v => Update(column, column with { Type = v })" Dense="true" Margin="Margin.Dense" Disabled="!column.Include" aria-label="@($"Type for {column.Source}")">
+                                    @foreach (var kind in Enum.GetValues<ColumnKind>().Where(k => k != ColumnKind.CostpointLookup))
+                                    {
+                                        <MudSelectItem T="ColumnKind" Value="kind">@kind</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                @if (column.Type == ColumnKind.Dropdown && column.Options.Count > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@string.Join(", ", column.Options.Take(10))</MudText>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudItem>
+    }
+
+    @if (NeedsProject || IsSheets)
+    {
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Options</MudText>
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" AlignItems="AlignItems.Center">
+                <MudSelect T="Guid?" Label="@(IsSheets ? "Link WBS codes to project" : "Project (blank = from each row's id)")" Value="Options.ProjectId"
+                           ValueChanged="v => SetOptions(Options with { ProjectId = v })" Clearable="true" Style="min-width:300px" Dense="true" data-testid="option-project">
+                    @foreach (var project in _projects)
+                    {
+                        <MudSelectItem T="Guid?" Value="project.Id">@project.Code · @project.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (IsSheets)
+                {
+                    <MudCheckBox T="bool" Value="Options.LinkPlanSheet" ValueChanged="v => SetOptions(Options with { LinkPlanSheet = v })" Label="Make the sheet the project's plan sheet" Disabled="Options.ProjectId is null" />
+                }
+                @if (Definition.Kind == ImportKind.Budgets)
+                {
+                    <MudTextField T="string" Label="Budget version" Value="Options.BudgetVersionName" Placeholder="Costpoint budget"
+                                  ValueChanged="v => SetOptions(Options with { BudgetVersionName = v })" Style="min-width:220px" />
+                    <MudSelect T="BudgetVersionKind" Label="Version kind" Value="Options.BudgetVersionKind" ValueChanged="v => SetOptions(Options with { BudgetVersionKind = v })" Style="min-width:160px">
+                        @foreach (var kind in Enum.GetValues<BudgetVersionKind>())
+                        {
+                            <MudSelectItem T="BudgetVersionKind" Value="kind">@kind</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (Definition.Source == ImportSource.SmartsheetApi)
+                {
+                    <MudCheckBox T="bool" Value="Options.IncludeComments" ValueChanged="v => SetOptions(Options with { IncludeComments = v })" Label="Import comments" />
+                    <MudCheckBox T="bool" Value="Options.IncludeAttachments" ValueChanged="v => SetOptions(Options with { IncludeAttachments = v })" Label="Import file attachments" />
+                }
+            </MudStack>
+            @if (IsSheets)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Rows whose WBS code matches one of the project's WBS elements are linked to it (the plan sheet and the WBS are one tree).</MudText>
+            }
+        </MudItem>
+    }
+
+    @if (Headers.Count > 0 && SampleRows.Count > 0)
+    {
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">First rows of the file</MudText>
+            <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Striped="true" data-testid="sample-rows">
+                    <thead><tr>@foreach (var header in Headers) { <th style="white-space:nowrap">@header</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var row in SampleRows)
+                        {
+                            <tr>@foreach (var cell in row) { <td style="white-space:nowrap">@cell</td> }</tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    public const string NotMapped = "\u0000";
+
+    [Parameter, EditorRequired]
+    public ImportKindDto Definition { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<string> Headers { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<IReadOnlyList<string>> SampleRows { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public ImportMappingDto Mapping { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ImportMappingDto> MappingChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public ImportOptionsDto Options { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ImportOptionsDto> OptionsChanged { get; set; }
+
+    private List<ImportColumnDto> _columns = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+
+    private bool IsSheets => Definition.Kind == ImportKind.Sheets;
+
+    private bool NeedsProject => Definition.Kind == ImportKind.Budgets;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (NeedsProject || IsSheets)
+        {
+            _projects = await Projects.ListProjectsAsync();
+        }
+    }
+
+    protected override void OnParametersSet() => _columns = Mapping.Columns.ToList();
+
+    private string Selected(string field) => Mapping.Fields.TryGetValue(field, out var header) && header is not null && Headers.Contains(header) ? header : NotMapped;
+
+    private Task SetField(string field, string value)
+    {
+        var fields = new Dictionary<string, string?>(Mapping.Fields) { [field] = value == NotMapped ? null : value };
+        return MappingChanged.InvokeAsync(Mapping with { Fields = fields });
+    }
+
+    private Task Update(ImportColumnDto column, ImportColumnDto updated)
+    {
+        var index = _columns.IndexOf(column);
+        if (index >= 0)
+        {
+            _columns[index] = updated;
+        }
+
+        return MappingChanged.InvokeAsync(Mapping with { Columns = _columns.ToList() });
+    }
+
+    private Task SetOptions(ImportOptionsDto options) => OptionsChanged.InvokeAsync(options);
+}

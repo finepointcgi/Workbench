@@ -37,6 +37,7 @@ public static class WorkbenchApi
         v1.MapPurchasingEndpoints();
         v1.MapHostAdminEndpoints();
         v1.MapOrganizationSettingsEndpoints();
+        v1.MapImportEndpoints();
 
         return app;
     }

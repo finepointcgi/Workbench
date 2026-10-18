@@ -1,0 +1,424 @@
+@* The import wizard: source → kind → upload/connect → map → validate → dry run → import. *@
+@inject IImportService Imports
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-4" data-testid="wizard-steps">
+        @for (var i = 0; i < Steps.Length; i++)
+        {
+            var index = i;
+            <MudChip T="string" Size="Size.Small" Color="@(index == _step ? Color.Primary : index < _step ? Color.Success : Color.Default)"
+                     Variant="@(index == _step ? Variant.Filled : Variant.Outlined)" Icon="@(index < _step ? Icons.Material.Filled.Check : null)"
+                     OnClick="@(index < _step && CanGoBackTo(index) ? () => GoTo(index) : null)">@($"{index + 1}. {Steps[index]}")</MudChip>
+        }
+    </MudStack>
+
+    @if (_busy)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+    }
+
+    @switch (_step)
+    {
+        case 0:
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Where is the data coming from?</MudText>
+            <MudGrid Spacing="2">
+                @foreach (var (source, title, text, icon) in Sources)
+                {
+                    <MudItem xs="12" md="4">
+                        <MudPaper Outlined="true" Class="pa-4 d-flex flex-column gap-2" Style="cursor:pointer;height:100%" @onclick="() => ChooseSource(source)"
+                                  data-testid="@($"source-{source}")">
+                            <MudIcon Icon="@icon" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.subtitle1"><b>@title</b></MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@text</MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+            break;
+
+        case 1:
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">What are you importing?</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">For a full move from Costpoint, import in this order: organizations, labor categories, employees, cost rates, customers, contracts, CLINs, projects, bill rates, budgets.</MudText>
+            <MudGrid Spacing="2">
+                @foreach (var kind in KindsForSource)
+                {
+                    <MudItem xs="12" md="6" lg="4">
+                        <MudPaper Outlined="true" Class="pa-3" Style="@($"cursor:pointer;height:100%;{(kind == _kind ? "border-color:var(--mud-palette-primary)" : "")}")"
+                                  @onclick="() => ChooseKind(kind)" data-testid="@($"kind-{kind.Kind}")">
+                            <MudText Typo="Typo.subtitle1"><b>@kind.Title</b></MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@kind.Description</MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+            break;
+
+        case 2 when _kind is not null:
+            @if (_source == ImportSource.SmartsheetApi)
+            {
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Connect to Smartsheet</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    Create an API token in Smartsheet (Account → Apps &amp; Integrations → API Access). It's stored encrypted for this import only
+                    and discarded when the import finishes.
+                </MudText>
+                @if (_job is null)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
+                        <MudTextField T="string" @bind-Value="_token" Label="API token" InputType="InputType.Password" Style="min-width:360px" Immediate="true" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || string.IsNullOrWhiteSpace(_token))" OnClick="ConnectAsync">Connect</MudButton>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">Choose the sheets to import (@_job.AvailableSheets.Count available)</MudText>
+                    <MudStack Spacing="0" Class="mb-3" Style="max-height:360px;overflow:auto">
+                        @foreach (var sheet in _job.AvailableSheets)
+                        {
+                            <MudCheckBox T="bool" Value="_sheets.Contains(sheet.Id)" ValueChanged="v => ToggleSheet(sheet.Id, v)"
+                                         Label="@($"{sheet.Name}{(sheet.ModifiedAtUtc is { } m ? $" · modified {m:yyyy-MM-dd}" : "")}")" Dense="true" />
+                        }
+                    </MudStack>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _sheets.Count == 0)" OnClick="FetchSheetsAsync">Fetch @_sheets.Count sheet(s)</MudButton>
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Upload @_kind.Title</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    A .csv or .xlsx export@(_source == ImportSource.Costpoint ? " of the Costpoint screen or report" : " (Smartsheet: File → Export → Microsoft Excel)").
+                    @if (_kind.SampleFile is not null)
+                    {
+                        <span>Example: <code>@_kind.SampleFile</code>.</span>
+                    }
+                </MudText>
+                <MudSimpleTable Dense="true" Class="mb-3">
+                    <thead><tr><th>Field</th><th>Expected headers (any of)</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var field in _kind.Fields)
+                        {
+                            <tr>
+                                <td>@field.Label@(field.Required ? " *" : "")</td>
+                                <td><MudText Typo="Typo.caption">@string.Join(", ", field.Aliases.Skip(1).Take(6))</MudText></td>
+                                <td><MudText Typo="Typo.caption" Class="mud-text-secondary">@field.Description</MudText></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <label class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-filled-size-medium mud-ripple" style="cursor:pointer">
+                    <MudIcon Icon="@Icons.Material.Filled.UploadFile" Class="mr-2" /> Choose file
+                    <InputFile OnChange="UploadAsync" multiple accept=".csv,.xlsx,.xlsm,.txt" style="display:none" data-testid="import-file" />
+                </label>
+            }
+            break;
+
+        case 3 when _job is not null:
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Map the columns</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@string.Join(", ", _job.Job.Files.Select(f => $"{f.FileName} ({ImportFormat.Size(f.Length)})"))</MudText>
+            <ImportMappingEditor Definition="_job.Definition" Headers="_job.Headers" SampleRows="_job.SampleRows"
+                                 @bind-Mapping="_mapping" @bind-Options="_options" />
+            <MudStack Row="true" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveMappingAsync">Save mapping and validate</MudButton>
+            </MudStack>
+            break;
+
+        case 4 when _job is not null:
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-3">Validation</MudText>
+            @if (_job.Job.Status == ImportJobStatus.Validated)
+            {
+                <ImportResults Job="_job" />
+            }
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Outlined" OnClick="() => GoTo(3)">Back to mapping</MudButton>
+                <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="ValidateAsync">Validate again</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _job.Job.Status != ImportJobStatus.Validated)" OnClick="DryRunAsync">Next: dry run</MudButton>
+            </MudStack>
+            break;
+
+        case 5 when _job is not null:
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Dry run</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Nothing has changed yet. This is what the import will create, update and skip; rows already in Workbench (matched on their natural keys) are updated, not duplicated.</MudText>
+            <ImportResults Job="_job" ShowPlan="true" />
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Outlined" OnClick="() => GoTo(3)">Back to mapping</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _job.Job.Counts.Creates + _job.Job.Counts.Updates == 0)" OnClick="ImportAsync"
+                           data-testid="run-import">Import @(_job.Job.Counts.Creates + _job.Job.Counts.Updates) changes</MudButton>
+            </MudStack>
+            break;
+
+        case 6 when _job is not null:
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudText Typo="Typo.h6" HtmlTag="h2">Import</MudText>
+                <MudChip T="string" Size="Size.Small" Color="@ImportFormat.Color(_job.Job.Status)">@ImportFormat.Label(_job.Job.Status)</MudChip>
+            </MudStack>
+            @if (_job.Job.Message is { } message)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">@message</MudAlert>
+            }
+            else if (_job.Job.Status == ImportJobStatus.Imported)
+            {
+                <MudAlert Severity="Severity.Success" Class="mb-3">Imported. Every change is in the audit log; you can roll this job back from the history while nothing else has used what it created.</MudAlert>
+            }
+            <ImportResults Job="_job" ShowPlan="true" />
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Restart" StartIcon="@Icons.Material.Filled.Add">Import another file</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="() => Done.InvokeAsync(_job.Job.Id)">See it in the history</MudButton>
+                @foreach (var (label, href) in Links())
+                {
+                    <MudButton Variant="Variant.Text" Href="@href">@label</MudButton>
+                }
+            </MudStack>
+            break;
+    }
+
+    @if (_step is > 0 and < 3)
+    {
+        <MudButton Variant="Variant.Text" Class="mt-4" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="() => GoTo(_step - 1)">Back</MudButton>
+    }
+</MudPaper>
+
+@code {
+    private static readonly string[] Steps = ["Source", "Kind", "Upload", "Map", "Validate", "Dry run", "Import"];
+
+    private static readonly (ImportSource, string, string, string)[] Sources =
+    [
+        (ImportSource.Costpoint, "Costpoint", "CSV or Excel exports of Costpoint screens and reports: organizations, employees and rates, customers, contracts and CLINs, projects and WBS, bill rates, budgets.", Icons.Material.Filled.AccountBalance),
+        (ImportSource.SmartsheetApi, "Smartsheet (API)", "Connect with an API token and pick sheets. Imports columns, hierarchy, dates, predecessors and, optionally, comments and attachments.", Icons.Material.Filled.CloudSync),
+        (ImportSource.SmartsheetExcel, "Smartsheet (.xlsx)", "Upload a sheet exported to Excel. Hierarchy comes from the row grouping or indentation.", Icons.Material.Filled.TableView),
+    ];
+
+    [Parameter]
+    public Guid? JobId { get; set; }
+
+    /// <summary>Raised when the user wants to see the finished job in the history.</summary>
+    [Parameter]
+    public EventCallback<Guid> Done { get; set; }
+
+    private IReadOnlyList<ImportKindDto> _kinds = [];
+    private ImportSource? _source;
+    private ImportKindDto? _kind;
+    private ImportJobDetailDto? _job;
+    private ImportMappingDto _mapping = new(new Dictionary<string, string?>(), []);
+    private ImportOptionsDto _options = new();
+    private string? _token;
+    private readonly HashSet<string> _sheets = [];
+    private int _step;
+    private bool _busy;
+    private Guid? _loadedJob;
+
+    private IEnumerable<ImportKindDto> KindsForSource => _kinds.Where(k => k.Source == _source);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _kinds = await Imports.ListKindsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (JobId is { } id && id != _loadedJob)
+        {
+            _loadedJob = id;
+            if (await Imports.GetJobAsync(id) is { } job)
+            {
+                Show(job);
+                _step = job.Job.Source == ImportSource.SmartsheetApi && job.Job.Files.Count == 0 ? 2 : ImportFormat.StepFor(job.Job.Status);
+            }
+        }
+    }
+
+    private void Show(ImportJobDetailDto job)
+    {
+        _job = job;
+        _loadedJob = job.Job.Id;
+        _source = job.Job.Source;
+        _kind = job.Definition;
+        _mapping = job.Mapping;
+        _options = job.Options;
+    }
+
+    private bool CanGoBackTo(int step) => _job is null || step >= 3 && _job.Job.Status is not (ImportJobStatus.Imported or ImportJobStatus.Failed or ImportJobStatus.RolledBack);
+
+    private void GoTo(int step) => _step = step;
+
+    private void ChooseSource(ImportSource source)
+    {
+        _source = source;
+        _kind = null;
+        _job = null;
+        var kinds = KindsForSource.ToList();
+        if (kinds.Count == 1)
+        {
+            _kind = kinds[0];
+            _step = 2;
+        }
+        else
+        {
+            _step = 1;
+        }
+    }
+
+    private void ChooseKind(ImportKindDto kind)
+    {
+        _kind = kind;
+        _job = null;
+        _step = 2;
+    }
+
+    private void Restart()
+    {
+        _job = null;
+        _kind = null;
+        _token = null;
+        _sheets.Clear();
+        _step = 0;
+        Navigation.NavigateTo("setup/import");
+    }
+
+    private void ToggleSheet(string id, bool on)
+    {
+        if (on)
+        {
+            _sheets.Add(id);
+        }
+        else
+        {
+            _sheets.Remove(id);
+        }
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        if (_kind is null || _source is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var files = new List<UploadFileRequest>();
+            foreach (var file in e.GetMultipleFiles(10))
+            {
+                await using var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                files.Add(new UploadFileRequest(file.Name, buffer.ToArray()));
+            }
+
+            Show(await Imports.UploadAsync(new UploadImportRequest(_source.Value, _kind.Kind, files)));
+            _step = 3;
+            Navigation.NavigateTo($"setup/import/{_job!.Job.Id}", replace: true);
+        });
+    }
+
+    private Task ConnectAsync() => RunAsync(async () =>
+    {
+        Show(await Imports.ConnectSmartsheetAsync(new ConnectSmartsheetRequest(_token!)));
+        _token = null;
+        _loadedJob = _job!.Job.Id;
+        Navigation.NavigateTo($"setup/import/{_job.Job.Id}", replace: true);
+    });
+
+    private Task FetchSheetsAsync() => RunAsync(async () =>
+    {
+        Show(await Imports.SelectSmartsheetSheetsAsync(_job!.Job.Id, new SelectSmartsheetSheetsRequest(_sheets.ToList())));
+        _step = 3;
+    });
+
+    private Task SaveMappingAsync() => RunAsync(async () =>
+    {
+        Show(await Imports.SaveMappingAsync(_job!.Job.Id, new SaveImportMappingRequest(_mapping, _options)));
+        Show(await Imports.ValidateAsync(_job.Job.Id));
+        _step = 4;
+    });
+
+    private Task ValidateAsync() => RunAsync(async () => Show(await Imports.ValidateAsync(_job!.Job.Id)));
+
+    private Task DryRunAsync() => RunAsync(async () =>
+    {
+        Show(await Imports.DryRunAsync(_job!.Job.Id));
+        _step = 5;
+    });
+
+    private async Task ImportAsync()
+    {
+        if (_job!.Job.Counts.Errors > 0)
+        {
+            var go = await DialogService.ShowMessageBoxAsync("Import with errors?",
+                $"{_job.Job.Counts.Errors} row(s) have errors and will be skipped. Import the valid rows?", yesText: "Import", cancelText: "Cancel");
+            if (go != true)
+            {
+                return;
+            }
+        }
+
+        await RunAsync(async () =>
+        {
+            Show(await Imports.ImportAsync(_job!.Job.Id));
+            _step = 6;
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or InvalidOperationException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private IEnumerable<(string, string)> Links()
+    {
+        if (_kind is null)
+        {
+            yield break;
+        }
+
+        switch (_kind.Kind)
+        {
+            case ImportKind.Sheets:
+                yield return ("Open sheets", "sheets");
+                if (_options.ProjectId is { } project)
+                {
+                    yield return ("Open the project", $"setup/projects/{project}");
+                }
+
+                break;
+            case ImportKind.Employees or ImportKind.CostRates:
+                yield return ("People", "setup/people");
+                break;
+            case ImportKind.OrgUnits:
+                yield return ("Org units", "setup/org-units");
+                break;
+            case ImportKind.LaborCategories:
+                yield return ("Labor categories", "setup/labor-categories");
+                break;
+            case ImportKind.Customers:
+                yield return ("Customers", "setup/customers");
+                break;
+            case ImportKind.Contracts or ImportKind.Clins or ImportKind.BillRates:
+                yield return ("Contracts", "setup/contracts");
+                break;
+            default:
+                yield return ("Projects", "setup/projects");
+                break;
+        }
+    }
+}

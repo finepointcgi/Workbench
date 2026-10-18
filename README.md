@@ -106,6 +106,13 @@ dotnet build src/Workbench.Desktop -t:Run
   `OpenTelemetry:Endpoint` (off by default). Outside Development the host refuses to start with a weak configuration.
   Supply secrets with environment variables or a vault, never in appsettings.
 
+## Moving from Costpoint and Smartsheet
+
+**Setup → Import** (`/setup/import`) imports Costpoint CSV/Excel exports (organizations, employees with PLCs and cost
+rates, customers, contracts with CLINs and funding, projects with their WBS, bill rates, budgets) and Smartsheet sheets
+(API token or `.xlsx` export, with hierarchy, predecessors and an optional link to a project's WBS). Upload, map,
+validate, dry run, import; each job can be rolled back. Sample files and expected columns: `samples/import/README.md`.
+
 ## Security and ISO 27001
 
 - Users and security (`/admin/users`): users and roles, invites, quarterly access reviews, the security event log and

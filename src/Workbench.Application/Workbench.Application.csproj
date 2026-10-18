@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <!-- Imports: reads .xlsx exports (Costpoint reports, Smartsheet sheets) incl. outline levels and indentation. MIT. -->
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
   </ItemGroup>
 
   <PropertyGroup>

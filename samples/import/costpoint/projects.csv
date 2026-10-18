@@ -1,0 +1,15 @@
+PROJ_ID,PROJ_NAME,LVL_NO,ACTIVE_FL,ALLOW_CHARGES_FL,PROJ_TYPE_DC,PRIME_CONTR_ID,CLIN_ID,PROJ_START_DT,PROJ_END_DT,PROJ_MGR_EMPL_ID
+2001,Fleet Data Modernization,1,Y,N,Direct,N66001-27-C-2001,,10/01/2026,09/30/2028,E2001
+2001.01,Program Management,2,Y,N,,,,,,
+2001.01.01,Project Management and Reporting,3,Y,Y,,,0001,,,
+2001.01.02,Travel,3,Y,Y,,,0002,,,
+2001.02,Data Platform,2,Y,N,,,,,,
+2001.02.01,Requirements and Design,3,Y,Y,,,0001,,,
+2001.02.02,Development,3,Y,Y,,,0001,,,
+2001.02.03,Testing and Deployment,3,Y,Y,,,0001,,,
+2001.03,Option Year 1 Support,2,N,Y,,,0003,,,
+9000,Indirect and Leave,1,Y,N,Indirect,,,10/01/2020,,
+9000.10,Overhead,2,Y,Y,Indirect,,,,,
+9000.20,General and Administrative,2,Y,Y,Indirect,,,,,
+9000.30,Bid and Proposal,2,Y,Y,Indirect,,,,,
+9000.90,Paid Leave,2,Y,Y,Leave,,,,,

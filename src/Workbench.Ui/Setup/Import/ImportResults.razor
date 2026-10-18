@@ -1,0 +1,89 @@
+@* Counts, row-level errors and (for dry runs and imports) the planned creates/updates/skips of a job. *@
+
+<MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3" data-testid="import-counts">
+    <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">Rows</MudText><MudText Typo="Typo.h6">@Counts.TotalRows</MudText></MudPaper>
+    @if (ShowPlan)
+    {
+        <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">@(Imported ? "Created" : "Creates")</MudText><MudText Typo="Typo.h6" Color="Color.Success">@Counts.Creates</MudText></MudPaper>
+        <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">@(Imported ? "Updated" : "Updates")</MudText><MudText Typo="Typo.h6" Color="Color.Info">@Counts.Updates</MudText></MudPaper>
+        <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">@(Imported ? "Skipped" : "Skips")</MudText><MudText Typo="Typo.h6">@Counts.Skips</MudText></MudPaper>
+    }
+    <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">Rows with errors</MudText><MudText Typo="Typo.h6" Color="@(Counts.Errors > 0 ? Color.Error : Color.Default)">@Counts.Errors</MudText></MudPaper>
+    <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">Warnings</MudText><MudText Typo="Typo.h6" Color="@(Warnings > 0 ? Color.Warning : Color.Default)">@Warnings</MudText></MudPaper>
+</MudStack>
+
+@if (Job.Errors.Count > 0)
+{
+    <MudText Typo="Typo.subtitle2" Class="mb-1">Errors and warnings</MudText>
+    @if (Counts.Errors > 0 && !Imported)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Rows with errors are skipped. Fix the file and upload it again, or import the valid rows.</MudText>
+    }
+    <MudSimpleTable Dense="true" Hover="true" Bordered="false" Class="mb-4" Style="max-height:320px;overflow:auto" data-testid="import-errors">
+        <thead><tr><th></th><th>File</th><th>Row</th><th>Field</th><th>Message</th></tr></thead>
+        <tbody>
+            @foreach (var error in Job.Errors.Take(500))
+            {
+                <tr>
+                    <td><MudIcon Icon="@(error.IsWarning ? Icons.Material.Filled.Warning : Icons.Material.Filled.Error)" Color="@(error.IsWarning ? Color.Warning : Color.Error)" Size="Size.Small" aria-label="@(error.IsWarning ? "Warning" : "Error")" /></td>
+                    <td>@error.File</td>
+                    <td>@(error.Row == 0 ? "—" : error.Row)</td>
+                    <td>@error.Field</td>
+                    <td>@error.Message</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+else if (!ShowPlan)
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">Every row is valid.</MudAlert>
+}
+
+@if (ShowPlan && Job.Plan.Count > 0)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1">
+        <MudText Typo="Typo.subtitle2">@(Imported ? "What was imported" : "What the import will do")</MudText>
+        <MudSpacer />
+        <MudChipSet T="string" @bind-SelectedValue="_filter" SelectionMode="SelectionMode.SingleSelection" Size="Size.Small">
+            <MudChip T="string" Value="@("all")" Default="true">All</MudChip>
+            <MudChip T="string" Value="@nameof(ImportRowAction.Create)">Creates</MudChip>
+            <MudChip T="string" Value="@nameof(ImportRowAction.Update)">Updates</MudChip>
+            <MudChip T="string" Value="@nameof(ImportRowAction.Skip)">Skips</MudChip>
+        </MudChipSet>
+    </MudStack>
+    <MudSimpleTable Dense="true" Hover="true" Style="max-height:420px;overflow:auto" data-testid="import-plan">
+        <thead><tr><th>Action</th><th>Type</th><th>Key</th><th>Detail</th><th>Row</th></tr></thead>
+        <tbody>
+            @foreach (var row in Filtered.Take(1000))
+            {
+                <tr>
+                    <td><MudChip T="string" Size="Size.Small" Color="@ImportFormat.Color(row.Action)" Variant="Variant.Text" Class="ma-0">@row.Action</MudChip></td>
+                    <td>@row.EntityType</td>
+                    <td><code>@row.Key</code></td>
+                    <td>@row.Summary</td>
+                    <td class="mud-text-secondary">@(row.Row == 0 ? "" : $"{row.File}:{row.Row}")</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ImportJobDetailDto Job { get; set; } = default!;
+
+    [Parameter]
+    public bool ShowPlan { get; set; }
+
+    private string? _filter = "all";
+
+    private ImportCountsDto Counts => Job.Job.Counts;
+
+    private bool Imported => Job.Job.Status is ImportJobStatus.Imported or ImportJobStatus.Failed or ImportJobStatus.RolledBack;
+
+    private int Warnings => Job.Errors.Count(e => e.IsWarning);
+
+    private IEnumerable<ImportPlanRowDto> Filtered =>
+        _filter is null or "all" ? Job.Plan : Job.Plan.Where(p => p.Action.ToString() == _filter);
+}
