@@ -138,6 +138,7 @@ public sealed class FinanceActionGatingTests
             null, [], [], [], null, null, null, null, null, CanEdit: true, CanApprove: true);
         ctx.Services.AddSingleton(Fake<IApBillService>.Create(("GetAsync", _ => bill)));
         ctx.Services.AddSingleton(Fake<IVendorService>.Create());
+        ctx.Services.AddSingleton(Fake<Workbench.Contracts.Assets.IAssetService>.Create());
         ctx.Services.AddSingleton(Fake<ISubcontractService>.Create());
         ctx.Services.AddSingleton(Fake<Workbench.Contracts.ProjectAccounting.IContractService>.Create());
         ctx.Services.AddSingleton(Fake<Workbench.Contracts.ProjectAccounting.IProjectService>.Create());

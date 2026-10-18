@@ -3,7 +3,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
-@inject Workbench.Contracts.Assets.IAssetService Assets
+@inject Workbench.Contracts.Assets.IAssetService AssetService
 
 <PageTitle>@(_bill?.Bill.Number ?? "Bill") · Purchasing · Workbench</PageTitle>
 
@@ -195,7 +195,7 @@ else
         try
         {
             _capitalizable = _bill?.Bill.Status == BillState.Posted
-                ? (await Assets.ListCapitalizableBillLinesAsync()).Where(l => l.BillId == BillId).Select(l => l.BillLineId).ToHashSet()
+                ? (await AssetService.ListCapitalizableBillLinesAsync()).Where(l => l.BillId == BillId).Select(l => l.BillLineId).ToHashSet()
                 : [];
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
@@ -213,7 +213,7 @@ else
         {
             try
             {
-                var asset = await Assets.CapitalizeAsync(request);
+                var asset = await AssetService.CapitalizeAsync(request);
                 Snackbar.Add($"Capitalized as {asset.Asset.TagNumber}.", Severity.Success);
                 Navigation.NavigateTo($"assets/{asset.Asset.Id}");
             }

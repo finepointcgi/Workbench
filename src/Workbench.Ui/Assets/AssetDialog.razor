@@ -1,5 +1,5 @@
 @* Record an asset by hand (nothing is posted): description, category, cost and life, location and custody, and FAR 52.245-1 property details. *@
-@inject IAssetService Assets
+@inject IAssetService AssetService
 @inject IPeopleService People
 @inject IProjectService Projects
 @inject IContractService Contracts
@@ -118,7 +118,7 @@
     {
         try
         {
-            _categories = await Assets.ListCategoriesAsync();
+            _categories = await AssetService.ListCategoriesAsync();
             _employees = await People.ListEmployeesAsync();
             _orgs = await People.ListOrgUnitsAsync();
             _projects = await Projects.ListProjectsAsync();

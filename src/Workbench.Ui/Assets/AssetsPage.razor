@@ -1,5 +1,5 @@
 @page "/assets"
-@inject IAssetService Assets
+@inject IAssetService AssetService
 @inject IAssetReportService Reports
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
@@ -93,7 +93,7 @@ else
     {
         try
         {
-            _assets = await Assets.ListAsync(new AssetQuery(_status, null, _search, _govOnly));
+            _assets = await AssetService.ListAsync(new AssetQuery(_status, null, _search, _govOnly));
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
@@ -108,7 +108,7 @@ else
         {
             try
             {
-                var asset = await Assets.CreateAsync(request);
+                var asset = await AssetService.CreateAsync(request);
                 Navigation.NavigateTo($"assets/{asset.Asset.Id}");
             }
             catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

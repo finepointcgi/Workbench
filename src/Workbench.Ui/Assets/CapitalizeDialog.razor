@@ -1,5 +1,5 @@
 @* Capitalize an AP bill line: the category (accounts, method and life default from it), and the asset's details. *@
-@inject IAssetService Assets
+@inject IAssetService AssetService
 @inject IPeopleService People
 
 <MudDialog>
@@ -69,7 +69,7 @@
         _description = Description;
         try
         {
-            _categories = await Assets.ListCategoriesAsync();
+            _categories = await AssetService.ListCategoriesAsync();
             _employees = await People.ListEmployeesAsync();
             if (_categories.FirstOrDefault(c => c.IsActive) is { } first)
             {

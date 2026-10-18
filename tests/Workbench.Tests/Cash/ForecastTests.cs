@@ -29,7 +29,7 @@ public sealed class ForecastTests
             var customer = await db.Set<Customer>().Select(c => c.Id).FirstAsync();
             Invoice Inv(string number, DateOnly due, decimal total, InvoiceStatus status, decimal paid = 0) => new()
             {
-                Number = number, CustomerId = customer, ContractId = kit.Fx.Contract1, Type = InvoiceType.TimeAndMaterials, Status = status,
+                Number = number, Sequence = int.Parse(number[4..]) + 1, CustomerId = customer, ContractId = kit.Fx.Contract1, Type = InvoiceType.TimeAndMaterials, Status = status,
                 InvoiceDate = due.AddDays(-30), DueDate = due, Total = total, AmountPaid = paid, CreatedBy = Finance,
             };
 
@@ -41,7 +41,9 @@ public sealed class ForecastTests
             db.Set<Payment>().Add(payment);
 
             // AP: a 2,000 bill due 10/28 with 500 of it in an approved run paying 10/20.
-            var bill = new ApBill { VendorId = Guid.NewGuid(), Number = "V-1", InvoiceNumber = "A-1", InvoiceDate = new DateOnly(2026, 9, 28), DueDate = new DateOnly(2026, 10, 28),
+            var vendor = new Vendor { Code = "FCST", Name = "Forecast vendor" };
+            db.Set<Vendor>().Add(vendor);
+            var bill = new ApBill { VendorId = vendor.Id, Number = "V-1", InvoiceNumber = "A-1", InvoiceDate = new DateOnly(2026, 9, 28), DueDate = new DateOnly(2026, 10, 28),
                 Status = ApBillStatus.Posted, Amount = 2_000m, EnteredBy = Finance };
             var run = new ApPaymentRun { Number = "PR-000001", PaymentDate = new DateOnly(2026, 10, 20), Status = PaymentRunStatus.Approved, CreatedBy = Finance };
             db.Set<ApBill>().Add(bill);

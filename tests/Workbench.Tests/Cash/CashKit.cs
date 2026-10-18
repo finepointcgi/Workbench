@@ -78,10 +78,27 @@ internal sealed class CashKit : IAsyncDisposable
     public async Task<JournalEntryDto> VendorPaymentAsync(DateOnly date, decimal amount, string reference, bool check = true)
     {
         await using var db = await Factory.CreateAsync();
+        var vendor = await db.Set<Vendor>().FirstOrDefaultAsync(v => v.Code == "CASHKIT");
+        if (vendor is null)
+        {
+            vendor = new Vendor { Code = "CASHKIT", Name = "Cash kit vendor" };
+            db.Set<Vendor>().Add(vendor);
+        }
+
+        // Real bill and run rows: the payment's foreign keys are enforced on SQLite and PostgreSQL.
+        var method = check ? PurchasingMethod.Check : PurchasingMethod.Ach;
+        var bill = new ApBill
+        {
+            VendorId = vendor.Id, Number = $"V-{reference}", InvoiceNumber = reference, InvoiceDate = date, DueDate = date,
+            Status = ApBillStatus.Posted, Amount = amount, PaidAmount = amount, EnteredBy = Finance,
+        };
+        var run = new ApPaymentRun { Number = $"PR-{reference}", PaymentDate = date, Method = method, Status = PaymentRunStatus.Completed, CreatedBy = Finance };
+        db.Set<ApBill>().Add(bill);
+        db.Set<ApPaymentRun>().Add(run);
         var payment = new ApPayment
         {
-            RunId = Guid.NewGuid(), BillId = Guid.NewGuid(), VendorId = Guid.NewGuid(), Amount = amount, Reference = reference, PaidOn = date,
-            Method = check ? PurchasingMethod.Check : PurchasingMethod.Ach, Status = ApPaymentStatus.Paid,
+            RunId = run.Id, BillId = bill.Id, VendorId = vendor.Id, Amount = amount, Reference = reference, PaidOn = date,
+            Method = method, Status = ApPaymentStatus.Paid,
         };
         db.Set<ApPayment>().Add(payment);
         await db.SaveChangesAsync();

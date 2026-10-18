@@ -1,5 +1,5 @@
 @page "/assets/capitalize"
-@inject IAssetService Assets
+@inject IAssetService AssetService
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -50,8 +50,8 @@ else
     {
         try
         {
-            _threshold = (await Assets.GetSettingsAsync()).CapitalizationThreshold;
-            _lines = await Assets.ListCapitalizableBillLinesAsync();
+            _threshold = (await AssetService.GetSettingsAsync()).CapitalizationThreshold;
+            _lines = await AssetService.ListCapitalizableBillLinesAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
@@ -68,7 +68,7 @@ else
         {
             try
             {
-                var asset = await Assets.CapitalizeAsync(request);
+                var asset = await AssetService.CapitalizeAsync(request);
                 Snackbar.Add($"Capitalized as {asset.Asset.TagNumber}.", Severity.Success);
                 Navigation.NavigateTo($"assets/{asset.Asset.Id}");
             }

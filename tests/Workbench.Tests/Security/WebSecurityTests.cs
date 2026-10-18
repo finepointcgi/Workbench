@@ -305,6 +305,10 @@ public sealed partial class WebSecurityTests
         var current = periods.Where(p => p.Status == FiscalPeriodState.Open).MinBy(p => p.Start)!;
         using var blocked = await pm.PutAsJsonAsync($"/api/v1/fiscal/periods/{current.Id}/status", new { Status = FiscalPeriodState.Closed, Reason = "Month end" });
         var period = periods.Where(p => p.Status == FiscalPeriodState.Open).MaxBy(p => p.Start)!;
+        // The seeded bank account is never reconciled that far and seeded assets depreciate every month: Finance waives and runs them.
+        using var waive = await pm.PostAsJsonAsync("/api/v1/cash/close-waivers", new { FiscalPeriodId = period.Id, Reason = "No statement yet" });
+        using var depreciate = await pm.PostAsync($"/api/v1/assets/depreciation/{period.Id}/run", null);
+        Assert.True(waive.IsSuccessStatusCode && depreciate.IsSuccessStatusCode, $"{waive.StatusCode} {depreciate.StatusCode}");
         using var close = await pm.PutAsJsonAsync($"/api/v1/fiscal/periods/{period.Id}/status", new { Status = FiscalPeriodState.Closed, Reason = "Month end" });
 
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);

@@ -1,6 +1,6 @@
 @page "/assets/reports"
 @inject IAssetReportService Reports
-@inject IAssetService Assets
+@inject IAssetService AssetService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 
@@ -94,7 +94,7 @@ else
         try
         {
             _gov = await Reports.GetGovernmentPropertyAsync();
-            _categories = await Assets.ListCategoriesAsync();
+            _categories = await AssetService.ListCategoriesAsync();
             await LoadRollAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

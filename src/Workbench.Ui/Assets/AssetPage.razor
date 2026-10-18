@@ -1,5 +1,5 @@
 @page "/assets/{AssetId:guid}"
-@inject IAssetService Assets
+@inject IAssetService AssetService
 @inject IAssetReportService Reports
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -155,7 +155,7 @@ else
     {
         try
         {
-            _asset = await Assets.GetAsync(AssetId);
+            _asset = await AssetService.GetAsync(AssetId);
             await LoadScheduleAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
@@ -203,7 +203,7 @@ else
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: TransferAssetRequest request })
         {
-            await RunAsync(() => Assets.TransferAsync(AssetId, request), "Transferred.");
+            await RunAsync(() => AssetService.TransferAsync(AssetId, request), "Transferred.");
         }
     }
 
@@ -213,7 +213,7 @@ else
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: DisposeAssetRequest request })
         {
-            await RunAsync(() => Assets.DisposeAsync(AssetId, request), "Disposed.");
+            await RunAsync(() => AssetService.DisposeAsync(AssetId, request), "Disposed.");
         }
     }
 
