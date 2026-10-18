@@ -11,7 +11,7 @@ using Workbench.Infrastructure.Tenancy;
 namespace Workbench.Migrations.Sqlite.CatalogDb
 {
     [DbContext(typeof(CatalogDbContext))]
-    [Migration("20261018123459_InitialCreate")]
+    [Migration("20261018125455_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

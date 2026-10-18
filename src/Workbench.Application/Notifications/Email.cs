@@ -20,6 +20,19 @@ public sealed class NullEmailSender : IEmailSender
 /// </summary>
 public sealed class NotificationOptions
 {
-    public string? PublicBaseUrl { get; set; }
+    private string? _publicBaseUrl;
+
+    /// <summary>
+    /// May contain <c>{tenant}</c> (MultiTenant), replaced by the current tenant's id, e.g. <c>https://{tenant}.workbench.example</c>.
+    /// Without a tenant such a template gives null, so links stay relative.
+    /// </summary>
+    public string? PublicBaseUrl
+    {
+        get => _publicBaseUrl is { } url && url.Contains("{tenant}", StringComparison.Ordinal)
+            ? Tenancy.TenantScope.Current is { } tenant ? url.Replace("{tenant}", tenant.Slug, StringComparison.Ordinal) : null
+            : _publicBaseUrl;
+        set => _publicBaseUrl = value;
+    }
+
     public int DigestHourLocal { get; set; } = 7;
 }

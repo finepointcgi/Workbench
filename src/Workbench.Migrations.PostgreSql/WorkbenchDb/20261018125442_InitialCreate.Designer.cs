@@ -13,7 +13,7 @@ using Workbench.Infrastructure.Persistence;
 namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 {
     [DbContext(typeof(WorkbenchDbContext))]
-    [Migration("20261018123446_InitialCreate")]
+    [Migration("20261018125442_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -3180,6 +3180,53 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("Timesheet");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.TimesheetPeriodRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("BiweeklyAnchor")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Cadence")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<string>("WeekStartDay")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveFrom");
+
+                    b.ToTable("TimesheetPeriodRule");
                 });
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.WbsElement", b =>

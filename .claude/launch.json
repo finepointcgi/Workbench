@@ -6,6 +6,20 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "src/Workbench.Web", "--launch-profile", "http"],
       "port": 5104
+    },
+    {
+      "name": "workbench-multitenant-postgres",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "ASPNETCORE_ENVIRONMENT=Development",
+        "ASPNETCORE_URLS=http://localhost:5251",
+        "Tenancy__Mode=MultiTenant",
+        "Database__Provider=PostgreSQL",
+        "ConnectionStrings__Catalog=Host=localhost;Database=workbench_catalog;Username=workbench;Password=workbench",
+        "Tenancy__TenantConnectionString=Host=localhost;Database=workbench_{tenant};Username=workbench;Password=workbench",
+        "dotnet", "run", "--project", "src/Workbench.Web", "--no-launch-profile"
+      ],
+      "port": 5251
     }
   ]
 }

@@ -1,5 +1,5 @@
 # Build, test and supply-chain checks (ISO 27001 A.8.25–A.8.29, A.8.8). Every pull request and every push to main
-# must pass before merge; make the "build-test" and "supply-chain" checks required in the branch protection rules.
+# must pass before merge; make both "build-test" legs and "supply-chain" required checks in the branch protection rules.
 name: CI
 
 on:
@@ -22,26 +22,58 @@ env:
 
 jobs:
   build-test:
-    name: Build and test
+    # The whole suite runs twice: on SQLite and on a PostgreSQL 17 service container (WORKBENCH_TEST_DB). The
+    # PostgreSQL-only tests ([PostgresFact], Category=PostgreSql) run in both legs because the service is always there.
+    name: Build and test (${{ matrix.database }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [Sqlite, PostgreSql]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: workbench
+          POSTGRES_PASSWORD: workbench
+          POSTGRES_DB: workbench
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U workbench -d workbench"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      WORKBENCH_TEST_DB: ${{ matrix.database }}
+      WORKBENCH_TEST_POSTGRES: "Host=localhost;Port=5432;Username=workbench;Password=workbench"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
       - name: Restore
-        run: dotnet restore Workbench.Server.slnf
+        run: |
+          dotnet restore Workbench.Server.slnf
+          dotnet tool restore
       - name: Build
         # The MAUI desktop app is excluded: it needs Xcode or Windows.
         run: dotnet build Workbench.Server.slnf --no-restore --configuration Release
+      - name: Migrations match the model (both providers, both contexts)
+        if: matrix.database == 'Sqlite'
+        run: |
+          for provider in PostgreSql Sqlite; do
+            for context in WorkbenchDbContext CatalogDbContext; do
+              dotnet tool run dotnet-ef migrations has-pending-model-changes --no-build --configuration Release \
+                --project "src/Workbench.Migrations.$provider" --startup-project "src/Workbench.Migrations.$provider" --context "$context"
+            done
+          done
       - name: Test
         run: dotnet test Workbench.Server.slnf --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory test-results
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.database }}
           path: test-results
           retention-days: 30
 

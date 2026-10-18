@@ -113,7 +113,7 @@ internal static class PostgresTemplates
 {
     public const string DefaultServer = "Host=localhost;Port=5432;Username=workbench;Password=workbench";
     private const string Prefix = "wbtest_";
-    private static readonly string RunId = $"{Prefix}{Environment.ProcessId}_{DateTime.UtcNow:HHmmss}";
+    public static readonly string RunId = $"{Prefix}{Environment.ProcessId}_{DateTime.UtcNow:HHmmss}";
     private static readonly Lazy<string> Template = new(CreateTemplate);
     private static readonly Lazy<bool> Available = new(Probe);
     private static int _counter;

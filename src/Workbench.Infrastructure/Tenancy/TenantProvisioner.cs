@@ -74,11 +74,14 @@ public sealed class TenantProvisioner(
             using (TenantScope.Enter(info))
             {
                 await services.GetRequiredService<DatabaseMigrator>().MigrateCurrentAsync(cancellationToken);
-                await TenantDefaultsSeed.SeedAsync(services, tenancy.FiscalYearStartMonth, clock, cancellationToken);
+
+                // The sample data brings its own chart of accounts and fiscal years; the defaults then add only what's missing.
                 if (seedSampleData)
                 {
                     await services.SeedSampleDataAsync(cancellationToken);
                 }
+
+                await TenantDefaultsSeed.SeedAsync(services, tenancy.FiscalYearStartMonth, clock, cancellationToken);
 
                 await InviteAdminAsync(info, adminEmail, Clean(request.AdminName, 200) ?? adminEmail.Split('@')[0], actor, cancellationToken);
             }

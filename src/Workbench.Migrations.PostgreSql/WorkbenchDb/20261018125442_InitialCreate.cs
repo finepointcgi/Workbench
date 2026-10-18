@@ -1,9 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Workbench.Migrations.Sqlite.WorkbenchDb
+namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -15,14 +16,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "AccessReview",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    StartedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    StartedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    CompletedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    CompletedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    StartedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    StartedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    CompletedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Notes = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -33,13 +34,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ActivityEvent",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Actor = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Summary = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    OccurredAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Actor = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Kind = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Summary = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false, collation: "C"),
+                    OccurredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -50,16 +51,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ApPaymentRun",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    PaymentDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CompletedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    PaymentDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Method = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ApprovedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    ApprovedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CompletedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -70,23 +71,23 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "AppUser",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    DisplayName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    IsAdmin = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsFinance = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsTimekeeper = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    LastSeenAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    LastSignInAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    DeactivatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    DeactivatedBy = table.Column<string>(type: "TEXT", nullable: true),
-                    SessionsRevokedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    EmployeeUnlinked = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ExternalId = table.Column<string>(type: "TEXT", nullable: true),
-                    ScimManaged = table.Column<bool>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    IsAdmin = table.Column<bool>(type: "boolean", nullable: false),
+                    IsFinance = table.Column<bool>(type: "boolean", nullable: false),
+                    IsTimekeeper = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastSeenAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastSignInAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    DeactivatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeactivatedBy = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    SessionsRevokedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EmployeeUnlinked = table.Column<bool>(type: "boolean", nullable: false),
+                    ExternalId = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    ScimManaged = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -97,15 +98,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Attachment",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
-                    ContentType = table.Column<string>(type: "TEXT", maxLength: 127, nullable: false),
-                    SizeBytes = table.Column<long>(type: "INTEGER", nullable: false),
-                    StorageKey = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    UploadedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UploadedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false, collation: "C"),
+                    ContentType = table.Column<string>(type: "character varying(127)", maxLength: 127, nullable: false, collation: "C"),
+                    SizeBytes = table.Column<long>(type: "bigint", nullable: false),
+                    StorageKey = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    UploadedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    UploadedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -116,15 +117,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "AuditEvent",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EntityType = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    EntityId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Action = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    BeforeJson = table.Column<string>(type: "TEXT", nullable: true),
-                    AfterJson = table.Column<string>(type: "TEXT", nullable: true),
-                    Actor = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    OccurredAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EntityType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    EntityId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Action = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    BeforeJson = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    AfterJson = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    Actor = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    OccurredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -135,15 +136,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Comment",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ParentCommentId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    AuthorEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Body = table.Column<string>(type: "TEXT", maxLength: 10000, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    EditedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    Mentions = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ParentCommentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AuthorEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Body = table.Column<string>(type: "character varying(10000)", maxLength: 10000, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    EditedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Mentions = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -154,13 +155,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpActuals",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    FiscalPeriod = table.Column<string>(type: "TEXT", maxLength: 7, nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Cost = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    WbsId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    FiscalPeriod = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false, collation: "C"),
+                    Hours = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Cost = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    SyncedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -171,13 +172,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpBudgets",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    FiscalPeriod = table.Column<string>(type: "TEXT", maxLength: 7, nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    WbsId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    FiscalPeriod = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false, collation: "C"),
+                    Hours = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    SyncedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -188,14 +189,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpEmployees",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    OrganizationId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    LaborCategoryId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Active = table.Column<bool>(type: "INTEGER", nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    OrganizationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    LaborCategoryId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    Active = table.Column<bool>(type: "boolean", nullable: false),
+                    SyncedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -206,10 +207,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpLaborCategories",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LaborCategoryId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    LaborCategoryId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    SyncedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -220,14 +221,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpProjects",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    OrganizationId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    End = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Active = table.Column<bool>(type: "INTEGER", nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    OrganizationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    Start = table.Column<DateOnly>(type: "date", nullable: true),
+                    End = table.Column<DateOnly>(type: "date", nullable: true),
+                    Active = table.Column<bool>(type: "boolean", nullable: false),
+                    SyncedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -238,22 +239,22 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpSyncRuns",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Source = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    StartedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    FinishedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Projects = table.Column<int>(type: "INTEGER", nullable: false),
-                    WbsElements = table.Column<int>(type: "INTEGER", nullable: false),
-                    Employees = table.Column<int>(type: "INTEGER", nullable: false),
-                    LaborCategories = table.Column<int>(type: "INTEGER", nullable: false),
-                    Budgets = table.Column<int>(type: "INTEGER", nullable: false),
-                    Actuals = table.Column<int>(type: "INTEGER", nullable: false),
-                    Inserted = table.Column<int>(type: "INTEGER", nullable: false),
-                    Updated = table.Column<int>(type: "INTEGER", nullable: false),
-                    Deleted = table.Column<int>(type: "INTEGER", nullable: false),
-                    Skipped = table.Column<int>(type: "INTEGER", nullable: false),
-                    Error = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Source = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    StartedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    FinishedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Projects = table.Column<int>(type: "integer", nullable: false),
+                    WbsElements = table.Column<int>(type: "integer", nullable: false),
+                    Employees = table.Column<int>(type: "integer", nullable: false),
+                    LaborCategories = table.Column<int>(type: "integer", nullable: false),
+                    Budgets = table.Column<int>(type: "integer", nullable: false),
+                    Actuals = table.Column<int>(type: "integer", nullable: false),
+                    Inserted = table.Column<int>(type: "integer", nullable: false),
+                    Updated = table.Column<int>(type: "integer", nullable: false),
+                    Deleted = table.Column<int>(type: "integer", nullable: false),
+                    Skipped = table.Column<int>(type: "integer", nullable: false),
+                    Error = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -264,14 +265,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CpWbsElements",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ParentWbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Level = table.Column<int>(type: "INTEGER", nullable: false),
-                    ChargeAllowed = table.Column<bool>(type: "INTEGER", nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    WbsId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    ParentWbsId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Level = table.Column<int>(type: "integer", nullable: false),
+                    ChargeAllowed = table.Column<bool>(type: "boolean", nullable: false),
+                    SyncedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -282,10 +283,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Customer",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Category = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Category = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -296,13 +297,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Dashboard",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    OwnerEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    WorkspaceId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Description = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
+                    OwnerEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    WorkspaceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -313,9 +314,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "DataProtectionKeys",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FriendlyName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Xml = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FriendlyName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
+                    Xml = table.Column<string>(type: "text", nullable: false, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -326,10 +327,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "FiscalYear",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Year = table.Column<int>(type: "INTEGER", nullable: false),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    End = table.Column<DateOnly>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Year = table.Column<int>(type: "integer", nullable: false),
+                    Start = table.Column<DateOnly>(type: "date", nullable: false),
+                    End = table.Column<DateOnly>(type: "date", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -340,16 +341,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "GlAccounts",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    NormalBalance = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ParentId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CostClass = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Type = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    NormalBalance = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    ParentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CostClass = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -366,19 +367,19 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IndirectRates",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Pool = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    FiscalYear = table.Column<int>(type: "INTEGER", nullable: false),
-                    Basis = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Rate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 6, nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Note = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    SupersededAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    SupersededById = table.Column<Guid>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Pool = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    FiscalYear = table.Column<int>(type: "integer", nullable: false),
+                    Basis = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Rate = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: false),
+                    EffectiveFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    Note = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    ApprovedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    ApprovedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SupersededAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    SupersededById = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -389,10 +390,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "LaborCategory",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -403,15 +404,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "LegalHold",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EntityType = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    EntityId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Label = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    PlacedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    PlacedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ReleasedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ReleasedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EntityType = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    EntityId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Label = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Reason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false, collation: "C"),
+                    PlacedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    PlacedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ReleasedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    ReleasedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -422,17 +423,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Notification",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RecipientEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Body = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: false),
-                    Link = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ReadAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    EmailedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    RecipientEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Body = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false, collation: "C"),
+                    Link = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ReadAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    EmailedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -443,10 +444,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "NotificationPreference",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Delivery = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    LastDigestSentUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Delivery = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    LastDigestSentUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -457,10 +458,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "OrgUnit",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    ParentId = table.Column<Guid>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    ParentId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -477,11 +478,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "RetentionPolicy",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RecordType = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    RetentionDays = table.Column<int>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    RecordType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    RetentionDays = table.Column<int>(type: "integer", nullable: false),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -492,15 +493,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "SecurityEvent",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    OccurredAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    EventType = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Actor = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Target = table.Column<string>(type: "TEXT", maxLength: 512, nullable: true),
-                    Outcome = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    IpAddress = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    UserAgent = table.Column<string>(type: "TEXT", maxLength: 512, nullable: true),
-                    Detail = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    OccurredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    EventType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Actor = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Target = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true, collation: "C"),
+                    Outcome = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    IpAddress = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    UserAgent = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true, collation: "C"),
+                    Detail = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -511,15 +512,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "StoredFile",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    OwnerType = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    OwnerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
-                    ContentType = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    SizeBytes = table.Column<long>(type: "INTEGER", nullable: false),
-                    StorageKey = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    UploadedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UploadedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    OwnerType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    OwnerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false, collation: "C"),
+                    ContentType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    SizeBytes = table.Column<long>(type: "bigint", nullable: false),
+                    StorageKey = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    UploadedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    UploadedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -530,20 +531,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "TimeEntryRevision",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TimeEntryId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TimesheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    OldHours = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: true),
-                    NewHours = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: true),
-                    OldWbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    NewWbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    OldLaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    NewLaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    WorkDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    TimesheetRevision = table.Column<int>(type: "INTEGER", nullable: false),
-                    ChangedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    ChangedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TimeEntryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TimesheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OldHours = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: true),
+                    NewHours = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: true),
+                    OldWbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
+                    NewWbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OldLaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    NewLaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    WorkDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    TimesheetRevision = table.Column<int>(type: "integer", nullable: false),
+                    ChangedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    ChangedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -551,21 +552,40 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
+                name: "TimesheetPeriodRule",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Cadence = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    WeekStartDay = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    BiweeklyAnchor = table.Column<DateOnly>(type: "date", nullable: true),
+                    EffectiveFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    ChangedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    ChangedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    CancelledAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TimesheetPeriodRule", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "UserInvite",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    DisplayName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    IsAdmin = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsFinance = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsTimekeeper = table.Column<bool>(type: "INTEGER", nullable: false),
-                    InvitedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ExpiresAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    AcceptedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    RevokedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    RevokedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    IsAdmin = table.Column<bool>(type: "boolean", nullable: false),
+                    IsFinance = table.Column<bool>(type: "boolean", nullable: false),
+                    IsTimekeeper = table.Column<bool>(type: "boolean", nullable: false),
+                    InvitedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    AcceptedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RevokedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RevokedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -576,8 +596,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Workspaces",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -588,20 +608,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "AccessReviewItem",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AccessReviewId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    DisplayName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    OrgRoles = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    WorkspaceRoles = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: false),
-                    LastSignInAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    EmployeeName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Dormant = table.Column<bool>(type: "INTEGER", nullable: false),
-                    Decision = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Comment = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    DecidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    DecidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    AppliedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    AccessReviewId = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    OrgRoles = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, collation: "C"),
+                    WorkspaceRoles = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false, collation: "C"),
+                    LastSignInAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    EmployeeName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
+                    Dormant = table.Column<bool>(type: "boolean", nullable: false),
+                    Decision = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Comment = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
+                    DecidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    DecidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    AppliedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -618,17 +638,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Contract",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractNumber = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    IsPrime = table.Column<bool>(type: "INTEGER", nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    CeilingValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    FundedValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractNumber = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    IsPrime = table.Column<bool>(type: "boolean", nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    PeriodEnd = table.Column<DateOnly>(type: "date", nullable: false),
+                    CeilingValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    FundedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -645,13 +665,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CustomerBillingProfile",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PaymentTermsDays = table.Column<int>(type: "INTEGER", nullable: false),
-                    BillingAddress = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    StatementEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PaymentTermsDays = table.Column<int>(type: "integer", nullable: false),
+                    BillingAddress = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    StatementEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -668,14 +688,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Widget",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    DashboardId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false),
-                    Width = table.Column<int>(type: "INTEGER", nullable: false),
-                    Height = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    ConfigJson = table.Column<string>(type: "TEXT", maxLength: 20000, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    DashboardId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Order = table.Column<int>(type: "integer", nullable: false),
+                    Width = table.Column<int>(type: "integer", nullable: false),
+                    Height = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    ConfigJson = table.Column<string>(type: "character varying(20000)", maxLength: 20000, nullable: false, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -692,13 +712,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "FiscalPeriod",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalYearId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Number = table.Column<int>(type: "INTEGER", nullable: false),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    End = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FiscalYearId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    Number = table.Column<int>(type: "integer", nullable: false),
+                    Start = table.Column<DateOnly>(type: "date", nullable: false),
+                    End = table.Column<DateOnly>(type: "date", nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -715,12 +735,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "GlPostingRules",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Key = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    AccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Key = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    AccountId = table.Column<Guid>(type: "uuid", nullable: false),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -737,18 +757,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IndirectPoolSetups",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Pool = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Base = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    CascadeOrder = table.Column<int>(type: "INTEGER", nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CostClasses = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    IncludeMappedIndirectLabor = table.Column<bool>(type: "INTEGER", nullable: false),
-                    AppliedAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AbsorbedAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Pool = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, collation: "C"),
+                    Base = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    CascadeOrder = table.Column<int>(type: "integer", nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    CostClasses = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    IncludeMappedIndirectLabor = table.Column<bool>(type: "boolean", nullable: false),
+                    AppliedAccountId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AbsorbedAccountId = table.Column<Guid>(type: "uuid", nullable: false),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -771,17 +791,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Employee",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeNumber = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    DisplayName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    OrgUnitId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    SupervisorId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    DefaultLaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    HireDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    TerminationDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    StandardHoursPerWeek = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false),
-                    IsExempt = table.Column<bool>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    OrgUnitId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SupervisorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    DefaultLaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    HireDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    TerminationDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    StandardHoursPerWeek = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    IsExempt = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -810,23 +830,23 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Vendor",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Is1099 = table.Column<bool>(type: "INTEGER", nullable: false),
-                    TaxIdLast4 = table.Column<string>(type: "TEXT", maxLength: 4, nullable: true),
-                    Uei = table.Column<string>(type: "TEXT", maxLength: 12, nullable: true),
-                    BusinessSize = table.Column<string>(type: "TEXT", maxLength: 32, nullable: true),
-                    PaymentTermsDays = table.Column<int>(type: "INTEGER", nullable: false),
-                    RemitToAddress = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    ContactEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    SocioEconomicCategories = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    ContactName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    ContactPhone = table.Column<string>(type: "TEXT", maxLength: 40, nullable: true),
-                    Form1099Box = table.Column<string>(type: "TEXT", maxLength: 16, nullable: true),
-                    W9FileId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Is1099 = table.Column<bool>(type: "boolean", nullable: false),
+                    TaxIdLast4 = table.Column<string>(type: "character varying(4)", maxLength: 4, nullable: true, collation: "C"),
+                    Uei = table.Column<string>(type: "character varying(12)", maxLength: 12, nullable: true, collation: "C"),
+                    BusinessSize = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true, collation: "C"),
+                    PaymentTermsDays = table.Column<int>(type: "integer", nullable: false),
+                    RemitToAddress = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    ContactEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    SocioEconomicCategories = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
+                    ContactName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
+                    ContactPhone = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true, collation: "C"),
+                    Form1099Box = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true, collation: "C"),
+                    W9FileId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -843,14 +863,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Sheets",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WorkspaceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", nullable: true),
-                    SchedulingEnabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CostpointProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    WorkspaceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Description = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    SchedulingEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    CostpointProjectId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -867,10 +887,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "WorkspaceMember",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WorkspaceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Role = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    WorkspaceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Role = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -887,19 +907,19 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Clin",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Pricing = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    IsOption = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsExercised = table.Column<bool>(type: "INTEGER", nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    CeilingValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    FundedValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    FeeRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: true),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Pricing = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    IsOption = table.Column<bool>(type: "boolean", nullable: false),
+                    IsExercised = table.Column<bool>(type: "boolean", nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    PeriodEnd = table.Column<DateOnly>(type: "date", nullable: false),
+                    CeilingValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    FundedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    FeeRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
+                    Order = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -916,18 +936,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ContractBillingSettings",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoicePrefix = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    FeeWithholdRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    FeeWithholdCap = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    MaterialHandlingRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: true),
-                    PaymentTermsDays = table.Column<int>(type: "INTEGER", nullable: true),
-                    PayingOffice = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    AdminOffice = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    CageCode = table.Column<string>(type: "TEXT", maxLength: 5, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    InvoicePrefix = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    FeeWithholdRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
+                    FeeWithholdCap = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaterialHandlingRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
+                    PaymentTermsDays = table.Column<int>(type: "integer", nullable: true),
+                    PayingOffice = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    AdminOffice = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    CageCode = table.Column<string>(type: "character varying(5)", maxLength: 5, nullable: true, collation: "C"),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -944,11 +964,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ContractLaborRate",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    HourlyBillRate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EffectiveFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    HourlyBillRate = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -971,14 +991,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ContractModification",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    EffectiveDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    ExecutedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ExecutedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    EffectiveDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false, collation: "C"),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    ExecutedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExecutedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -995,23 +1015,23 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "GlJournalEntries",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Sequence = table.Column<int>(type: "INTEGER", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Date = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Source = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    SourceId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    SourceRevision = table.Column<int>(type: "INTEGER", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    PostedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    PostedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ReversalOfId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ReversedById = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ReversalReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Sequence = table.Column<int>(type: "integer", nullable: false),
+                    Number = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    Date = table.Column<DateOnly>(type: "date", nullable: false),
+                    FiscalPeriodId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Source = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    SourceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SourceRevision = table.Column<int>(type: "integer", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    PostedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    PostedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReversalOfId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReversedById = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReversalReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -1034,13 +1054,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "UnbilledAccrual",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ReversalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PostedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    PostedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    FiscalPeriodId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReversalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PostedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    PostedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1057,9 +1077,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IndirectPoolAccounts",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PoolSetupId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AccountId = table.Column<Guid>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PoolSetupId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AccountId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1082,10 +1102,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "EmployeeCostRate",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    HourlyCost = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EffectiveFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    HourlyCost = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1102,22 +1122,22 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ExpenseReport",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Purpose = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    TripStart = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    TripEnd = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    SubmittedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    RejectedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    RejectedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    RejectionReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Purpose = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    TripStart = table.Column<DateOnly>(type: "date", nullable: true),
+                    TripEnd = table.Column<DateOnly>(type: "date", nullable: true),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SubmittedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApprovedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    ApprovedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RejectedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    RejectedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RejectionReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -1134,23 +1154,23 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Timesheet",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    CertifiedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ApprovedById = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    RejectionReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    Revision = table.Column<int>(type: "INTEGER", nullable: false),
-                    FirstSubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CertificationText = table.Column<string>(type: "TEXT", nullable: true),
-                    ReviewedBy = table.Column<string>(type: "TEXT", nullable: true),
-                    RejectedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    PeriodEnd = table.Column<DateOnly>(type: "date", nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    CertifiedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApprovedById = table.Column<Guid>(type: "uuid", nullable: true),
+                    ApprovedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RejectionReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    Revision = table.Column<int>(type: "integer", nullable: false),
+                    FirstSubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CertificationText = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    ReviewedBy = table.Column<string>(type: "text", nullable: true, collation: "C"),
+                    RejectedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1173,12 +1193,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "VendorTaxId",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    ProtectedValue = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VendorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Kind = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false, collation: "C"),
+                    ProtectedValue = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false, collation: "C"),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1195,10 +1215,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Baseline",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    CapturedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    CapturedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1215,13 +1235,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Columns",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false),
-                    Options = table.Column<string>(type: "TEXT", nullable: false),
-                    Formula = table.Column<string>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Order = table.Column<int>(type: "integer", nullable: false),
+                    Options = table.Column<List<string>>(type: "text[]", nullable: false),
+                    Formula = table.Column<string>(type: "text", nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -1238,15 +1258,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Items",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ParentId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Finish = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    CostpointWbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Values = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ParentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Order = table.Column<int>(type: "integer", nullable: false),
+                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Start = table.Column<DateOnly>(type: "date", nullable: true),
+                    Finish = table.Column<DateOnly>(type: "date", nullable: true),
+                    CostpointWbsId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    Values = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1263,15 +1283,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Project",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ProjectManagerId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Finish = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ProjectManagerId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Start = table.Column<DateOnly>(type: "date", nullable: true),
+                    Finish = table.Column<DateOnly>(type: "date", nullable: true),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1300,16 +1320,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Rule",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Trigger = table.Column<string>(type: "TEXT", nullable: false),
-                    Conditions = table.Column<string>(type: "TEXT", nullable: false),
-                    Actions = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Trigger = table.Column<string>(type: "text", nullable: false),
+                    Conditions = table.Column<string>(type: "text", nullable: false),
+                    Actions = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1326,15 +1346,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ClinFundingNotice",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ThresholdPercent = table.Column<int>(type: "INTEGER", nullable: false),
-                    FundedValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    IncurredAndCommitted = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Recipients = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    SentAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClinId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ThresholdPercent = table.Column<int>(type: "integer", nullable: false),
+                    FundedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    IncurredAndCommitted = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Recipients = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false, collation: "C"),
+                    SentAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1357,26 +1377,26 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ContractModificationChange",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ModificationId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Sequence = table.Column<int>(type: "INTEGER", nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    ClinNumber = table.Column<string>(type: "TEXT", maxLength: 16, nullable: true),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    NewPeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    ClinDescription = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    Pricing = table.Column<string>(type: "TEXT", maxLength: 32, nullable: true),
-                    IsOption = table.Column<bool>(type: "INTEGER", nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    PeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    FeeRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: true),
-                    Note = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ModificationId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Sequence = table.Column<int>(type: "integer", nullable: false),
+                    Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    ClinNumber = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true, collation: "C"),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    NewPeriodEnd = table.Column<DateOnly>(type: "date", nullable: true),
+                    ClinDescription = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    Pricing = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    IsOption = table.Column<bool>(type: "boolean", nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: true),
+                    PeriodEnd = table.Column<DateOnly>(type: "date", nullable: true),
+                    FeeRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
+                    Note = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ContractModificationChange", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ContractModificationChange_ContractModification_ModificationId",
+                        name: "FK_ContractModificationChange_ContractModification_Modificatio~",
                         column: x => x.ModificationId,
                         principalTable: "ContractModification",
                         principalColumn: "Id",
@@ -1387,15 +1407,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "FundingAction",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ModificationId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    EffectiveDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClinId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ModificationId = table.Column<Guid>(type: "uuid", nullable: true),
+                    EffectiveDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -1424,29 +1444,29 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ApBill",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    InvoiceNumber = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    InvoiceDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    DueDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    RetainageAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    PaidAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EnteredBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    PostedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PostingProblem = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    FundingOverrideBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    FundingOverrideReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    DuplicateConfirmedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    RejectionReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    VoidReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    AttachmentFileId = table.Column<Guid>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VendorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    InvoiceNumber = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    InvoiceDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    DueDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    RetainageAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    PaidAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    EnteredBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PostedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PostingProblem = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    FundingOverrideBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    FundingOverrideReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    DuplicateConfirmedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    RejectionReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    VoidReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    AttachmentFileId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1475,39 +1495,39 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Invoice",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Sequence = table.Column<int>(type: "INTEGER", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    PeriodFrom = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PeriodTo = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    InvoiceDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    DueDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PaymentTermsDays = table.Column<int>(type: "INTEGER", nullable: false),
-                    Total = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Withheld = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    AmountPaid = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    AmountCredited = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    CreditOfInvoiceId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    RateNote = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    GenerationWarnings = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    FundingOverrideReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    ReleasesWithhold = table.Column<bool>(type: "INTEGER", nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    SentBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    SentAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    VoidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    VoidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    VoidReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Sequence = table.Column<int>(type: "integer", nullable: false),
+                    Number = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    PeriodFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    PeriodTo = table.Column<DateOnly>(type: "date", nullable: false),
+                    InvoiceDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    DueDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    PaymentTermsDays = table.Column<int>(type: "integer", nullable: false),
+                    Total = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Withheld = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    AmountPaid = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    AmountCredited = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CreditOfInvoiceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RateNote = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
+                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
+                    GenerationWarnings = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
+                    FundingOverrideReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    ReleasesWithhold = table.Column<bool>(type: "boolean", nullable: false),
+                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ApprovedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    ApprovedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    SentBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    SentAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    VoidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    VoidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    VoidReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -1542,20 +1562,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Payment",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ReceivedOn = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Reference = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    IsVoid = table.Column<bool>(type: "INTEGER", nullable: false),
-                    VoidReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    VoidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    VoidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReceivedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Method = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Reference = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
+                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IsVoid = table.Column<bool>(type: "boolean", nullable: false),
+                    VoidReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    VoidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    VoidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1578,11 +1598,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "TimeDayRecord",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TimesheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WorkDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    FirstEnteredAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TimesheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    WorkDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    FirstEnteredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1605,11 +1625,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "BaselineEntry",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BaselineId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Finish = table.Column<DateOnly>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    BaselineId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Start = table.Column<DateOnly>(type: "date", nullable: true),
+                    Finish = table.Column<DateOnly>(type: "date", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1632,12 +1652,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Dependency",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PredecessorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SuccessorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    LagDays = table.Column<int>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PredecessorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SuccessorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    LagDays = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1666,17 +1686,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "BudgetVersion",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    IsLocked = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    SourceVersionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    LockedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    LockedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    IsLocked = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    Description = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
+                    SourceVersionId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LockedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LockedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -1693,19 +1713,19 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Subcontract",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PrimeContractId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Pricing = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    CeilingValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    FundedValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    RetainagePercent = table.Column<decimal>(type: "TEXT", precision: 9, scale: 4, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VendorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PrimeContractId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Number = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Pricing = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    PeriodEnd = table.Column<DateOnly>(type: "date", nullable: false),
+                    CeilingValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    FundedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    RetainagePercent = table.Column<decimal>(type: "numeric(9,4)", precision: 9, scale: 4, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1734,18 +1754,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "WbsElement",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ParentId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    IsChargeable = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsOpen = table.Column<bool>(type: "INTEGER", nullable: false),
-                    RequiresAssignment = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ParentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
+                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    IsChargeable = table.Column<bool>(type: "boolean", nullable: false),
+                    IsOpen = table.Column<bool>(type: "boolean", nullable: false),
+                    RequiresAssignment = table.Column<bool>(type: "boolean", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Order = table.Column<int>(type: "integer", nullable: false),
+                    ClinId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1780,15 +1800,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "RuleRun",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RuleId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    FiredAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Outcome = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Detail = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    Error = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    TriggerDate = table.Column<DateOnly>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    RuleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: true),
+                    FiredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Outcome = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Detail = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
+                    Error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
+                    TriggerDate = table.Column<DateOnly>(type: "date", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1805,20 +1825,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ApPayment",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BillId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Reference = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    PaidOn = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PaidBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    VoidReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    VoidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    VoidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    RunId = table.Column<Guid>(type: "uuid", nullable: false),
+                    BillId = table.Column<Guid>(type: "uuid", nullable: false),
+                    VendorId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Method = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Reference = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    PaidOn = table.Column<DateOnly>(type: "date", nullable: true),
+                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PaidBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    VoidReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    VoidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    VoidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1853,16 +1873,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "BillingMilestone",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    PlannedDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    CompletedDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    CompletedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClinId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    PlannedDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    CompletedDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    CompletedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Order = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1891,10 +1911,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "PaymentApplication",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PaymentId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PaymentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1917,14 +1937,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "SubcontractFlowDown",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SubcontractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClauseNumber = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 300, nullable: true),
-                    IsIncluded = table.Column<bool>(type: "INTEGER", nullable: false),
-                    Note = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SubcontractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClauseNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
+                    Title = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
+                    IsIncluded = table.Column<bool>(type: "boolean", nullable: false),
+                    Note = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1941,15 +1961,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "SubcontractFundingAction",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SubcontractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    EffectiveDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    FundedChange = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    CeilingChange = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SubcontractId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Number = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
+                    EffectiveDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    FundedChange = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CeilingChange = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -1966,16 +1986,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "BudgetLine",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BudgetVersionId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CostType = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    LaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    OdcType = table.Column<string>(type: "TEXT", maxLength: 16, nullable: true),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false),
-                    PlanningRate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    BudgetVersionId = table.Column<Guid>(type: "uuid", nullable: false),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CostType = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OdcType = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: true),
+                    Hours = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    PlanningRate = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -2004,12 +2024,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ChargeAssignment",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    From = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    To = table.Column<DateOnly>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    From = table.Column<DateOnly>(type: "date", nullable: true),
+                    To = table.Column<DateOnly>(type: "date", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -2038,16 +2058,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "GlJournalLines",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LineNumber = table.Column<int>(type: "INTEGER", nullable: false),
-                    AccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    OrgUnitId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Debit = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Credit = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Memo = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LineNumber = table.Column<int>(type: "integer", nullable: false),
+                    AccountId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrgUnitId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: true),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Debit = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Credit = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Memo = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C")
                 },
                 constraints: table =>
                 {
@@ -2088,11 +2108,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "GlWbsCostPools",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Pool = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Pool = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -2109,20 +2129,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "InvoiceLine",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LineNumber = table.Column<int>(type: "INTEGER", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    LaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    OdcType = table.Column<string>(type: "TEXT", maxLength: 32, nullable: true),
-                    Quantity = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false),
-                    Rate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    IsGenerated = table.Column<bool>(type: "INTEGER", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LineNumber = table.Column<int>(type: "integer", nullable: false),
+                    ClinId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: true),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OdcType = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true, collation: "C"),
+                    Quantity = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    Rate = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    IsGenerated = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -2163,31 +2183,31 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "OdcEntry",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Type = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    IncurredOn = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Vendor = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    SubcontractId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    InvoiceNumber = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    IsUnallowable = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UnallowableReason = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    ExpenseReportId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ReceiptAttachmentId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    SubmittedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    RejectionReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    RejectedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    RejectedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: false),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Type = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    IncurredOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Vendor = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
+                    VendorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SubcontractId = table.Column<Guid>(type: "uuid", nullable: true),
+                    InvoiceNumber = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsUnallowable = table.Column<bool>(type: "boolean", nullable: false),
+                    UnallowableReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    ExpenseReportId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ReceiptAttachmentId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    SubmittedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApprovedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    ApprovedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RejectionReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    RejectedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    RejectedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -2234,15 +2254,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "TimeEntry",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TimesheetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    WorkDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false),
-                    Comment = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    EnteredAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TimesheetId = table.Column<Guid>(type: "uuid", nullable: false),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: false),
+                    WorkDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Hours = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    Comment = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
+                    EnteredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -2271,20 +2291,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "BilledSource",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceLineId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    SourceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Date = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    LaborCategoryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Quantity = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false),
-                    Rate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    ReleasedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    InvoiceLineId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    SourceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Date = table.Column<DateOnly>(type: "date", nullable: false),
+                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
+                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Quantity = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false),
+                    Rate = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
+                    ReleasedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -2301,24 +2321,24 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ApBillLine",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BillId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LineNumber = table.Column<int>(type: "INTEGER", nullable: false),
-                    Kind = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    OdcType = table.Column<string>(type: "TEXT", maxLength: 16, nullable: true),
-                    SubcontractId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    OdcEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    AccountId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    OrgUnitId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    RetainageAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    ApproverEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    DecidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    DecidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    BillId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LineNumber = table.Column<int>(type: "integer", nullable: false),
+                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ProjectId = table.Column<Guid>(type: "uuid", nullable: true),
+                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OdcType = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true),
+                    SubcontractId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OdcEntryId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AccountId = table.Column<Guid>(type: "uuid", nullable: true),
+                    OrgUnitId = table.Column<Guid>(type: "uuid", nullable: true),
+                    RetainageAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    ApproverEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    DecidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
+                    DecidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -2821,7 +2841,7 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 filter: "\"Sequence\" > 0");
 
             migrationBuilder.CreateIndex(
-                name: "IX_GlJournalEntries_Source_SourceId_SourceRevision_FiscalPeriodId",
+                name: "IX_GlJournalEntries_Source_SourceId_SourceRevision_FiscalPerio~",
                 table: "GlJournalEntries",
                 columns: new[] { "Source", "SourceId", "SourceRevision", "FiscalPeriodId" },
                 unique: true);
@@ -3207,6 +3227,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 column: "Status");
 
             migrationBuilder.CreateIndex(
+                name: "IX_TimesheetPeriodRule_EffectiveFrom",
+                table: "TimesheetPeriodRule",
+                column: "EffectiveFrom");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UnbilledAccrual_FiscalPeriodId",
                 table: "UnbilledAccrual",
                 column: "FiscalPeriodId",
@@ -3425,6 +3450,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "TimeEntryRevision");
+
+            migrationBuilder.DropTable(
+                name: "TimesheetPeriodRule");
 
             migrationBuilder.DropTable(
                 name: "UnbilledAccrual");

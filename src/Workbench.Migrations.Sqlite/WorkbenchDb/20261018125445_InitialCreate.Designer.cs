@@ -11,7 +11,7 @@ using Workbench.Infrastructure.Persistence;
 namespace Workbench.Migrations.Sqlite.WorkbenchDb
 {
     [DbContext(typeof(WorkbenchDbContext))]
-    [Migration("20261018123448_InitialCreate")]
+    [Migration("20261018125445_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -3009,6 +3009,51 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("Timesheet");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.TimesheetPeriodRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("BiweeklyAnchor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Cadence")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WeekStartDay")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveFrom");
+
+                    b.ToTable("TimesheetPeriodRule");
                 });
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.WbsElement", b =>

@@ -36,6 +36,8 @@ public sealed class WorkbenchDbContext(DbContextOptions<WorkbenchDbContext> opti
 /// Without it a PostgreSQL database created with a locale (e.g. <c>en_US.UTF-8</c>) orders "B" before "a" differently
 /// and ignores punctuation when sorting codes like <c>1001.01.02</c>. Equality and unique indexes are case-sensitive on
 /// both providers, which is why emails are always stored lowercased.</item>
+/// <item>Decimals are rounded to their column's scale (half away from zero) when saved. PostgreSQL's <c>numeric(p,s)</c>
+/// does that itself; SQLite stores decimals as text at full precision, so it gets the same rounding as a converter.</item>
 /// </list>
 /// </summary>
 internal static class ProviderConventions
@@ -48,16 +50,24 @@ internal static class ProviderConventions
 
     public static void Apply(ModelBuilder modelBuilder, Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade database)
     {
-        if (!database.IsNpgsql())
-        {
-            return;
-        }
-
+        var npgsql = database.IsNpgsql();
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(t => t.GetProperties()))
         {
-            if (property.ClrType == typeof(string) && property.GetCollation() is null)
+            if (npgsql && property.ClrType == typeof(string) && property.GetCollation() is null)
             {
                 property.SetCollation("C");
+            }
+
+            if (!npgsql && property.GetScale() is { } scale && property.GetValueConverter() is null)
+            {
+                if (property.ClrType == typeof(decimal))
+                {
+                    property.SetValueConverter(new ValueConverter<decimal, decimal>(v => Math.Round(v, scale, MidpointRounding.AwayFromZero), v => v));
+                }
+                else if (property.ClrType == typeof(decimal?))
+                {
+                    property.SetValueConverter(new ValueConverter<decimal?, decimal?>(v => v.HasValue ? Math.Round(v.Value, scale, MidpointRounding.AwayFromZero) : v, v => v));
+                }
             }
         }
     }

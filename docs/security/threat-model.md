@@ -21,7 +21,9 @@ interface, new data store, new hosting model) and at least yearly. Owner: `<secu
 ```
 
 **Trust boundaries:** the internet ↔ the web host; the web host ↔ the database and blob store; the web host ↔ the
-identity provider; the desktop client's machine ↔ the API.
+identity provider; the desktop client's machine ↔ the API. In MultiTenant (SaaS) mode, also **tenant ↔ tenant**: every
+tenant has its own database, and the catalog database (tenants, connection strings, the shared Data Protection key
+ring) sits behind the host admin site.
 
 **Assets:** labor hours and cost rates (DCAA-relevant, CUI-adjacent), contract values, budgets and financials,
 ODCs and receipts, employee records, the audit and security logs, credentials (OIDC client secret, SCIM token, Data
@@ -117,6 +119,24 @@ Status: **M** = mitigated in the product, **P** = partly mitigated, **O** = the 
 | Repudiation | Unknown provisioning changes | Every SCIM call is a `scim.request` event | M |
 | Info disclosure | Enumerating users | Requires the token; the token grants only user provisioning | M |
 
+### Multi-tenancy (SaaS mode)
+
+| Threat | Example | Mitigation | Status |
+| --- | --- | --- | --- |
+| Info disclosure | A user of tenant A reads tenant B's data | One database per tenant; the tenant comes from the subdomain before authentication; the only database factory opens the resolved tenant's database and throws without one; isolation tests cover the API, hubs, background jobs and cookies | M |
+| Spoofing | Choosing a tenant with a header or query string | `X-Tenant` is honoured only in Development; production resolves from the host name only, one subdomain label of `Tenancy:BaseDomain` | M |
+| Spoofing | Replaying tenant A's cookie at tenant B | Data Protection purposes are per tenant, so the cookie doesn't decrypt; the cookie also carries the tenant id and is rejected if it differs | M |
+| Spoofing | IdP user joins a tenant they don't belong to | Tenant membership is the tenant's own user table; `RequireInvite` is enforced in MultiTenant production; first admin invited by the host | M |
+| Info disclosure | Shared in-process caches or event fan-outs leak across tenants | User status, provisioning caches, live updates and notifications are keyed by tenant; SignalR groups are tenant-qualified | M |
+| Info disclosure | A long-lived Blazor circuit switches tenant | Each circuit is pinned to its first tenant; an activity from another tenant is refused | M |
+| Elevation | A tenant Admin acts on other tenants | Host administration is a separate role (`Tenancy:HostAdmins`) and only works on the base domain | M |
+| Denial of service | One tenant's background job failure stops others | The job runner isolates failures per tenant | M |
+| Tampering | Suspended tenant keeps using the service | Requests get 403 within 30 s (at once on the instance that suspended it); open circuits stop on their next activity; jobs skip it | M |
+| Info disclosure | Catalog breach exposes all tenant databases | Connection strings are encrypted with Data Protection (certificate-protected keys recommended); least-privilege database accounts per tenant | M / O |
+| Info disclosure | Attachments mixed across tenants | Blob keys are prefixed `tenants/<slug>/`; nothing is stored without a tenant | M |
+| Repudiation | Host admin denies suspending a tenant | Host audit log in the catalog (append-only) | M |
+| — | SCIM and the Costpoint worker | Still single-tenant: SCIM is disabled in MultiTenant mode; run the worker per tenant database if needed | O |
+
 ## Open items for the company
 
 1. Enforce MFA and conditional access at the identity provider.
@@ -126,3 +146,5 @@ Status: **M** = mitigated in the product, **P** = partly mitigated, **O** = the 
 5. Malware scanning on the blob store.
 6. Close SignalR hub connections on deactivation (product backlog).
 7. Annual penetration test by an independent tester; track findings in the risk register.
+8. SaaS: least-privilege database accounts per tenant (the provisioning account only creates databases), and per-tenant
+   SCIM tokens before SCIM is enabled for MultiTenant mode (product backlog).

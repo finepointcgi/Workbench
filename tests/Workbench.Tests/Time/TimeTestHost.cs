@@ -35,7 +35,12 @@ internal sealed class TimeTestHost
         Timesheets = new TimesheetService(Factory, User, recorder, Projects, tk, access, Notifier);
         Approvals = new TimesheetApprovalService(Factory, User, recorder, tk, access, Notifier);
         Reports = new TimeReportService(Factory, tk);
+        var security = new Workbench.Application.Security.SecurityEventLog(Factory, User, new NoSecurityContext(), Clock,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Workbench.Application.Security.SecurityEventLog>.Instance);
+        OrganizationSettings = new OrganizationSettingsService(Factory, access, recorder, security, tk, Microsoft.Extensions.Options.Options.Create(Options));
     }
+
+    public OrganizationSettingsService OrganizationSettings { get; }
 
     public TimekeepingOptions Options { get; }
     public IWorkbenchDbContextFactory Factory { get; }
@@ -130,6 +135,16 @@ internal sealed class TimeTestHost
 internal sealed class TestUser(string email) : ICurrentUser
 {
     public string Email { get; set; } = email;
+}
+
+internal sealed class NoSecurityContext : Workbench.Application.Security.ISecurityEventContext
+{
+    public string? IpAddress => null;
+    public string? UserAgent => null;
+
+    public void MarkDenialRecorded()
+    {
+    }
 }
 
 internal sealed class TestClock(DateTime utcNow) : TimeProvider

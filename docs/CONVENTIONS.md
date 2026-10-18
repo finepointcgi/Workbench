@@ -50,13 +50,72 @@ dotnet run --project src/Workbench.Web --launch-profile http   # http://localhos
 ```
 
 `Workbench.Server.slnf` excludes the desktop app, which needs Xcode (macOS) or Windows to build.
-The dev database is `src/Workbench.Web/workbench.db` (SQLite, created and seeded on start). Delete it after
-schema changes; migrations come later.
+The dev database is `src/Workbench.Web/workbench.db` (SQLite, migrated and seeded on start). After pulling a schema
+change it is migrated; after a baseline regeneration, delete it (or let Development set it aside on start).
+
+Tests run on EF Core InMemory by default. `WORKBENCH_TEST_DB=Sqlite` or `=PostgreSql` runs the whole suite on a real,
+migrated database per test (CI runs both). PostgreSQL comes from `docker compose up -d` (or `WORKBENCH_TEST_POSTGRES`);
+tests that only make sense there use `[PostgresFact]` and skip when no server answers.
+
+## Database migrations
+
+Schema changes are EF Core migrations, one assembly per provider: `src/Workbench.Migrations.PostgreSql` and
+`src/Workbench.Migrations.Sqlite`, each with a `WorkbenchDb/` (the tenant database) and a `CatalogDb/` folder (the
+MultiTenant catalog). Migrations are provider-specific SQL and EF keeps one model snapshot per context per assembly, so
+one shared assembly can't serve both providers.
+
+- **Until the pilot, the baseline is regenerated instead of adding migrations.** A feature branch adds its entity and
+  configuration and then either runs `scripts/regenerate-baseline.sh` itself, or leaves that to whoever merges it. Until
+  it is regenerated, CI's model-drift check and the SQLite/PostgreSQL test legs fail for the new tables (the InMemory
+  default still passes locally). Never hand-merge generated migration files: on a conflict, take either side and regenerate.
+- **After the pilot** (once any shared or production database exists), every schema change is
+  `scripts/new-migration.sh AddSomething` (`--catalog` for the catalog). It adds the migration to both providers and
+  checks nothing is left over. Commit both folders together; never edit a generated migration after it has shipped.
+- **Regenerating the baseline (pre-pilot only).** There are no production databases yet, so after merging feature
+  branches run `scripts/regenerate-baseline.sh`: it deletes every migration and generates one `InitialCreate` per
+  provider and context from the merged model. Then delete local dev databases (`src/Workbench.Web/*.db`,
+  `src/Workbench.Web/App_Data/catalog.db`, `src/Workbench.Web/App_Data/tenants/`) and run the tests on both providers.
+- Startup migrates only when `Database:MigrateOnStartup` is true (Development). Production deploys run
+  `dotnet Workbench.Web.dll --migrate` (the catalog, then every tenant) before starting the new version.
+- Things that differ by provider, handled for you in `ProviderConventions` (`WorkbenchDbContext.cs`): every `DateTime`
+  is UTC (Npgsql refuses other kinds for `timestamptz`); text uses ordinal collation `C` on PostgreSQL, like SQLite's
+  `BINARY`; decimals round to their column's scale on both. Still yours to get right: string equality and unique
+  indexes are case-sensitive on both providers (store emails and codes normalized; lowercase emails), give every
+  decimal a precision (`HasPrecision`), give strings a `HasMaxLength` (PostgreSQL enforces it), don't rely on how
+  NULLs sort (last on PostgreSQL, first on SQLite), and never use provider-specific SQL outside `Infrastructure`.
+
+## Multi-tenancy
+
+`Tenancy:Mode=MultiTenant` gives every tenant its own database; SingleTenant (the default) is one database. Feature
+code doesn't see tenants, provided it follows these rules:
+
+- Open data only through `IWorkbenchDbContextFactory` (or `IDbContextFactory<WorkbenchDbContext>` in Infrastructure). It
+  opens the current tenant's database and throws `TenantNotResolvedException` without one. Never build `DbContextOptions`
+  or connections yourself.
+- A `BackgroundService` wraps each run in `ITenantJobRunner.ForEachTenantAsync(ct => ...)` and creates its scope inside
+  the callback (see `MissingTimesheetBackgroundService`). In SingleTenant mode it runs once.
+- Singletons must not cache tenant data under a bare key: qualify keys with `TenantScope.Qualify(key)` (see
+  `UserStatusCache`) or key by `TenantScope.Key`. In-process fan-outs (`SheetEventHub`, `NotificationHub`) and SignalR
+  group names are already tenant-qualified. No `static` mutable state.
+- Blob keys are prefixed per tenant by the store; email links use `Notifications:PublicBaseUrl` (which may contain `{tenant}`).
+- Per-tenant settings live in the tenant database (e.g. the timesheet cadence, `/setup/organization`), not in
+  configuration. Server-wide configuration is the same for every tenant.
+- Host administration (`/host`, `IHostAdminService`) is for `Tenancy:HostAdmins` on the base domain only. To try it:
+  `dotnet run --project src/Workbench.Web --launch-profile multitenant` and open `http://acme.localhost:5251`,
+  `http://beta.localhost:5251` and `http://localhost:5251/host` (sign in as host@workbench.local).
+
+## Timesheet periods
+
+The cadence (Weekly with a start day, Biweekly with an anchor, SemiMonthly, Monthly) is an organization setting in the
+tenant database (`TimesheetPeriodRule`, effective-dated, changed from the next period boundary). Get a period with
+`TimekeepingClock.PeriodForAsync(db, date)`; a timesheet keeps the `PeriodStart`/`PeriodEnd` it was opened with, so
+look timesheets up by the date they contain, not by recomputing the period.
 
 ## Shared files
 
 Only append to these, one line per feature, never reorder: `Application/DependencyInjection.cs`,
 `ApiClient/DependencyInjection.cs`, `Api/WorkbenchApi.cs`, `Ui/Layout/NavMenu.razor`, `Ui/_Imports.razor`.
+Generated migrations (`src/Workbench.Migrations.*`) are owned by whoever regenerates the baseline; don't hand-merge them.
 Don't change existing contracts in `Workbench.Contracts/Sheets`; if a feature needs more, add new records or
 interfaces next to them and say so in the commit message.
 
