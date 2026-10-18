@@ -1,22 +1,173 @@
-<MudNavMenu Class="pt-2">
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Inbox">My Work</MudNavLink>
-    <MudNavLink Href="sheets" Icon="@Icons.Material.Filled.TableChart">Sheets</MudNavLink>
-    <TimeNavLinks />
-    <MudNavLink Href="expenses" Icon="@Icons.Material.Filled.Receipt">Expenses</MudNavLink>
-    <MudNavLink Href="odcs" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.RequestQuote">Project ODCs</MudNavLink>
-    <OdcApprovalsNavLink />
-    <MudNavLink Href="dashboards" Icon="@Icons.Material.Filled.Dashboard">Dashboards</MudNavLink>
-    <AdminNavLinks />
-    <Workbench.Ui.Accounting.AccountingNavLinks />
-    <Workbench.Ui.Billing.BillingNavLinks />
-    <MudNavLink Href="notifications" Icon="@Icons.Material.Filled.Notifications">Notifications</MudNavLink>
-    <SetupNavLinks />
-    <Workbench.Ui.Purchasing.PurchasingNavLinks />
-    <Workbench.Ui.Assets.AssetNavLinks />
-    <Workbench.Ui.Payroll.PayrollNavLinks />
-    <Workbench.Ui.Leave.LeaveNavLinks />
-    <MudNavLink Href="resourcing" Icon="@Icons.Material.Filled.GroupWork">Resourcing</MudNavLink>
-    <Workbench.Ui.Reports.ReportsNavLinks />
-    <Workbench.Ui.Approvals.ApprovalsNavLink />
-    <MudNavLink Href="m" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PhoneIphone">Mobile view</MudNavLink>
+@* The main menu, shaped by task and role (Ui/Navigation/NavCatalog): a handful of sections, everything else nested
+   and collapsed until you're on one of its pages. It is cosmetic; every page and the server check again. *@
+@using Workbench.Ui.Navigation
+@using Workbench.Contracts.Notifications
+@implements IAsyncDisposable
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+
+<MudNavMenu Class="pt-2" data-testid="nav-menu">
+    @foreach (var section in NavCatalog.Sections)
+    {
+        var entries = NavCatalog.MenuEntries(_access).Where(e => e.Section == section.Key).ToList();
+        if (entries.Count == 0)
+        {
+            continue;
+        }
+
+        var title = NavCatalog.TitleFor(section, _access);
+        if (section.Href is not null && entries.Count == 1 && entries[0].Href == section.Href)
+        {
+            <MudNavLink Href="@section.Href" Match="@(entries[0].MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@section.Icon" data-testid="@($"nav-{section.Key}")">
+                @title
+                @if (section.Key == NavCatalog.Approvals && _access.ApprovalCount > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2 my-0" data-testid="approvals-count"
+                             aria-label="@($"{_access.ApprovalCount} waiting")">@_access.ApprovalCount</MudChip>
+                }
+            </MudNavLink>
+            continue;
+        }
+
+        var sectionKey = section.Key;
+        <MudNavGroup Title="@title" Icon="@section.Icon" data-testid="@($"nav-{section.Key}")"
+                     Expanded="@IsExpanded(sectionKey)" ExpandedChanged="@(open => SetExpanded(sectionKey, open))">
+            @foreach (var part in Parts(entries))
+            {
+                if (part.Group is null || part.Entries.Count == 1)
+                {
+                    @Link(part.Entries[0])
+                }
+                else
+                {
+                    var groupKey = $"{sectionKey}/{part.Group}";
+                    <MudNavGroup Title="@part.Group" data-testid="@($"nav-group-{part.Group}")"
+                                 Expanded="@IsExpanded(groupKey)" ExpandedChanged="@(open => SetExpanded(groupKey, open))">
+                        @foreach (var entry in part.Entries)
+                        {
+                            @Link(entry)
+                        }
+                    </MudNavGroup>
+                }
+            }
+        </MudNavGroup>
+    }
 </MudNavMenu>
+
+@code {
+    private NavAccess _access = NavAccess.Anonymous;
+    private readonly Dictionary<string, bool> _expanded = [];
+    private IAsyncDisposable? _feed;
+    private bool _disposed;
+
+    /// <summary>The access the menu was built from (the layout shares it with the palette and breadcrumbs).</summary>
+    [Parameter] public EventCallback<NavAccess> AccessLoaded { get; set; }
+
+    private RenderFragment Link(NavEntry entry) => @<MudNavLink Href="@entry.Href" Match="@(entry.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@entry.Icon">@Label(entry)</MudNavLink>;
+
+    private string Label(NavEntry entry) =>
+        entry.Href == "leave" && _access.LeavePending > 0 ? $"{entry.Title} ({_access.LeavePending})"
+        : entry.Href == "purchasing/receiving" && _access.ReceivableCount > 0 ? $"{entry.Title} ({_access.ReceivableCount})"
+        : entry.Title;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _access = await NavAccess.LoadAsync(Services);
+        ExpandCurrent();
+        Navigation.LocationChanged += OnLocationChanged;
+        await AccessLoaded.InvokeAsync(_access);
+    }
+
+    // Keep the Approvals count live: recount when a notification arrives (a new submission notifies the approver).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Services.GetService(typeof(INotificationFeed)) is not INotificationFeed feed)
+        {
+            return;
+        }
+
+        try
+        {
+            _feed = await feed.SubscribeAsync(_ => InvokeAsync(RecountAsync));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or IOException)
+        {
+            // The count still refreshes on every navigation.
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () =>
+        {
+            ExpandCurrent();
+            await RecountAsync();
+        });
+
+    private async Task RecountAsync()
+    {
+        if (_disposed || !_access.IsSignedIn)
+        {
+            return;
+        }
+
+        var count = await NavAccess.CountApprovalsAsync(Services);
+        if (count != _access.ApprovalCount)
+        {
+            _access = _access with { ApprovalCount = count };
+            await AccessLoaded.InvokeAsync(_access);
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Opens the section and sub-group holding the current page; leaves the rest as the user left them.</summary>
+    private void ExpandCurrent()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+        if (NavCatalog.Match(path, _access) is not ({ InMenu: true } entry, _) || entry.Href.Length == 0)
+        {
+            return;
+        }
+
+        _expanded[entry.Section] = true;
+        if (entry.Group is not null)
+        {
+            _expanded[$"{entry.Section}/{entry.Group}"] = true;
+        }
+    }
+
+    private bool IsExpanded(string key) => _expanded.GetValueOrDefault(key);
+
+    private void SetExpanded(string key, bool open) => _expanded[key] = open;
+
+    private sealed record Part(string? Group, List<NavEntry> Entries);
+
+    // Entries in catalog order; a sub-group appears where its first entry does.
+    private static IEnumerable<Part> Parts(IEnumerable<NavEntry> entries)
+    {
+        var parts = new List<Part>();
+        foreach (var entry in entries)
+        {
+            if (entry.Group is not null && parts.FirstOrDefault(p => p.Group == entry.Group) is { } existing)
+            {
+                existing.Entries.Add(entry);
+            }
+            else
+            {
+                parts.Add(new Part(entry.Group, [entry]));
+            }
+        }
+
+        return parts;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        Navigation.LocationChanged -= OnLocationChanged;
+        if (_feed is not null)
+        {
+            await _feed.DisposeAsync();
+        }
+    }
+}

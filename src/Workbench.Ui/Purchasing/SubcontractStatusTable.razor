@@ -2,7 +2,7 @@
 <MudTable T="SubcontractDto" Items="Subcontracts" Loading="Loading" Dense="true" Hover="true" data-testid="subcontracts">
     <HeaderContent>
         <MudTh>Number</MudTh><MudTh>Vendor</MudTh><MudTh>Project</MudTh><MudTh>Type</MudTh><MudTh>Status</MudTh>
-        <MudTh Style="text-align:right">Ceiling</MudTh><MudTh Style="text-align:right">Funded</MudTh><MudTh Style="text-align:right">Billed to date</MudTh>
+        <MudTh Style="text-align:right"><Term Key="ceiling">Ceiling</Term></MudTh><MudTh Style="text-align:right"><Term Key="funded">Funded</Term></MudTh><MudTh Style="text-align:right">Billed to date</MudTh>
         <MudTh Style="text-align:right">Remaining funding</MudTh><MudTh Style="text-align:right">Remaining ceiling</MudTh><MudTh Style="text-align:right">Retainage held</MudTh><MudTh>Flow-downs</MudTh>
     </HeaderContent>
     <RowTemplate>
@@ -19,7 +19,7 @@
         <MudTd Style="text-align:right">@PurchasingFormat.Amount(context.RetainageHeld)</MudTd>
         <MudTd>@context.FlowDownsIncluded / @context.FlowDownsTotal</MudTd>
     </RowTemplate>
-    <NoRecordsContent><MudText Class="mud-text-secondary">No subcontracts.</MudText></NoRecordsContent>
+    <NoRecordsContent><MudText Class="mud-text-secondary">No subcontracts yet. Add one when another company does work on your contract.</MudText></NoRecordsContent>
 </MudTable>
 
 @code {

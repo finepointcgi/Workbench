@@ -72,7 +72,7 @@ else
     <MudPaper Outlined="true" Class="pa-4 mb-3">
         <MudText Typo="Typo.h6" Class="mb-2">Lines</MudText>
         <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" data-testid="po-lines">
-            <thead><tr><th>#</th><th>Description</th><th>Charge to</th><th style="text-align:right">Ordered</th><th style="text-align:right">Unit price</th><th style="text-align:right">Amount</th><th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th style="text-align:right">Committed</th><th>Requisition</th></tr></thead>
+            <thead><tr><th>#</th><th>Description</th><th>Charge to</th><th style="text-align:right">Ordered</th><th style="text-align:right">Unit price</th><th style="text-align:right">Amount</th><th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th style="text-align:right"><Term Key="committed">Committed</Term></th><th>Requisition</th></tr></thead>
             <tbody>
                 @foreach (var l in po.Lines)
                 {

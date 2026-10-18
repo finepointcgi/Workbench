@@ -1,0 +1,187 @@
+@* "My sheet items": everything assigned to me on sheets (a Person column holds my email), collapsed by default and
+   loaded when first opened. The status can be changed inline. *@
+@inject IMyWorkService MyWorkService
+@inject IItemService ItemService
+@inject ISnackbar Snackbar
+
+<MudExpansionPanels Outlined="true" Class="mb-4">
+    <MudExpansionPanel Expanded="_expanded" ExpandedChanged="OnExpandedAsync" data-card="sheet-items">
+        <TitleContent>
+            <div class="d-flex align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.TaskAlt" />
+                <MudText Typo="Typo.h6" HtmlTag="h2">My sheet items</MudText>
+                @if (_work is not null)
+                {
+                    <MudChip T="string" Size="Size.Small">@_work.Counts.Assigned open</MudChip>
+                }
+            </div>
+        </TitleContent>
+        <ChildContent>
+            @if (_loading && _work is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_work is not null)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Items on any sheet where a Person column is @_work.Email.</MudText>
+                    <MudSpacer />
+                    <MudSwitch T="bool" @bind-Value="_showDone" Label="Show done" Color="Color.Primary" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Refresh sheet items" OnClick="LoadAsync" />
+                </MudStack>
+                @if (!_work.Items.Any(i => _showDone || i.Bucket != MyWorkBucket.Done))
+                {
+                    <MudText Class="mud-text-secondary" data-testid="no-sheet-items">Nothing on sheets is assigned to you.</MudText>
+                }
+                @foreach (var group in _work.Items.Where(i => _showDone || i.Bucket != MyWorkBucket.Done).GroupBy(i => i.Bucket))
+                {
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3 mb-1" data-bucket="@group.Key">
+                        @BucketLabel(group.Key) <MudChip T="string" Size="Size.Small">@group.Count()</MudChip>
+                    </MudText>
+                    <MudSimpleTable Dense="true" Hover="true" Outlined="true">
+                        <thead>
+                            <tr>
+                                <th style="width:22%">Sheet</th>
+                                <th>Title</th>
+                                <th style="width:14%">Due</th>
+                                <th style="width:20%">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in group)
+                            {
+                                <tr @key="row.Item.Id" data-item="@row.Item.Id">
+                                    <td class="mud-text-secondary">@row.SheetName</td>
+                                    <td><MudLink Href="@($"sheets/{row.SheetId}?item={row.Item.Id}")" Typo="Typo.body2">@row.Item.Title</MudLink></td>
+                                    <td class="@(row.Bucket == MyWorkBucket.Overdue ? "mud-error-text" : null)">@(row.Due?.ToString("ddd d MMM") ?? "—")</td>
+                                    <td>
+                                        @if (row.StatusColumn is { } column)
+                                        {
+                                            @* Keyed on the value: MudSelect keeps showing the old text when Value changes during its own ValueChanged. *@
+                                            <MudSelect @key="row.Status" T="string" Value="@(row.Status ?? string.Empty)" Dense="true" Margin="Margin.Dense"
+                                                       Variant="Variant.Outlined" aria-label="Status" Disabled="_saving.Contains(row.Item.Id)"
+                                                       ValueChanged="@(v => SetStatusAsync(row, v))">
+                                                <MudSelectItem T="string" Value="@string.Empty">(none)</MudSelectItem>
+                                                @foreach (var option in OptionsFor(row, column))
+                                                {
+                                                    <MudSelectItem T="string" Value="@option">@option</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@(row.Status ?? "—")</MudText>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            }
+        </ChildContent>
+    </MudExpansionPanel>
+</MudExpansionPanels>
+
+@code {
+    /// <summary>Open on first render (tests, or a page that wants it open).</summary>
+    [Parameter] public bool InitiallyExpanded { get; set; }
+
+    /// <summary>Raised after a status change, so the to-do list can drop an item that's now done.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private MyWorkDto? _work;
+    private bool _expanded;
+    private bool _loading;
+    private bool _showDone;
+    private readonly HashSet<Guid> _saving = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (InitiallyExpanded)
+        {
+            _expanded = true;
+            await LoadAsync();
+        }
+    }
+
+    private async Task OnExpandedAsync(bool expanded)
+    {
+        _expanded = expanded;
+        if (expanded && _work is null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _work = await MyWorkService.GetAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load your sheet items: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string BucketLabel(MyWorkBucket bucket) => bucket switch
+    {
+        MyWorkBucket.Overdue => "Overdue",
+        MyWorkBucket.DueThisWeek => "Due this week",
+        MyWorkBucket.Later => "Later",
+        MyWorkBucket.NoDate => "No date",
+        _ => "Done",
+    };
+
+    // Keep a value that isn't an option any more selectable so it still shows.
+    private static IEnumerable<string> OptionsFor(MyWorkItem row, ColumnDto column) =>
+        row.Status is null || column.Options.Contains(row.Status) ? column.Options : column.Options.Append(row.Status);
+
+    private async Task SetStatusAsync(MyWorkItem row, string value)
+    {
+        if (row.StatusColumn is not { } column || value == (row.Status ?? string.Empty))
+        {
+            return;
+        }
+
+        var values = new Dictionary<string, string?>(row.Item.Values)
+        {
+            [column.Id.ToString()] = value.Length == 0 ? null : value,
+        };
+        // Show the new value right away; otherwise the re-render during the save puts the old value back in the select.
+        if (_work is not null)
+        {
+            _work = _work with
+            {
+                Items = _work.Items.Select(i => i.Item.Id == row.Item.Id ? i with { Status = value.Length == 0 ? null : value } : i).ToList(),
+            };
+        }
+
+        _saving.Add(row.Item.Id);
+        try
+        {
+            var item = row.Item;
+            await ItemService.UpdateAsync(row.SheetId, item.Id,
+                new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values));
+            Snackbar.Add($"\"{item.Title}\" is now {(value.Length == 0 ? "unset" : value)}", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or WorkbenchNotFoundException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't update the status: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving.Remove(row.Item.Id);
+        }
+
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+}

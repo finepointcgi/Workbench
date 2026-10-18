@@ -1,0 +1,10 @@
+.wb-term {
+    border-bottom: 1px dotted currentColor;
+    cursor: help;
+}
+
+.wb-term:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}

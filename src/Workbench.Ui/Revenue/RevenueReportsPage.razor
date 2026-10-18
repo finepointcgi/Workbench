@@ -67,7 +67,7 @@ else
             {
                 <MudText Class="mud-text-secondary mb-2">As of @AccountingFormat.Date(bl.AsOf) (choose the period on the Revenue vs billings tab). Contract value and funding are today's CLIN values.</MudText>
                 <MudSimpleTable Dense="true" Elevation="0" data-testid="backlog">
-                    <thead><tr><th>Contract</th><th>Customer</th><th style="text-align:right">Value</th><th style="text-align:right">Funded</th><th style="text-align:right">Recognized</th><th style="text-align:right">Funded backlog</th><th style="text-align:right">Unfunded backlog</th><th style="text-align:right">Total backlog</th></tr></thead>
+                    <thead><tr><th>Contract</th><th>Customer</th><th style="text-align:right">Value</th><th style="text-align:right"><Term Key="funded">Funded</Term></th><th style="text-align:right">Recognized</th><th style="text-align:right"><Term Key="funded">Funded backlog</Term></th><th style="text-align:right">Unfunded backlog</th><th style="text-align:right">Total backlog</th></tr></thead>
                     <tbody>
                         @foreach (var r in bl.Rows)
                         {

@@ -14,7 +14,7 @@ else if (_error is not null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.h6" HtmlTag="h2">Ceilings</MudText>
+        <MudText Typo="Typo.h6" HtmlTag="h2"><Term Key="ceiling">Ceilings</Term></MudText>
         <MudText Typo="Typo.caption" Class="mud-text-secondary">
             Hours = time on record · cost = labor at cost + submitted/approved ODCs + open PO commitments · billed = approved invoices
         </MudText>
@@ -31,13 +31,13 @@ else
 
     @if (_ceilings.Count == 0)
     {
-        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No ceilings yet.</MudText></MudPaper>
+        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No ceilings yet. A ceiling caps the hours, cost or billing allowed; add one to get warned before it's reached.</MudText></MudPaper>
     }
     else
     {
         <MudTable Items="_ceilings" Dense="true" Hover="true" Outlined="true" Elevation="0" data-testid="ceiling-table">
             <HeaderContent>
-                <MudTh>Ceiling</MudTh>
+                <MudTh><Term Key="ceiling">Ceiling</Term></MudTh>
                 <MudTh>Mode</MudTh>
                 <MudTh>Consumed</MudTh>
                 <MudTh>Overrides</MudTh>
@@ -113,7 +113,7 @@ else
         </MudStack>
         @if (_rates.Count == 0)
         {
-            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No rate or fee caps.</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No rate or fee caps. Add one if the contract limits indirect rates or fee.</MudText></MudPaper>
         }
         else
         {

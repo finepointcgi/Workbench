@@ -1,0 +1,20 @@
+@* A term with a plain-English explanation on hover or focus, from the Glossary: <Term Key="eac">EAC</Term>.
+   Without child content it shows the glossary's own term; an unknown key shows the content as plain text. *@
+@if (Entry is { } entry)
+{
+    <MudTooltip Text="@entry.Tooltip" Arrow="true" Placement="Placement.Top">
+        <span class="wb-term" tabindex="0" data-term="@entry.Key">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, entry.Term)))</span>
+    </MudTooltip>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired] public string Key { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private GlossaryEntry? Entry => Glossary.Find(Key);
+}

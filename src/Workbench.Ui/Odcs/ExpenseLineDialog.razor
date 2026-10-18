@@ -16,7 +16,7 @@
                        HelperText="@(_codes.Count == 0 && !_loadingCodes ? "You have no charge codes on this date." : null)">
                 @foreach (var chargeCode in _codes)
                 {
-                    <MudSelectItem T="Guid?" Value="chargeCode.WbsElementId">@chargeCode.Code · @chargeCode.Name (@chargeCode.ProjectCode)</MudSelectItem>
+                    <MudSelectItem T="Guid?" Value="chargeCode.WbsElementId">@ChargeCodeText.Label(chargeCode)@(chargeCode.Kind == ChargeCodeKind.Direct ? $" · {chargeCode.ProjectName}" : "")</MudSelectItem>
                 }
             </MudSelect>
             <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />

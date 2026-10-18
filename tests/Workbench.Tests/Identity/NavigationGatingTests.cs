@@ -6,7 +6,6 @@ using MudBlazor.Services;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Time;
 using Workbench.Ui.Layout;
-using Workbench.Ui.Time;
 
 namespace Workbench.Tests.Identity;
 
@@ -32,7 +31,7 @@ public sealed class NavigationGatingTests
     {
         await using var ctx = NewContext(roles);
 
-        var nav = ctx.Render<MudNavMenu>(p => p.AddChildContent<SetupNavLinks>());
+        var nav = ctx.Render<NavMenu>();
         var layout = ctx.Render<SetupLayout>(p => p.Add(l => l.Body, (RenderFragment)(b => b.AddMarkupContent(0, "<p data-body>People</p>"))));
 
         nav.WaitForAssertion(() => Assert.Equal(allowed, nav.Markup.Contains("setup/people")));
@@ -84,13 +83,19 @@ public sealed class NavigationGatingTests
     [InlineData(OrgRoles.Employee, true, true)] // a supervisor
     [InlineData(OrgRoles.Timekeeper, false, true)]
     [InlineData(OrgRoles.Admin, false, true)]
-    public async Task Timesheet_approvals_link_is_for_supervisors_admins_and_timekeepers(OrgRoles roles, bool isApprover, bool shown)
+    public async Task Team_time_link_is_for_supervisors_admins_and_timekeepers(OrgRoles roles, bool isApprover, bool shown)
     {
         await using var ctx = NewContext(roles, isApprover);
 
-        var nav = ctx.Render<MudNavMenu>(p => p.AddChildContent<TimeNavLinks>());
+        // Approving itself happens in the one Approvals inbox; time/approvals is reached from there.
+        var nav = ctx.Render<NavMenu>();
 
-        nav.WaitForAssertion(() => Assert.Equal(shown, nav.Markup.Contains("time/approvals")));
+        nav.WaitForAssertion(() =>
+        {
+            Assert.Contains("href=\"time\"", nav.Markup);
+            Assert.Equal(shown, nav.Markup.Contains("time/team"));
+            Assert.DoesNotContain("time/approvals", nav.Markup);
+        });
     }
 
     private sealed class FakeUserContext(OrgRoles roles) : ICurrentUserContext

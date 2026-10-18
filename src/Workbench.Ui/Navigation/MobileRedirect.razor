@@ -1,0 +1,56 @@
+@* On a phone, opening the home page (/) goes to the phone layout (/m) unless this device chose the full site. The
+   phone layout's "Full site" button links to ?site=full, which is remembered (localStorage, per device). Not in the
+   desktop app, whose window can be narrow. *@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || RendererInfo.Name == "WebView")
+        {
+            return;
+        }
+
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/navigation.js");
+            var uri = new Uri(Navigation.Uri);
+            var choice = SiteChoice(uri.Query);
+            if (choice is not null)
+            {
+                await module.InvokeVoidAsync("setSitePreference", choice);
+            }
+
+            if (ShouldRedirect(Navigation.ToBaseRelativePath(Navigation.Uri), choice ?? await module.InvokeAsync<string?>("getSitePreference"),
+                    await module.InvokeAsync<bool>("isSmallScreen")))
+            {
+                Navigation.NavigateTo("m", replace: true);
+            }
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+            // Stay on the full site.
+        }
+    }
+
+    /// <summary>"full" or "mobile" from a ?site= query, else null.</summary>
+    public static string? SiteChoice(string query)
+    {
+        foreach (var pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length == 2 && parts[0] == "site" && parts[1] is "full" or "mobile")
+            {
+                return parts[1];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Only the home page redirects, only on a small screen, and never once this device chose the full site.</summary>
+    public static bool ShouldRedirect(string relativePath, string? preference, bool smallScreen) =>
+        smallScreen && preference != "full" && NavCatalog.Segments(relativePath).Length == 0;
+}

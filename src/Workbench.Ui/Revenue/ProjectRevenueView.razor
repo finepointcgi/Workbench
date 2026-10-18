@@ -15,8 +15,11 @@ else
 {
     var p = _project;
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.h4" HtmlTag="h1">@p.ProjectCode · @p.ProjectName</MudText>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Revenue</MudChip>
+        @if (!Embedded)
+        {
+            <MudText Typo="Typo.h4" HtmlTag="h1">@p.ProjectCode · @p.ProjectName</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Revenue</MudChip>
+        }
         @if (p.ContractNumber is not null)
         {
             <MudText Class="mud-text-secondary">@p.ContractNumber · @p.ContractType</MudText>
@@ -32,7 +35,7 @@ else
         else
         {
             <MudSimpleTable Dense="true" Elevation="0" data-testid="project-setups">
-                <thead><tr><th>Unit</th><th>Method</th><th>Fee</th><th>ODC markup</th><th style="text-align:right">Transaction price</th><th style="text-align:right">Unit price</th><th>Notes</th></tr></thead>
+                <thead><tr><th>Unit</th><th>Method</th><th><Term Key="fee">Fee</Term></th><th>ODC markup</th><th style="text-align:right">Transaction price</th><th style="text-align:right">Unit price</th><th>Notes</th></tr></thead>
                 <tbody>
                     @foreach (var s in p.Setups)
                     {
@@ -106,7 +109,7 @@ else
         {
             <MudSimpleTable Dense="true" Elevation="0" data-testid="project-runs">
                 <thead>
-                    <tr><th>Period</th><th>Status</th><th style="text-align:right">Recognized to date</th><th style="text-align:right">Period revenue</th><th style="text-align:right">Billed to date</th><th style="text-align:right">Unbilled</th><th style="text-align:right">Billings in excess</th><th style="text-align:right">Loss provision</th><th>Entry</th></tr>
+                    <tr><th>Period</th><th>Status</th><th style="text-align:right">Recognized to date</th><th style="text-align:right">Period revenue</th><th style="text-align:right">Billed to date</th><th style="text-align:right"><Term Key="unbilled">Unbilled</Term></th><th style="text-align:right">Billings in excess</th><th style="text-align:right">Loss provision</th><th>Entry</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var r in p.Runs)
@@ -133,6 +136,10 @@ else
 @code {
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
+
+    /// <summary>Rendered as the Revenue tab of the project page, which shows the project's name.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
 
     private ProjectRevenueDto? _project;
     private string? _error;

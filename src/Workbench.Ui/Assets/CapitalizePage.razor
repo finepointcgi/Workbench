@@ -4,9 +4,9 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<PageTitle>Capitalize · Fixed assets · Workbench</PageTitle>
+<PageTitle>Add to fixed assets · Fixed assets · Workbench</PageTitle>
 
-<AssetHeader Title="Capitalize from AP" Subtitle="@($"Posted bills' GL-account lines of {AssetFormat.Amount(_threshold)} or more (the capitalization threshold) that aren't assets yet.")" />
+<AssetHeader Title="Add purchases to fixed assets" TitleTerm="capitalize" Subtitle="@($"Purchases of {AssetFormat.Amount(_threshold)} or more (the capitalization threshold) on posted vendor bills that aren't fixed assets yet. Adding one records it as an asset and depreciates it over its life.")" />
 
 @if (_error is not null)
 {
@@ -14,7 +14,7 @@
 }
 else if (_lines.Count == 0)
 {
-    <MudAlert Severity="Severity.Info" Dense="true">No bill lines to capitalize.</MudAlert>
+    <MudAlert Severity="Severity.Info" Dense="true" data-testid="capitalize-empty">No purchases waiting to become fixed assets. Equipment bought on a vendor bill over the threshold appears here once the bill is posted.</MudAlert>
 }
 else
 {
@@ -32,7 +32,7 @@ else
                         <td>@l.AccountNumber @l.AccountName</td>
                         <td>@l.OrgUnitCode</td>
                         <td style="text-align:right">@AssetFormat.Amount(l.Amount)</td>
-                        <td><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => CapitalizeAsync(l))" data-testid="capitalize">Capitalize</MudButton></td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => CapitalizeAsync(l))" data-testid="capitalize">Add to fixed assets</MudButton></td>
                     </tr>
                 }
             </tbody>
@@ -61,7 +61,7 @@ else
 
     private async Task CapitalizeAsync(CapitalizableBillLineDto line)
     {
-        var dialog = await DialogService.ShowAsync<CapitalizeDialog>($"Capitalize {line.BillNumber} line {line.LineNumber}",
+        var dialog = await DialogService.ShowAsync<CapitalizeDialog>($"Add {line.BillNumber} line {line.LineNumber} to fixed assets",
             new DialogParameters<CapitalizeDialog> { { d => d.BillLineId, line.BillLineId }, { d => d.Description, line.Description }, { d => d.Amount, line.Amount } },
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: CapitalizeBillLineRequest request })
@@ -69,7 +69,7 @@ else
             try
             {
                 var asset = await AssetService.CapitalizeAsync(request);
-                Snackbar.Add($"Capitalized as {asset.Asset.TagNumber}.", Severity.Success);
+                Snackbar.Add($"Added to fixed assets as {asset.Asset.TagNumber}.", Severity.Success);
                 Navigation.NavigateTo($"assets/{asset.Asset.Id}");
             }
             catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

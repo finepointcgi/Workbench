@@ -1,6 +1,6 @@
 @* A bill's lines: what each charges, where it's routed and whether it's decided. *@
 <MudSimpleTable Dense="true" Elevation="0" data-testid="bill-lines" Style="overflow-x:auto">
-    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th>Routed to</th><th>Status</th>@if (CanCapitalize is not null) { <th></th> }</tr></thead>
+    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right"><Term Key="retainage">Retainage</Term></th><th>Routed to</th><th>Status</th>@if (CanCapitalize is not null) { <th></th> }</tr></thead>
     <tbody>
         @foreach (var l in Lines)
         {
@@ -56,7 +56,7 @@
                     <td>
                         @if (CanCapitalize(l))
                         {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="@(() => OnCapitalize.InvokeAsync(l))" data-testid="capitalize">Capitalize</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="@(() => OnCapitalize.InvokeAsync(l))" data-testid="capitalize" title="Capitalize: record this purchase as a fixed asset and depreciate it">Add to fixed assets</MudButton>
                         }
                     </td>
                 }
