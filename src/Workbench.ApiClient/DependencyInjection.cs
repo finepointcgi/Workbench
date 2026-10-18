@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.ApiClient.Security;
 using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Sheets;
 
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.AddOdcClients(serverBaseAddress);
         services.AddFinancialsClients(serverBaseAddress);
         services.AddSetupClients(serverBaseAddress);
+        services.AddSecurityAdminClients(serverBaseAddress);
         return services;
     }
 }

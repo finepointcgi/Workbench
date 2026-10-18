@@ -29,9 +29,8 @@ public sealed class PeopleService(IWorkbenchDbContextFactory dbFactory, AuditRec
 
     public async Task<EmployeeDto?> GetCurrentEmployeeAsync(CancellationToken cancellationToken = default)
     {
-        var email = currentUser.Email.Trim().ToLowerInvariant();
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return (await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Email == email, cancellationToken))?.ToDto();
+        return (await Identity.EmployeeLinks.FindForUserAsync(db, currentUser.Email, cancellationToken))?.ToDto();
     }
 
     public async Task<EmployeeDto> CreateEmployeeAsync(SaveEmployeeRequest request, CancellationToken cancellationToken = default)

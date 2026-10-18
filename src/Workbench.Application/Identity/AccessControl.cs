@@ -13,7 +13,7 @@ namespace Workbench.Application.Identity;
 /// Answers "what may the current user do here" from workspace memberships and the admin flag. Nothing is cached:
 /// a Blazor circuit keeps its scope for hours, and role changes should apply on the next call.
 /// </summary>
-public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser)
+public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null)
 {
     public string Email => Normalize(currentUser.Email);
 
@@ -51,7 +51,7 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         var email = Email;
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await db.Set<AppUser>().AsNoTracking()
-            .Where(u => u.Email == email)
+            .Where(u => u.Email == email && u.IsActive)
             .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper })
             .FirstOrDefaultAsync(cancellationToken);
         return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper);
@@ -65,12 +65,8 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
             return null;
         }
 
-        var email = Email;
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return await db.Set<Employee>().AsNoTracking()
-            .Where(e => e.Email == email)
-            .Select(e => (Guid?)e.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        return (await EmployeeLinks.FindForUserAsync(db, Email, cancellationToken))?.Id;
     }
 
     /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless the user is in Finance or an Admin.</summary>
@@ -79,7 +75,7 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         RequireSignedIn();
         if (!(await GetOrgRolesAsync(cancellationToken)).IsFinance())
         {
-            throw new WorkbenchForbiddenException($"Only Finance and administrators can {what}.");
+            throw await DeniedAsync($"Only Finance and administrators can {what}.", cancellationToken);
         }
     }
 
@@ -160,13 +156,13 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         var role = await GetSheetRoleAsync(sheetId, cancellationToken) ?? throw WorkbenchNotFoundException.For("Sheet", sheetId);
         if (role < minimum)
         {
-            throw new WorkbenchForbiddenException(minimum switch
+            throw await DeniedAsync(minimum switch
             {
                 WorkspaceRole.Commenter => "You need comment access to this sheet to do that.",
                 WorkspaceRole.Editor => "You need edit access to this sheet to do that.",
                 WorkspaceRole.Owner => "Only the workspace's owners can do that.",
                 _ => "You don't have access to this sheet.",
-            });
+            }, cancellationToken, $"sheet {sheetId}");
         }
     }
 
@@ -175,8 +171,19 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         RequireSignedIn();
         if (!await IsAdminAsync(cancellationToken))
         {
-            throw new WorkbenchForbiddenException("Only administrators can do that.");
+            throw await DeniedAsync("Only administrators can do that.", cancellationToken);
         }
+    }
+
+    /// <summary>Records the denial in the security event log (A.8.15) and returns the exception to throw.</summary>
+    private async Task<WorkbenchForbiddenException> DeniedAsync(string message, CancellationToken cancellationToken, string? target = null)
+    {
+        if (securityLog is not null)
+        {
+            await securityLog.RecordAsync(Contracts.Security.SecurityEventTypes.PermissionDenied, target, Contracts.Security.SecurityOutcomes.Denied, message, cancellationToken: cancellationToken);
+        }
+
+        return new WorkbenchForbiddenException(message);
     }
 
     public void RequireSignedIn()
@@ -195,7 +202,7 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         }
 
         var email = Email;
-        return email.Length > 0 && await db.Set<AppUser>().AsNoTracking().AnyAsync(u => u.Email == email && u.IsAdmin, cancellationToken);
+        return email.Length > 0 && await db.Set<AppUser>().AsNoTracking().AnyAsync(u => u.Email == email && u.IsAdmin && u.IsActive, cancellationToken);
     }
 
     internal async Task<WorkspaceRole?> GetWorkspaceRoleAsync(IWorkbenchDbContext db, Guid workspaceId, CancellationToken cancellationToken)
@@ -217,5 +224,5 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
 
     internal static DomainRole ToDomain(WorkspaceRole role) => (DomainRole)(int)role;
 
-    internal static string Normalize(string? email) => (email ?? string.Empty).Trim().ToLowerInvariant();
+    public static string Normalize(string? email) => (email ?? string.Empty).Trim().ToLowerInvariant();
 }

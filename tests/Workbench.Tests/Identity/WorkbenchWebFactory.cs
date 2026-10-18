@@ -16,10 +16,11 @@ namespace Workbench.Tests.Identity;
 /// <c>testAuth</c>, requests carrying <c>X-Test-User: email</c> are signed in as that user, standing in for the
 /// cookie or bearer token.
 /// </summary>
-internal sealed class WorkbenchWebFactory(string environment, bool testAuth = false, string? oidcAuthority = null)
+internal sealed class WorkbenchWebFactory(string environment, bool testAuth = false, string? oidcAuthority = null, IReadOnlyDictionary<string, string>? settings = null)
     : WebApplicationFactory<Program>
 {
     public const string UserHeader = "X-Test-User";
+    public const string ScimToken = "test-scim-token-0123456789abcdef0123456789";
     private readonly string _database = Path.Combine(Path.GetTempPath(), $"workbench-test-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -28,6 +29,16 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
         builder.UseSetting("ConnectionStrings:Workbench", $"Data Source={_database};Pooling=False");
         builder.UseSetting("Costpoint:Source", "None");
         builder.UseSetting("Storage:Root", Path.Combine(Path.GetTempPath(), $"workbench-blobs-{Guid.NewGuid():N}"));
+
+        // A configuration the production startup check accepts: TLS at a proxy, a SCIM token, SQLite allowed for tests.
+        builder.UseSetting("Security:TlsTerminatedByProxy", "true");
+        builder.UseSetting("Scim:BearerToken", ScimToken);
+        builder.UseSetting("Database:AllowSqliteInProduction", "true");
+        builder.UseSetting("Retention:NightlyJobEnabled", "false");
+        foreach (var (key, value) in settings ?? new Dictionary<string, string>())
+        {
+            builder.UseSetting(key, value);
+        }
         if (oidcAuthority is not null)
         {
             builder.UseSetting("Authentication:Oidc:Authority", oidcAuthority);

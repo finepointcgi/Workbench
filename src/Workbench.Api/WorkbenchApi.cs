@@ -29,6 +29,7 @@ public static class WorkbenchApi
         v1.MapOdcEndpoints();
         v1.MapFinancialsEndpoints();
         v1.MapSetupEndpoints();
+        v1.MapSecurityAdminEndpoints();
 
         return app;
     }

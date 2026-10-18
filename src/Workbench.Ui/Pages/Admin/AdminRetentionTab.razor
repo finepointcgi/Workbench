@@ -1,0 +1,210 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Security
+@inject IRetentionService Retention
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    How long each kind of record is kept (ISO 27001 A.5.33, A.8.10). A nightly job deletes only expired records of the
+    purgeable types. Protected records (time, ODCs, journal, audit, access reviews) are never deleted automatically:
+    the report shows how many have passed their retention so the records owner can decide. A legal hold on a contract or
+    project blocks deletion of anything related to it.
+</MudText>
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Retention periods</MudText>
+<MudTable T="RetentionPolicyDto" Items="_policies" Dense="true" Breakpoint="Breakpoint.Sm" Class="mb-4" data-testid="retention-policies">
+    <HeaderContent>
+        <MudTh>Records</MudTh>
+        <MudTh>Kept for (days)</MudTh>
+        <MudTh>Rule</MudTh>
+        <MudTh />
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Records">@context.Description</MudTd>
+        <MudTd DataLabel="Days">
+            <MudNumericField T="int" Value="DaysFor(context)" ValueChanged="d => _edits[context.RecordType] = d" Min="0" Max="36500" Margin="Margin.Dense"
+                             Variant="Variant.Outlined" Style="max-width:120px" aria-label="@($"{context.Description} days")" />
+        </MudTd>
+        <MudTd DataLabel="Rule">
+            @if (context.Protected)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Protected</MudChip>
+                <span class="mud-text-secondary">@(context.AfterContractClose ? "after contract close; " : "")report only, never auto-deleted</span>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Purged nightly</MudChip>
+            }
+            @if (context.IsOverride)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Changed from the configured default</MudText>
+            }
+        </MudTd>
+        <MudTd>
+            @if (_edits.TryGetValue(context.RecordType, out var days) && days != context.RetentionDays)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveAsync(context, days)">Save</MudButton>
+            }
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Retention report</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" OnClick="PreviewAsync" Disabled="_busy" data-testid="retention-preview">Preview</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="RunAsync" Disabled="_busy" data-testid="retention-run">Run purge now</MudButton>
+</MudStack>
+@if (_report is { } report)
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@(report.DryRun ? "Preview" : "Run") at @report.RanAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</MudText>
+    <MudTable T="RetentionReportLine" Items="report.Lines" Dense="true" Breakpoint="Breakpoint.Sm" Class="mb-4" data-testid="retention-report">
+        <HeaderContent>
+            <MudTh>Records</MudTh>
+            <MudTh>Past retention</MudTh>
+            <MudTh>Purged</MudTh>
+            <MudTh>On legal hold</MudTh>
+            <MudTh>Note</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Records">@context.RecordType</MudTd>
+            <MudTd DataLabel="Past retention">@context.Eligible</MudTd>
+            <MudTd DataLabel="Purged">@(context.Protected ? "Never" : context.Purged.ToString())</MudTd>
+            <MudTd DataLabel="Held">@context.Held</MudTd>
+            <MudTd DataLabel="Note">@context.Note</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Legal holds</MudText>
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="5">
+            <MudSelect T="HoldableRecordDto" @bind-Value="_holdTarget" Label="Contract or project" Margin="Margin.Dense" Variant="Variant.Outlined"
+                       ToStringFunc="HoldLabel">
+                @foreach (var record in _holdable)
+                {
+                    <MudSelectItem T="HoldableRecordDto" Value="record">@record.EntityType: @record.Label</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudTextField @bind-Value="_holdReason" Label="Reason (matter, request or counsel)" Margin="Margin.Dense" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PlaceHoldAsync" Disabled="_busy || _holdTarget is null || string.IsNullOrWhiteSpace(_holdReason)">Place hold</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+<MudTable T="LegalHoldDto" Items="_holds" Dense="true" Breakpoint="Breakpoint.Sm">
+    <HeaderContent>
+        <MudTh>Record</MudTh>
+        <MudTh>Reason</MudTh>
+        <MudTh>Placed</MudTh>
+        <MudTh>Released</MudTh>
+        <MudTh />
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Record">@context.EntityType: @context.Label</MudTd>
+        <MudTd DataLabel="Reason">@context.Reason</MudTd>
+        <MudTd DataLabel="Placed">@context.PlacedAtUtc.ToString("yyyy-MM-dd") · @context.PlacedBy</MudTd>
+        <MudTd DataLabel="Released">@(context.ReleasedAtUtc is { } released ? $"{released:yyyy-MM-dd} · {context.ReleasedBy}" : "—")</MudTd>
+        <MudTd>
+            @if (context.ReleasedAtUtc is null)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => ReleaseAsync(context)">Release</MudButton>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No legal holds.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<RetentionPolicyDto> _policies = [];
+    private IReadOnlyList<LegalHoldDto> _holds = [];
+    private IReadOnlyList<HoldableRecordDto> _holdable = [];
+    private readonly Dictionary<string, int> _edits = [];
+    private RetentionReportDto? _report;
+    private HoldableRecordDto? _holdTarget;
+    private string? _holdReason;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RunGuardedAsync(async () =>
+        {
+            _policies = await Retention.ListPoliciesAsync();
+            _holds = await Retention.ListHoldsAsync(includeReleased: true);
+            _holdable = await Retention.ListHoldableAsync();
+        });
+    }
+
+    private static string HoldLabel(HoldableRecordDto? record) => record is null ? string.Empty : $"{record.EntityType}: {record.Label}";
+
+    private int DaysFor(RetentionPolicyDto policy) => _edits.TryGetValue(policy.RecordType, out var days) ? days : policy.RetentionDays;
+
+    private Task SaveAsync(RetentionPolicyDto policy, int days) => RunGuardedAsync(async () =>
+    {
+        var saved = await Retention.SetPolicyAsync(policy.RecordType, days);
+        _policies = _policies.Select(p => p.RecordType == saved.RecordType ? saved : p).ToList();
+        _edits.Remove(policy.RecordType);
+        Snackbar.Add($"{saved.Description}: kept for {saved.RetentionDays} days.", Severity.Success);
+    });
+
+    private Task PreviewAsync() => RunGuardedAsync(async () => _report = await Retention.PreviewAsync());
+
+    private async Task RunAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Run the purge now?",
+            "Deletes expired security events, notifications and lapsed invites now, as the nightly job would. Protected and held records are never deleted.",
+            yesText: "Run purge", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await RunGuardedAsync(async () => _report = await Retention.RunNowAsync());
+        }
+    }
+
+    private Task PlaceHoldAsync() => RunGuardedAsync(async () =>
+    {
+        var hold = await Retention.PlaceHoldAsync(new PlaceLegalHoldRequest(_holdTarget!.EntityType, _holdTarget.Id, _holdReason!));
+        _holds = await Retention.ListHoldsAsync(includeReleased: true);
+        _holdTarget = null;
+        _holdReason = null;
+        Snackbar.Add($"{hold.Label} is on legal hold.", Severity.Success);
+    });
+
+    private async Task ReleaseAsync(LegalHoldDto hold)
+    {
+        var dialog = await Dialogs.ShowAsync<SecurityReasonDialog>($"Release the hold on {hold.Label}?", new DialogParameters<SecurityReasonDialog>
+        {
+            { d => d.Message, "Its records follow the normal retention rules again." },
+            { d => d.ConfirmText, "Release" },
+            { d => d.ReasonRequired, true },
+        });
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunGuardedAsync(async () =>
+            {
+                await Retention.ReleaseHoldAsync(hold.Id, reason);
+                _holds = await Retention.ListHoldsAsync(includeReleased: true);
+            });
+        }
+    }
+
+    private async Task RunGuardedAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException or TaskCanceledException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
