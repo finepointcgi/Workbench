@@ -1,0 +1,131 @@
+@page "/setup/org-units"
+@inject IPeopleService People
+@inject ISetupAdminService Setup
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Org units · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Org units" Subtitle="Divisions and departments, used for reporting and approvals.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null, null)">New org unit</MudButton>
+</SetupHeader>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_units.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-6"><MudText>No org units yet.</MudText></MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-2">
+        <MudTreeView T="Guid" Hover="true" Dense="true" ExpandOnClick="false">
+            @OrgTree(null)
+        </MudTreeView>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<OrgUnitDto> _units = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private bool _loading = true;
+    private readonly HashSet<Guid> _collapsed = [];
+
+    private void Toggle(Guid id, bool expanded)
+    {
+        if (expanded)
+        {
+            _collapsed.Remove(id);
+        }
+        else
+        {
+            _collapsed.Add(id);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _employees = await People.ListEmployeesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _units = await People.ListOrgUnitsAsync();
+        _loading = false;
+    }
+
+    private IEnumerable<OrgUnitDto> ChildrenOf(Guid? parentId) =>
+        _units.Where(u => parentId is null ? u.ParentId is not { } p || _units.All(o => o.Id != p) : u.ParentId == parentId)
+              .OrderBy(u => u.Code, StringComparer.Ordinal);
+
+    private RenderFragment OrgTree(Guid? parentId) => __builder =>
+    {
+        foreach (var unit in ChildrenOf(parentId))
+        {
+            var people = _employees.Count(e => e.OrgUnitId == unit.Id);
+            <MudTreeViewItem T="Guid" Value="unit.Id" Expanded="!_collapsed.Contains(unit.Id)" Icon="@Icons.Material.Filled.AccountTree">
+                <Content>
+                    <MudTreeViewItemToggleButton Expanded="!_collapsed.Contains(unit.Id)" ExpandedChanged="v => Toggle(unit.Id, v)" Visible="ChildrenOf(unit.Id).Any()" />
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="flex-grow-1" Spacing="2">
+                        <MudText Typo="Typo.body2"><b>@unit.Code</b> · @unit.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@people @(people == 1 ? "person" : "people")</MudText>
+                        <MudSpacer />
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="@($"Add a unit under {unit.Code}")"
+                                       OnClick="() => EditAsync(null, unit.Id)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {unit.Code}")"
+                                       OnClick="() => EditAsync(unit, unit.ParentId)" />
+                    </MudStack>
+                </Content>
+                <ChildContent>@OrgTree(unit.Id)</ChildContent>
+            </MudTreeViewItem>
+        }
+    };
+
+    private async Task EditAsync(OrgUnitDto? unit, Guid? parentId)
+    {
+        var choices = SetupFormat.Flatten(_units.Where(u => unit is null || !IsSelfOrDescendant(u.Id, unit.Id)), u => u.Id, u => u.ParentId, u => u.Code)
+            .Select(x => (x.Node.Id, $"{new string(' ', x.Depth * 2)}{x.Node.Code} · {x.Node.Name}"))
+            .ToList();
+        var parameters = new DialogParameters<CodeNameDialog>
+        {
+            { d => d.Code, unit?.Code },
+            { d => d.Name, unit?.Name },
+            { d => d.ParentChoices, choices },
+            { d => d.ParentId, parentId },
+        };
+        var dialog = await DialogService.ShowAsync<CodeNameDialog>(unit is null ? "New org unit" : "Edit org unit", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: CodeNameResult result })
+        {
+            return;
+        }
+
+        try
+        {
+            var request = new CreateOrgUnitRequest(result.Code, result.Name, result.ParentId);
+            _ = unit is null ? await People.CreateOrgUnitAsync(request) : await Setup.UpdateOrgUnitAsync(unit.Id, request);
+            await LoadAsync();
+            Snackbar.Add($"Saved {result.Code}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private bool IsSelfOrDescendant(Guid candidate, Guid ancestor)
+    {
+        for (Guid? cursor = candidate; cursor is { } id; cursor = _units.FirstOrDefault(u => u.Id == id)?.ParentId)
+        {
+            if (id == ancestor)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

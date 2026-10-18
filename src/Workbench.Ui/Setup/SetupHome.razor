@@ -1,0 +1,81 @@
+@page "/setup"
+@inject ISetupAdminService Setup
+
+<PageTitle>Setup · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1">Setup</MudText>
+<MudText Class="mud-text-secondary mb-4">Configure the project-accounting system of record. Work through the checklist in order the first time.</MudText>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="7">
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudText Typo="Typo.h6" HtmlTag="h2">Getting started</MudText>
+                <MudSpacer />
+                @if (_checklist is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="checklist-progress">@Done of @Steps.Count done</MudText>
+                }
+            </MudStack>
+            @if (_checklist is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else
+            {
+                <MudProgressLinear Value="100.0 * Done / Steps.Count" Color="Color.Success" Class="mb-3" Rounded="true" />
+                <MudList T="string" Dense="true">
+                    @foreach (var step in Steps)
+                    {
+                        <MudListItem T="string" Href="@step.Href" data-testid="checklist-item">
+                            <div class="d-flex align-center gap-3">
+                                <MudIcon Icon="@(step.Done ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)"
+                                         Color="@(step.Done ? Color.Success : Color.Default)" aria-label="@(step.Done ? "Done" : "To do")" />
+                                <div>
+                                    <MudText Typo="Typo.body1" Style="@(step.Done ? "text-decoration:line-through" : "")">@step.Title</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@step.Hint</MudText>
+                                </div>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="5">
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">All setup screens</MudText>
+            <MudNavMenu Dense="true">
+                <MudNavLink Href="setup/people" Icon="@Icons.Material.Filled.People">People and cost rates</MudNavLink>
+                <MudNavLink Href="setup/org-units" Icon="@Icons.Material.Filled.AccountTree">Org units</MudNavLink>
+                <MudNavLink Href="setup/labor-categories" Icon="@Icons.Material.Filled.Badge">Labor categories</MudNavLink>
+                <MudNavLink Href="setup/customers" Icon="@Icons.Material.Filled.Business">Customers</MudNavLink>
+                <MudNavLink Href="setup/contracts" Icon="@Icons.Material.Filled.Description">Contracts and bill rates</MudNavLink>
+                <MudNavLink Href="setup/projects" Icon="@Icons.Material.Filled.Work">Projects, WBS and plan sheets</MudNavLink>
+                <MudNavLink Href="setup/fiscal-calendar" Icon="@Icons.Material.Filled.CalendarMonth">Fiscal calendar</MudNavLink>
+                <MudNavLink Href="setup/audit" Icon="@Icons.Material.Filled.History">Audit log</MudNavLink>
+            </MudNavMenu>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private SetupChecklistDto? _checklist;
+
+    private sealed record Step(string Title, string Hint, string Href, bool Done);
+
+    private IReadOnlyList<Step> Steps => _checklist is not { } c ? [] :
+    [
+        new("Fiscal calendar", "At least one open accounting period.", "setup/fiscal-calendar", c.HasOpenFiscalPeriods),
+        new("Labor categories", "Used for budgets and bill rates.", "setup/labor-categories", c.HasLaborCategories),
+        new("Employees", "Everyone who records time.", "setup/people", c.HasEmployees),
+        new("Cost rates", "Labor cost is approved hours × the cost rate in effect.", "setup/people", c.HasCostRates),
+        new("Customer and contract", "With its ceiling, funding and bill rates.", "setup/contracts", c.HasCustomerAndContract),
+        new("Project and WBS", "Leaf WBS elements are the charge codes.", "setup/projects", c.HasProjectWithWbs),
+        new("Charge assignments", "Who may charge which WBS elements.", "setup/projects", c.HasChargeAssignments),
+    ];
+
+    private int Done => Steps.Count(s => s.Done);
+
+    protected override async Task OnInitializedAsync() => _checklist = await Setup.GetChecklistAsync();
+}

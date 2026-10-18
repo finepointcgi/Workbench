@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddWorkbenchCollaboration();
         services.AddWorkbenchCostpoint();
         services.AddWorkbenchProjectAccounting();
+        services.AddWorkbenchSetup();
         return services;
     }
 }

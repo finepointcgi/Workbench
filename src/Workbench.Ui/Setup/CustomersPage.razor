@@ -1,0 +1,75 @@
+@page "/setup/customers"
+@inject IContractService Contracts
+@inject ISetupAdminService Setup
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Customers · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Customers" Subtitle="Agencies and primes you hold contracts with.">
+    <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.Description">Contracts</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">New customer</MudButton>
+</SetupHeader>
+
+<MudDataGrid T="CustomerDto" Items="_customers" Loading="_loading" Dense="true" Hover="true">
+    <Columns>
+        <PropertyColumn Property="c => c.Code" />
+        <PropertyColumn Property="c => c.Name" />
+        <PropertyColumn Property="c => c.Category" />
+        <TemplateColumn Title="Contracts" SortBy="@(c => ContractCount(c.Id))">
+            <CellTemplate>@ContractCount(context.Item.Id)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Sortable="false" CellStyle="text-align:right">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {context.Item.Code}")"
+                               OnClick="() => EditAsync(context.Item)" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent><MudText>No customers yet.</MudText></NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<CustomerDto> _customers = [];
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _contracts = await Contracts.ListContractsAsync();
+        _customers = await Contracts.ListCustomersAsync();
+        _loading = false;
+    }
+
+    private int ContractCount(Guid customerId) => _contracts.Count(c => c.CustomerId == customerId);
+
+    private async Task EditAsync(CustomerDto? customer)
+    {
+        var parameters = new DialogParameters<CodeNameDialog>
+        {
+            { d => d.Code, customer?.Code },
+            { d => d.Name, customer?.Name },
+            { d => d.CategoryLabel, "Category" },
+            { d => d.CategoryHelp, "For example DoD, Civilian, Commercial or Prime contractor." },
+            { d => d.Category, customer?.Category },
+        };
+        var dialog = await DialogService.ShowAsync<CodeNameDialog>(customer is null ? "New customer" : "Edit customer", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: CodeNameResult result })
+        {
+            return;
+        }
+
+        try
+        {
+            var request = new SaveCustomerRequest(result.Code, result.Name, result.Category);
+            _ = customer is null ? await Contracts.CreateCustomerAsync(request) : await Setup.UpdateCustomerAsync(customer.Id, request);
+            _customers = await Contracts.ListCustomersAsync();
+            Snackbar.Add($"Saved {result.Name}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,76 @@
+@* Code + name (+ optional extra fields) editor used by the simple setup grids. *@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="Code" Label="Code" Required="true" RequiredError="Code is required." AutoFocus="true" Immediate="true" />
+                <MudTextField @bind-Value="Name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" />
+                @if (CategoryLabel is not null)
+                {
+                    <MudTextField @bind-Value="Category" Label="@CategoryLabel" HelperText="@CategoryHelp" />
+                }
+                @if (ParentChoices is not null)
+                {
+                    <MudSelect T="Guid?" @bind-Value="ParentId" Label="Parent" Clearable="true">
+                        @foreach (var (id, label) in ParentChoices)
+                        {
+                            <MudSelectItem T="Guid?" Value="id">@label</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (ShowActive)
+                {
+                    <MudSwitch @bind-Value="IsActive" Label="Active" Color="Color.Primary" />
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string? Code { get; set; }
+
+    [Parameter]
+    public string? Name { get; set; }
+
+    [Parameter]
+    public bool ShowActive { get; set; }
+
+    [Parameter]
+    public bool IsActive { get; set; } = true;
+
+    [Parameter]
+    public string? CategoryLabel { get; set; }
+
+    [Parameter]
+    public string? CategoryHelp { get; set; }
+
+    [Parameter]
+    public string? Category { get; set; }
+
+    /// <summary>When set, shows a parent picker with these (id, label) choices.</summary>
+    [Parameter]
+    public IReadOnlyList<(Guid Id, string Label)>? ParentChoices { get; set; }
+
+    [Parameter]
+    public Guid? ParentId { get; set; }
+
+    private MudForm _form = default!;
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(new CodeNameResult(Code!.Trim(), Name!.Trim(), IsActive, Category, ParentId)));
+        }
+    }
+}

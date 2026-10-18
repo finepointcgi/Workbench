@@ -1,0 +1,235 @@
+@page "/setup/contracts/new"
+@page "/setup/contracts/{ContractId:guid}"
+@inject IContractService Contracts
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_contract?.ContractNumber ?? "New contract") · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="@(_contract is null ? "New contract" : $"{_contract.ContractNumber} · {_contract.Name}")">
+    <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">All contracts</MudButton>
+</SetupHeader>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3" Class="mt-1">
+        <MudItem xs="12" lg="7">
+            <MudPaper Outlined="true" Class="pa-4">
+                @if (_customers.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mb-3">Create a <MudLink Href="setup/customers">customer</MudLink> first.</MudAlert>
+                }
+                <MudForm @ref="_form">
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="_number" Label="Contract number" Required="true" RequiredError="Contract number is required." Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="Guid?" @bind-Value="_customerId" Label="Customer" Required="true" RequiredError="Customer is required.">
+                                @foreach (var c in _customers)
+                                {
+                                    <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="ContractKind" @bind-Value="_type" Label="Type">
+                                @foreach (var kind in Enum.GetValues<ContractKind>())
+                                {
+                                    <MudSelectItem T="ContractKind" Value="kind">@SetupFormat.Label(kind) · @kind</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="ContractState" @bind-Value="_status" Label="Status">
+                                @foreach (var state in Enum.GetValues<ContractState>())
+                                {
+                                    <MudSelectItem T="ContractState" Value="state">@state</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_start" Label="Period of performance start" Required="true" RequiredError="Start is required."
+                                           DateFormat="yyyy-MM-dd" Editable="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_end" Label="Period of performance end" Required="true" RequiredError="End is required."
+                                           DateFormat="yyyy-MM-dd" Editable="true" Validation="@(new Func<DateTime?, string?>(ValidateEnd))" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Ceiling value" Adornment="Adornment.Start" AdornmentText="$"
+                                             Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(v => v < 0 ? "Can't be negative." : null))" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="decimal" @bind-Value="_funded" Label="Funded value" Adornment="Adornment.Start" AdornmentText="$"
+                                             Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(ValidateFunded))"
+                                             HelperText="Obligated to date. Can't exceed the ceiling." data-testid="contract-funded" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudSwitch @bind-Value="_isPrime" Label="We are the prime contractor" Color="Color.Primary" />
+                        </MudItem>
+                    </MudGrid>
+                </MudForm>
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="contract-save">
+                        @(_contract is null ? "Create contract" : "Save")
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="5">
+            @if (_contract is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h6" HtmlTag="h2">Bill rates</MudText>
+                        <MudSpacer />
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRateAsync">Add bill rate</MudButton>
+                    </MudStack>
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead><tr><th>Labor category</th><th>Effective from</th><th style="text-align:right">Hourly bill rate</th></tr></thead>
+                        <tbody>
+                            @if (_rates.Count == 0)
+                            {
+                                <tr><td colspan="3" class="mud-text-secondary">No bill rates yet.</td></tr>
+                            }
+                            @foreach (var group in _rates.GroupBy(r => r.LaborCategoryId).OrderBy(g => CategoryLabel(g.Key)))
+                            {
+                                var first = true;
+                                foreach (var rate in group.OrderByDescending(r => r.EffectiveFrom))
+                                {
+                                    <tr>
+                                        <td>@(first ? CategoryLabel(group.Key) : "")</td>
+                                        <td>@SetupFormat.Date(rate.EffectiveFrom)@(first ? "" : " (superseded)")</td>
+                                        <td style="text-align:right">@SetupFormat.Rate(rate.HourlyBillRate)</td>
+                                    </tr>
+                                    first = false;
+                                }
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudPaper>
+            }
+            else
+            {
+                <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">Save the contract to add bill rates.</MudText></MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid? ContractId { get; set; }
+
+    private ContractDto? _contract;
+    private IReadOnlyList<CustomerDto> _customers = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private IReadOnlyList<BillRateDto> _rates = [];
+    private MudForm _form = default!;
+    private bool _loading = true;
+    private bool _saving;
+
+    private string? _number;
+    private string? _name;
+    private Guid? _customerId;
+    private ContractKind _type = ContractKind.FirmFixedPrice;
+    private ContractState _status = ContractState.Active;
+    private DateTime? _start = DateTime.Today;
+    private DateTime? _end = DateTime.Today.AddYears(1).AddDays(-1);
+    private decimal _ceiling;
+    private decimal _funded;
+    private bool _isPrime = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _customers = await Contracts.ListCustomersAsync();
+        _categories = await People.ListLaborCategoriesAsync();
+        _contract = ContractId is { } id ? await Contracts.GetContractAsync(id) : null;
+        if (_contract is { } c)
+        {
+            (_number, _name, _customerId, _type, _status) = (c.ContractNumber, c.Name, c.CustomerId, c.Type, c.Status);
+            (_start, _end, _ceiling, _funded, _isPrime) = (SetupFormat.ToDateTime(c.PeriodStart), SetupFormat.ToDateTime(c.PeriodEnd), c.CeilingValue, c.FundedValue, c.IsPrime);
+            _rates = await Contracts.ListBillRatesAsync(c.Id);
+        }
+        else if (_customers.Count == 1)
+        {
+            _customerId = _customers[0].Id;
+        }
+
+        _loading = false;
+    }
+
+    private string? ValidateEnd(DateTime? end) => end is { } e && _start is { } s && e.Date < s.Date ? "End can't be before the start." : null;
+
+    internal string? ValidateFunded(decimal funded) =>
+        funded < 0 ? "Can't be negative." : funded > _ceiling ? "Funded value can't exceed the ceiling." : null;
+
+    private string CategoryLabel(Guid id) => _categories.FirstOrDefault(c => c.Id == id) is { } c ? $"{c.Code} · {c.Name}" : "(unknown)";
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var request = new SaveContractRequest(_customerId!.Value, _number!.Trim(), _name!.Trim(), _type, _status, _isPrime,
+                SetupFormat.ToDateOnly(_start)!.Value, SetupFormat.ToDateOnly(_end)!.Value, _ceiling, _funded);
+            if (_contract is null)
+            {
+                var created = await Contracts.CreateContractAsync(request);
+                Snackbar.Add($"Created {created.ContractNumber}. Add its bill rates next.", Severity.Success);
+                Navigation.NavigateTo($"setup/contracts/{created.Id}");
+            }
+            else
+            {
+                _contract = await Contracts.UpdateContractAsync(_contract.Id, request);
+                Snackbar.Add("Contract saved.", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AddRateAsync()
+    {
+        var parameters = new DialogParameters<AddBillRateDialog> { { d => d.Categories, _categories } };
+        var dialog = await DialogService.ShowAsync<AddBillRateDialog>("Add bill rate", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: AddBillRateRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            await Contracts.AddBillRateAsync(_contract!.Id, request);
+            _rates = await Contracts.ListBillRatesAsync(_contract.Id);
+            Snackbar.Add("Bill rate added.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}
