@@ -30,6 +30,12 @@ public enum CostClassification
     GeneralAndAdministrative,
     Unallowable,
     Other,
+
+    /// <summary>
+    /// Indirect cost applied to projects by the allocation run (the "applied burden" debit and the per-pool "applied"
+    /// contra credit). Never part of a pool or a base, so allocations don't feed back into the rates.
+    /// </summary>
+    AppliedBurden,
 }
 
 /// <summary>

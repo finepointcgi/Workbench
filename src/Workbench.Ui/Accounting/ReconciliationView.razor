@@ -13,7 +13,7 @@
     <ExportButton Request="new AccountingExportRequest(AccountingReport.Reconciliation)" />
 </MudStack>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-    Inception to date, per WBS element: allowable cost in the ledger against the project financials actuals (approved labor at cost plus approved allowable ODCs).
+    Inception to date, per WBS element: allowable cost in the ledger against the project financials actuals (approved labor at cost plus approved allowable ODCs). Burden columns: provisional-rate burden on those actuals against the burden the allocation runs applied in the ledger.
 </MudText>
 @if (_error is not null)
 {
@@ -33,7 +33,8 @@ else
         <MudSimpleTable Dense="true" Hover="true" data-testid="reconciliation">
             <thead>
                 <tr><th>Project</th><th>WBS</th><th style="text-align:right">Financials labor</th><th style="text-align:right">Financials ODC</th><th style="text-align:right">GL labor</th>
-                    <th style="text-align:right">GL ODC</th><th style="text-align:right">Difference</th><th></th></tr>
+                    <th style="text-align:right">GL ODC</th><th style="text-align:right">Difference</th><th></th>
+                    <th style="text-align:right">Expected burden</th><th style="text-align:right">GL applied burden</th><th style="text-align:right">Burdened total</th></tr>
             </thead>
             <tbody>
                 @foreach (var r in _report.Rows)
@@ -50,6 +51,9 @@ else
                             <MudIcon Size="Size.Small" Icon="@(r.IsReconciled ? Icons.Material.Filled.Check : Icons.Material.Filled.Flag)"
                                      Color="@(r.IsReconciled ? Color.Success : Color.Error)" />
                         </td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.ExpectedBurden)</td>
+                        <td style="text-align:right" class="@(r.BurdenDifference == 0 ? "" : "mud-warning-text")">@AccountingFormat.Amount(r.GlAppliedBurden)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.BurdenedTotal)</td>
                     </tr>
                 }
             </tbody>
