@@ -1,0 +1,38 @@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudDatePicker @bind-Date="_from" Label="Effective from" Required="true" RequiredError="Effective date is required."
+                               DateFormat="yyyy-MM-dd" Editable="true" />
+                <MudNumericField T="decimal?" @bind-Value="_rate" Label="Hourly cost" Required="true" RequiredError="Rate is required."
+                                 Adornment="Adornment.Start" AdornmentText="$" Format="0.00##" Min="0.01m" Immediate="true" data-testid="rate-value"
+                                 Validation="@(new Func<decimal?, string?>(r => r is > 0 ? null : "Rate must be greater than zero."))" />
+                <MudTextField @bind-Value="_reason" Label="Reason" Required="true" RequiredError="A reason is required." Lines="2"
+                              Immediate="true" HelperText="For example: annual merit increase. Recorded in the audit log." data-testid="rate-reason" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" data-testid="rate-submit">Add rate</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private MudForm _form = default!;
+    private DateTime? _from = DateTime.Today;
+    private decimal? _rate;
+    private string? _reason;
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(new AddCostRateRequest(SetupFormat.ToDateOnly(_from)!.Value, _rate!.Value, _reason!.Trim())));
+        }
+    }
+}

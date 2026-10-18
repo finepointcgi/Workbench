@@ -1,0 +1,198 @@
+@* The project's WBS as a tree, with the selected element's settings and charge assignments beside it. *@
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" lg="7">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Work breakdown structure</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddAsync(null)" data-testid="wbs-add-root">
+                Add top-level element
+            </MudButton>
+        </MudStack>
+        @if (_wbs.Count == 0)
+        {
+            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No WBS yet. Add a top-level element to start.</MudText></MudPaper>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Class="pa-1">
+                <MudTreeView T="Guid" Dense="true" Hover="true">
+                    @Tree(null)
+                </MudTreeView>
+            </MudPaper>
+        }
+    </MudItem>
+    <MudItem xs="12" lg="5">
+        @if (_selected is { } el)
+        {
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                    <MudText Typo="Typo.h6" HtmlTag="h3">@el.Code</MudText>
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(el)">Edit</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddAsync(el)"
+                               data-testid="wbs-add-child">Add child</MudButton>
+                </MudStack>
+                <MudText Class="mb-2">@el.Name</MudText>
+                <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@el.Kind</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(el.IsOpen ? Color.Success : Color.Default)">@(el.IsOpen ? "Open" : "Closed")</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(el.IsChargeable ? "Chargeable" : "Not chargeable")</MudChip>
+                    @if (el.RequiresAssignment)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Requires assignment</MudChip>
+                    }
+                    @if (IsChargeCode(el))
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">Charge code</MudChip>
+                    }
+                </MudStack>
+                @if (HasChildren(el.Id))
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">A parent element is a roll-up; only leaf elements take charges.</MudText>
+                }
+            </MudPaper>
+            <ChargeAssignmentPanel Element="el" Employees="Employees" LaborCategories="_categories" />
+        }
+        else if (_wbs.Count > 0)
+        {
+            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">Select an element to edit it and its charge assignments.</MudText></MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectDto Project { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<EmployeeDto> Employees { get; set; } = [];
+
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private WbsElementDto? _selected;
+    private readonly HashSet<Guid> _collapsed = [];
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != Project.Id)
+        {
+            _loadedFor = Project.Id;
+            _categories = await People.ListLaborCategoriesAsync();
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _wbs = await Projects.ListWbsAsync(Project.Id);
+        _selected = _selected is null ? null : _wbs.FirstOrDefault(w => w.Id == _selected.Id);
+    }
+
+    private bool HasChildren(Guid id) => _wbs.Any(w => w.ParentId == id);
+
+    private bool IsChargeCode(WbsElementDto w) => w.IsOpen && w.IsChargeable && !HasChildren(w.Id);
+
+    private RenderFragment Tree(Guid? parentId) => __builder =>
+    {
+        foreach (var el in _wbs.Where(w => w.ParentId == parentId).OrderBy(w => w.Order).ThenBy(w => w.Code, StringComparer.Ordinal))
+        {
+            var expanded = !_collapsed.Contains(el.Id);
+            <MudTreeViewItem T="Guid" Value="el.Id" Expanded="expanded">
+                <Content>
+                    <MudTreeViewItemToggleButton Expanded="expanded" ExpandedChanged="v => Toggle(el.Id, v)" Visible="HasChildren(el.Id)" />
+                    <div class="d-flex align-center flex-grow-1 gap-2 py-1 px-1 rounded @(el.Id == _selected?.Id ? "mud-selected-item mud-primary-text" : "")"
+                         style="cursor:pointer;min-width:0" @onclick="() => _selected = el" data-testid="wbs-node">
+                        <MudText Typo="Typo.body2" Style="white-space:nowrap"><b>@el.Code</b></MudText>
+                        <MudText Typo="Typo.body2" Class="text-truncate">@el.Name</MudText>
+                        <MudSpacer />
+                        @if (el.Kind != ChargeCodeKind.Direct)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">@el.Kind</MudChip>
+                        }
+                        @if (!el.IsOpen)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" title="Closed" />
+                        }
+                        else if (IsChargeCode(el))
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Primary" title="Charge code" />
+                        }
+                        @if (el.ItemId is not null)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" title="Linked to a plan task" />
+                        }
+                    </div>
+                </Content>
+                <ChildContent>@Tree(el.Id)</ChildContent>
+            </MudTreeViewItem>
+        }
+    };
+
+    private void Toggle(Guid id, bool expanded)
+    {
+        if (expanded)
+        {
+            _collapsed.Remove(id);
+        }
+        else
+        {
+            _collapsed.Add(id);
+        }
+    }
+
+    private async Task AddAsync(WbsElementDto? parent)
+    {
+        var parameters = new DialogParameters<WbsElementDialog> { { d => d.Parent, parent }, { d => d.ProjectCode, Project.Code } };
+        var dialog = await DialogService.ShowAsync<WbsElementDialog>(parent is null ? "Add top-level element" : "Add child element", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveWbsElementRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            var created = await Projects.CreateWbsElementAsync(Project.Id, request);
+            if (parent is not null)
+            {
+                _collapsed.Remove(parent.Id);
+            }
+
+            _selected = created;
+            await LoadAsync();
+            Snackbar.Add($"Added {created.Code}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(WbsElementDto element)
+    {
+        var parent = _wbs.FirstOrDefault(w => w.Id == element.ParentId);
+        var parameters = new DialogParameters<WbsElementDialog> { { d => d.Parent, parent }, { d => d.Element, element }, { d => d.ProjectCode, Project.Code } };
+        var dialog = await DialogService.ShowAsync<WbsElementDialog>($"Edit {element.Code}", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveWbsElementRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            await Projects.UpdateWbsElementAsync(element.Id, request with { ParentId = element.ParentId });
+            await LoadAsync();
+            Snackbar.Add($"Saved {request.Code}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}
