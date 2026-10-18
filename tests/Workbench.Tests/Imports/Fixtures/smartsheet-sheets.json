@@ -1,0 +1,10 @@
+{
+  "pageNumber": 1,
+  "pageSize": 100,
+  "totalPages": 1,
+  "totalCount": 2,
+  "data": [
+    { "id": 4583173393803140, "name": "Website Relaunch", "accessLevel": "OWNER", "permalink": "https://app.smartsheet.com/sheets/abc", "createdAt": "2026-08-01T14:00:00Z", "modifiedAt": "2026-10-10T18:22:11Z" },
+    { "id": 2331373580117892, "name": "Risk Register", "accessLevel": "EDITOR", "permalink": "https://app.smartsheet.com/sheets/def", "createdAt": "2026-07-12T09:30:00Z", "modifiedAt": "2026-09-28T12:00:00Z" }
+  ]
+}

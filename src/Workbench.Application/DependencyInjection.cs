@@ -6,6 +6,7 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
+using Workbench.Application.Imports;
 using Workbench.Application.IndirectRates;
 using Workbench.Application.Odcs;
 using Workbench.Application.Financials;
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddWorkbenchContractDetail();
         services.AddWorkbenchBilling(); // Billing/AR: posts through the GL; must stay above AddWorkbenchIdentity.
         services.AddWorkbenchPurchasing(); // AP bills post through AddWorkbenchAccounting's engine; above AddWorkbenchIdentity.
+        services.AddWorkbenchImports(); // Costpoint and Smartsheet importers; they import through the services above.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
