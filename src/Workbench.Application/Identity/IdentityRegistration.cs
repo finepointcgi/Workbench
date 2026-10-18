@@ -68,6 +68,8 @@ public static class IdentityRegistration
         services.AddScoped<BillingAccess>(); services.AddWorkbenchBillingPermissions(); // Billing/AR: Finance or Admin; PMs read their contracts' invoices.
         services.AddWorkbenchPurchasingPermissions(); // Purchasing: Finance or Admin; PMs approve the AP bill lines routed to them.
         services.Decorate<Workbench.Contracts.Imports.IImportService, PermissionCheckingImportService>(); // Imports: Finance or Admin.
+        services.AddWorkbenchProcurementPermissions(); // Requisitions: any employee for their projects/org; POs and match: Finance/Admin (receivers receive).
+        services.AddWorkbenchAssetPermissions(); // Fixed assets: Finance or Admin only.
         return services;
     }
 

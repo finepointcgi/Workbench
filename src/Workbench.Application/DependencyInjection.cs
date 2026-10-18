@@ -12,6 +12,7 @@ using Workbench.Application.Odcs;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
+using Workbench.Application.Assets;
 using Workbench.Application.Dashboards;
 using Workbench.Application.MyWork;
 using Workbench.Application.Security;
@@ -49,6 +50,7 @@ public static class DependencyInjection
         services.AddWorkbenchPurchasing(); // AP bills post through AddWorkbenchAccounting's engine; above AddWorkbenchIdentity.
         services.AddWorkbenchTenancy(); // SingleTenant defaults; AddWorkbenchInfrastructure replaces them from the Tenancy section.
         services.AddWorkbenchImports(); // Costpoint and Smartsheet importers; they import through the services above.
+        services.AddWorkbenchAssets(); // Fixed assets: depreciation posts through the GL and adds a close check; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

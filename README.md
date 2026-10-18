@@ -95,6 +95,8 @@ dotnet build src/Workbench.Desktop -t:Run
 - Timesheet periods are an organization setting (Admin, `/setup/organization`): Weekly with a start day, Biweekly with
   an anchor date, SemiMonthly (1st–15th, 16th–end) or Monthly, changed from the next period boundary. `Timekeeping:Cadence`
   (and `:WeekStartDay`, `:BiweeklyAnchor`) only give the starting value until an Admin saves one.
+- `Purchasing:RequisitionFinanceThreshold`: requisitions over this total also need Finance approval after the project manager (default 10000); `Purchasing:MatchPriceTolerancePercent`: three-way match price tolerance (default 5)
+- `Assets:CapitalizationThreshold`: AP bill lines at or above this can be capitalized (default 5000); `Assets:GainLossAccountNumber` (default 4900) and `Assets:CashAccountNumber` (default 1010) for disposals
 - `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
 - `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
 - `Timekeeping:MissingTimeReminderHour`: local hour from which employees with no hours for the previous business day get a reminder (default 9)

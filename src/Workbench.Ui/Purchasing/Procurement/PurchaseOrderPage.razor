@@ -1,0 +1,222 @@
+@page "/purchasing/orders/{OrderId:guid}"
+@inject IPurchaseOrderService Orders
+@inject IRequisitionService Requisitions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ICurrentUserContext UserContext
+
+<PageTitle>@(_po?.Order.Number ?? "Purchase order") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Purchase order" BackHref="purchasing/orders" BackLabel="Purchase orders" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_po is not { } po)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var o = po.Order;
+    var open = o.Status is PurchaseOrderState.Issued or PurchaseOrderState.PartiallyReceived or PurchaseOrderState.Received;
+    <PurchasingHeader Title="@($"{o.Number} · {o.VendorName}")" BackHref="@(_finance ? "purchasing/orders" : "purchasing/receiving")" BackLabel="@(_finance ? "Purchase orders" : "Receiving")">
+        <OrderStatusChip Status="o.Status" />
+        @if (o.Revision > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Class="ma-0">Rev @o.Revision</MudChip>
+        }
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"purchasing/orders/{o.Id}/print")" data-testid="po-print">Print</MudButton>
+        @if (po.CanEdit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Orders.IssueAsync(o.Id), "Issued."))" data-testid="po-issue">Issue</MudButton>
+        }
+        @if (po.CanReceive)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Inventory" OnClick="ReceiveAsync" data-testid="po-receive">Receive</MudButton>
+        }
+        @if (_finance && open)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ReceiptLong" Href="@($"purchasing/bills/new?po={o.Id}")" Disabled="@(po.Lines.All(l => l.QuantityReceived <= l.QuantityBilled))" data-testid="po-bill">Create bill</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.EditNote" OnClick="ChangeOrderAsync" data-testid="po-change">Change order</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@(() => RunAsync(() => Orders.CloseAsync(o.Id), "Closed."))">Close</MudButton>
+        }
+        @if (_finance && o.Status is PurchaseOrderState.Draft or PurchaseOrderState.Issued && po.Bills.Count == 0 && po.Receipts.Count == 0)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelAsync">Cancel PO</MudButton>
+        }
+    </PurchasingHeader>
+
+    @if (po.CancelReason is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">Cancelled: @po.CancelReason</MudAlert>
+    }
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[] { ("Order date", PurchasingFormat.Date(o.OrderDate)), ("Total", PurchasingFormat.Amount(o.Total)), ("Received", PurchasingFormat.Amount(o.Received)),
+            ("Billed", PurchasingFormat.Amount(o.Billed)), ("Committed", PurchasingFormat.Amount(o.Committed)), ("Terms", po.Terms ?? "—") })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Ship to: @(po.ShipTo ?? "—") · Receivers: @(po.Receivers.Count == 0 ? "Finance" : string.Join(", ", po.Receivers)) · Created by @po.CreatedBy@(po.IssuedBy is { } ib ? $" · issued by {ib}" : "")
+        @if (po.Notes is not null) { <span> · @po.Notes</span> }
+    </MudText>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">Lines</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" data-testid="po-lines">
+            <thead><tr><th>#</th><th>Description</th><th>Charge to</th><th style="text-align:right">Ordered</th><th style="text-align:right">Unit price</th><th style="text-align:right">Amount</th><th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th style="text-align:right">Committed</th><th>Requisition</th></tr></thead>
+            <tbody>
+                @foreach (var l in po.Lines)
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Description@(l.IsService ? " (service)" : "")</td>
+                        <td>@ProcurementFormat.Charge(l.ProjectCode, l.WbsCode, l.AccountNumber, l.OrgUnitCode)</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.Quantity)</td>
+                        <td style="text-align:right">@ProcurementFormat.Price(l.UnitPrice)</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(l.Amount)</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.QuantityReceived)</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.QuantityBilled)</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(l.Committed)</td>
+                        <td>@l.RequisitionNumber</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-4" Style="height:100%">
+                <MudText Typo="Typo.h6" Class="mb-2">Receipts</MudText>
+                @if (po.Receipts.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">Nothing received yet.</MudText>
+                }
+                @foreach (var r in po.Receipts)
+                {
+                    <MudText Typo="Typo.body2" data-testid="po-receipt"><b>@r.Number</b> · @PurchasingFormat.Date(r.ReceivedOn) by @r.ReceivedBy@(r.Note is null ? "" : $": {r.Note}")</MudText>
+                    <ul class="mb-2">
+                        @foreach (var l in r.Lines)
+                        {
+                            <li><MudText Typo="Typo.body2">Line @l.LineNumber @l.Description: @ProcurementFormat.Quantity(l.Quantity)@(l.IsAcceptance ? " accepted" : " received")</MudText></li>
+                        }
+                    </ul>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-4" Style="height:100%">
+                <MudText Typo="Typo.h6" Class="mb-2">Bills</MudText>
+                @if (po.Bills.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">Not billed yet.</MudText>
+                }
+                else
+                {
+                    <BillTable Bills="po.Bills" />
+                }
+            </MudPaper>
+        </MudItem>
+        @if (po.Revisions.Count > 0)
+        {
+            <MudItem xs="12">
+                <MudPaper Outlined="true" Class="pa-4" data-testid="po-revisions">
+                    <MudText Typo="Typo.h6" Class="mb-2">Change orders</MudText>
+                    @foreach (var rev in po.Revisions.Reverse())
+                    {
+                        <MudText Typo="Typo.body2"><b>Revision @rev.Revision</b> · @rev.ChangedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") by @rev.ChangedBy · @PurchasingFormat.Amount(rev.TotalBefore) → @PurchasingFormat.Amount(rev.TotalAfter) · @rev.Reason</MudText>
+                        <ul class="mb-2">
+                            @foreach (var c in rev.Changes)
+                            {
+                                <li><MudText Typo="Typo.body2">@c</MudText></li>
+                            }
+                        </ul>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private PurchaseOrderDto? _po;
+    private bool _finance;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _finance = (await UserContext.GetAsync()).IsFinance;
+            _po = await Orders.GetAsync(OrderId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<PurchaseOrderDto>> action, string success)
+    {
+        try
+        {
+            _po = await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ReceiveAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ReceiveDialog>($"Receive against {_po!.Order.Number}",
+            new DialogParameters<ReceiveDialog> { { d => d.Order, _po } }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ReceiveRequest request })
+        {
+            await RunAsync(() => Orders.ReceiveAsync(OrderId, request), "Receipt recorded.");
+        }
+    }
+
+    private async Task ChangeOrderAsync()
+    {
+        RequisitionOptionsDto options;
+        try
+        {
+            options = await Requisitions.GetOptionsAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<PurchaseOrderDialog>($"Change order: {_po!.Order.Number}",
+            new DialogParameters<PurchaseOrderDialog> { { d => d.Options, options }, { d => d.Order, _po } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ChangeOrderRequest request })
+        {
+            await RunAsync(() => Orders.ChangeOrderAsync(OrderId, request), "Change order saved.");
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Cancel purchase order", "Cancel PO", "Its requisition lines go back to approved.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Orders.CancelAsync(OrderId, new PurchaseOrderReasonRequest(reason)), "Cancelled.");
+        }
+    }
+}
