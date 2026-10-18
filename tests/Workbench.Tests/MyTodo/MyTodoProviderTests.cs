@@ -152,6 +152,10 @@ public sealed class MyTodoProviderTests
         var item = Assert.Single(items);
         Assert.Equal("Receive PO-1 from Acme Corp", item.Title);
         Assert.Equal($"purchasing/orders/{mine}", item.Link);
+        Assert.DoesNotContain("$", item.Reason); // PO dollars are for Finance, as on the Receiving page
+
+        var finance = await new ReceivingTodoProvider().GetAsync(Context(services, OrgRoles.Finance, "analyst@example.com"), default);
+        Assert.Contains("$1,200", Assert.Single(finance).Reason);
     }
 
     [Fact]

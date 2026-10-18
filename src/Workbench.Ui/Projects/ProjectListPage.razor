@@ -76,10 +76,17 @@ else
                   Breakpoint="Breakpoint.Sm" data-testid="project-table">
             <HeaderContent>
                 <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Code" InitialDirection="SortDirection.Ascending">Project</MudTableSortLabel></MudTh>
+                @if (_list.ShowsMoney)
+                {
+                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money == null ? -1 : (int)p.Money.Health">Health</MudTableSortLabel></MudTh>
+                }
                 <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.ProjectManagerName ?? string.Empty">Manager</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.ContractNumber ?? string.Empty">Contract</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Status">Status</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Finish ?? DateOnly.MaxValue">Period</MudTableSortLabel></MudTh>
+                @if (!_list.ShowsMoney)
+                {
+                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Status">Status</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Finish ?? DateOnly.MaxValue">Period</MudTableSortLabel></MudTh>
+                }
                 @if (_list.ShowsMoney)
                 {
                     <MudTh>
@@ -97,7 +104,6 @@ else
                             <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.ForecastVsBudget ?? -1m">Forecast vs budget</MudTableSortLabel>
                         </MudTooltip>
                     </MudTh>
-                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money == null ? -1 : (int)p.Money.Health">Health</MudTableSortLabel></MudTh>
                     <MudTh>
                         <MudTooltip Text="Tasks in the plan sheet that aren't Done.">
                             <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.OpenItems ?? -1">Open tasks</MudTableSortLabel>
@@ -112,11 +118,25 @@ else
                     {
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">You manage</MudChip>
                     }
+                    @if (_list.ShowsMoney)
+                    {
+                        @* Status and period ride under the name here, so the money columns fit a laptop screen. *@
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                            @ProjectsFormat.Status(context.Status) · @ProjectsFormat.Period(context.Start, context.Finish)
+                        </MudText>
+                    }
                 </MudTd>
+                @if (_list.ShowsMoney)
+                {
+                    <MudTd DataLabel="Health">@if (context.Money is { } health) { <ProjectHealthChip Money="health" /> }</MudTd>
+                }
                 <MudTd DataLabel="Manager">@(context.ProjectManagerName ?? "—")</MudTd>
                 <MudTd DataLabel="Contract">@(context.ContractNumber ?? "No contract")</MudTd>
-                <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(context.Status)">@ProjectsFormat.Status(context.Status)</MudChip></MudTd>
-                <MudTd DataLabel="Period">@ProjectsFormat.Period(context.Start, context.Finish)</MudTd>
+                @if (!_list.ShowsMoney)
+                {
+                    <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(context.Status)">@ProjectsFormat.Status(context.Status)</MudChip></MudTd>
+                    <MudTd DataLabel="Period">@ProjectsFormat.Period(context.Start, context.Finish)</MudTd>
+                }
                 @if (_list.ShowsMoney)
                 {
                     @if (context.Money is { } m)
@@ -145,12 +165,11 @@ else
                             <span class="@(m.ForecastAtCompletion > m.Budget && m.Budget > 0 ? "mud-error-text" : "")">@FinancialFormat.Money(m.ForecastAtCompletion)</span>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@(m.ForecastVsBudget is { } r ? $"{FinancialFormat.Percent(r)} of budget" : "no budget")</MudText>
                         </MudTd>
-                        <MudTd DataLabel="Health"><ProjectHealthChip Money="m" /></MudTd>
                         <MudTd DataLabel="Open tasks">@(context.OpenItems?.ToString() ?? "—")</MudTd>
                     }
                     else
                     {
-                        <MudTd DataLabel="Funding used" /><MudTd DataLabel="Spent of budget" /><MudTd DataLabel="Forecast vs budget" /><MudTd DataLabel="Health" /><MudTd DataLabel="Open tasks" />
+                        <MudTd DataLabel="Funding used" /><MudTd DataLabel="Spent of budget" /><MudTd DataLabel="Forecast vs budget" /><MudTd DataLabel="Open tasks" />
                     }
                 }
             </RowTemplate>
