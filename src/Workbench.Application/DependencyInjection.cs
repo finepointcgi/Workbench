@@ -8,6 +8,7 @@ using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Imports;
+using Workbench.Application.IncurredCost;
 using Workbench.Application.IndirectRates;
 using Workbench.Application.Leave;
 using Workbench.Application.Odcs;
@@ -61,6 +62,7 @@ public static class DependencyInjection
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
+        services.AddWorkbenchIncurredCost(); // Incurred cost submission (ICE schedules): reads the GL, pools, billing and AP; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
