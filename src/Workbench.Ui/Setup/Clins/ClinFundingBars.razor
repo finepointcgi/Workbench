@@ -1,0 +1,60 @@
+@* Per-CLIN funding bars: incurred (solid) and committed (lighter) against funded value, with markers at the notice thresholds. *@
+
+@foreach (var clin in Status.Clins.Where(c => ShowParents || !Parents.Contains(c.Number)))
+{
+    var funded = clin.FundedValue;
+    var incurredPct = Pct(clin.Incurred, funded);
+    var committedPct = Math.Min(Pct(clin.Incurred + clin.Committed, funded), 100) - Math.Min(incurredPct, 100);
+    <div class="mb-4" data-testid="clin-funding-bar">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+            <MudText Typo="Typo.body2"><b>CLIN @clin.Number</b> · @clin.Description</MudText>
+            <MudChip T="string" Size="Size.Small" Color="ClinFormat.Color(clin.Level)" Class="ma-0">@ClinFormat.Label(clin.Level)</MudChip>
+            <MudSpacer />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                @ClinFormat.Money(clin.Incurred) incurred@(clin.Committed > 0 ? $" + {ClinFormat.Money(clin.Committed)} committed" : "") of @ClinFormat.Money(funded) funded
+                · @ClinFormat.Percent(clin.PercentIncurred)
+            </MudText>
+        </MudStack>
+        <div style="position:relative; height:14px; border-radius:7px; background:var(--mud-palette-action-disabled-background); overflow:hidden; margin-top:4px"
+             role="img" aria-label="@($"CLIN {clin.Number}: {ClinFormat.Percent(clin.PercentIncurred)} of funding incurred")">
+            <div style="position:absolute; left:0; top:0; bottom:0; width:@Css(Math.Min(incurredPct, 100))%; background:var(--mud-palette-@(Palette(clin.Level)))"></div>
+            <div style="position:absolute; left:@Css(Math.Min(incurredPct, 100))%; top:0; bottom:0; width:@Css(Math.Max(committedPct, 0))%; background:var(--mud-palette-@(Palette(clin.Level))); opacity:.4"></div>
+            @foreach (var t in new[] { Status.WarningThreshold, Status.CriticalThreshold })
+            {
+                <div style="position:absolute; left:@Css(t * 100)%; top:0; bottom:0; width:2px; background:var(--mud-palette-text-primary)" title="@($"{t:P0}")"></div>
+            }
+        </div>
+        <MudStack Row="true" Spacing="3" Class="mt-1" Wrap="Wrap.Wrap">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Remaining @ClinFormat.Money(clin.Remaining)</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Burn @ClinFormat.Money(clin.BurnPerDay)/day</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Projected exhaustion @(clin.ProjectedExhaustion is { } d ? SetupFormat.Date(d) : "—")@(clin.ProjectedExhaustion is { } e && e < clin.PeriodEnd ? " (before the period ends)" : "")
+            </MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Markers at @Status.WarningThreshold.ToString("P0") and @Status.CriticalThreshold.ToString("P0")</MudText>
+        </MudStack>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ContractFundingStatusDto Status { get; set; } = default!;
+
+    /// <summary>CLIN numbers that roll up SLINs; hidden unless <see cref="ShowParents"/>.</summary>
+    [Parameter]
+    public IReadOnlySet<string> Parents { get; set; } = new HashSet<string>();
+
+    [Parameter]
+    public bool ShowParents { get; set; }
+
+    private static decimal Pct(decimal value, decimal funded) => funded > 0 ? value / funded * 100 : value > 0 ? 100 : 0;
+
+    private static string Css(decimal value) => value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Palette(FundingLevel level) => level switch
+    {
+        FundingLevel.Exhausted or FundingLevel.Critical => "error",
+        FundingLevel.Warning => "warning",
+        FundingLevel.NotActive => "text-disabled",
+        _ => "success",
+    };
+}

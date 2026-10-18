@@ -2,6 +2,8 @@
 @page "/setup/contracts/{ContractId:guid}"
 @inject IContractService Contracts
 @inject IPeopleService People
+@inject Workbench.Contracts.Contracts.IClinService Clins
+@inject Workbench.Contracts.Contracts.IFundingService Funding
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -18,6 +20,8 @@
 }
 else
 {
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" @bind-ActivePanelIndex="_tab" TabPanelsClass="pa-4" Class="mt-2">
+    <MudTabPanel Text="Details">
     <MudGrid Spacing="3" Class="mt-1">
         <MudItem xs="12" lg="7">
             <MudPaper Outlined="true" Class="pa-4">
@@ -67,12 +71,14 @@ else
                         </MudItem>
                         <MudItem xs="12" sm="6">
                             <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Ceiling value" Adornment="Adornment.Start" AdornmentText="$"
-                                             Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(v => v < 0 ? "Can't be negative." : null))" />
+                                             Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(v => v < 0 ? "Can't be negative." : null))"
+                                             Disabled="HasClins" HelperText="@(HasClins ? "Sum of exercised CLIN values." : "")" />
                         </MudItem>
                         <MudItem xs="12" sm="6">
                             <MudNumericField T="decimal" @bind-Value="_funded" Label="Funded value" Adornment="Adornment.Start" AdornmentText="$"
                                              Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(ValidateFunded))"
-                                             HelperText="Obligated to date. Can't exceed the ceiling." data-testid="contract-funded" />
+                                             HelperText="@(HasClins ? "Sum of CLIN funding; change it with a modification." : "Obligated to date. Can't exceed the ceiling.")"
+                                             Disabled="HasClins" data-testid="contract-funded" />
                         </MudItem>
                         <MudItem xs="12">
                             <MudSwitch @bind-Value="_isPrime" Label="We are the prime contractor" Color="Color.Primary" />
@@ -125,11 +131,42 @@ else
             }
         </MudItem>
     </MudGrid>
+    </MudTabPanel>
+    @if (_contract is { } detail)
+    {
+        <MudTabPanel Text="CLINs" data-testid="tab-clins">
+            <Workbench.Ui.Setup.Clins.ClinsTab Contract="detail" Clins="_clins" Status="_fundingStatus" Changed="ReloadDetailAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Modifications" data-testid="tab-mods">
+            <Workbench.Ui.Setup.Clins.ModificationsTab Contract="detail" Clins="_clins" Changed="ReloadDetailAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Funding history" data-testid="tab-history">
+            <Workbench.Ui.Setup.Clins.FundingHistoryTab Rows="_history" Clins="_clins" />
+        </MudTabPanel>
+        <MudTabPanel Text="Funding status" BadgeData="@(_fundingStatus?.Notices.Count > 0 ? _fundingStatus.Notices.Count : null)" BadgeColor="Color.Warning" data-testid="tab-status">
+            @if (_fundingStatus is not null)
+            {
+                <Workbench.Ui.Setup.Clins.FundingStatusTab Status="_fundingStatus" Clins="_clins" Changed="ReloadDetailAsync" />
+            }
+        </MudTabPanel>
+    }
+    </MudTabs>
 }
 
 @code {
     [Parameter]
     public Guid? ContractId { get; set; }
+
+    /// <summary>Opens a tab: clins, modifications, history or funding.</summary>
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    private int _tab;
+    private IReadOnlyList<Workbench.Contracts.Contracts.ClinDto> _clins = [];
+    private IReadOnlyList<Workbench.Contracts.Contracts.FundingActionDto> _history = [];
+    private Workbench.Contracts.Contracts.ContractFundingStatusDto? _fundingStatus;
+
+    private bool HasClins => _clins.Count > 0;
 
     private ContractDto? _contract;
     private IReadOnlyList<CustomerDto> _customers = [];
@@ -161,6 +198,8 @@ else
             (_number, _name, _customerId, _type, _status) = (c.ContractNumber, c.Name, c.CustomerId, c.Type, c.Status);
             (_start, _end, _ceiling, _funded, _isPrime) = (SetupFormat.ToDateTime(c.PeriodStart), SetupFormat.ToDateTime(c.PeriodEnd), c.CeilingValue, c.FundedValue, c.IsPrime);
             _rates = await Contracts.ListBillRatesAsync(c.Id);
+            await LoadDetailAsync(c.Id);
+            _tab = Tab switch { "clins" => 1, "modifications" => 2, "history" => 3, "funding" => 4, _ => 0 };
         }
         else if (_customers.Count == 1)
         {
@@ -168,6 +207,26 @@ else
         }
 
         _loading = false;
+    }
+
+    private async Task LoadDetailAsync(Guid contractId)
+    {
+        _clins = await Clins.ListClinsAsync(contractId);
+        _history = await Funding.ListFundingHistoryAsync(contractId);
+        _fundingStatus = await Funding.GetFundingStatusAsync(contractId);
+    }
+
+    /// <summary>After a CLIN edit or an executed modification: the contract's totals and period may have changed too.</summary>
+    private async Task ReloadDetailAsync()
+    {
+        if (_contract is not { } c)
+        {
+            return;
+        }
+
+        _contract = await Contracts.GetContractAsync(c.Id) ?? c;
+        (_end, _ceiling, _funded) = (SetupFormat.ToDateTime(_contract.PeriodEnd), _contract.CeilingValue, _contract.FundedValue);
+        await LoadDetailAsync(c.Id);
     }
 
     private string? ValidateEnd(DateTime? end) => end is { } e && _start is { } s && e.Date < s.Date ? "End can't be before the start." : null;
