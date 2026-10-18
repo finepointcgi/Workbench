@@ -128,7 +128,7 @@ public static partial class ScimEndpoints
         }
         catch (ArgumentException ex) when (ex.Message.Contains("already exists", StringComparison.Ordinal))
         {
-            return Error(StatusCodes.Status409Conflict, ex.Message, "uniqueness");
+            return Error(StatusCodes.Status409Conflict, Detail(ex), "uniqueness");
         }
     }
 
@@ -201,7 +201,10 @@ public static partial class ScimEndpoints
             }
         }
 
-        var name = displayName ?? JoinName(givenName, familyName);
+        // A change to only the given or family name keeps the other part.
+        var current = user.DisplayName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var name = displayName ?? (givenName is null && familyName is null ? null
+            : JoinName(givenName ?? current.ElementAtOrDefault(0), familyName ?? current.ElementAtOrDefault(1)));
         if (name is not null || externalId is not null)
         {
             await lifecycle.UpdateProfileAsync(user.Email, name, externalId, UserLifecycle.ScimActor, http.RequestAborted);
@@ -262,7 +265,7 @@ public static partial class ScimEndpoints
         }
         catch (ArgumentException ex)
         {
-            result = Error(StatusCodes.Status400BadRequest, ex.Message, "invalidValue");
+            result = Error(StatusCodes.Status400BadRequest, Detail(ex), "invalidValue");
         }
         catch (WorkbenchNotFoundException ex)
         {
@@ -359,6 +362,10 @@ public static partial class ScimEndpoints
         JsonValue v when v.TryGetValue<string>(out var s) && bool.TryParse(s, out var parsed) => parsed,
         _ => null,
     };
+
+    /// <summary>The message without .NET's " (Parameter 'x')" suffix.</summary>
+    private static string Detail(ArgumentException ex) =>
+        ex.ParamName is null ? ex.Message : ex.Message.Replace($" (Parameter '{ex.ParamName}')", "", StringComparison.Ordinal);
 
     private static IResult Json(JsonObject body) => Results.Text(body.ToJsonString(), ContentType);
 

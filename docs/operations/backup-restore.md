@@ -61,10 +61,10 @@ Run on 2026-10-18 against a development database while the web host was running:
 | `scripts/backup.sh sqlite src/Workbench.Web/workbench.db <dir>` | Backup + checksum written; integrity check `ok` |
 | `scripts/restore.sh sqlite <backup> <new path>` | Restored |
 | Restore again over the existing file | Previous file kept as `.pre-restore-<timestamp>` |
-| Row counts, live vs restored (users, security events, sheets, time entries, timesheets, Data Protection keys) | Identical (4/4, 1/1, 2/2, 125/125, 15/15, 1/1) |
+| Row counts, live vs restored (users, security events, invites, access reviews and items, time entries, Data Protection keys) | Identical (7/7, 32/32, 1/1, 1/1, 3/3, 125/125, 1/1) |
 | `PRAGMA integrity_check` on the restored file | `ok` |
 | Restore of a backup with one byte appended | Refused: checksum mismatch, nothing changed |
-| Web host started on the restored database; `/health/ready` | `Healthy`; admin sign-in and users page load |
+| Web host started on the restored database (port 5234, `--ConnectionStrings:Workbench=Data Source=<restored file>`) | `/health/ready` `Healthy`; admin signed in with the restored Data Protection keys; the completed access review and its decisions were present |
 
 The company must repeat a restore test at least quarterly in each production environment (PostgreSQL, full
 blob store) and keep the record as evidence; see `docs/iso/backup-policy.md`.

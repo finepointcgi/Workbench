@@ -89,7 +89,7 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="5">
-            <MudTextField @bind-Value="_holdReason" Label="Reason (matter, request or counsel)" Margin="Margin.Dense" Variant="Variant.Outlined" />
+            <MudTextField @bind-Value="_holdReason" Immediate="true" Label="Reason (matter, request or counsel)" Margin="Margin.Dense" Variant="Variant.Outlined" />
         </MudItem>
         <MudItem xs="12" md="2" Class="d-flex align-center">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PlaceHoldAsync" Disabled="_busy || _holdTarget is null || string.IsNullOrWhiteSpace(_holdReason)">Place hold</MudButton>
