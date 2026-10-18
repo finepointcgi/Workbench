@@ -1,0 +1,47 @@
+@page "/help/glossary"
+@* Every glossary term (the same dictionary as the dotted-underline tooltips), searchable. *@
+
+<PageTitle>Glossary · Help · Workbench</PageTitle>
+
+<MudButton Href="help" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2 ml-n2">Help center</MudButton>
+<MudText Typo="Typo.h4" HtmlTag="h1">Glossary</MudText>
+<MudText Class="mud-text-secondary mb-4">Plain-English meanings of the government contracting and accounting terms Workbench uses.</MudText>
+
+<div role="search" class="mb-4" style="max-width:420px">
+    <MudTextField T="string" @bind-Value="_filter" Immediate="true" Label="Find a term" Variant="Variant.Outlined" Clearable="true"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" data-testid="glossary-filter" />
+</div>
+
+@{
+    var entries = Filtered().ToList();
+}
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" aria-live="polite">@entries.Count @(entries.Count == 1 ? "term" : "terms")</MudText>
+<dl class="wb-glossary" data-testid="glossary">
+    @foreach (var entry in entries)
+    {
+        <div class="wb-glossary-entry" id="@entry.Key" data-testid="glossary-entry">
+            <dt>
+                <strong>@entry.Term</strong>
+                @if (!string.Equals(entry.Name, entry.Term, StringComparison.OrdinalIgnoreCase))
+                {
+                    <span class="mud-text-secondary"> · @entry.Name</span>
+                }
+            </dt>
+            <dd>@entry.Explanation</dd>
+        </div>
+    }
+</dl>
+
+@code {
+    private string? _filter;
+
+    /// <summary>Distinct terms (the dictionary has a few aliases with the same wording), alphabetical, filtered by word.</summary>
+    private IEnumerable<GlossaryEntry> Filtered()
+    {
+        var words = (_filter ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return Glossary.Entries
+            .DistinctBy(e => (e.Term.ToLowerInvariant(), e.Explanation))
+            .Where(e => words.All(w => $"{e.Term} {e.Name} {e.Explanation}".Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(e => e.Term, StringComparer.OrdinalIgnoreCase);
+    }
+}

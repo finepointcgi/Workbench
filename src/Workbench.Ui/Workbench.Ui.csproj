@@ -17,6 +17,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Help center articles and the What's new list, read by Help/HelpLibrary.cs. -->
+    <EmbeddedResource Include="Help\Articles\*.md" LogicalName="Workbench.Ui.Help.Articles.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Help\WhatsNew.md" LogicalName="Workbench.Ui.Help.WhatsNew.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Workbench.Contracts\Workbench.Contracts.csproj" />
   </ItemGroup>
 

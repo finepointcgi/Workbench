@@ -51,6 +51,7 @@ public static class WorkbenchApi
         v1.MapApprovalEndpoints();
         v1.MapProjectHubEndpoints();
         v1.MapMyTodoEndpoints();
+        v1.MapSupportEndpoints();
 
         return app;
     }

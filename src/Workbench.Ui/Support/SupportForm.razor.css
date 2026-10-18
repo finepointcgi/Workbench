@@ -1,0 +1,23 @@
+.wb-support-label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.wb-support-help {
+    font-size: 0.8125rem;
+    margin-top: 4px;
+}
+
+.wb-support-file {
+    max-width: 100%;
+}
+
+.wb-support-file:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+code {
+    font-size: 0.9em;
+}
