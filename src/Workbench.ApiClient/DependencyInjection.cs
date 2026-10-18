@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddCashClients(serverBaseAddress);
         services.AddPayrollLeaveClients(serverBaseAddress);
         services.AddPerDiemResourcingClients(serverBaseAddress);
+        services.AddApprovalClients(serverBaseAddress);
         return services;
     }
 }

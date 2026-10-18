@@ -186,7 +186,8 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
     private async Task<OdcApprovalQueueDto> ListRoutedToMeAsync(OdcStatus status, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        if (await workflow.FindCurrentEmployeeAsync(db, cancellationToken) is not { } me)
+        var me = await workflow.FindCurrentEmployeeAsync(db, cancellationToken);
+        if (me is null && status != OdcStatus.Submitted)
         {
             return new OdcApprovalQueueDto([], []);
         }
@@ -227,9 +228,10 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
         {
             // Approved: what I approved through the workflow, plus what the fixed rules routed to me before it.
             var decidedReports = await DecidedByMeAsync(db, ApprovalDocumentTypes.ExpenseReport, cancellationToken);
+            var myId = me!.Id;
             reports = await db.Set<ExpenseReport>().AsNoTracking()
-                .Where(r => r.Status == status && r.EmployeeId != me.Id
-                    && (decidedReports.Contains(r.Id) || db.Set<Employee>().Any(e => e.Id == r.EmployeeId && e.SupervisorId == me.Id)))
+                .Where(r => r.Status == status && r.EmployeeId != myId
+                    && (decidedReports.Contains(r.Id) || db.Set<Employee>().Any(e => e.Id == r.EmployeeId && e.SupervisorId == myId)))
                 .OrderBy(r => r.SubmittedAtUtc)
                 .ToListAsync(cancellationToken);
 
@@ -241,7 +243,7 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
             vendor = [];
             foreach (var entry in candidates.Where(e => !workflow.IsMe(e.SubmittedBy)))
             {
-                if (decidedOdcs.Contains(entry.Id) || (await OdcWorkflow.ResolveVendorApproverAsync(db, entry, cancellationToken))?.Id == me.Id)
+                if (decidedOdcs.Contains(entry.Id) || (await OdcWorkflow.ResolveVendorApproverAsync(db, entry, cancellationToken))?.Id == myId)
                 {
                     vendor.Add(entry);
                 }
@@ -287,8 +289,8 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
         var report = await db.Set<ExpenseReport>().FirstOrDefaultAsync(r => r.Id == reportId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Expense report", reportId);
         var lines = await db.Set<OdcEntry>().Where(o => o.ExpenseReportId == reportId).ToListAsync(cancellationToken);
-        var me = await workflow.RequireCurrentEmployeeAsync(db, cancellationToken);
-        if (workflow.IsMe(report.SubmittedBy ?? report.CreatedBy) || me.Id == report.EmployeeId)
+        var me = await workflow.FindCurrentEmployeeAsync(db, cancellationToken); // Finance or a named approver may have none.
+        if (workflow.IsMe(report.SubmittedBy ?? report.CreatedBy) || (me is not null && me.Id == report.EmployeeId))
         {
             throw new UnauthorizedAccessException("You can't approve, reject or reopen your own submission.");
         }
@@ -306,7 +308,7 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
         else
         {
             var approver = await OdcWorkflow.ResolveReportApproverAsync(db, report, cancellationToken);
-            if (approver?.Id != me.Id && !await workflow.Approvals.IsParticipantAsync(db, ApprovalDocumentTypes.ExpenseReport, report.Id, workflow.Actor, cancellationToken))
+            if ((me is null || approver?.Id != me.Id) && !await workflow.Approvals.IsParticipantAsync(db, ApprovalDocumentTypes.ExpenseReport, report.Id, workflow.Actor, cancellationToken))
             {
                 throw new UnauthorizedAccessException($"This is routed to {approver?.DisplayName ?? "no approver"}, not you.");
             }
@@ -329,7 +331,7 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
             throw new ArgumentException("This entry is an expense report line; approve or reject its report.");
         }
 
-        var me = await workflow.RequireCurrentEmployeeAsync(db, cancellationToken);
+        var me = await workflow.FindCurrentEmployeeAsync(db, cancellationToken);
         if (workflow.IsMe(entry.SubmittedBy))
         {
             throw new UnauthorizedAccessException("You can't approve, reject or reopen your own submission.");
@@ -348,7 +350,7 @@ public sealed class OdcApprovalService(IWorkbenchDbContextFactory dbFactory, Odc
         else
         {
             var approver = await OdcWorkflow.ResolveVendorApproverAsync(db, entry, cancellationToken);
-            if (approver?.Id != me.Id && !await workflow.Approvals.IsParticipantAsync(db, ApprovalDocumentTypes.VendorOdc, entry.Id, workflow.Actor, cancellationToken))
+            if ((me is null || approver?.Id != me.Id) && !await workflow.Approvals.IsParticipantAsync(db, ApprovalDocumentTypes.VendorOdc, entry.Id, workflow.Actor, cancellationToken))
             {
                 throw new UnauthorizedAccessException($"This is routed to {approver?.DisplayName ?? "no approver"}, not you.");
             }

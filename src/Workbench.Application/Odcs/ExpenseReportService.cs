@@ -26,8 +26,8 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var report = await FindAsync(db, reportId, cancellationToken);
-        var me = await workflow.RequireCurrentEmployeeAsync(db, cancellationToken);
-        if (report.EmployeeId != me.Id && (await OdcWorkflow.ResolveReportApproverAsync(db, report, cancellationToken))?.Id != me.Id
+        var me = await workflow.FindCurrentEmployeeAsync(db, cancellationToken);
+        if ((me is null || (report.EmployeeId != me.Id && (await OdcWorkflow.ResolveReportApproverAsync(db, report, cancellationToken))?.Id != me.Id))
             && !await workflow.Approvals.IsParticipantAsync(db, ApprovalDocumentTypes.ExpenseReport, report.Id, workflow.Actor, cancellationToken))
         {
             throw new UnauthorizedAccessException("Only the employee and their supervisor can see this expense report.");

@@ -140,6 +140,8 @@ public sealed record ApprovalWorkflowDto(
 
 public sealed record SaveApprovalWorkflowRequest(string Name, ApprovalWorkflowDefinition Definition, string? Note = null);
 
+public sealed record SetOrgUnitApproverRequest(Guid? EmployeeId);
+
 public sealed record OrgUnitApproverDto(Guid OrgUnitId, string OrgUnitCode, string OrgUnitName, Guid? EmployeeId, string? EmployeeName);
 
 /// <summary>Approval workflows per document type: read by Finance and Admin, changed by Admin. Every change is a new version.</summary>

@@ -1,0 +1,23 @@
+@* The extra input an approver rule needs: the org role, or the people. *@
+@switch (Rule.Kind)
+{
+    case ApproverRuleKind.OrgRole:
+        <MudSelect T="ApprovalOrgRole?" @bind-Value="Rule.Role" Label="Org role" ReadOnly="ReadOnly">
+            @foreach (var role in Enum.GetValues<ApprovalOrgRole>())
+            {
+                <MudSelectItem T="ApprovalOrgRole?" Value="role">@role</MudSelectItem>
+            }
+        </MudSelect>
+        break;
+    case ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf:
+        <MudTextField @bind-Value="Rule.People" Label="Emails (comma-separated)" ReadOnly="ReadOnly" />
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ApprovalWorkflowPage.RuleModel Rule { get; set; } = default!;
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+}
