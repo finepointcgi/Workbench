@@ -1,0 +1,392 @@
+@* Modification history plus a draft editor: header, change list, save, and execute with confirmation. *@
+@inject IContractModificationService Modifications
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" lg="5">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Modifications</MudText>
+            <MudSpacer />
+            @if (CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="NewDraft" data-testid="mod-new">New modification</MudButton>
+            }
+        </MudStack>
+        <MudPaper Outlined="true">
+            <MudList T="Guid" Dense="true">
+                @if (_mods.Count == 0)
+                {
+                    <MudListItem T="Guid" Disabled="true">No modifications yet.</MudListItem>
+                }
+                @foreach (var mod in _mods)
+                {
+                    <MudListItem T="Guid" Value="mod.Id" OnClick="() => Select(mod)" Class="@(mod.Id == _editing?.Id ? "mud-selected-item" : "")" data-testid="mod-row">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudText Typo="Typo.body2"><b>@mod.Number</b></MudText>
+                            <MudChip T="string" Size="Size.Small" Class="ma-0" Variant="@(mod.Status == ModificationState.Draft ? Variant.Outlined : Variant.Filled)"
+                                     Color="@(mod.Status == ModificationState.Draft ? Color.Warning : Color.Success)">@mod.Status</MudChip>
+                            <MudText Typo="Typo.body2" Class="text-truncate">@mod.Description</MudText>
+                            <MudSpacer />
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="white-space:nowrap">
+                                @SetupFormat.Date(mod.EffectiveDate)@(mod.FundingDelta != 0 ? $" · {(mod.FundingDelta > 0 ? "+" : "")}{ClinFormat.Money(mod.FundingDelta)}" : "")
+                            </MudText>
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" lg="7">
+        @if (_editing is { Status: ModificationState.Executed } executed)
+        {
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" HtmlTag="h3">@executed.Number · @executed.Description</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+                    Effective @SetupFormat.Date(executed.EffectiveDate) · executed @executed.ExecutedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") by @executed.ExecutedBy.
+                    Executed modifications can't change; make a correction with another modification.
+                </MudText>
+                <MudSimpleTable Dense="true">
+                    <tbody>
+                        @foreach (var change in executed.Changes)
+                        {
+                            <tr><td>@ClinFormat.Label(change.Kind)</td><td>@ClinFormat.Describe(change)</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        }
+        else if (_draft is not null)
+        {
+            <MudPaper Outlined="true" Class="pa-4" data-testid="mod-editor">
+                <MudText Typo="Typo.h6" HtmlTag="h3" Class="mb-2">@(_editing is null ? "New modification" : $"Draft {_editing.Number}")</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_draft.Number" Label="Number" HelperText="P00002, A00001…" Immediate="true" data-testid="mod-number" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_draft.EffectiveDate" Label="Effective date" DateFormat="yyyy-MM-dd" Editable="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_draft.Description" Label="Description" Immediate="true" data-testid="mod-description" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4 mb-1">
+                    <MudText Typo="Typo.subtitle1">Changes</MudText>
+                    <MudSpacer />
+                    <MudMenu Label="Add change" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Dense="true" data-testid="mod-add-change">
+                        @foreach (var kind in Enum.GetValues<ModificationChangeKind>())
+                        {
+                            <MudMenuItem OnClick="() => AddChange(kind)">@ClinFormat.Label(kind)</MudMenuItem>
+                        }
+                    </MudMenu>
+                </MudStack>
+                @if (_draft.Changes.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No changes yet.</MudText>
+                }
+                @foreach (var row in _draft.Changes)
+                {
+                    <MudPaper Outlined="true" Class="pa-2 mb-2" data-testid="mod-change">
+                        <MudStack Row="true" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.body2"><b>@ClinFormat.Label(row.Kind)</b></MudText>
+                            <MudSpacer />
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _draft.Changes.Remove(row)" aria-label="Remove change" />
+                        </MudStack>
+                        <MudGrid Spacing="1">
+                            <MudItem xs="6" sm="3">
+                                @if (row.Kind == ModificationChangeKind.AddClin)
+                                {
+                                    <MudTextField @bind-Value="row.ClinNumber" Label="New CLIN" Immediate="true" Margin="Margin.Dense" data-testid="change-clin" />
+                                }
+                                else
+                                {
+                                    <MudSelect T="string" @bind-Value="row.ClinNumber" Label="@(row.Kind == ModificationChangeKind.ExtendPeriod ? "CLIN (empty = contract)" : "CLIN")"
+                                               Clearable="@(row.Kind == ModificationChangeKind.ExtendPeriod)" Margin="Margin.Dense" data-testid="change-clin">
+                                        @foreach (var c in ClinChoices(row.Kind))
+                                        {
+                                            <MudSelectItem T="string" Value="c">@c</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                }
+                            </MudItem>
+                            @if (row.Kind is ModificationChangeKind.Fund or ModificationChangeKind.ChangeClinValue or ModificationChangeKind.AddClin)
+                            {
+                                <MudItem xs="6" sm="3">
+                                    <MudNumericField T="decimal?" @bind-Value="row.Amount" Label="@(row.Kind == ModificationChangeKind.AddClin ? "Value" : "Amount (+/−)")"
+                                                     Adornment="Adornment.Start" AdornmentText="$" Format="N2" Margin="Margin.Dense" data-testid="change-amount" />
+                                </MudItem>
+                            }
+                            @if (row.Kind == ModificationChangeKind.ExtendPeriod)
+                            {
+                                <MudItem xs="6" sm="3">
+                                    <MudDatePicker @bind-Date="row.NewPeriodEnd" Label="New end" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+                                </MudItem>
+                            }
+                            @if (row.Kind == ModificationChangeKind.AddClin)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="row.Description" Label="Description" Immediate="true" Margin="Margin.Dense" data-testid="change-description" />
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudSelect T="ClinPricingKind" @bind-Value="row.Pricing" Label="Pricing" Margin="Margin.Dense">
+                                        @foreach (var p in Enum.GetValues<ClinPricingKind>())
+                                        {
+                                            <MudSelectItem T="ClinPricingKind" Value="p">@ClinFormat.Label(p)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudNumericField T="decimal?" @bind-Value="row.FeePercent" Label="Fee %" Format="N2" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudDatePicker @bind-Date="row.PeriodStart" Label="Start" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="6" sm="3">
+                                    <MudDatePicker @bind-Date="row.PeriodEnd" Label="End" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12" sm="3">
+                                    <MudCheckBox @bind-Value="row.IsOption" Label="Option (unexercised)" Dense="true" data-testid="change-option" />
+                                </MudItem>
+                            }
+                            @if (row.Kind == ModificationChangeKind.Fund)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="row.Note" Label="Note (optional)" Margin="Margin.Dense" />
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudPaper>
+                }
+
+                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-3">
+                    @if (_editing is not null)
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteAsync">Delete draft</MudButton>
+                    }
+                    <MudButton Variant="Variant.Outlined" OnClick="() => SaveAsync()" Disabled="_busy" data-testid="mod-save">Save draft</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ExecuteAsync" Disabled="_busy || _draft.Changes.Count == 0"
+                               StartIcon="@Icons.Material.Filled.Gavel" data-testid="mod-execute">Execute…</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Class="mud-text-secondary">Select a modification to see its changes@(CanEdit ? ", or start a new one" : "").</MudText>
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContractDto Contract { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public bool CanEdit { get; set; } = true;
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<ContractModificationDto> _mods = [];
+    private ContractModificationDto? _editing;
+    private DraftModel? _draft;
+    private bool _busy;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != Contract.Id)
+        {
+            _loadedFor = Contract.Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _mods = await Modifications.ListAsync(Contract.Id);
+        _editing = _editing is null ? null : _mods.FirstOrDefault(m => m.Id == _editing.Id);
+    }
+
+    private IEnumerable<string> ClinChoices(ModificationChangeKind kind)
+    {
+        var existing = Clins.Where(c => kind switch
+        {
+            ModificationChangeKind.ExerciseOption => c.IsOption && !c.IsExercised && !c.IsSlin,
+            ModificationChangeKind.Fund or ModificationChangeKind.ChangeClinValue => !c.HasSlins,
+            _ => true,
+        }).Select(c => c.Number);
+        var added = _draft?.Changes.Where(r => r.Kind == ModificationChangeKind.AddClin && !string.IsNullOrWhiteSpace(r.ClinNumber))
+            .Where(r => kind != ModificationChangeKind.ExerciseOption || r.IsOption)
+            .Select(r => r.ClinNumber!.Trim().ToUpperInvariant()) ?? [];
+        return existing.Concat(added).Distinct();
+    }
+
+    private void NewDraft()
+    {
+        _editing = null;
+        var next = _mods.Select(m => m.Number).Where(n => n.Length == 6 && n[0] == 'P' && int.TryParse(n[1..], out _)).Select(n => int.Parse(n[1..])).DefaultIfEmpty(0).Max() + 1;
+        _draft = new DraftModel { Number = $"P{next:00000}", EffectiveDate = DateTime.Today, Description = "" };
+    }
+
+    private void Select(ContractModificationDto mod)
+    {
+        _editing = mod;
+        _draft = mod.Status == ModificationState.Draft ? DraftModel.From(mod) : null;
+    }
+
+    private void AddChange(ModificationChangeKind kind) =>
+        _draft!.Changes.Add(new ChangeRow
+        {
+            Kind = kind,
+            PeriodStart = SetupFormat.ToDateTime(Contract.PeriodStart),
+            PeriodEnd = SetupFormat.ToDateTime(Contract.PeriodEnd),
+            Pricing = ClinPricingKind.CostPlusFixedFee,
+        });
+
+    private async Task<bool> SaveAsync(bool quiet = false)
+    {
+        _busy = true;
+        try
+        {
+            var request = _draft!.ToRequest();
+            _editing = _editing is null
+                ? await Modifications.CreateDraftAsync(Contract.Id, request)
+                : await Modifications.UpdateDraftAsync(_editing.Id, request);
+            await LoadAsync();
+            _draft = DraftModel.From(_editing!);
+            if (!quiet)
+            {
+                Snackbar.Add($"Saved draft {_editing!.Number}.", Severity.Success);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExecuteAsync()
+    {
+        if (!await SaveAsync(quiet: true))
+        {
+            return;
+        }
+
+        var mod = _editing!;
+        var summary = string.Join("; ", mod.Changes.Select(ClinFormat.Describe));
+        var confirmed = await DialogService.ShowMessageBoxAsync($"Execute {mod.Number}?",
+            $"{summary}. All changes apply together, and the executed modification can't be edited afterwards.",
+            yesText: "Execute", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _editing = await Modifications.ExecuteAsync(mod.Id);
+            _draft = null;
+            await LoadAsync();
+            Snackbar.Add($"Executed {mod.Number}.", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_editing is not { } mod || await DialogService.ShowMessageBoxAsync($"Delete draft {mod.Number}?", "The draft and its changes are removed.",
+                yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Modifications.DeleteDraftAsync(mod.Id);
+            (_editing, _draft) = (null, null);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private sealed class DraftModel
+    {
+        public string? Number { get; set; }
+        public DateTime? EffectiveDate { get; set; }
+        public string? Description { get; set; }
+        public List<ChangeRow> Changes { get; } = [];
+
+        public SaveModificationRequest ToRequest() =>
+            new(Number ?? "", SetupFormat.ToDateOnly(EffectiveDate) ?? DateOnly.FromDateTime(DateTime.Today), Description ?? "",
+                Changes.Select(c => c.ToDto()).ToList());
+
+        public static DraftModel From(ContractModificationDto mod)
+        {
+            var model = new DraftModel { Number = mod.Number, EffectiveDate = SetupFormat.ToDateTime(mod.EffectiveDate), Description = mod.Description };
+            model.Changes.AddRange(mod.Changes.Select(ChangeRow.From));
+            return model;
+        }
+    }
+
+    private sealed class ChangeRow
+    {
+        public ModificationChangeKind Kind { get; set; }
+        public string? ClinNumber { get; set; }
+        public decimal? Amount { get; set; }
+        public DateTime? NewPeriodEnd { get; set; }
+        public string? Description { get; set; }
+        public ClinPricingKind Pricing { get; set; }
+        public bool IsOption { get; set; }
+        public DateTime? PeriodStart { get; set; }
+        public DateTime? PeriodEnd { get; set; }
+        public decimal? FeePercent { get; set; }
+        public string? Note { get; set; }
+
+        public ModificationChangeDto ToDto() =>
+            new(Kind, string.IsNullOrWhiteSpace(ClinNumber) ? null : ClinNumber.Trim(), Amount, SetupFormat.ToDateOnly(NewPeriodEnd),
+                Kind == ModificationChangeKind.AddClin ? Description : null, Kind == ModificationChangeKind.AddClin ? Pricing : null,
+                Kind == ModificationChangeKind.AddClin && IsOption, SetupFormat.ToDateOnly(PeriodStart), SetupFormat.ToDateOnly(PeriodEnd),
+                Kind == ModificationChangeKind.AddClin ? FeePercent / 100m : null, Note);
+
+        public static ChangeRow From(ModificationChangeDto c) => new()
+        {
+            Kind = c.Kind,
+            ClinNumber = c.ClinNumber,
+            Amount = c.Amount,
+            NewPeriodEnd = SetupFormat.ToDateTime(c.NewPeriodEnd),
+            Description = c.ClinDescription,
+            Pricing = c.Pricing ?? ClinPricingKind.CostPlusFixedFee,
+            IsOption = c.IsOption,
+            PeriodStart = SetupFormat.ToDateTime(c.PeriodStart),
+            PeriodEnd = SetupFormat.ToDateTime(c.PeriodEnd),
+            FeePercent = c.FeeRate * 100,
+            Note = c.Note,
+        };
+    }
+}

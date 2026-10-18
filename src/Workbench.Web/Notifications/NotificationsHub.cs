@@ -59,6 +59,7 @@ public static class NotificationsHosting
         services.AddHostedService<NotificationRelay>();
         services.AddWorkbenchAutomationHosting();
         services.AddWorkbenchTimekeepingHosting();
+        Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);
         return services;
     }
 
