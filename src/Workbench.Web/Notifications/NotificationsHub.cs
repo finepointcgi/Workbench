@@ -12,8 +12,8 @@ namespace Workbench.Web.Notifications;
 /// carrying a <c>NotificationDto</c>. Each connection joins its user's group on connect. The browser UI subscribes
 /// in-process instead.
 /// </summary>
-// TODO: require auth once identity is wired up; until then the user is whatever ICurrentUser resolves to.
-public sealed class NotificationsHub(ICurrentUser currentUser) : Hub
+[Microsoft.AspNetCore.Authorization.Authorize]
+public sealed class NotificationsHub : Hub
 {
     public const string Path = "/hubs/notifications";
     public const string NotificationMethod = "Notification";
@@ -23,7 +23,12 @@ public sealed class NotificationsHub(ICurrentUser currentUser) : Hub
 
     public override async Task OnConnectedAsync()
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, GroupFor(currentUser.Email));
+        // The connection's own user: hub calls run outside the HTTP pipeline, where ICurrentUser has no principal.
+        if (Workbench.Web.Identity.ClaimsUser.EmailOf(Context.User) is { } email)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, GroupFor(email));
+        }
+
         await base.OnConnectedAsync();
     }
 }

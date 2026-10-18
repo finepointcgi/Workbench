@@ -22,9 +22,10 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddMudServices();
 
-        var serverUrl = Environment.GetEnvironmentVariable("WORKBENCH_SERVER_URL") ?? DefaultServerUrl;
+        // WORKBENCH_TENANT_URL (or WORKBENCH_SERVER_URL + WORKBENCH_TENANT) for a SaaS tenant; WORKBENCH_SERVER_URL when self-hosted.
+        var serverUrl = WorkbenchServerAddress.FromEnvironment(DefaultServerUrl);
         builder.Services.AddDesktopSignIn();
-        builder.Services.AddWorkbenchApiClient(new Uri(serverUrl));
+        builder.Services.AddWorkbenchApiClient(serverUrl);
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
