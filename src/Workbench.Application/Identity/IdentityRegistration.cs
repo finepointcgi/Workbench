@@ -74,6 +74,7 @@ public static class IdentityRegistration
         services.AddWorkbenchCashPermissions(); // Cash management and bank reconciliation: Finance or Admin only.
         services.AddWorkbenchPayrollPermissions(); // Payroll: Finance or Admin only (pay rates masked unless revealed).
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
+        services.AddWorkbenchEvmPermissions(); // Earned value: Finance, Admin or the project's PM; BCR approval and period reopen Finance/Admin.
         return services;
     }
 
