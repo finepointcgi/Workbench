@@ -11,12 +11,22 @@ using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Tenancy;
 
+// `Workbench.Web --health-check`: the container HEALTHCHECK probe (GET /health/live), without starting a host.
+if (args.Contains("--health-check", StringComparer.OrdinalIgnoreCase))
+{
+    return await Observability.RunContainerHealthCheckAsync(args);
+}
+
 // `Workbench.Web --migrate` applies pending migrations (the catalog and every tenant in MultiTenant mode) and exits:
 // the production deploy step. Normal startup only migrates when Database:MigrateOnStartup is true (Development default).
+// `--rewrap-data-protection-keys` re-encrypts the stored key ring with the configured key encryption and exits (after
+// rotating the certificate or vault key; docs/operations/data-protection-keys.md).
 var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
-args = args.Where(a => !a.Equals("--migrate", StringComparison.OrdinalIgnoreCase)).ToArray();
+var rewrapKeys = args.Contains("--rewrap-data-protection-keys", StringComparer.OrdinalIgnoreCase);
+args = args.Where(a => !a.Equals("--migrate", StringComparison.OrdinalIgnoreCase) && !a.Equals("--rewrap-data-protection-keys", StringComparison.OrdinalIgnoreCase)).ToArray();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddWorkbenchHosting();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -38,7 +48,14 @@ var app = builder.Build();
 if (migrateOnly)
 {
     await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
-    return;
+    return 0;
+}
+
+if (rewrapKeys)
+{
+    var count = await DataProtectionKeyRewrap.RunAsync(app.Services);
+    app.Logger.LogInformation("Re-encrypted {Count} Data Protection keys. Restart every web host.", count);
+    return 0;
 }
 
 await app.Services.InitializeWorkbenchDatabaseAsync();
@@ -74,6 +91,7 @@ app.MapRazorComponents<App>()
     .AddAdditionalAssemblies(typeof(Workbench.Ui.Routes).Assembly);
 
 app.Run();
+return 0;
 
 /// <summary>Visible to the integration tests (WebApplicationFactory).</summary>
 public partial class Program;

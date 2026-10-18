@@ -28,31 +28,6 @@ internal static class MailMessages
     }
 }
 
-/// <summary>Sends through an SMTP relay (config <c>Email:Smtp:*</c>).</summary>
-public sealed class SmtpEmailSender(EmailSettings settings) : IEmailSender
-{
-    public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(settings.SmtpHost))
-        {
-            throw new InvalidOperationException("Email:Smtp:Host isn't configured.");
-        }
-
-        using var mail = MailMessages.Build(message, settings.From);
-        using var client = new SmtpClient(settings.SmtpHost, settings.SmtpPort)
-        {
-            EnableSsl = settings.SmtpEnableSsl,
-            Timeout = 15_000,
-        };
-        if (!string.IsNullOrEmpty(settings.SmtpUserName))
-        {
-            client.Credentials = new NetworkCredential(settings.SmtpUserName, settings.SmtpPassword);
-        }
-
-        await client.SendMailAsync(mail, cancellationToken);
-    }
-}
-
 /// <summary>
 /// Development sender: writes each email as an <c>.eml</c> file into a folder (config <c>Email:PickupFolder</c>,
 /// default <c>App_Data/mail</c>) instead of sending it. Open the files with any mail client.
@@ -82,18 +57,3 @@ public sealed class PickupFolderEmailSender : IEmailSender
     }
 }
 
-public sealed class EmailSettings
-{
-    public const string DefaultPickupFolder = "App_Data/mail";
-
-    /// <summary><c>Smtp</c> or <c>Pickup</c>.</summary>
-    public string Mode { get; set; } = "Pickup";
-
-    public string From { get; set; } = "workbench@localhost";
-    public string PickupFolder { get; set; } = DefaultPickupFolder;
-    public string? SmtpHost { get; set; }
-    public int SmtpPort { get; set; } = 25;
-    public bool SmtpEnableSsl { get; set; } = true;
-    public string? SmtpUserName { get; set; }
-    public string? SmtpPassword { get; set; }
-}
