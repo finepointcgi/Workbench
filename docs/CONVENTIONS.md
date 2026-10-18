@@ -174,3 +174,18 @@ await notifications.PublishAsync(
   rows hold it until the invoice is voided. Cost-plus bills cumulative cost less billed cost, so it reads
   `IBurdenedCostService` from the contract start; without a registered implementation it bills direct cost only and says
   so. Other modules can add a period-close checklist item by registering `Application.Accounting.IPeriodCloseCheck`.
+
+## Payroll and leave (wave 6)
+
+- Workbench never calculates payroll taxes. `Application/Payroll/IPayrollProvider` adapters (Paylocity; ADP, Paychex and Gusto
+  are "coming soon" stubs that throw `NotSupportedException`) format the hours export and parse the provider's register.
+  The Paylocity file formats Workbench assumes are documented on `PaylocityFormats`; sample: `samples/payroll/paylocity-register-sample.csv`.
+- Pay rates (`EmployeePayProfile`) are what employees are paid, not cost rates. Every payroll service is Finance/Admin; rates are
+  masked except `IPayrollProfileService.RevealAsync` (security event `payroll.pay_rate_revealed`); audit rows never hold rates.
+- Payroll hours come from approved timesheets only; missing and unapproved timesheets are flagged. Overtime: non-exempt, over 40
+  worked hours in a Monday–Sunday week (leave doesn't count). The payroll journal (`JournalSource.Payroll`, source id = register)
+  clears 2100 at the GL's accrual, posts gross − accrual to 6050, employer taxes/benefits to 6020/6030 and credits 2120/2130/2140.
+- Leave balances are an append-only `LeaveLedgerEntry` ledger. Usage is never typed: `LeaveEngine.SyncUsageAsync` keeps one net row
+  per approved timesheet on the policy's charge code. Accrual (per pay period, idempotent by `SourceKey`) runs when payroll posts.
+  Holidays aren't a balance. Seeds: `PayrollSeed.cs`, `LeaveSeed.cs`.
+
