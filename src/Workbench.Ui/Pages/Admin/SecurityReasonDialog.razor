@@ -3,7 +3,7 @@
 <MudDialog>
     <DialogContent>
         <MudText Class="mb-3">@Message</MudText>
-        <MudTextField T="string" @bind-Value="_reason" Label="@(ReasonRequired ? "Reason" : "Reason (optional)")" Lines="2" AutoFocus="true"
+        <MudTextField T="string" @bind-Value="_reason" Immediate="true" Label="@(ReasonRequired ? "Reason" : "Reason (optional)")" Lines="2" AutoFocus="true"
                       Variant="Variant.Outlined" MaxLength="500" data-testid="reason" />
     </DialogContent>
     <DialogActions>

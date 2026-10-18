@@ -183,6 +183,8 @@ public sealed partial class WebSecurityTests
             """);
         var afterPatch = JsonNode.Parse(await patched.Content.ReadAsStringAsync())!;
 
+        using var givenOnly = await PatchScimAsync(scim, $"/scim/v2/Users/{id}", """{"Operations":[{"op":"replace","path":"name.givenName","value":"Jordy"}]}""");
+        var afterGivenName = JsonNode.Parse(await givenOnly.Content.ReadAsStringAsync())!;
         using var reactivated = await PatchScimAsync(scim, $"/scim/v2/Users/{id}", """{"Operations":[{"op":"replace","path":"active","value":true}]}""");
         using var deleted = await scim.DeleteAsync($"/scim/v2/Users/{id}");
         var afterDelete = JsonNode.Parse(await scim.GetStringAsync($"/scim/v2/Users/{id}"))!;
@@ -194,6 +196,7 @@ public sealed partial class WebSecurityTests
         Assert.Equal("Jordan Price", user["displayName"]!.GetValue<string>());
         Assert.Equal("entra-123", user["externalId"]!.GetValue<string>());
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.DoesNotContain("Parameter", await duplicate.Content.ReadAsStringAsync());
         Assert.Equal(1, filtered["totalResults"]!.GetValue<int>());
         Assert.Equal(id, filtered["Resources"]![0]!["id"]!.GetValue<string>());
         Assert.Equal(0, none["totalResults"]!.GetValue<int>());
@@ -201,6 +204,7 @@ public sealed partial class WebSecurityTests
         Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
         Assert.False(afterPatch["active"]!.GetValue<bool>());
         Assert.Equal("Jordan R. Price", afterPatch["displayName"]!.GetValue<string>());
+        Assert.Equal("Jordy R. Price", afterGivenName["displayName"]!.GetValue<string>());
         Assert.True(JsonNode.Parse(await reactivated.Content.ReadAsStringAsync())!["active"]!.GetValue<bool>());
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         Assert.False(afterDelete["active"]!.GetValue<bool>());
