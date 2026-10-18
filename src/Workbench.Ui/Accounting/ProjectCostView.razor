@@ -1,0 +1,115 @@
+@inject IAccountingReportService Reports
+@inject IProjectService Projects
+
+<MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Project cost ledger</MudText>
+    <MudSelect T="Guid?" Value="_projectId" ValueChanged="v => SetAsync(() => _projectId = v)" Label="Project" Clearable="true" Dense="true" Style="min-width:160px">
+        @foreach (var p in _projects)
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Code @p.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSwitch T="bool" Value="_periodOnly" ValueChanged="v => SetAsync(() => _periodOnly = v)" Label="@(_periodOnly ? $"{Period.Name} only" : "Inception to date")" Color="Color.Primary" />
+    <MudSpacer />
+    <ExportButton Request="new AccountingExportRequest(AccountingReport.ProjectCost, _periodOnly ? Period.Id : null, null, _projectId)" />
+</MudStack>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_rows is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No project cost posted.</MudText>
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="project-cost">
+            <thead>
+                <tr><th>Project</th><th>WBS</th><th style="text-align:right">Direct labor</th><th style="text-align:right">Direct ODC</th><th style="text-align:right">Indirect and leave</th>
+                    <th style="text-align:right">Other</th><th style="text-align:right">Allowable</th><th style="text-align:right">Unallowable</th><th style="text-align:right">Total</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _rows)
+                {
+                    <tr>
+                        <td>@r.ProjectCode</td>
+                        <td>@r.WbsCode @r.WbsName</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(r.DirectLabor)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(r.DirectOdc)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(r.Indirect)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(r.Other)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.Allowable)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(r.Unallowable)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.Total)</td>
+                    </tr>
+                }
+                <tr style="font-weight:600">
+                    <td colspan="2">Total</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.DirectLabor))</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.DirectOdc))</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.Indirect))</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.Other))</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.Allowable))</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.Unallowable))</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_rows.Sum(r => r.Total))</td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public FiscalPeriodDto Period { get; set; } = default!;
+
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<ProjectCostRowDto>? _rows;
+    private Guid? _projectId;
+    private bool _periodOnly;
+    private string? _error;
+    private Guid _loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != Period.Id)
+        {
+            _loaded = Period.Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = await Reports.GetProjectCostLedgerAsync(_projectId, _periodOnly ? Period.Id : null);
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}

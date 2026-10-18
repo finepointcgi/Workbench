@@ -1,0 +1,62 @@
+@page "/accounting"
+@page "/accounting/reports"
+@inject IFiscalCalendarService Calendar
+@inject IChartOfAccountsService Chart
+
+<PageTitle>Reports · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Accounting reports" Subtitle="From posted journal entries. Balance-sheet accounts accumulate since inception; income-statement accounts reset each fiscal year.">
+    @if (_periods.Count > 0)
+    {
+        <MudSelect T="Guid?" Value="_period?.Id" ValueChanged="v => _period = _periods.FirstOrDefault(p => p.Id == v)" Label="Fiscal period" Dense="true"
+                   Style="min-width:200px" data-testid="report-period">
+            @foreach (var p in _periods.OrderByDescending(p => p.Start))
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_period is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Trial balance"><TrialBalanceView Period="_period" /></MudTabPanel>
+        <MudTabPanel Text="General ledger"><LedgerView Period="_period" Accounts="_accounts" /></MudTabPanel>
+        <MudTabPanel Text="Income statement"><StatementView Period="_period" Report="AccountingReport.IncomeStatement" /></MudTabPanel>
+        <MudTabPanel Text="Balance sheet"><StatementView Period="_period" Report="AccountingReport.BalanceSheet" /></MudTabPanel>
+        <MudTabPanel Text="Project cost"><ProjectCostView Period="_period" /></MudTabPanel>
+        <MudTabPanel Text="Reconciliation"><ReconciliationView /></MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private FiscalPeriodDto? _period;
+    private int _tab;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = await Chart.ListAccountsAsync();
+            _periods = await Calendar.ListPeriodsAsync();
+            _period = AccountingFormat.DefaultPeriod(_periods);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+}

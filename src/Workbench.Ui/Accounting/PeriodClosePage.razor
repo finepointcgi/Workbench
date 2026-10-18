@@ -1,0 +1,209 @@
+@page "/accounting/close"
+@inject IPeriodCloseService Close
+@inject IPostingService Posting
+@inject IFiscalCalendarService Calendar
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Period close · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Period close" Subtitle="Close a fiscal period once its time and ODCs are decided and posted and its trial balance balances. A closed period accepts no postings and no time or ODC changes.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAddCheck" OnClick="PostBacklogAsync" Disabled="@(_busy || _error is not null)"
+               data-testid="post-backlog">Post backlog</MudButton>
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_periods.Count == 0)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudSelect T="Guid?" Value="_periodId" ValueChanged="SelectAsync" Label="Fiscal period" Dense="true" Style="max-width:220px" data-testid="close-period">
+            @foreach (var p in _periods.OrderByDescending(p => p.Start))
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_checklist is { } c)
+        {
+            <MudChip T="string" Variant="Variant.Outlined" Color="@(c.IsClosed ? Color.Default : Color.Success)"
+                     Icon="@(c.IsClosed ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)">@(c.IsClosed ? "Closed" : "Open")</MudChip>
+            <MudSpacer />
+            @if (c.IsClosed)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ReopenAsync" Disabled="_busy">Reopen period</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Lock" OnClick="ClosePeriodAsync" Disabled="@(_busy || !c.CanClose)"
+                           data-testid="close-button">Close @c.FiscalPeriodName</MudButton>
+            }
+        }
+    </MudStack>
+
+    @if (_checklist is { } checklist)
+    {
+        <MudPaper Outlined="true" Class="pa-2 mb-4" data-testid="close-checklist">
+            @foreach (var check in checklist.Checks)
+            {
+                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start" Class="pa-2">
+                    <MudIcon Icon="@(check.Passed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" Color="@(check.Passed ? Color.Success : Color.Error)" />
+                    <MudStack Spacing="0" Style="flex:1">
+                        <MudText Typo="Typo.subtitle1"><b>@check.Title</b></MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@check.Summary</MudText>
+                        @if (check.Details.Count > 0)
+                        {
+                            <ul class="mt-1 mb-0" style="padding-left:20px">
+                                @foreach (var d in check.Details)
+                                {
+                                    <li><MudText Typo="Typo.body2">@d</MudText></li>
+                                }
+                            </ul>
+                        }
+                    </MudStack>
+                </MudStack>
+                <MudDivider />
+            }
+        </MudPaper>
+
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Unposted items in @checklist.FiscalPeriodName</MudText>
+        @if (_unposted.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Nothing waiting to post.</MudText>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" data-testid="unposted">
+                    <thead><tr><th>Source</th><th>Date</th><th>Item</th><th style="text-align:right">Amount</th><th>Problem</th></tr></thead>
+                    <tbody>
+                        @foreach (var u in _unposted)
+                        {
+                            <tr>
+                                <td>@AccountingFormat.Label(u.Source)@(u.IsStale ? " (reversal)" : "")</td>
+                                <td style="white-space:nowrap">@AccountingFormat.Date(u.Date)</td>
+                                <td>@u.Description</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(u.Amount)</td>
+                                <td class="mud-error-text">@u.Problem</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        }
+    }
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private Guid? _periodId;
+    private PeriodCloseChecklistDto? _checklist;
+    private IReadOnlyList<UnpostedItemDto> _unposted = [];
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            await SelectAsync(AccountingFormat.DefaultPeriod(_periods)?.Id);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SelectAsync(Guid? periodId)
+    {
+        _periodId = periodId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_periodId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            _checklist = await Close.GetChecklistAsync(id);
+            _unposted = await Posting.ListUnpostedAsync(id);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task PostBacklogAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Posting.PostBacklogAsync();
+            var message = $"Posted {result.EntriesPosted} entr{(result.EntriesPosted == 1 ? "y" : "ies")}, reversed {result.EntriesReversed}.";
+            Snackbar.Add(result.Problems.Count == 0 ? message : $"{message} {result.Problems.Count} item(s) couldn't post: {string.Join(" ", result.Problems.Take(3))}",
+                result.Problems.Count == 0 ? Severity.Success : Severity.Warning);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClosePeriodAsync() => await ChangeAsync(true);
+
+    private async Task ReopenAsync() => await ChangeAsync(false);
+
+    private async Task ChangeAsync(bool closing)
+    {
+        if (_checklist is not { } c)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog>
+        {
+            { d => d.Message, closing ? $"Closing {c.FiscalPeriodName} stops postings and any time or ODC change dated in it." : $"Reopening {c.FiscalPeriodName} allows postings and changes dated in it again." },
+            { d => d.ConfirmText, closing ? "Close period" : "Reopen period" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>(closing ? $"Close {c.FiscalPeriodName}" : $"Reopen {c.FiscalPeriodName}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _checklist = closing ? await Close.CloseAsync(c.FiscalPeriodId, new ClosePeriodRequest(reason)) : await Close.ReopenAsync(c.FiscalPeriodId, new ClosePeriodRequest(reason));
+            _periods = await Calendar.ListPeriodsAsync();
+            Snackbar.Add($"{c.FiscalPeriodName} {(closing ? "closed" : "reopened")}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
