@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Workbench.Application.Approvals;
 using Workbench.Application.Files;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
@@ -31,14 +32,20 @@ public sealed class OdcWorkflow(
     IOdcNotifier notifier,
     FileStorage files,
     IOptions<ExpenseOptions> options,
-    TimeProvider clock)
+    TimeProvider clock,
+    ApprovalEngine? approvals = null)
 {
+    private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
+
     public const string OdcEntityType = nameof(OdcEntry);
     public const string ReportEntityType = nameof(ExpenseReport);
 
     public decimal ReceiptThreshold => options.Value.ReceiptThreshold;
 
     public AuditRecorder Audit => audit;
+
+    /// <summary>Routes expense reports and vendor ODCs (Setup › Approval workflows).</summary>
+    public ApprovalEngine Approvals => _approvals;
 
     public FileStorage Files => files;
 
