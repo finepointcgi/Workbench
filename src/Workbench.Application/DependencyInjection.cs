@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
 using Workbench.Application.Collaboration;
+using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Odcs;
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.AddWorkbenchSetup();
         services.AddWorkbenchAccounting(); // GL posting decorators wrap time/ODC approvals; must stay above AddWorkbenchIdentity.
         services.AddWorkbenchSecurity();
+        services.AddWorkbenchContractDetail();
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

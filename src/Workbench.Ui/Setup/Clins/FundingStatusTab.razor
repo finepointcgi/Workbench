@@ -1,0 +1,63 @@
+@* Funding status per CLIN with Limitation of Funds / Cost notices. *@
+@inject IFundingService Funding
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Funding status</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+        As of @SetupFormat.Date(Status.AsOf) · @(Status.IsBurdened ? "fully burdened cost" : "direct cost (labor at cost + allowable ODCs)") · committed = submitted, not yet approved
+    </MudText>
+    <MudSpacer />
+    @if (CanEdit)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="CheckAsync" data-testid="funding-check">Check notices</MudButton>
+    }
+</MudStack>
+
+@foreach (var notice in Status.Notices)
+{
+    <MudAlert Severity="@(notice.ThresholdPercent >= 90 ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2" data-testid="funding-notice">
+        <b>@notice.Title</b> · sent @notice.SentAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") to @string.Join(", ", notice.Recipients)
+    </MudAlert>
+}
+
+<MudPaper Outlined="true" Class="pa-4">
+    @if (Status.Clins.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No CLINs yet.</MudText>
+    }
+    else
+    {
+        <ClinFundingBars Status="Status" Parents="Parents" />
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContractFundingStatusDto Status { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public bool CanEdit { get; set; } = true;
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private IReadOnlySet<string> Parents => Clins.Where(c => c.HasSlins).Select(c => c.Number).ToHashSet();
+
+    private async Task CheckAsync()
+    {
+        try
+        {
+            var sent = await Funding.CheckNoticesAsync(Status.ContractId);
+            Snackbar.Add(sent.Count == 0 ? "No new notices." : $"Sent {sent.Count} notice{(sent.Count == 1 ? "" : "s")}.", sent.Count == 0 ? Severity.Info : Severity.Warning);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

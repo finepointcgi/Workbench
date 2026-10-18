@@ -1,0 +1,73 @@
+@* Every funding action on the contract: a timeline of obligations and a table with each CLIN's running total. *@
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Funding history</MudText>
+    <MudSpacer />
+    <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN" Clearable="true" Dense="true" Style="max-width:240px" Margin="Margin.Dense">
+        @foreach (var c in Clins.Where(c => !c.HasSlins))
+        {
+            <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
+        }
+    </MudSelect>
+</MudStack>
+
+@if (Rows.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No funding yet. Funding is added by executing a modification.</MudText></MudPaper>
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-2">
+                <MudTimeline TimelineOrientation="TimelineOrientation.Vertical" TimelinePosition="TimelinePosition.Start">
+                    @foreach (var group in Shown.GroupBy(r => (r.EffectiveDate, r.ModificationNumber)).OrderByDescending(g => g.Key.EffectiveDate))
+                    {
+                        var total = group.Sum(r => r.Amount);
+                        <MudTimelineItem Color="@(total >= 0 ? Color.Success : Color.Error)" Size="Size.Small">
+                            <MudText Typo="Typo.body2"><b>@(group.Key.ModificationNumber ?? "Award")</b> · @SetupFormat.Date(group.Key.EffectiveDate)</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @(total >= 0 ? "+" : "")@ClinFormat.Money(total) on @string.Join(", ", group.Select(r => r.ClinNumber).Distinct())
+                            </MudText>
+                        </MudTimelineItem>
+                    }
+                </MudTimeline>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="8">
+            <MudPaper Outlined="true">
+                <MudSimpleTable Dense="true" Hover="true" data-testid="funding-history">
+                    <thead>
+                        <tr><th>Effective</th><th>CLIN</th><th>Source</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">CLIN funded</th><th>By</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Shown.Reverse())
+                        {
+                            <tr data-testid="funding-row">
+                                <td>@SetupFormat.Date(r.EffectiveDate)</td>
+                                <td>@r.ClinNumber</td>
+                                <td>@(r.ModificationNumber ?? "Award")</td>
+                                <td>@r.Description</td>
+                                <td style="text-align:right" class="@(r.Amount < 0 ? "mud-error-text" : "")">@ClinFormat.Money(r.Amount)</td>
+                                <td style="text-align:right">@ClinFormat.Money(r.RunningTotal)</td>
+                                <td class="mud-text-secondary">@r.CreatedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<FundingActionDto> Rows { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<ClinDto> Clins { get; set; } = [];
+
+    private Guid? _clinId;
+
+    private IEnumerable<FundingActionDto> Shown => _clinId is { } id ? Rows.Where(r => r.ClinId == id) : Rows;
+}
