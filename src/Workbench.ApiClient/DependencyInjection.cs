@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddIdentityClients(serverBaseAddress);
         services.AddAutomationClients(serverBaseAddress);
         services.AddDashboardClients(serverBaseAddress);
+        services.AddTimekeepingClients(serverBaseAddress);
         return services;
     }
 }

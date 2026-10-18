@@ -25,6 +25,7 @@ public static class WorkbenchApi
         v1.MapNotificationEndpoints();
         v1.MapMyWorkEndpoints();
         v1.MapDashboardEndpoints();
+        v1.MapTimeEndpoints();
 
         return app;
     }

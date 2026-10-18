@@ -1,0 +1,23 @@
+@inject ITimesheetApprovalService Approvals
+
+<MudNavLink Href="time" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.AccessTime">Time</MudNavLink>
+@if (_isApprover)
+{
+    <MudNavLink Href="time/approvals" Icon="@Icons.Material.Filled.FactCheck">Approvals</MudNavLink>
+}
+
+@code {
+    private bool _isApprover;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isApprover = await Approvals.IsApproverAsync();
+        }
+        catch (HttpRequestException)
+        {
+            // Server unreachable: leave the approvals link hidden.
+        }
+    }
+}
