@@ -1,0 +1,331 @@
+@page "/billing/invoices/{InvoiceId:guid}"
+@inject IInvoiceService Invoices
+@inject ICurrentUserContext UserContext
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>@(_invoice?.Summary.Number ?? "Invoice") · Billing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <BillingHeader Title="Invoice" />
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_invoice is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = _invoice.Summary;
+    var isDraft = s.Status == InvoiceState.Draft;
+    <BillingHeader Title="@($"{(s.Type == InvoiceKind.CreditMemo ? "Credit memo" : "Invoice")} {s.Number}")">
+        <InvoiceStatusChip Status="s.Status" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print?form=sf1034")" data-testid="print-sf1034">SF 1034</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print?form=commercial")">Commercial</MudButton>
+        @if (_isFinance)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="export-wawf">WAWF CSV</MudButton>
+            @if (isDraft)
+            {
+                @if (s.Type != InvoiceKind.CreditMemo)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RegenerateAsync" Disabled="_busy">Regenerate</MudButton>
+                }
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" Disabled="_busy">Delete draft</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Verified" OnClick="ApproveAsync"
+                           Disabled="@(_busy || _invoice.IsOverCeiling || _invoice.Lines.Count == 0)" data-testid="approve">Approve and post</MudButton>
+            }
+            else if (s.Status != InvoiceState.Void)
+            {
+                @if (_invoice.SentAtUtc is null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SendAsync" Disabled="_busy" data-testid="mark-sent">Mark sent</MudButton>
+                }
+                @if (s.Type != InvoiceKind.CreditMemo && s.Balance > 0)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Payments" Href="@($"billing/payments?customer={s.CustomerId}")">Record payment</MudButton>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="CreditAsync" Disabled="_busy">Credit memo</MudButton>
+                }
+                @if (s.AmountPaid == 0)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Block" OnClick="VoidAsync" Disabled="_busy" data-testid="void">Void</MudButton>
+                }
+            }
+        }
+    </BillingHeader>
+
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="12" md="8">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6" sm="4"><Field Label="Contract"><MudLink Href="@($"billing/contracts/{s.ContractId}")">@s.ContractNumber</MudLink></Field></MudItem>
+                    <MudItem xs="6" sm="4"><Field Label="Customer">@s.CustomerName</Field></MudItem>
+                    <MudItem xs="6" sm="4"><Field Label="Type">@BillingFormat.Label(s.Type)</Field></MudItem>
+                    <MudItem xs="6" sm="4"><Field Label="Billing period">@BillingFormat.Date(s.PeriodFrom) – @BillingFormat.Date(s.PeriodTo)</Field></MudItem>
+                    <MudItem xs="6" sm="4">
+                        @if (isDraft && _isFinance)
+                        {
+                            <MudDatePicker Label="Invoice date" Date="s.InvoiceDate.ToDateTime(TimeOnly.MinValue)" DateChanged="InvoiceDateChanged" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" />
+                        }
+                        else
+                        {
+                            <Field Label="Invoice date">@BillingFormat.Date(s.InvoiceDate)</Field>
+                        }
+                    </MudItem>
+                    <MudItem xs="6" sm="4"><Field Label="Due">@BillingFormat.Date(s.DueDate) (net @_invoice.PaymentTermsDays)@(s.DaysPastDue > 0 ? $", {s.DaysPastDue} days late" : "")</Field></MudItem>
+                    @if (_invoice.CreditOfInvoiceId is { } creditOf)
+                    {
+                        <MudItem xs="6" sm="4"><Field Label="Credits invoice"><MudLink Href="@($"billing/invoices/{creditOf}")">@_invoice.CreditOfInvoiceNumber</MudLink></Field></MudItem>
+                    }
+                    @if (_invoice.JournalEntryId is { } je)
+                    {
+                        <MudItem xs="6" sm="4"><Field Label="GL entry"><MudLink Href="@($"accounting/journal/{je}")">@_invoice.JournalEntryNumber</MudLink></Field></MudItem>
+                    }
+                    @if (_invoice.RateNote is not null)
+                    {
+                        <MudItem xs="12"><Field Label="Indirect rates">@_invoice.RateNote</Field></MudItem>
+                    }
+                    <MudItem xs="12">
+                        @if (isDraft && _isFinance)
+                        {
+                            <MudTextField T="string" Value="_invoice.Notes" ValueChanged="NotesChanged" Label="Notes (printed on the invoice)" Lines="2" DebounceInterval="600" />
+                        }
+                        else if (_invoice.Notes is not null)
+                        {
+                            <Field Label="Notes">@_invoice.Notes</Field>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <tbody>
+                        <tr><td>Total</td><td style="text-align:right"><strong>@BillingFormat.Money(s.Total)</strong></td></tr>
+                        @if (_invoice.Withheld > 0)
+                        {
+                            <tr><td>Fee withheld</td><td style="text-align:right">@BillingFormat.Money(_invoice.Withheld)</td></tr>
+                        }
+                        <tr><td>Paid</td><td style="text-align:right">@BillingFormat.Money(s.AmountPaid)</td></tr>
+                        @if (s.AmountCredited != 0)
+                        {
+                            <tr><td>Credited</td><td style="text-align:right">@BillingFormat.Money(s.AmountCredited)</td></tr>
+                        }
+                        <tr><td>Balance</td><td style="text-align:right" data-testid="invoice-balance"><strong>@BillingFormat.Money(s.Balance)</strong></td></tr>
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+                    Created by @_invoice.CreatedBy@(_invoice.ApprovedBy is null ? "" : $"; approved by {_invoice.ApprovedBy} {_invoice.ApprovedAtUtc?.ToLocalTime():yyyy-MM-dd}")@(_invoice.SentAtUtc is null ? "" : $"; sent {_invoice.SentAtUtc?.ToLocalTime():yyyy-MM-dd}")
+                </MudText>
+                @if (_invoice.FundingOverrideReason is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Approved past funding: @_invoice.FundingOverrideReason</MudAlert>
+                }
+                @if (s.Status == InvoiceState.Void)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Voided by @_invoice.VoidedBy: @_invoice.VoidReason</MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @foreach (var w in _invoice.Warnings)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@w</MudAlert>
+    }
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3 mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Lines</MudText>
+        <MudSpacer />
+        @if (isDraft && _isFinance)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLineAsync" Disabled="_busy">Add adjustment</MudButton>
+        }
+    </MudStack>
+    @if (isDraft && _isFinance)
+    {
+        <InvoiceLinesTable Lines="_invoice.Lines" Funding="_invoice.Funding" OnRemove="RemoveLineAsync" />
+    }
+    else
+    {
+        <InvoiceLinesTable Lines="_invoice.Lines" Funding="_invoice.Funding" />
+    }
+
+    @if (_invoice.Funding.Count > 0)
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Funding check</MudText>
+        <FundingCheckTable Funding="_invoice.Funding" />
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid InvoiceId { get; set; }
+
+    private InvoiceDto? _invoice;
+    private IReadOnlyList<BillingClinDto> _clins = [];
+    private bool _isFinance;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _isFinance = (await UserContext.GetAsync()).IsFinance;
+            _invoice = await Invoices.GetAsync(InvoiceId);
+            _error = null;
+            if (_isFinance)
+            {
+                _clins = (await Invoices.ListBillingContractsAsync()).FirstOrDefault(c => c.Id == _invoice.Summary.ContractId)?.Clins ?? [];
+            }
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<InvoiceDto>> action, string? done = null)
+    {
+        _busy = true;
+        try
+        {
+            _invoice = await action();
+            if (done is not null)
+            {
+                Snackbar.Add(done, Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private Task InvoiceDateChanged(DateTime? date) => date is { } d
+        ? RunAsync(() => Invoices.UpdateDraftAsync(InvoiceId, new UpdateInvoiceDraftRequest(DateOnly.FromDateTime(d), _invoice!.Notes)))
+        : Task.CompletedTask;
+
+    private Task NotesChanged(string? notes) =>
+        RunAsync(() => Invoices.UpdateDraftAsync(InvoiceId, new UpdateInvoiceDraftRequest(_invoice!.Summary.InvoiceDate, notes)));
+
+    private Task RegenerateAsync() => RunAsync(() => Invoices.RegenerateDraftAsync(InvoiceId), "Draft regenerated.");
+
+    private Task RemoveLineAsync(InvoiceLineDto line) => RunAsync(() => Invoices.RemoveLineAsync(InvoiceId, line.Id), $"Line {line.LineNumber} removed.");
+
+    private async Task AddLineAsync()
+    {
+        var dialog = await DialogService.ShowAsync<InvoiceLineDialog>("Add an adjustment", new DialogParameters<InvoiceLineDialog> { { d => d.Clins, _clins } });
+        if (await dialog.Result is { Canceled: false, Data: AddInvoiceLineRequest request })
+        {
+            await RunAsync(() => Invoices.AddLineAsync(InvoiceId, request), "Line added.");
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        var needsOverride = _invoice!.NeedsFundingOverride;
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, needsOverride
+                ? "This invoice takes a CLIN past its funded value. Finance may approve it with a reason; it's recorded with the invoice and in the audit log."
+                : $"Approving posts {BillingFormat.Money(_invoice.Summary.Total)} to the general ledger (debit AR billed, credit revenue) dated {BillingFormat.Date(_invoice.Summary.InvoiceDate)}. Approved invoices can't be edited, only voided." },
+            { d => d.Warnings, needsOverride ? _invoice.Warnings : [] },
+            { d => d.AskText, needsOverride },
+            { d => d.Label, "Funding override reason" },
+            { d => d.ConfirmText, needsOverride ? "Approve with override" : "Approve and post" },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>($"Approve {_invoice.Summary.Number}", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => Invoices.ApproveAsync(InvoiceId, new ApproveInvoiceRequest(needsOverride ? reason : null)), "Approved and posted to the general ledger.");
+        }
+    }
+
+    private Task SendAsync() => RunAsync(() => Invoices.MarkSentAsync(InvoiceId), "Marked sent.");
+
+    private async Task VoidAsync()
+    {
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, _invoice!.JournalEntryId is null
+                ? "Voiding frees its hours, ODCs and milestones to be billed again."
+                : "Voiding reverses its GL entry (dated today) and frees its hours, ODCs and milestones to be billed again." },
+            { d => d.ConfirmText, "Void invoice" },
+            { d => d.ConfirmColor, Color.Error },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>($"Void {_invoice.Summary.Number}", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => Invoices.VoidAsync(InvoiceId, new VoidInvoiceRequest(reason)), "Invoice voided.");
+        }
+    }
+
+    private async Task CreditAsync()
+    {
+        var parameters = new DialogParameters<InvoiceLineDialog>
+        {
+            { d => d.Clins, _clins },
+            { d => d.IsCredit, true },
+            { d => d.DefaultClinId, _invoice!.Lines.FirstOrDefault(l => l.ClinId is not null)?.ClinId },
+        };
+        var dialog = await DialogService.ShowAsync<InvoiceLineDialog>($"Credit memo against {_invoice!.Summary.Number}", parameters);
+        if (await dialog.Result is { Canceled: false, Data: CreditMemoRequest request })
+        {
+            try
+            {
+                var memo = await Invoices.CreateCreditMemoAsync(InvoiceId, request);
+                Snackbar.Add($"Draft credit memo {memo.Summary.Number} created.", Severity.Success);
+                Navigation.NavigateTo($"billing/invoices/{memo.Summary.Id}");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, "Delete this draft? Its hours, ODCs and milestones become billable again." },
+            { d => d.AskText, false },
+            { d => d.ConfirmText, "Delete draft" },
+            { d => d.ConfirmColor, Color.Error },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>($"Delete {_invoice!.Summary.Number}", parameters);
+        if (await dialog.Result is { Canceled: false })
+        {
+            try
+            {
+                await Invoices.DeleteDraftAsync(InvoiceId);
+                Navigation.NavigateTo("billing");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            await BillingFormat.DownloadAsync(JS, await Invoices.ExportWawfCsvAsync(InvoiceId));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

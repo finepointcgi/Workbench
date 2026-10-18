@@ -1,0 +1,237 @@
+@page "/purchasing/subcontracts/{SubcontractId:guid}"
+@inject ISubcontractService Subcontracts
+@inject IVendorService Vendors
+@inject IContractService ContractService
+@inject IProjectService Projects
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_detail?.Subcontract.Number ?? "Subcontract") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Subcontract" BackHref="purchasing/subcontracts" BackLabel="Subcontracts" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_detail is not { } d)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = d.Subcontract;
+    <PurchasingHeader Title="@($"{s.Number} · {s.Description}")" BackHref="purchasing/subcontracts" BackLabel="Subcontracts">
+        <MudChip T="string" Variant="Variant.Outlined" Color="@(s.Status == SubcontractState.Active ? Color.Success : Color.Default)">@s.Status</MudChip>
+        @if (s.Status != SubcontractState.Closed)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditAsync">Edit</MudButton>
+        }
+        @if (s.Status == SubcontractState.Draft)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Subcontracts.ActivateAsync(s.Id), "Subcontract activated."))" data-testid="activate">Activate</MudButton>
+        }
+        else if (s.Status == SubcontractState.Active)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="CloseAsync">Close</MudButton>
+        }
+    </PurchasingHeader>
+
+    <MudText Class="mud-text-secondary mb-3">
+        <MudLink Href="@($"purchasing/vendors/{s.VendorId}")">@s.VendorCode · @s.VendorName</MudLink>
+        · @PurchasingFormat.Label(s.Pricing) · @PurchasingFormat.Date(s.PeriodStart) to @PurchasingFormat.Date(s.PeriodEnd)
+        @(s.PrimeContractNumber is null ? "" : $"· prime {s.PrimeContractNumber}") @(s.ProjectCode is null ? "" : $"· project {s.ProjectCode}")
+        · retainage @s.RetainagePercent.ToString("0.##")%
+    </MudText>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value, warn) in new[]
+        {
+            ("Ceiling", s.CeilingValue, false), ("Funded", s.FundedValue, false), ("Billed to date", s.BilledToDate, false),
+            ("Remaining funding", s.RemainingFunding, s.RemainingFunding < 0), ("Remaining ceiling", s.RemainingCeiling, false), ("Retainage held", s.RetainageHeld, false),
+        })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" Color="@(warn ? Color.Error : Color.Default)">@PurchasingFormat.Amount(value)</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="6">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Funding and modifications</MudText>
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="funding">
+                    <thead><tr><th>Mod</th><th>Effective</th><th>Description</th><th style="text-align:right">Funding</th><th style="text-align:right">Ceiling</th><th>By</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in d.Funding)
+                        {
+                            <tr>
+                                <td>@f.Number</td><td>@PurchasingFormat.Date(f.EffectiveDate)</td><td>@f.Description</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(f.FundedChange)</td><td style="text-align:right">@PurchasingFormat.Amount(f.CeilingChange)</td>
+                                <td>@f.CreatedBy</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                @if (s.Status != SubcontractState.Closed)
+                {
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mt-3">
+                        <MudTextField T="string" @bind-Value="_modNumber" Label="Mod number" Style="max-width:110px" />
+                        <MudNumericField T="decimal" @bind-Value="_modFunded" Label="Funding change" Format="N2" Style="max-width:150px" />
+                        <MudNumericField T="decimal" @bind-Value="_modCeiling" Label="Ceiling change" Format="N2" Style="max-width:150px" />
+                        <MudTextField T="string" @bind-Value="_modDescription" Label="Description" Style="min-width:200px" />
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddFundingAsync" data-testid="add-funding"
+                                   Disabled="@(string.IsNullOrWhiteSpace(_modNumber) || string.IsNullOrWhiteSpace(_modDescription))">Add modification</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="6">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6">Flow-down clauses</MudText>
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => RunAsync(() => Subcontracts.AddStandardFlowDownsAsync(s.Id), null))">Add standard clauses</MudButton>
+                </MudStack>
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="flow-downs">
+                    <thead><tr><th>Clause</th><th>Title</th><th>Flowed down</th><th>Note</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var f in d.FlowDowns)
+                        {
+                            <tr>
+                                <td style="white-space:nowrap">@(f.ClauseNumber.StartsWith("252", StringComparison.Ordinal) ? "DFARS" : "FAR") @f.ClauseNumber</td>
+                                <td>@f.Title</td>
+                                <td><MudCheckBox T="bool" Value="f.IsIncluded" ValueChanged="@(v => SaveFlowDownAsync(f, v, f.Note))" Dense="true" /></td>
+                                <td><MudTextField T="string" Value="f.Note" ValueChanged="@(n => SaveFlowDownAsync(f, f.IsIncluded, n))" Placeholder="Note" Margin="Margin.Dense" /></td>
+                                <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" aria-label="Remove" OnClick="@(() => RunAsync(() => Subcontracts.RemoveFlowDownAsync(s.Id, f.Id), null))" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-2">
+                    <MudTextField T="string" @bind-Value="_clause" Label="Clause number" Placeholder="52.204-21" Style="max-width:160px" />
+                    <MudTextField T="string" @bind-Value="_clauseTitle" Label="Title" />
+                    <MudButton Variant="Variant.Outlined" OnClick="AddClauseAsync" Disabled="@string.IsNullOrWhiteSpace(_clause)">Add</MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Invoices</MudText>
+                @if (d.Invoices.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No invoices yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="sub-invoices">
+                        <thead><tr><th>Voucher</th><th>Invoice</th><th>Date</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in d.Invoices)
+                            {
+                                <tr>
+                                    <td>@if (i.BillId is { } b) { <MudLink Href="@($"purchasing/bills/{b}")">@i.BillNumber</MudLink> }</td>
+                                    <td>@i.InvoiceNumber</td><td>@PurchasingFormat.Date(i.InvoiceDate)</td>
+                                    <td style="text-align:right">@PurchasingFormat.Amount(i.Amount)</td><td style="text-align:right">@PurchasingFormat.Amount(i.Retainage)</td>
+                                    <td>@i.Status</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid SubcontractId { get; set; }
+
+    private SubcontractDetailDto? _detail;
+    private string? _error;
+    private bool _forbidden;
+    private string? _modNumber;
+    private decimal _modFunded;
+    private decimal _modCeiling;
+    private string? _modDescription;
+    private string? _clause;
+    private string? _clauseTitle;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _detail = await Subcontracts.GetAsync(SubcontractId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task<bool> RunAsync(Func<Task<SubcontractDetailDto>> action, string? success)
+    {
+        try
+        {
+            _detail = await action();
+            if (success is not null)
+            {
+                Snackbar.Add(success, Severity.Success);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            return false;
+        }
+    }
+
+    private async Task AddFundingAsync()
+    {
+        if (await RunAsync(() => Subcontracts.AddFundingAsync(SubcontractId,
+                new AddSubcontractFundingRequest(_modNumber!, DateOnly.FromDateTime(DateTime.Today), _modFunded, _modCeiling, _modDescription!)), "Modification added."))
+        {
+            (_modNumber, _modFunded, _modCeiling, _modDescription) = (null, 0, 0, null);
+        }
+    }
+
+    private Task SaveFlowDownAsync(FlowDownDto f, bool included, string? note) =>
+        RunAsync(() => Subcontracts.SaveFlowDownAsync(SubcontractId, new SaveFlowDownRequest(f.ClauseNumber, f.Title, included, note)), null);
+
+    private async Task AddClauseAsync()
+    {
+        if (await RunAsync(() => Subcontracts.SaveFlowDownAsync(SubcontractId, new SaveFlowDownRequest(_clause!.Trim(), _clauseTitle, false, null)), null))
+        {
+            (_clause, _clauseTitle) = (null, null);
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Close subcontract", $"Close {_detail!.Subcontract.Number}? It can't be billed after that.", yesText: "Close", cancelText: "Cancel") == true)
+        {
+            await RunAsync(() => Subcontracts.CloseAsync(SubcontractId), "Subcontract closed.");
+        }
+    }
+
+    private async Task EditAsync()
+    {
+        var parameters = new DialogParameters<SubcontractDialog>
+        {
+            { x => x.Existing, _detail!.Subcontract },
+            { x => x.Vendors, await Vendors.ListAsync() },
+            { x => x.Contracts, await ContractService.ListContractsAsync() },
+            { x => x.Projects, await Projects.ListProjectsAsync() },
+        };
+        var dialog = await DialogService.ShowAsync<SubcontractDialog>("Edit subcontract", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SubcontractDetailDto saved })
+        {
+            _detail = saved;
+        }
+    }
+}

@@ -162,6 +162,8 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         var assignments = await db.Set<ChargeAssignment>().AsNoTracking()
             .Where(a => a.EmployeeId == employeeId)
             .ToListAsync(cancellationToken);
+        var clinIds = elements.Where(w => w.ClinId != null).Select(w => w.ClinId!.Value).Distinct().ToList();
+        var clins = await db.Set<Clin>().AsNoTracking().Where(c => clinIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, cancellationToken);
 
         var codes = new List<ChargeCodeDto>();
         foreach (var element in elements.Where(w => w.IsOpen && w.IsChargeable && !parents.Contains(w.Id)))
@@ -169,6 +171,13 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
             if (!projects.TryGetValue(element.ProjectId, out var project)
                 || (project.Start is { } start && date < start)
                 || (project.Finish is { } finish && date > finish))
+            {
+                continue;
+            }
+
+            // Contract detail: no charging to an unexercised option CLIN or outside the CLIN's period of performance.
+            if (element.ClinId is { } clinId && clins.TryGetValue(clinId, out var clin)
+                && ((clin.IsOption && !clin.IsExercised) || date < clin.PeriodStart || date > clin.PeriodEnd))
             {
                 continue;
             }

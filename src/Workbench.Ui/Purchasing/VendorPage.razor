@@ -1,0 +1,207 @@
+@page "/purchasing/vendors/{VendorId:guid}"
+@inject IVendorService Vendors
+@inject ISubcontractService Subcontracts
+@inject IApBillService Bills
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_vendor?.Name ?? "Vendor") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Vendor" BackHref="purchasing/vendors" BackLabel="Vendors" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_vendor is not { } v)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <PurchasingHeader Title="@($"{v.Code} · {v.Name}")" BackHref="purchasing/vendors" BackLabel="Vendors">
+        <MudChip T="string" Variant="Variant.Outlined" Color="@PurchasingFormat.Color(v.Status)">@(v.Status == VendorState.OnHold ? "On hold" : v.Status.ToString())</MudChip>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditAsync" data-testid="edit-vendor">Edit</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@($"purchasing/bills/new?vendor={v.Id}")" Disabled="@(v.Status != VendorState.Active)">New bill</MudButton>
+    </PurchasingHeader>
+
+    @if (v.Status == VendorState.OnHold)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3">This vendor is on hold: new bills and payments are blocked until the hold is released.</MudAlert>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Details</MudText>
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <tbody>
+                        <tr><td class="mud-text-secondary">UEI</td><td>@v.Uei</td></tr>
+                        <tr><td class="mud-text-secondary">Business size</td><td>@v.BusinessSize</td></tr>
+                        <tr><td class="mud-text-secondary">Socio-economic</td><td>@string.Join(", ", v.SocioEconomicCategories)</td></tr>
+                        <tr><td class="mud-text-secondary">Payment terms</td><td>Net @v.PaymentTermsDays</td></tr>
+                        <tr><td class="mud-text-secondary">1099</td><td>@(v.Is1099 ? PurchasingCatalog.Form1099Boxes.FirstOrDefault(b => b.Box == v.Form1099Box).Label ?? v.Form1099Box : "No")</td></tr>
+                        <tr><td class="mud-text-secondary">Remit to</td><td style="white-space:pre-line">@v.RemitToAddress</td></tr>
+                        <tr><td class="mud-text-secondary">Contact</td><td>@v.ContactName @(v.ContactEmail is null ? "" : $"· {v.ContactEmail}") @(v.ContactPhone is null ? "" : $"· {v.ContactPhone}")</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.h6" Class="mb-2">Taxpayer ID</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudText Style="font-family:monospace; font-size:1.1rem" data-testid="tin">@(_revealed ?? (string.IsNullOrEmpty(v.TaxIdMasked) ? "Not on file" : v.TaxIdMasked))</MudText>
+                    @if (v.TaxIdKind is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Class="ma-0">@v.TaxIdKind</MudChip>
+                    }
+                    <MudSpacer />
+                    @if (v.HasFullTaxId)
+                    {
+                        @if (_revealed is null)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" OnClick="RevealAsync" data-testid="reveal-tin">Reveal</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.VisibilityOff" OnClick="() => _revealed = null">Hide</MudButton>
+                        }
+                    }
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="SetTinAsync">@(v.HasFullTaxId ? "Replace" : "Enter TIN")</MudButton>
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">The full TIN is encrypted; revealing it is recorded in the security log.</MudText>
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">W-9</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    @if (v.W9FileId is not null)
+                    {
+                        <MudLink Href="@Vendors.GetW9Url(v.Id)" download="@v.W9FileName" data-testid="w9-link">@v.W9FileName</MudLink>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">uploaded @v.W9UploadedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd")</MudText>
+                    }
+                    else
+                    {
+                        <MudText Class="mud-text-secondary">No W-9 on file.</MudText>
+                    }
+                    <MudSpacer />
+                    <ReceiptUpload Label="@(v.W9FileId is null ? "Upload W-9" : "Replace")" OnUpload="UploadAsync" />
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center"><MudText Typo="Typo.h6">Subcontracts</MudText></MudStack>
+                @if (_subs.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">None.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <thead><tr><th>Number</th><th>Description</th><th>Status</th><th style="text-align:right">Funded</th><th style="text-align:right">Billed</th><th style="text-align:right">Remaining funding</th></tr></thead>
+                        <tbody>
+                            @foreach (var s in _subs)
+                            {
+                                <tr>
+                                    <td><MudLink Href="@($"purchasing/subcontracts/{s.Id}")">@s.Number</MudLink></td>
+                                    <td>@s.Description</td><td>@s.Status</td>
+                                    <td style="text-align:right">@PurchasingFormat.Amount(s.FundedValue)</td>
+                                    <td style="text-align:right">@PurchasingFormat.Amount(s.BilledToDate)</td>
+                                    <td style="text-align:right">@PurchasingFormat.Amount(s.RemainingFunding)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h6">Bills</MudText>
+                    <MudSpacer />
+                    <MudLink Href="@($"purchasing/reports?tab=ledger&vendor={v.Id}")" Typo="Typo.body2">Vendor ledger</MudLink>
+                </MudStack>
+                <BillTable Bills="_bills" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid VendorId { get; set; }
+
+    private VendorDto? _vendor;
+    private IReadOnlyList<SubcontractDto> _subs = [];
+    private IReadOnlyList<BillSummaryDto> _bills = [];
+    private string? _revealed;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _vendor = await Vendors.GetAsync(VendorId);
+            _subs = await Subcontracts.ListAsync(VendorId);
+            _bills = await Bills.ListAsync(new BillQuery(VendorId: VendorId));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task EditAsync()
+    {
+        var dialog = await DialogService.ShowAsync<VendorDialog>("Edit vendor", new DialogParameters<VendorDialog> { { d => d.Vendor, _vendor } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: VendorDto vendor })
+        {
+            _vendor = vendor;
+            Snackbar.Add("Vendor saved.", Severity.Success);
+        }
+    }
+
+    private async Task RevealAsync()
+    {
+        try
+        {
+            _revealed = (await Vendors.RevealTaxIdAsync(VendorId)).TaxId;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SetTinAsync()
+    {
+        var tin = await ReasonDialog.AskAsync(DialogService, "Enter TIN", "Save", "Nine digits, for example 12-3456789 (EIN) or 123-45-6789 (SSN). It's stored encrypted.", label: "TIN");
+        if (tin is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var kind = tin.Trim().Length == 11 && tin.Trim()[3] == '-' ? "SSN" : "EIN";
+            _vendor = await Vendors.SetTaxIdAsync(VendorId, new SetVendorTaxIdRequest(tin, kind));
+            _revealed = null;
+            Snackbar.Add("TIN saved.", Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task UploadAsync(string fileName, Stream content)
+    {
+        _vendor = await Vendors.AttachW9Async(VendorId, fileName, content);
+        Snackbar.Add($"Attached {fileName}.", Severity.Success);
+        StateHasChanged();
+    }
+}

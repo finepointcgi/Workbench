@@ -31,6 +31,22 @@ public sealed class Vendor : Workbench.Domain.Entity
 
     public string? RemitToAddress { get; set; }
     public string? ContactEmail { get; set; }
+
+    // ---- Added by accounts payable (additive) ----
+
+    /// <summary>Comma-separated socio-economic categories, for example "SDB,WOSB,HUBZone,SDVOSB,VOSB".</summary>
+    public string? SocioEconomicCategories { get; set; }
+
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
+
+    /// <summary>The 1099 box payments are reported in, for example "NEC-1" (default) or "MISC-1".</summary>
+    public string? Form1099Box { get; set; }
+
+    /// <summary>The current W-9: a <c>StoredFile</c> id.</summary>
+    public Guid? W9FileId { get; set; }
+
+    public DateTime CreatedAtUtc { get; set; }
 }
 
 public enum SubcontractStatus
@@ -60,4 +76,7 @@ public sealed class Subcontract : Workbench.Domain.Entity
     public DateOnly PeriodEnd { get; set; }
     public decimal CeilingValue { get; set; }
     public decimal FundedValue { get; set; }
+
+    /// <summary>Percent (0-100) of each subcontract invoice held back as retainage (added by accounts payable).</summary>
+    public decimal RetainagePercent { get; set; }
 }

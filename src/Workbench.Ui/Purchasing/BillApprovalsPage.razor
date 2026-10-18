@@ -1,0 +1,103 @@
+@page "/purchasing/approvals"
+@inject IApBillService Bills
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Bill approvals · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Bill approvals" Subtitle="Bill lines routed to you: project costs on projects you manage, and overhead lines for Finance. You can't approve bills you entered." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_items.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary" data-testid="no-approvals">Nothing is waiting for your approval.</MudText></MudPaper>
+}
+else
+{
+    @foreach (var item in _items)
+    {
+        var b = item.Bill;
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="approval-item">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+                <MudStack Spacing="0">
+                    <MudLink Href="@($"purchasing/bills/{b.Id}")" Typo="Typo.h6">@b.Number · @b.VendorName invoice @b.InvoiceNumber</MudLink>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@PurchasingFormat.Date(b.InvoiceDate) · due @PurchasingFormat.Date(b.DueDate) · bill total @PurchasingFormat.Amount(b.Amount) · entered by @b.EnteredBy</MudText>
+                </MudStack>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RejectAsync(b))">Reject</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => ApproveAsync(b))" data-testid="approve">Approve @PurchasingFormat.Amount(item.Lines.Sum(l => l.Amount))</MudButton>
+            </MudStack>
+            <BillLinesTable Lines="item.Lines" />
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<BillApprovalItemDto> _items = [];
+    private bool _loading = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await Bills.ListApprovalQueueAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+
+    private async Task ApproveAsync(BillSummaryDto bill)
+    {
+        try
+        {
+            var result = await Bills.ApproveAsync(bill.Id);
+            Snackbar.Add(result.Bill.Status switch
+            {
+                BillState.Posted => $"{bill.Number} approved and posted.",
+                BillState.Approved => $"{bill.Number} approved, but posting failed: {result.Bill.PostingProblem}",
+                _ => $"Your lines on {bill.Number} are approved; other approvers are still pending.",
+            }, result.Bill.Status == BillState.Approved ? Severity.Warning : Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task RejectAsync(BillSummaryDto bill)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, $"Reject {bill.Number}", "Reject", $"{bill.EnteredBy} is notified.", color: Color.Error) is not { } reason)
+        {
+            return;
+        }
+
+        try
+        {
+            await Bills.RejectAsync(bill.Id, new BillReasonRequest(reason));
+            Snackbar.Add($"{bill.Number} rejected.", Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+}

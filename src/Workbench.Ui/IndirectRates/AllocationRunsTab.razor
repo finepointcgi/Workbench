@@ -1,0 +1,218 @@
+@* Monthly allocation runs: preview each period's burden and post, re-run or reverse it. *@
+@inject IIndirectRateService Rates
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudSelect T="int" Value="_year" ValueChanged="SelectYearAsync" Label="Fiscal year" Dense="true" Style="max-width:160px">
+        @foreach (var y in IndirectRatesFormat.FiscalYears(Periods))
+        {
+            <MudSelectItem T="int" Value="y">FY@(y)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Run after the period's time and ODCs are approved and posted. Provisional rates apply to approved direct labor and allowable ODCs dated in the period.
+    </MudText>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="allocation-runs">
+            <thead><tr><th>Period</th><th style="text-align:right">Burden to apply</th><th>Posted</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var run in _runs)
+                {
+                    <tr>
+                        <td>@run.PeriodName @(run.PeriodClosed ? "(closed)" : "")</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(run.PreviewTotal)</td>
+                        <td>
+                            @if (run.Posted is { } posted)
+                            {
+                                <span>@posted.EntryNumber · @AccountingFormat.Amount(posted.Total) · run @posted.Revision</span>
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (run.Posted is null && run.PreviewTotal == 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Nothing to allocate</MudChip>
+                            }
+                            else if (run.IsCurrent)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Check">Posted</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@(run.Posted is null ? "Not posted" : "Out of date")</MudChip>
+                            }
+                        </td>
+                        <td style="white-space:nowrap">
+                            <MudButton Size="Size.Small" OnClick="() => PreviewAsync(run.FiscalPeriodId)" data-testid="@($"preview-{run.PeriodName}")">Preview</MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Disabled="@(_busy || run.PeriodClosed)" OnClick="() => PostAsync(run)"
+                                       data-testid="@($"post-{run.PeriodName}")">@(run.Posted is null ? "Post" : "Re-run")</MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Warning" Disabled="@(_busy || run.PeriodClosed || run.Posted is null)" OnClick="() => ReverseAsync(run)">Reverse</MudButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (_preview is { } p)
+    {
+        <MudPaper Outlined="true" Class="pa-4" data-testid="allocation-preview">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.h6" HtmlTag="h2">Allocation preview · @p.PeriodName</MudText>
+                <MudSpacer />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@IndirectRatesFormat.Rates(p.Rates)</MudText>
+            </MudStack>
+            @foreach (var note in p.Notes)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+            }
+            <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true">
+                    <thead>
+                        <tr><th>Project</th><th>WBS</th><th style="text-align:right">Direct labor</th><th style="text-align:right">Direct ODC</th><th style="text-align:right">Fringe</th>
+                            <th style="text-align:right">Overhead</th><th style="text-align:right">G&amp;A</th><th style="text-align:right">Burden</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in p.Lines)
+                        {
+                            <tr>
+                                <td>@l.ProjectCode</td>
+                                <td>@l.WbsCode</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(l.DirectLabor)</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(l.DirectOdc)</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(l.Fringe)</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(l.Overhead)</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(l.GeneralAndAdministrative)</td>
+                                <td style="text-align:right"><b>@AccountingFormat.Amount(l.Burden)</b></td>
+                            </tr>
+                        }
+                        <tr>
+                            <td colspan="2"><b>Total</b></td>
+                            <td style="text-align:right"><b>@AccountingFormat.Amount(p.Lines.Sum(l => l.DirectLabor))</b></td>
+                            <td style="text-align:right"><b>@AccountingFormat.Amount(p.Lines.Sum(l => l.DirectOdc))</b></td>
+                            <td style="text-align:right"><b>@AccountingFormat.Amount(p.Lines.Sum(l => l.Fringe))</b></td>
+                            <td style="text-align:right"><b>@AccountingFormat.Amount(p.Lines.Sum(l => l.Overhead))</b></td>
+                            <td style="text-align:right"><b>@AccountingFormat.Amount(p.Lines.Sum(l => l.GeneralAndAdministrative))</b></td>
+                            <td style="text-align:right"><b>@AccountingFormat.Amount(p.Total)</b></td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Posting debits each pool's applied-burden account on the project and WBS and credits the pool's applied (contra) account. Re-running reverses the posted run first.
+            </MudText>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+
+    private int _year;
+    private IReadOnlyList<AllocationRunSummaryDto> _runs = [];
+    private AllocationPreviewDto? _preview;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _year = IndirectRatesFormat.DefaultYear(Periods);
+        await LoadAsync();
+    }
+
+    private async Task SelectYearAsync(int year)
+    {
+        _year = year;
+        _preview = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _runs = await Rates.ListAllocationRunsAsync(_year);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    private async Task PreviewAsync(Guid periodId)
+    {
+        try
+        {
+            _preview = await Rates.PreviewAllocationAsync(periodId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task PostAsync(AllocationRunSummaryDto run)
+    {
+        _busy = true;
+        try
+        {
+            _preview = await Rates.PostAllocationAsync(run.FiscalPeriodId);
+            Snackbar.Add(_preview.Posted is { } posted
+                ? $"Allocation for {run.PeriodName} posted as {posted.EntryNumber} ({AccountingFormat.Amount(posted.Total)})."
+                : $"Nothing to allocate in {run.PeriodName}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReverseAsync(AllocationRunSummaryDto run)
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog>
+        {
+            { d => d.Message, $"Reverse the {run.PeriodName} allocation? A reversing entry is posted in the same period." },
+            { d => d.ConfirmText, "Reverse" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>($"Reverse {run.PeriodName} allocation", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _preview = await Rates.ReverseAllocationAsync(run.FiscalPeriodId, new ReverseAllocationRequest(reason));
+            Snackbar.Add($"Allocation for {run.PeriodName} reversed.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
