@@ -37,11 +37,13 @@ public sealed class MobileTimePageTests
         // Used this period: offered as a row. Never used: only in "Add a charge code".
         Assert.Equal("", page.Find("[data-testid='hours-IND.OH']").GetAttribute("value") ?? "");
         Assert.Empty(page.FindAll("[data-testid='hours-LV.PTO']"));
-        Assert.Contains("LV.PTO", page.Find("[data-testid='add-code']").InnerHtml);
+        // Leave reads by name, not by code.
+        Assert.Contains("Paid time off", page.Find("[data-testid='add-code']").InnerHtml);
+        Assert.DoesNotContain("LV.PTO", page.Find("[data-testid='add-code']").InnerHtml);
         Assert.True(page.Find("button[data-testid='save']").HasAttribute("disabled"));
 
-        page.FindAll("button[aria-label='More time on IND.OH']").Single().Click();
-        page.FindAll("button[aria-label='More time on IND.OH']").Single().Click();
+        page.FindAll("button[aria-label='More time on Overhead (IND.OH)']").Single().Click();
+        page.FindAll("button[aria-label='More time on Overhead (IND.OH)']").Single().Click();
         page.Find("[data-testid='hours-1001.01']").Change("5,5");
         page.Find("button[data-testid='save']").Click();
 

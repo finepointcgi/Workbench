@@ -1,13 +1,30 @@
-@* A list of purchase orders with received, billed and committed amounts. *@
+@* A list of purchase orders with received, billed and committed amounts (dollar columns only when ShowAmounts). *@
 @if (Orders.Count == 0)
 {
-    <MudText Class="mud-text-secondary">No purchase orders.</MudText>
+    @if (Empty is not null)
+    {
+        @Empty
+    }
+    else
+    {
+        <MudText Class="mud-text-secondary" data-testid="orders-empty">No purchase orders yet. Approved requisitions become purchase orders here.</MudText>
+    }
 }
 else
 {
     <MudPaper Elevation="0" Style="overflow-x:auto">
         <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="orders">
-            <thead><tr><th>PO</th><th>Vendor</th><th>Date</th><th>Rev</th><th style="text-align:right">Total</th><th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th style="text-align:right">Committed</th><th>Status</th></tr></thead>
+            <thead>
+                <tr>
+                    <th><Term Key="po">PO</Term></th><th>Vendor</th><th>Date</th><th title="Revision">Rev</th>
+                    @if (ShowAmounts)
+                    {
+                        <th style="text-align:right">Total</th><th style="text-align:right">Received</th><th style="text-align:right">Billed</th>
+                        <th style="text-align:right"><Term Key="committed">Committed</Term></th>
+                    }
+                    <th>Status</th>
+                </tr>
+            </thead>
             <tbody>
                 @foreach (var o in Orders)
                 {
@@ -16,10 +33,13 @@ else
                         <td>@o.VendorCode · @o.VendorName</td>
                         <td style="white-space:nowrap">@PurchasingFormat.Date(o.OrderDate)</td>
                         <td>@o.Revision</td>
-                        <td style="text-align:right">@PurchasingFormat.Amount(o.Total)</td>
-                        <td style="text-align:right">@PurchasingFormat.Amount(o.Received)</td>
-                        <td style="text-align:right">@PurchasingFormat.Amount(o.Billed)</td>
-                        <td style="text-align:right">@PurchasingFormat.Amount(o.Committed)</td>
+                        @if (ShowAmounts)
+                        {
+                            <td style="text-align:right">@PurchasingFormat.Amount(o.Total)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(o.Received)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(o.Billed)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(o.Committed)</td>
+                        }
                         <td><OrderStatusChip Status="o.Status" /></td>
                     </tr>
                 }
@@ -31,4 +51,10 @@ else
 @code {
     [Parameter] public IReadOnlyList<PurchaseOrderSummaryDto> Orders { get; set; } = [];
     [Parameter] public string LinkPrefix { get; set; } = "purchasing/orders/";
+
+    /// <summary>False hides the dollar columns (receivers outside Finance only need what to receive).</summary>
+    [Parameter] public bool ShowAmounts { get; set; } = true;
+
+    /// <summary>What to show when there are no orders.</summary>
+    [Parameter] public RenderFragment? Empty { get; set; }
 }

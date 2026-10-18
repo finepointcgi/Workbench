@@ -66,17 +66,16 @@ else
     {
         <div class="wb-m-card" data-testid="@($"row-{row.Code}")">
             <div class="wb-m-kv">
-                <b class="wb-m-wrap">@row.Code</b>
-                <span class="wb-m-muted">@row.ProjectCode</span>
+                <b class="wb-m-wrap">@RowLabel(row)</b>
             </div>
-            <div class="wb-m-muted wb-m-wrap">@row.Name</div>
+            <div class="wb-m-muted wb-m-wrap">@ChargeCodeText.Context(KindOf(row), row.ProjectCode)</div>
             <div class="wb-m-stepper">
-                <button type="button" class="wb-m-step" aria-label="@($"Less time on {row.Code}")" disabled="@(!CanEdit || row.Hours <= 0)"
+                <button type="button" class="wb-m-step" aria-label="@($"Less time on {RowLabel(row)}")" disabled="@(!CanEdit || row.Hours <= 0)"
                         @onclick="() => Step(row, -Increment)">−</button>
-                <input class="wb-m-input" inputmode="decimal" autocomplete="off" aria-label="@($"Hours on {row.Code}")"
+                <input class="wb-m-input" inputmode="decimal" autocomplete="off" aria-label="@($"Hours on {RowLabel(row)}")"
                        value="@row.Text" disabled="@(!CanEdit)" data-testid="@($"hours-{row.Code}")"
                        @onchange="e => Type(row, e.Value?.ToString())" />
-                <button type="button" class="wb-m-step" aria-label="@($"More time on {row.Code}")" disabled="@(!CanEdit || row.Hours >= 24)"
+                <button type="button" class="wb-m-step" aria-label="@($"More time on {RowLabel(row)}")" disabled="@(!CanEdit || row.Hours >= 24)"
                         @onclick="() => Step(row, Increment)">+</button>
             </div>
             @if (row.Invalid)
@@ -94,7 +93,7 @@ else
                 <option value="">Choose…</option>
                 @foreach (var c in _available)
                 {
-                    <option value="@c.ChargeCode.WbsElementId">@c.ChargeCode.Code · @c.ChargeCode.Name</option>
+                    <option value="@c.ChargeCode.WbsElementId">@ChargeCodeText.Label(c.ChargeCode)</option>
                 }
             </select>
         </label>
@@ -244,7 +243,7 @@ else
                 }
 
                 row.Set(p.Hours);
-                _prefilled.Add($"{p.Source} ({p.WbsCode} {MobileFormat.Hours(p.Hours)} h)");
+                _prefilled.Add($"{p.Source} ({MobileFormat.Hours(p.Hours)} h)");
             }
         }
 
@@ -327,6 +326,11 @@ else
             _busy = false;
         }
     }
+
+    private ChargeCodeKind? KindOf(Row row) =>
+        _detail?.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == row.WbsElementId)?.ChargeCode.Kind;
+
+    private string RowLabel(Row row) => ChargeCodeText.Label(row.Code, row.Name, KindOf(row));
 
     private sealed class Row(Guid wbsElementId, string code, string name, string projectCode, Guid? entryId, Guid? laborCategoryId, string? comment, decimal hours)
     {

@@ -10,19 +10,19 @@
 <MudSimpleTable Dense="true" Hover="true" Outlined="true" Class="wbs-fin" Style="overflow-x: auto">
     <thead>
         <tr>
-            <th>WBS</th>
+            <th><Term Key="wbs">WBS</Term></th>
             <th>Name</th>
             @if (!Compact)
             {
                 <th class="num">Budget hrs</th>
                 <th class="num">Actual hrs</th>
-                <th class="num">EAC hrs</th>
-                <th class="num">VAC hrs</th>
+                <th class="num"><Term Key="eac">EAC hrs</Term></th>
+                <th class="num"><Term Key="vac">VAC hrs</Term></th>
             }
             <th class="num">Budget $</th>
             <th class="num">Actual $</th>
-            <th class="num">EAC $</th>
-            <th class="num">VAC $</th>
+            <th class="num"><Term Key="eac">EAC $</Term></th>
+            <th class="num"><Term Key="vac">VAC $</Term></th>
             <th class="num">% spent</th>
             @if (ShowBillable && !Compact)
             {

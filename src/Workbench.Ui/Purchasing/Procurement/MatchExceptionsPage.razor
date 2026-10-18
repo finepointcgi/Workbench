@@ -3,10 +3,10 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<PageTitle>Match exceptions · Purchasing · Workbench</PageTitle>
+<PageTitle>Invoices that don't match the PO · Purchasing · Workbench</PageTitle>
 
-<PurchasingHeader Title="Three-way match exceptions" BackHref="purchasing/bills" BackLabel="Bills"
-                  Subtitle="Bill lines that bill a PO line for more than has been received, or at a price outside the tolerance. They can't be approved until the goods are received, the bill is corrected, or Finance overrides with a reason." />
+<PurchasingHeader Title="Invoices that don't match the PO" TitleTerm="match-exception" BackHref="purchasing/bills" BackLabel="Bills"
+                  Subtitle="Vendor invoice lines that charge for more than was received, or at a price different from the purchase order. They can't be approved until the goods arrive, the invoice is corrected, or Finance overrides with a reason." />
 
 @if (_error is not null)
 {
@@ -17,13 +17,13 @@ else
     <MudSwitch T="bool" Value="_includeOverridden" ValueChanged="v => SetAsync(v)" Label="Include overridden" Color="Color.Primary" Class="mb-2" />
     @if (_rows.Count == 0)
     {
-        <MudAlert Severity="Severity.Success" Dense="true">No match exceptions.</MudAlert>
+        <MudAlert Severity="Severity.Success" Dense="true" data-testid="match-empty">Every vendor invoice matches its purchase order and what was received. Nothing to resolve.</MudAlert>
     }
     else
     {
         <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
             <MudSimpleTable Dense="true" Elevation="0" data-testid="match-exceptions">
-                <thead><tr><th>Bill</th><th>Vendor</th><th>Line</th><th>PO</th><th style="text-align:right">Billed</th><th style="text-align:right">Received</th><th style="text-align:right">Ordered</th><th style="text-align:right">Price</th><th style="text-align:right">PO price</th><th>Problem</th><th></th></tr></thead>
+                <thead><tr><th>Bill</th><th>Vendor</th><th>Line</th><th><Term Key="po">PO</Term></th><th style="text-align:right">Billed</th><th style="text-align:right">Received</th><th style="text-align:right">Ordered</th><th style="text-align:right">Price</th><th style="text-align:right">PO price</th><th>Problem</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var r in _rows)
                     {

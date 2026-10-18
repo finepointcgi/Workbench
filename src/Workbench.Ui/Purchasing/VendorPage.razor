@@ -98,7 +98,7 @@ else
                 else
                 {
                     <MudSimpleTable Dense="true" Elevation="0">
-                        <thead><tr><th>Number</th><th>Description</th><th>Status</th><th style="text-align:right">Funded</th><th style="text-align:right">Billed</th><th style="text-align:right">Remaining funding</th></tr></thead>
+                        <thead><tr><th>Number</th><th>Description</th><th>Status</th><th style="text-align:right"><Term Key="funded">Funded</Term></th><th style="text-align:right">Billed</th><th style="text-align:right">Remaining funding</th></tr></thead>
                         <tbody>
                             @foreach (var s in _subs)
                             {

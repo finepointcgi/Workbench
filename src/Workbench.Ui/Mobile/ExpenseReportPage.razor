@@ -48,7 +48,7 @@ else
     {
         <div class="wb-m-card" data-testid="line">
             <div class="wb-m-kv"><b class="wb-m-wrap">@line.Description</b><b>@MobileFormat.Money(line.Amount)</b></div>
-            <div class="wb-m-muted wb-m-wrap">@MobileFormat.Day(line.IncurredOn) · @line.Type · @line.WbsCode@(line.Vendor is { } v ? $" · {v}" : "")</div>
+            <div class="wb-m-muted wb-m-wrap">@MobileFormat.Day(line.IncurredOn) · @line.Type · @ChargeCodeText.Label(line.WbsCode, line.WbsName)@(line.Vendor is { } v ? $" · {v}" : "")</div>
             @if (line.IsUnallowable)
             {
                 <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Unallowable</MudChip>

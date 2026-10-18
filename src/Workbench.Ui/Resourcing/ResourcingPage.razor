@@ -2,6 +2,7 @@
 @inject IPeopleService People
 @inject IProjectService ProjectService
 @inject IResourceAllocationService Allocations
+@inject ICurrentUserContext CurrentUser
 @inject ISnackbar Snackbar
 
 <PageTitle>Resourcing · Workbench</PageTitle>
@@ -9,17 +10,25 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1">
     <MudText Typo="Typo.h4" HtmlTag="h1">Resourcing</MudText>
 </MudStack>
-<MudText Class="mud-text-secondary mb-3">
-    Who is planned where, week by week: capacity is standard hours less holidays, approved leave and a non-billable allowance.
-</MudText>
-
 @if (_context is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
+else if (!_staffing)
+{
+    @* Employees: just their own plan. Staffing tabs are for project managers, resource managers and Finance. *@
+    <MudText Class="mud-text-secondary mb-3">The projects you're planned to work on, and how many hours a week.</MudText>
+    <MyAllocationsCard Weeks="8" ShowWhenEmpty="true" ShowLink="false" />
+}
 else
 {
+    <MudText Class="mud-text-secondary mb-3">
+        Who is planned where, week by week. <Term Key="capacity">Capacity</Term> is a person's standard hours less holidays, approved leave and time for non-project work.
+    </MudText>
     <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-3" @bind-ActivePanelIndex="_tab" data-testid="resourcing-tabs">
+        <MudTabPanel Text="My allocations">
+            <MyAllocationsCard Weeks="8" ShowWhenEmpty="true" ShowLink="false" />
+        </MudTabPanel>
         <MudTabPanel Text="Heat map">
             <HeatMapTab Lookups="_context" />
         </MudTabPanel>
@@ -37,7 +46,10 @@ else
 
 @code {
     private ResourcingContext? _context;
-    private int _tab;
+    private int _tab = 1;
+
+    /// <summary>Project managers, resource managers and Finance see the staffing tabs (cosmetic; the server limits the data).</summary>
+    private bool _staffing;
 
     protected override async Task OnInitializedAsync()
     {
@@ -56,6 +68,9 @@ else
 
             var categories = await People.ListLaborCategoriesAsync();
             _context = new ResourcingContext(employees.OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToList(), projects, manageable, categories);
+            var me = await CurrentUser.GetAsync();
+            _staffing = me.IsFinance || me.Roles.IsResourceManager() || manageable.Count > 0
+                || (me.EmployeeId is { } id && projects.Any(p => p.ProjectManagerId == id));
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
         {

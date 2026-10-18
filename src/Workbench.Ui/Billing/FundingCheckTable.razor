@@ -2,8 +2,8 @@
 <MudPaper Outlined="true" Style="overflow-x:auto">
     <MudSimpleTable Dense="true" data-testid="funding-check">
         <thead>
-            <tr><th>CLIN</th><th style="text-align:right">Previously billed</th><th style="text-align:right">This invoice</th><th style="text-align:right">Billed to date</th>
-                <th style="text-align:right">Funded</th><th style="text-align:right">Funded remaining</th><th style="text-align:right">Ceiling</th><th>Check</th></tr>
+            <tr><th><Term Key="clin">CLIN</Term></th><th style="text-align:right">Previously billed</th><th style="text-align:right">This invoice</th><th style="text-align:right">Billed to date</th>
+                <th style="text-align:right"><Term Key="funded">Funded</Term></th><th style="text-align:right"><Term Key="funded">Funded remaining</Term></th><th style="text-align:right"><Term Key="ceiling">Ceiling</Term></th><th>Check</th></tr>
         </thead>
         <tbody>
             @if (Funding.Count == 0)

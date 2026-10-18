@@ -3,7 +3,7 @@
     <MudSimpleTable Dense="true" Hover="true" data-testid="invoice-lines">
         <thead>
             <tr>
-                <th>#</th><th>Kind</th><th>Description</th><th>WBS</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th>
+                <th>#</th><th>Kind</th><th>Description</th><th><Term Key="wbs">WBS</Term></th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th>
                 <th style="text-align:right">Amount</th>
                 @if (OnRemove.HasDelegate)
                 {
