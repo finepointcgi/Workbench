@@ -411,6 +411,348 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("GlWbsCostPools", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccumulatedDepreciationAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AssetAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DefaultLifeYears")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DefaultMethod")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MacrsRecoveryYears")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccumulatedDepreciationAccountId");
+
+                    b.HasIndex("AssetAccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.ToTable("AssetCategory");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetDepreciation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("AssetId", "FiscalPeriodId")
+                        .IsUnique();
+
+                    b.ToTable("AssetDepreciation");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetDepreciationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AssetCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RunAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("AssetDepreciationRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("FromCustodianEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromLocation")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("FromOrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("FromProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ToCustodianEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToLocation")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ToOrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ToProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TransferredBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TransferredOn")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId");
+
+                    b.ToTable("AssetTransfer");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.FixedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AccumulatedDepreciation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccumulatedDepreciationAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("AcquisitionDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AssetAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CapitalizationEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Cost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustodianEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DisposalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("DisposalProceeds")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisposalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DisposedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GovernmentPropertyNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("InServiceDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsContractorAcquired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsGovernmentFurnished")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("MacrsRecoveryYears")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("SalvageValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceBillLineId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TagNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsefulLifeYears")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccumulatedDepreciationAccountId");
+
+                    b.HasIndex("AssetAccountId");
+
+                    b.HasIndex("CapitalizationEntryId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("CustodianEmployeeId");
+
+                    b.HasIndex("DisposalEntryId");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("SourceBillLineId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TagNumber")
+                        .IsUnique();
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("FixedAsset");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Automation.Rule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1030,6 +1372,438 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("UnbilledAccrual");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountNumberLast4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CsvMappingJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GlAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedAccountNumber")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoutingNumber")
+                        .HasMaxLength(9)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GlAccountId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("BankAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankCloseWaiver", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("WaivedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WaivedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.ToTable("BankCloseWaivers", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankMatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Confidence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("MatchedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MatchedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReconciliationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Rule")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReconciliationId");
+
+                    b.HasIndex("BankAccountId", "ReconciliationId");
+
+                    b.ToTable("BankMatches", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankMatchLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("JournalLineId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MatchId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalLineId");
+
+                    b.HasIndex("MatchId");
+
+                    b.HasIndex("BankAccountId", "JournalLineId")
+                        .IsUnique();
+
+                    b.ToTable("BankMatchLines", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankReconciliation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DepositsInTransit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("GlBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("OutstandingPayments")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReopenReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReopenedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReopenedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StartedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StatementEndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("StatementEndingBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("UnrecordedBankItems")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId", "StatementEndDate")
+                        .IsUnique();
+
+                    b.ToTable("BankReconciliations", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankStatementImport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ClosingBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DuplicateCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Format")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("OpeningBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PeriodEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PeriodStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TransactionCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId", "ImportedAtUtc");
+
+                    b.ToTable("BankStatementImports", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BankReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CheckNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("MatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("MatchId");
+
+                    b.HasIndex("BankAccountId", "Date");
+
+                    b.HasIndex("BankAccountId", "Fingerprint");
+
+                    b.ToTable("BankTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.CashForecastItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CashForecastItems", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.CashSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MatchDateWindowDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PayCycleDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("PayDateAnchor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("PayrollAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CashSettings", (string)null);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Collaboration.ActivityEvent", b =>
@@ -1656,6 +2430,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<bool>("IsFinance")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsResourceManager")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsTimekeeper")
                         .HasColumnType("INTEGER");
 
@@ -1708,6 +2485,209 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("WorkspaceMember");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AvailableJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CreateCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EncryptedToken")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ErrorCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ErrorsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ImportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MappingJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OptionsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlanJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RolledBackAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RolledBackBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SkipCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UpdateCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.ToTable("ImportJob");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportJobFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(127)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ImportJobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportJobId");
+
+                    b.ToTable("ImportJobFile");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportJobRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ImportJobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityId");
+
+                    b.HasIndex("ImportJobId", "Sequence");
+
+                    b.ToTable("ImportJobRecord");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportKeyMap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ImportJobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityId");
+
+                    b.HasIndex("Scope", "ExternalId");
+
+                    b.ToTable("ImportKeyMap");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Item", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1747,6 +2727,246 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("SheetId", "ParentId", "Order");
 
                     b.ToTable("Items");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.Holiday", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Hours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique();
+
+                    b.ToTable("Holiday");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveAccrualTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("MaxBalance")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MinYearsOfService")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyId");
+
+                    b.ToTable("LeaveAccrualTier");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyId");
+
+                    b.HasIndex("SourceKey");
+
+                    b.HasIndex("EmployeeId", "PolicyId", "Date");
+
+                    b.ToTable("LeaveLedgerEntry");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeavePolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowNegativeBalance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("CarryoverLimit")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("MaxBalance")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("WaitingPeriodDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("LeavePolicy");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecisionComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyId");
+
+                    b.HasIndex("EmployeeId", "StartDate");
+
+                    b.ToTable("LeaveRequest");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveRequestDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("LeaveRequestDay");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Notifications.Notification", b =>
@@ -1828,6 +3048,699 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("NotificationPreference");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("AnnualSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("HourlyRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PayGroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderEmployeeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.HasIndex("PayGroupId");
+
+                    b.ToTable("EmployeePayProfile");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("AnchorDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CheckDateOffsetDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("PayGroup");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayPeriod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("CheckDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("End")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PayGroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Start")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayGroupId", "Start")
+                        .IsUnique();
+
+                    b.ToTable("PayPeriod");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EarningCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("PayrollExportLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollProviderSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EarningCodes")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ExportSalariedRegularHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique();
+
+                    b.ToTable("PayrollProviderSetting");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRegister", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "ContentHash");
+
+                    b.ToTable("PayrollRegister");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRegisterLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("CheckDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Deductions")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmployeeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EmployeeTaxes")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EmployerBenefits")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EmployerTaxes")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("GrossWages")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("NetPay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderEmployeeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RegisterId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("RegisterId");
+
+                    b.ToTable("PayrollRegisterLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExportContent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExportFileName")
+                        .HasMaxLength(260)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExportedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayGroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PostedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RegisterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VoidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("PayPeriodId");
+
+                    b.HasIndex("PayGroupId", "PayPeriodId");
+
+                    b.ToTable("PayrollRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ExpenseReportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("FirstDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("LastDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OdcEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TravelPerDiemId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OdcEntryId");
+
+                    b.HasIndex("TravelPerDiemId");
+
+                    b.ToTable("PerDiemLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemMieTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Breakfast")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Dinner")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("FirstLastDay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FiscalYear")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Incidentals")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Lunch")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId", "Total");
+
+                    b.ToTable("PerDiemMieTier");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("County")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FiscalYear")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsStandard")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LodgingMax")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("MieRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SeasonEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SeasonStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId", "State", "Destination");
+
+                    b.ToTable("PerDiemRate");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemRateBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FiscalYear")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RateCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TierCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalYear", "Kind", "ImportedAtUtc");
+
+                    b.ToTable("PerDiemRateBatch");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("BreakfastProvided")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("DinnerProvided")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Justification")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LodgingClaimed")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LodgingTaxClaimed")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("LunchProvided")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("MieClaimed")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TravelPerDiemId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TravelPerDiemId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("TravelDay");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelDestination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ArriveOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("DepartOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TravelPerDiemId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TravelPerDiemId");
+
+                    b.ToTable("TravelDestination");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelPerDiem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AppliedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ExpenseReportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("LodgingTaxesSeparate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseReportId")
+                        .IsUnique();
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("TravelPerDiem");
                 });
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.AuditEvent", b =>
@@ -3260,6 +5173,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<int>("LineNumber")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("MatchOverrideAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MatchOverrideBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MatchOverrideReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MatchProblem")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("OdcEntryId")
                         .HasColumnType("TEXT");
 
@@ -3273,6 +5201,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PurchaseOrderLineId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("RetainageAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
@@ -3283,6 +5218,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("SubcontractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("UnitPrice")
+                        .HasPrecision(18, 4)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("WbsElementId")
@@ -3299,6 +5238,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("OrgUnitId");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("PurchaseOrderLineId");
 
                     b.HasIndex("SubcontractId");
 
@@ -3422,6 +5363,470 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("ApPaymentRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("IssuedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IssuedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("OrderDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceiverEmails")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ShipTo")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("VendorId", "Status");
+
+                    b.ToTable("PurchaseOrder");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrderLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsService")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("NeededBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OdcType")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PurchaseOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("QuantityReceived")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RequisitionLineId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("RequisitionLineId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("PurchaseOrderLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrderRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Changes")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PurchaseOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("TotalAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalBefore")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseOrderId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("PurchaseOrderRevision");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PurchaseOrderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceivedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.ToTable("PurchaseReceipt");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseReceiptLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsAcceptance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PurchaseOrderLineId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseOrderLineId");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.ToTable("PurchaseReceiptLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseRequisition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Justification")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("NeedsFinance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequesterEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RequesterEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stage")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("RequesterEmployeeId");
+
+                    b.HasIndex("Status", "RequesterEmail");
+
+                    b.ToTable("PurchaseRequisition");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseRequisitionLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApproverEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("NeededBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OdcType")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PurchaseOrderLineId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequisitionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SuggestedVendorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("PurchaseOrderLineId");
+
+                    b.HasIndex("RequisitionId");
+
+                    b.HasIndex("SuggestedVendorId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("PurchaseRequisitionLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.RequisitionApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecidedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequisitionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequisitionId");
+
+                    b.ToTable("RequisitionApproval");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.Subcontract", b =>
@@ -3690,6 +6095,75 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("VendorTaxId");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.ResourceAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LaborCategoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Percent")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("WeekStart")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LaborCategoryId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.HasIndex("EmployeeId", "WeekStart");
+
+                    b.HasIndex("ProjectId", "WeekStart");
+
+                    b.ToTable("ResourceAllocation");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Scheduling.Baseline", b =>
@@ -4067,6 +6541,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<bool>("IsFinance")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsResourceManager")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsTimekeeper")
                         .HasColumnType("INTEGER");
 
@@ -4239,6 +6716,143 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetCategory", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccumulatedDepreciationAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetDepreciation", b =>
+                {
+                    b.HasOne("Workbench.Domain.Assets.FixedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Assets.AssetDepreciationRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetDepreciationRun", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.AssetTransfer", b =>
+                {
+                    b.HasOne("Workbench.Domain.Assets.FixedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Assets.FixedAsset", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccumulatedDepreciationAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AssetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("CapitalizationEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Assets.AssetCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("CustodianEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("DisposalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.ApBillLine", null)
+                        .WithMany()
+                        .HasForeignKey("SourceBillLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Automation.Rule", b =>
                 {
                     b.HasOne("Workbench.Domain.Sheet", null)
@@ -4396,6 +7010,96 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Cash.BankAccount", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("GlAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankCloseWaiver", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankMatch", b =>
+                {
+                    b.HasOne("Workbench.Domain.Cash.BankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Cash.BankReconciliation", null)
+                        .WithMany()
+                        .HasForeignKey("ReconciliationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankMatchLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.JournalLine", null)
+                        .WithMany()
+                        .HasForeignKey("JournalLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Cash.BankMatch", null)
+                        .WithMany("GlLines")
+                        .HasForeignKey("MatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankReconciliation", b =>
+                {
+                    b.HasOne("Workbench.Domain.Cash.BankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankStatementImport", b =>
+                {
+                    b.HasOne("Workbench.Domain.Cash.BankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Cash.BankTransaction", b =>
+                {
+                    b.HasOne("Workbench.Domain.Cash.BankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Cash.BankStatementImport", null)
+                        .WithMany()
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Cash.BankMatch", null)
+                        .WithMany()
+                        .HasForeignKey("MatchId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Column", b =>
                 {
                     b.HasOne("Workbench.Domain.Sheet", null)
@@ -4423,12 +7127,228 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportJobFile", b =>
+                {
+                    b.HasOne("Workbench.Domain.Imports.ImportJob", null)
+                        .WithMany("Files")
+                        .HasForeignKey("ImportJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportJobRecord", b =>
+                {
+                    b.HasOne("Workbench.Domain.Imports.ImportJob", null)
+                        .WithMany()
+                        .HasForeignKey("ImportJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Item", b =>
                 {
                     b.HasOne("Workbench.Domain.Sheet", null)
                         .WithMany("Items")
                         .HasForeignKey("SheetId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveAccrualTier", b =>
+                {
+                    b.HasOne("Workbench.Domain.Leave.LeavePolicy", null)
+                        .WithMany("Tiers")
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveLedgerEntry", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Leave.LeavePolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeavePolicy", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveRequest", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Leave.LeavePolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveRequestDay", b =>
+                {
+                    b.HasOne("Workbench.Domain.Leave.LeaveRequest", null)
+                        .WithMany("Days")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayProfile", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Payroll.PayGroup", null)
+                        .WithMany()
+                        .HasForeignKey("PayGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayPeriod", b =>
+                {
+                    b.HasOne("Workbench.Domain.Payroll.PayGroup", null)
+                        .WithMany()
+                        .HasForeignKey("PayGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Payroll.PayrollRun", null)
+                        .WithMany("ExportLines")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRegister", b =>
+                {
+                    b.HasOne("Workbench.Domain.Payroll.PayrollRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRegisterLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Payroll.PayrollRegister", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("RegisterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRun", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Payroll.PayGroup", null)
+                        .WithMany()
+                        .HasForeignKey("PayGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Payroll.PayPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("PayPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.PerDiem.TravelPerDiem", null)
+                        .WithMany()
+                        .HasForeignKey("TravelPerDiemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemMieTier", b =>
+                {
+                    b.HasOne("Workbench.Domain.PerDiem.PerDiemRateBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.PerDiemRate", b =>
+                {
+                    b.HasOne("Workbench.Domain.PerDiem.PerDiemRateBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelDay", b =>
+                {
+                    b.HasOne("Workbench.Domain.PerDiem.TravelPerDiem", null)
+                        .WithMany("Days")
+                        .HasForeignKey("TravelPerDiemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelDestination", b =>
+                {
+                    b.HasOne("Workbench.Domain.PerDiem.TravelPerDiem", null)
+                        .WithMany("Destinations")
+                        .HasForeignKey("TravelPerDiemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelPerDiem", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.ExpenseReport", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -4794,6 +7714,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseOrderLine", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.Purchasing.Subcontract", null)
                         .WithMany()
                         .HasForeignKey("SubcontractId")
@@ -4827,6 +7752,133 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
                         .WithMany()
                         .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrder", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrderLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseOrder", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrderRevision", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseOrder", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseReceipt", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseOrder", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseReceiptLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseOrderLine", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseReceipt", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseRequisition", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseRequisitionLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseRequisition", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("RequisitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedVendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.RequisitionApproval", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.PurchaseRequisition", null)
+                        .WithMany()
+                        .HasForeignKey("RequisitionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -4883,6 +7935,31 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.ResourceAllocation", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.LaborCategory", null)
+                        .WithMany()
+                        .HasForeignKey("LaborCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Scheduling.Baseline", b =>
@@ -4975,9 +8052,46 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Navigation("Applications");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Cash.BankMatch", b =>
+                {
+                    b.Navigation("GlLines");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Dashboards.Dashboard", b =>
                 {
                     b.Navigation("Widgets");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Imports.ImportJob", b =>
+                {
+                    b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeavePolicy", b =>
+                {
+                    b.Navigation("Tiers");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Leave.LeaveRequest", b =>
+                {
+                    b.Navigation("Days");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRegister", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollRun", b =>
+                {
+                    b.Navigation("ExportLines");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.PerDiem.TravelPerDiem", b =>
+                {
+                    b.Navigation("Days");
+
+                    b.Navigation("Destinations");
                 });
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.BudgetVersion", b =>
@@ -4991,6 +8105,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.ApBill", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseReceipt", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.PurchaseRequisition", b =>
                 {
                     b.Navigation("Lines");
                 });

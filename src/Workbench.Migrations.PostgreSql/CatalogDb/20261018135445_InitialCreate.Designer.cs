@@ -12,7 +12,7 @@ using Workbench.Infrastructure.Tenancy;
 namespace Workbench.Migrations.PostgreSql.CatalogDb
 {
     [DbContext(typeof(CatalogDbContext))]
-    [Migration("20261018125453_InitialCreate")]
+    [Migration("20261018135445_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
