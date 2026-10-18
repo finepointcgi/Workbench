@@ -270,7 +270,7 @@ public sealed class MobileWorkflowPageTests
         var requests = Add<ILeaveRequestService>(ctx)
             .Returns(nameof(ILeaveRequestService.ListMineAsync), new List<LeaveRequestDto>())
             .Returns(nameof(ILeaveRequestService.CreateAsync), LeaveRequest());
-        Add<ILeavePolicyService>(ctx).Returns(nameof(ILeavePolicyService.ListAsync), new List<LeavePolicyDto> { policy, holiday });
+        Add<ILeavePolicyService>(ctx).Returns(nameof(ILeavePolicyService.ListMineAsync), new List<LeavePolicyDto> { policy, holiday });
         Providers(ctx);
 
         var page = ctx.Render<LeavePage>();

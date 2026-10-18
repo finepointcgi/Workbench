@@ -158,7 +158,7 @@ internal static class LeaveEngine
     public static decimal? CapFor(LeavePolicy policy, LeaveAccrualTier? tier) => tier?.MaxBalance ?? policy.MaxBalance;
 
     /// <summary>
-    /// Accrues every active accruing policy for the employees in the pay period's pay group. Per-period and per-hour
+    /// Accrues every active accruing policy for the employees in the pay period's pay group it applies to. Per-period and per-hour
     /// policies accrue once per pay period; annual grants once per calendar year (the year of the period's end).
     /// The balance cap stops accrual; the waiting period delays it from the hire date.
     /// </summary>
@@ -178,13 +178,15 @@ internal static class LeaveEngine
         }
 
         var ids = employees.Select(e => e.Id).ToList();
+        var eligibility = await LeaveEligibility.LoadAsync(db, ids, ct);
         await SyncUsageAsync(db, ids, actor, utcNow, ct);
         var balances = await BalancesAsync(db, ids, period.End, ct);
+        // A key counts as accrued while its rows net above zero: a voided payroll's reversal lets the period accrue again.
         var existingKeys = (await db.Set<LeaveLedgerEntry>().AsNoTracking()
                 .Where(l => ids.Contains(l.EmployeeId) && l.SourceKey != null && (l.Kind == LeaveLedgerKind.Accrual || l.Kind == LeaveLedgerKind.Grant))
-                .Select(l => new { l.EmployeeId, l.PolicyId, l.SourceKey })
+                .Select(l => new { l.EmployeeId, l.PolicyId, l.SourceKey, l.Hours })
                 .ToListAsync(ct))
-            .Select(k => (k.EmployeeId, k.PolicyId, k.SourceKey!)).ToHashSet();
+            .GroupBy(k => (k.EmployeeId, k.PolicyId, k.SourceKey!)).Where(g => g.Sum(k => k.Hours) > 0).Select(g => g.Key).ToHashSet();
 
         Dictionary<Guid, decimal>? worked = null;
         if (policies.Any(p => p.Method == AccrualMethod.PerHourWorked))
@@ -206,6 +208,11 @@ internal static class LeaveEngine
         {
             foreach (var policy in policies)
             {
+                if (!eligibility.Applies(policy, employee))
+                {
+                    continue; // The policy doesn't apply to them (Leave › Policies › Applies to).
+                }
+
                 var key = policy.Method == AccrualMethod.AnnualGrant ? GrantKey(period.End.Year) : AccrualKey(period.Id);
                 if (existingKeys.Contains((employee.Id, policy.Id, key)))
                 {
@@ -270,6 +277,50 @@ internal static class LeaveEngine
         await db.SaveChangesAsync(ct);
         return new AccrualRunResultDto(period.Id, period.Start, period.End, added, total, already, notes);
     }
+
+    /// <summary>
+    /// Reverses what a pay period's accrual run added (its per-period accruals, and an annual grant made in it) with
+    /// negative rows under the same source keys, so the balance drops back and accruing the period again adds them
+    /// again. Idempotent: only what still nets above zero is reversed. Not saved.
+    /// </summary>
+    public static async Task<(int Entries, decimal Hours)> ReverseAccrualAsync(IWorkbenchDbContext db, PayPeriod period, string reason, string actor, DateTime utcNow, CancellationToken ct)
+    {
+        var accrualKey = AccrualKey(period.Id);
+        var grantKey = GrantKey(period.End.Year);
+        var rows = await db.Set<LeaveLedgerEntry>().AsNoTracking()
+            .Where(l => (l.Kind == LeaveLedgerKind.Accrual && l.SourceKey == accrualKey)
+                || (l.Kind == LeaveLedgerKind.Grant && l.SourceKey == grantKey && l.Date == period.End))
+            .ToListAsync(ct);
+        int count = 0;
+        decimal hours = 0;
+        foreach (var g in rows.GroupBy(r => (r.EmployeeId, r.PolicyId, r.Kind, r.SourceKey)).OrderBy(g => g.Key.EmployeeId).ThenBy(g => g.Key.PolicyId))
+        {
+            var net = g.Sum(r => r.Hours);
+            if (net <= 0)
+            {
+                continue;
+            }
+
+            db.Set<LeaveLedgerEntry>().Add(new LeaveLedgerEntry
+            {
+                EmployeeId = g.Key.EmployeeId,
+                PolicyId = g.Key.PolicyId,
+                Date = period.End,
+                Kind = g.Key.Kind,
+                Hours = -net,
+                SourceKey = g.Key.SourceKey,
+                Reason = Truncate($"Reversed: payroll for {period.Start:yyyy-MM-dd} – {period.End:yyyy-MM-dd} voided ({reason})", 500),
+                CreatedBy = actor,
+                CreatedAtUtc = utcNow,
+            });
+            count++;
+            hours += net;
+        }
+
+        return (count, hours);
+    }
+
+    private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 
     /// <summary>Forfeits hours above each policy's carryover limit as of December 31 of <paramref name="year"/>. Idempotent per year.</summary>
     public static async Task<YearEndResultDto> YearEndAsync(IWorkbenchDbContext db, int year, string actor, DateTime utcNow, CancellationToken ct)
@@ -336,5 +387,5 @@ internal static class LeaveEngine
     public static LeavePolicyDto ToDto(this LeavePolicy p, string wbsCode) => new(
         p.Id, p.Code, p.Name, (LeaveTypeKind)(int)p.Type, p.WbsElementId, wbsCode, (AccrualMethodKind)(int)p.Method,
         p.Tiers.OrderBy(t => t.MinYearsOfService).Select(t => new AccrualTierDto(t.MinYearsOfService, t.Rate, t.MaxBalance)).ToList(),
-        p.MaxBalance, p.CarryoverLimit, p.WaitingPeriodDays, p.AllowNegativeBalance, p.IsActive);
+        p.MaxBalance, p.CarryoverLimit, p.WaitingPeriodDays, p.AllowNegativeBalance, p.IsActive, LeaveEligibility.ToDto(p));
 }

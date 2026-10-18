@@ -16,7 +16,7 @@
                 <MudLink Href="@item.Link" Typo="Typo.body1" Color="Color.Inherit">@item.Title</MudLink>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                     @item.DocumentLabel
-                    @if (item.Amount is { } amount && item.DocumentType != ApprovalDocumentTypes.Timesheet)
+                    @if (item.Amount is { } amount && !ApprovalDocumentTypes.AmountIsHours(item.DocumentType))
                     {
                         <text> · @TodoFormat.Money(amount)</text>
                     }

@@ -15,6 +15,9 @@ internal sealed class LeavePolicyConfiguration : IEntityTypeConfiguration<LeaveP
         b.Property(p => p.Method).HasConversion<string>().HasMaxLength(24);
         b.Property(p => p.MaxBalance).HasPrecision(9, 2);
         b.Property(p => p.CarryoverLimit).HasPrecision(9, 2);
+        b.Property(p => p.EligibleOrgUnitIds).HasMaxLength(4000);
+        b.Property(p => p.EligiblePayGroupIds).HasMaxLength(4000);
+        b.Property(p => p.EligibleEmploymentTypes).HasMaxLength(200);
         b.HasIndex(p => p.Code).IsUnique();
         b.HasOne<WbsElement>().WithMany().HasForeignKey(p => p.WbsElementId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(p => p.Tiers).WithOne().HasForeignKey(t => t.PolicyId).OnDelete(DeleteBehavior.Cascade);

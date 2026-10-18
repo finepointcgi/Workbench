@@ -17,6 +17,8 @@ internal static class PayrollSeed
     {
         if (await db.Set<PayGroup>().AnyAsync(cancellationToken) || !await db.Set<Employee>().AnyAsync(cancellationToken))
         {
+            // Databases seeded before pay rates had a history: one rate row per profile, from the hire date.
+            await PayRates.BackfillAsync(db, "system", DateTime.UtcNow, cancellationToken);
             return;
         }
 
@@ -76,5 +78,6 @@ internal static class PayrollSeed
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await PayRates.BackfillAsync(db, "seed@workbench.local", now, cancellationToken, "Seeded pay rate");
     }
 }

@@ -243,8 +243,9 @@ public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var employees = await db.Set<Employee>().AsNoTracking().OrderBy(e => e.DisplayName).ToListAsync(cancellationToken);
         var profiles = await db.Set<EmployeePayProfile>().AsNoTracking().ToDictionaryAsync(p => p.EmployeeId, cancellationToken);
+        var history = await PayRates.HistoryAsync(db, profiles.Values.ToList(), cancellationToken);
         var groups = await db.Set<PayGroup>().AsNoTracking().ToDictionaryAsync(g => g.Id, g => g.Code, cancellationToken);
-        return employees.Select(e => ToDto(e, profiles.GetValueOrDefault(e.Id), groups, reveal: false)).ToList();
+        return employees.Select(e => ToDto(e, profiles.GetValueOrDefault(e.Id), history.GetValueOrDefault(e.Id) ?? [], groups, Today, reveal: false, withHistory: false)).ToList();
     }
 
     public async Task<PayProfileDto> GetAsync(Guid employeeId, CancellationToken cancellationToken = default)
@@ -293,12 +294,20 @@ public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, 
             throw new ArgumentException("Enter a salary up to 10,000,000 or an hourly rate up to 10,000.");
         }
 
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        if (reason?.Length > 500)
+        {
+            throw new ArgumentException("The reason can be at most 500 characters.");
+        }
+
         var profile = await db.Set<EmployeePayProfile>().FirstOrDefaultAsync(p => p.EmployeeId == employeeId, cancellationToken);
         var isNew = profile is null;
         profile ??= new EmployeePayProfile { EmployeeId = employeeId, EffectiveFrom = employee.HireDate };
         var before = isNew ? null : Snapshot(profile);
+        var history = isNew ? [] : await PayRates.HistoryAsync(db, profile, cancellationToken);
         var payType = (PayType)(int)request.PayType;
-        var rateChanged = false;
+        var now = clock.GetUtcNow().UtcDateTime;
+        EmployeePayRate? added = null;
         if (request.AnnualSalary is not null || request.HourlyRate is not null || payType != profile.PayType || isNew)
         {
             var salary = payType == PayType.Salaried ? request.AnnualSalary ?? (profile.PayType == payType ? profile.AnnualSalary : null) : null;
@@ -313,53 +322,105 @@ public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, 
                 throw new ArgumentException("An hourly employee needs an hourly pay rate.");
             }
 
-            rateChanged = salary != profile.AnnualSalary || hourly != profile.HourlyRate || payType != profile.PayType;
-            profile.PayType = payType;
-            profile.AnnualSalary = salary;
-            profile.HourlyRate = hourly;
+            var effective = request.EffectiveFrom ?? (isNew ? employee.HireDate : Today);
+            if (effective < employee.HireDate)
+            {
+                throw new ArgumentException($"A pay rate can't start before the hire date ({employee.HireDate:yyyy-MM-dd}).");
+            }
+
+            var inEffect = PayRates.InEffect(history, effective);
+            if (isNew || inEffect is null || salary != inEffect.AnnualSalary || hourly != inEffect.HourlyRate || payType != inEffect.PayType)
+            {
+                // Rates are append-only: the change is a new row from its effective date. A profile saved before the
+                // history existed gets its old rate stored first (from the hire date), so earlier periods keep it.
+                if (!isNew && !await db.Set<EmployeePayRate>().AnyAsync(r => r.EmployeeId == employeeId, cancellationToken))
+                {
+                    foreach (var derived in history)
+                    {
+                        db.Set<EmployeePayRate>().Add(derived);
+                    }
+                }
+
+                added = new EmployeePayRate
+                {
+                    EmployeeId = employeeId,
+                    EffectiveFrom = effective,
+                    PayType = payType,
+                    AnnualSalary = salary,
+                    HourlyRate = hourly,
+                    Reason = reason ?? (isNew ? "Initial pay rate" : null),
+                    CreatedBy = audit.Actor,
+                    CreatedAtUtc = now,
+                };
+                db.Set<EmployeePayRate>().Add(added);
+                PayRates.Mirror(profile, PayRates.Order([.. history, added]));
+            }
         }
 
         profile.PayGroupId = request.PayGroupId;
         profile.ProviderEmployeeId = providerId;
-        if (request.EffectiveFrom is { } from)
+        if (request.EmploymentType is { } type)
         {
-            profile.EffectiveFrom = from;
+            profile.EmploymentType = (EmploymentType)(int)type;
         }
 
-        profile.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
+        profile.UpdatedAtUtc = now;
         profile.UpdatedBy = audit.Actor;
         if (isNew)
         {
             db.Set<EmployeePayProfile>().Add(profile);
         }
 
+        var rateChanged = added is not null && !isNew;
         audit.Record(db, AuditEntityType, profile.Id, isNew ? "Created" : "Updated", before, Snapshot(profile), rateChanged ? "Pay rate changed" : null);
-        await db.SaveChangesAsync(cancellationToken);
-        if (rateChanged && !isNew && securityLog is not null)
+        if (rateChanged)
         {
-            await securityLog.RecordAsync(PayrollSecurityEvents.PayRateChanged, $"employee {employee.EmployeeNumber}", detail: "Pay rate changed", cancellationToken: cancellationToken);
+            // Its own row, so the history of changes is searchable; never the amounts.
+            audit.Record(db, AuditEntityType, profile.Id, "Pay rate changed", null,
+                new { added!.EffectiveFrom, PayType = added.PayType.ToString() }, reason);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        if (rateChanged && securityLog is not null)
+        {
+            await securityLog.RecordAsync(PayrollSecurityEvents.PayRateChanged, $"employee {employee.EmployeeNumber}",
+                detail: $"Pay rate changed from {added!.EffectiveFrom:yyyy-MM-dd}", cancellationToken: cancellationToken);
         }
 
         return await LoadAsync(db, employeeId, reveal: false, cancellationToken);
     }
 
-    private static async Task<PayProfileDto> LoadAsync(IWorkbenchDbContext db, Guid employeeId, bool reveal, CancellationToken ct)
+    private DateOnly Today => DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+
+    private async Task<PayProfileDto> LoadAsync(IWorkbenchDbContext db, Guid employeeId, bool reveal, CancellationToken ct)
     {
         var employee = await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Id == employeeId, ct) ?? throw WorkbenchNotFoundException.For("Employee", employeeId);
         var profile = await db.Set<EmployeePayProfile>().AsNoTracking().FirstOrDefaultAsync(p => p.EmployeeId == employeeId, ct);
+        var history = profile is null ? [] : await PayRates.HistoryAsync(db, profile, ct);
         var groups = await db.Set<PayGroup>().AsNoTracking().ToDictionaryAsync(g => g.Id, g => g.Code, ct);
-        return ToDto(employee, profile, groups, reveal);
+        return ToDto(employee, profile, history, groups, Today, reveal, withHistory: true);
     }
 
-    private static PayProfileDto ToDto(Employee e, EmployeePayProfile? p, IReadOnlyDictionary<Guid, string> groups, bool reveal) => new(
-        e.Id, e.EmployeeNumber, e.DisplayName, e.Email, e.IsExempt, p is not null, p?.PayGroupId,
-        p?.PayGroupId is { } g ? groups.GetValueOrDefault(g) : null, p?.ProviderEmployeeId,
-        p is null ? PayTypeKind.Hourly : (PayTypeKind)(int)p.PayType,
-        p is not null && (p.AnnualSalary ?? p.HourlyRate) is not null,
-        reveal ? p?.AnnualSalary : null, reveal ? p?.HourlyRate : null, p?.EffectiveFrom, p?.UpdatedAtUtc);
+    private static PayProfileDto ToDto(Employee e, EmployeePayProfile? p, IReadOnlyList<EmployeePayRate> history, IReadOnlyDictionary<Guid, string> groups,
+        DateOnly today, bool reveal, bool withHistory)
+    {
+        // What's in effect today (a new hire's first rate may start later).
+        var current = PayRates.InEffect(history, today) ?? (history.Count > 0 ? history[0] : null);
+        return new PayProfileDto(
+            e.Id, e.EmployeeNumber, e.DisplayName, e.Email, e.IsExempt, p is not null, p?.PayGroupId,
+            p?.PayGroupId is { } g ? groups.GetValueOrDefault(g) : null, p?.ProviderEmployeeId,
+            current is not null ? (PayTypeKind)(int)current.PayType : p is null ? PayTypeKind.Hourly : (PayTypeKind)(int)p.PayType,
+            current is not null && (current.AnnualSalary ?? current.HourlyRate) is not null,
+            reveal ? current?.AnnualSalary : null, reveal ? current?.HourlyRate : null, current?.EffectiveFrom ?? p?.EffectiveFrom, p?.UpdatedAtUtc,
+            p is null ? EmploymentTypeKind.FullTime : (EmploymentTypeKind)(int)p.EmploymentType,
+            withHistory
+                ? history.Reverse().Select(r => new PayRateDto(r.EffectiveFrom, (PayTypeKind)(int)r.PayType, reveal ? r.AnnualSalary : null, reveal ? r.HourlyRate : null,
+                    r.Reason, r.CreatedBy, r.CreatedAtUtc, ReferenceEquals(r, current))).ToList()
+                : null);
+    }
 
     // Never the pay rate itself: audit rows are readable by more people than pay rates should be.
-    private static object Snapshot(EmployeePayProfile p) => new { p.PayGroupId, p.ProviderEmployeeId, PayType = p.PayType.ToString(), p.EffectiveFrom };
+    private static object Snapshot(EmployeePayProfile p) => new { p.PayGroupId, p.ProviderEmployeeId, PayType = p.PayType.ToString(), EmploymentType = p.EmploymentType.ToString(), p.EffectiveFrom };
 }
 
 public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, PayrollProviders providers, TimeProvider clock) : IPayrollProviderService
@@ -431,6 +492,7 @@ public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory,
 
         var profiles = await db.Set<EmployeePayProfile>().Where(p => p.PayGroupId == group.Id).ToListAsync(cancellationToken);
         var ids = profiles.Select(p => p.EmployeeId).ToList();
+        var rates = await PayRates.HistoryAsync(db, profiles, cancellationToken);
         var employees = await db.Set<Employee>().AsNoTracking().Where(e => ids.Contains(e.Id)).ToDictionaryAsync(e => e.Id, cancellationToken);
         var orgs = await db.Set<OrgUnit>().AsNoTracking().ToDictionaryAsync(o => o.Id, o => o.Code, cancellationToken);
         var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
@@ -441,8 +503,10 @@ public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory,
             var e = employees[profile.EmployeeId];
             var terminated = e.TerminationDate is { } t && t <= today;
             var (first, last) = SplitName(e.DisplayName);
+            var rate = PayRates.InEffect(rates[profile.EmployeeId], today); // The provider pays the rate in effect now.
             var record = new PayrollEmployeeRecord(e.Id, profile.ProviderEmployeeId, e.EmployeeNumber, first, last, e.Email, e.HireDate, e.TerminationDate, e.IsExempt,
-                profile.PayType.ToString(), profile.AnnualSalary, profile.HourlyRate, e.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null);
+                (rate?.PayType ?? profile.PayType).ToString(), rate is null ? profile.AnnualSalary : rate.AnnualSalary, rate is null ? profile.HourlyRate : rate.HourlyRate,
+                e.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null);
             PayrollSyncAction? action = profile.ProviderEmployeeId is null
                 ? terminated ? null : PayrollSyncAction.Create
                 : terminated ? PayrollSyncAction.Terminate : PayrollSyncAction.Update;

@@ -46,6 +46,13 @@ internal static class PayrollFormat
         _ => f.ToString(),
     };
 
+    public static string Label(EmploymentTypeKind t) => t switch
+    {
+        EmploymentTypeKind.FullTime => "Full-time",
+        EmploymentTypeKind.PartTime => "Part-time",
+        _ => t.ToString(),
+    };
+
     public static async Task DownloadAsync(IJSRuntime js, string fileName, string contentType, string content)
     {
         await using var module = await js.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/financials.js");

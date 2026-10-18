@@ -1,10 +1,15 @@
-@* Leave policies (administrators): charge code, accrual method and tiers, caps, carryover, waiting period, negative balances. *@
+@* Leave policies (administrators): charge code, accrual method and tiers, caps, carryover, waiting period, negative balances,
+   and who the policy applies to. *@
+@using Workbench.Contracts.Payroll
+@using Workbench.Contracts.ProjectAccounting
+@using Microsoft.Extensions.DependencyInjection
 @inject ILeavePolicyService Policies
+@inject IServiceProvider Services
 @inject ISnackbar Snackbar
 
 <MudTable T="LeavePolicyDto" Items="_policies" Dense="true" Class="mb-4" data-testid="policies">
     <HeaderContent>
-        <MudTh>Code</MudTh><MudTh>Name</MudTh><MudTh>Type</MudTh><MudTh>Charge code</MudTh><MudTh>Accrual</MudTh><MudTh>Cap</MudTh><MudTh>Carryover</MudTh><MudTh>Waiting</MudTh><MudTh>Negative</MudTh><MudTh></MudTh>
+        <MudTh>Code</MudTh><MudTh>Name</MudTh><MudTh>Type</MudTh><MudTh>Charge code</MudTh><MudTh>Accrual</MudTh><MudTh>Cap</MudTh><MudTh>Carryover</MudTh><MudTh>Waiting</MudTh><MudTh>Negative</MudTh><MudTh>Applies to</MudTh><MudTh></MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd>@context.Code</MudTd>
@@ -22,6 +27,7 @@
         <MudTd>@(context.CarryoverLimit is { } c ? LeavePage.Hours(c) : "all")</MudTd>
         <MudTd>@context.WaitingPeriodDays d</MudTd>
         <MudTd>@(context.AllowNegativeBalance ? "Allowed" : "Blocked")</MudTd>
+        <MudTd data-testid="@($"applies-{context.Code}")">@AppliesTo(context.Eligibility)</MudTd>
         <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(context)">Edit</MudButton></MudTd>
     </RowTemplate>
 </MudTable>
@@ -61,6 +67,51 @@
         <MudItem xs="12" sm="3"><MudSwitch T="bool" @bind-Value="_f.AllowNegative" Label="Allow negative balance" Color="Color.Primary" /></MudItem>
         <MudItem xs="12" sm="2"><MudSwitch T="bool" @bind-Value="_f.Active" Label="Active" Color="Color.Primary" /></MudItem>
     </MudGrid>
+    <MudText Typo="Typo.subtitle2" Class="mt-3">Applies to</MudText>
+    <MudSwitch T="bool" @bind-Value="_f.Everyone" Label="Everyone" Color="Color.Primary" data-testid="eligibility-everyone" />
+    @if (!_f.Everyone)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            An employee must match every choice you make below (any of the values in each). Leave a choice empty to include everyone for it.
+            Accrual, balances and requests only include employees the policy applies to.
+        </MudText>
+        <MudGrid Spacing="2" data-testid="eligibility">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="Guid" @bind-SelectedValues="_f.OrgUnits" MultiSelection="true" Label="Org units (include their sub-units)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="UnitLabel" data-testid="eligibility-units">
+                    @foreach (var u in _units)
+                    {
+                        <MudSelectItem T="Guid" Value="u.Id">@u.Code · @u.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="Guid" @bind-SelectedValues="_f.PayGroups" MultiSelection="true" Label="Pay groups" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="GroupLabel" Disabled="_groups.Count == 0" data-testid="eligibility-groups">
+                    @foreach (var g in _groups)
+                    {
+                        <MudSelectItem T="Guid" Value="g.Id">@g.Code · @g.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_f.Exempt" Label="Exempt status" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="eligibility-exempt">
+                    <MudSelectItem T="string" Value="@("any")">Exempt and non-exempt</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("exempt")">Exempt only</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("nonexempt")">Non-exempt only</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="EmploymentTypeKind" @bind-SelectedValues="_f.Types" MultiSelection="true" Label="Employment types" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="TypeLabel" data-testid="eligibility-types">
+                    @foreach (var t in Enum.GetValues<EmploymentTypeKind>())
+                    {
+                        <MudSelectItem T="EmploymentTypeKind" Value="t">@TypeLabel(t)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    }
     <MudText Typo="Typo.subtitle2" Class="mt-3">Tiers by years of service (@RateUnit(_f.Method))</MudText>
     @foreach (var tier in _f.Tiers)
     {
@@ -84,6 +135,8 @@
 @code {
     private IReadOnlyList<LeavePolicyDto> _policies = [];
     private IReadOnlyList<LeaveChargeCodeDto> _codes = [];
+    private IReadOnlyList<OrgUnitDto> _units = [];
+    private IReadOnlyList<PayGroupDto> _groups = [];
     private Guid? _editingId;
     private Form _f = new();
     private bool _busy;
@@ -108,11 +161,39 @@
         public bool AllowNegative { get; set; }
         public bool Active { get; set; } = true;
         public List<TierRow> Tiers { get; set; } = [new()];
+        public bool Everyone { get; set; } = true;
+        public IReadOnlyCollection<Guid> OrgUnits { get; set; } = [];
+        public IReadOnlyCollection<Guid> PayGroups { get; set; } = [];
+        public string Exempt { get; set; } = "any";
+        public IReadOnlyCollection<EmploymentTypeKind> Types { get; set; } = [];
+
+        public LeaveEligibilityDto? Eligibility => Everyone
+            ? null
+            : new LeaveEligibilityDto(OrgUnits.ToList(), PayGroups.ToList(), Exempt switch { "exempt" => true, "nonexempt" => false, _ => null }, Types.ToList());
     }
 
     protected override async Task OnInitializedAsync()
     {
         _codes = await Policies.ListLeaveChargeCodesAsync();
+        // The choices for "Applies to"; a page without either service (or access to it) just has fewer choices.
+        try
+        {
+            _units = Services.GetService<IPeopleService>() is { } people ? await people.ListOrgUnitsAsync() : [];
+        }
+        catch (Exception ex) when (LeavePage.IsExpected(ex))
+        {
+            _units = [];
+        }
+
+        try
+        {
+            _groups = Services.GetService<IPayGroupService>() is { } groups ? await groups.ListAsync() : [];
+        }
+        catch (Exception ex) when (LeavePage.IsExpected(ex))
+        {
+            _groups = [];
+        }
+
         await LoadAsync();
     }
 
@@ -127,6 +208,12 @@
             Waiting = p.WaitingPeriodDays, AllowNegative = p.AllowNegativeBalance, Active = p.IsActive,
             Tiers = p.Tiers.Select(t => new TierRow { Years = t.MinYearsOfService, Rate = t.Rate, Cap = t.MaxBalance }).ToList(),
         };
+        var e = p.Eligibility ?? LeaveEligibilityDto.Everyone;
+        _f.Everyone = e.IsEveryone;
+        _f.OrgUnits = e.OrgUnitIds.ToHashSet();
+        _f.PayGroups = e.PayGroupIds.ToHashSet();
+        _f.Exempt = e.Exempt switch { true => "exempt", false => "nonexempt", _ => "any" };
+        _f.Types = e.EmploymentTypes.ToHashSet();
     }
 
     private async Task SaveAsync()
@@ -135,7 +222,7 @@
         try
         {
             var request = new SaveLeavePolicyRequest(_f.Code, _f.Name, _f.Type, _f.WbsElementId!.Value, _f.Method,
-                _f.Tiers.Select(t => new AccrualTierDto(t.Years, t.Rate, t.Cap)).ToList(), _f.MaxBalance, _f.Carryover, _f.Waiting, _f.AllowNegative, _f.Active);
+                _f.Tiers.Select(t => new AccrualTierDto(t.Years, t.Rate, t.Cap)).ToList(), _f.MaxBalance, _f.Carryover, _f.Waiting, _f.AllowNegative, _f.Active, _f.Eligibility);
             _ = _editingId is { } id ? await Policies.UpdateAsync(id, request) : await Policies.CreateAsync(request);
             Snackbar.Add("Policy saved.", Severity.Success);
             _editingId = null;
@@ -151,6 +238,48 @@
             _busy = false;
         }
     }
+
+    private string AppliesTo(LeaveEligibilityDto? e)
+    {
+        if (e is null || e.IsEveryone)
+        {
+            return "Everyone";
+        }
+
+        var parts = new List<string>();
+        if (e.OrgUnitIds.Count > 0)
+        {
+            parts.Add(string.Join(", ", e.OrgUnitIds.Select(UnitLabel)));
+        }
+
+        if (e.PayGroupIds.Count > 0)
+        {
+            parts.Add(string.Join(", ", e.PayGroupIds.Select(GroupLabel)));
+        }
+
+        if (e.Exempt is { } exempt)
+        {
+            parts.Add(exempt ? "exempt" : "non-exempt");
+        }
+
+        if (e.EmploymentTypes.Count > 0)
+        {
+            parts.Add(string.Join(", ", e.EmploymentTypes.Select(t => TypeLabel(t).ToLowerInvariant())));
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    private string UnitLabel(Guid id) => _units.FirstOrDefault(u => u.Id == id)?.Code ?? "(unknown unit)";
+
+    private string GroupLabel(Guid id) => _groups.FirstOrDefault(g => g.Id == id)?.Code ?? "(pay group)";
+
+    private static string TypeLabel(EmploymentTypeKind t) => t switch
+    {
+        EmploymentTypeKind.FullTime => "Full-time",
+        EmploymentTypeKind.PartTime => "Part-time",
+        _ => t.ToString(),
+    };
 
     private static string Method(AccrualMethodKind m) => m switch
     {
