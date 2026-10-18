@@ -21,6 +21,8 @@ public static class WorkbenchApi
         v1.MapCostpointEndpoints();
         v1.MapProjectAccountingEndpoints();
         v1.MapIdentityEndpoints();
+        v1.MapAutomationEndpoints();
+        v1.MapNotificationEndpoints();
 
         return app;
     }

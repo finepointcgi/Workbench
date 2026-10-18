@@ -57,6 +57,9 @@ else
         <MudTabPanel Text="Activity" Icon="@Icons.Material.Filled.History">
             <ActivityFeed SheetId="SheetId" Items="_items" Version="_liveVersion" />
         </MudTabPanel>
+        <MudTabPanel Text="Automation" Icon="@Icons.Material.Filled.Bolt">
+            <Workbench.Ui.Automation.AutomationPanel Sheet="_sheet" Items="_items" Version="_liveVersion" />
+        </MudTabPanel>
     </MudTabs>
 
     @* Collaboration: item details panel (?item={id}) and live reload when others change the sheet. *@

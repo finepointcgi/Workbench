@@ -61,3 +61,6 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Authentication:Admins`: emails made administrators when they sign in (bootstrap for a new install)
 - Desktop sign-in: `WORKBENCH_OIDC_AUTHORITY`, `WORKBENCH_OIDC_CLIENT_ID` and optional `WORKBENCH_OIDC_SCOPE`
   (a public client that allows `http://127.0.0.1` loopback redirects)
+- `Email:Mode`: `Pickup` (write `.eml` files to `Email:PickupFolder`, default `App_Data/mail`; Development default) or `Smtp`
+  (`Email:Smtp:Host`, `Port`, `EnableSsl`, `UserName`, `Password`); `Email:From` sets the sender
+- `Notifications:PublicBaseUrl`: makes links in emails absolute; `Notifications:DigestHourLocal`: daily digest hour (default 7)
