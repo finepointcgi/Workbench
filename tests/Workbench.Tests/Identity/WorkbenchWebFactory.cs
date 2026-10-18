@@ -34,10 +34,13 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
         builder.UseSetting("Costpoint:Source", "None");
         builder.UseSetting("Storage:Root", Path.Combine(Path.GetTempPath(), $"workbench-blobs-{Guid.NewGuid():N}"));
 
-        // A configuration the production startup check accepts: TLS at a proxy, a SCIM token, SQLite allowed for tests.
+        // A configuration the production startup check accepts: TLS at a proxy, a SCIM token, SQLite allowed for tests,
+        // Data Protection keys encrypted with a test certificate.
         builder.UseSetting("Security:TlsTerminatedByProxy", "true");
         builder.UseSetting("Scim:BearerToken", ScimToken);
         builder.UseSetting("Database:AllowSqliteInProduction", "true");
+        builder.UseSetting("DataProtection:CertificatePath", Operations.TestCertificates.SharedPfx);
+        builder.UseSetting("DataProtection:CertificatePassword", Operations.TestCertificates.Password);
         builder.UseSetting("Retention:NightlyJobEnabled", "false");
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
         {
