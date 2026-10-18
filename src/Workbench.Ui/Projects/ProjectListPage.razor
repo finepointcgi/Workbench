@@ -72,7 +72,7 @@ else
     }
     else
     {
-        <MudTable T="ProjectHubRowDto" Items="Visible" Dense="true" Hover="true" Outlined="true" Elevation="0" OnRowClick="Open" RowStyle="cursor: pointer"
+        <MudTable SortLabel="Sort by" T="ProjectHubRowDto" Items="Visible" Dense="true" Hover="true" Outlined="true" Elevation="0" OnRowClick="Open" RowStyle="cursor: pointer"
                   Breakpoint="Breakpoint.Sm" data-testid="project-table">
             <HeaderContent>
                 <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Code" InitialDirection="SortDirection.Ascending">Project</MudTableSortLabel></MudTh>

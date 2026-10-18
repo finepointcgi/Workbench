@@ -15,20 +15,30 @@
 <MudGrid>
     <MudItem xs="12" md="4">
         <MudPaper Outlined="true">
-            <MudList T="TimesheetDto" SelectedValue="_selected" SelectedValueChanged="SelectAsync" data-testid="pending" aria-label="Timesheets waiting for you">
-                <MudListSubheader>Waiting for you (@_pending.Count)</MudListSubheader>
-                @foreach (var t in _pending)
-                {
-                    <MudListItem T="TimesheetDto" Value="t" @key="t.Id">
-                        <div><b>@t.EmployeeName</b></div>
-                        <div class="mud-text-secondary">@TimePage.PeriodLabel(t) · @t.TotalHours.ToString("0.##") h@(t.Revision > 0 ? $" · rev {t.Revision}" : "")</div>
-                    </MudListItem>
-                }
-                @if (!_loading && _pending.Count == 0)
-                {
-                    <MudText Class="pa-4 mud-text-secondary">No timesheets are waiting for your approval. Your team's submitted timesheets show up here.</MudText>
-                }
-            </MudList>
+            @* An empty listbox is invalid ARIA, so the list only renders when something is waiting. *@
+            @if (_pending.Count > 0)
+            {
+                <MudList T="TimesheetDto" SelectedValue="_selected" SelectedValueChanged="SelectAsync" data-testid="pending" aria-label="Timesheets waiting for you">
+                    <MudListSubheader>Waiting for you (@_pending.Count)</MudListSubheader>
+                    @foreach (var t in _pending)
+                    {
+                        <MudListItem T="TimesheetDto" Value="t" @key="t.Id">
+                            <div><b>@t.EmployeeName</b></div>
+                            <div class="mud-text-secondary">@TimePage.PeriodLabel(t) · @t.TotalHours.ToString("0.##") h@(t.Revision > 0 ? $" · rev {t.Revision}" : "")</div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+            else
+            {
+                <div class="mud-list" data-testid="pending">
+                    <div class="mud-list-subheader mud-list-subheader-gutters">Waiting for you (0)</div>
+                    @if (!_loading)
+                    {
+                        <MudText Class="pa-4 mud-text-secondary">No timesheets are waiting for your approval. Your team's submitted timesheets show up here.</MudText>
+                    }
+                </div>
+            }
         </MudPaper>
     </MudItem>
     <MudItem xs="12" md="8">

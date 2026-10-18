@@ -25,14 +25,15 @@
 }
 
 /* Visible keyboard focus everywhere (2.4.7). MudBlazor relies on a faint ripple overlay for most controls, which isn't
-   enough contrast; give every focusable control a 2px ring that shows on light and dark surfaces. */
-:focus-visible {
+   enough contrast; give every focusable control a 2px ring that shows on light and dark surfaces. "html body" outranks
+   MudBlazor's "button:focus { outline: none }". */
+html body :focus-visible {
     outline: 2px solid var(--mud-palette-primary, #1F5AA6);
     outline-offset: 2px;
 }
 
-.mud-appbar :focus-visible,
-.wb-m-bottom-nav :focus-visible {
+html body .mud-appbar :focus-visible,
+html body .wb-m-nav :focus-visible {
     outline-color: currentColor;
 }
 
@@ -90,7 +91,7 @@ a.mud-link.mud-link-underline-hover,
 
 /* Windows high-contrast / forced colors: keep focus and chips visible. */
 @media (forced-colors: active) {
-    :focus-visible {
+    html body :focus-visible {
         outline: 2px solid CanvasText;
     }
 

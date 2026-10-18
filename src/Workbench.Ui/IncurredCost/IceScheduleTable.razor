@@ -1,15 +1,16 @@
 @* One schedule as a table. In a draft, editable columns become inputs; changes are collected by the page and saved together. *@
 <div class="ice-table-wrap">
-    <MudSimpleTable Dense="true" Elevation="0" Bordered="true" Class="ice-table" data-testid="@($"ice-schedule-{Schedule.Code}")">
+    <MudSimpleTable Dense="true" Elevation="0" Bordered="true" Class="ice-table" data-testid="@($"ice-schedule-{Schedule.Code}")"
+                    aria-label="@($"Schedule {Schedule.Code}: {Schedule.Title}")">
         <thead>
             <tr>
                 @foreach (var column in Schedule.Columns)
                 {
-                    <th style="@(IceFormat.IsNumeric(column) ? "text-align:right" : "")">
+                    <th scope="col" style="@(IceFormat.IsNumeric(column) ? "text-align:right" : "")">
                         @column.Header
                         @if (column.Editable)
                         {
-                            <MudTooltip Text="Typed in: Workbench has no source for this"><MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="ml-1 mud-text-secondary" Style="font-size:14px" /></MudTooltip>
+                            <MudTooltip Text="Typed in: Workbench has no source for this"><MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="ml-1 mud-text-secondary" Style="font-size:14px" aria-hidden="true" /></MudTooltip><span class="wb-sr-only">(typed in)</span>
                         }
                     </th>
                 }
@@ -29,7 +30,8 @@
                                               Style="@(IceFormat.IsNumeric(column) ? "min-width:120px;text-align:right" : "min-width:180px")"
                                               Value="@(Edits.TryGetValue(key, out var v) ? v : IceFormat.Cell(column, row))"
                                               ValueChanged="@(text => OnEdit(key, text))"
-                                              data-testid="@($"ice-input-{Schedule.Code}-{column.Key}")" />
+                                              data-testid="@($"ice-input-{Schedule.Code}-{column.Key}")"
+                                              aria-label="@($"{column.Header}, {IceFormat.Cell(Schedule.Columns[0], row)}")" />
                             }
                             else
                             {
