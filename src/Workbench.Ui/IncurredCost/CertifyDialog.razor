@@ -1,0 +1,29 @@
+@* Schedule N: the certifying official reads the certificate and confirms it. Who certified and when are recorded with the text. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudAlert Severity="Severity.Info" Dense="true">FAR 42.703-2 requires the certificate to be signed by an official no lower than a vice president or chief financial officer.</MudAlert>
+            <MudPaper Outlined="true" Class="pa-3" Style="white-space:pre-wrap;max-height:260px;overflow:auto" data-testid="certificate-text">@Certificate</MudPaper>
+            <MudTextField T="string" @bind-Value="_name" Label="Name of certifying official" Required="true" Immediate="true" data-testid="certify-name" />
+            <MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" Immediate="true" data-testid="certify-title" />
+            <MudCheckBox T="bool" @bind-Value="_ack" Label="I have read the certificate and certify the package as stated" data-testid="certify-ack" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!_ack || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_title))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new CertifyIncurredCostRequest(_name!.Trim(), _title!.Trim(), _ack)))" data-testid="certify-ok">Certify</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string Certificate { get; set; } = "";
+
+    private string? _name;
+    private string? _title;
+    private bool _ack;
+}

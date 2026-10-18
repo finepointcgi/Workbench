@@ -1,0 +1,36 @@
+@* Asks for one line of text (a reason or a reference) before a workflow step. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText>@Message</MudText>
+            <MudTextField T="string" @bind-Value="_text" Label="@Label" Required="Required" Immediate="true" AutoFocus="true" Lines="2" HelperText="@Helper" data-testid="ice-dialog-text" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(Required && string.IsNullOrWhiteSpace(_text))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_text?.Trim() ?? string.Empty))" data-testid="ice-dialog-ok">@Button</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string Message { get; set; } = "";
+
+    [Parameter]
+    public string Label { get; set; } = "";
+
+    [Parameter]
+    public string? Helper { get; set; }
+
+    [Parameter]
+    public string Button { get; set; } = "OK";
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    private string? _text;
+}
