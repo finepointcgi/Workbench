@@ -333,3 +333,17 @@ await notifications.PublishAsync(
   Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
 - Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
   `InvoiceGenerator`); cost reports keep the real rates.
+
+## Date rules act for their author
+
+- Nobody is signed in when the hourly `DateTriggerBackgroundService` runs, so a date rule acts as the person who wrote it
+  (`Rule.CreatedBy`). Each author's rules run, per tenant, in a scope from `RuleAuthorExecution.CreateScope` (internal,
+  refused inside an HTTP request): `AccessControl` checks that author, through the ordinary permission-checked services.
+  The author gets only their own roles: no system powers, and the worker's `SystemCurrentUser` doesn't leak into it.
+- Checked at run time, before a sheet's rules run: the author must not be deactivated (memberships outlive deactivation,
+  so this is explicit) and must be an Editor on the sheet's workspace. Otherwise the rules are skipped, logged, and recorded
+  as a `Skipped` rule run with the reason (at most once per rule and day), and fire again once access is restored.
+- This is deliberately not the "Workbench System" context (`SystemExecution`), which stays limited to the one burdened-cost
+  read and never gains sheet data or writes. Don't use the author context for anything except running rules.
+- Changes made by any rule (item or date trigger) are recorded as `Workbench Automation (rule "Name", author email)`
+  (`AutomationContext.Actor`) in activity, comments and assignment notifications.

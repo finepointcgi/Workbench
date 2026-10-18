@@ -14,9 +14,11 @@ namespace Workbench.Application.Identity;
 /// a Blazor circuit keeps its scope for hours, and role changes should apply on the next call.
 /// </summary>
 public sealed class AccessControl(
-    IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null, SystemExecutionContext? system = null)
+    IWorkbenchDbContextFactory dbFactory, ICurrentUser currentUser, Security.SecurityEventLog? securityLog = null, SystemExecutionContext? system = null,
+    RuleAuthorExecutionContext? ruleAuthor = null)
 {
-    public string Email => Normalize(currentUser.Email);
+    /// <summary>Who is checked: the signed-in user, or the rule's author inside a <see cref="RuleAuthorExecutionContext"/>.</summary>
+    public string Email => ruleAuthor?.Email ?? Normalize(currentUser.Email);
 
     /// <summary>
     /// True only inside a trusted background job's scope (<see cref="SystemExecutionContext"/>). It passes no role check;
@@ -24,11 +26,14 @@ public sealed class AccessControl(
     /// </summary>
     public bool IsSystemReader => system?.IsActive == true;
 
-    public bool IsAuthenticated => currentUser is SystemCurrentUser || (currentUser.IsAuthenticated && Email.Length > 0);
+    public bool IsAuthenticated => ruleAuthor?.IsActive == true || IsSystemUser || (currentUser.IsAuthenticated && Email.Length > 0);
+
+    // The worker's all-powerful user, unless this scope acts for a rule's author (who gets only their own roles).
+    private bool IsSystemUser => currentUser is SystemCurrentUser && ruleAuthor?.IsActive != true;
 
     public async Task<bool> IsAdminAsync(CancellationToken cancellationToken = default)
     {
-        if (currentUser is SystemCurrentUser)
+        if (IsSystemUser)
         {
             return true;
         }
@@ -45,7 +50,7 @@ public sealed class AccessControl(
     /// <summary>The user's organization roles. The system user has them all; nobody signed in has none.</summary>
     public async Task<OrgRoles> GetOrgRolesAsync(CancellationToken cancellationToken = default)
     {
-        if (currentUser is SystemCurrentUser)
+        if (IsSystemUser)
         {
             return OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager;
         }
@@ -67,7 +72,7 @@ public sealed class AccessControl(
     /// <summary>The employee record with the signed-in user's email, if any.</summary>
     public async Task<Guid?> GetEmployeeIdAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsAuthenticated || currentUser is SystemCurrentUser)
+        if (!IsAuthenticated || IsSystemUser)
         {
             return null;
         }
@@ -204,7 +209,7 @@ public sealed class AccessControl(
 
     internal async Task<bool> IsAdminAsync(IWorkbenchDbContext db, CancellationToken cancellationToken)
     {
-        if (currentUser is SystemCurrentUser)
+        if (IsSystemUser)
         {
             return true;
         }
