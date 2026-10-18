@@ -372,9 +372,11 @@ public sealed class ApprovalEngine(TimeProvider clock)
         IWorkbenchDbContext db, string? documentType, string actorEmail, CancellationToken ct)
     {
         var actor = await ActorAsync(db, actorEmail, ct);
-        var instances = await db.Set<ApprovalInstance>().AsNoTracking()
+        // Should two pending trips ever exist for a document (a race), only the latest counts, as in CheckAsync.
+        var instances = (await db.Set<ApprovalInstance>().AsNoTracking()
             .Where(i => i.Status == ApprovalInstanceStatus.Pending && (documentType == null || i.DocumentType == documentType))
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .GroupBy(i => (i.DocumentType, i.DocumentId)).Select(g => g.MaxBy(i => i.StartedAtUtc)!).ToList();
         if (instances.Count == 0)
         {
             return [];
@@ -429,6 +431,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
     {
         var instance = await db.Set<ApprovalInstance>().AsNoTracking()
             .Where(i => i.DocumentType == documentType && i.DocumentId == documentId && i.Status == ApprovalInstanceStatus.Pending)
+            .OrderByDescending(i => i.StartedAtUtc)
             .FirstOrDefaultAsync(ct);
         var actor = await ActorAsync(db, actorEmail, ct);
         IEnumerable<ApprovalTask> pending;

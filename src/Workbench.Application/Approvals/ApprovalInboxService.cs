@@ -25,8 +25,11 @@ public sealed class ApprovalInboxService(
     IWorkbenchDbContextFactory dbFactory,
     ApprovalEngine engine,
     AccessControl access,
-    IEnumerable<IApprovalDocumentHandler> handlers) : IApprovalInboxService
+    IEnumerable<IApprovalDocumentHandler> handlers,
+    ApprovalBackfill? backfill = null) : IApprovalInboxService
 {
+    private readonly ApprovalBackfill _backfill = backfill ?? new ApprovalBackfill(dbFactory, engine);
+
     public async Task<IReadOnlyList<ApprovalInboxItemDto>> ListMineAsync(CancellationToken cancellationToken = default)
     {
         if (!access.IsAuthenticated)
@@ -34,6 +37,7 @@ public sealed class ApprovalInboxService(
             return [];
         }
 
+        await _backfill.RunAsync(cancellationToken); // Documents pending since before workflows (seeded, imported, upgraded).
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var now = engine.UtcNow;
         return (await engine.ActionableAsync(db, null, access.Email, cancellationToken))
@@ -59,6 +63,7 @@ public sealed class ApprovalInboxService(
             return 0;
         }
 
+        await _backfill.RunAsync(cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         return (await engine.ActionableAsync(db, null, access.Email, cancellationToken)).Count;
     }
