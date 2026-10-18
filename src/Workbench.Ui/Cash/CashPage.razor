@@ -1,0 +1,138 @@
+@page "/cash"
+@inject IBankAccountService Accounts
+@inject ICashForecastService Forecast
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Cash and bank accounts · Workbench</PageTitle>
+
+<CashHeader Title="Cash and bank accounts" BackHref="accounting/reports" BackLabel="Accounting"
+            Subtitle="The cash position from the general ledger, and the bank accounts that reconcile to it. Account numbers are masked; showing one is logged.">
+    <MudButton Variant="Variant.Outlined" Href="cash/import" StartIcon="@Icons.Material.Filled.UploadFile">Import statement</MudButton>
+    <MudButton Variant="Variant.Outlined" Href="cash/reconcile" StartIcon="@Icons.Material.Filled.FactCheck">Reconcile</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => EditAsync(null)" StartIcon="@Icons.Material.Filled.Add" data-testid="add-account">Add bank account</MudButton>
+</CashHeader>
+
+@if (_error is not null)
+{
+    <CashError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_position is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="cash-total">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Cash per GL, @CashFormat.Date(_position.AsOf)</MudText>
+                <MudText Typo="Typo.h5">@CashFormat.Amount(_position.Total)</MudText>
+            </MudPaper>
+        </MudItem>
+        @foreach (var p in _position.Accounts)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@p.Name @p.MaskedAccountNumber · GL @p.GlAccountNumber</MudText>
+                    <MudText Typo="Typo.h6">@CashFormat.Amount(p.GlBalance)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Bank @CashFormat.Amount(p.LastStatementBalance) on @CashFormat.Date(p.LastStatementDate) · reconciled through @CashFormat.Date(p.ReconciledThrough)
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Bank accounts</MudText>
+        @if (_accounts.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No bank accounts yet. Add one and link it to its GL cash account (usually 1010 Cash - operating).</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="bank-accounts">
+                <thead>
+                    <tr><th>Name</th><th>Bank</th><th>Account</th><th>Routing</th><th>GL account</th><th style="text-align:right">GL balance</th><th>Last statement</th><th>Reconciled through</th><th>Unmatched</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _accounts)
+                    {
+                        <tr style="@(a.IsActive ? "" : "opacity:.6")">
+                            <td>@a.Name @(a.IsActive ? "" : "(inactive)")</td>
+                            <td>@a.BankName</td>
+                            <td>
+                                <span data-testid="masked-number">@(_revealed.TryGetValue(a.Id, out var full) ? full : a.MaskedAccountNumber)</span>
+                                @if (a.HasFullAccountNumber && !_revealed.ContainsKey(a.Id))
+                                {
+                                    <MudTooltip Text="Show the full number (logged as a security event)">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" OnClick="() => RevealAsync(a)" aria-label="Show account number" data-testid="reveal" />
+                                    </MudTooltip>
+                                }
+                            </td>
+                            <td>@a.RoutingNumber</td>
+                            <td>@a.GlAccountNumber @a.GlAccountName</td>
+                            <td style="text-align:right">@CashFormat.Amount(a.GlBalance)</td>
+                            <td>@CashFormat.Date(a.LastStatementDate) @(a.LastStatementBalance is { } b ? $"· {CashFormat.Amount(b)}" : "")</td>
+                            <td>@CashFormat.Date(a.ReconciledThrough)</td>
+                            <td>@(a.UnmatchedBankItems == 0 ? "" : a.UnmatchedBankItems.ToString(CultureInfo.InvariantCulture))</td>
+                            <td style="white-space:nowrap">
+                                <MudButton Size="Size.Small" Href="@($"cash/reconcile?account={a.Id}")">Reconcile</MudButton>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => EditAsync(a)" aria-label="Edit" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<BankAccountDto> _accounts = [];
+    private CashPositionDto? _position;
+    private readonly Dictionary<Guid, string> _revealed = [];
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _accounts = await Accounts.ListAsync();
+            _position = await Forecast.GetPositionAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task EditAsync(BankAccountDto? account)
+    {
+        var dialog = await Dialogs.ShowAsync<BankAccountDialog>(account is null ? "Add bank account" : $"Edit {account.Name}",
+            new DialogParameters<BankAccountDialog> { { d => d.Account, account } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            _revealed.Clear();
+            await LoadAsync();
+        }
+    }
+
+    private async Task RevealAsync(BankAccountDto account)
+    {
+        try
+        {
+            var number = await Accounts.RevealAccountNumberAsync(account.Id);
+            _revealed[account.Id] = number.AccountNumber;
+            Snackbar.Add("Shown for this page only; the reveal was logged.", Severity.Info);
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+}

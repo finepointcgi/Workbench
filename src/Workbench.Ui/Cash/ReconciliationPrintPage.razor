@@ -1,0 +1,126 @@
+@page "/cash/reconciliations/{ReconciliationId:guid}/print"
+@layout Workbench.Ui.Layout.CashPrintLayout
+@inject IBankReconciliationService Reconciliations
+@inject IJSRuntime JS
+
+<PageTitle>Bank reconciliation · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"cash/reconcile/{ReconciliationId}")">← Back to the reconciliation</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="() => CashFormat.PrintAsync(JS)" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_report is null)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var r = _report.Reconciliation;
+    var m = r.Math;
+    <div class="page" data-testid="rec-report">
+        @if (r.Status == ReconciliationState.InProgress)
+        {
+            <div class="watermark">DRAFT</div>
+        }
+        <h1>Bank reconciliation</h1>
+        <table class="meta">
+            <tr><th>Account</th><td>@r.BankAccountName @r.MaskedAccountNumber</td><th>Bank</th><td>@_report.BankName @(_report.RoutingNumber is null ? "" : $"(ABA {_report.RoutingNumber})")</td></tr>
+            <tr><th>GL cash account</th><td>@r.GlAccountNumber</td><th>Statement end date</th><td>@CashFormat.Date(r.StatementEndDate)</td></tr>
+            <tr><th>Status</th><td>@(r.Status == ReconciliationState.Completed ? $"Completed by {r.CompletedBy} on {r.CompletedAtUtc?.ToLocalTime():yyyy-MM-dd}" : "In progress")</td>
+                <th>Prepared</th><td>@DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td></tr>
+            @if (r.ReopenReason is not null)
+            {
+                <tr><th>Reopened</th><td colspan="3">@r.ReopenedBy, @r.ReopenedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture): @r.ReopenReason</td></tr>
+            }
+        </table>
+
+        <div class="columns">
+            <table class="sums">
+                <tr><th colspan="2">Bank</th></tr>
+                <tr><td>Balance per bank statement</td><td class="num">@CashFormat.Amount(m.StatementEndingBalance)</td></tr>
+                <tr><td>Add: deposits in transit</td><td class="num">@CashFormat.Amount(m.DepositsInTransit)</td></tr>
+                <tr><td>Less: outstanding checks and payments</td><td class="num">@CashFormat.Amount(m.OutstandingPayments)</td></tr>
+                <tr class="total"><td>Adjusted bank balance</td><td class="num" data-testid="report-adjusted-bank">@CashFormat.Amount(m.AdjustedBankBalance)</td></tr>
+            </table>
+            <table class="sums">
+                <tr><th colspan="2">Books</th></tr>
+                <tr><td>Balance per general ledger</td><td class="num">@CashFormat.Amount(m.GlBalance)</td></tr>
+                <tr><td>Bank items not yet recorded</td><td class="num">@CashFormat.Amount(m.UnrecordedBankItems)</td></tr>
+                <tr><td>&nbsp;</td><td></td></tr>
+                <tr class="total"><td>Adjusted book balance</td><td class="num" data-testid="report-adjusted-book">@CashFormat.Amount(m.AdjustedBookBalance)</td></tr>
+            </table>
+        </div>
+        <p class="diff">Difference: <b>@CashFormat.Amount(m.Difference)</b></p>
+
+        <h2>Outstanding checks and payments, deposits in transit</h2>
+        @if (m.OutstandingItems.Count == 0)
+        {
+            <p>None.</p>
+        }
+        else
+        {
+            <table class="items">
+                <tr><th>Date</th><th>Entry</th><th>Description</th><th>Reference</th><th class="num">Amount</th></tr>
+                @foreach (var o in m.OutstandingItems)
+                {
+                    <tr><td>@CashFormat.Date(o.Date)</td><td>@o.EntryNumber</td><td>@o.Description</td><td>@o.Reference</td><td class="num">@CashFormat.Amount(o.Amount)</td></tr>
+                }
+            </table>
+        }
+
+        @if (m.UnrecordedItems.Count > 0)
+        {
+            <h2>Bank items not in the general ledger</h2>
+            <table class="items">
+                <tr><th>Date</th><th>Description</th><th>Reference</th><th class="num">Amount</th></tr>
+                @foreach (var u in m.UnrecordedItems)
+                {
+                    <tr><td>@CashFormat.Date(u.Date)</td><td>@u.Description</td><td>@(u.CheckNumber ?? u.BankReference)</td><td class="num">@CashFormat.Amount(u.Amount)</td></tr>
+                }
+            </table>
+        }
+
+        <h2>Cleared this reconciliation (@_report.ClearedBankItems.Count bank items, @_report.ClearedGlItems.Count GL items)</h2>
+        <table class="items">
+            <tr><th>Date</th><th>Bank item</th><th>Reference</th><th class="num">Amount</th></tr>
+            @foreach (var b in _report.ClearedBankItems)
+            {
+                <tr><td>@CashFormat.Date(b.Date)</td><td>@b.Description</td><td>@(b.CheckNumber ?? b.BankReference)</td><td class="num">@CashFormat.Amount(b.Amount)</td></tr>
+            }
+        </table>
+
+        @if (r.Note is not null)
+        {
+            <p><b>Note:</b> @r.Note</p>
+        }
+        <div class="signatures">
+            <div>Prepared by: @(r.CompletedBy ?? r.StartedBy)</div>
+            <div>Reviewed by: ______________________</div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ReconciliationId { get; set; }
+
+    private ReconciliationReportDto? _report;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _report = await Reconciliations.GetReportAsync(ReconciliationId);
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            _error = CashFormat.IsForbidden(ex) ? "Bank reconciliations are for Finance and administrators." : CashFormat.Error(ex);
+        }
+    }
+}

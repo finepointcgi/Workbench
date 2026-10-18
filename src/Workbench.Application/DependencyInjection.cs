@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
 using Workbench.Application.Billing;
+using Workbench.Application.Cash;
 using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
@@ -51,6 +52,7 @@ public static class DependencyInjection
         services.AddWorkbenchTenancy(); // SingleTenant defaults; AddWorkbenchInfrastructure replaces them from the Tenancy section.
         services.AddWorkbenchImports(); // Costpoint and Smartsheet importers; they import through the services above.
         services.AddWorkbenchAssets(); // Fixed assets: depreciation posts through the GL and adds a close check; above AddWorkbenchIdentity.
+        services.AddWorkbenchCash(); // Cash and bank reconciliation: books bank items through the GL journal; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

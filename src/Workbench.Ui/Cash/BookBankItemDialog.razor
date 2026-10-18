@@ -1,0 +1,78 @@
+@* Books an unmatched bank item (a fee, interest, a wire) to the GL and matches it. *@
+@inject IBankReconciliationService Reconciliations
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-3">
+            <b>@CashFormat.Date(Item.Date)</b> @Item.Description · <b>@CashFormat.Amount(Item.Amount)</b>
+        </MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            @(Item.Amount < 0
+                ? "Posts a journal entry debiting the account below and crediting cash, dated the bank date."
+                : "Posts a journal entry debiting cash and crediting the account below, dated the bank date.")
+        </MudText>
+        <MudSelect T="Guid?" @bind-Value="_accountId" Label="Book to" Required="true" data-testid="book-account">
+            @foreach (var a in _accounts?.Accounts ?? [])
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="_description" Label="Description" Class="mt-2" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="BookAsync" Disabled="@(_accountId is null || _busy)" data-testid="book-confirm">Post and match</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public BankItemDto Item { get; set; } = default!;
+
+    private BookingAccountsDto? _accounts;
+    private Guid? _accountId;
+    private string? _description, _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = await Reconciliations.GetBookingAccountsAsync();
+            _accountId = Item.Amount < 0 ? _accounts.BankFeeAccountId : _accounts.InterestIncomeAccountId;
+            _description = Item.Type switch
+            {
+                BankItemType.Fee => $"Bank fee: {Item.Description}",
+                BankItemType.Interest => $"Interest income: {Item.Description}",
+                _ => Item.Description,
+            };
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            _error = CashFormat.Error(ex);
+        }
+    }
+
+    private async Task BookAsync()
+    {
+        _busy = true;
+        try
+        {
+            var match = await Reconciliations.BookBankItemAsync(new BookBankItemRequest(Item.Id, _accountId!.Value, _description));
+            MudDialog.Close(DialogResult.Ok(match));
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            _error = CashFormat.Error(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
