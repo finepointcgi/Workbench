@@ -1,0 +1,82 @@
+@* One schedule as a table. In a draft, editable columns become inputs; changes are collected by the page and saved together. *@
+<div class="ice-table-wrap">
+    <MudSimpleTable Dense="true" Elevation="0" Bordered="true" Class="ice-table" data-testid="@($"ice-schedule-{Schedule.Code}")">
+        <thead>
+            <tr>
+                @foreach (var column in Schedule.Columns)
+                {
+                    <th style="@(IceFormat.IsNumeric(column) ? "text-align:right" : "")">
+                        @column.Header
+                        @if (column.Editable)
+                        {
+                            <MudTooltip Text="Typed in: Workbench has no source for this"><MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="ml-1 mud-text-secondary" Style="font-size:14px" /></MudTooltip>
+                        }
+                    </th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Schedule.Rows)
+            {
+                <tr class="@RowClass(row)" data-row="@row.Key">
+                    @foreach (var column in Schedule.Columns)
+                    {
+                        <td style="@(IceFormat.IsNumeric(column) ? "text-align:right;white-space:nowrap" : Schedule.Code == "N" ? "white-space:pre-wrap" : "")">
+                            @if (column.Editable && CanEdit && row.Kind == IceRowKind.Detail)
+                            {
+                                var key = (Schedule.Code, row.Key, column.Key);
+                                <MudTextField T="string" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true"
+                                              Style="@(IceFormat.IsNumeric(column) ? "min-width:120px;text-align:right" : "min-width:180px")"
+                                              Value="@(Edits.TryGetValue(key, out var v) ? v : IceFormat.Cell(column, row))"
+                                              ValueChanged="@(text => OnEdit(key, text))"
+                                              data-testid="@($"ice-input-{Schedule.Code}-{column.Key}")" />
+                            }
+                            else
+                            {
+                                @IceFormat.Cell(column, row)
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</div>
+@if (Schedule.Notes.Count > 0)
+{
+    <ul class="mt-2 mud-text-secondary" style="font-size:0.85rem">
+        @foreach (var note in Schedule.Notes)
+        {
+            <li>@note</li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IceScheduleDto Schedule { get; set; } = default!;
+
+    [Parameter]
+    public bool CanEdit { get; set; }
+
+    /// <summary>Edited cells by (schedule, row, column), shared with the page.</summary>
+    [Parameter]
+    public Dictionary<(string, string, string), string?> Edits { get; set; } = [];
+
+    [Parameter]
+    public EventCallback EditsChanged { get; set; }
+
+    private async Task OnEdit((string, string, string) key, string? text)
+    {
+        Edits[key] = text;
+        await EditsChanged.InvokeAsync();
+    }
+
+    private static string RowClass(IceRowDto row) => row.Kind switch
+    {
+        IceRowKind.Section => "ice-section",
+        IceRowKind.Subtotal => "ice-subtotal",
+        IceRowKind.Total => "ice-total",
+        _ => "",
+    };
+}

@@ -1,0 +1,111 @@
+@page "/accounting/incurred-cost"
+@inject IIncurredCostService IncurredCost
+@inject IFiscalCalendarService Calendar
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Incurred cost · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Incurred cost submissions"
+                  Subtitle="The annual incurred cost proposal (FAR 52.216-7, the DCAA ICE model): Schedules A–O generated from the books, reviewed, certified and submitted.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_busy" data-testid="new-package">New package</MudButton>
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_packages is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4">
+        @if (_packages.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No packages yet. Generate a draft for a fiscal year to start.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="ice-packages">
+                <thead>
+                    <tr><th>Fiscal year</th><th>Status</th><th style="text-align:right">Claimed cost</th><th>Checks</th><th>Generated</th><th>Certified</th><th>Submitted</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _packages)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"accounting/incurred-cost/{p.Id}")" data-testid="ice-package-link">FY@(p.FiscalYear)</MudLink></td>
+                            <td><IceStatusChip Status="p.Status" /></td>
+                            <td style="text-align:right">@AccountingFormat.Amount(p.ClaimedCost)</td>
+                            <td>
+                                @if (p.Errors > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">@p.Errors error@(p.Errors == 1 ? "" : "s")</MudChip>
+                                }
+                                @if (p.Warnings > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@p.Warnings warning@(p.Warnings == 1 ? "" : "s")</MudChip>
+                                }
+                                @if (p.Errors == 0 && p.Warnings == 0)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">All tie</MudText>
+                                }
+                            </td>
+                            <td>rev. @p.Revision, @p.GeneratedBy, @IceFormat.When(p.GeneratedAtUtc)</td>
+                            <td>@(p.CertifiedBy is null ? "" : $"{p.CertifiedBy}, {IceFormat.When(p.CertifiedAtUtc)}")</td>
+                            <td>@(p.SubmittedBy is null ? "" : $"{p.SubmittedBy}, {IceFormat.When(p.SubmittedAtUtc)}")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<IncurredCostSummaryDto>? _packages;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _packages = await IncurredCost.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task NewAsync()
+    {
+        try
+        {
+            var years = (await Calendar.ListPeriodsAsync()).Select(p => p.FiscalYear).Distinct()
+                .Where(y => _packages?.All(p => p.FiscalYear != y) ?? true).OrderByDescending(y => y).ToList();
+            var dialog = await Dialogs.ShowAsync<NewPackageDialog>("New incurred cost package", new DialogParameters<NewPackageDialog> { { d => d.Years, years } });
+            if (await dialog.Result is not { Canceled: false, Data: int year })
+            {
+                return;
+            }
+
+            _busy = true;
+            var package = await IncurredCost.CreateAsync(new CreateIncurredCostRequest(year));
+            Nav.NavigateTo($"accounting/incurred-cost/{package.Id}");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

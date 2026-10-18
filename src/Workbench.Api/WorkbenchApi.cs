@@ -44,6 +44,7 @@ public static class WorkbenchApi
         v1.MapPayrollLeaveEndpoints();
         v1.MapPerDiemResourcingEndpoints();
         v1.MapRevenueEndpoints();
+        v1.MapIncurredCostEndpoints();
 
         return app;
     }

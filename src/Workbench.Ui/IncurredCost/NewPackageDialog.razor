@@ -1,0 +1,35 @@
+@* Picks the fiscal year of a new package (years that already have one aren't offered). *@
+<MudDialog>
+    <DialogContent>
+        @if (Years.Count == 0)
+        {
+            <MudText>Every fiscal year in the calendar already has a package.</MudText>
+        }
+        else
+        {
+            <MudSelect T="int" @bind-Value="_year" Label="Fiscal year" data-testid="new-package-year">
+                @foreach (var y in Years)
+                {
+                    <MudSelectItem Value="y">FY@(y)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudText Class="mud-text-secondary mt-2" Typo="Typo.body2">The draft is generated from the general ledger, the indirect pools, contracts, billing and AP as they stand now. You can regenerate it while it's a draft.</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(Years.Count == 0)" OnClick="() => MudDialog.Close(DialogResult.Ok(_year))" data-testid="new-package-ok">Generate draft</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<int> Years { get; set; } = [];
+
+    private int _year;
+
+    protected override void OnInitialized() => _year = Years.FirstOrDefault();
+}
