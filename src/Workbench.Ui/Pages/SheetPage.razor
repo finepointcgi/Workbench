@@ -4,6 +4,7 @@
 @inject ISheetService SheetService
 @inject IItemService ItemService
 @inject ISnackbar Snackbar
+@inject Workbench.Contracts.ProjectAccounting.IProjectService ProjectService
 
 <PageTitle>@(_sheet?.Summary.Name ?? "Sheet") · Workbench</PageTitle>
 
@@ -45,6 +46,12 @@ else
                 <SheetGanttView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
             </MudTabPanel>
         }
+        @if (_project is not null)
+        {
+            <MudTabPanel Text="Financials" Icon="@Icons.Material.Filled.AttachMoney">
+                <Workbench.Ui.Financials.ProjectFinancialsCompact ProjectId="_project.Id" />
+            </MudTabPanel>
+        }
         <MudTabPanel Text="Activity" Icon="@Icons.Material.Filled.History">
             <ActivityFeed SheetId="SheetId" Items="_items" Version="_liveVersion" />
         </MudTabPanel>
@@ -63,6 +70,7 @@ else
     private IReadOnlyList<ItemDto> _items = [];
     private bool _loading = true;
     private int _liveVersion;
+    private Workbench.Contracts.ProjectAccounting.ProjectDto? _project;
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -73,6 +81,7 @@ else
         {
             _sheet = await SheetService.GetAsync(SheetId);
             _items = _sheet is null ? [] : await ItemService.ListAsync(SheetId);
+            _project = _sheet is null ? null : await ProjectService.GetProjectForSheetAsync(SheetId);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
