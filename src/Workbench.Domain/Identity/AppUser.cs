@@ -19,4 +19,31 @@ public sealed class AppUser : Entity
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }
+
+    /// <summary>Last interactive sign-in (OIDC or dev). <see cref="LastSeenAtUtc"/> also moves with API calls.</summary>
+    public DateTime? LastSignInAtUtc { get; set; }
+
+    /// <summary>
+    /// False once deactivated (by an admin, SCIM or an access review). Deactivated users can't sign in and their
+    /// sessions and tokens stop working; they're never deleted, so their history keeps its author.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
+    public DateTime? DeactivatedAtUtc { get; set; }
+    public string? DeactivatedBy { get; set; }
+
+    /// <summary>Sessions and tokens issued before this time are rejected ("sign out everywhere").</summary>
+    public DateTime? SessionsRevokedAtUtc { get; set; }
+
+    /// <summary>An explicit link to an employee record. When null, the employee with the same email is used.</summary>
+    public Guid? EmployeeId { get; set; }
+
+    /// <summary>True when an admin unlinked the user: no employee, even if one has the same email.</summary>
+    public bool EmployeeUnlinked { get; set; }
+
+    /// <summary>The identity provider's id for this user (SCIM <c>externalId</c>).</summary>
+    public string? ExternalId { get; set; }
+
+    /// <summary>Created or last changed through SCIM provisioning.</summary>
+    public bool ScimManaged { get; set; }
 }

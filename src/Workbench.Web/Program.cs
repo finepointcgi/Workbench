@@ -8,6 +8,7 @@ using Workbench.Web.Components;
 using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
 using Workbench.Web.Notifications;
+using Workbench.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,11 +22,13 @@ builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 
 // Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
 builder.AddWorkbenchAuthentication();
+builder.AddWorkbenchSecurity();
 builder.Services.AddWorkbenchLiveUpdatesHub();
 builder.Services.AddWorkbenchNotificationsHub();
 builder.Services.AddCostpointSource(builder.Configuration);
 
 var app = builder.Build();
+app.UseWorkbenchSecurityHeaders();
 
 if (app.Environment.IsDevelopment())
 {
@@ -43,11 +46,15 @@ app.UseWhen(
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseRateLimiter();
+app.UseWorkbenchDenialLogging();
 app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets().AllowAnonymous();
 app.MapWorkbenchAccountEndpoints();
+app.MapWorkbenchHealthChecks();
+app.MapWorkbenchScim();
 app.MapWorkbenchApi();
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();

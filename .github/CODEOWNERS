@@ -1,0 +1,21 @@
+# Reviews required before merge (ISO 27001 A.8.25, A.8.28, A.8.32). Replace the placeholder teams with real
+# GitHub teams or users, and turn on "Require review from Code Owners" in the branch protection rule for main.
+
+*                                   @your-org/workbench-maintainers
+
+# Security-sensitive code: authentication, permissions, user lifecycle, SCIM, HTTP hardening, data protection.
+/src/Workbench.Web/Identity/        @your-org/workbench-security
+/src/Workbench.Web/Security/        @your-org/workbench-security
+/src/Workbench.Application/Identity/ @your-org/workbench-security
+/src/Workbench.Application/Security/ @your-org/workbench-security
+/src/Workbench.Contracts/Security/  @your-org/workbench-security
+
+# Money, labor and audit records.
+/src/Workbench.Domain/ProjectAccounting/ @your-org/workbench-finance-owners
+
+# Pipeline, scripts and the ISMS documents.
+/.github/                           @your-org/workbench-security
+/scripts/                           @your-org/workbench-operations
+/docs/security/                     @your-org/workbench-security
+/docs/iso/                          @your-org/isms-owners
+/SECURITY.md                        @your-org/workbench-security

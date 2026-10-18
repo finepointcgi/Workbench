@@ -6,7 +6,7 @@ using Workbench.Domain.Identity;
 
 namespace Workbench.Application.Identity;
 
-public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessControl access, UserProvisioner provisioner, ICurrentUser currentUser)
+public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessControl access, UserProvisioner provisioner, ICurrentUser currentUser, UserLifecycle lifecycle)
     : IUserDirectory
 {
     public async Task<UserDto> GetMeAsync(CancellationToken cancellationToken = default)
@@ -27,7 +27,8 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
         take = Math.Clamp(take, 1, 500);
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var users = db.Set<AppUser>().AsNoTracking();
+        // Deactivated people aren't offered in pickers; their names still show on their history.
+        var users = db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive);
         if (!string.IsNullOrWhiteSpace(query))
         {
             var q = query.Trim().ToLowerInvariant();
@@ -40,23 +41,8 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
 
     public async Task<UserDto> SetRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken = default)
     {
-        var isAdmin = roles.IsAdmin();
         await access.RequireAdminAsync(cancellationToken);
-        email = AccessControl.Normalize(email);
-
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var user = await db.Set<AppUser>().FirstOrDefaultAsync(u => u.Email == email, cancellationToken)
-            ?? throw new WorkbenchNotFoundException($"User {email} was not found.");
-        if (user.IsAdmin && !isAdmin && await db.Set<AppUser>().CountAsync(u => u.IsAdmin, cancellationToken) == 1)
-        {
-            throw new ArgumentException("There must be at least one administrator.", nameof(roles));
-        }
-
-        user.IsAdmin = isAdmin;
-        user.IsFinance = roles.HasFlag(OrgRoles.Finance);
-        user.IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper);
-        await db.SaveChangesAsync(cancellationToken);
-        return ToDto(user);
+        return ToDto(await lifecycle.SetRolesAsync(email, roles, access.Email, cancellationToken));
     }
 
     internal static UserDto ToDto(AppUser u) =>

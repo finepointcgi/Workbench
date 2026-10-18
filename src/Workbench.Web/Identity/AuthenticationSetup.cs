@@ -6,7 +6,11 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Components.Authorization;
 using Workbench.Application.Identity;
+using Workbench.Application.Security;
+using Workbench.Contracts.Security;
+using Workbench.Web.Security;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Identity;
 
@@ -34,7 +38,14 @@ public static class AuthenticationSetup
         }
 
         var admins = builder.Configuration.GetSection("Authentication:Admins").Get<string[]>() ?? [];
-        var bootstrapAdmins = admins.Select(a => a.Trim().ToLowerInvariant()).ToHashSet();
+        var signInPolicy = new SignInPolicyOptions
+        {
+            // Outside Development only invited people (or SCIM-provisioned and bootstrap admins) may sign in.
+            RequireInvite = builder.Configuration.GetValue("Authentication:RequireInvite", !builder.Environment.IsDevelopment()),
+            BootstrapAdmins = admins.Select(a => a.Trim().ToLowerInvariant()).Where(a => a.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase),
+        };
+        var session = builder.Configuration.GetSection(SessionSettings.SectionName).Get<SessionSettings>() ?? new SessionSettings();
+        var scimEnabled = builder.Configuration.GetSection(ScimSettings.SectionName).Get<ScimSettings>()?.Enabled ?? true;
 
         var auth = services.AddAuthentication(o =>
             {
@@ -42,31 +53,46 @@ public static class AuthenticationSetup
                 o.DefaultChallengeScheme = SelectorScheme;
             })
             .AddPolicyScheme(SelectorScheme, null, o =>
-                o.ForwardDefaultSelector = context => oidc.IsConfigured && HasBearerToken(context.Request)
-                    ? JwtBearerDefaults.AuthenticationScheme
+                o.ForwardDefaultSelector = context =>
+                    context.Request.Path.StartsWithSegments(ScimEndpoints.BasePath) ? ScimAuthenticationHandler.SchemeName
+                    : oidc.IsConfigured && HasBearerToken(context.Request) ? JwtBearerDefaults.AuthenticationScheme
                     : CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(o =>
             {
                 o.Cookie.Name = ".Workbench.Auth";
                 o.Cookie.HttpOnly = true;
                 o.Cookie.SameSite = SameSiteMode.Lax;
-                o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-                o.ExpireTimeSpan = TimeSpan.FromHours(8);
+                o.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+
+                // Idle timeout (A.8.5): the cookie slides while the user is active and expires after this much inactivity.
+                // The absolute lifetime and deactivation are checked in OnValidatePrincipal.
+                o.ExpireTimeSpan = session.IdleTimeout;
                 o.SlidingExpiration = true;
                 // Pages redirect to the sign-in endpoint (which starts OIDC, or shows the dev page); API and hub
                 // callers get a bare 401 instead, without contacting the identity provider.
                 o.LoginPath = devSignIn ? DevSignIn.Path : AccountEndpoints.SignInPath;
                 o.LogoutPath = AccountEndpoints.SignOutPath;
+                o.AccessDeniedPath = AccountEndpoints.AccessDeniedPath;
 
                 o.Events.OnRedirectToLogin = context => RespondOrRedirect(context, StatusCodes.Status401Unauthorized);
                 o.Events.OnRedirectToAccessDenied = context => RespondOrRedirect(context, StatusCodes.Status403Forbidden);
-                o.Events.OnSigningIn = async context =>
+                o.Events.OnSigningIn = context =>
                 {
-                    var email = ClaimsUser.EmailOf(context.Principal) ?? throw new InvalidOperationException("The sign-in has no email claim.");
-                    var provisioner = context.HttpContext.RequestServices.GetRequiredService<UserProvisioner>();
-                    await provisioner.EnsureUserAsync(email, ClaimsUser.NameOf(context.Principal), bootstrapAdmins.Contains(email), context.HttpContext.RequestAborted);
+                    // The sign-in gate (OIDC OnTokenValidated or the dev sign-in) has already admitted the user.
+                    if (context.Principal?.Identity is ClaimsIdentity identity && !identity.HasClaim(c => c.Type == SessionValidation.SignedInAtClaim))
+                    {
+                        identity.AddClaim(SessionValidation.SignedInAt(context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow()));
+                    }
+
+                    return Task.CompletedTask;
                 };
+                o.Events.OnValidatePrincipal = SessionValidation.ValidateCookieAsync;
             });
+
+        if (scimEnabled)
+        {
+            auth.AddScheme<AuthenticationSchemeOptions, ScimAuthenticationHandler>(ScimAuthenticationHandler.SchemeName, null);
+        }
 
         if (oidc.IsConfigured)
         {
@@ -99,13 +125,28 @@ public static class AuthenticationSetup
 
                     return Task.CompletedTask;
                 };
-                o.Events.OnTokenValidated = context =>
+                o.Events.OnTokenValidated = async context =>
                 {
-                    if (ClaimsUser.EmailOf(context.Principal) is null)
+                    if (ClaimsUser.EmailOf(context.Principal) is not { } email)
                     {
+                        await context.HttpContext.RequestServices.GetRequiredService<SecurityEventLog>()
+                            .RecordAsync(SecurityEventTypes.SignInFailure, null, SecurityOutcomes.Failure, "oidc: no email claim", actor: "anonymous");
                         context.Fail("The identity provider didn't send an email, preferred_username or upn claim.");
+                        return;
                     }
 
+                    var gate = context.HttpContext.RequestServices.GetRequiredService<SignInGate>();
+                    var decision = await gate.EvaluateAsync(email, ClaimsUser.NameOf(context.Principal), "oidc", interactive: true, context.HttpContext.RequestAborted);
+                    if (!decision.Allowed)
+                    {
+                        context.Fail(decision.Reason ?? "Sign-in refused.");
+                    }
+                };
+                o.Events.OnRemoteFailure = context =>
+                {
+                    // A refused or failed sign-in shows a plain page instead of an exception.
+                    context.Response.Redirect($"{AccountEndpoints.AccessDeniedPath}?reason=signin");
+                    context.HandleResponse();
                     return Task.CompletedTask;
                 };
             });
@@ -138,8 +179,23 @@ public static class AuthenticationSetup
                             return;
                         }
 
-                        var provisioner = context.HttpContext.RequestServices.GetRequiredService<UserProvisioner>();
-                        await provisioner.EnsureUserAsync(email, ClaimsUser.NameOf(context.Principal), bootstrapAdmins.Contains(email), context.HttpContext.RequestAborted);
+                        // Every API call: deactivated users and revoked sessions are refused (A.8.5). Only refusals are logged.
+                        var services = context.HttpContext.RequestServices;
+                        var decision = await services.GetRequiredService<SignInGate>()
+                            .EvaluateAsync(email, ClaimsUser.NameOf(context.Principal), "bearer", interactive: false, context.HttpContext.RequestAborted);
+                        if (!decision.Allowed)
+                        {
+                            context.Fail(decision.Reason ?? "Refused.");
+                            return;
+                        }
+
+                        var reason = await SessionValidation.CheckAsync(context.Principal, services.GetRequiredService<UserStatusCache>(), session,
+                            services.GetRequiredService<TimeProvider>(), enforceLifetime: false, context.HttpContext.RequestAborted);
+                        if (reason is not null)
+                        {
+                            await services.GetRequiredService<SecurityEventLog>().RecordAsync(SecurityEventTypes.SessionRejected, email, SecurityOutcomes.Denied, $"bearer: {reason}", actor: email);
+                            context.Fail(reason);
+                        }
                     },
                 };
             });
@@ -148,6 +204,12 @@ public static class AuthenticationSetup
         services.AddAuthorizationBuilder()
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
         services.AddCascadingAuthenticationState();
+        services.AddScoped<CircuitActivity>();
+        services.AddScoped<AuthenticationStateProvider, RevalidatingAuthenticationStateProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, SessionCircuitHandler>());
+        services.AddSingleton(session);
+        services.AddSingleton(signInPolicy);
+        services.AddScoped<ISecurityEventContext, HttpSecurityEventContext>();
 
         services.AddHttpContextAccessor();
         services.AddScoped<CurrentPrincipal>();
@@ -159,7 +221,8 @@ public static class AuthenticationSetup
     }
 
     internal static bool IsApiRequest(HttpRequest request) =>
-        request.Path.StartsWithSegments("/api") || request.Path.StartsWithSegments("/hubs");
+        request.Path.StartsWithSegments("/api") || request.Path.StartsWithSegments("/hubs")
+        || request.Path.StartsWithSegments(ScimEndpoints.BasePath) || request.Path.StartsWithSegments("/health");
 
     private static bool HasBearerToken(HttpRequest request) =>
         request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
