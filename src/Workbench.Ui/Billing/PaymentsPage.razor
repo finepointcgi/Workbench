@@ -1,0 +1,216 @@
+@page "/billing/payments"
+@inject IPaymentService Payments
+@inject IArReportService Ar
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Payments · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="Payments" Subtitle="Cash receipts applied to customer invoices. Recording one posts debit cash, credit AR billed." />
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_customers is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="record-payment">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Record a cash receipt</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudSelect T="Guid?" Value="_customerId" ValueChanged="CustomerChanged" Label="Customer" data-testid="payment-customer">
+                    @foreach (var c in _customers)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.Name (@BillingFormat.Money(c.OpenBalance) open)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2"><MudDatePicker Label="Received on" @bind-Date="_receivedOn" DateFormat="yyyy-MM-dd" /></MudItem>
+            <MudItem xs="6" md="2">
+                <MudSelect T="CashReceiptMethod" @bind-Value="_method" Label="Method">
+                    @foreach (var m in Enum.GetValues<CashReceiptMethod>())
+                    {
+                        <MudSelectItem T="CashReceiptMethod" Value="m">@BillingFormat.Label(m)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="_reference" Label="Reference (EFT trace, check no.)" /></MudItem>
+        </MudGrid>
+
+        @if (_customerId is not null)
+        {
+            @if (_open.Count == 0)
+            {
+                <MudText Class="mud-text-secondary mt-3">This customer has no open invoices.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Class="mt-3" data-testid="open-invoices">
+                    <thead><tr><th>Invoice</th><th>Contract</th><th>Due</th><th style="text-align:right">Open balance</th><th style="text-align:right; width:180px">Apply</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _open)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"billing/invoices/{i.Id}")">@i.Number</MudLink></td>
+                                <td>@i.ContractNumber</td>
+                                <td class="@(i.DaysPastDue > 0 ? "mud-error-text" : "")">@BillingFormat.Date(i.DueDate)</td>
+                                <td style="text-align:right">@BillingFormat.Amount(i.Balance)</td>
+                                <td>
+                                    <MudNumericField T="decimal" Value="_apply.GetValueOrDefault(i.Id)" ValueChanged="v => _apply[i.Id] = v" Format="N2" HideSpinButtons="true"
+                                                     Min="0" Max="i.Balance" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="apply-amount" />
+                                </td>
+                                <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _apply[i.Id] = i.Balance">Full</MudButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr><td colspan="4" style="text-align:right"><strong>Receipt amount</strong></td><td style="text-align:right" data-testid="receipt-total"><strong>@BillingFormat.Money(Total)</strong></td><td></td></tr>
+                    </tfoot>
+                </MudSimpleTable>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" StartIcon="@Icons.Material.Filled.Payments" OnClick="RecordAsync"
+                           Disabled="@(_busy || Total <= 0 || _receivedOn is null)" data-testid="record-payment-button">Record @BillingFormat.Money(Total)</MudButton>
+            }
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Receipts</MudText>
+    @if (_payments.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No payments recorded.</MudText></MudPaper>
+    }
+    else
+    {
+        <MudPaper Outlined="true" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Hover="true" data-testid="payments">
+                <thead><tr><th>Received</th><th>Customer</th><th>Method</th><th>Reference</th><th>Applied to</th><th style="text-align:right">Amount</th><th>GL entry</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _payments)
+                    {
+                        <tr style="@(p.IsVoid ? "text-decoration: line-through; opacity: .6" : "")">
+                            <td>@BillingFormat.Date(p.ReceivedOn)</td>
+                            <td>@p.CustomerName</td>
+                            <td>@BillingFormat.Label(p.Method)</td>
+                            <td>@p.Reference</td>
+                            <td>
+                                @foreach (var a in p.Applications)
+                                {
+                                    <div><MudLink Href="@($"billing/invoices/{a.InvoiceId}")">@a.InvoiceNumber</MudLink> @BillingFormat.Amount(a.Amount)</div>
+                                }
+                            </td>
+                            <td style="text-align:right">@BillingFormat.Amount(p.Amount)</td>
+                            <td>@if (p.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">@p.JournalEntryNumber</MudLink> }</td>
+                            <td>
+                                @if (!p.IsVoid)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => VoidAsync(p)">Void</MudButton>
+                                }
+                                else
+                                {
+                                    <span class="mud-text-secondary">Void</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "customer")]
+    public Guid? Customer { get; set; }
+
+    private IReadOnlyList<BillingCustomerDto>? _customers;
+    private IReadOnlyList<PaymentDto> _payments = [];
+    private IReadOnlyList<InvoiceSummaryDto> _open = [];
+    private readonly Dictionary<Guid, decimal> _apply = [];
+    private Guid? _customerId;
+    private DateTime? _receivedOn = DateTime.Today;
+    private CashReceiptMethod _method = CashReceiptMethod.Eft;
+    private string? _reference;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    private decimal Total => _apply.Where(a => _open.Any(i => i.Id == a.Key)).Sum(a => a.Value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _customers = await Ar.ListCustomersAsync();
+            _payments = await Payments.ListAsync(new PaymentQuery());
+            var pick = Customer ?? _customers.Where(c => c.OpenBalance > 0).Select(c => (Guid?)c.Id).FirstOrDefault();
+            if (pick is not null)
+            {
+                await CustomerChanged(pick);
+            }
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task CustomerChanged(Guid? id)
+    {
+        _customerId = id;
+        _apply.Clear();
+        _open = id is { } c ? await Payments.ListOpenInvoicesAsync(c) : [];
+    }
+
+    private async Task RecordAsync()
+    {
+        _busy = true;
+        try
+        {
+            var applications = _apply.Where(a => a.Value > 0 && _open.Any(i => i.Id == a.Key)).Select(a => new PaymentApplicationInput(a.Key, a.Value)).ToList();
+            var payment = await Payments.RecordAsync(new RecordPaymentRequest(_customerId!.Value, DateOnly.FromDateTime(_receivedOn!.Value), Total, _method, applications, _reference));
+            Snackbar.Add($"Recorded {BillingFormat.Money(payment.Amount)} (GL {payment.JournalEntryNumber}).", Severity.Success);
+            _reference = null;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private async Task VoidAsync(PaymentDto payment)
+    {
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, "Voiding reverses the receipt's GL entry (dated today) and reopens the invoices it paid." },
+            { d => d.ConfirmText, "Void payment" },
+            { d => d.ConfirmColor, Color.Error },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>("Void payment", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            try
+            {
+                await Payments.VoidAsync(payment.Id, new VoidInvoiceRequest(reason));
+                Snackbar.Add("Payment voided.", Severity.Success);
+                await ReloadAsync();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _payments = await Payments.ListAsync(new PaymentQuery());
+        _customers = await Ar.ListCustomersAsync();
+        await CustomerChanged(_customerId);
+    }
+}

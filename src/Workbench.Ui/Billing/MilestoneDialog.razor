@@ -1,0 +1,45 @@
+@* Adds or changes an FFP billing milestone. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="Guid?" @bind-Value="_clinId" Label="FFP CLIN" Required="true">
+                @foreach (var c in Clins)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Format="N2" HideSpinButtons="true" Min="0" />
+            <MudDatePicker Label="Planned date" @bind-Date="_planned" DateFormat="yyyy-MM-dd" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_clinId is null || string.IsNullOrWhiteSpace(_description) || _amount <= 0 || _planned is null)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new SaveMilestoneRequest(_clinId!.Value, _description!.Trim(), _amount, DateOnly.FromDateTime(_planned!.Value))))">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<BillingClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public BillingMilestoneDto? Milestone { get; set; }
+
+    private Guid? _clinId;
+    private string? _description;
+    private decimal _amount;
+    private DateTime? _planned = DateTime.Today;
+
+    protected override void OnInitialized()
+    {
+        _clinId = Milestone?.ClinId ?? (Clins.Count == 1 ? Clins[0].Id : null);
+        _description = Milestone?.Description;
+        _amount = Milestone?.Amount ?? 0;
+        _planned = Milestone?.PlannedDate.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today;
+    }
+}

@@ -1,0 +1,16 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ColorOf(Status)" Class="ma-0" data-testid="invoice-status">@BillingFormat.Label(Status)</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public InvoiceState Status { get; set; }
+
+    private static Color ColorOf(InvoiceState s) => s switch
+    {
+        InvoiceState.Draft => Color.Default,
+        InvoiceState.Approved => Color.Info,
+        InvoiceState.Sent => Color.Primary,
+        InvoiceState.PartiallyPaid => Color.Warning,
+        InvoiceState.Paid => Color.Success,
+        _ => Color.Error,
+    };
+}

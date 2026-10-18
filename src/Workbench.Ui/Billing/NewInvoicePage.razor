@@ -1,0 +1,233 @@
+@page "/billing/new"
+@inject IInvoiceService Invoices
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>New invoice · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="New invoice" Subtitle="Pick a contract and billing period, preview the lines by CLIN with the funding check, then create the draft. Running it again for the same period refreshes the existing draft.">
+    <MudButton Variant="Variant.Outlined" Href="billing" StartIcon="@Icons.Material.Filled.ArrowBack">All invoices</MudButton>
+</BillingHeader>
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_contracts is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">1. Contract and period</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="5">
+                <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChanged" Label="Contract" data-testid="wizard-contract">
+                    @foreach (var c in _contracts)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name (@c.CustomerName)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudSelect T="InvoiceKind" Value="_type" ValueChanged="TypeChanged" Label="Invoice type" Disabled="_contract is null" data-testid="wizard-type">
+                    @foreach (var t in Types)
+                    {
+                        <MudSelectItem T="InvoiceKind" Value="t">@BillingFormat.Label(t)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="mt-3">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetPeriod(BillingFormat.PreviousMonth(Today))">Last month</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetPeriod(BillingFormat.CurrentMonth(Today))">This month</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="SetFiscalYear">Last fiscal year</MudButton>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudDatePicker Label="Period from" Date="_from" DateChanged="d => { _from = d; _preview = null; }" DateFormat="yyyy-MM-dd" data-testid="wizard-from" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudDatePicker Label="Period to" Date="_to" DateChanged="d => { _to = d; _preview = null; }" DateFormat="yyyy-MM-dd" data-testid="wizard-to" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudDatePicker Label="Invoice date" @bind-Date="_invoiceDate" DateFormat="yyyy-MM-dd" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                @if (_type == InvoiceKind.CostPlus)
+                {
+                    <MudCheckBox T="bool" Value="_releaseWithhold" ValueChanged="v => { _releaseWithhold = v; _preview = null; }" Color="Color.Primary"
+                                 Label="Final invoice: release withheld fee" Class="mt-3" />
+                }
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField T="string" @bind-Value="_notes" Label="Notes (printed on the invoice)" Lines="2" />
+            </MudItem>
+        </MudGrid>
+        @if (_type == InvoiceKind.TrueUp)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                A true-up bills cost at actual indirect rates minus what the year's cost-plus invoices billed at provisional rates. Use the fiscal year as the period.
+            </MudAlert>
+        }
+        <MudStack Row="true" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Preview" OnClick="PreviewAsync"
+                       Disabled="@(!CanPreview || _busy)" data-testid="wizard-preview">Preview lines</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (_preview is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="wizard-preview-panel">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">2. Preview: @_preview.ContractNumber · @BillingFormat.Label(_preview.Request.Type)</MudText>
+            @if (_preview.RateNote is not null)
+            {
+                <MudAlert Severity="@(_preview.RateNote.StartsWith("Indirect rates not configured", StringComparison.Ordinal) ? Severity.Warning : Severity.Normal)" Dense="true" Class="mb-2" data-testid="rate-note">
+                    @_preview.RateNote
+                </MudAlert>
+            }
+            @foreach (var w in _preview.Warnings)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@w</MudAlert>
+            }
+            @if (_preview.ExistingDraftId is not null)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                    A draft for this contract, type and period already exists; creating it again refreshes that draft (manual lines are kept).
+                </MudAlert>
+            }
+            <InvoiceLinesTable Lines="_preview.Lines" Funding="_preview.Funding" />
+            @if (_preview.Withheld > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2">Fee withheld on this invoice: @BillingFormat.Money(_preview.Withheld)</MudText>
+            }
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-4 mb-2">Funding check</MudText>
+            <FundingCheckTable Funding="_preview.Funding" />
+        </MudPaper>
+
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">3. Create the draft</MudText>
+            <MudText Class="mud-text-secondary mb-3">The draft holds its hours, ODCs and milestones so no other invoice bills them. Review it, then approve to post it.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.NoteAdd" OnClick="CreateAsync"
+                       Disabled="@(_busy || _preview.Lines.Count == 0)" data-testid="wizard-create">
+                @(_preview.ExistingDraftId is null ? "Create draft" : "Refresh draft")
+            </MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<BillingContractDto>? _contracts;
+    private BillingContractDto? _contract;
+    private Guid? _contractId;
+    private InvoiceKind _type = InvoiceKind.CostPlus;
+    private DateTime? _from;
+    private DateTime? _to;
+    private DateTime? _invoiceDate = DateTime.Today;
+    private bool _releaseWithhold;
+    private string? _notes;
+    private InvoicePreviewDto? _preview;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    [SupplyParameterFromQuery]
+    public Guid? Contract { get; set; }
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private IEnumerable<InvoiceKind> Types => _contract?.SuggestedTypes.Count > 0 ? _contract.SuggestedTypes : Enum.GetValues<InvoiceKind>().Where(t => t != InvoiceKind.CreditMemo);
+
+    private bool CanPreview => _contractId is not null && _from is not null && _to is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _contracts = await Invoices.ListBillingContractsAsync();
+            SetPeriod(BillingFormat.CurrentMonth(Today));
+            if ((Contract is { } id && _contracts.Any(c => c.Id == id) ? id : _contracts.FirstOrDefault(c => c.Clins.Count > 0)?.Id) is { } pick)
+            {
+                ContractChanged(pick);
+            }
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void ContractChanged(Guid? id)
+    {
+        _contractId = id;
+        _contract = _contracts?.FirstOrDefault(c => c.Id == id);
+        if (_contract?.SuggestedTypes.Count > 0 && !_contract.SuggestedTypes.Contains(_type))
+        {
+            _type = _contract.SuggestedTypes[0];
+        }
+
+        _preview = null;
+    }
+
+    private void TypeChanged(InvoiceKind type)
+    {
+        _type = type;
+        if (type == InvoiceKind.TrueUp)
+        {
+            SetFiscalYear();
+        }
+
+        _preview = null;
+    }
+
+    private void SetPeriod((DateOnly From, DateOnly To) period)
+    {
+        _from = period.From.ToDateTime(TimeOnly.MinValue);
+        _to = period.To.ToDateTime(TimeOnly.MinValue);
+        _preview = null;
+    }
+
+    private void SetFiscalYear()
+    {
+        // The federal fiscal year (October to September) before the current one.
+        var start = new DateOnly(Today.Month >= 10 ? Today.Year - 1 : Today.Year - 2, 10, 1);
+        SetPeriod((start, start.AddYears(1).AddDays(-1)));
+    }
+
+    private GenerateInvoiceRequest Request() => new(
+        _contractId!.Value, _type, DateOnly.FromDateTime(_from!.Value), DateOnly.FromDateTime(_to!.Value),
+        _invoiceDate is { } d ? DateOnly.FromDateTime(d) : null, _type == InvoiceKind.CostPlus && _releaseWithhold, _notes);
+
+    private async Task PreviewAsync()
+    {
+        _busy = true;
+        try
+        {
+            _preview = await Invoices.PreviewAsync(Request());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var invoice = await Invoices.GenerateDraftAsync(Request());
+            Snackbar.Add($"Draft {invoice.Summary.Number} saved.", Severity.Success);
+            Navigation.NavigateTo($"billing/invoices/{invoice.Summary.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+}

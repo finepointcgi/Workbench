@@ -134,6 +134,7 @@ public static class DatabaseInitializer
         await FinancialsSeed.SeedAsync(db, cancellationToken);
         await AccountingSeed.SeedAsync(db, cancellationToken);
         await ContractDetailSeed.SeedAsync(db, cancellationToken);
+        await BillingSeed.SeedAsync(db, factory, cancellationToken);
     }
 
     /// <summary>

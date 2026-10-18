@@ -1,0 +1,59 @@
+@page "/billing/contracts"
+@inject IInvoiceService Invoices
+
+<PageTitle>Contracts · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="Contracts and milestones" Subtitle="Billed to date against funding for each contract and CLIN. Open a contract for its billing settings and FFP milestones." />
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_contracts is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_contracts.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No contracts yet.</MudText></MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="billing-contracts">
+            <thead><tr><th>Contract</th><th>Customer</th><th>Type</th><th>CLINs</th><th style="text-align:right">Funded</th><th style="text-align:right">Billed to date</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _contracts)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"billing/contracts/{c.Id}")">@c.ContractNumber</MudLink><div class="mud-text-secondary">@c.Name</div></td>
+                        <td>@c.CustomerName</td>
+                        <td>@c.ContractType</td>
+                        <td>@string.Join(", ", c.Clins.Select(x => $"{x.Number} ({x.Pricing})"))</td>
+                        <td style="text-align:right">@BillingFormat.Amount(c.Clins.Sum(x => x.FundedValue))</td>
+                        <td style="text-align:right">@BillingFormat.Amount(c.Clins.Sum(x => x.BilledToDate))</td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"billing/new?contract={c.Id}")" Disabled="c.Clins.Count == 0">New invoice</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<BillingContractDto>? _contracts;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _contracts = await Invoices.ListBillingContractsAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+}

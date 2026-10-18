@@ -1,0 +1,92 @@
+@page "/billing/statements/{CustomerId:guid}"
+@inject IArReportService Ar
+
+<PageTitle>Statement · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="@(_statement is null ? "Customer statement" : $"Statement · {_statement.CustomerName}")">
+    <MudDatePicker Label="From" Date="_from" DateChanged="d => SetAsync(() => _from = d)" DateFormat="yyyy-MM-dd" Style="max-width:150px" />
+    <MudDatePicker Label="To" Date="_to" DateChanged="d => SetAsync(() => _to = d)" DateFormat="yyyy-MM-dd" Style="max-width:150px" />
+    <MudButton Variant="Variant.Outlined" Href="billing/aging" StartIcon="@Icons.Material.Filled.ArrowBack">AR aging</MudButton>
+</BillingHeader>
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_statement is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.subtitle1">@_statement.CustomerName</MudText>
+        <MudText Style="white-space:pre-line" Class="mud-text-secondary">@_statement.BillingAddress</MudText>
+        <MudText Typo="Typo.body2" Class="mt-2">Activity @BillingFormat.Date(_statement.From) to @BillingFormat.Date(_statement.To)</MudText>
+    </MudPaper>
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
+        <MudSimpleTable Dense="true" data-testid="statement">
+            <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th style="text-align:right">Charges</th><th style="text-align:right">Credits</th><th style="text-align:right">Balance</th></tr></thead>
+            <tbody>
+                <tr><td>@BillingFormat.Date(_statement.From)</td><td colspan="5">Opening balance</td><td style="text-align:right">@BillingFormat.Amount(_statement.OpeningBalance)</td></tr>
+                @foreach (var l in _statement.Lines)
+                {
+                    <tr>
+                        <td>@BillingFormat.Date(l.Date)</td>
+                        <td>@l.Kind</td>
+                        <td>@if (l.InvoiceId is { } id) { <MudLink Href="@($"billing/invoices/{id}")">@l.Reference</MudLink> } else { @l.Reference }</td>
+                        <td>@l.Description</td>
+                        <td style="text-align:right">@BillingFormat.Blank(l.Charges)</td>
+                        <td style="text-align:right">@BillingFormat.Blank(l.Credits)</td>
+                        <td style="text-align:right">@BillingFormat.Amount(l.Balance)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><td colspan="6"><strong>Closing balance</strong></td><td style="text-align:right"><strong>@BillingFormat.Money(_statement.ClosingBalance)</strong></td></tr></tfoot>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Aging today</MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true">
+            <thead><tr><th style="text-align:right">Current</th><th style="text-align:right">1–30</th><th style="text-align:right">31–60</th><th style="text-align:right">61–90</th><th style="text-align:right">90+</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody><tr><Buckets Value="_statement.Aging" Bold="true" /></tr></tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public Guid CustomerId { get; set; }
+
+    private CustomerStatementDto? _statement;
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-2);
+    private DateTime? _to = DateTime.Today;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_from is null || _to is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _statement = await Ar.GetStatementAsync(CustomerId, DateOnly.FromDateTime(_from.Value), DateOnly.FromDateTime(_to.Value));
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+}
