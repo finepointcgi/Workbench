@@ -27,6 +27,7 @@ public enum ImportKind
     BillRates,
     Budgets,
     Sheets,
+    FixedAssets,
 }
 
 public enum ImportJobStatus

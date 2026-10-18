@@ -34,6 +34,7 @@ public static class SecurityEventTypes
     public const string ExportSecurityEvents = "export.security_events";
     public const string ExportReport = "export.report";
     public const string ExportEvm = "export.evm"; // IPMDAR Format 1/5 workbooks (earned value).
+    public const string ExportAssets = "export.assets"; // Fixed asset register, schedules, roll-forward and government property exports.
 
     public const string PeriodStatusChanged = "period.status_changed";
     public const string SettingChanged = "settings.changed";
