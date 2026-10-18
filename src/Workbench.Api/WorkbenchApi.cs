@@ -50,6 +50,7 @@ public static class WorkbenchApi
         v1.MapCeilingEndpoints();
         v1.MapApprovalEndpoints();
         v1.MapProjectHubEndpoints();
+        v1.MapMyTodoEndpoints();
 
         return app;
     }

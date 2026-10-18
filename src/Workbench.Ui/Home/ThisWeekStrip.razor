@@ -1,0 +1,67 @@
+@* "This week": hours entered against the standard for the timesheet period, leave balances and this week's allocations. *@
+
+<MudPaper Class="pa-4 mb-4" Outlined="true" data-card="this-week">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">This week</MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@Range()</MudText>
+    </MudStack>
+
+    <div class="d-flex align-baseline gap-1" data-testid="hours">
+        <MudText Typo="Typo.h5" HtmlTag="span">@TodoFormat.Hours(Week.HoursEntered)</MudText>
+        <MudText Typo="Typo.body2" HtmlTag="span" Class="mud-text-secondary">of @TodoFormat.Hours(Week.StandardHours) hours entered</MudText>
+        <MudSpacer />
+        <MudChip T="string" Size="Size.Small" Color="StatusColor()" Variant="Variant.Outlined" data-testid="timesheet-status">@StatusLabel()</MudChip>
+    </div>
+    <MudProgressLinear Value="@Percent()" Color="@(Percent() >= 100 ? Color.Success : Color.Primary)" Rounded="true" Size="Size.Medium" Class="my-2"
+                       aria-label="Hours entered against standard hours" />
+    <MudButton Href="time" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Filled.ArrowForward" Class="px-0">Open timesheet</MudButton>
+
+    @if (Week.Leave.Count > 0)
+    {
+        <div class="d-flex flex-wrap gap-1 mt-2" data-testid="leave">
+            @foreach (var balance in Week.Leave)
+            {
+                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.BeachAccess" Href="leave">
+                    @balance.PolicyName: @TodoFormat.Hours(balance.Available) h available
+                </MudChip>
+            }
+        </div>
+    }
+
+    @if (Week.AllocatedHours is { } allocated)
+    {
+        <MudText Typo="Typo.body2" Class="mt-2" data-testid="allocations">
+            <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Small" Class="mr-1" Style="vertical-align:middle" />
+            You're planned for @TodoFormat.Hours(allocated) h on @(Week.AllocatedProjects == 1 ? "1 project" : $"{Week.AllocatedProjects} projects") this week.
+            <MudLink Href="resourcing" Typo="Typo.body2">See allocations</MudLink>
+        </MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public MyWeekDto Week { get; set; } = default!;
+
+    private double Percent() => Week.StandardHours <= 0 ? 0 : (double)Math.Min(100m, Week.HoursEntered / Week.StandardHours * 100m);
+
+    private string Range() => Week.PeriodStart.Month == Week.PeriodEnd.Month
+        ? $"{Week.PeriodStart.ToString("MMM d", CultureInfo.InvariantCulture)}–{Week.PeriodEnd.Day}"
+        : $"{Week.PeriodStart.ToString("MMM d", CultureInfo.InvariantCulture)}–{Week.PeriodEnd.ToString("MMM d", CultureInfo.InvariantCulture)}";
+
+    private string StatusLabel() => Week.Status switch
+    {
+        null => "Not started",
+        Workbench.Contracts.Time.TimesheetState.Draft => "Not submitted",
+        Workbench.Contracts.Time.TimesheetState.Submitted => "Submitted",
+        Workbench.Contracts.Time.TimesheetState.Approved => "Approved",
+        _ => "Needs changes",
+    };
+
+    private Color StatusColor() => Week.Status switch
+    {
+        Workbench.Contracts.Time.TimesheetState.Approved => Color.Success,
+        Workbench.Contracts.Time.TimesheetState.Submitted => Color.Info,
+        Workbench.Contracts.Time.TimesheetState.Rejected => Color.Error,
+        _ => Color.Default,
+    };
+}

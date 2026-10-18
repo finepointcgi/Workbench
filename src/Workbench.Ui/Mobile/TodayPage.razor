@@ -10,6 +10,11 @@
 
 <PageTitle>Today · Workbench</PageTitle>
 
+@if (_date == Today)
+{
+    <Workbench.Ui.Home.MobileTodo />
+}
+
 <div class="wb-m-title">
     <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Large" aria-label="Previous day" OnClick="() => GoAsync(_date.AddDays(-1))" />
     <h1 data-testid="day">@(_date == Today ? "Today" : MobileFormat.Day(_date))</h1>
