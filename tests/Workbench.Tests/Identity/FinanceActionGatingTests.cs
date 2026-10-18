@@ -81,6 +81,25 @@ public sealed class FinanceActionGatingTests
     [Theory]
     [InlineData(OrgRoles.Employee, false)]
     [InlineData(OrgRoles.Finance, true)]
+    [InlineData(OrgRoles.Admin, true)]
+    public async Task Purchase_orders_show_new_po_only_to_finance(OrgRoles roles, bool finance)
+    {
+        await using var ctx = NewContext(roles);
+        ctx.Services.AddSingleton(Fake<IPurchaseOrderService>.Create());
+        ctx.Services.AddSingleton(Fake<IRequisitionService>.Create(("GetOptionsAsync", _ => throw new Workbench.Contracts.WorkbenchForbiddenException())));
+
+        var orders = RenderIn<PurchasingLayout, Workbench.Ui.Purchasing.Procurement.PurchaseOrdersPage>(ctx);
+
+        orders.WaitForAssertion(() =>
+        {
+            Assert.Contains("Purchase orders", orders.Markup);
+            Assert.Equal(finance, orders.FindAll("[data-testid=new-po]").Count == 1);
+        });
+    }
+
+    [Theory]
+    [InlineData(OrgRoles.Employee, false)]
+    [InlineData(OrgRoles.Finance, true)]
     public async Task A_project_manager_can_still_decide_a_bill_routed_to_them(OrgRoles roles, bool finance)
     {
         await using var ctx = NewContext(roles);
