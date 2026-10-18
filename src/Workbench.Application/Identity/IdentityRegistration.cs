@@ -71,6 +71,7 @@ public static class IdentityRegistration
         services.AddWorkbenchProcurementPermissions(); // Requisitions: any employee for their projects/org; POs and match: Finance/Admin (receivers receive).
         services.AddWorkbenchAssetPermissions(); // Fixed assets: Finance or Admin only.
         services.AddWorkbenchCashPermissions(); // Cash management and bank reconciliation: Finance or Admin only.
+        services.AddWorkbenchPayrollPermissions(); // Payroll: Finance or Admin only (pay rates masked unless revealed).
         return services;
     }
 
