@@ -15,7 +15,7 @@
 
   const update = () => {
     for (const region of document.querySelectorAll(selector)) {
-      const overflows = region.scrollWidth > region.clientWidth + 1 || region.scrollHeight > region.clientHeight + 1;
+      const overflows = region.scrollWidth > region.clientWidth || region.scrollHeight > region.clientHeight;
       const added = region.hasAttribute("data-wb-scroll-added");
       if (overflows && !added && !region.hasAttribute("tabindex") && !region.querySelector(focusable)) {
         region.setAttribute("tabindex", "0");
