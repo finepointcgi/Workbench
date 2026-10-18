@@ -189,6 +189,30 @@ public sealed class LeaveTests
     }
 
     [Fact]
+    public async Task Resource_planning_sees_company_holidays_and_approved_leave_only()
+    {
+        await using var kit = await PayrollKit.CreateAsync();
+        var pto = await kit.PtoPolicyAsync();
+        await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 40m, "Opening"));
+        kit.As(Admin);
+        await kit.Holidays.AddAsync(new SaveHolidayRequest(Week1.AddDays(4), "Company holiday"));
+
+        kit.As(Editor);
+        var approved = await kit.Requests.CreateAsync(new CreateLeaveRequest(pto.Id, Week1.AddDays(2), Week1.AddDays(3)));
+        await kit.Requests.CreateAsync(new CreateLeaveRequest(pto.Id, Week1.AddDays(7), Week1.AddDays(7))); // still pending
+        kit.As(Owner);
+        await kit.Requests.ApproveAsync(approved.Id, new DecideLeaveRequest());
+
+        var calendar = new LeaveResourceCalendar(kit.Factory);
+        var holidays = await calendar.GetHolidaysAsync(Week1, Week1.AddDays(13), [kit.Fx.AnalystId]);
+        var leave = await calendar.GetApprovedLeaveAsync(Week1, Week1.AddDays(13), [kit.Fx.AnalystId]);
+
+        Assert.Equal([(Week1.AddDays(4), "Company holiday", (Guid?)null)], holidays.Select(h => (h.Date, h.Name, h.EmployeeId)));
+        Assert.Equal([(kit.Fx.AnalystId, Week1.AddDays(2), 8m), (kit.Fx.AnalystId, Week1.AddDays(3), 8m)], leave.Select(l => (l.EmployeeId, l.Date, l.Hours)));
+        Assert.Empty(await calendar.GetApprovedLeaveAsync(Week1, Week1.AddDays(13), [kit.Fx.PmId]));
+    }
+
+    [Fact]
     public async Task Only_the_supervisor_decides_and_admins_own_policies_and_holidays()
     {
         await using var kit = await PayrollKit.CreateAsync();

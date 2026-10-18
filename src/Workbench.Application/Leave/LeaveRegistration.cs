@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
+using Workbench.Application.Resourcing;
 using Workbench.Contracts.Leave;
 using Workbench.Contracts.Time;
 
@@ -20,6 +21,7 @@ public static class LeaveRegistration
         services.AddScoped<ILeaveRequestService, LeaveRequestService>();
         services.AddScoped<ILeaveTimesheetService, LeaveTimesheetService>();
         services.Decorate<ITimesheetService, LeaveCheckingTimesheetService>();
+        services.AddScoped<IResourceLeaveCalendar, LeaveResourceCalendar>(); // Wins over resourcing's TryAdd'ed no-op default.
         return services;
     }
 }
