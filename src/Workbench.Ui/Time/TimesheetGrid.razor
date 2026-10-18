@@ -1,17 +1,26 @@
 @using System.Globalization
 @inject IDialogService DialogService
 
-@* Weekly (or semi-monthly) time grid: rows are charge codes, columns are days. *@
+@* Weekly (or semi-monthly) time grid: rows are charge codes, columns are days. Today is highlighted and weekends and
+   holidays are dimmed; the footer shows the period's hours against the standard. *@
 <div class="timesheet-grid">
     <table class="mud-table-root" data-testid="timesheet-grid">
         <thead>
             <tr>
-                <th class="code">Charge code</th>
+                <th class="code"><Term Key="charge-code">Charge code</Term></th>
                 @foreach (var day in Detail.Days)
                 {
-                    <th class="day @(day.Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "weekend" : "")" title="@DayTitle(day)">
+                    <th class="@DayClass(day)" title="@DayTitle(day)" data-testid="@($"day-{day.Date:yyyy-MM-dd}")" aria-current="@(day.Date == TodayDate ? "date" : null)">
                         <div>@day.Date.ToString("ddd", CultureInfo.InvariantCulture)</div>
-                        <div class="mud-text-secondary">@day.Date.ToString("M/d", CultureInfo.InvariantCulture)</div>
+                        <div class="date">@day.Date.ToString("M/d", CultureInfo.InvariantCulture)</div>
+                        @if (day.Date == TodayDate)
+                        {
+                            <div class="tag">Today</div>
+                        }
+                        else if (HolidayName(day.Date) is { } holiday)
+                        {
+                            <div class="tag" title="@holiday">Holiday</div>
+                        }
                         @if (day.EnteredLate)
                         {
                             <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Warning" title="Entered late" />
@@ -25,17 +34,17 @@
             @foreach (var row in _rows)
             {
                 <tr @key="row.Code.WbsElementId">
-                    <td class="code">
-                        <div><b>@row.Code.Code</b> <span class="mud-text-secondary">@row.Code.ProjectCode</span></div>
-                        <div class="mud-text-secondary name">@row.Code.Name</div>
+                    <td class="code" data-testid="@($"row-{row.Code.Code}")">
+                        <div class="name">@ChargeCodeText.Label(row.Code.Code, row.Code.Name, row.Code.Kind)</div>
+                        <div class="mud-text-secondary context">@ChargeCodeText.Context(row.Code.Kind, row.Code.ProjectCode, row.Code.ProjectName)</div>
                     </td>
                     @foreach (var day in Detail.Days)
                     {
                         var cell = row.Cell(day.Date);
                         var enabled = CanEdit(row, day);
-                        <td class="cell">
+                        <td class="cell @DayClass(day)">
                             <input type="number" min="0" max="24" step="0.25" inputmode="decimal"
-                                   aria-label="@($"{row.Code.Code} {day.Date:yyyy-MM-dd}")"
+                                   aria-label="@($"{ChargeCodeText.Label(row.Code.Code, row.Code.Name, row.Code.Kind)}, {day.Date:dddd MMMM d}")"
                                    data-testid="@($"cell-{row.Code.Code}-{day.Date:yyyy-MM-dd}")"
                                    value="@Format(cell.Hours)"
                                    placeholder="@Planned(row, day.Date)"
@@ -51,12 +60,12 @@
                             </button>
                         </td>
                     }
-                    <td class="total">@row.Total.ToString("0.##")</td>
+                    <td class="total" data-testid="@($"row-total-{row.Code.Code}")">@row.Total.ToString("0.##")</td>
                 </tr>
             }
             @if (_rows.Count == 0)
             {
-                <tr><td colspan="@(Detail.Days.Count + 2)" class="mud-text-secondary pa-4">No charge codes yet. Add one below.</td></tr>
+                <tr><td colspan="@(Detail.Days.Count + 2)" class="mud-text-secondary pa-4">No charge codes yet. Pick the task you worked on under "Add a charge code" below.</td></tr>
             }
         </tbody>
         <tfoot>
@@ -65,12 +74,21 @@
                 @foreach (var day in Detail.Days)
                 {
                     var total = DayTotal(day.Date);
-                    <td class="total @(total > 24 ? "over" : "")" data-testid="@($"total-{day.Date:yyyy-MM-dd}")">@total.ToString("0.##")</td>
+                    <td class="total @DayClass(day) @(total > 24 ? "over" : "")" data-testid="@($"total-{day.Date:yyyy-MM-dd}")">@total.ToString("0.##")</td>
                 }
                 <td class="total" data-testid="grand-total"><b>@GrandTotal.ToString("0.##")</b></td>
             </tr>
         </tfoot>
     </table>
+</div>
+
+<div class="timesheet-summary mt-3" data-testid="week-summary">
+    <MudText Typo="Typo.subtitle1" HtmlTag="div">
+        <b data-testid="week-total">@GrandTotal.ToString("0.##") of @Standard.ToString("0.##") h</b>
+        <span class="mud-text-secondary"> · @SummaryHint</span>
+    </MudText>
+    <MudProgressLinear Value="@Percent" Color="@(GrandTotal > Standard && Standard > 0 ? Color.Warning : GrandTotal >= Standard ? Color.Success : Color.Primary)"
+                       Rounded="true" Size="Size.Medium" Class="mt-1" aria-label="@($"{GrandTotal:0.##} of {Standard:0.##} standard hours")" data-testid="week-progress" />
 </div>
 
 @if (Editable && !Locked)
@@ -80,7 +98,7 @@
             @foreach (var option in AvailableCodes)
             {
                 <MudSelectItem T="Guid?" Value="option.ChargeCode.WbsElementId">
-                    @option.ChargeCode.Code · @option.ChargeCode.Name (@option.ChargeCode.ProjectCode)@(option.RecentlyUsed ? " · recent" : "")
+                    @ChargeCodeText.Label(option.ChargeCode)@(option.ChargeCode.Kind == ChargeCodeKind.Direct ? $" · {option.ChargeCode.ProjectName}" : "")@(option.RecentlyUsed ? " · recent" : "")
                 </MudSelectItem>
             }
         </MudSelect>
@@ -111,7 +129,22 @@
 
     private readonly Dictionary<(Guid WbsElementId, DateOnly Date), decimal> _planned = [];
 
+    /// <summary>The day to highlight as today; defaults to the local date.</summary>
+    [Parameter] public DateOnly? Today { get; set; }
+
     public bool IsDirty { get; private set; }
+
+    private DateOnly TodayDate => Today ?? DateOnly.FromDateTime(DateTime.Now);
+
+    private decimal Standard => Detail.Timesheet.StandardHours;
+
+    private double Percent => Standard <= 0 ? (GrandTotal > 0 ? 100 : 0) : (double)Math.Min(100m, GrandTotal / Standard * 100m);
+
+    private string SummaryHint =>
+        Standard <= 0 ? "no standard hours this period"
+        : GrandTotal < Standard ? $"{Standard - GrandTotal:0.##} h to go"
+        : GrandTotal == Standard ? "standard hours met"
+        : $"{GrandTotal - Standard:0.##} h over standard";
 
     private bool Locked => Detail.Timesheet.IsLocked;
 
@@ -135,7 +168,7 @@
         {
             var first = group.First();
             var known = Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == group.Key);
-            var row = new Row(new RowCode(group.Key, first.WbsCode, first.WbsName, first.ProjectCode), known?.ChargeableDates ?? []);
+            var row = new Row(new RowCode(group.Key, first.WbsCode, first.WbsName, first.ProjectCode, known?.ChargeCode.Kind, known?.ChargeCode.ProjectName), known?.ChargeableDates ?? []);
             foreach (var e in group)
             {
                 row.Cells[e.WorkDate] = new Cell { Hours = e.Hours, Comment = e.Comment, EntryId = e.Id };
@@ -245,7 +278,7 @@
             { d => d.ReadOnly, readOnly },
             { d => d.ConfirmText, "Save comment" },
         };
-        var dialog = await DialogService.ShowAsync<ReasonDialog>($"{row.Code.Code} · {day.Date:ddd M/d}", parameters);
+        var dialog = await DialogService.ShowAsync<ReasonDialog>($"{ChargeCodeText.Label(row.Code.Code, row.Code.Name, row.Code.Kind)} · {day.Date:ddd M/d}", parameters);
         if (await dialog.Result is { Canceled: false, Data: string comment } && !readOnly)
         {
             row.Edit(day.Date).Comment = string.IsNullOrWhiteSpace(comment) ? null : comment;
@@ -264,6 +297,17 @@
         _newCode = null;
     }
 
+    /// <summary>Company holidays come pre-filled under the holiday's name; approved leave requests say "Approved ...".</summary>
+    private string? HolidayName(DateOnly date) =>
+        Prefill?.FirstOrDefault(p => p.Date == date && !p.Source.StartsWith("Approved ", StringComparison.Ordinal))?.Source;
+
+    private bool HolidayOn(DateOnly date) => HolidayName(date) is not null;
+
+    /// <summary>Column classes: today, and non-work days (weekends and holidays) dimmed.</summary>
+    private string DayClass(TimesheetDayDto day) =>
+        "day" + (day.Date == TodayDate ? " today" : "")
+        + (day.Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday || HolidayOn(day.Date) ? " nonwork" : "");
+
     private static string DayTitle(TimesheetDayDto day) =>
         day.IsFuture ? "Future date: time can't be entered yet"
         : !day.IsInOpenPeriod ? "Not in an open fiscal period"
@@ -273,7 +317,7 @@
 
     private static string Format(decimal? hours) => hours?.ToString("0.##", CultureInfo.InvariantCulture) ?? "";
 
-    private sealed record RowCode(Guid WbsElementId, string Code, string Name, string ProjectCode);
+    private sealed record RowCode(Guid WbsElementId, string Code, string Name, string ProjectCode, ChargeCodeKind? Kind, string? ProjectName);
 
     private sealed class Cell
     {
@@ -296,6 +340,7 @@
         public Cell Edit(DateOnly date) => Cells.TryGetValue(date, out var c) ? c : Cells[date] = new Cell();
 
         public static Row For(TimesheetChargeCodeDto code) =>
-            new(new RowCode(code.ChargeCode.WbsElementId, code.ChargeCode.Code, code.ChargeCode.Name, code.ChargeCode.ProjectCode), code.ChargeableDates);
+            new(new RowCode(code.ChargeCode.WbsElementId, code.ChargeCode.Code, code.ChargeCode.Name, code.ChargeCode.ProjectCode, code.ChargeCode.Kind, code.ChargeCode.ProjectName),
+                code.ChargeableDates);
     }
 }

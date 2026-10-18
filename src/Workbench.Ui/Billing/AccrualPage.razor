@@ -31,7 +31,7 @@ else
         }
         <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-3">
             <MudSimpleTable Dense="true" data-testid="accrual-lines">
-                <thead><tr><th>Contract</th><th>CLIN</th><th>Description</th><th style="text-align:right">Unbilled at @BillingFormat.Date(_accrual.PeriodEnd)</th></tr></thead>
+                <thead><tr><th>Contract</th><th><Term Key="clin">CLIN</Term></th><th>Description</th><th style="text-align:right">Unbilled at @BillingFormat.Date(_accrual.PeriodEnd)</th></tr></thead>
                 <tbody>
                     @if (_accrual.Lines.Count == 0)
                     {

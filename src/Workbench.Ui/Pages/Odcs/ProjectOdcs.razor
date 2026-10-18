@@ -6,14 +6,22 @@
 @inject IOdcService Odcs
 @inject Workbench.Contracts.Purchasing.IApBillService ApBills
 @inject IProjectService Projects
+@inject Workbench.Contracts.Financials.IFinancialAccessService FinancialAccess
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
-<PageTitle>ODCs · Workbench</PageTitle>
+<PageTitle>@(_canManage ? "Project costs" : "My project costs") · Workbench</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
-    <MudText Typo="Typo.h4" HtmlTag="h1">Other direct costs</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+    @if (_canManage)
+    {
+        <MudText Typo="Typo.h4" HtmlTag="h1" data-testid="odc-title">Project costs (<Term Key="odc">ODCs</Term>)</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" HtmlTag="h1" data-testid="odc-title">My project costs</MudText>
+    }
     <MudSelect T="Guid?" Value="ProjectId" ValueChanged="SelectProject" Label="Project" Dense="true" Style="min-width:280px" Class="ml-4">
         @foreach (var p in _projects)
         {
@@ -21,8 +29,26 @@
         }
     </MudSelect>
     <MudSpacer />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="ProjectId is null">New vendor ODC</MudButton>
+    @if (_canManage)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="ProjectId is null"
+                   data-testid="new-vendor-odc">Add a vendor invoice</MudButton>
+    }
+    else
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Receipt" Href="expenses" data-testid="go-expenses">My expense reports</MudButton>
+    }
 </MudStack>
+<MudText Class="mud-text-secondary mb-4">
+    @if (_canManage)
+    {
+        <span>Non-labor costs charged to this project: vendor invoices and, if you include them, employees' expenses. Enter a vendor's invoice here, attach it and submit it for approval.</span>
+    }
+    else
+    {
+        <span>Costs you've charged to this project. Your own travel and purchases go on an expense report; vendor invoices are entered by the project manager or Finance.</span>
+    }
+</MudText>
 
 @if (ProjectId is not null)
 {
@@ -57,19 +83,19 @@
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
                 <MudPaper Outlined="true" Class="pa-3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Allowable</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"><Term Key="allowable">Allowable</Term></MudText>
                     <MudText Typo="Typo.h6">@OdcFormat.Money(list.AllowableTotal)</MudText>
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
                 <MudPaper Outlined="true" Class="pa-3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Approved allowable (actuals)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Approved <Term Key="allowable">allowable</Term> (actuals)</MudText>
                     <MudText Typo="Typo.h6">@OdcFormat.Money(list.ApprovedAllowableTotal)</MudText>
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
                 <MudPaper Outlined="true" Class="pa-3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Unallowable</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"><Term Key="unallowable">Unallowable</Term></MudText>
                     <MudText Typo="Typo.h6">@OdcFormat.Money(list.UnallowableTotal)</MudText>
                 </MudPaper>
             </MudItem>
@@ -101,7 +127,7 @@
         <HeaderContent>
             <MudTh>Date</MudTh>
             <MudTh>Type</MudTh>
-            <MudTh>WBS</MudTh>
+            <MudTh><Term Key="charge-code">Charge code</Term></MudTh>
             <MudTh>Vendor / invoice</MudTh>
             <MudTh>Description</MudTh>
             <MudTh Style="text-align:right">Amount</MudTh>
@@ -112,7 +138,7 @@
         <RowTemplate>
             <MudTd DataLabel="Date">@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
             <MudTd DataLabel="Type">@context.Type</MudTd>
-            <MudTd DataLabel="WBS">@context.WbsCode</MudTd>
+            <MudTd DataLabel="Charge code">@ChargeCodeText.Label(context.WbsCode, context.WbsName)</MudTd>
             <MudTd DataLabel="Vendor">
                 @if (context.ExpenseReportId is null && _apLinks.GetValueOrDefault(context.Id) is { } ap)
                 {
@@ -168,13 +194,26 @@
             </MudTd>
         </RowTemplate>
         <NoRecordsContent>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">No ODCs match these filters.</MudText>
+            @if (HasFilters)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing matches these filters. Clear a filter to see more.</MudText>
+            }
+            else if (_canManage)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="odc-empty">No vendor costs on this project yet. When a vendor's invoice arrives, add it here.</MudText>
+                <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">Add a vendor invoice</MudButton>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="odc-empty">You haven't charged any costs to this project. Travelling or buying something for it? Start an expense report.</MudText>
+                <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" Href="expenses">Start an expense report</MudButton>
+            }
         </NoRecordsContent>
     </MudTable>
 }
 else if (!_loading)
 {
-    <MudText Class="mud-text-secondary">Choose a project.</MudText>
+    <MudText Class="mud-text-secondary">Choose a project to see its costs.</MudText>
 }
 
 @code {
@@ -190,6 +229,7 @@ else if (!_loading)
     private OdcCostType? _type;
     private OdcApprovalState? _status;
     private bool _includeExpenses;
+    private bool _canManage;
     private Guid? _loadedProject;
     private Dictionary<Guid, Workbench.Contracts.Purchasing.OdcBillLinkDto> _apLinks = [];
 
@@ -222,8 +262,24 @@ else if (!_loading)
         if (_loadedProject != ProjectId)
         {
             _loadedProject = ProjectId;
+            _canManage = await CanManageAsync(ProjectId.Value);
             _wbs = await Projects.ListWbsAsync(ProjectId.Value);
             await LoadAsync();
+        }
+    }
+
+    private bool HasFilters => _from is not null || _to is not null || _type is not null || _status is not null;
+
+    /// <summary>Finance, Admin and the project's manager see the whole list and enter vendor invoices (cosmetic; the server checks).</summary>
+    private async Task<bool> CanManageAsync(Guid projectId)
+    {
+        try
+        {
+            return await FinancialAccess.CanReadProjectFinancialsAsync(projectId);
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            return false;
         }
     }
 
@@ -299,7 +355,7 @@ else if (!_loading)
             { d => d.Existing, existing },
             { d => d.ReceiptThreshold, _threshold },
         };
-        var dialog = await DialogService.ShowAsync<VendorOdcDialog>(existing is null ? "New vendor ODC" : "Edit vendor ODC", parameters,
+        var dialog = await DialogService.ShowAsync<VendorOdcDialog>(existing is null ? "Add a vendor invoice" : "Edit vendor invoice", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         return await dialog.Result is { Canceled: false, Data: SaveVendorOdcRequest request } ? request : null;
     }
@@ -308,7 +364,7 @@ else if (!_loading)
     {
         if (await AskAsync(null) is { } request)
         {
-            await RunAsync(() => Odcs.CreateVendorOdcAsync(ProjectId!.Value, request), "ODC saved as a draft. Attach the invoice and submit it.");
+            await RunAsync(() => Odcs.CreateVendorOdcAsync(ProjectId!.Value, request), "Saved as a draft. Attach the invoice and submit it.");
         }
     }
 
@@ -322,7 +378,7 @@ else if (!_loading)
 
     private async Task DeleteAsync(OdcEntryDto entry)
     {
-        if (await DialogService.ShowMessageBoxAsync("Delete ODC", $"Delete {entry.Vendor} invoice {entry.InvoiceNumber}?", yesText: "Delete", cancelText: "Cancel") == true)
+        if (await DialogService.ShowMessageBoxAsync("Delete vendor invoice", $"Delete {entry.Vendor} invoice {entry.InvoiceNumber}?", yesText: "Delete", cancelText: "Cancel") == true)
         {
             await RunAsync(() => Odcs.DeleteVendorOdcAsync(entry.Id));
         }

@@ -4,7 +4,7 @@
 <PageTitle>Receiving · Purchasing · Workbench</PageTitle>
 
 <PurchasingHeader Title="Receiving" BackHref="purchasing/orders" BackLabel="Purchase orders"
-                  Subtitle="Issued orders you can receive against (Finance, or the receivers named on the order). Record what arrived, or accept services, with partial receipts as they come in." />
+                  Subtitle="Orders you can receive against. When something arrives (or a service is delivered), open its order and record what came in; partial deliveries are fine." />
 
 @if (_error is not null)
 {
@@ -12,10 +12,20 @@
 }
 else
 {
-    <MudPaper Outlined="true" Class="pa-2"><OrderTable Orders="_orders" /></MudPaper>
+    <MudPaper Outlined="true" Class="pa-2">
+        <OrderTable Orders="_orders" ShowAmounts="@(Access?.IsFinance == true)">
+            <Empty>
+                <MudText Class="mud-text-secondary pa-2" data-testid="receiving-empty">
+                    Nothing to receive right now. When an order names you as its receiver, it shows up here so you can record the delivery.
+                </MudText>
+            </Empty>
+        </OrderTable>
+    </MudPaper>
 }
 
 @code {
+    [CascadingParameter] public FinanceAccess? Access { get; set; }
+
     private IReadOnlyList<PurchaseOrderSummaryDto> _orders = [];
     private string? _error;
 

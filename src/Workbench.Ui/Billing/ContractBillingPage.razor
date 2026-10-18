@@ -42,7 +42,7 @@ else
                 else
                 {
                     <MudSimpleTable Dense="true" Hover="true" data-testid="milestones">
-                        <thead><tr><th>CLIN</th><th>Milestone</th><th>Planned</th><th>Completed</th><th style="text-align:right">Amount</th><th>Billed on</th><th></th></tr></thead>
+                        <thead><tr><th><Term Key="clin">CLIN</Term></th><th>Milestone</th><th>Planned</th><th>Completed</th><th style="text-align:right">Amount</th><th>Billed on</th><th></th></tr></thead>
                         <tbody>
                             @if (_milestones.Count == 0)
                             {
@@ -107,7 +107,7 @@ else
                 <MudPaper Outlined="true" Class="pa-4 mt-3">
                     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">CLINs</MudText>
                     <MudSimpleTable Dense="true" Elevation="0">
-                        <thead><tr><th>CLIN</th><th>Pricing</th><th style="text-align:right">Fee</th><th style="text-align:right">Funded</th><th style="text-align:right">Ceiling</th></tr></thead>
+                        <thead><tr><th><Term Key="clin">CLIN</Term></th><th>Pricing</th><th style="text-align:right"><Term Key="fee">Fee</Term></th><th style="text-align:right"><Term Key="funded">Funded</Term></th><th style="text-align:right"><Term Key="ceiling">Ceiling</Term></th></tr></thead>
                         <tbody>
                             @foreach (var c in _contract.Clins)
                             {

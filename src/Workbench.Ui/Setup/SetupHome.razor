@@ -4,7 +4,7 @@
 <PageTitle>Setup · Workbench</PageTitle>
 
 <MudText Typo="Typo.h4" HtmlTag="h1">Setup</MudText>
-<MudText Class="mud-text-secondary mb-4">Configure the project-accounting system of record. Work through the checklist in order the first time.</MudText>
+<MudText Class="mud-text-secondary mb-4">Set up your company in Workbench. The first time, work through the checklist in order; each step ticks itself off once it's done.</MudText>
 
 <MudGrid Spacing="3">
     <MudItem xs="12" md="7">
@@ -29,7 +29,10 @@
             {
                 <MudProgressLinear Value="100.0 * Done / Steps.Count" Color="Color.Success" Class="mb-3" Rounded="true" />
                 <MudList T="string" Dense="true">
-                    @foreach (var step in Steps)
+                    @foreach (var group in Steps.GroupBy(s => s.Group))
+                    {
+                        <MudListSubheader Class="pl-0 pt-2 pb-0"><MudText Typo="Typo.overline">@group.Key</MudText></MudListSubheader>
+                    @foreach (var step in group)
                     {
                         <MudListItem T="string" Href="@step.Href" data-testid="checklist-item">
                             <div class="d-flex align-center gap-3">
@@ -42,6 +45,7 @@
                             </div>
                         </MudListItem>
                     }
+                    }
                 </MudList>
             }
         </MudPaper>
@@ -50,6 +54,8 @@
         <MudPaper Outlined="true" Class="pa-4">
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">All setup screens</MudText>
             <MudNavMenu Dense="true">
+                <MudNavLink Href="setup/organization" Icon="@Icons.Material.Filled.Apartment">Organization and timesheet periods</MudNavLink>
+                <MudNavLink Href="admin/users" Icon="@Icons.Material.Filled.ManageAccounts">Users and sign-in</MudNavLink>
                 <MudNavLink Href="setup/people" Icon="@Icons.Material.Filled.People">People and cost rates</MudNavLink>
                 <MudNavLink Href="setup/org-units" Icon="@Icons.Material.Filled.AccountTree">Org units</MudNavLink>
                 <MudNavLink Href="setup/labor-categories" Icon="@Icons.Material.Filled.Badge">Labor categories</MudNavLink>
@@ -57,6 +63,13 @@
                 <MudNavLink Href="setup/contracts" Icon="@Icons.Material.Filled.Description">Contracts and bill rates</MudNavLink>
                 <MudNavLink Href="setup/projects" Icon="@Icons.Material.Filled.Work">Projects, WBS and plan sheets</MudNavLink>
                 <MudNavLink Href="setup/fiscal-calendar" Icon="@Icons.Material.Filled.CalendarMonth">Fiscal calendar</MudNavLink>
+                <MudNavLink Href="setup/approval-workflows" Icon="@Icons.Material.Filled.AltRoute">Approval workflows</MudNavLink>
+                <MudNavLink Href="setup/per-diem" Icon="@Icons.Material.Filled.Luggage">Per diem rates</MudNavLink>
+                <MudNavLink Href="accounting/accounts" Icon="@Icons.Material.Filled.AccountBalance">Chart of accounts</MudNavLink>
+                <MudNavLink Href="accounting/indirect-rates" Icon="@Icons.Material.Filled.Percent">Indirect rates</MudNavLink>
+                <MudNavLink Href="cash" Icon="@Icons.Material.Filled.AccountBalanceWallet">Bank accounts</MudNavLink>
+                <MudNavLink Href="payroll" Icon="@Icons.Material.Filled.Payments">Payroll provider</MudNavLink>
+                <MudNavLink Href="billing/contracts" Icon="@Icons.Material.Filled.RequestQuote">Contract billing details</MudNavLink>
                 <MudNavLink Href="setup/audit" Icon="@Icons.Material.Filled.History">Audit log</MudNavLink>
                 <MudNavLink Href="setup/import" Icon="@Icons.Material.Filled.UploadFile">Import from Costpoint or Smartsheet</MudNavLink>
             </MudNavMenu>
@@ -67,17 +80,24 @@
 @code {
     private SetupChecklistDto? _checklist;
 
-    private sealed record Step(string Title, string Hint, string Href, bool Done);
+    private sealed record Step(string Group, string Title, string Hint, string Href, bool Done);
 
     private IReadOnlyList<Step> Steps => _checklist is not { } c ? [] :
     [
-        new("Fiscal calendar", "At least one open accounting period.", "setup/fiscal-calendar", c.HasOpenFiscalPeriods),
-        new("Labor categories", "Used for budgets and bill rates.", "setup/labor-categories", c.HasLaborCategories),
-        new("Employees", "Everyone who records time.", "setup/people", c.HasEmployees),
-        new("Cost rates", "Labor cost is approved hours × the cost rate in effect.", "setup/people", c.HasCostRates),
-        new("Customer and contract", "With its ceiling, funding and bill rates.", "setup/contracts", c.HasCustomerAndContract),
-        new("Project and WBS", "Leaf WBS elements are the charge codes.", "setup/projects", c.HasProjectWithWbs),
-        new("Charge assignments", "Who may charge which WBS elements.", "setup/projects", c.HasChargeAssignments),
+        new("Company", "Users and sign-in", "Invite the people who'll use Workbench and give Finance and timekeepers their roles.", "admin/users", c.HasInvitedUsers),
+        new("Company", "Fiscal calendar", "At least one open accounting month.", "setup/fiscal-calendar", c.HasOpenFiscalPeriods),
+        new("Company", "Chart of accounts", "Review the general ledger accounts (a GovCon default is ready to use).", "accounting/accounts", c.HasChartOfAccounts),
+        new("Company", "Bank accounts", "The accounts you pay from and get paid into, for reconciliation.", "cash", c.HasBankAccount),
+        new("People", "Labor categories", "Job titles used for budgets and bill rates.", "setup/labor-categories", c.HasLaborCategories),
+        new("People", "Employees", "Everyone who records time, with their supervisor.", "setup/people", c.HasEmployees),
+        new("People", "Cost rates", "What an hour of each person's time costs (hours × cost rate = labor cost).", "setup/people", c.HasCostRates),
+        new("People", "Payroll provider", "Where approved hours are sent for paychecks (Paylocity and others).", "payroll", c.HasPayrollProvider),
+        new("People", "Approval workflows", "Who approves timesheets, expenses, purchases and invoices.", "setup/approval-workflows", c.HasApprovalWorkflows),
+        new("Contracts and projects", "Customer and contract", "With its ceiling, funding and bill rates.", "setup/contracts", c.HasCustomerAndContract),
+        new("Contracts and projects", "Project and tasks", "A project's lowest-level tasks (its WBS) are the charge codes people record time to.", "setup/projects", c.HasProjectWithWbs),
+        new("Contracts and projects", "Charge assignments", "Who may charge which tasks.", "setup/projects", c.HasChargeAssignments),
+        new("Contracts and projects", "Indirect rates", "Fringe, overhead and G&A rates used for burdened cost and billing.", "accounting/indirect-rates", c.HasIndirectRates),
+        new("Contracts and projects", "Billing details", "Invoice numbering and customer billing addresses for each contract.", "billing/contracts", c.HasBillingDetails),
     ];
 
     private int Done => Steps.Count(s => s.Done);

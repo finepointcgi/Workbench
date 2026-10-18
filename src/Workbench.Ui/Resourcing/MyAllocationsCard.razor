@@ -1,17 +1,30 @@
-@* My Work: the signed-in employee's allocations for the next four weeks. Hidden when there are none (or when the host has
-   no resourcing service, so pages and tests without it still render). *@
+@* My Work: the signed-in employee's allocations for the next weeks. Hidden when there are none (or when the host has
+   no resourcing service, so pages and tests without it still render) unless ShowWhenEmpty. *@
 @inject IServiceProvider Services
 
-@if (_rows.Count > 0)
+@if (_rows.Count == 0 && ShowWhenEmpty && _loaded)
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true" data-card="allocations">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">My allocations</MudText>
+        <MudText Class="mud-text-secondary" data-testid="allocations-empty">
+            You aren't planned on any project for the next @Weeks weeks. When a project manager staffs you on their project, your weekly hours show up here.
+        </MudText>
+    </MudPaper>
+}
+else if (_rows.Count > 0)
 {
     <MudPaper Class="pa-4 mb-4" Outlined="true" data-card="allocations">
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
             <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Primary" />
             <MudText Typo="Typo.subtitle1">My allocations</MudText>
             <MudSpacer />
-            <MudButton Href="resourcing" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Resourcing</MudButton>
+            @if (ShowLink)
+            {
+                <MudButton Href="resourcing" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Resourcing</MudButton>
+            }
         </MudStack>
-        <MudSimpleTable Dense="true">
+        <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="my-allocations">
             <thead>
                 <tr>
                     <th>Project</th>
@@ -22,7 +35,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var group in _rows.GroupBy(r => r.ProjectCode + (r.WbsCode is { } w ? " · " + w : "")))
+                @foreach (var group in _rows.GroupBy(r => $"{r.ProjectName} ({r.ProjectCode}{(r.WbsCode is { } w ? " · " + w : "")})"))
                 {
                     <tr>
                         <td>@group.Key</td>
@@ -41,17 +54,29 @@
                 </tr>
             </tbody>
         </MudSimpleTable>
+        </div>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Hours you're planned to work on each project, by week starting.</MudText>
     </MudPaper>
 }
 
 @code {
     private IReadOnlyList<AllocationDto> _rows = [];
     private IReadOnlyList<DateOnly> _weeks = [];
+    private bool _loaded;
+
+    /// <summary>How many weeks to show from this week.</summary>
+    [Parameter] public int Weeks { get; set; } = 4;
+
+    /// <summary>Show an explanation instead of hiding the card when there are no allocations.</summary>
+    [Parameter] public bool ShowWhenEmpty { get; set; }
+
+    /// <summary>Show the link to the resourcing page.</summary>
+    [Parameter] public bool ShowLink { get; set; } = true;
 
     protected override async Task OnInitializedAsync()
     {
         var start = ResourcingFormat.ThisWeek;
-        _weeks = Enumerable.Range(0, 4).Select(i => start.AddDays(7 * i)).ToList();
+        _weeks = Enumerable.Range(0, Weeks).Select(i => start.AddDays(7 * i)).ToList();
         if (Services.GetService(typeof(IResourceAllocationService)) is not IResourceAllocationService allocations)
         {
             return;
@@ -59,11 +84,15 @@
 
         try
         {
-            _rows = await allocations.ListMineAsync(start, start.AddDays(27));
+            _rows = await allocations.ListMineAsync(start, start.AddDays(7 * Weeks - 1));
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is InvalidOperationException)
         {
             _rows = [];
+        }
+        finally
+        {
+            _loaded = true;
         }
     }
 }
