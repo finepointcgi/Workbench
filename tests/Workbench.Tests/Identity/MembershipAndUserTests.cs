@@ -78,7 +78,7 @@ public sealed class MembershipAndUserTests
         var me = await seeded.As("Newcomer@Example.com").Host.Get<IUserDirectory>().GetMeAsync();
         var found = await seeded.Host.Get<IUserDirectory>().SearchAsync("newcomer");
 
-        Assert.Equal(("newcomer@example.com", "newcomer", false), (me.Email, me.DisplayName, me.IsAdmin));
+        Assert.Equal(("newcomer@example.com", "newcomer", OrgRoles.Employee), (me.Email, me.DisplayName, me.Roles));
         Assert.Single(found);
     }
 
@@ -98,16 +98,17 @@ public sealed class MembershipAndUserTests
     }
 
     [Fact]
-    public async Task Only_admins_change_the_admin_flag_and_one_admin_remains()
+    public async Task Only_admins_change_org_roles_and_one_admin_remains()
     {
         await using var seeded = await CreateAsync();
 
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.As(Owner).Host.Get<IUserDirectory>().SetAdminAsync(Viewer, true));
-        var promoted = await seeded.As(Admin).Host.Get<IUserDirectory>().SetAdminAsync(Viewer, true);
-        await seeded.Host.Get<IUserDirectory>().SetAdminAsync(Viewer, false);
+        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.As(Owner).Host.Get<IUserDirectory>().SetRolesAsync(Viewer, OrgRoles.Admin));
+        var promoted = await seeded.As(Admin).Host.Get<IUserDirectory>().SetRolesAsync(Viewer, OrgRoles.Admin | OrgRoles.Timekeeper);
+        var demoted = await seeded.Host.Get<IUserDirectory>().SetRolesAsync(Viewer, OrgRoles.Finance);
 
         Assert.True(promoted.IsAdmin);
-        await Assert.ThrowsAsync<ArgumentException>(() => seeded.Host.Get<IUserDirectory>().SetAdminAsync(Admin, false));
-        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => seeded.Host.Get<IUserDirectory>().SetAdminAsync("nobody@example.com", true));
+        Assert.Equal(OrgRoles.Finance, demoted.Roles);
+        await Assert.ThrowsAsync<ArgumentException>(() => seeded.Host.Get<IUserDirectory>().SetRolesAsync(Admin, OrgRoles.Finance));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => seeded.Host.Get<IUserDirectory>().SetRolesAsync("nobody@example.com", OrgRoles.Admin));
     }
 }

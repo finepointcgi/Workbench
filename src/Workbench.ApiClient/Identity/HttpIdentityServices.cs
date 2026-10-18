@@ -18,13 +18,22 @@ public sealed class HttpUserDirectory(HttpClient http) : IUserDirectory
         return await response.ReadAsync<List<UserDto>>(cancellationToken);
     }
 
-    public async Task<UserDto> SetAdminAsync(string email, bool isAdmin, CancellationToken cancellationToken = default)
+    public async Task<UserDto> SetRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken = default)
     {
-        using var response = await http.PutAsJsonAsync($"api/v1/users/{Uri.EscapeDataString(email)}/admin", new SetAdminBody(isAdmin), cancellationToken);
+        using var response = await http.PutAsJsonAsync($"api/v1/users/{Uri.EscapeDataString(email)}/roles", new SetRolesBody(roles), cancellationToken);
         return await response.ReadAsync<UserDto>(cancellationToken);
     }
 
-    private sealed record SetAdminBody(bool IsAdmin);
+    private sealed record SetRolesBody(OrgRoles Roles);
+}
+
+public sealed class HttpCurrentUserContext(HttpClient http) : ICurrentUserContext
+{
+    public async Task<CurrentUserInfo> GetAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await http.GetAsync("api/v1/users/me/context", cancellationToken);
+        return await response.ReadAsync<CurrentUserInfo>(cancellationToken);
+    }
 }
 
 public sealed class HttpSheetPermissions(HttpClient http) : ISheetPermissions

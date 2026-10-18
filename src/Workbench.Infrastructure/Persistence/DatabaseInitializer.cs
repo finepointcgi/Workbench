@@ -85,15 +85,20 @@ public static class DatabaseInitializer
             new WorkspaceMember { WorkspaceId = workspace.Id, UserEmail = "analyst@example.com", Role = WorkspaceRole.Editor },
             new WorkspaceMember { WorkspaceId = workspace.Id, UserEmail = "viewer@example.com", Role = WorkspaceRole.Viewer });
         await db.SaveChangesAsync(cancellationToken);
+
+        await ProjectAccountingSeed.SeedAsync(db, schedule, cancellationToken);
     }
 
-    /// <summary>The people offered by the development sign-in page. <c>dev@workbench.local</c> is an admin.</summary>
-    public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin)> DevUsers { get; } =
+    /// <summary>
+    /// The people offered by the development sign-in page, each matching a seeded employee by email
+    /// (<see cref="ProjectAccountingSeed"/>). dev@ is an Admin, pm@ is Finance, the others are plain Employees.
+    /// </summary>
+    public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin, bool IsFinance)> DevUsers { get; } =
     [
-        ("dev@workbench.local", "Dev Admin", true),
-        ("pm@example.com", "Pat Morgan (PM)", false),
-        ("analyst@example.com", "Alex Rivera (Analyst)", false),
-        ("viewer@example.com", "Val Chen (Viewer)", false),
+        ("dev@workbench.local", "Dana Lee", true, false),
+        ("pm@example.com", "Pat Morgan", false, true),
+        ("analyst@example.com", "Alex Rivera", false, false),
+        ("viewer@example.com", "Val Chen", false, false),
     ];
 
     private static async Task SeedUsersAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
@@ -104,7 +109,7 @@ public static class DatabaseInitializer
         }
 
         var now = DateTime.UtcNow;
-        db.Set<AppUser>().AddRange(DevUsers.Select(u => new AppUser { Email = u.Email, DisplayName = u.DisplayName, IsAdmin = u.IsAdmin, CreatedAtUtc = now }));
+        db.Set<AppUser>().AddRange(DevUsers.Select(u => new AppUser { Email = u.Email, DisplayName = u.DisplayName, IsAdmin = u.IsAdmin, IsFinance = u.IsFinance, CreatedAtUtc = now }));
         await db.SaveChangesAsync(cancellationToken);
     }
 }

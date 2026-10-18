@@ -58,3 +58,40 @@ Only append to these, one line per feature, never reorder: `Application/Dependen
 `ApiClient/DependencyInjection.cs`, `Api/WorkbenchApi.cs`, `Ui/Layout/NavMenu.razor`, `Ui/_Imports.razor`.
 Don't change existing contracts in `Workbench.Contracts/Sheets`; if a feature needs more, add new records or
 interfaces next to them and say so in the commit message.
+
+## Project accounting (system of record)
+
+Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Costpoint/Unanet code paths
+(`Workbench.Costpoint`, `Cp*` mirror tables, `/admin/costpoint`) are kept for future import and are hidden in the UI.
+
+- Entities live in `src/Workbench.Domain/ProjectAccounting/` (people, contracts, projects/WBS, fiscal calendar,
+  timesheets, ODCs, budgets, audit). Mappings in `Configurations/ProjectAccountingConfigurations.cs`.
+- Foreign keys **restrict** deletes. Setup data is closed or deactivated, never deleted out from under history.
+- Every change to rates, setup, budgets and approvals writes an `AuditEvent` through `AuditRecorder.Record(...)` in the
+  same unit of work. Audit rows are append-only.
+- Rates are effective-dated and append-only: a correction is a new rate with a reason.
+- Money is `decimal` (18,2), rates (18,4), hours (9,2). Never use `double` for money or hours.
+- A charge code is an open, chargeable **leaf** `WbsElement` of an active project. `IProjectService.ListChargeCodesAsync`
+  is the single source of truth for what an employee may charge on a date.
+- Labor cost is always computed (approved hours × the employee's cost rate effective on the work date), never stored as typed.
+- The plan sheet and the WBS are one tree: `Project.SheetId` points at the plan sheet and `WbsElement.ItemId` at its task.
+- The signed-in person's employee record: `IPeopleService.GetCurrentEmployeeAsync()` (matched by `ICurrentUser.Email`).
+- Seeded dev data: `ProjectAccountingSeed.cs` (FY runs Oct–Sep; employees pm@, analyst@, dev@workbench.local, viewer@).
+
+## Authentication and permissions
+
+- Who is signed in: `ICurrentUser` (sync: email, name). Roles and the linked employee: `ICurrentUserContext.GetAsync()`
+  (`CurrentUserInfo`: `Roles`, `EmployeeId`, `IsFinance`, `CanViewAllTimesheets`). Server code can also inject
+  `Application.Identity.AccessControl` (`RequireSheetRoleAsync`, `RequireFinanceAsync`, `RequireAdminAsync`).
+- Two kinds of roles. **Workspace roles** (Viewer < Commenter < Editor < Owner) govern sheets, through membership of the
+  sheet's workspace. **Organization roles** (`OrgRoles` flags: Timekeeper, Finance, Admin; everyone is an Employee)
+  govern project accounting. Admin can do everything.
+- Enforce on the server with decorators registered by `AddWorkbenchIdentity()`, which stays the **last** line of
+  `AddWorkbenchApplication` so the permission checks wrap every other decorator. Put new feature registrations
+  (and their own decorators) above it, and add the new service's permission decorator inside `AddWorkbenchIdentity`.
+- A sheet the user can't see is not found (404); something they can see but not change is
+  `WorkbenchForbiddenException` (403, a subclass of `UnauthorizedAccessException`). UI catch filters should include it.
+- Views get the user's sheet role as a cascading `SheetAccess` (`CanEdit`, `CanComment`) from `SheetPage`; hide edit
+  affordances with it. A missing cascade means full access, so components still render in tests.
+- Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
+  analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.

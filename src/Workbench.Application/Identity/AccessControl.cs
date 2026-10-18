@@ -3,6 +3,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
+using Workbench.Domain.ProjectAccounting;
 using DomainRole = Workbench.Domain.Identity.WorkspaceRole;
 using WorkspaceRole = Workbench.Contracts.Identity.WorkspaceRole;
 
@@ -33,6 +34,57 @@ public sealed class AccessControl(IWorkbenchDbContextFactory dbFactory, ICurrent
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         return await IsAdminAsync(db, cancellationToken);
     }
+
+    /// <summary>The user's organization roles. The system user has them all; nobody signed in has none.</summary>
+    public async Task<OrgRoles> GetOrgRolesAsync(CancellationToken cancellationToken = default)
+    {
+        if (currentUser is SystemCurrentUser)
+        {
+            return OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper;
+        }
+
+        if (!IsAuthenticated)
+        {
+            return OrgRoles.Employee;
+        }
+
+        var email = Email;
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var user = await db.Set<AppUser>().AsNoTracking()
+            .Where(u => u.Email == email)
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper })
+            .FirstOrDefaultAsync(cancellationToken);
+        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper);
+    }
+
+    /// <summary>The employee record with the signed-in user's email, if any.</summary>
+    public async Task<Guid?> GetEmployeeIdAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsAuthenticated || currentUser is SystemCurrentUser)
+        {
+            return null;
+        }
+
+        var email = Email;
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await db.Set<Employee>().AsNoTracking()
+            .Where(e => e.Email == email)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless the user is in Finance or an Admin.</summary>
+    public async Task RequireFinanceAsync(string what, CancellationToken cancellationToken = default)
+    {
+        RequireSignedIn();
+        if (!(await GetOrgRolesAsync(cancellationToken)).IsFinance())
+        {
+            throw new WorkbenchForbiddenException($"Only Finance and administrators can {what}.");
+        }
+    }
+
+    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper) =>
+        (admin ? OrgRoles.Admin : 0) | (finance ? OrgRoles.Finance : 0) | (timekeeper ? OrgRoles.Timekeeper : 0);
 
     /// <summary>The user's role on a sheet (Owner for admins), or null when they can't see it or it doesn't exist.</summary>
     public async Task<WorkspaceRole?> GetSheetRoleAsync(Guid sheetId, CancellationToken cancellationToken = default)
