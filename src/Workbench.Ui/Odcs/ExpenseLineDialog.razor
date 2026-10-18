@@ -1,0 +1,119 @@
+@using Workbench.Contracts.Odcs
+@using Workbench.Contracts.ProjectAccounting
+@inject IProjectService Projects
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudStack Row="true" Spacing="3">
+                <MudDatePicker Editable="true" Label="Date" Date="_date" DateChanged="OnDateChangedAsync" Required="true" DateFormat="MM/dd/yyyy" AutoClose="true" />
+                <MudSelect T="OdcCostType" @bind-Value="_type" Label="Type">
+                    <MudSelectItem Value="OdcCostType.Travel">Travel</MudSelectItem>
+                    <MudSelectItem Value="OdcCostType.Other">Other</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+            <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge code" Required="true" Disabled="_loadingCodes"
+                       HelperText="@(_codes.Count == 0 && !_loadingCodes ? "You have no charge codes on this date." : null)">
+                @foreach (var chargeCode in _codes)
+                {
+                    <MudSelectItem T="Guid?" Value="chargeCode.WbsElementId">@chargeCode.Code · @chargeCode.Name (@chargeCode.ProjectCode)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />
+            <MudStack Row="true" Spacing="3">
+                <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Immediate="true"
+                                 HelperText="@(_amount >= ReceiptThreshold ? $"Receipt required ({OdcFormat.Money(ReceiptThreshold)} or more)" : null)" />
+                <MudTextField @bind-Value="_vendor" Label="Merchant (optional)" />
+            </MudStack>
+            <MudCheckBox T="bool" @bind-Value="_unallowable" Label="Unallowable cost (FAR 31.205: alcohol, entertainment, …)" Color="Color.Warning" />
+            @if (_unallowable)
+            {
+                <MudTextField @bind-Value="_unallowableReason" Label="Why it's unallowable" Required="true" Immediate="true" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsValid" OnClick="Save">@(Existing is null ? "Add line" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+    [Parameter] public OdcEntryDto? Existing { get; set; }
+    [Parameter] public DateOnly? DefaultDate { get; set; }
+    [Parameter] public decimal ReceiptThreshold { get; set; } = 75m;
+
+    private DateTime? _date;
+    private OdcCostType _type = OdcCostType.Travel;
+    private Guid? _wbsId;
+    private string? _description;
+    private decimal _amount;
+    private string? _vendor;
+    private bool _unallowable;
+    private string? _unallowableReason;
+    private IReadOnlyList<ChargeCodeDto> _codes = [];
+    private bool _loadingCodes;
+
+    private bool IsValid => _date is not null && _wbsId is not null && _amount > 0 && !string.IsNullOrWhiteSpace(_description)
+        && (!_unallowable || !string.IsNullOrWhiteSpace(_unallowableReason));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } e)
+        {
+            _date = OdcFormat.ToDateTime(e.IncurredOn);
+            _type = e.Type;
+            _wbsId = e.WbsElementId;
+            _description = e.Description;
+            _amount = e.Amount;
+            _vendor = e.Vendor;
+            _unallowable = e.IsUnallowable;
+            _unallowableReason = e.UnallowableReason;
+        }
+        else
+        {
+            _date = OdcFormat.ToDateTime(DefaultDate ?? DateOnly.FromDateTime(DateTime.Today));
+        }
+
+        await LoadCodesAsync();
+    }
+
+    private async Task OnDateChangedAsync(DateTime? date)
+    {
+        _date = date;
+        await LoadCodesAsync();
+    }
+
+    private async Task LoadCodesAsync()
+    {
+        if (OdcFormat.ToDateOnly(_date) is not { } date)
+        {
+            _codes = [];
+            return;
+        }
+
+        _loadingCodes = true;
+        try
+        {
+            // Leave codes take hours, not costs.
+            _codes = (await Projects.ListChargeCodesAsync(EmployeeId, date)).Where(c => c.Kind != ChargeCodeKind.Leave).ToList();
+        }
+        finally
+        {
+            _loadingCodes = false;
+        }
+
+        if (_wbsId is { } id && _codes.All(c => c.WbsElementId != id))
+        {
+            _wbsId = null;
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveExpenseLineRequest(
+        _wbsId!.Value, _type, OdcFormat.ToDateOnly(_date)!.Value, _amount, _description!.Trim(), _vendor,
+        _unallowable, _unallowable ? _unallowableReason : null)));
+}

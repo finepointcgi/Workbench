@@ -1,0 +1,87 @@
+@using Workbench.Contracts.Odcs
+@using Workbench.Contracts.ProjectAccounting
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudStack Row="true" Spacing="3">
+                <MudSelect T="OdcCostType" @bind-Value="_type" Label="Type">
+                    @foreach (var type in Enum.GetValues<OdcCostType>())
+                    {
+                        <MudSelectItem Value="type">@type</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudDatePicker Editable="true" Label="Invoice date" @bind-Date="_date" Required="true" DateFormat="MM/dd/yyyy" AutoClose="true" />
+            </MudStack>
+            <MudSelect T="Guid?" @bind-Value="_wbsId" Label="WBS element" Required="true">
+                @foreach (var wbs in ChargeableWbs)
+                {
+                    <MudSelectItem T="Guid?" Value="wbs.Id">@wbs.Code · @wbs.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudStack Row="true" Spacing="3">
+                <MudTextField @bind-Value="_vendor" Label="Vendor" Required="true" Immediate="true" />
+                <MudTextField @bind-Value="_invoice" Label="Invoice number" Required="true" Immediate="true" />
+            </MudStack>
+            <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Immediate="true"
+                             HelperText="@(_amount >= ReceiptThreshold ? $"Attach the invoice before submitting ({OdcFormat.Money(ReceiptThreshold)} or more)" : null)" />
+            <MudCheckBox T="bool" @bind-Value="_unallowable" Label="Unallowable cost (FAR 31.205)" Color="Color.Warning" />
+            @if (_unallowable)
+            {
+                <MudTextField @bind-Value="_unallowableReason" Label="Why it's unallowable" Required="true" Immediate="true" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsValid" OnClick="Save">@(Existing is null ? "Create" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The project's WBS; only open, chargeable leaves are offered.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<WbsElementDto> Wbs { get; set; } = [];
+    [Parameter] public OdcEntryDto? Existing { get; set; }
+    [Parameter] public decimal ReceiptThreshold { get; set; } = 75m;
+
+    private OdcCostType _type = OdcCostType.Subcontract;
+    private DateTime? _date = DateTime.Today;
+    private Guid? _wbsId;
+    private string? _vendor;
+    private string? _invoice;
+    private string? _description;
+    private decimal _amount;
+    private bool _unallowable;
+    private string? _unallowableReason;
+
+    private IEnumerable<WbsElementDto> ChargeableWbs =>
+        Wbs.Where(w => w.IsOpen && w.IsChargeable && Wbs.All(c => c.ParentId != w.Id)).OrderBy(w => w.Code, StringComparer.Ordinal);
+
+    private bool IsValid => _date is not null && _wbsId is not null && _amount > 0 && !string.IsNullOrWhiteSpace(_description)
+        && !string.IsNullOrWhiteSpace(_vendor) && !string.IsNullOrWhiteSpace(_invoice)
+        && (!_unallowable || !string.IsNullOrWhiteSpace(_unallowableReason));
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } e)
+        {
+            _type = e.Type;
+            _date = OdcFormat.ToDateTime(e.IncurredOn);
+            _wbsId = e.WbsElementId;
+            _vendor = e.Vendor;
+            _invoice = e.InvoiceNumber;
+            _description = e.Description;
+            _amount = e.Amount;
+            _unallowable = e.IsUnallowable;
+            _unallowableReason = e.UnallowableReason;
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveVendorOdcRequest(
+        _wbsId!.Value, _type, OdcFormat.ToDateOnly(_date)!.Value, _amount, _description!.Trim(), _vendor!.Trim(), _invoice!.Trim(),
+        _unallowable, _unallowable ? _unallowableReason : null)));
+}
