@@ -88,7 +88,7 @@
 
     private async Task RejectReportAsync(ExpenseReportDto r)
     {
-        if (await ReasonDialog.AskAsync(DialogService, "Reject expense report", "Reject", $"Tell {r.EmployeeName} what to fix in \"{r.Title}\".", color: Color.Error) is { } reason)
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Reject expense report", "Reject", $"Tell {r.EmployeeName} what to fix in \"{r.Title}\".", color: Color.Error) is { } reason)
         {
             await RunAsync(() => Approvals.RejectReportAsync(r.Id, reason), $"Rejected \"{r.Title}\".");
         }
@@ -96,7 +96,7 @@
 
     private async Task ReopenReportAsync(ExpenseReportDto r)
     {
-        if (await ReasonDialog.AskAsync(DialogService, "Reopen expense report", "Reopen", "The report goes back to draft so it can be corrected. The reason is kept in the audit log.") is { } reason)
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Reopen expense report", "Reopen", "The report goes back to draft so it can be corrected. The reason is kept in the audit log.") is { } reason)
         {
             await RunAsync(() => Approvals.ReopenReportAsync(r.Id, reason), $"Reopened \"{r.Title}\".");
         }
@@ -106,7 +106,7 @@
 
     private async Task RejectOdcAsync(OdcEntryDto o)
     {
-        if (await ReasonDialog.AskAsync(DialogService, "Reject ODC", "Reject", $"Tell {o.SubmittedBy} what to fix.", color: Color.Error) is { } reason)
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Reject ODC", "Reject", $"Tell {o.SubmittedBy} what to fix.", color: Color.Error) is { } reason)
         {
             await RunAsync(() => Approvals.RejectOdcAsync(o.Id, reason), $"Rejected {o.Vendor} {OdcFormat.Money(o.Amount)}.");
         }
@@ -114,7 +114,7 @@
 
     private async Task ReopenOdcAsync(OdcEntryDto o)
     {
-        if (await ReasonDialog.AskAsync(DialogService, "Reopen ODC", "Reopen", "The ODC goes back to draft so it can be corrected. The reason is kept in the audit log.") is { } reason)
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Reopen ODC", "Reopen", "The ODC goes back to draft so it can be corrected. The reason is kept in the audit log.") is { } reason)
         {
             await RunAsync(() => Approvals.ReopenOdcAsync(o.Id, reason), "Reopened.");
         }
@@ -126,7 +126,7 @@
         {
             await RunAsync(() => Approvals.SetUnallowableAsync(o.Id, false, null), "Marked allowable.");
         }
-        else if (await ReasonDialog.AskAsync(DialogService, "Mark unallowable", "Mark unallowable", "Unallowable costs (FAR 31.205) are kept on record but left out of allowable totals.",
+        else if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Mark unallowable", "Mark unallowable", "Unallowable costs (FAR 31.205) are kept on record but left out of allowable totals.",
                      label: "Reason (e.g. Alcohol, FAR 31.205-51)", color: Color.Warning) is { } reason)
         {
             await RunAsync(() => Approvals.SetUnallowableAsync(o.Id, true, reason), "Marked unallowable.");
