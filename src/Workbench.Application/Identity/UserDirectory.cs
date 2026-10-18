@@ -14,7 +14,7 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
         access.RequireSignedIn();
         if (currentUser is SystemCurrentUser system)
         {
-            return new UserDto(system.Email, system.DisplayName, true, DateTime.MinValue, null);
+            return new UserDto(system.Email, system.DisplayName, OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper, DateTime.MinValue, null);
         }
 
         var user = await provisioner.EnsureUserAsync(access.Email, currentUser.DisplayName == currentUser.Email ? null : currentUser.DisplayName, cancellationToken: cancellationToken);
@@ -38,8 +38,9 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
         return found.Select(ToDto).ToList();
     }
 
-    public async Task<UserDto> SetAdminAsync(string email, bool isAdmin, CancellationToken cancellationToken = default)
+    public async Task<UserDto> SetRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken = default)
     {
+        var isAdmin = roles.IsAdmin();
         await access.RequireAdminAsync(cancellationToken);
         email = AccessControl.Normalize(email);
 
@@ -48,13 +49,16 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
             ?? throw new WorkbenchNotFoundException($"User {email} was not found.");
         if (user.IsAdmin && !isAdmin && await db.Set<AppUser>().CountAsync(u => u.IsAdmin, cancellationToken) == 1)
         {
-            throw new ArgumentException("There must be at least one administrator.", nameof(isAdmin));
+            throw new ArgumentException("There must be at least one administrator.", nameof(roles));
         }
 
         user.IsAdmin = isAdmin;
+        user.IsFinance = roles.HasFlag(OrgRoles.Finance);
+        user.IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper);
         await db.SaveChangesAsync(cancellationToken);
         return ToDto(user);
     }
 
-    internal static UserDto ToDto(AppUser u) => new(u.Email, u.DisplayName, u.IsAdmin, u.CreatedAtUtc, u.LastSeenAtUtc);
+    internal static UserDto ToDto(AppUser u) =>
+        new(u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper), u.CreatedAtUtc, u.LastSeenAtUtc);
 }

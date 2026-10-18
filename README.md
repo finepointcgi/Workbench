@@ -1,6 +1,8 @@
 # Workbench
 
-A Smartsheet / Asana-style work management app with native Deltek Costpoint integration.
+A standalone project ERP and work-management system for government contractors: projects, contracts and WBS,
+DCAA timesheets, budgets, ODCs and plan vs. actual, plus Smartsheet/Asana-style sheets, boards and Gantt charts.
+It replaces Costpoint, Unanet and Asana; a Costpoint connector comes later.
 Built with .NET 10, Blazor and MudBlazor. Runs in the browser and as a desktop app.
 
 Product and technical plan: https://claude.ai/code/artifact/6cda230a-5649-42ac-9dc0-5ec505da3921
@@ -54,3 +56,8 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Costpoint:Source`: `None` (default), `Csv`, `Rest` or `Database` (see `src/Workbench.Costpoint/README.md`)
 - `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)
+- `Authentication:Oidc:Authority`, `:ClientId`, `:ClientSecret`, `:Audience`, `:Scopes`: OpenID Connect sign-in (Entra ID
+  or any OIDC provider). Required outside Development; without an authority, Development uses the dev sign-in page.
+- `Authentication:Admins`: emails made administrators when they sign in (bootstrap for a new install)
+- Desktop sign-in: `WORKBENCH_OIDC_AUTHORITY`, `WORKBENCH_OIDC_CLIENT_ID` and optional `WORKBENCH_OIDC_SCOPE`
+  (a public client that allows `http://127.0.0.1` loopback redirects)

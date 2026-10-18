@@ -23,10 +23,6 @@ else
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
         <MudIconButton Href="sheets" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Sheets" />
         <MudText Typo="Typo.h4" HtmlTag="h1">@_sheet.Summary.Name</MudText>
-        @if (_sheet.Summary.CostpointProjectId is { } project)
-        {
-            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Link">Costpoint @project</MudChip>
-        }
         <MudSpacer />
         @if (!_access.CanEdit)
         {
@@ -61,12 +57,6 @@ else
         <MudTabPanel Text="Activity" Icon="@Icons.Material.Filled.History">
             <ActivityFeed SheetId="SheetId" Items="_items" Version="_liveVersion" />
         </MudTabPanel>
-        @if (_sheet.Summary.CostpointProjectId is not null)
-        {
-            <MudTabPanel Text="Plan vs actual" Icon="@Icons.Material.Filled.QueryStats">
-                <Workbench.Ui.Costpoint.PlanVsActualPanel SheetId="SheetId" Items="_items" />
-            </MudTabPanel>
-        }
     </MudTabs>
 
     @* Collaboration: item details panel (?item={id}) and live reload when others change the sheet. *@

@@ -49,6 +49,12 @@ public static class DevSignIn
         }).AllowAnonymous().ExcludeFromDescription();
     }
 
+    private static string RoleLabel(AppUser user)
+    {
+        var roles = string.Join(", ", new[] { user.IsAdmin ? "Admin" : null, user.IsFinance ? "Finance" : null, user.IsTimekeeper ? "Timekeeper" : null }.OfType<string>());
+        return roles.Length == 0 ? "Employee" : roles;
+    }
+
     private static string RenderPage(IEnumerable<AppUser> users, AntiforgeryTokenSet tokens, string returnUrl)
     {
         static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
@@ -73,7 +79,7 @@ public static class DevSignIn
                 <form method="post" action="{Path}">
                   <input type="hidden" name="{E(tokens.FormFieldName)}" value="{E(tokens.RequestToken)}" />
                   <input type="hidden" name="returnUrl" value="{E(returnUrl)}" />
-                  <button type="submit" name="email" value="{E(user.Email)}">{E(user.DisplayName)}{(user.IsAdmin ? "<span class=\"admin\">admin</span>" : "")}<small>{E(user.Email)}</small></button>
+                  <button type="submit" name="email" value="{E(user.Email)}">{E(user.DisplayName)}<span class="admin">{E(RoleLabel(user))}</span><small>{E(user.Email)}</small></button>
                 </form>
                 """);
         }

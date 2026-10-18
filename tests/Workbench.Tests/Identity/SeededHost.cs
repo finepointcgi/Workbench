@@ -17,6 +17,8 @@ internal sealed class SeededHost : IAsyncDisposable
     public const string Commenter = "reviewer@example.com";
     public const string Viewer = "viewer@example.com";
     public const string Outsider = "outsider@example.com";
+    public const string Finance = "finance@example.com";
+    public const string Timekeeper = "timekeeper@example.com";
 
     private SeededHost(CollaborationHost host, Guid programOffice, Guid sheetId, Guid itemId, Guid financeSheetId)
     {
@@ -48,7 +50,9 @@ internal sealed class SeededHost : IAsyncDisposable
         db.Set<AppUser>().AddRange(
             new AppUser { Email = Admin, DisplayName = "Admin", IsAdmin = true },
             new AppUser { Email = Owner, DisplayName = "Pat" },
-            new AppUser { Email = Viewer, DisplayName = "Val" });
+            new AppUser { Email = Viewer, DisplayName = "Val" },
+            new AppUser { Email = Finance, DisplayName = "Fin", IsFinance = true },
+            new AppUser { Email = Timekeeper, DisplayName = "Tim", IsTimekeeper = true });
         db.Set<WorkspaceMember>().AddRange(
             new WorkspaceMember { WorkspaceId = programOffice.Id, UserEmail = Owner, Role = WorkspaceRole.Owner },
             new WorkspaceMember { WorkspaceId = programOffice.Id, UserEmail = Editor, Role = WorkspaceRole.Editor },

@@ -8,8 +8,14 @@ public sealed class AppUser : Entity
 
     public required string DisplayName { get; set; }
 
-    /// <summary>Admins see every workspace and can do everything.</summary>
+    /// <summary>Organization role Admin: sees every workspace and can do everything.</summary>
     public bool IsAdmin { get; set; }
+
+    /// <summary>Organization role Finance: rates, contracts, budgets, project setup and fiscal close.</summary>
+    public bool IsFinance { get; set; }
+
+    /// <summary>Organization role Timekeeper: can view everyone's timesheets.</summary>
+    public bool IsTimekeeper { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }

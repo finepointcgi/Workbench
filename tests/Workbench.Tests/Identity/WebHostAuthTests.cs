@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Hosting;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Sheets;
 using Workbench.Web.Identity;
 
@@ -124,6 +125,32 @@ public sealed class WebHostAuthTests
         Assert.Equal(HttpStatusCode.Created, analystCreate.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, outsiderGet.StatusCode);
         Assert.Empty(outsiderList!);
+    }
+
+    [Fact]
+    public async Task Seeded_dev_users_have_org_roles_and_employees()
+    {
+        await using var factory = new WorkbenchWebFactory("Development", testAuth: true);
+        using var pm = factory.CreateClientAs("pm@example.com");
+        using var analyst = factory.CreateClientAs("analyst@example.com");
+        using var dev = factory.CreateClientAs("dev@workbench.local");
+
+        var pmContext = await pm.GetFromJsonAsync<CurrentUserInfo>("/api/v1/users/me/context");
+        var analystContext = await analyst.GetFromJsonAsync<CurrentUserInfo>("/api/v1/users/me/context");
+        var devContext = await dev.GetFromJsonAsync<CurrentUserInfo>("/api/v1/users/me/context");
+        using var analystRates = await analyst.GetAsync($"/api/v1/employees/{analystContext!.EmployeeId}/cost-rates");
+        using var pmRates = await pm.GetAsync($"/api/v1/employees/{analystContext.EmployeeId}/cost-rates");
+        using var analystAudit = await analyst.GetAsync("/api/v1/audit");
+
+        Assert.Equal(OrgRoles.Finance, pmContext!.Roles);
+        Assert.Equal(OrgRoles.Employee, analystContext.Roles);
+        Assert.Equal(OrgRoles.Admin, devContext!.Roles);
+        Assert.NotNull(pmContext.EmployeeId);
+        Assert.NotNull(analystContext.EmployeeId);
+        Assert.NotNull(devContext.EmployeeId);
+        Assert.Equal(HttpStatusCode.Forbidden, analystRates.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, pmRates.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, analystAudit.StatusCode);
     }
 
     [Fact]

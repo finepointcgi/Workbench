@@ -5,6 +5,7 @@ using Workbench.Application.Sheets;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
 
@@ -28,6 +29,7 @@ public static class IdentityRegistration
         services.AddScoped<AccessControl>();
         services.AddScoped<ISheetPermissions, SheetPermissions>();
         services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         services.AddScoped<IWorkspaceMembershipService, WorkspaceMembershipService>();
         services.AddScoped<ISheetWorkspacePicker, EditableWorkspacePicker>();
 
@@ -40,6 +42,11 @@ public static class IdentityRegistration
         services.Decorate<IAttachmentService, PermissionCheckingAttachmentService>();
         services.Decorate<IActivityService, PermissionCheckingActivityService>();
         services.Decorate<ICostpointService, PermissionCheckingCostpointService>();
+        services.Decorate<IPeopleService, PermissionCheckingPeopleService>();
+        services.Decorate<IContractService, PermissionCheckingContractService>();
+        services.Decorate<IProjectService, PermissionCheckingProjectService>();
+        services.Decorate<IFiscalCalendarService, PermissionCheckingFiscalCalendarService>();
+        services.Decorate<IAuditLogService, PermissionCheckingAuditLogService>();
         return services;
     }
 

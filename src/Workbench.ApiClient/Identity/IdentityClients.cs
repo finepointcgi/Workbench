@@ -19,6 +19,7 @@ public static class IdentityClients
         services.AddTransient<BearerTokenHandler>();
         services.ConfigureHttpClientDefaults(client => client.AddHttpMessageHandler<BearerTokenHandler>());
         services.AddHttpClient<IUserDirectory, HttpUserDirectory>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ICurrentUserContext, HttpCurrentUserContext>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ISheetPermissions, HttpSheetPermissions>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IWorkspaceMembershipService, HttpWorkspaceMembershipService>(client => client.BaseAddress = serverBaseAddress);
         services.TryAddSingleton<ISignOutService, AccessTokenSignOutService>();

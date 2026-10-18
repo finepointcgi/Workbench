@@ -17,8 +17,9 @@ else if (_me is not { IsAdmin: true })
 else
 {
     <MudText Class="mud-text-secondary mb-4">
-        People appear here after they first sign in. Administrators see every workspace and can do everything;
-        everyone else gets access through workspace membership (Share on a sheet).
+        People appear here after they first sign in. Administrators see every workspace and can do everything.
+        Finance manages rates, contracts, budgets, project setup and fiscal close. Timekeepers can see everyone's
+        timesheets. Sheet access comes from workspace membership (Share on a sheet).
     </MudText>
     <MudTable T="UserDto" Items="_users" Loading="_loading" Dense="true" Hover="true" Filter="Matches">
         <ToolBarContent>
@@ -30,15 +31,20 @@ else
             <MudTh>Email</MudTh>
             <MudTh>Last seen (UTC)</MudTh>
             <MudTh>Admin</MudTh>
+            <MudTh>Finance</MudTh>
+            <MudTh>Timekeeper</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Name">@context.DisplayName</MudTd>
             <MudTd DataLabel="Email">@context.Email</MudTd>
             <MudTd DataLabel="Last seen">@(context.LastSeenAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</MudTd>
-            <MudTd DataLabel="Admin">
-                <MudSwitch T="bool" Value="context.IsAdmin" ValueChanged="value => SetAdminAsync(context, value)" Color="Color.Primary"
-                           aria-label="@($"Administrator: {context.Email}")" />
-            </MudTd>
+            @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper })
+            {
+                <MudTd DataLabel="@role.ToString()">
+                    <MudSwitch T="bool" Value="context.Roles.HasFlag(role)" ValueChanged="value => SetRoleAsync(context, role, value)" Color="Color.Primary"
+                               aria-label="@($"{role}: {context.Email}")" />
+                </MudTd>
+            }
         </RowTemplate>
     </MudTable>
 }
@@ -74,13 +80,13 @@ else
         || user.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)
         || user.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase);
 
-    private async Task SetAdminAsync(UserDto user, bool isAdmin)
+    private async Task SetRoleAsync(UserDto user, OrgRoles role, bool on)
     {
         try
         {
-            var updated = await Users.SetAdminAsync(user.Email, isAdmin);
+            var updated = await Users.SetRolesAsync(user.Email, on ? user.Roles | role : user.Roles & ~role);
             _users = _users.Select(u => u.Email == updated.Email ? updated : u).ToList();
-            Snackbar.Add($"{updated.DisplayName} is {(updated.IsAdmin ? "now" : "no longer")} an administrator.", Severity.Success);
+            Snackbar.Add($"{updated.DisplayName} is {(on ? "now" : "no longer")} {role}.", Severity.Success);
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
         {
