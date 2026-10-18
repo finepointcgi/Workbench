@@ -179,10 +179,12 @@ public sealed class ClinFundingCalculator(
         try
         {
             var result = new Dictionary<Guid, ClinCost>();
+            var anyRates = false;
             foreach (var projectId in projectIds)
             {
                 var total = await burdened.GetProjectCostAsync(projectId, from < windowStart ? from : windowStart, asOf, RateBasis.Provisional, ct);
                 var recent = await burdened.GetProjectCostAsync(projectId, windowStart, asOf, RateBasis.Provisional, ct);
+                anyRates |= total.Rates.Any(r => r.Fringe != 0 || r.Overhead != 0 || r.GeneralAndAdministrative != 0);
                 foreach (var (line, isRecent) in total.Lines.Select(l => (l, false)).Concat(recent.Lines.Select(l => (l, true))))
                 {
                     if (!mapping.TryGetValue(line.WbsElementId, out var clinId))
@@ -195,7 +197,8 @@ public sealed class ClinFundingCalculator(
                 }
             }
 
-            return result;
+            // With no indirect rates set up the service only echoes direct cost; report that as direct, not burdened.
+            return anyRates ? result : null;
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or WorkbenchNotFoundException)
         {
