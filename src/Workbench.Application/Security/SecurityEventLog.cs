@@ -83,7 +83,9 @@ public sealed class SecurityEventLog(
     {
         try
         {
-            return string.IsNullOrWhiteSpace(currentUser.Email) ? "anonymous" : currentUser.Email.Trim().ToLowerInvariant();
+            return string.IsNullOrWhiteSpace(currentUser.Email) ? "anonymous"
+                : currentUser.Email == Identity.SystemExecutionContext.Actor ? Identity.SystemExecutionContext.Actor
+                : currentUser.Email.Trim().ToLowerInvariant();
         }
         catch (Exception)
         {

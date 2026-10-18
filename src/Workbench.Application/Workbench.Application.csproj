@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Tests drive SystemExecution.CreateScope, which is internal so only this assembly's hosted services can use it. -->
+    <InternalsVisibleTo Include="Workbench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
   </ItemGroup>
 

@@ -139,7 +139,7 @@ else
         var closing = status == FiscalPeriodState.Closed;
         var parameters = new DialogParameters<ReasonDialog>
         {
-            { d => d.Message, closing ? $"Closing {period.Name} stops new time, ODCs and changes dated in it." : $"Reopening {period.Name} allows changes dated in it again." },
+            { d => d.Message, closing ? $"Closing {period.Name} runs the period-close checklist (Accounting › Period close) and then stops new time, ODCs and changes dated in it." : $"Reopening {period.Name} allows changes dated in it again." },
             { d => d.ConfirmText, closing ? "Close period" : "Reopen period" },
         };
         var dialog = await DialogService.ShowAsync<ReasonDialog>(closing ? $"Close {period.Name}" : $"Reopen {period.Name}", parameters,
