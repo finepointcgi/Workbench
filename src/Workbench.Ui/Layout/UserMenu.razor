@@ -1,19 +1,31 @@
-@* App bar menu for the signed-in user: name, email and sign out. *@
+@* App bar menu for the signed-in user: their name (never just the email), roles, the phone layout and sign out. *@
+@using Microsoft.JSInterop
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.ProjectAccounting
+@using Workbench.Ui.Navigation
 @inject IUserDirectory Users
 @inject ISignOutService SignOut
+@inject IServiceProvider Services
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 @if (_me is { } me)
 {
     <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
         <ActivatorContent>
             @* A custom activator has to open the menu itself (MudBlazor 9). *@
-            <MudIconButton Color="Color.Inherit" OnClick="e => context.ToggleAsync(e)" aria-label="@($"Account: {me.DisplayName}")" Class="pa-1">
-                <MudAvatar Size="Size.Small" Color="Color.Secondary" Class="wb-user-avatar" title="@me.DisplayName">@Initials(me)</MudAvatar>
-            </MudIconButton>
+            <MudButton Color="Color.Inherit" Variant="Variant.Text" OnClick="e => context.ToggleAsync(e)" aria-label="@($"Account: {_name}")"
+                       Class="px-1 text-none" Style="text-transform:none;min-width:0" data-testid="user-menu">
+                <MudAvatar Size="Size.Small" Color="Color.Secondary" Class="wb-user-avatar" title="@_name">@Initials(_name, me.Email)</MudAvatar>
+                @if (ShowName)
+                {
+                    <span class="d-none d-md-inline ml-2" data-testid="user-name">@_name</span>
+                }
+            </MudButton>
         </ActivatorContent>
         <ChildContent>
             <div class="px-4 py-2" style="min-width:220px">
-                <MudText Typo="Typo.subtitle2">@me.DisplayName</MudText>
+                <MudText Typo="Typo.subtitle2" data-testid="user-menu-name">@_name</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@me.Email</MudText>
                 @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => me.Roles.HasFlag(r)))
                 {
@@ -21,6 +33,11 @@
                 }
             </div>
             <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Notifications" Href="notifications">Notification settings</MudMenuItem>
+            @if (ShowName)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.PhoneIphone" OnClick="OpenMobileAsync" data-testid="mobile-view">Mobile view</MudMenuItem>
+            }
             <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOutAsync">Sign out</MudMenuItem>
         </ChildContent>
     </MudMenu>
@@ -28,12 +45,17 @@
 
 @code {
     private UserDto? _me;
+    private string _name = "";
+
+    /// <summary>Show the name beside the avatar and the Mobile view item (the phone layout hides both).</summary>
+    [Parameter] public bool ShowName { get; set; } = true;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _me = await Users.GetMeAsync();
+            _name = await FriendlyNameAsync(_me, Services);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {
@@ -41,14 +63,55 @@
         }
     }
 
+    /// <summary>
+    /// The user's display name. A sign-in that never gave one is named after the email (or its local part); then the
+    /// linked employee record's name is used, and the email only as a last resort.
+    /// </summary>
+    public static async Task<string> FriendlyNameAsync(UserDto user, IServiceProvider services)
+    {
+        var name = user.DisplayName?.Trim() ?? "";
+        var local = user.Email.Split('@')[0];
+        if (name.Length > 0 && !name.Equals(user.Email, StringComparison.OrdinalIgnoreCase) && !name.Equals(local, StringComparison.OrdinalIgnoreCase))
+        {
+            return name;
+        }
+
+        try
+        {
+            if (services.GetService<IPeopleService>() is { } people && await people.GetCurrentEmployeeAsync() is { DisplayName.Length: > 0 } employee)
+            {
+                return employee.DisplayName;
+            }
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+        }
+
+        return name.Length > 0 ? name : user.Email;
+    }
+
+    private async Task OpenMobileAsync()
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/navigation.js");
+            await module.InvokeVoidAsync("setSitePreference", "mobile");
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+        }
+
+        Navigation.NavigateTo("m");
+    }
+
     private Task SignOutAsync() => SignOut.SignOutAsync();
 
-    private static string Initials(UserDto user)
+    private static string Initials(string name, string email)
     {
-        var parts = user.DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var initials = parts.Length switch
         {
-            0 => user.Email[..1],
+            0 => email[..1],
             1 => parts[0][..1],
             _ => $"{parts[0][0]}{parts[1][0]}",
         };
