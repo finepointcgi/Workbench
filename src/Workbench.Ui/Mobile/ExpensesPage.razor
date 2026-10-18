@@ -1,0 +1,107 @@
+@page "/m/expenses"
+@* The employee's expense reports on a phone, and a quick way to start one. *@
+@inject IExpenseReportService Reports
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Expenses · Workbench</PageTitle>
+
+<div class="wb-m-title"><h1>Expenses</h1></div>
+
+@if (_showNew)
+{
+    <div class="wb-m-card" data-testid="new-report">
+        <label class="wb-m-field">
+            <span>Report title</span>
+            <input class="wb-m-input" maxlength="200" placeholder="Trip to Dayton, Oct 2026" data-testid="title" @bind="_title" @bind:event="oninput" />
+        </label>
+        <div class="wb-m-row">
+            <label class="wb-m-field"><span>Trip start</span><input type="date" class="wb-m-input" data-testid="trip-start" @bind="_tripStart" /></label>
+            <label class="wb-m-field"><span>Trip end</span><input type="date" class="wb-m-input" data-testid="trip-end" @bind="_tripEnd" /></label>
+        </div>
+        <label class="wb-m-field">
+            <span>Purpose (optional)</span>
+            <input class="wb-m-input" maxlength="500" @bind="_purpose" />
+        </label>
+        <div class="wb-m-actions">
+            <MudButton Variant="Variant.Text" OnClick="() => _showNew = false">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title))" OnClick="CreateAsync" data-testid="create">Create</MudButton>
+        </div>
+    </div>
+}
+else
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mb-3" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="() => _showNew = true" data-testid="new">New expense report</MudButton>
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_reports is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_reports.Count == 0)
+{
+    <MudText Class="wb-m-muted" Align="Align.Center" data-testid="empty">No expense reports yet.</MudText>
+}
+else
+{
+    @foreach (var r in _reports)
+    {
+        <div class="wb-m-card" data-testid="report">
+            <a class="wb-m-list-link" href="@($"m/expenses/{r.Id}")">
+                <span style="flex:1 1 auto;min-width:0">
+                    <b class="wb-m-wrap">@r.Title</b><br />
+                    <span class="wb-m-muted">@r.LineCount line@(r.LineCount == 1 ? "" : "s") · @MobileFormat.Money(r.Total)</span>
+                </span>
+                <Workbench.Ui.Odcs.OdcStatusChip Status="r.Status" />
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="wb-m-muted" />
+            </a>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<ExpenseReportDto>? _reports;
+    private string? _error;
+    private bool _showNew;
+    private bool _busy;
+    private string? _title;
+    private DateOnly? _tripStart;
+    private DateOnly? _tripEnd;
+    private string? _purpose;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports = await Reports.ListMyReportsAsync();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var purpose = string.IsNullOrWhiteSpace(_purpose) ? null : _purpose.Trim();
+            var report = await Reports.CreateReportAsync(new SaveExpenseReportRequest(_title!.Trim(), _tripStart, _tripEnd, purpose));
+            Navigation.NavigateTo($"m/expenses/{report.Id}");
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

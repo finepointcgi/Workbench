@@ -1,0 +1,348 @@
+@page "/m"
+@page "/m/today"
+@* Daily time entry on a phone (DCAA: hours are entered each day, changes after a submission need a reason). *@
+@inject ITimesheetService Timesheets
+@inject ILeaveTimesheetService LeaveTimesheets
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Today · Workbench</PageTitle>
+
+<div class="wb-m-title">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Large" aria-label="Previous day" OnClick="() => GoAsync(_date.AddDays(-1))" />
+    <h1 data-testid="day">@(_date == Today ? "Today" : MobileFormat.Day(_date))</h1>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Large" aria-label="Next day" Disabled="@(_date >= Today)"
+                   OnClick="() => GoAsync(_date.AddDays(1))" />
+</div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" data-testid="error">@_error</MudAlert>
+}
+else if (_detail is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    var sheet = _detail.Timesheet;
+    <MudText Class="wb-m-muted mb-2" Align="Align.Center">
+        @MobileFormat.Day(_date) · week @MobileFormat.Hours(sheet.TotalHours) of @MobileFormat.Hours(sheet.StandardHours) h
+    </MudText>
+    @if (sheet.Status != TimesheetState.Draft || sheet.ChangesNeedReason)
+    {
+        <TimesheetStatusBanner Timesheet="sheet" />
+    }
+
+    @if (_day is { CanEnter: false } day)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="cannot-enter">
+            @(day.IsFuture ? "You can't enter hours for a future day." : !day.IsEmployed ? "You weren't employed on this day." : "This day's accounting period is closed.")
+        </MudAlert>
+    }
+    else if (sheet.IsLocked)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="locked">
+            This timesheet is @sheet.Status.ToString().ToLowerInvariant() and locked.
+            <MudLink Href="m/timesheet" Typo="Typo.body2">Open the timesheet</MudLink> to recall or correct it.
+        </MudAlert>
+    }
+
+    @if (_prefilled.Count > 0)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="leave-prefill">
+            Pre-filled from @string.Join(", ", _prefilled). Save to keep them.
+        </MudAlert>
+    }
+
+    @foreach (var row in _rows)
+    {
+        <div class="wb-m-card" data-testid="@($"row-{row.Code}")">
+            <div class="wb-m-kv">
+                <b class="wb-m-wrap">@row.Code</b>
+                <span class="wb-m-muted">@row.ProjectCode</span>
+            </div>
+            <div class="wb-m-muted wb-m-wrap">@row.Name</div>
+            <div class="wb-m-stepper">
+                <button type="button" class="wb-m-step" aria-label="@($"Less time on {row.Code}")" disabled="@(!CanEdit || row.Hours <= 0)"
+                        @onclick="() => Step(row, -Increment)">−</button>
+                <input class="wb-m-input" inputmode="decimal" autocomplete="off" aria-label="@($"Hours on {row.Code}")"
+                       value="@row.Text" disabled="@(!CanEdit)" data-testid="@($"hours-{row.Code}")"
+                       @onchange="e => Type(row, e.Value?.ToString())" />
+                <button type="button" class="wb-m-step" aria-label="@($"More time on {row.Code}")" disabled="@(!CanEdit || row.Hours >= 24)"
+                        @onclick="() => Step(row, Increment)">+</button>
+            </div>
+            @if (row.Invalid)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Error">Enter hours between 0 and 24.</MudText>
+            }
+        </div>
+    }
+
+    @if (CanEdit && _available.Count > 0)
+    {
+        <label class="wb-m-field">
+            <span>Add a charge code</span>
+            <select class="wb-m-select" data-testid="add-code" value="" @onchange="e => Add(e.Value?.ToString())">
+                <option value="">Choose…</option>
+                @foreach (var c in _available)
+                {
+                    <option value="@c.ChargeCode.WbsElementId">@c.ChargeCode.Code · @c.ChargeCode.Name</option>
+                }
+            </select>
+        </label>
+    }
+    else if (_rows.Count == 0)
+    {
+        <MudText Class="wb-m-muted" data-testid="no-codes">You have no charge codes on this day. Ask your project manager or timekeeper.</MudText>
+    }
+
+    @if (CanEdit)
+    {
+        @if (sheet.ChangesNeedReason && IsDirty)
+        {
+            <label class="wb-m-field">
+                <span>Reason for the change (required, recorded with your name and the time)</span>
+                <textarea class="wb-m-input" maxlength="1000" data-testid="reason" @bind="_reason" @bind:event="oninput"></textarea>
+            </label>
+        }
+
+        <div class="wb-m-sticky">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" data-testid="save"
+                       Disabled="@(!CanSave)" OnClick="SaveAsync" StartIcon="@Icons.Material.Filled.Save">
+                @(_busy ? "Saving…" : $"Save {MobileFormat.Hours(DayTotal)} h")
+            </MudButton>
+        </div>
+    }
+
+    @if (_day?.FirstEnteredAtUtc is { } first)
+    {
+        <MudText Class="wb-m-muted mt-2" Align="Align.Center" data-testid="first-entered">
+            First entered @first.ToLocalTime().ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)@(_day.EnteredLate ? " (late)" : "")
+        </MudText>
+    }
+}
+
+@code {
+    private const decimal Increment = 0.5m;
+
+    [SupplyParameterFromQuery(Name = "date")]
+    public string? Date { get; set; }
+
+    /// <summary>Today, overridable in tests.</summary>
+    [Parameter] public DateOnly? TodayOverride { get; set; }
+
+    private DateOnly Today => TodayOverride ?? DateOnly.FromDateTime(DateTime.Now);
+
+    private DateOnly _date;
+    private TimesheetDetailDto? _detail;
+    private TimesheetDayDto? _day;
+    private List<Row> _rows = [];
+    private List<TimesheetChargeCodeDto> _available = [];
+    private List<string> _prefilled = [];
+    private string? _reason;
+    private string? _error;
+    private bool _busy;
+
+    private bool CanEdit => _detail is { Timesheet.IsLocked: false } && _day is { CanEnter: true };
+
+    private bool IsDirty => _rows.Any(r => r.Hours != r.Original);
+
+    private decimal DayTotal => _rows.Where(r => !r.Invalid).Sum(r => r.Hours);
+
+    private bool CanSave => !_busy && IsDirty && _rows.All(r => !r.Invalid) && DayTotal <= 24
+        && (_detail?.Timesheet.ChangesNeedReason != true || !string.IsNullOrWhiteSpace(_reason));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var date = MobileFormat.ParseIso(Date) ?? Today;
+        _date = date > Today ? Today : date;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _error = null;
+            var detail = await Timesheets.GetOrCreateMyTimesheetAsync(_date);
+            Build(detail, await PrefillAsync(detail));
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task<IReadOnlyList<LeavePrefillDto>> PrefillAsync(TimesheetDetailDto detail)
+    {
+        if (detail.Timesheet.IsLocked)
+        {
+            return [];
+        }
+
+        try
+        {
+            return (await LeaveTimesheets.GetForTimesheetAsync(detail.Timesheet.Id)).Prefill;
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// One row per entry on the day, then the charge codes the employee used recently or this period, so the usual
+    /// codes are one tap away. The rest are offered in "Add a charge code".
+    /// </summary>
+    private void Build(TimesheetDetailDto detail, IReadOnlyList<LeavePrefillDto> prefill)
+    {
+        _detail = detail;
+        _day = detail.Days.FirstOrDefault(d => d.Date == _date);
+        _reason = null;
+        _prefilled = [];
+        var codes = detail.ChargeCodes.Where(c => c.ChargeableDates.Contains(_date)).ToList();
+        var rows = detail.Entries.Where(e => e.WorkDate == _date)
+            .Select(e => new Row(e.WbsElementId, e.WbsCode, e.WbsName, e.ProjectCode, e.Id, e.LaborCategoryId, e.Comment, e.Hours))
+            .ToList();
+        var usedThisPeriod = detail.Entries.Select(e => e.WbsElementId).ToHashSet();
+        foreach (var code in codes.Where(c => c.RecentlyUsed || usedThisPeriod.Contains(c.ChargeCode.WbsElementId)))
+        {
+            if (rows.All(r => r.WbsElementId != code.ChargeCode.WbsElementId))
+            {
+                rows.Add(Row.For(code.ChargeCode));
+            }
+        }
+
+        if (CanEdit)
+        {
+            foreach (var p in prefill.Where(p => p.Date == _date))
+            {
+                var row = rows.FirstOrDefault(r => r.WbsElementId == p.WbsElementId);
+                if (row is { EntryId: not null })
+                {
+                    continue;
+                }
+
+                if (row is null)
+                {
+                    var code = codes.FirstOrDefault(c => c.ChargeCode.WbsElementId == p.WbsElementId);
+                    if (code is null)
+                    {
+                        continue;
+                    }
+
+                    row = Row.For(code.ChargeCode);
+                    rows.Add(row);
+                }
+
+                row.Set(p.Hours);
+                _prefilled.Add($"{p.Source} ({p.WbsCode} {MobileFormat.Hours(p.Hours)} h)");
+            }
+        }
+
+        _rows = rows;
+        _available = codes.Where(c => rows.All(r => r.WbsElementId != c.ChargeCode.WbsElementId)).ToList();
+    }
+
+    private static void Step(Row row, decimal delta) => row.Set(Math.Clamp((row.Invalid ? 0 : row.Hours) + delta, 0, 24));
+
+    private static void Type(Row row, string? text)
+    {
+        if (MobileFormat.ParseHours(text) is { } hours)
+        {
+            row.Set(hours);
+        }
+        else
+        {
+            row.Text = text ?? "";
+            row.Invalid = true;
+        }
+    }
+
+    private void Add(string? wbsElementId)
+    {
+        var code = _available.FirstOrDefault(c => c.ChargeCode.WbsElementId.ToString() == wbsElementId);
+        if (code is null)
+        {
+            return;
+        }
+
+        _rows.Add(Row.For(code.ChargeCode));
+        _available.Remove(code);
+    }
+
+    private async Task GoAsync(DateOnly date)
+    {
+        if (IsDirty && !await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        Navigation.NavigateTo(date == Today ? "m" : $"m?date={MobileFormat.Iso(date)}");
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Grid.ConfirmDialog>
+        {
+            { x => x.Message, "You have unsaved hours. Leave this day without saving?" },
+            { x => x.ConfirmText, "Discard" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Grid.ConfirmDialog>("Unsaved hours", parameters);
+        return await dialog.Result is { Canceled: false };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_detail is null || !CanSave)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var entries = _rows.Where(r => r.Hours > 0)
+                .Select(r => new TimeEntryInput(r.WbsElementId, _date, r.Hours, r.Comment, r.EntryId, r.LaborCategoryId))
+                .ToList();
+            var reason = _detail.Timesheet.ChangesNeedReason ? _reason?.Trim() : null;
+            var detail = await Timesheets.SaveEntriesAsync(_detail.Timesheet.Id, new SaveTimeEntriesRequest(entries, _date, reason));
+            Build(detail, []);
+            Snackbar.Add($"Hours saved for {MobileFormat.Day(_date)}.", Severity.Success);
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class Row(Guid wbsElementId, string code, string name, string projectCode, Guid? entryId, Guid? laborCategoryId, string? comment, decimal hours)
+    {
+        public static Row For(ChargeCodeDto c) => new(c.WbsElementId, c.Code, c.Name, c.ProjectCode, null, null, null, 0m);
+
+        public Guid WbsElementId { get; } = wbsElementId;
+        public string Code { get; } = code;
+        public string Name { get; } = name;
+        public string ProjectCode { get; } = projectCode;
+        public Guid? EntryId { get; } = entryId;
+        public Guid? LaborCategoryId { get; } = laborCategoryId;
+        public string? Comment { get; } = comment;
+        public decimal Original { get; } = hours;
+        public decimal Hours { get; private set; } = hours;
+        public string Text { get; set; } = hours == 0 ? "" : MobileFormat.Hours(hours);
+        public bool Invalid { get; set; }
+
+        public void Set(decimal value)
+        {
+            Hours = value;
+            Text = value == 0 ? "" : MobileFormat.Hours(value);
+            Invalid = false;
+        }
+    }
+}

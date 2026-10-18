@@ -1,0 +1,204 @@
+@page "/m/timesheet"
+@* The period at a glance on a phone: hours per day, certify and submit, recall or reopen with a reason. *@
+@inject ITimesheetService Timesheets
+@inject ILeaveTimesheetService LeaveTimesheets
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Timesheet · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" data-testid="error">@_error</MudAlert>
+}
+else if (_detail is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    var sheet = _detail.Timesheet;
+    <div class="wb-m-title">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Large" aria-label="Previous period" OnClick="() => Go(sheet.PeriodStart.AddDays(-1))" />
+        <h1 data-testid="period">@MobileFormat.Period(sheet.PeriodStart, sheet.PeriodEnd)</h1>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Large" aria-label="Next period" Disabled="@(sheet.PeriodEnd >= Today)"
+                       OnClick="() => Go(sheet.PeriodEnd.AddDays(1))" />
+    </div>
+
+    <TimesheetStatusBanner Timesheet="sheet" />
+    @foreach (var warning in _leaveWarnings)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="leave-warning">@warning</MudAlert>
+    }
+
+    <div class="wb-m-card">
+        <div class="wb-m-kv"><b>Total</b><b data-testid="total">@MobileFormat.Hours(sheet.TotalHours) h</b></div>
+        <div class="wb-m-kv wb-m-muted"><span>Standard</span><span>@MobileFormat.Hours(sheet.StandardHours) h</span></div>
+    </div>
+
+    @foreach (var day in _detail.Days)
+    {
+        var entries = _detail.Entries.Where(e => e.WorkDate == day.Date).ToList();
+        <div class="wb-m-card" data-testid="@($"day-{MobileFormat.Iso(day.Date)}")">
+            @if (day.CanEnter)
+            {
+                <a class="wb-m-list-link" href="@($"m?date={MobileFormat.Iso(day.Date)}")">
+                    @DayHeader(day, entries)
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="wb-m-muted" />
+                </a>
+            }
+            else
+            {
+                <div class="wb-m-list-link wb-m-muted">@DayHeader(day, entries)</div>
+            }
+            @foreach (var e in entries)
+            {
+                <div class="wb-m-kv wb-m-muted"><span class="wb-m-wrap">@e.WbsCode · @e.WbsName</span><span>@MobileFormat.Hours(e.Hours)</span></div>
+            }
+        </div>
+    }
+
+    <div class="wb-m-sticky">
+        @if (sheet.Status is TimesheetState.Draft or TimesheetState.Rejected)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Disabled="_busy" OnClick="SubmitAsync"
+                       StartIcon="@Icons.Material.Filled.Send" data-testid="submit">Certify and submit</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" FullWidth="true" Disabled="_busy" OnClick="ReopenAsync"
+                       StartIcon="@Icons.Material.Filled.LockOpen" data-testid="reopen">
+                @(sheet.Status == TimesheetState.Approved ? "Correct (reopen)" : "Recall to edit")
+            </MudButton>
+        }
+    </div>
+    <MudText Class="wb-m-muted mt-2" Align="Align.Center">
+        <MudLink Href="@($"time/history/{sheet.Id}")" Typo="Typo.body2">Revision history</MudLink>
+    </MudText>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "date")]
+    public string? Date { get; set; }
+
+    /// <summary>Today, overridable in tests.</summary>
+    [Parameter] public DateOnly? TodayOverride { get; set; }
+
+    private DateOnly Today => TodayOverride ?? DateOnly.FromDateTime(DateTime.Now);
+
+    private TimesheetDetailDto? _detail;
+    private IReadOnlyList<string> _leaveWarnings = [];
+    private string? _error;
+    private bool _busy;
+
+    private static RenderFragment DayHeader(TimesheetDayDto day, List<TimeEntryDto> entries) => __builder =>
+    {
+        <span style="flex:1 1 auto">
+            <b>@MobileFormat.Day(day.Date)</b>
+            @if (day.EnteredLate)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ml-1">Entered late</MudChip>
+            }
+        </span>
+        <b data-testid="@($"day-total-{MobileFormat.Iso(day.Date)}")">@MobileFormat.Hours(entries.Sum(e => e.Hours)) h</b>
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var date = MobileFormat.ParseIso(Date) ?? Today;
+        try
+        {
+            _error = null;
+            await ShowAsync(await Timesheets.GetOrCreateMyTimesheetAsync(date > Today ? Today : date));
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ShowAsync(TimesheetDetailDto detail)
+    {
+        _detail = detail;
+        try
+        {
+            _leaveWarnings = (await LeaveTimesheets.GetForTimesheetAsync(detail.Timesheet.Id)).Warnings.ToList();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _leaveWarnings = [];
+        }
+    }
+
+    private void Go(DateOnly date) => Navigation.NavigateTo($"m/timesheet?date={MobileFormat.Iso(date)}");
+
+    private async Task SubmitAsync()
+    {
+        var sheet = _detail!.Timesheet;
+        var parameters = new DialogParameters<CertifyDialog>
+        {
+            { x => x.TotalHours, sheet.TotalHours },
+            { x => x.StandardHours, sheet.StandardHours },
+            { x => x.Period, MobileFormat.Period(sheet.PeriodStart, sheet.PeriodEnd) },
+        };
+        var dialog = await DialogService.ShowAsync<CertifyDialog>("Certify and submit", parameters);
+        if (await dialog.Result is not { Canceled: false })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var result = await Timesheets.SubmitAsync(sheet.Id, new SubmitTimesheetRequest(true));
+            await ShowAsync(result.Detail);
+            Snackbar.Add("Timesheet certified and submitted for approval.", Severity.Success);
+            foreach (var warning in result.Warnings)
+            {
+                Snackbar.Add(warning, Severity.Warning);
+            }
+        });
+    }
+
+    private async Task ReopenAsync()
+    {
+        var sheet = _detail!.Timesheet;
+        var approved = sheet.Status == TimesheetState.Approved;
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { x => x.Message, approved
+                ? "Reopening an approved timesheet starts a new revision. Every change is recorded with your reason; you'll certify and get approval again."
+                : "Recall it to make changes; you'll need to certify and submit again." },
+            { x => x.Label, "Reason for the change" },
+            { x => x.ConfirmText, approved ? "Reopen" : "Recall" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>(approved ? "Correct an approved timesheet" : "Recall timesheet", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await ShowAsync(await Timesheets.ReopenAsync(sheet.Id, reason));
+            Snackbar.Add(approved ? "Reopened for correction." : "Recalled. You can edit your hours.", Severity.Info);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
