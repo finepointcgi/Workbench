@@ -135,7 +135,7 @@
                 Snackbar.Add($"Sync failed: {run.Error}", Severity.Error);
             }
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't run the sync: {ex.Message}", Severity.Error);
         }

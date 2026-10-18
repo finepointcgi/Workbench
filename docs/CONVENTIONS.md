@@ -77,3 +77,21 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - The plan sheet and the WBS are one tree: `Project.SheetId` points at the plan sheet and `WbsElement.ItemId` at its task.
 - The signed-in person's employee record: `IPeopleService.GetCurrentEmployeeAsync()` (matched by `ICurrentUser.Email`).
 - Seeded dev data: `ProjectAccountingSeed.cs` (FY runs Oct–Sep; employees pm@, analyst@, dev@workbench.local, viewer@).
+
+## Authentication and permissions
+
+- Who is signed in: `ICurrentUser` (sync: email, name). Roles and the linked employee: `ICurrentUserContext.GetAsync()`
+  (`CurrentUserInfo`: `Roles`, `EmployeeId`, `IsFinance`, `CanViewAllTimesheets`). Server code can also inject
+  `Application.Identity.AccessControl` (`RequireSheetRoleAsync`, `RequireFinanceAsync`, `RequireAdminAsync`).
+- Two kinds of roles. **Workspace roles** (Viewer < Commenter < Editor < Owner) govern sheets, through membership of the
+  sheet's workspace. **Organization roles** (`OrgRoles` flags: Timekeeper, Finance, Admin; everyone is an Employee)
+  govern project accounting. Admin can do everything.
+- Enforce on the server with decorators registered by `AddWorkbenchIdentity()`, which stays the **last** line of
+  `AddWorkbenchApplication` so the permission checks wrap every other decorator. Put new feature registrations
+  (and their own decorators) above it, and add the new service's permission decorator inside `AddWorkbenchIdentity`.
+- A sheet the user can't see is not found (404); something they can see but not change is
+  `WorkbenchForbiddenException` (403, a subclass of `UnauthorizedAccessException`). UI catch filters should include it.
+- Views get the user's sheet role as a cascading `SheetAccess` (`CanEdit`, `CanComment`) from `SheetPage`; hide edit
+  affordances with it. A missing cascade means full access, so components still render in tests.
+- Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
+  analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.

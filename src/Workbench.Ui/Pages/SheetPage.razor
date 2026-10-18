@@ -3,6 +3,8 @@
 @using Workbench.Ui.Collaboration
 @inject ISheetService SheetService
 @inject IItemService ItemService
+@inject ISheetPermissions Permissions
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
 <PageTitle>@(_sheet?.Summary.Name ?? "Sheet") · Workbench</PageTitle>
@@ -22,6 +24,11 @@ else
         <MudIconButton Href="sheets" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Sheets" />
         <MudText Typo="Typo.h4" HtmlTag="h1">@_sheet.Summary.Name</MudText>
         <MudSpacer />
+        @if (!_access.CanEdit)
+        {
+            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Outlined.Visibility">@(_access.CanComment ? "Can comment" : "View only")</MudChip>
+        }
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
     </MudStack>
     @if (!string.IsNullOrWhiteSpace(_sheet.Summary.Description))
@@ -29,6 +36,8 @@ else
         <MudText Class="mud-text-secondary mb-4">@_sheet.Summary.Description</MudText>
     }
 
+    @* Views hide edit affordances from Viewers and Commenters; the server enforces the same rules. *@
+    <CascadingValue Value="_access">
     <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" KeepPanelsAlive="false">
         <MudTabPanel Text="Grid" Icon="@Icons.Material.Filled.GridOn">
             <SheetGridView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
@@ -52,6 +61,7 @@ else
 
     @* Collaboration: item details panel (?item={id}) and live reload when others change the sheet. *@
     <ItemDetailsDrawer Sheet="_sheet" Items="_items" Version="_liveVersion" />
+    </CascadingValue>
 }
 <SheetLiveRefresher SheetId="SheetId" Changed="OnLiveChangeAsync" />
 
@@ -63,6 +73,7 @@ else
     private IReadOnlyList<ItemDto> _items = [];
     private bool _loading = true;
     private int _liveVersion;
+    private SheetAccess _access = new(null);
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -73,6 +84,7 @@ else
         {
             _sheet = await SheetService.GetAsync(SheetId);
             _items = _sheet is null ? [] : await ItemService.ListAsync(SheetId);
+            _access = new SheetAccess(_sheet is null ? null : await Permissions.GetMyRoleAsync(SheetId));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -82,6 +94,14 @@ else
         {
             _loading = false;
         }
+    }
+
+    private async Task ShareAsync()
+    {
+        var parameters = new DialogParameters<ShareDialog> { { d => d.SheetId, SheetId } };
+        var dialog = await DialogService.ShowAsync<ShareDialog>("Share", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        await dialog.Result;
+        await LoadAsync();
     }
 
     private async Task OnLiveChangeAsync()

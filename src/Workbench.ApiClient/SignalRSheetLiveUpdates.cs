@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR.Client;
+using Workbench.ApiClient.Identity;
 using Workbench.Contracts.Collaboration;
 
 namespace Workbench.ApiClient;
@@ -14,10 +15,16 @@ public sealed class SignalRSheetLiveUpdates : ISheetLiveUpdates, IAsyncDisposabl
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<Guid, List<Func<SheetChange, Task>>> _handlers = [];
 
-    public SignalRSheetLiveUpdates(Uri serverBaseAddress)
+    public SignalRSheetLiveUpdates(Uri serverBaseAddress, IAccessTokenProvider? tokens = null)
     {
         _connection = new HubConnectionBuilder()
-            .WithUrl(new Uri(serverBaseAddress, "hubs/sheets"))
+            .WithUrl(new Uri(serverBaseAddress, "hubs/sheets"), options =>
+            {
+                if (tokens is not null)
+                {
+                    options.AccessTokenProvider = async () => await tokens.GetAccessTokenAsync(CancellationToken.None);
+                }
+            })
             .WithAutomaticReconnect()
             .Build();
         _connection.On<SheetChange>("SheetChanged", DispatchAsync);

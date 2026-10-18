@@ -56,3 +56,8 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Costpoint:Source`: `None` (default), `Csv`, `Rest` or `Database` (see `src/Workbench.Costpoint/README.md`)
 - `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)
+- `Authentication:Oidc:Authority`, `:ClientId`, `:ClientSecret`, `:Audience`, `:Scopes`: OpenID Connect sign-in (Entra ID
+  or any OIDC provider). Required outside Development; without an authority, Development uses the dev sign-in page.
+- `Authentication:Admins`: emails made administrators when they sign in (bootstrap for a new install)
+- Desktop sign-in: `WORKBENCH_OIDC_AUTHORITY`, `WORKBENCH_OIDC_CLIENT_ID` and optional `WORKBENCH_OIDC_SCOPE`
+  (a public client that allows `http://127.0.0.1` loopback redirects)
