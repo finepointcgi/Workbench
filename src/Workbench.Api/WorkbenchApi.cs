@@ -30,6 +30,7 @@ public static class WorkbenchApi
         v1.MapFinancialsEndpoints();
         v1.MapSetupEndpoints();
         v1.MapAccountingEndpoints();
+        v1.MapSecurityAdminEndpoints();
 
         return app;
     }

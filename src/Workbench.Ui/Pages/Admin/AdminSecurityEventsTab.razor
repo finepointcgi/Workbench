@@ -1,0 +1,155 @@
+@using Microsoft.JSInterop
+@using Workbench.Contracts.Security
+@inject ISecurityEventService Events
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Append-only record of sign-ins, user changes, SCIM calls, access reviews, permission denials, sensitive exports,
+    period close and settings changes (ISO 27001 A.8.15). Times are UTC. Retention is set on the Retention tab.
+</MudText>
+
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <MudGrid Spacing="2">
+        <MudItem xs="6" md="2">
+            <MudDatePicker @bind-Date="_from" Label="From" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudDatePicker @bind-Date="_to" Label="To" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string" @bind-Value="_type" Label="Event" Clearable="true" Dense="true" Margin="Margin.Dense" data-testid="event-type">
+                @foreach (var type in _types)
+                {
+                    <MudSelectItem T="string" Value="type">@type</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string" @bind-Value="_outcome" Label="Outcome" Clearable="true" Dense="true" Margin="Margin.Dense">
+                <MudSelectItem T="string" Value="@SecurityOutcomes.Success">success</MudSelectItem>
+                <MudSelectItem T="string" Value="@SecurityOutcomes.Failure">failure</MudSelectItem>
+                <MudSelectItem T="string" Value="@SecurityOutcomes.Denied">denied</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudTextField @bind-Value="_actor" Label="Actor" Clearable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudTextField @bind-Value="_text" Label="Target, detail or IP" Clearable="true" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" Class="d-flex gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SearchAsync" data-testid="events-search">Search</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="ResetAsync">Reset</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="events-export">Export CSV</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable T="SecurityEventDto" Items="_events" Loading="_busy" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Height="60vh" data-testid="events-table">
+    <HeaderContent>
+        <MudTh>When (UTC)</MudTh>
+        <MudTh>Event</MudTh>
+        <MudTh>Outcome</MudTh>
+        <MudTh>Actor</MudTh>
+        <MudTh>Target</MudTh>
+        <MudTh>Detail</MudTh>
+        <MudTh>IP</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="When" Style="white-space:nowrap">@context.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+        <MudTd DataLabel="Event"><code>@context.EventType</code></MudTd>
+        <MudTd DataLabel="Outcome">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@OutcomeColor(context.Outcome)">@context.Outcome</MudChip>
+        </MudTd>
+        <MudTd DataLabel="Actor">@context.Actor</MudTd>
+        <MudTd DataLabel="Target" Style="word-break:break-all">@context.Target</MudTd>
+        <MudTd DataLabel="Detail">@context.Detail</MudTd>
+        <MudTd DataLabel="IP">
+            <MudTooltip Text="@(context.UserAgent ?? "")">@context.IpAddress</MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No security events match.</MudText></NoRecordsContent>
+</MudTable>
+<MudText Typo="Typo.caption" Class="mud-text-secondary">Showing the newest @Limit events that match. Export includes all matches.</MudText>
+
+@code {
+    private const int Limit = 500;
+    private IReadOnlyList<SecurityEventDto> _events = [];
+    private IReadOnlyList<string> _types = [];
+    private DateTime? _from;
+    private DateTime? _to;
+    private string? _type;
+    private string? _outcome;
+    private string? _actor;
+    private string? _text;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _types = await Events.ListEventTypesAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load event types: {ex.Message}", Severity.Error);
+        }
+
+        await SearchAsync();
+    }
+
+    private SecurityEventQuery Query() =>
+        new(_from?.Date, _to?.Date.AddDays(1), _type, _actor, _outcome, _text, Limit);
+
+    private async Task SearchAsync()
+    {
+        _busy = true;
+        try
+        {
+            _events = await Events.SearchAsync(Query());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or ArgumentException)
+        {
+            Snackbar.Add($"Couldn't load events: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        _from = _to = null;
+        _type = _outcome = _actor = _text = null;
+        await SearchAsync();
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        try
+        {
+            var file = await Events.ExportCsvAsync(Query());
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/financials.js");
+            await module.InvokeVoidAsync("downloadText", file.FileName, file.ContentType, file.Content);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or JSException)
+        {
+            Snackbar.Add($"Couldn't export: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color OutcomeColor(string outcome) => outcome switch
+    {
+        SecurityOutcomes.Success => Color.Success,
+        SecurityOutcomes.Denied => Color.Warning,
+        _ => Color.Error,
+    };
+}
