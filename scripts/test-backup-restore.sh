@@ -38,7 +38,8 @@ fi
 echo "== Backup"
 cmd=(/scripts/backup-all.sh)
 tools -e BACKUP_DATABASES="$databases" -e BACKUP_CATALOG_DB="$catalog"
-run="$(ls "$work/backups" | grep '^20' | sort | tail -n 1)"
+runs=("$work"/backups/20*)
+run="$(basename "${runs[${#runs[@]}-1]}")"
 
 echo "== Restore test"
 cmd=(/scripts/restore-test.sh "/backups/$run")

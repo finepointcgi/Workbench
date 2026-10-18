@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared by backup-all.sh and restore-test.sh (source it). A manifest is what a restore must reproduce exactly:
 # the row count of every table and a fingerprint of the trial balance (SHA-256 of each GL account's posted debits and
 # credits) plus whether it balances. It holds no business data, only counts and a hash.

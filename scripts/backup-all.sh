@@ -33,12 +33,17 @@ run="$backup_dir/$stamp"
 umask 077
 
 notify() { [[ -n "${BACKUP_NOTIFY_URL:-}" ]] && curl -fsS -m 10 --retry 3 "$BACKUP_NOTIFY_URL$1" > /dev/null || true; }
-trap 'status=$?; if [[ $status -ne 0 ]]; then log "Backup FAILED (exit $status); $run is incomplete"; notify /fail; fi' EXIT
+on_exit() {
+  local status=$?
+  if [[ $status -ne 0 ]]; then log "Backup FAILED (exit $status); $run is incomplete"; notify /fail; fi
+}
+trap on_exit EXIT
 
 # Encryption: refuse to write plain dumps unless explicitly allowed.
 gpg_args=()
 if [[ -n "${BACKUP_GPG_RECIPIENT_FILE:-}" ]]; then
-  export GNUPGHOME="$(mktemp -d)"
+  GNUPGHOME="$(mktemp -d)"
+  export GNUPGHOME
   gpg --batch --quiet --import "$BACKUP_GPG_RECIPIENT_FILE"
   recipient="$(gpg --batch --with-colons --list-keys | awk -F: '/^fpr:/ { print $10; exit }')"
   gpg_args=(--batch --yes --trust-model always --encrypt --recipient "$recipient")
@@ -49,7 +54,7 @@ elif [[ "${BACKUP_ALLOW_UNENCRYPTED:-}" != "1" ]]; then
   exit 2
 fi
 
-databases=(${BACKUP_DATABASES:-})
+read -r -a databases <<< "${BACKUP_DATABASES:-}"
 if [[ -n "${BACKUP_CATALOG_DB:-}" ]]; then
   databases+=("$BACKUP_CATALOG_DB")
   tenant_template="${BACKUP_TENANT_DB_TEMPLATE:-}"
@@ -62,7 +67,8 @@ mkdir -p "$run"
 log "Backing up ${#databases[@]} database(s) to $run"
 
 backup_one() {
-  local db="$1" snapshot="" line plain="$run/.$db.dump"
+  local db="$1" snapshot="" line
+  local plain="$run/.$db.dump"
   # Hold a repeatable-read transaction open, export its snapshot, describe the data in it, and let pg_dump dump the
   # very same snapshot: the manifest then matches the dump exactly, even while users keep working.
   coproc PSQL { psql -X -q -A -t -F $'\t' -v ON_ERROR_STOP=1 -d "$db"; }
