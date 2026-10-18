@@ -38,7 +38,7 @@ else
                     {
                         var onHold = _vendors.FirstOrDefault(v => v.Id == d.Bill.VendorId)?.Status != VendorState.Active;
                         <tr>
-                            <td><MudCheckBox T="bool" Value="_selected.ContainsKey(d.Bill.Id)" ValueChanged="@(v => Toggle(d, v))" Disabled="@(onHold || d.Available <= 0)" Dense="true" /></td>
+                            <td><MudCheckBox T="bool" Value="_selected.ContainsKey(d.Bill.Id)" aria-label="@($"Pay bill {d.Bill.Number}")" ValueChanged="@(v => Toggle(d, v))" Disabled="@(onHold || d.Available <= 0)" Dense="true" /></td>
                             <td><MudLink Href="@($"purchasing/bills/{d.Bill.Id}")">@d.Bill.Number</MudLink></td>
                             <td>@d.Bill.VendorCode @(onHold ? "(on hold)" : "")</td>
                             <td>@d.Bill.InvoiceNumber</td>
@@ -48,7 +48,7 @@ else
                             <td>
                                 @if (_selected.ContainsKey(d.Bill.Id))
                                 {
-                                    <MudNumericField T="decimal" Value="_selected[d.Bill.Id]" ValueChanged="@(v => _selected[d.Bill.Id] = v)" Format="N2" Min="0.01m" Max="d.Available" Margin="Margin.Dense" />
+                                    <MudNumericField T="decimal" Value="_selected[d.Bill.Id]" aria-label="@($"Amount to pay, bill {d.Bill.Number}")" ValueChanged="@(v => _selected[d.Bill.Id] = v)" Format="N2" Min="0.01m" Max="d.Available" Margin="Margin.Dense" />
                                 }
                             </td>
                         </tr>

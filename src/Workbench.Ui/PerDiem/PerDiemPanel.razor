@@ -86,7 +86,7 @@
                         <td>
                             @if (!last)
                             {
-                                <MudNumericField T="decimal" @bind-Value="day.Lodging" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:120px" />
+                                <MudNumericField T="decimal" @bind-Value="day.Lodging" aria-label="@($"Lodging, {date:ddd MMM d}")" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:120px" />
                             }
                             else
                             {
@@ -98,7 +98,7 @@
                             <td>
                                 @if (!last)
                                 {
-                                    <MudNumericField T="decimal" @bind-Value="day.Tax" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:110px" />
+                                    <MudNumericField T="decimal" @bind-Value="day.Tax" aria-label="@($"Lodging tax, {date:ddd MMM d}")" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:110px" />
                                 }
                             </td>
                         }
@@ -108,12 +108,12 @@
                             <MudCheckBox T="bool" @bind-Value="day.Dinner" Label="D" Dense="true" Size="Size.Small" />
                         </td>
                         <td>
-                            <MudNumericField T="decimal?" @bind-Value="day.Mie" Min="0" Format="N2" Placeholder="Allowable" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:120px" />
+                            <MudNumericField T="decimal?" @bind-Value="day.Mie" aria-label="@($"Meals and incidentals, {date:ddd MMM d}")" Min="0" Format="N2" Placeholder="Allowable" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:120px" />
                         </td>
                         <td>
                             @if (!last)
                             {
-                                <MudTextField T="string" @bind-Value="day.Justification" Variant="Variant.Text" Placeholder="Only needed above the maximum" />
+                                <MudTextField T="string" @bind-Value="day.Justification" aria-label="@($"Justification, {date:ddd MMM d}")" Variant="Variant.Text" Placeholder="Only needed above the maximum" />
                             }
                         </td>
                     </tr>

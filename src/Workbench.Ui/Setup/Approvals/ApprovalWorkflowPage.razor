@@ -13,7 +13,7 @@
 }
 else if (_workflow is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -36,8 +36,8 @@ else
                     <MudItem xs="6" sm="5" Class="d-flex align-center justify-end">
                         @if (_workflow.CanEdit)
                         {
-                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="index == 0" OnClick="() => Move(index, -1)" title="Move up" />
-                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="index == _steps.Count - 1" OnClick="() => Move(index, 1)" title="Move down" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Disabled="index == 0" OnClick="() => Move(index, -1)" title="Move up" aria-label="Move step up" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Disabled="index == _steps.Count - 1" OnClick="() => Move(index, 1)" title="Move down" aria-label="Move step down" />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_steps.Count == 1" OnClick="() => _steps.RemoveAt(index)" title="Remove step" />
                         }
                     </MudItem>
@@ -82,7 +82,7 @@ else
                     <MudItem xs="12">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudText Typo="Typo.subtitle2">Applies</MudText>
-                            <MudSelect T="ConditionMatch" @bind-Value="step.Match" Dense="true" Style="max-width:260px" ReadOnly="!_workflow.CanEdit" Disabled="step.Conditions.Count < 2">
+                            <MudSelect T="ConditionMatch" @bind-Value="step.Match" aria-label="Condition matching" Dense="true" Style="max-width:260px" ReadOnly="!_workflow.CanEdit" Disabled="step.Conditions.Count < 2">
                                 <MudSelectItem Value="ConditionMatch.All">when all conditions match</MudSelectItem>
                                 <MudSelectItem Value="ConditionMatch.Any">when any condition matches</MudSelectItem>
                             </MudSelect>
@@ -95,7 +95,7 @@ else
                         {
                             <MudGrid Spacing="2" Class="mt-1">
                                 <MudItem xs="12" sm="5">
-                                    <MudSelect T="ApprovalConditionKind" @bind-Value="condition.Kind" Dense="true" ReadOnly="!_workflow.CanEdit">
+                                    <MudSelect T="ApprovalConditionKind" @bind-Value="condition.Kind" aria-label="Condition" Dense="true" ReadOnly="!_workflow.CanEdit">
                                         @foreach (var kind in Enum.GetValues<ApprovalConditionKind>())
                                         {
                                             <MudSelectItem Value="kind">@ApprovalText.Condition(kind)</MudSelectItem>

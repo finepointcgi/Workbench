@@ -55,9 +55,13 @@
                 }
             </ChildContent>
             <ItemRenderer>
-                <BoardCard Item="context" Person="@PersonOf(context)" Today="Today" OnOpen="Open" />
+                <BoardCard Item="context" Person="@PersonOf(context)" Today="Today" OnOpen="Open" Href="@($"sheets/{SheetId}?item={context.Id}")"
+                           Lanes="@(CanEdit ? Lanes : [])" CurrentLane="@(_laneColumn is null ? null : BoardLanes.ValueOf(context, _laneColumn))"
+                           OnMove="m => MoveToLaneAsync(m.Item, m.LaneValue)" TakeFocus="@(context.Id == _focusItemId)" />
             </ItemRenderer>
         </MudDropContainer>
+        @* Announces keyboard and drag moves to screen readers. *@
+        <div class="wb-sr-only" role="status" aria-live="polite" data-testid="board-status">@_announcement</div>
     }
 </div>
 
@@ -73,6 +77,8 @@
     private MudDropContainer<ItemDto>? _container;
     // The drop zones cache their items, so they are refreshed whenever the lanes change.
     private bool _lanesChanged;
+    private string _announcement = "";
+    private Guid? _focusItemId;
 
     private IEnumerable<ColumnDto> DropdownColumns =>
         Sheet.Columns.Where(c => c.Type == ColumnKind.Dropdown).OrderBy(c => c.Order);
@@ -96,6 +102,7 @@
 
     protected override void OnAfterRender(bool firstRender)
     {
+
         if (_lanesChanged && _container is not null)
         {
             _lanesChanged = false;
@@ -105,6 +112,7 @@
 
     private void SetLeavesOnly(bool value)
     {
+        _focusItemId = null;
         _leavesOnly = value;
         _lanesChanged = true;
     }
@@ -118,6 +126,7 @@
 
     private void SelectLaneColumn(Guid columnId)
     {
+        _focusItemId = null;
         _chosenColumnId = columnId;
         _laneColumn = DropdownColumns.FirstOrDefault(c => c.Id == columnId) ?? _laneColumn;
         _lanesChanged = true;
@@ -132,8 +141,12 @@
             return;
         }
 
-        var value = zone[LanePrefix.Length..];
-        if (BoardLanes.ValueOf(item, _laneColumn) == value)
+        await MoveToLaneAsync(item, zone[LanePrefix.Length..]);
+    }
+
+    private async Task MoveToLaneAsync(ItemDto item, string value)
+    {
+        if (_laneColumn is null || BoardLanes.ValueOf(item, _laneColumn) == value)
         {
             return;
         }
@@ -151,6 +164,9 @@
         {
             await ItemService.UpdateAsync(SheetId, item.Id,
                 new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values));
+            _announcement = $"Moved {item.Title} to {Lanes.FirstOrDefault(l => l.Value == value)?.Label ?? value}.";
+            _focusItemId = item.Id;
+            _lanesChanged = true;
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)

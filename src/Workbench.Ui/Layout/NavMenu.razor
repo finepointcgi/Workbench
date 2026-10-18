@@ -6,7 +6,7 @@
 @inject IServiceProvider Services
 @inject NavigationManager Navigation
 
-<MudNavMenu Class="pt-2" data-testid="nav-menu">
+<MudNavMenu Class="pt-2" data-testid="nav-menu" aria-label="Main menu">
     @foreach (var section in NavCatalog.Sections)
     {
         var entries = NavCatalog.MenuEntries(_access).Where(e => e.Section == section.Key).ToList();

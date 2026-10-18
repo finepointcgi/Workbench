@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
@@ -48,6 +49,7 @@ public sealed class GanttViewTests
         Assert.Single(view.FindAll($".gantt-summary[data-item='{phase.Id}']"));
         Assert.Single(view.FindAll($".gantt-milestone.critical[data-item='{kickoff.Id}']"));
         Assert.Single(view.FindAll($".gantt-task.critical[data-item='{design.Id}']"));
+        A11yAssert.Check(view);
         Assert.DoesNotContain("critical", view.Find($".gantt-task[data-item='{docs.Id}']").ClassName);
         Assert.Single(view.FindAll(".gantt-today"));
         Assert.Contains("Critical path: 2 tasks", view.Markup);

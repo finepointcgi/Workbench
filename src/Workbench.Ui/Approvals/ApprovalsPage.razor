@@ -6,7 +6,8 @@
 
 <PageTitle>Approvals · Workbench</PageTitle>
 
-<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Approvals</MudText>
+@* Focus returns here after a decision removes the row whose button had it (WCAG 2.4.3). *@
+<h1 class="mud-typography mud-typography-h4 mb-1" tabindex="-1" @ref="_heading">Approvals</h1>
 <MudText Class="mud-text-secondary mb-4">
     Everything waiting on you (or on someone you're standing in for), across timesheets, expenses, ODCs, purchasing,
     bills, invoices and journal entries. The module pages still work:
@@ -18,7 +19,7 @@
     <MudTabPanel Text="@($"Waiting on me ({_items?.Count ?? 0})")">
         @if (_items is null)
         {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
         }
         else if (_items.Count == 0)
         {
@@ -31,7 +32,7 @@
             @* Wide windows: a compact table whose action column never scrolls away. Below 960px (Sm and smaller) each row becomes
                a card (MudTable's DataLabel layout), with the actions full width at the bottom. *@
             <div class="wb-inbox-host">
-            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="wb-inbox" data-testid="inbox">
+            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="wb-inbox" data-testid="inbox" aria-label="Approvals waiting on me">
                 <HeaderContent>
                     <MudTh>What</MudTh>
                     <MudTh>From</MudTh>
@@ -58,11 +59,11 @@
                     <MudTd DataLabel="Waiting" Style="white-space:nowrap">@(context.BusinessDaysWaiting == 0 ? "Today" : context.BusinessDaysWaiting == 1 ? "1 business day" : $"{context.BusinessDaysWaiting} business days")</MudTd>
                     <MudTd DataLabel="Decide" Class="wb-inbox-actions">
                         <div class="d-flex flex-wrap gap-1 justify-end">
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="() => ApproveAsync(context)" data-testid="approve">Approve</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="() => ApproveAsync(context)" data-testid="approve" aria-label="@($"Approve {context.Title}")">Approve</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Return)" data-testid="return"
-                                       title="Send it back so the submitter can fix it">Return</MudButton>
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Reject)" data-testid="reject">Reject</MudButton>
-                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.History" title="Approval history" aria-label="Approval history" OnClick="() => HistoryAsync(context)" />
+                                       title="Send it back so the submitter can fix it" aria-label="@($"Return {context.Title}")">Return</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => DecideWithReasonAsync(context, ApprovalDecisionKind.Reject)" data-testid="reject" aria-label="@($"Reject {context.Title}")">Reject</MudButton>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.History" title="Approval history" aria-label="@($"Approval history, {context.Title}")" OnClick="() => HistoryAsync(context)" />
                         </div>
                     </MudTd>
                 </RowTemplate>
@@ -160,6 +161,18 @@
         }
     }
 
+    private ElementReference _heading;
+    private bool _refocus;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_refocus)
+        {
+            _refocus = false;
+            await _heading.FocusAsync();
+        }
+    }
+
     private async Task RunAsync(ApprovalInboxItemDto item, ApprovalDecisionRequest request, string done)
     {
         _busy = true;
@@ -168,6 +181,7 @@
             await Inbox.DecideAsync(item.DocumentType, item.DocumentId, request);
             Snackbar.Add($"{done}: {item.Title}", Severity.Success);
             await LoadAsync();
+            _refocus = true;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
         {

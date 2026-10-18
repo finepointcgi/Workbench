@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using MudBlazor.Services;
@@ -61,6 +62,7 @@ public sealed class TimesheetGridTests
         Assert.Equal("16", grid.Find("[data-testid='grand-total']").TextContent.Trim());
         // Future days can't be entered.
         Assert.True(grid.Find("[data-testid='cell-1001.01-2026-10-23']").HasAttribute("disabled"));
+        A11yAssert.Check(grid);
     }
 
     [Fact]

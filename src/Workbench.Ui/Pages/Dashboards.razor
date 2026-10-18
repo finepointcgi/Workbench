@@ -16,7 +16,7 @@
 
 @if (_loading && _dashboards.Count == 0)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else if (_dashboards.Count == 0)
 {
