@@ -1,0 +1,171 @@
+@* Create or edit an employee. Validates on the client, then calls Save; a service error shows inline. *@
+<MudForm @ref="_form" @bind-IsValid="_valid">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="_number" Label="Employee number" Required="true" RequiredError="Employee number is required."
+                          Immediate="true" data-testid="employee-number" />
+        </MudItem>
+        <MudItem xs="12" sm="8">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true"
+                          data-testid="employee-name" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_email" Label="Email" Required="true" RequiredError="Email is required." Immediate="true"
+                          Validation="@(new Func<string?, string?>(ValidateEmail))" InputType="InputType.Email"
+                          HelperText="Matches the person's sign-in account." data-testid="employee-email" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" @bind-Value="_orgUnitId" Label="Org unit" Clearable="true">
+                @foreach (var (unit, depth) in SetupFormat.Flatten(OrgUnits, o => o.Id, o => o.ParentId, o => o.Code))
+                {
+                    <MudSelectItem T="Guid?" Value="unit.Id">@(new string(' ', depth * 2))@unit.Code · @unit.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" @bind-Value="_supervisorId" Label="Supervisor" Clearable="true"
+                       HelperText="Approves timesheets and expenses." data-testid="employee-supervisor">
+                @foreach (var e in Employees.Where(e => e.Id != Employee?.Id))
+                {
+                    <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName (@e.EmployeeNumber)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" @bind-Value="_laborCategoryId" Label="Default labor category" Clearable="true">
+                @foreach (var c in LaborCategories.Where(c => c.IsActive || c.Id == _laborCategoryId))
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudNumericField T="decimal" @bind-Value="_hours" Label="Standard hours per week" Min="0" Max="80"
+                             Validation="@(new Func<decimal, string?>(ValidateHours))" Immediate="true" data-testid="employee-hours" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudDatePicker @bind-Date="_hireDate" Label="Hire date" Required="true" RequiredError="Hire date is required."
+                           DateFormat="yyyy-MM-dd" Editable="true" data-testid="employee-hire" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudDatePicker @bind-Date="_terminationDate" Label="Termination date" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                           Validation="@(new Func<DateTime?, string?>(ValidateTermination))" data-testid="employee-termination" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudSwitch @bind-Value="_exempt" Label="Exempt (salaried, FLSA)" Color="Color.Primary" />
+        </MudItem>
+    </MudGrid>
+</MudForm>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3" data-testid="employee-error">@_error</MudAlert>
+}
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+    @if (OnCancel.HasDelegate)
+    {
+        <MudButton OnClick="OnCancel">Cancel</MudButton>
+    }
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving" OnClick="SubmitAsync" data-testid="employee-save">
+        @(Employee is null ? "Create employee" : "Save")
+    </MudButton>
+</MudStack>
+
+@code {
+    /// <summary>The employee being edited, or null for a new one.</summary>
+    [Parameter]
+    public EmployeeDto? Employee { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<EmployeeDto> Employees { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<OrgUnitDto> OrgUnits { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<LaborCategoryDto> LaborCategories { get; set; } = [];
+
+    /// <summary>Saves the request; throw to show the error in the form.</summary>
+    [Parameter, EditorRequired]
+    public Func<SaveEmployeeRequest, Task> Save { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private MudForm _form = default!;
+    private bool _valid;
+    private bool _saving;
+    private string? _error;
+    private Guid? _loadedFor = Guid.Empty;
+
+    private string? _number;
+    private string? _name;
+    private string? _email;
+    private Guid? _orgUnitId;
+    private Guid? _supervisorId;
+    private Guid? _laborCategoryId;
+    private decimal _hours = 40m;
+    private DateTime? _hireDate;
+    private DateTime? _terminationDate;
+    private bool _exempt = true;
+
+    protected override void OnParametersSet()
+    {
+        if (_loadedFor == Employee?.Id)
+        {
+            return;
+        }
+
+        _loadedFor = Employee?.Id;
+        _error = null;
+        var e = Employee;
+        _number = e?.EmployeeNumber;
+        _name = e?.DisplayName;
+        _email = e?.Email;
+        _orgUnitId = e?.OrgUnitId;
+        _supervisorId = e?.SupervisorId;
+        _laborCategoryId = e?.DefaultLaborCategoryId;
+        _hours = e?.StandardHoursPerWeek ?? 40m;
+        _hireDate = e is null ? DateTime.Today : SetupFormat.ToDateTime(e.HireDate);
+        _terminationDate = SetupFormat.ToDateTime(e?.TerminationDate);
+        _exempt = e?.IsExempt ?? true;
+    }
+
+    internal static string? ValidateEmail(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null
+        : System.Text.RegularExpressions.Regex.IsMatch(value.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$") ? null
+        : "Enter a valid email address.";
+
+    private static string? ValidateHours(decimal value) =>
+        value is > 0 and <= 80 ? null : "Standard hours must be more than 0 and at most 80.";
+
+    private string? ValidateTermination(DateTime? value) =>
+        value is { } end && _hireDate is { } start && end.Date < start.Date ? "Termination date can't be before the hire date." : null;
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await Save(new SaveEmployeeRequest(
+                _number!.Trim(), _email!.Trim(), _name!.Trim(), _orgUnitId, _supervisorId, _laborCategoryId,
+                SetupFormat.ToDateOnly(_hireDate)!.Value, SetupFormat.ToDateOnly(_terminationDate), _hours, _exempt));
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

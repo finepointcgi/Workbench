@@ -1,0 +1,7 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0"
+         Color="@(Status switch { ContractState.Active => Color.Success, ContractState.Pending => Color.Info, _ => Color.Default })">@Status</MudChip>
+
+@code {
+    [Parameter]
+    public ContractState Status { get; set; }
+}

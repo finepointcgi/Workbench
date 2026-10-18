@@ -1,0 +1,129 @@
+@page "/setup/people"
+@inject IPeopleService People
+@inject ISnackbar Snackbar
+
+<PageTitle>People · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="People" Subtitle="Employees, their supervisors, labor categories and effective-dated cost rates.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="NewEmployee"
+               data-testid="new-employee">New employee</MudButton>
+</SetupHeader>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6" lg="5">
+        <MudDataGrid T="EmployeeDto" Items="Filtered" Loading="_loading" Dense="true" Hover="true" RowClick="@(a => Select(a.Item))"
+                     RowClassFunc="@((e, _) => e.Id == _selected?.Id ? "mud-selected-item" : "")" Style="cursor:pointer">
+            <ToolBarContent>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="flex-grow-1">
+                    <MudTextField @bind-Value="_search" Placeholder="Search name, number or email" Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" Style="min-width:200px" />
+                    <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Style="max-width:140px">
+                        <MudSelectItem T="string" Value="@("Active")">Active</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Inactive")">Inactive</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("All")">All</MudSelectItem>
+                    </MudSelect>
+                </MudStack>
+            </ToolBarContent>
+            <Columns>
+                <PropertyColumn Property="e => e.EmployeeNumber" Title="Number" />
+                <PropertyColumn Property="e => e.DisplayName" Title="Name" />
+                <TemplateColumn Title="Org unit" SortBy="@(e => OrgUnitCode(e.OrgUnitId))">
+                    <CellTemplate>@OrgUnitCode(context.Item.OrgUnitId)</CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Status" Sortable="false">
+                    <CellTemplate>
+                        @if (IsActive(context.Item))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Active</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Inactive</MudChip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <NoRecordsContent>
+                <MudText>No employees match.</MudText>
+            </NoRecordsContent>
+        </MudDataGrid>
+    </MudItem>
+    <MudItem xs="12" md="6" lg="7">
+        @if (_editing)
+        {
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_selected is null ? "New employee" : _selected.DisplayName)</MudText>
+                <EmployeeEditor Employee="_selected" Employees="_employees" OrgUnits="_orgUnits" LaborCategories="_categories"
+                                Save="SaveAsync" OnCancel="() => _editing = _selected is not null" />
+            </MudPaper>
+            @if (_selected is not null)
+            {
+                <CostRatePanel EmployeeId="_selected.Id" />
+            }
+        }
+        else
+        {
+            <MudPaper Outlined="true" Class="pa-6">
+                <MudText Class="mud-text-secondary">Select an employee to edit them and their cost rates, or create a new one.</MudText>
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private IReadOnlyList<OrgUnitDto> _orgUnits = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private EmployeeDto? _selected;
+    private bool _editing;
+    private bool _loading = true;
+    private string? _search;
+    private string _status = "Active";
+
+    private IEnumerable<EmployeeDto> Filtered => _employees.Where(e =>
+        (_status == "All" || IsActive(e) == (_status == "Active"))
+        && (string.IsNullOrWhiteSpace(_search)
+            || e.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || e.EmployeeNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || e.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _orgUnits = await People.ListOrgUnitsAsync();
+        _categories = await People.ListLaborCategoriesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _employees = await People.ListEmployeesAsync(includeInactive: true);
+        _loading = false;
+    }
+
+    private static bool IsActive(EmployeeDto e) => e.TerminationDate is not { } end || end >= DateOnly.FromDateTime(DateTime.Today);
+
+    private string OrgUnitCode(Guid? id) => _orgUnits.FirstOrDefault(o => o.Id == id)?.Code ?? "";
+
+    private void Select(EmployeeDto employee)
+    {
+        _selected = employee;
+        _editing = true;
+    }
+
+    private void NewEmployee()
+    {
+        _selected = null;
+        _editing = true;
+    }
+
+    private async Task SaveAsync(SaveEmployeeRequest request)
+    {
+        var saved = _selected is null
+            ? await People.CreateEmployeeAsync(request)
+            : await People.UpdateEmployeeAsync(_selected.Id, request);
+        Snackbar.Add(_selected is null ? $"Created {saved.DisplayName}. Add a cost rate next." : $"Saved {saved.DisplayName}.", Severity.Success);
+        await LoadAsync();
+        _selected = _employees.FirstOrDefault(e => e.Id == saved.Id) ?? saved;
+    }
+}

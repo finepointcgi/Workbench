@@ -1,0 +1,64 @@
+@page "/setup/projects"
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject NavigationManager Navigation
+
+<PageTitle>Projects · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Projects" Subtitle="Projects, their WBS and charge codes, who may charge them, and the plan sheet that mirrors the WBS.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="setup/projects/new">New project</MudButton>
+</SetupHeader>
+
+<MudDataGrid T="ProjectDto" Items="_projects" Loading="_loading" Dense="true" Hover="true" QuickFilter="Matches"
+             RowClick="@(a => Navigation.NavigateTo($"setup/projects/{a.Item.Id}"))" Style="cursor:pointer">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search" Placeholder="Search code or name" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="p => p.Code">
+            <CellTemplate><MudLink Href="@($"setup/projects/{context.Item.Id}")" Typo="Typo.body2">@context.Item.Code</MudLink></CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="p => p.Name" />
+        <PropertyColumn Property="p => p.ContractNumber" Title="Contract" />
+        <TemplateColumn Title="PM" SortBy="@(p => PmName(p.ProjectManagerId))">
+            <CellTemplate>@PmName(context.Item.ProjectManagerId)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Status" SortBy="@(p => p.Status)">
+            <CellTemplate><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0">@SetupFormat.Label(context.Item.Status)</MudChip></CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Dates" SortBy="@(p => p.Start)">
+            <CellTemplate>@SetupFormat.Date(context.Item.Start) – @SetupFormat.Date(context.Item.Finish)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Plan" Sortable="false">
+            <CellTemplate>
+                @if (context.Item.SheetId is { } sheetId)
+                {
+                    <MudLink Href="@($"sheets/{sheetId}")" Typo="Typo.body2">Plan sheet</MudLink>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent><MudText>No projects yet.</MudText></NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private bool _loading = true;
+    private string? _search;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _employees = await People.ListEmployeesAsync(includeInactive: true);
+        _projects = await Projects.ListProjectsAsync();
+        _loading = false;
+    }
+
+    private string PmName(Guid? id) => _employees.FirstOrDefault(e => e.Id == id)?.DisplayName ?? "";
+
+    private bool Matches(ProjectDto p) =>
+        string.IsNullOrWhiteSpace(_search)
+        || p.Code.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase);
+}
