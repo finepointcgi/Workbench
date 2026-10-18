@@ -1,0 +1,84 @@
+@page "/expenses"
+@using Workbench.Contracts.Odcs
+@using Workbench.Ui.Odcs
+@inject IExpenseReportService Reports
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Expenses · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">My expense reports</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">New report</MudButton>
+</MudStack>
+
+<MudTable T="ExpenseReportDto" Items="_reports" Loading="_loading" Hover="true" Dense="true" OnRowClick="@(e => { if (e.Item is { } r) Open(r); })" Style="cursor:pointer">
+    <HeaderContent>
+        <MudTh>Title</MudTh>
+        <MudTh>Trip</MudTh>
+        <MudTh Style="text-align:right">Lines</MudTh>
+        <MudTh Style="text-align:right">Total</MudTh>
+        <MudTh Style="text-align:right">Allowable</MudTh>
+        <MudTh>Status</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Title"><MudLink Href="@($"expenses/{context.Id}")">@context.Title</MudLink></MudTd>
+        <MudTd DataLabel="Trip">@TripText(context)</MudTd>
+        <MudTd DataLabel="Lines" Style="text-align:right">@context.LineCount</MudTd>
+        <MudTd DataLabel="Total" Style="text-align:right">@OdcFormat.Money(context.Total)</MudTd>
+        <MudTd DataLabel="Allowable" Style="text-align:right">@OdcFormat.Money(context.AllowableTotal)</MudTd>
+        <MudTd DataLabel="Status"><OdcStatusChip Status="context.Status" /></MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>No expense reports yet. Create one for your next trip.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<ExpenseReportDto> _reports = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports = await Reports.ListMyReportsAsync();
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load expense reports: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    internal static string TripText(ExpenseReportDto r) => (r.TripStart, r.TripEnd) switch
+    {
+        ({ } s, { } e) => $"{s:MMM d} – {e:MMM d, yyyy}",
+        ({ } s, null) => $"{s:MMM d, yyyy}",
+        _ => "",
+    };
+
+    private void Open(ExpenseReportDto report) => Navigation.NavigateTo($"expenses/{report.Id}");
+
+    private async Task CreateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ExpenseReportDialog>("New expense report", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveExpenseReportRequest request })
+        {
+            try
+            {
+                var report = await Reports.CreateReportAsync(request);
+                Open(report);
+            }
+            catch (Exception ex) when (OdcFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+}

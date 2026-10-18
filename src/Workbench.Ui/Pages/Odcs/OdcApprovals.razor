@@ -1,0 +1,274 @@
+@page "/odcs/approvals"
+@using Workbench.Contracts.Odcs
+@using Workbench.Ui.Odcs
+@inject IOdcApprovalService Approvals
+@inject IOdcService Odcs
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>ODC approvals · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">ODC and expense approvals</MudText>
+
+<MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" ActivePanelIndexChanged="OnTabChangedAsync">
+    <MudTabPanel Text="@($"Waiting for me ({Count(_queue)})")">
+        @Body(_queue, pending: true)
+    </MudTabPanel>
+    <MudTabPanel Text="Approved by me">
+        @Body(_approved, pending: false)
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private OdcApprovalQueueDto? _queue;
+    private OdcApprovalQueueDto? _approved;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static int Count(OdcApprovalQueueDto? q) => q is null ? 0 : q.Reports.Count + q.VendorOdcs.Count;
+
+    private async Task OnTabChangedAsync(int index)
+    {
+        if (index == 1 && _approved is null)
+        {
+            await LoadApprovedAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _queue = await Approvals.GetMyQueueAsync();
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load your queue: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadApprovedAsync()
+    {
+        try
+        {
+            _approved = await Approvals.ListMyApprovedAsync();
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load approved items: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+        if (_approved is not null)
+        {
+            await LoadApprovedAsync();
+        }
+    }
+
+    private Task ApproveReportAsync(ExpenseReportDto r) => RunAsync(() => Approvals.ApproveReportAsync(r.Id), $"Approved \"{r.Title}\".");
+
+    private async Task RejectReportAsync(ExpenseReportDto r)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reject expense report", "Reject", $"Tell {r.EmployeeName} what to fix in \"{r.Title}\".", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Approvals.RejectReportAsync(r.Id, reason), $"Rejected \"{r.Title}\".");
+        }
+    }
+
+    private async Task ReopenReportAsync(ExpenseReportDto r)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reopen expense report", "Reopen", "The report goes back to draft so it can be corrected. The reason is kept in the audit log.") is { } reason)
+        {
+            await RunAsync(() => Approvals.ReopenReportAsync(r.Id, reason), $"Reopened \"{r.Title}\".");
+        }
+    }
+
+    private Task ApproveOdcAsync(OdcEntryDto o) => RunAsync(() => Approvals.ApproveOdcAsync(o.Id), $"Approved {o.Vendor} {OdcFormat.Money(o.Amount)}.");
+
+    private async Task RejectOdcAsync(OdcEntryDto o)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reject ODC", "Reject", $"Tell {o.SubmittedBy} what to fix.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Approvals.RejectOdcAsync(o.Id, reason), $"Rejected {o.Vendor} {OdcFormat.Money(o.Amount)}.");
+        }
+    }
+
+    private async Task ReopenOdcAsync(OdcEntryDto o)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reopen ODC", "Reopen", "The ODC goes back to draft so it can be corrected. The reason is kept in the audit log.") is { } reason)
+        {
+            await RunAsync(() => Approvals.ReopenOdcAsync(o.Id, reason), "Reopened.");
+        }
+    }
+
+    private async Task ToggleUnallowableAsync(OdcEntryDto o)
+    {
+        if (o.IsUnallowable)
+        {
+            await RunAsync(() => Approvals.SetUnallowableAsync(o.Id, false, null), "Marked allowable.");
+        }
+        else if (await ReasonDialog.AskAsync(DialogService, "Mark unallowable", "Mark unallowable", "Unallowable costs (FAR 31.205) are kept on record but left out of allowable totals.",
+                     label: "Reason (e.g. Alcohol, FAR 31.205-51)", color: Color.Warning) is { } reason)
+        {
+            await RunAsync(() => Approvals.SetUnallowableAsync(o.Id, true, reason), "Marked unallowable.");
+        }
+    }
+
+    private RenderFragment Body(OdcApprovalQueueDto? queue, bool pending) => __builder =>
+    {
+        if (queue is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+            return;
+        }
+
+        <MudText Typo="Typo.h6" Class="mb-2">Expense reports</MudText>
+        if (queue.Reports.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@(pending ? "No expense reports waiting for you." : "Nothing here yet.")</MudText>
+        }
+
+        foreach (var detail in queue.Reports)
+        {
+            var r = detail.Report;
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <div>
+                        <MudText Typo="Typo.subtitle1"><b>@r.Title</b> · @r.EmployeeName</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @Expenses.TripText(r) @(r.Purpose is null ? "" : $"· {r.Purpose}")
+                            · @OdcFormat.Money(r.Total) (allowable @OdcFormat.Money(r.AllowableTotal))
+                        </MudText>
+                    </div>
+                    <MudSpacer />
+                    @if (pending)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="() => RejectReportAsync(r)" Disabled="_busy">Reject</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="() => ApproveReportAsync(r)" Disabled="_busy">Approve</MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Approved @r.ApprovedAtUtc?.ToString("yyyy-MM-dd")</MudText>
+                        <MudButton Variant="Variant.Outlined" OnClick="() => ReopenReportAsync(r)" Disabled="_busy">Reopen</MudButton>
+                    }
+                </MudStack>
+                @Lines(detail.Lines, pending)
+            </MudPaper>
+        }
+
+        <MudText Typo="Typo.h6" Class="mb-2 mt-4">Vendor ODCs</MudText>
+        if (queue.VendorOdcs.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@(pending ? "No vendor ODCs waiting for you." : "Nothing here yet.")</MudText>
+        }
+        else
+        {
+            <MudTable T="OdcEntryDto" Items="queue.VendorOdcs" Dense="true" Elevation="0" Outlined="true">
+                <HeaderContent>
+                    <MudTh>Project</MudTh>
+                    <MudTh>Date</MudTh>
+                    <MudTh>Type</MudTh>
+                    <MudTh>Vendor / invoice</MudTh>
+                    <MudTh>Description</MudTh>
+                    <MudTh Style="text-align:right">Amount</MudTh>
+                    <MudTh>Receipt</MudTh>
+                    <MudTh>Entered by</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><MudLink Href="@($"projects/{context.ProjectId}/odcs")">@context.ProjectCode</MudLink> · @context.WbsCode</MudTd>
+                    <MudTd>@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
+                    <MudTd>@context.Type</MudTd>
+                    <MudTd>@context.Vendor · @context.InvoiceNumber</MudTd>
+                    <MudTd>@context.Description @UnallowableChip(context)</MudTd>
+                    <MudTd Style="text-align:right">@OdcFormat.Money(context.Amount)</MudTd>
+                    <MudTd>@Receipt(context)</MudTd>
+                    <MudTd>@context.SubmittedBy</MudTd>
+                    <MudTd Style="white-space:nowrap">
+                        @if (pending)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="() => ToggleUnallowableAsync(context)" Disabled="_busy">
+                                @(context.IsUnallowable ? "Allowable" : "Unallowable")
+                            </MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="() => RejectOdcAsync(context)" Disabled="_busy">Reject</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="() => ApproveOdcAsync(context)" Disabled="_busy">Approve</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ReopenOdcAsync(context)" Disabled="_busy">Reopen</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    };
+
+    private RenderFragment Lines(IReadOnlyList<OdcEntryDto> lines, bool pending) => __builder =>
+    {
+        <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+            <thead>
+                <tr><th>Date</th><th>Type</th><th>Charge code</th><th>Description</th><th style="text-align:right">Amount</th><th>Receipt</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var line in lines)
+                {
+                    <tr>
+                        <td>@line.IncurredOn.ToString("yyyy-MM-dd")</td>
+                        <td>@line.Type</td>
+                        <td>@line.WbsCode</td>
+                        <td>@line.Description @(line.Vendor is null ? "" : $"· {line.Vendor}") @UnallowableChip(line)</td>
+                        <td style="text-align:right">@OdcFormat.Money(line.Amount)</td>
+                        <td>@Receipt(line)</td>
+                        <td>
+                            @if (pending)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="() => ToggleUnallowableAsync(line)" Disabled="_busy">
+                                    @(line.IsUnallowable ? "Allowable" : "Unallowable")
+                                </MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    };
+
+    private RenderFragment UnallowableChip(OdcEntryDto o) => __builder =>
+    {
+        if (o.IsUnallowable)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" title="@o.UnallowableReason">Unallowable: @o.UnallowableReason</MudChip>
+        }
+    };
+
+    private RenderFragment Receipt(OdcEntryDto o) => __builder =>
+    {
+        if (o.ReceiptFileId is not null)
+        {
+            <MudLink Href="@Odcs.GetReceiptUrl(o.Id)" Typo="Typo.body2" download="@o.ReceiptFileName">@o.ReceiptFileName</MudLink>
+        }
+        else
+        {
+            <span class="mud-text-secondary">None</span>
+        }
+    };
+}

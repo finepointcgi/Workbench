@@ -1,0 +1,44 @@
+<MudDialog>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">@Message</MudText>
+        }
+        <MudTextField @bind-Value="_reason" Label="@Label" Required="@Required" Lines="3" AutoFocus="true" Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="@ConfirmColor" Variant="Variant.Filled" Disabled="@(Required && string.IsNullOrWhiteSpace(_reason))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_reason?.Trim() ?? string.Empty))">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string Label { get; set; } = "Reason";
+    [Parameter] public bool Required { get; set; } = true;
+    [Parameter] public string ConfirmText { get; set; } = "OK";
+    [Parameter] public Color ConfirmColor { get; set; } = Color.Primary;
+
+    private string? _reason;
+
+    /// <summary>Asks for a reason; returns null when cancelled.</summary>
+    public static async Task<string?> AskAsync(IDialogService dialogs, string title, string confirmText, string? message = null,
+        bool required = true, string label = "Reason", Color color = Color.Primary)
+    {
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { d => d.Message, message },
+            { d => d.ConfirmText, confirmText },
+            { d => d.Required, required },
+            { d => d.Label, label },
+            { d => d.ConfirmColor, color },
+        };
+        var dialog = await dialogs.ShowAsync<ReasonDialog>(title, parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        return result is { Canceled: false, Data: string reason } ? reason : null;
+    }
+}
