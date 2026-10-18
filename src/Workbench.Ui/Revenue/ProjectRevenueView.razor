@@ -15,8 +15,11 @@ else
 {
     var p = _project;
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.h4" HtmlTag="h1">@p.ProjectCode · @p.ProjectName</MudText>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Revenue</MudChip>
+        @if (!Embedded)
+        {
+            <MudText Typo="Typo.h4" HtmlTag="h1">@p.ProjectCode · @p.ProjectName</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Revenue</MudChip>
+        }
         @if (p.ContractNumber is not null)
         {
             <MudText Class="mud-text-secondary">@p.ContractNumber · @p.ContractType</MudText>
@@ -133,6 +136,10 @@ else
 @code {
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
+
+    /// <summary>Rendered as the Revenue tab of the project page, which shows the project's name.</summary>
+    [Parameter]
+    public bool Embedded { get; set; }
 
     private ProjectRevenueDto? _project;
     private string? _error;

@@ -1,0 +1,22 @@
+@* A key number with a plain-language label; the tooltip gives the accounting term. *@
+
+<MudPaper Outlined="true" Class="pa-3" Style="height: 100%" data-testid="@($"tile-{Label.ToLowerInvariant().Replace(' ', '-')}")">
+    <MudTooltip Text="@Term" Arrow="true" Placement="Placement.Top">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="cursor: help; border-bottom: 1px dotted currentColor">@Label</MudText>
+    </MudTooltip>
+    <MudText Typo="Typo.h5">@Value</MudText>
+    @if (!string.IsNullOrEmpty(Detail))
+    {
+        <MudText Typo="Typo.caption" Class="@DetailClass">@Detail</MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Detail { get; set; }
+    [Parameter] public string DetailClass { get; set; } = "mud-text-secondary";
+
+    /// <summary>The accounting term and how the number is computed.</summary>
+    [Parameter] public string Term { get; set; } = "";
+}

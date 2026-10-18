@@ -1,0 +1,26 @@
+@* The on track / at risk / over chip, with the reasons and the thresholds in its tooltip. *@
+
+<MudTooltip Arrow="true" Placement="Placement.Top">
+    <ChildContent>
+        <MudChip T="string" Size="Size.Small" Color="ProjectsFormat.HealthColor(Money.Health)" Variant="@(Money.Health == ProjectHealth.NoBudget ? Variant.Outlined : Variant.Filled)"
+                 data-testid="health-chip">@ProjectHealthRules.Label(Money.Health)</MudChip>
+    </ChildContent>
+    <TooltipContent>
+        <div style="max-width: 340px; text-align: left">
+            @foreach (var reason in Money.HealthReasons)
+            {
+                <MudText Typo="Typo.body2">@reason</MudText>
+            }
+            <MudText Typo="Typo.caption" Class="d-block mt-1"><b>How health is judged</b></MudText>
+            @foreach (var line in ProjectHealthRules.Explanation)
+            {
+                <MudText Typo="Typo.caption" Class="d-block">@line</MudText>
+            }
+        </div>
+    </TooltipContent>
+</MudTooltip>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectMoneyDto Money { get; set; } = default!;
+}
