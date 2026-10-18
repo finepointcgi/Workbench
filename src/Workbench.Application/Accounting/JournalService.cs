@@ -5,7 +5,11 @@ using Workbench.Domain.Accounting;
 
 namespace Workbench.Application.Accounting;
 
-public sealed class JournalService(IWorkbenchDbContextFactory dbFactory, GeneralLedger ledger, Workbench.Application.ProjectAccounting.AuditRecorder audit) : IJournalService
+public sealed class JournalService(
+    IWorkbenchDbContextFactory dbFactory,
+    GeneralLedger ledger,
+    Workbench.Application.ProjectAccounting.AuditRecorder audit,
+    Approvals.ApprovalEngine? approvals = null) : IJournalService
 {
     public async Task<IReadOnlyList<JournalEntrySummaryDto>> ListAsync(JournalQuery query, CancellationToken cancellationToken = default)
     {
@@ -91,6 +95,12 @@ public sealed class JournalService(IWorkbenchDbContextFactory dbFactory, General
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var entry = await db.Set<JournalEntry>().Include(e => e.Lines).FirstOrDefaultAsync(e => e.Id == entryId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Journal entry", entryId);
+        if (!await ApprovedToPostAsync(db, entry, cancellationToken))
+        {
+            await SaveAsync(db, cancellationToken);
+            return (await LedgerLookups.LoadAsync(db, cancellationToken)).Detail(entry);
+        }
+
         await ledger.PostAsync(db, entry, cancellationToken);
         await SaveAsync(db, cancellationToken);
         return (await LedgerLookups.LoadAsync(db, cancellationToken)).Detail(entry);
@@ -114,6 +124,14 @@ public sealed class JournalService(IWorkbenchDbContextFactory dbFactory, General
 
         var entry = await NewEntryAsync(db, request, cancellationToken);
         db.Set<JournalEntry>().Add(entry);
+        if (!await ApprovedToPostAsync(db, entry, cancellationToken))
+        {
+            // A later workflow step must approve: keep it as a draft for them.
+            await GeneralLedger.ValidateLinesAsync(db, entry, cancellationToken);
+            await SaveAsync(db, cancellationToken);
+            return (await LedgerLookups.LoadAsync(db, cancellationToken)).Detail(entry);
+        }
+
         await ledger.PostAsync(db, entry, cancellationToken);
         await SaveAsync(db, cancellationToken);
         return (await LedgerLookups.LoadAsync(db, cancellationToken)).Detail(entry);
@@ -208,6 +226,34 @@ public sealed class JournalService(IWorkbenchDbContextFactory dbFactory, General
         }
 
         return entry;
+    }
+
+    /// <summary>
+    /// Manual entries go through the journal-entry workflow (Setup › Approval workflows; by default Finance posts, as
+    /// before). False while a later step still has to approve. Entries from other modules and calls without the engine
+    /// registered (tests, seeding) aren't gated.
+    /// </summary>
+    private async Task<bool> ApprovedToPostAsync(IWorkbenchDbContext db, JournalEntry entry, CancellationToken ct)
+    {
+        if (approvals is null || entry.Source != JournalSource.Manual || entry.Status != JournalStatus.Draft)
+        {
+            return true;
+        }
+
+        var check = await approvals.CheckAsync(db, Contracts.Approvals.ApprovalDocumentTypes.JournalEntry, entry.Id, audit.Actor,
+            _ => Task.FromResult(Approvals.ApprovalSubjects.JournalEntry(entry)), ct);
+        if (!check.CanDecide)
+        {
+            throw new WorkbenchForbiddenException("This journal entry is waiting on another approver.");
+        }
+
+        var outcome = await approvals.DecideAsync(db, check, Contracts.Approvals.ApprovalDecisionKind.Approve, audit.Actor, null, ct);
+        if (!outcome.IsComplete)
+        {
+            audit.Record(db, GeneralLedger.AuditEntityType, entry.Id, "StepApproved", after: new { Step = string.Join(", ", outcome.Decided.Select(t => t.StepName).Distinct()) });
+        }
+
+        return outcome.IsComplete;
     }
 
     private static async Task SaveAsync(IWorkbenchDbContext db, CancellationToken ct)

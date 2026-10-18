@@ -1,0 +1,26 @@
+@* The unified approvals inbox, with how many documents wait on the signed-in user. *@
+@inject IApprovalInboxService Inbox
+
+<MudNavLink Href="approvals" Icon="@Icons.Material.Filled.Approval">
+    Approvals inbox
+    @if (_count > 0)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2" data-testid="approvals-count">@_count</MudChip>
+    }
+</MudNavLink>
+
+@code {
+    private int _count;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _count = await Inbox.CountMineAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException)
+        {
+            _count = 0;
+        }
+    }
+}

@@ -48,6 +48,7 @@ public static class WorkbenchApi
         v1.MapReportEndpoints();
         v1.MapEvmEndpoints();
         v1.MapCeilingEndpoints();
+        v1.MapApprovalEndpoints();
 
         return app;
     }

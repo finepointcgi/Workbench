@@ -1,0 +1,15 @@
+<MudChip T="string" Size="Size.Small" Color="ChipColor">@State</MudChip>
+
+@code {
+    [Parameter]
+    public ApprovalInstanceState State { get; set; }
+
+    private Color ChipColor => State switch
+    {
+        ApprovalInstanceState.Approved => Color.Success,
+        ApprovalInstanceState.Rejected => Color.Error,
+        ApprovalInstanceState.Returned => Color.Warning,
+        ApprovalInstanceState.Pending => Color.Info,
+        _ => Color.Default,
+    };
+}

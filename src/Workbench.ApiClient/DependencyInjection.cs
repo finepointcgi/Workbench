@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddReportClients(serverBaseAddress);
         services.AddEvmClients(serverBaseAddress);
         services.AddCeilingClients(serverBaseAddress);
+        services.AddApprovalClients(serverBaseAddress);
         return services;
     }
 }
