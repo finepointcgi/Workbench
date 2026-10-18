@@ -25,6 +25,7 @@ using Workbench.Application.Revenue;
 using Workbench.Application.Dashboards;
 using Workbench.Application.Evm;
 using Workbench.Application.MyWork;
+using Workbench.Application.MyTodo;
 using Workbench.Application.Security;
 using Workbench.Application.Sheets;
 using Workbench.Application.Tenancy;
@@ -72,6 +73,7 @@ public static class DependencyInjection
         services.AddWorkbenchEvm(); // Earned value (PMB, status, VARs, BCRs, IPMDAR exports); ACWP via IBurdenedCostService; above AddWorkbenchIdentity.
         services.AddWorkbenchCeilings(); // Ceilings, rate caps and closeout; decorates time, ODCs, expenses, AP bills, POs and invoices; above AddWorkbenchIdentity.
         Approvals.ApprovalRegistration.AddWorkbenchApprovals(services); // Approval workflow engine, inbox, delegation; above AddWorkbenchIdentity.
+        services.AddWorkbenchMyTodo(); // Home page to-dos: providers read through the permission-checked services above.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
