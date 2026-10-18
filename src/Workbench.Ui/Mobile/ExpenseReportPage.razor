@@ -1,0 +1,290 @@
+@page "/m/expenses/{ReportId:guid}"
+@layout MobileLayout
+@* One expense report on a phone: add expenses with a receipt photo, look up per diem, submit for approval. *@
+@inject IExpenseReportService Reports
+@inject IOdcService Odcs
+@inject IProjectService Projects
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_detail?.Report.Title ?? "Expense report") · Workbench</PageTitle>
+
+<div class="wb-m-title">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="m/expenses" aria-label="Back to expenses" />
+    <h1 class="wb-m-wrap" style="text-align:left">@(_detail?.Report.Title ?? "Expense report")</h1>
+</div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" data-testid="error">@_error</MudAlert>
+}
+else if (_detail is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    var report = _detail.Report;
+    <div class="wb-m-card">
+        <div class="wb-m-kv"><Workbench.Ui.Odcs.OdcStatusChip Status="report.Status" /><b data-testid="report-total">@MobileFormat.Money(report.Total)</b></div>
+        @if (report.TripStart is { } start)
+        {
+            <div class="wb-m-muted">Trip @MobileFormat.Day(start)@(report.TripEnd is { } end ? $" – {MobileFormat.Day(end)}" : "")</div>
+        }
+        @if (report.Status == OdcApprovalState.Rejected && report.RejectionReason is { } reason)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Rejected: @reason</MudAlert>
+        }
+        else if (report.Status == OdcApprovalState.Submitted)
+        {
+            <MudText Class="wb-m-muted mt-1">Submitted; waiting for your supervisor.</MudText>
+        }
+        else if (report.Status == OdcApprovalState.Approved)
+        {
+            <MudText Class="wb-m-muted mt-1">Approved by @report.ApprovedBy.</MudText>
+        }
+    </div>
+
+    @foreach (var line in _detail.Lines)
+    {
+        <div class="wb-m-card" data-testid="line">
+            <div class="wb-m-kv"><b class="wb-m-wrap">@line.Description</b><b>@MobileFormat.Money(line.Amount)</b></div>
+            <div class="wb-m-muted wb-m-wrap">@MobileFormat.Day(line.IncurredOn) · @line.Type · @line.WbsCode@(line.Vendor is { } v ? $" · {v}" : "")</div>
+            @if (line.IsUnallowable)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Unallowable</MudChip>
+            }
+            <div class="wb-m-kv mt-1">
+                @if (line.ReceiptFileId is not null)
+                {
+                    <MudLink Href="@Odcs.GetReceiptUrl(line.Id)" Typo="Typo.body2" Target="_blank" data-testid="receipt-link">
+                        <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Small" /> Receipt
+                    </MudLink>
+                }
+                else if (line.Amount >= _threshold)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Error" data-testid="receipt-required">Receipt required</MudText>
+                }
+                else
+                {
+                    <span class="wb-m-muted">No receipt</span>
+                }
+                @if (report.IsEditable)
+                {
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" aria-label="Remove expense" OnClick="() => RemoveAsync(line)" Disabled="_busy" />
+                }
+            </div>
+            @if (report.IsEditable)
+            {
+                <ReceiptCapture Compact="true" TestId="@($"line-receipt-{line.Id}")" Disabled="_busy" Picked="r => AttachAsync(line, r)" />
+            }
+        </div>
+    }
+
+    @if (report.IsEditable)
+    {
+        @if (_adding)
+        {
+            <div class="wb-m-card" data-testid="add-form">
+                <b>New expense</b>
+                <div class="wb-m-row mt-2">
+                    <label class="wb-m-field"><span>Date</span><input type="date" class="wb-m-input" data-testid="line-date" @bind="_lineDate" @bind:after="LoadCodesAsync" /></label>
+                    <label class="wb-m-field">
+                        <span>Type</span>
+                        <select class="wb-m-select" data-testid="line-type" @bind="_lineType">
+                            <option value="@OdcCostType.Travel">Travel</option>
+                            <option value="@OdcCostType.Other">Other</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="wb-m-field">
+                    <span>Charge code</span>
+                    <select class="wb-m-select" data-testid="line-code" @bind="_lineWbs">
+                        <option value="">Choose…</option>
+                        @foreach (var c in _codes)
+                        {
+                            <option value="@c.WbsElementId">@c.Code · @c.Name</option>
+                        }
+                    </select>
+                    @if (_codes.Count == 0)
+                    {
+                        <span class="wb-m-muted">You have no charge codes on this date.</span>
+                    }
+                </label>
+                <label class="wb-m-field">
+                    <span>Amount ($)</span>
+                    <input class="wb-m-input" inputmode="decimal" placeholder="0.00" data-testid="line-amount" @bind="_lineAmount" @bind:event="oninput" />
+                </label>
+                <label class="wb-m-field">
+                    <span>Description</span>
+                    <input class="wb-m-input" maxlength="500" placeholder="Taxi to client site" data-testid="line-description" @bind="_lineDescription" @bind:event="oninput" />
+                </label>
+                <label class="wb-m-field">
+                    <span>Merchant (optional)</span>
+                    <input class="wb-m-input" maxlength="200" @bind="_lineVendor" />
+                </label>
+                <span class="wb-m-muted d-block mb-1">Receipt@(Amount >= _threshold ? $" (required for {MobileFormat.Money(_threshold)} or more)" : " (optional)")</span>
+                <ReceiptCapture TestId="new-receipt" Disabled="_busy" Picked="r => _receipt = r" />
+                @if (_receipt is { } picked)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-1" data-testid="picked">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" /> @picked.FileName (@picked.SizeText)
+                    </MudText>
+                }
+                <div class="wb-m-actions">
+                    <MudButton Variant="Variant.Text" OnClick="() => _adding = false">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!LineValid || _busy)" OnClick="AddAsync" data-testid="add-line">Add expense</MudButton>
+                </div>
+            </div>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mb-3" StartIcon="@Icons.Material.Filled.AddAPhoto"
+                       OnClick="StartAddAsync" data-testid="add">Add expense</MudButton>
+        }
+
+        <PerDiemLookup DefaultDate="report.TripStart" />
+
+        <div class="wb-m-sticky">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" StartIcon="@Icons.Material.Filled.Send"
+                       Disabled="@(_busy || _detail.Lines.Count == 0)" OnClick="SubmitAsync" data-testid="submit">Submit for approval</MudButton>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public Guid ReportId { get; set; }
+
+    private ExpenseReportDetailDto? _detail;
+    private decimal _threshold = 75m;
+    private string? _error;
+    private bool _busy;
+
+    private bool _adding;
+    private DateOnly? _lineDate;
+    private OdcCostType _lineType = OdcCostType.Travel;
+    private string? _lineWbs;
+    private string? _lineAmount;
+    private string? _lineDescription;
+    private string? _lineVendor;
+    private PickedReceipt? _receipt;
+    private IReadOnlyList<ChargeCodeDto> _codes = [];
+
+    private decimal Amount => decimal.TryParse((_lineAmount ?? "").Replace("$", "").Replace(",", "").Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var a) ? a : 0m;
+
+    private bool LineValid => _lineDate is not null && Guid.TryParse(_lineWbs, out _) && Amount > 0 && !string.IsNullOrWhiteSpace(_lineDescription);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _threshold = (await Odcs.GetPolicyAsync()).ReceiptThreshold;
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _detail = await Reports.GetReportAsync(ReportId);
+            _error = null;
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task StartAddAsync()
+    {
+        _adding = true;
+        _lineDate ??= _detail!.Report.TripStart ?? DateOnly.FromDateTime(DateTime.Today);
+        _lineWbs = null;
+        _lineAmount = null;
+        _lineDescription = null;
+        _lineVendor = null;
+        _receipt = null;
+        await LoadCodesAsync();
+    }
+
+    private async Task LoadCodesAsync()
+    {
+        if (_lineDate is not { } date || _detail is null)
+        {
+            _codes = [];
+            return;
+        }
+
+        try
+        {
+            // Leave codes take hours, not costs.
+            _codes = (await Projects.ListChargeCodesAsync(_detail.Report.EmployeeId, date)).Where(c => c.Kind != ChargeCodeKind.Leave).ToList();
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            _codes = [];
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        if (_codes.All(c => c.WbsElementId.ToString() != _lineWbs))
+        {
+            _lineWbs = _codes.Count == 1 ? _codes[0].WbsElementId.ToString() : null;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (!LineValid)
+        {
+            return;
+        }
+
+        var request = new SaveExpenseLineRequest(Guid.Parse(_lineWbs!), _lineType, _lineDate!.Value, Amount, _lineDescription!.Trim(),
+            string.IsNullOrWhiteSpace(_lineVendor) ? null : _lineVendor.Trim());
+        var receipt = _receipt;
+        await RunAsync(async () =>
+        {
+            var line = await Reports.AddLineAsync(ReportId, request);
+            _adding = false;
+            if (receipt is not null)
+            {
+                using var content = new MemoryStream(receipt.Content);
+                await Reports.AttachReceiptAsync(ReportId, line.Id, receipt.FileName, content);
+            }
+        }, receipt is null ? "Expense added." : "Expense and receipt added.");
+    }
+
+    private async Task AttachAsync(OdcEntryDto line, PickedReceipt receipt) =>
+        await RunAsync(async () =>
+        {
+            using var content = new MemoryStream(receipt.Content);
+            await Reports.AttachReceiptAsync(ReportId, line.Id, receipt.FileName, content);
+        }, $"Attached {receipt.FileName}.");
+
+    private Task RemoveAsync(OdcEntryDto line) => RunAsync(() => Reports.RemoveLineAsync(ReportId, line.Id), "Expense removed.");
+
+    private Task SubmitAsync() => RunAsync(() => Reports.SubmitAsync(ReportId), "Submitted to your supervisor for approval.");
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (MobileFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            await LoadAsync();
+        }
+    }
+}

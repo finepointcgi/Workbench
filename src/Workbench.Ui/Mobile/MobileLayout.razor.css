@@ -1,0 +1,17 @@
+.wb-m {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--mud-palette-background);
+}
+
+.wb-m-main {
+    /* Room for the fixed app bar (dense: 48px) and the bottom navigation (64px), plus the device's safe areas. */
+    padding: calc(56px + env(safe-area-inset-top)) 12px calc(80px + env(safe-area-inset-bottom));
+    max-width: 640px;
+    margin: 0 auto;
+    overflow-x: hidden;
+}
+
+::deep .wb-m-appbar {
+    padding-top: env(safe-area-inset-top);
+}
