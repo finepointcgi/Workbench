@@ -1,0 +1,31 @@
+<MudAlert Severity="Severity" Dense="true" Class="mb-3" data-testid="status-banner">
+    <b>@Timesheet.Status</b>
+    @if (Timesheet.Revision > 0)
+    {
+        <span> · revision @Timesheet.Revision</span>
+    }
+    <span> · @Describe()</span>
+</MudAlert>
+
+@code {
+    [Parameter, EditorRequired] public TimesheetDto Timesheet { get; set; } = default!;
+
+    private Severity Severity => Timesheet.Status switch
+    {
+        TimesheetState.Approved => Severity.Success,
+        TimesheetState.Submitted => Severity.Info,
+        TimesheetState.Rejected => Severity.Error,
+        _ => Severity.Normal,
+    };
+
+    private string Describe() => Timesheet.Status switch
+    {
+        TimesheetState.Submitted => $"Certified and submitted {Local(Timesheet.SubmittedAtUtc)}; waiting for approval. Locked.",
+        TimesheetState.Approved => $"Approved by {Timesheet.ReviewedBy} {Local(Timesheet.ApprovedAtUtc)}. Locked; corrections need a reason.",
+        TimesheetState.Rejected => $"Rejected by {Timesheet.ReviewedBy}: {Timesheet.RejectionReason}",
+        _ when Timesheet.ChangesNeedReason => "Reopened for correction. Changes need a reason, then certify and submit again.",
+        _ => "Enter your hours each day, then certify and submit at the end of the period.",
+    };
+
+    private static string Local(DateTime? utc) => utc is { } v ? $"on {v.ToLocalTime():MMM d, h:mm tt}" : "";
+}

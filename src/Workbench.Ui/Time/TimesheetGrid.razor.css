@@ -1,0 +1,85 @@
+.timesheet-grid {
+    overflow-x: auto;
+}
+
+.timesheet-grid table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 760px;
+}
+
+.timesheet-grid th,
+.timesheet-grid td {
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    padding: 6px 8px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.timesheet-grid th {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.timesheet-grid .code {
+    text-align: left;
+    min-width: 220px;
+}
+
+.timesheet-grid .code .name {
+    font-size: 0.8rem;
+}
+
+.timesheet-grid .weekend {
+    background: var(--mud-palette-background-gray);
+}
+
+.timesheet-grid .cell {
+    white-space: nowrap;
+}
+
+.timesheet-grid input {
+    width: 4.2rem;
+    padding: 4px 6px;
+    font: inherit;
+    text-align: right;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 4px;
+    background: var(--mud-palette-surface);
+    color: var(--mud-palette-text-primary);
+}
+
+.timesheet-grid input[readonly] {
+    background: var(--mud-palette-background-gray);
+    cursor: pointer;
+}
+
+.timesheet-grid input:disabled {
+    opacity: 0.45;
+}
+
+.timesheet-grid .comment {
+    border: none;
+    background: none;
+    padding: 0 0 0 2px;
+    cursor: pointer;
+    color: var(--mud-palette-text-secondary);
+    vertical-align: middle;
+}
+
+.timesheet-grid .comment.has-comment {
+    color: var(--mud-palette-primary);
+}
+
+.timesheet-grid .comment:disabled {
+    visibility: hidden;
+}
+
+.timesheet-grid .total {
+    font-variant-numeric: tabular-nums;
+}
+
+.timesheet-grid .total.over {
+    color: var(--mud-palette-error);
+    font-weight: 700;
+}

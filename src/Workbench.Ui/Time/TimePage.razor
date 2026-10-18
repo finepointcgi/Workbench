@@ -1,0 +1,230 @@
+@page "/time"
+@using System.Globalization
+@inject ITimesheetService Timesheets
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Time · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">My time</MudText>
+    <MudSpacer />
+    @if (_detail is not null)
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" aria-label="Previous period" OnClick="() => GoAsync(_detail.Timesheet.PeriodStart.AddDays(-1))" />
+        <MudText Typo="Typo.subtitle1" data-testid="period">@PeriodLabel(_detail.Timesheet)</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" aria-label="Next period" Disabled="NextDisabled"
+                       OnClick="() => GoAsync(_detail.Timesheet.PeriodEnd.AddDays(1))" />
+        <MudButton Variant="Variant.Text" OnClick="() => GoAsync(null)">This week</MudButton>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_detail is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <TimesheetStatusBanner Timesheet="_detail.Timesheet" />
+
+    <MudPaper Outlined="true" Class="pa-3">
+        <TimesheetGrid @ref="_grid" Detail="_detail" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
+    </MudPaper>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap">
+        <MudText Class="mud-text-secondary">
+            Standard for this period: @_detail.Timesheet.StandardHours.ToString("0.##") h
+        </MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Href="@($"time/history/{_detail.Timesheet.Id}")" StartIcon="@Icons.Material.Filled.History">History</MudButton>
+        @if (!_detail.Timesheet.IsLocked)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(_busy || _grid?.IsDirty != true)" OnClick="SaveAsync"
+                       StartIcon="@Icons.Material.Filled.Save">Save</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SubmitAsync"
+                       StartIcon="@Icons.Material.Filled.Send">Submit</MudButton>
+        }
+    </MudStack>
+}
+
+@code {
+    private TimesheetDetailDto? _detail;
+    private TimesheetGrid? _grid;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>The correction reason given when reopening, offered again when saving.</summary>
+    private string? _correctionReason;
+
+    [SupplyParameterFromQuery(Name = "date")]
+    public string? Date { get; set; }
+
+    private bool NextDisabled => _detail is null || _detail.Timesheet.PeriodEnd >= DateOnly.FromDateTime(DateTime.Now);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var date = DateOnly.TryParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : DateOnly.FromDateTime(DateTime.Now);
+        try
+        {
+            _error = null;
+            _detail = await Timesheets.GetOrCreateMyTimesheetAsync(date);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task GoAsync(DateOnly? date)
+    {
+        if (_grid?.IsDirty == true && !await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _correctionReason = null;
+        Navigation.NavigateTo(date is { } d ? $"time?date={d:yyyy-MM-dd}" : "time");
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Grid.ConfirmDialog>
+        {
+            { x => x.Message, "You have unsaved hours. Leave this period without saving?" },
+            { x => x.ConfirmText, "Discard" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Grid.ConfirmDialog>("Unsaved changes", parameters);
+        return await dialog.Result is { Canceled: false };
+    }
+
+    /// <summary>Editing a locked timesheet: recall it (submitted) or reopen it for correction (approved), with a reason.</summary>
+    private async Task UnlockAsync()
+    {
+        if (_detail is null || _busy)
+        {
+            return;
+        }
+
+        var approved = _detail.Timesheet.Status == TimesheetState.Approved;
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { x => x.Message, approved
+                ? "This timesheet is approved and locked. Reopening it starts a new revision; every change is recorded with your reason, and you'll need to certify and get approval again."
+                : "This timesheet is submitted and waiting for approval. Recall it to make changes; you'll need to certify and submit again." },
+            { x => x.Label, "Reason for the change" },
+            { x => x.ConfirmText, approved ? "Reopen for correction" : "Recall" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>(approved ? "Correct an approved timesheet" : "Recall timesheet", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            _detail = await Timesheets.ReopenAsync(_detail.Timesheet.Id, reason);
+            _correctionReason = reason;
+            Snackbar.Add(approved ? "Reopened for correction." : "Recalled. You can edit your hours.", Severity.Info);
+        });
+    }
+
+    private async Task<bool> SaveAsync()
+    {
+        if (_detail is null || _grid is null)
+        {
+            return false;
+        }
+
+        string? reason = null;
+        if (_detail.Timesheet.ChangesNeedReason)
+        {
+            var parameters = new DialogParameters<ReasonDialog>
+            {
+                { x => x.Message, "This timesheet was already submitted, so each change is recorded with who, when and why." },
+                { x => x.Label, "Reason for the change" },
+                { x => x.InitialValue, _correctionReason },
+                { x => x.ConfirmText, "Save changes" },
+            };
+            var dialog = await DialogService.ShowAsync<ReasonDialog>("Reason for change", parameters);
+            if (await dialog.Result is not { Canceled: false, Data: string r })
+            {
+                return false;
+            }
+
+            reason = r;
+        }
+
+        var entries = _grid.BuildEntries();
+        return await RunAsync(async () =>
+        {
+            _detail = await Timesheets.SaveEntriesAsync(_detail.Timesheet.Id, new SaveTimeEntriesRequest(entries, Reason: reason));
+            Snackbar.Add("Hours saved.", Severity.Success);
+        });
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_detail is null || _grid is null)
+        {
+            return;
+        }
+
+        if (_grid.IsDirty && !await SaveAsync())
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<CertifyDialog>
+        {
+            { x => x.TotalHours, _detail.Timesheet.TotalHours },
+            { x => x.StandardHours, _detail.Timesheet.StandardHours },
+            { x => x.Period, PeriodLabel(_detail.Timesheet) },
+        };
+        var dialog = await DialogService.ShowAsync<CertifyDialog>("Certify and submit", parameters);
+        if (await dialog.Result is not { Canceled: false })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var result = await Timesheets.SubmitAsync(_detail.Timesheet.Id, new SubmitTimesheetRequest(true));
+            _detail = result.Detail;
+            _correctionReason = null;
+            Snackbar.Add("Timesheet submitted for approval.", Severity.Success);
+            foreach (var warning in result.Warnings)
+            {
+                Snackbar.Add(warning, Severity.Warning);
+            }
+        });
+    }
+
+    private async Task<bool> RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    internal static string PeriodLabel(TimesheetDto t) =>
+        $"{t.PeriodStart.ToString("MMM d", CultureInfo.InvariantCulture)} – {t.PeriodEnd.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}";
+}
