@@ -1,0 +1,209 @@
+@page "/reports/saved/{ReportId:guid}"
+@inject ISavedReportService Saved
+@inject IStandardReportService Standard
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_report?.Name ?? "Saved report") · Reports · Workbench</PageTitle>
+
+<ReportsHeader Title="@(_report?.Name ?? "Saved report")" Subtitle="@(_report?.Description)">
+    @if (_report is not null)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune" Href="@EditLink" data-testid="edit-report">@(_report.CanEdit ? "Edit" : "Open")</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.GridOn" OnClick="() => ExportAsync(ReportFileFormat.Xlsx)" data-testid="export-xlsx">Excel</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description" OnClick="() => ExportAsync(ReportFileFormat.Csv)" data-testid="export-csv">CSV</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"reports/print?saved={ReportId}")" Target="_blank">Print</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Schedule" OnClick="() => ScheduleAsync(null)" data-testid="add-schedule">Schedule</MudButton>
+        @if (_report.CanEdit)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" data-testid="delete-report">Delete</MudButton>
+        }
+    }
+</ReportsHeader>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" data-testid="load-error">@_error</MudAlert>
+}
+
+@if (_report is not null)
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+        @(_report.IsMine ? "Your report" : $"Owned by {_report.OwnerEmail}") ·
+        @(_report.Visibility == ReportVisibility.Shared ? $"shared with {string.Join(", ", _report.SharedWith.Select(r => r == OrgRoles.Employee ? "everyone" : r.ToString()))}" : "private") ·
+        runs with your access
+    </MudText>
+
+    @if (_report.Schedules.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="mb-4">
+            <MudSimpleTable Dense="true" data-testid="schedules">
+                <thead><tr><th>Schedule</th><th>Delivery</th><th>Runs as</th><th>Next</th><th>Last</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var s in _report.Schedules)
+                    {
+                        <tr>
+                            <td>@Describe(s)</td>
+                            <td>@(s.Delivery == ReportDeliveryMode.Attachment ? $"{s.Format} attached" : "Link")@(s.AdditionalRecipients.Count > 0 ? $" · +{s.AdditionalRecipients.Count} (link)" : "")</td>
+                            <td>@s.OwnerEmail</td>
+                            <td>@(s.Enabled ? s.NextRunUtc.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture) : "Off")</td>
+                            <td>@(s.LastRunUtc?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)) @s.LastStatus</td>
+                            <td style="white-space:nowrap">
+                                @if (s.IsMine)
+                                {
+                                    <MudButton Size="Size.Small" OnClick="() => SendNowAsync(s)" data-testid="send-now">Send now</MudButton>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit schedule" OnClick="() => ScheduleAsync(s)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete schedule" OnClick="() => DeleteScheduleAsync(s)" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@if (_running)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+@if (_result is not null)
+{
+    @if (_result.Subtitle is not null)
+    {
+        <MudText Typo="Typo.subtitle2" Class="mb-2">@_result.Subtitle</MudText>
+    }
+    <ReportTable Result="_result" OnDrill="DrillAsync" />
+}
+@if (_drill is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mt-4" data-testid="drill-panel">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">@_drill.Title</MudText>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="Close the detail" OnClick="() => _drill = null" />
+        </MudStack>
+        <ReportTable Result="_drill" />
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public Guid ReportId { get; set; }
+
+    private SavedReportDto? _report;
+    private ReportResultDto? _result;
+    private ReportResultDto? _drill;
+    private string? _error;
+    private bool _running;
+
+    private string EditLink => _report!.StandardKey is { } key ? $"reports/standard/{key}?saved={ReportId}" : $"reports/writer/{ReportId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _report = await Saved.GetAsync(ReportId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            _error = ReportFormat.Error(ex);
+            return;
+        }
+
+        _running = true;
+        try
+        {
+            _result = await Saved.RunAsync(ReportId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            _error = ReportFormat.Error(ex);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private static string Describe(ReportScheduleDto s) => s.Frequency switch
+    {
+        ReportFrequency.Weekly => $"Weekly on {s.DayOfWeek} at {s.HourUtc:00}:00 UTC",
+        ReportFrequency.Monthly => $"Monthly on day {s.DayOfMonth} at {s.HourUtc:00}:00 UTC",
+        _ => $"Daily at {s.HourUtc:00}:00 UTC",
+    };
+
+    private async Task DrillAsync(ReportRowDto row)
+    {
+        if (_report?.StandardKey is not { } key)
+        {
+            return;
+        }
+
+        try
+        {
+            _drill = await Standard.DrillAsync(key, _report.Parameters ?? new ReportParameters(), row.DrillKey!);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ExportAsync(ReportFileFormat format) => await TryAsync(async () => await ReportFormat.DownloadAsync(JS, await Saved.ExportAsync(ReportId, format)));
+
+    private async Task ScheduleAsync(ReportScheduleDto? existing)
+    {
+        var dialog = await DialogService.ShowAsync<ScheduleDialog>(existing is null ? "Schedule this report" : "Edit schedule",
+            new DialogParameters<ScheduleDialog> { { d => d.Existing, existing } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveReportScheduleRequest request })
+        {
+            await TryAsync(async () =>
+            {
+                _ = existing is null ? await Saved.AddScheduleAsync(ReportId, request) : await Saved.UpdateScheduleAsync(existing.Id, request);
+                _report = await Saved.GetAsync(ReportId);
+                Snackbar.Add("Schedule saved. It runs as you, with your access.", Severity.Success);
+            });
+        }
+    }
+
+    private Task SendNowAsync(ReportScheduleDto s) => TryAsync(async () =>
+    {
+        var updated = await Saved.SendNowAsync(s.Id);
+        _report = await Saved.GetAsync(ReportId);
+        Snackbar.Add(updated.LastStatus ?? "Sent.", Severity.Success);
+    });
+
+    private Task DeleteScheduleAsync(ReportScheduleDto s) => TryAsync(async () =>
+    {
+        await Saved.DeleteScheduleAsync(s.Id);
+        _report = await Saved.GetAsync(ReportId);
+    });
+
+    private async Task DeleteAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete report", $"Delete \"{_report!.Name}\" and its schedules?", yesText: "Delete", cancelText: "Cancel") == true)
+        {
+            await TryAsync(async () =>
+            {
+                await Saved.DeleteAsync(ReportId);
+                Nav.NavigateTo("reports");
+            });
+        }
+    }
+
+    private async Task TryAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+}
