@@ -1,0 +1,167 @@
+@page "/purchasing/requisitions/{RequisitionId:guid}"
+@inject IRequisitionService Requisitions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ICurrentUserContext UserContext
+
+<PageTitle>@(_req?.Requisition.Number ?? "Requisition") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Requisition" BackHref="purchasing/requisitions" BackLabel="Requisitions" />
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_req is not { } req)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var r = req.Requisition;
+    <PurchasingHeader Title="@($"{r.Number} · {r.Justification}")" BackHref="purchasing/requisitions" BackLabel="Requisitions">
+        <RequisitionStatusChip Status="r.Status" />
+        @if (req.CanEdit)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/requisitions/{r.Id}/edit")">Edit</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Requisitions.SubmitAsync(r.Id), "Submitted for approval."))" data-testid="req-submit">Submit</MudButton>
+        }
+        @if (req.CanApprove)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" data-testid="req-reject">Reject</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ApproveAsync" data-testid="req-approve">
+                Approve@(r.Stage is { } s ? $" ({ProcurementFormat.Label(s)})" : "")
+            </MudButton>
+        }
+        @if (_finance && r.Status == RequisitionState.Approved)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ShoppingCart" Href="@($"purchasing/orders?requisition={r.Id}")" data-testid="req-order">Create PO</MudButton>
+        }
+        @if (r.Status is RequisitionState.Draft or RequisitionState.PendingApproval or RequisitionState.Rejected or RequisitionState.Approved && req.Lines.All(l => l.PurchaseOrderLineId is null))
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelAsync">Cancel requisition</MudButton>
+        }
+    </PurchasingHeader>
+
+    @if (r.Status == RequisitionState.Rejected && req.RejectionReason is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">Rejected by @req.RejectedBy: @req.RejectionReason</MudAlert>
+    }
+    @if (r.Status == RequisitionState.PendingApproval)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Waiting on @(r.Stage == RequisitionApprovalStage.Finance ? "Finance" : "the project manager")@(req.NeedsFinance && r.Stage == RequisitionApprovalStage.ProjectManager ? ", then Finance" : "").
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[] { ("Requester", r.RequesterName ?? r.RequesterEmail), ("Total", PurchasingFormat.Amount(r.Total)), ("Organization", req.OrgUnitCode ?? "—"),
+            ("Submitted", r.SubmittedAtUtc is { } at ? PurchasingFormat.Date(DateOnly.FromDateTime(at)) : "—") })
+        {
+            <MudItem xs="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">Lines</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" data-testid="req-lines">
+            <thead><tr><th>#</th><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit cost</th><th style="text-align:right">Amount</th><th>Charge to</th><th>Needed by</th><th>Vendor</th><th>Routed to</th><th>Approved by</th><th>PO</th></tr></thead>
+            <tbody>
+                @foreach (var l in req.Lines)
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Description</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.Quantity)</td>
+                        <td style="text-align:right">@ProcurementFormat.Price(l.UnitCost)</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(l.Amount)</td>
+                        <td>@ProcurementFormat.Charge(l.ProjectCode, l.WbsCode, l.AccountNumber, l.OrgUnitCode)@(l.OdcType is { } t ? $" · {t}" : "")</td>
+                        <td>@PurchasingFormat.Date(l.NeededBy)</td>
+                        <td>@l.SuggestedVendorName</td>
+                        <td>@l.RoutedTo</td>
+                        <td>@l.ApprovedBy</td>
+                        <td>@if (l.PurchaseOrderNumber is { } po) { <span>@po</span> }</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (req.History.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Approval history</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="req-history">
+                <thead><tr><th>When</th><th>Stage</th><th>Decision</th><th>By</th><th>Project</th><th>Comment</th></tr></thead>
+                <tbody>
+                    @foreach (var h in req.History)
+                    {
+                        <tr><td>@h.DecidedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td><td>@ProcurementFormat.Label(h.Stage)</td><td>@h.Decision</td><td>@h.DecidedBy</td><td>@h.ProjectCode</td><td>@h.Comment</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public Guid RequisitionId { get; set; }
+
+    private RequisitionDto? _req;
+    private bool _finance;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _finance = (await UserContext.GetAsync()).IsFinance;
+            _req = await Requisitions.GetAsync(RequisitionId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private async Task RunAsync(Func<Task<RequisitionDto>> action, string success)
+    {
+        try
+        {
+            _req = await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Approve requisition", "Approve", "Add a comment if you like.", required: false, label: "Comment", color: Color.Success) is { } comment)
+        {
+            await RunAsync(() => Requisitions.ApproveAsync(RequisitionId, new RequisitionDecisionRequest(string.IsNullOrWhiteSpace(comment) ? null : comment)), "Approved.");
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reject requisition", "Reject", "The requester is notified and can correct and resubmit it.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Requisitions.RejectAsync(RequisitionId, new RequisitionDecisionRequest(reason)), "Rejected.");
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Cancel requisition", "Cancel requisition", required: false, color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Requisitions.CancelAsync(RequisitionId, new RequisitionDecisionRequest(reason)), "Cancelled.");
+        }
+    }
+}

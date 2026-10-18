@@ -90,7 +90,7 @@ public sealed class ClinFundingCalculator(
     /// <summary>
     /// Incurred: approved time at cost plus approved, allowable ODCs on WBS elements mapped to each CLIN (fully burdened
     /// through <see cref="IBurdenedCostService"/> when indirect rates are registered). Committed: submitted time and ODCs
-    /// that aren't approved yet, at direct cost.
+    /// that aren't approved yet, at direct cost, plus open purchase order amounts.
     /// </summary>
     private async Task<CostResult> LoadCostsAsync(IWorkbenchDbContext db, Contract contract, IReadOnlyList<Clin> clins, DateOnly asOf, CancellationToken ct)
     {
@@ -162,6 +162,12 @@ public sealed class ClinFundingCalculator(
         foreach (var o in pendingOdcs)
         {
             Add(o.WbsElementId, o.IncurredOn, o.Amount, committed: true);
+        }
+
+        // Open purchase order amounts (procure-to-pay) are committed cost too, until their bills post.
+        foreach (var (wbsId, orderDate, amount) in await Purchasing.ProcurementSupport.CommitmentsByWbsAsync(db, wbsIds, ct))
+        {
+            Add(wbsId, orderDate, amount, committed: true);
         }
 
         return new CostResult(result, burdened is not null);

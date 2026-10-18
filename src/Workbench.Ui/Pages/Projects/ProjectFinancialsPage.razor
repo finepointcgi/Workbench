@@ -5,6 +5,7 @@
 @inject IFinancialExportService Exports
 @inject Workbench.Contracts.IndirectRates.IBurdenedFinancialsService Burdened
 @inject IJSRuntime JS
+@inject Workbench.Contracts.Purchasing.ICommitmentService Commitments
 @inject ISnackbar Snackbar
 
 <PageTitle>@(_project?.Code ?? "Project") financials · Workbench</PageTitle>
@@ -75,11 +76,15 @@ else
     </MudToggleGroup>
     @if (_showBurdened && _burdened is not null)
     {
+        @if (_committed is { } committed)
+        {
+            <MudText Typo="Typo.body2" Class="mb-2" data-testid="committed">Committed (open purchase orders, not in actuals): <b>@FinancialFormat.Money(committed)</b></MudText>
+        }
         <Workbench.Ui.IndirectRates.BurdenedFinancialsView Data="_burdened" />
     }
     else
     {
-    <FinancialTiles Summary="_summary" />
+    <FinancialTiles Summary="_summary" Committed="_committed" />
 
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">By WBS</MudText>
     <WbsFinancialsGrid Rows="_rows" Totals="_summary.Totals" ShowBillable="_summary.ShowsBillableValue" />
@@ -141,6 +146,7 @@ else
             _rows = await Financials.GetWbsFinancialsAsync(ProjectId, _budgetVersionId, _forecastVersionId);
             _burn = await Financials.GetTimePhasedBurnAsync(ProjectId, _budgetVersionId);
             await LoadBurdenedAsync();
+            await LoadCommittedAsync();
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -153,6 +159,21 @@ else
         finally
         {
             _loading = false;
+        }
+    }
+
+    /// <summary>Open purchase order amounts on the project (procure-to-pay); not posted to the GL.</summary>
+    private decimal? _committed;
+
+    private async Task LoadCommittedAsync()
+    {
+        try
+        {
+            _committed = (await Commitments.GetProjectCommitmentsAsync(ProjectId)).Total;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            _committed = null;
         }
     }
 

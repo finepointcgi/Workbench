@@ -30,6 +30,8 @@ public static class DependencyInjection
         services.AddIndirectRateClients(serverBaseAddress);
         services.AddBillingClients(serverBaseAddress);
         services.AddPurchasingClients(serverBaseAddress);
+        services.AddProcurementClients(serverBaseAddress);
+        services.AddAssetClients(serverBaseAddress);
         return services;
     }
 }

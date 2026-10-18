@@ -165,6 +165,22 @@ public sealed class ApBillLine : Entity
 
     public string? DecidedBy { get; set; }
     public DateTime? DecidedAtUtc { get; set; }
+
+    // ---- Added by procure-to-pay (additive): three-way match against a purchase order line ----
+
+    /// <summary>The purchase order line this line bills; the match checks it against receipts and the PO price.</summary>
+    public Guid? PurchaseOrderLineId { get; set; }
+
+    public decimal? Quantity { get; set; }
+    public decimal? UnitPrice { get; set; }
+
+    /// <summary>Why the three-way match failed when last checked; null when it matched (or there's no PO line).</summary>
+    public string? MatchProblem { get; set; }
+
+    /// <summary>Set when Finance let a mismatched line through.</summary>
+    public string? MatchOverrideBy { get; set; }
+    public string? MatchOverrideReason { get; set; }
+    public DateTime? MatchOverrideAtUtc { get; set; }
 }
 
 public enum PaymentMethod

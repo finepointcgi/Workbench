@@ -1,0 +1,135 @@
+@page "/assets/reports"
+@inject IAssetReportService Reports
+@inject IAssetService Assets
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Asset reports · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Asset reports" Subtitle="Roll-forward of net book value, the government property listing, and the asset categories. Export any of them as CSV; the register and schedules export from their pages." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-4">
+        <MudTabPanel Text="Roll-forward">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudDatePicker Date="_from" DateChanged="v => SetAsync(() => _from = v)" Label="From" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+                <MudDatePicker Date="_to" DateChanged="v => SetAsync(() => _to = v)" Label="To" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => DownloadAsync(() => Reports.ExportRollForwardCsvAsync(From, To)))">Export CSV</MudButton>
+            </MudStack>
+            @if (_roll is { } roll)
+            {
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="roll-forward">
+                    <thead><tr><th>Category</th><th style="text-align:right">Beginning</th><th style="text-align:right">Additions</th><th style="text-align:right">Depreciation</th><th style="text-align:right">Disposals</th><th style="text-align:right">Ending</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in roll.Rows.Append(roll.Totals))
+                        {
+                            <tr style="@(r == roll.Totals ? "font-weight:bold" : "")">
+                                <td>@(r.CategoryCode.Length > 0 ? $"{r.CategoryCode} · {r.CategoryName}" : r.CategoryName)</td>
+                                <td style="text-align:right">@AssetFormat.Amount(r.Beginning)</td>
+                                <td style="text-align:right">@AssetFormat.Amount(r.Additions)</td>
+                                <td style="text-align:right">@AssetFormat.Amount(r.Depreciation)</td>
+                                <td style="text-align:right">@AssetFormat.Amount(r.Disposals)</td>
+                                <td style="text-align:right">@AssetFormat.Amount(r.Ending)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Net book value of contractor-owned assets: beginning + additions − depreciation − disposals (book value removed) = ending.</MudText>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Government property">
+            <MudStack Row="true" Class="mb-2">
+                <MudText Class="mud-text-secondary">Government-furnished (GFP) and contractor-acquired (CAP) property by contract, for FAR 52.245-1 records and inventories.</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => DownloadAsync(() => Reports.ExportGovernmentPropertyCsvAsync()))">Export CSV</MudButton>
+            </MudStack>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="gov-property">
+                <thead><tr><th>Contract</th><th>Gov property no.</th><th>Tag</th><th>Description</th><th>Kind</th><th>Acquired</th><th style="text-align:right">Cost</th><th>Serial</th><th>Location</th><th>Custodian</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _gov)
+                    {
+                        <tr>
+                            <td>@r.ContractNumber</td><td>@r.GovernmentPropertyNumber</td><td><MudLink Href="@($"assets/{r.AssetId}")">@r.TagNumber</MudLink></td><td>@r.Description</td><td>@r.Kind</td>
+                            <td>@AssetFormat.Date(r.AcquisitionDate)</td><td style="text-align:right">@AssetFormat.Amount(r.Cost)</td><td>@r.SerialNumber</td><td>@r.Location</td><td>@r.Custodian</td><td>@AssetFormat.Label(r.Status)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+        <MudTabPanel Text="Categories">
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Code</th><th>Name</th><th>Method</th><th>Life</th><th>MACRS</th><th>Asset</th><th>Accum. depr.</th><th>Expense</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _categories)
+                    {
+                        <tr><td>@c.Code</td><td>@c.Name</td><td>@AssetFormat.Label(c.DefaultMethod)</td><td>@c.DefaultLifeYears yrs</td><td>@(c.MacrsRecoveryYears is { } m ? $"{m}-year" : "")</td><td>@c.AssetAccountNumber</td><td>@c.AccumulatedDepreciationAccountNumber</td><td>@c.ExpenseAccountNumber</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private DateTime? _from = new DateTime(DateTime.Today.Month >= 10 ? DateTime.Today.Year : DateTime.Today.Year - 1, 10, 1);
+    private DateTime? _to = DateTime.Today;
+    private RollForwardDto? _roll;
+    private IReadOnlyList<GovernmentPropertyRowDto> _gov = [];
+    private IReadOnlyList<AssetCategoryDto> _categories = [];
+    private string? _error;
+    private bool _forbidden;
+
+    private DateOnly From => DateOnly.FromDateTime(_from ?? DateTime.Today);
+
+    private DateOnly To => DateOnly.FromDateTime(_to ?? DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _gov = await Reports.GetGovernmentPropertyAsync();
+            _categories = await Assets.ListCategoriesAsync();
+            await LoadRollAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadRollAsync();
+    }
+
+    private async Task LoadRollAsync()
+    {
+        try
+        {
+            _roll = await Reports.GetRollForwardAsync(From, To);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task DownloadAsync(Func<Task<AssetExportFile>> export)
+    {
+        try
+        {
+            await AssetFormat.DownloadAsync(JS, await export());
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

@@ -65,6 +65,8 @@ dotnet build src/Workbench.Desktop -t:Run
   (`Email:Smtp:Host`, `Port`, `EnableSsl`, `UserName`, `Password`); `Email:From` sets the sender
 - `Notifications:PublicBaseUrl`: makes links in emails absolute; `Notifications:DigestHourLocal`: daily digest hour (default 7)
 - `Billing:CompanyName`, `Billing:RemitToAddress`, `Billing:CageCode`, `Billing:Uei`: the contractor details printed on invoices (SF 1034 and commercial)
+- `Purchasing:RequisitionFinanceThreshold`: requisitions over this total also need Finance approval after the project manager (default 10000); `Purchasing:MatchPriceTolerancePercent`: three-way match price tolerance (default 5)
+- `Assets:CapitalizationThreshold`: AP bill lines at or above this can be capitalized (default 5000); `Assets:GainLossAccountNumber` (default 4900) and `Assets:CashAccountNumber` (default 1010) for disposals
 - `Timekeeping:Cadence`: timesheet period, `Weekly` (Monday–Sunday, default) or `SemiMonthly` (1st–15th, 16th–end)
 - `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
 - `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
