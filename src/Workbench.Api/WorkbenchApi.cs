@@ -27,6 +27,7 @@ public static class WorkbenchApi
         v1.MapDashboardEndpoints();
         v1.MapTimeEndpoints();
         v1.MapOdcEndpoints();
+        v1.MapFinancialsEndpoints();
 
         return app;
     }

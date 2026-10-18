@@ -1,0 +1,257 @@
+@page "/projects/{ProjectId:guid}/budgets"
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject IFiscalCalendarService Calendar
+@inject IBudgetService Budgets
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_project?.Code ?? "Project") budgets · Workbench</PageTitle>
+
+@if (_loading && _project is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_project is null)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Project not found</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudIconButton Href="@($"projects/{ProjectId}/financials")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to financials" />
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Budgets</MudChip>
+        <MudSpacer />
+        <MudButton Href="@($"projects/{ProjectId}/financials")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Insights">Financials</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => NewVersionAsync(BudgetVersionSource.Empty, null)">New version</MudButton>
+    </MudStack>
+
+    <MudSimpleTable Dense="true" Hover="true" Outlined="true" Class="mb-3">
+        <thead>
+            <tr><th>Version</th><th>Kind</th><th style="text-align: right">Hours</th><th style="text-align: right">Amount</th><th>Lines</th><th>Created</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var v in _versions)
+            {
+                <tr @onclick="() => SelectAsync(v.Id)" style="cursor: pointer" class="@(v.Id == _selected?.Version.Id ? "mud-selected-item mud-primary-hover" : "")">
+                    <td>@v.Name</td>
+                    <td><MudChip T="string" Size="Size.Small" Color="KindColor(v.Kind)">@v.Kind</MudChip></td>
+                    <td style="text-align: right">@FinancialFormat.Hours(v.TotalHours)</td>
+                    <td style="text-align: right">@FinancialFormat.Money(v.TotalAmount)</td>
+                    <td>@v.LineCount</td>
+                    <td>@v.CreatedAtUtc.ToString("yyyy-MM-dd") · @v.CreatedBy</td>
+                    <td>
+                        @if (v.IsLocked)
+                        {
+                            <MudTooltip Text="@($"Locked {v.LockedAtUtc:yyyy-MM-dd} by {v.LockedBy}")">
+                                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" />
+                            </MudTooltip>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (_versions.Count == 0)
+            {
+                <tr><td colspan="7" class="mud-text-secondary">No budget versions yet. Create one empty or from the plan sheet.</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    <MudStack Row="true" Spacing="2" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" Disabled="_selected is null || _busy"
+                   OnClick="() => NewVersionAsync(BudgetVersionSource.CopyVersion, _selected?.Version.Id)">Copy</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.TableChart" Disabled="_project.SheetId is null || _busy"
+                   OnClick="() => NewVersionAsync(BudgetVersionSource.PlanSheet, null)">Create from plan sheet</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Lock" Disabled="!CanLock || _busy" OnClick="LockAsync">Lock baseline</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upgrade" Disabled="!CanPromote || _busy" OnClick="PromoteAsync">Promote to Current</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PriceChange" Disabled="_selected is null || _selected.Version.IsLocked || _busy" OnClick="RepriceAsync">Reprice</MudButton>
+    </MudStack>
+
+    @if (_selected is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">
+                @_selected.Version.Kind: @_selected.Version.Name · @FinancialFormat.Hours(_selected.Version.TotalHours) hrs · @FinancialFormat.Money(_selected.Version.TotalAmount)
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(_selected.Version.Description))
+            {
+                <MudText Class="mud-text-secondary mb-2">@_selected.Version.Description</MudText>
+            }
+            <BudgetLineEditor Detail="_selected" Wbs="_wbs" Categories="_categories" Periods="_periods" ReadOnly="_selected.Version.IsLocked"
+                              Saving="_busy" OnSave="SaveLinesAsync" />
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+
+    private ProjectDto? _project;
+    private IReadOnlyList<BudgetVersionDto> _versions = [];
+    private BudgetVersionDetailDto? _selected;
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private bool _loading = true;
+    private bool _busy;
+
+    private bool CanLock => _selected?.Version is { Kind: BudgetVersionKind.Baseline, IsLocked: false };
+
+    private bool CanPromote => _selected?.Version.Kind == BudgetVersionKind.Forecast;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _project = await Projects.GetProjectAsync(ProjectId);
+            if (_project is null)
+            {
+                return;
+            }
+
+            _wbs = await Projects.ListWbsAsync(ProjectId);
+            _categories = await People.ListLaborCategoriesAsync();
+            _periods = await Calendar.ListPeriodsAsync();
+            await RefreshAsync(null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load budgets: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshAsync(Guid? select)
+    {
+        _versions = await Budgets.ListVersionsAsync(ProjectId);
+        var id = select ?? _selected?.Version.Id ?? _versions.FirstOrDefault(v => v.Kind == BudgetVersionKind.Current)?.Id ?? _versions.FirstOrDefault()?.Id;
+        _selected = id is { } v ? await Budgets.GetVersionAsync(v) : null;
+    }
+
+    private async Task SelectAsync(Guid id) => _selected = await Budgets.GetVersionAsync(id);
+
+    private async Task NewVersionAsync(BudgetVersionSource source, Guid? sourceVersionId)
+    {
+        var parameters = new DialogParameters<NewBudgetVersionDialog>
+        {
+            { d => d.Versions, _versions },
+            { d => d.HasPlanSheet, _project?.SheetId is not null },
+            { d => d.InitialSource, source },
+            { d => d.InitialSourceVersionId, sourceVersionId },
+        };
+        var dialog = await DialogService.ShowAsync<NewBudgetVersionDialog>("New budget version", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: CreateBudgetVersionRequest request })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var created = await Budgets.CreateVersionAsync(ProjectId, request);
+            await RefreshAsync(created.Version.Id);
+            Snackbar.Add($"Created {created.Version.Kind} \"{created.Version.Name}\" with {created.Lines.Count} lines.", Severity.Success);
+        });
+    }
+
+    private async Task SaveLinesAsync(IReadOnlyList<SaveBudgetLineRequest> lines)
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            _selected = await Budgets.SaveLinesAsync(_selected.Version.Id, lines);
+            _versions = await Budgets.ListVersionsAsync(ProjectId);
+            Snackbar.Add("Budget lines saved.", Severity.Success);
+        });
+    }
+
+    private async Task LockAsync()
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<Workbench.Ui.Grid.ConfirmDialog>
+        {
+            { d => d.Message, $"Lock \"{_selected.Version.Name}\" as the baseline? It can't be edited afterwards." },
+            { d => d.ConfirmText, "Lock baseline" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Grid.ConfirmDialog>("Lock baseline", parameters);
+        if (await dialog.Result is not { Canceled: false })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Budgets.LockBaselineAsync(_selected.Version.Id, "Baseline approved");
+            await RefreshAsync(_selected.Version.Id);
+            Snackbar.Add("Baseline locked.", Severity.Success);
+        });
+    }
+
+    private async Task PromoteAsync()
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Budgets.PromoteToCurrentAsync(_selected.Version.Id);
+            await RefreshAsync(_selected.Version.Id);
+            Snackbar.Add($"\"{_selected.Version.Name}\" is now the Current budget.", Severity.Success);
+        });
+    }
+
+    private async Task RepriceAsync()
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var before = _selected.Version.TotalAmount;
+            _selected = await Budgets.RepriceAsync(_selected.Version.Id);
+            _versions = await Budgets.ListVersionsAsync(ProjectId);
+            Snackbar.Add($"Repriced: {FinancialFormat.Money(before)} → {FinancialFormat.Money(_selected.Version.TotalAmount)}.", Severity.Success);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color KindColor(BudgetVersionKind kind) => kind switch
+    {
+        BudgetVersionKind.Baseline => Color.Dark,
+        BudgetVersionKind.Current => Color.Primary,
+        _ => Color.Default,
+    };
+}

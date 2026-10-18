@@ -130,6 +130,8 @@ public static class DatabaseInitializer
             new(Markdown: "## Program Office overview\nFigures come from the **Integrated Master Schedule** and the program's contract.\n\n- Widgets refresh when the sheet changes\n- Choose *Edit* to add, move or resize widgets")));
         db.Add(overview);
         await db.SaveChangesAsync(cancellationToken);
+
+        await FinancialsSeed.SeedAsync(db, cancellationToken);
     }
 
     /// <summary>

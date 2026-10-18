@@ -1,0 +1,145 @@
+@* WBS tree with rolled-up budget, actual and EAC for hours and dollars. Negative variance is highlighted. *@
+
+<style>
+    .wbs-fin th, .wbs-fin td { white-space: nowrap; }
+    .wbs-fin td.num, .wbs-fin th.num { text-align: right; }
+    .wbs-fin tr.wbs-parent td { font-weight: 600; }
+    .wbs-fin tr.wbs-total td { font-weight: 700; border-top: 2px solid var(--mud-palette-lines-default); }
+</style>
+
+<MudSimpleTable Dense="true" Hover="true" Outlined="true" Class="wbs-fin" Style="overflow-x: auto">
+    <thead>
+        <tr>
+            <th>WBS</th>
+            <th>Name</th>
+            @if (!Compact)
+            {
+                <th class="num">Budget hrs</th>
+                <th class="num">Actual hrs</th>
+                <th class="num">EAC hrs</th>
+                <th class="num">VAC hrs</th>
+            }
+            <th class="num">Budget $</th>
+            <th class="num">Actual $</th>
+            <th class="num">EAC $</th>
+            <th class="num">VAC $</th>
+            <th class="num">% spent</th>
+            @if (ShowBillable && !Compact)
+            {
+                <th class="num">Billable value</th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in VisibleRows)
+        {
+            var f = row.Figures;
+            <tr class="@(row.IsLeaf ? "" : "wbs-parent")">
+                <td>
+                    <span style="padding-left: @(row.Depth * 20)px; display: inline-flex; align-items: center;">
+                        @if (row.IsLeaf)
+                        {
+                            <span style="width: 28px; display: inline-block"></span>
+                        }
+                        else
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@(_collapsed.Contains(row.WbsElementId) ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.ExpandMore)"
+                                           OnClick="() => Toggle(row.WbsElementId)" aria-label="@($"Expand or collapse {row.Code}")" />
+                        }
+                        @row.Code
+                    </span>
+                </td>
+                <td>@row.Name</td>
+                @if (!Compact)
+                {
+                    <td class="num">@FinancialFormat.Hours(f.BudgetHours)</td>
+                    <td class="num">@FinancialFormat.Hours(f.ActualHours)</td>
+                    <td class="num">@FinancialFormat.Hours(f.EacHours)</td>
+                    <td class="num"><span class="@Variance(f.VacHours)">@FinancialFormat.Hours(f.VacHours)</span></td>
+                }
+                <td class="num">@FinancialFormat.Money(f.BudgetAmount)</td>
+                <td class="num">@FinancialFormat.Money(f.ActualCost)</td>
+                <td class="num">@FinancialFormat.Money(f.EacAmount)</td>
+                <td class="num"><span class="@Variance(f.VacAmount)">@FinancialFormat.Money(f.VacAmount)</span></td>
+                <td class="num"><span class="@FinancialFormat.SpentClass(f.PercentSpent)">@FinancialFormat.Percent(f.PercentSpent)</span></td>
+                @if (ShowBillable && !Compact)
+                {
+                    <td class="num">@FinancialFormat.Money(f.BillableValue)</td>
+                }
+            </tr>
+        }
+        @if (Totals is { } t)
+        {
+            <tr class="wbs-total">
+                <td>Total</td>
+                <td></td>
+                @if (!Compact)
+                {
+                    <td class="num">@FinancialFormat.Hours(t.BudgetHours)</td>
+                    <td class="num">@FinancialFormat.Hours(t.ActualHours)</td>
+                    <td class="num">@FinancialFormat.Hours(t.EacHours)</td>
+                    <td class="num"><span class="@Variance(t.VacHours)">@FinancialFormat.Hours(t.VacHours)</span></td>
+                }
+                <td class="num">@FinancialFormat.Money(t.BudgetAmount)</td>
+                <td class="num">@FinancialFormat.Money(t.ActualCost)</td>
+                <td class="num">@FinancialFormat.Money(t.EacAmount)</td>
+                <td class="num"><span class="@Variance(t.VacAmount)">@FinancialFormat.Money(t.VacAmount)</span></td>
+                <td class="num">@FinancialFormat.Percent(t.PercentSpent)</td>
+                @if (ShowBillable && !Compact)
+                {
+                    <td class="num">@FinancialFormat.Money(t.BillableValue)</td>
+                }
+            </tr>
+        }
+        @if (Rows.Count == 0)
+        {
+            <tr><td colspan="13" class="mud-text-secondary">This project has no WBS elements yet.</td></tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<WbsFinancialRowDto> Rows { get; set; } = [];
+
+    [Parameter]
+    public FinancialFigures? Totals { get; set; }
+
+    /// <summary>Dollars only (for the sheet's Financials tab).</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    [Parameter]
+    public bool ShowBillable { get; set; }
+
+    private readonly HashSet<Guid> _collapsed = [];
+
+    private IEnumerable<WbsFinancialRowDto> VisibleRows
+    {
+        get
+        {
+            var hiddenUnder = new HashSet<Guid>();
+            foreach (var row in Rows)
+            {
+                if (row.ParentId is { } parent && (hiddenUnder.Contains(parent) || _collapsed.Contains(parent)))
+                {
+                    hiddenUnder.Add(row.WbsElementId);
+                    continue;
+                }
+
+                yield return row;
+            }
+        }
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!_collapsed.Remove(id))
+        {
+            _collapsed.Add(id);
+        }
+    }
+
+    // Only overruns are colored, so the grid doesn't turn green everywhere.
+    private static string Variance(decimal value) => value < 0 ? "mud-error-text" : "";
+}

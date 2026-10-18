@@ -1,0 +1,79 @@
+@* New budget version: empty, a copy of another version, or from the plan sheet's Planned hours and Budget columns. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3" Style="min-width: 380px">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
+            <MudSelect T="BudgetVersionKind" @bind-Value="_kind" Label="Kind">
+                @foreach (var kind in Enum.GetValues<BudgetVersionKind>())
+                {
+                    <MudSelectItem Value="kind" Disabled="Taken(kind)">@kind@(Taken(kind) ? " (already exists)" : "")</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="BudgetVersionSource" @bind-Value="_source" Label="Start from">
+                <MudSelectItem Value="BudgetVersionSource.Empty">Empty</MudSelectItem>
+                <MudSelectItem Value="BudgetVersionSource.CopyVersion" Disabled="Versions.Count == 0">Copy of another version</MudSelectItem>
+                <MudSelectItem Value="BudgetVersionSource.PlanSheet" Disabled="!HasPlanSheet">Plan sheet (Planned hours and Budget)</MudSelectItem>
+            </MudSelect>
+            @if (_source == BudgetVersionSource.CopyVersion)
+            {
+                <MudSelect T="Guid?" @bind-Value="_sourceVersionId" Label="Version to copy" ToStringFunc="Label">
+                    @foreach (var v in Versions)
+                    {
+                        <MudSelectItem T="Guid?" Value="v.Id">@v.Kind: @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField @bind-Value="_description" Label="Description" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!CanSubmit" OnClick="Submit">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<BudgetVersionDto> Versions { get; set; } = [];
+
+    [Parameter]
+    public bool HasPlanSheet { get; set; }
+
+    [Parameter]
+    public BudgetVersionSource InitialSource { get; set; }
+
+    [Parameter]
+    public Guid? InitialSourceVersionId { get; set; }
+
+    private string _name = string.Empty;
+    private BudgetVersionKind _kind = BudgetVersionKind.Forecast;
+    private BudgetVersionSource _source;
+    private Guid? _sourceVersionId;
+    private string? _description;
+
+    protected override void OnInitialized()
+    {
+        _source = InitialSource;
+        _sourceVersionId = InitialSourceVersionId;
+        _kind = Enum.GetValues<BudgetVersionKind>().FirstOrDefault(k => !Taken(k) && k != BudgetVersionKind.Forecast, BudgetVersionKind.Forecast);
+        var source = Versions.FirstOrDefault(v => v.Id == _sourceVersionId);
+        _name = source is null ? "" : $"{source.Name} (copy)";
+    }
+
+    private bool Taken(BudgetVersionKind kind) => kind != BudgetVersionKind.Forecast && Versions.Any(v => v.Kind == kind);
+
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(_name) && !Taken(_kind)
+        && (_source != BudgetVersionSource.CopyVersion || _sourceVersionId is not null);
+
+    private string Label(Guid? id) => Versions.FirstOrDefault(v => v.Id == id) is { } v ? $"{v.Kind}: {v.Name}" : "";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit() =>
+        MudDialog.Close(DialogResult.Ok(new CreateBudgetVersionRequest(_name.Trim(), _kind, _source,
+            _source == BudgetVersionSource.CopyVersion ? _sourceVersionId : null, _description)));
+}

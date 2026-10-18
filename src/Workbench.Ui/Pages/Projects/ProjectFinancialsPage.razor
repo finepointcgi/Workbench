@@ -1,0 +1,166 @@
+@page "/projects/{ProjectId:guid}/financials"
+@inject IProjectService Projects
+@inject IBudgetService Budgets
+@inject IProjectFinancialsService Financials
+@inject IFinancialExportService Exports
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_project?.Code ?? "Project") financials · Workbench</PageTitle>
+
+@if (_loading && _summary is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_project is null || _summary is null)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Project not found</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+        @if (_project.SheetId is { } sheetId)
+        {
+            <MudIconButton Href="@($"sheets/{sheetId}")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the plan sheet" />
+        }
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Financials</MudChip>
+        <MudSpacer />
+        <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.EditNote">Budgets</MudButton>
+        <MudMenu Label="Export CSV" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download">
+            <MudMenuItem OnClick="ExportWbsAsync">WBS financials</MudMenuItem>
+            <MudMenuItem OnClick="ExportBurnAsync">Time-phased burn</MudMenuItem>
+        </MudMenu>
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
+    </MudStack>
+
+    <MudStack Row="true" Spacing="3" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.End">
+        <MudSelect T="Guid?" Label="Budget version" Value="_budgetVersionId" ValueChanged="OnBudgetChangedAsync" Dense="true" Style="min-width: 260px"
+                   ToStringFunc="VersionLabel">
+            <MudSelectItem T="Guid?" Value="null">Current (default)</MudSelectItem>
+            @foreach (var v in _versions.Where(v => v.Kind != BudgetVersionKind.Forecast))
+            {
+                <MudSelectItem T="Guid?" Value="v.Id">@v.Kind: @v.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="Guid?" Label="Estimate to complete" Value="_forecastVersionId" ValueChanged="OnForecastChangedAsync" Dense="true" Style="min-width: 260px"
+                   ToStringFunc="ForecastLabel">
+            <MudSelectItem T="Guid?" Value="null">Remaining budget</MudSelectItem>
+            @foreach (var v in _versions.Where(v => v.Kind == BudgetVersionKind.Forecast))
+            {
+                <MudSelectItem T="Guid?" Value="v.Id">Forecast: @v.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            @(_summary.BudgetVersionName is { } name ? $"Showing {name}" : "No budget") · as of @_summary.AsOf.ToString("yyyy-MM-dd")
+            @(_summary.ContractNumber is { } c ? $" · {c} ({_summary.ContractType})" : "")
+        </MudText>
+    </MudStack>
+
+    @foreach (var note in _summary.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+
+    <FinancialTiles Summary="_summary" />
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">By WBS</MudText>
+    <WbsFinancialsGrid Rows="_rows" Totals="_summary.Totals" ShowBillable="_summary.ShowsBillableValue" />
+
+    <MudGrid Spacing="3" Class="mt-2">
+        <MudItem xs="12" md="8">
+            @if (_burn is not null)
+            {
+                <BurnCharts Burn="_burn" />
+            }
+        </MudItem>
+        <MudItem xs="12" md="4">
+            @if (_summary.Funding is { } funding)
+            {
+                <FundingPanel Funding="funding" />
+            }
+            else
+            {
+                <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">This project isn't on a contract.</MudText></MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+
+    private ProjectDto? _project;
+    private IReadOnlyList<BudgetVersionDto> _versions = [];
+    private ProjectFinancialSummaryDto? _summary;
+    private IReadOnlyList<WbsFinancialRowDto> _rows = [];
+    private TimePhasedBurnDto? _burn;
+    private Guid? _budgetVersionId;
+    private Guid? _forecastVersionId;
+    private bool _loading = true;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _project = await Projects.GetProjectAsync(ProjectId);
+            if (_project is null)
+            {
+                return;
+            }
+
+            _versions = await Budgets.ListVersionsAsync(ProjectId);
+            _summary = await Financials.GetProjectSummaryAsync(ProjectId, _budgetVersionId, _forecastVersionId);
+            _rows = await Financials.GetWbsFinancialsAsync(ProjectId, _budgetVersionId, _forecastVersionId);
+            _burn = await Financials.GetTimePhasedBurnAsync(ProjectId, _budgetVersionId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException)
+        {
+            Snackbar.Add($"Couldn't load financials: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnBudgetChangedAsync(Guid? id)
+    {
+        _budgetVersionId = id;
+        await LoadAsync();
+    }
+
+    private async Task OnForecastChangedAsync(Guid? id)
+    {
+        _forecastVersionId = id;
+        await LoadAsync();
+    }
+
+    private string VersionLabel(Guid? id) =>
+        id is null ? "Current (default)" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"{v.Kind}: {v.Name}" : "";
+
+    private string ForecastLabel(Guid? id) =>
+        id is null ? "Remaining budget" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"Forecast: {v.Name}" : "";
+
+    private async Task ExportWbsAsync() => await DownloadAsync(() => Exports.ExportWbsCsvAsync(ProjectId, _budgetVersionId, _forecastVersionId));
+
+    private async Task ExportBurnAsync() => await DownloadAsync(() => Exports.ExportTimePhasedCsvAsync(ProjectId, _budgetVersionId));
+
+    private async Task DownloadAsync(Func<Task<FinancialExportFile>> export)
+    {
+        try
+        {
+            var file = await export();
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/financials.js");
+            await module.InvokeVoidAsync("downloadText", file.FileName, file.ContentType, file.Content);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or JSException)
+        {
+            Snackbar.Add($"Couldn't export: {ex.Message}", Severity.Error);
+        }
+    }
+}
