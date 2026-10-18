@@ -1,0 +1,101 @@
+@* The "To do" list, grouped overdue → today → this week → coming up. Shared by the home page and the mobile Today tab.
+   Inline actions (approve a leave request or a simple document) run here; the item disappears and OnChanged reloads. *@
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (_visible.Count == 0)
+{
+    <MudPaper Class="pa-6 d-flex flex-column align-center gap-1" Outlined="true" data-testid="all-caught-up">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+        <MudText Typo="Typo.h6" HtmlTag="p">You're all caught up</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary" Align="Align.Center">Nothing needs you right now. New tasks show up here as they come in.</MudText>
+    </MudPaper>
+}
+else
+{
+    @foreach (var group in _visible.GroupBy(i => i.Urgency))
+    {
+        <MudText Typo="Typo.overline" HtmlTag="h3" Class="d-block mt-2" Color="TodoFormat.Color(group.Key)" data-urgency="@group.Key">
+            @TodoFormat.Heading(group.Key) · @group.Count()
+        </MudText>
+        <MudPaper Outlined="true" Class="mb-2">
+            @foreach (var item in group)
+            {
+                <div @key="item.Key" class="@($"d-flex align-start gap-3 pa-3{(Compact ? " flex-wrap" : "")}")" data-todo="@item.Key"
+                     style="@($"border-left:3px solid {TodoFormat.Accent(item.Urgency)}")">
+                    <MudIcon Icon="@TodoFormat.Icon(item.Category)" Color="TodoFormat.Color(item.Urgency)" Class="mt-1" />
+                    <div style="flex:1;min-width:0">
+                        <MudLink Href="@item.Link" Typo="Typo.subtitle1" Underline="Underline.Hover" Color="Color.Inherit" data-testid="todo-title">@item.Title</MudLink>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@item.Reason</MudText>
+                        @if (TodoFormat.Due(item, Today) is { } due)
+                        {
+                            <MudText Typo="Typo.caption" Color="@(item.Urgency == TodoUrgency.Overdue ? Color.Error : Color.Default)">@due</MudText>
+                        }
+                    </div>
+                    @* On a phone the buttons go under the text (lined up with it) so the text keeps the width. *@
+                    <div class="@($"d-flex gap-2 flex-wrap {(Compact ? "justify-start" : "justify-end")}")" style="@(Compact ? "flex-basis:100%;padding-left:36px" : "flex-shrink:0")">
+                        @if (item.Action is { } action)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="@(Compact ? Size.Medium : Size.Small)"
+                                       Disabled="_busy.Contains(item.Key)" OnClick="() => RunAsync(item, action)" data-testid="todo-action">
+                                @(_busy.Contains(item.Key) ? "Working…" : action.Label)
+                            </MudButton>
+                        }
+                        @if (!Compact || item.Action is null)
+                        {
+                            <MudButton Href="@item.Link" Variant="Variant.Outlined" Color="Color.Primary" Size="@(Compact ? Size.Medium : Size.Small)">@item.LinkLabel</MudButton>
+                        }
+                    </div>
+                </div>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MyTodoItem> Items { get; set; } = [];
+
+    [Parameter] public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>Phone layout: bigger buttons, and only the inline action when there is one.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>Raised after an inline action succeeded, so the page can reload.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private readonly HashSet<string> _done = [];
+    private readonly HashSet<string> _busy = [];
+    private List<MyTodoItem> _visible = [];
+
+    protected override void OnParametersSet() => _visible = Items.Where(i => !_done.Contains(i.Key)).ToList();
+
+    private async Task RunAsync(MyTodoItem item, TodoInlineAction action)
+    {
+        _busy.Add(item.Key);
+        try
+        {
+            switch (action.Kind)
+            {
+                case TodoInlineActionKind.ApproveLeave:
+                    await Services.GetRequiredService<ILeaveRequestService>().ApproveAsync(action.TargetId, new DecideLeaveRequest());
+                    break;
+                case TodoInlineActionKind.ApproveDocument:
+                    await Services.GetRequiredService<IApprovalInboxService>().DecideAsync(action.DocumentType!, action.TargetId, new ApprovalDecisionRequest(ApprovalDecisionKind.Approve));
+                    break;
+            }
+
+            _done.Add(item.Key);
+            _visible.Remove(item);
+            Snackbar.Add($"Done: {item.Title}", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (TodoFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't do that: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy.Remove(item.Key);
+        }
+    }
+}

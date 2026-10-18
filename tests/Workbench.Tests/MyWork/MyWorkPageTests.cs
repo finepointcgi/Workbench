@@ -5,7 +5,7 @@ using Workbench.Application.MyWork;
 using Workbench.Contracts.MyWork;
 using Workbench.Contracts.Sheets;
 using Workbench.Tests.Board;
-using Workbench.Ui.Pages;
+using Workbench.Ui.Home;
 using static Workbench.Tests.MyWork.MyWorkCalculatorTests;
 
 namespace Workbench.Tests.MyWork;
@@ -22,7 +22,7 @@ public sealed class MyWorkPageTests
     }
 
     [Fact]
-    public async Task Shows_groups_tiles_timesheet_card_and_saves_status_inline()
+    public async Task Sheet_items_show_groups_and_save_status_inline()
     {
         var sheet = Sheet(true, Status, Owner);
         var me = (Owner, (string?)"pm@example.com");
@@ -42,16 +42,13 @@ public sealed class MyWorkPageTests
         ctx.Services.AddSingleton<IItemService>(itemService);
         var popovers = ctx.Render<MudBlazor.MudPopoverProvider>();
 
-        var page = ctx.Render<Home>();
+        var page = ctx.Render<MySheetItems>(p => p.Add(x => x.InitiallyExpanded, true));
 
         page.WaitForAssertion(() => Assert.Contains("Late report", page.Markup));
         Assert.Equal(["Overdue", "DueThisWeek"], page.FindAll("[data-bucket]").Select(e => e.GetAttribute("data-bucket")));
         Assert.DoesNotContain("Shipped", page.Markup); // done items are hidden until "Show done"
-        Assert.Equal(["2", "1", "1", "1"], page.FindAll("[data-tile]").Select(e => e.TextContent.Trim()));
+        Assert.Contains("2 open", page.Markup);
         Assert.Contains($"sheets/{sheet.Summary.Id}?item={items[0].Id}", page.Markup);
-        var card = page.Find("[data-card='timesheet']");
-        Assert.Contains("12 Oct", card.TextContent);
-        Assert.Equal("time", card.QuerySelector("a")!.GetAttribute("href"));
 
         page.Find($"tr[data-item='{items[0].Id}'] .mud-select .mud-input-control").MouseDown();
         popovers.WaitForAssertion(() => Assert.Contains("Done", popovers.Markup));

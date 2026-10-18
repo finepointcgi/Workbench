@@ -1,0 +1,82 @@
+@* "Waiting on you": the oldest approvals in the inbox. Simple ones (timesheets) can be approved right here. *@
+@inject IApprovalInboxService Inbox
+@inject ISnackbar Snackbar
+
+<MudPaper Class="pa-4 mb-4" Outlined="true" data-card="waiting-on-you">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Waiting on you</MudText>
+        <MudChip T="string" Size="Size.Small" Color="Color.Primary">@_count</MudChip>
+        <MudSpacer />
+        <MudLink Href="approvals" Typo="Typo.body2">See all</MudLink>
+    </MudStack>
+    @foreach (var item in _items)
+    {
+        <div @key="item.TaskId" class="d-flex align-center gap-2 py-2" style="border-top:1px solid var(--mud-palette-lines-default)" data-approval="@item.DocumentId">
+            <div style="flex:1;min-width:0">
+                <MudLink Href="@item.Link" Typo="Typo.body1" Color="Color.Inherit">@item.Title</MudLink>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    @item.DocumentLabel
+                    @if (item.Amount is { } amount && item.DocumentType != ApprovalDocumentTypes.Timesheet)
+                    {
+                        <text> · @TodoFormat.Money(amount)</text>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(item.Summary))
+                    {
+                        <text> · @item.Summary</text>
+                    }
+                    · @(item.BusinessDaysWaiting == 0 ? "today" : item.BusinessDaysWaiting == 1 ? "1 day" : $"{item.BusinessDaysWaiting} days")
+                </MudText>
+            </div>
+            @if (ApprovalsPreviewDto.CanQuickApprove(item))
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" Disabled="_busy.Contains(item.TaskId)"
+                           OnClick="() => ApproveAsync(item)" data-testid="quick-approve">
+                    @(_busy.Contains(item.TaskId) ? "Approving…" : "Approve")
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Href="@item.Link" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">Review</MudButton>
+            }
+        </div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public ApprovalsPreviewDto Approvals { get; set; } = default!;
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private readonly HashSet<Guid> _busy = [];
+    private readonly HashSet<Guid> _done = [];
+    private List<ApprovalInboxItemDto> _items = [];
+    private int _count;
+
+    protected override void OnParametersSet()
+    {
+        _items = Approvals.Top.Where(i => !_done.Contains(i.TaskId)).ToList();
+        _count = Math.Max(0, Approvals.Count - Approvals.Top.Count(i => _done.Contains(i.TaskId)));
+    }
+
+    private async Task ApproveAsync(ApprovalInboxItemDto item)
+    {
+        _busy.Add(item.TaskId);
+        try
+        {
+            await Inbox.DecideAsync(item.DocumentType, item.DocumentId, new ApprovalDecisionRequest(ApprovalDecisionKind.Approve));
+            _done.Add(item.TaskId);
+            _items.Remove(item);
+            _count = Math.Max(0, _count - 1);
+            Snackbar.Add($"Approved {item.Title}", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (TodoFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't approve: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy.Remove(item.TaskId);
+        }
+    }
+}
