@@ -1,0 +1,13 @@
+@* The five aging bucket cells and the total. *@
+@foreach (var v in new[] { Value.Current, Value.Days1To30, Value.Days31To60, Value.Days61To90, Value.Over90, Value.Total })
+{
+    <td style="text-align:right; white-space:nowrap">@if (Bold) { <strong>@BillingFormat.Amount(v)</strong> } else { @BillingFormat.Blank(v) }</td>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public AgingBuckets Value { get; set; } = AgingBuckets.Zero;
+
+    [Parameter]
+    public bool Bold { get; set; }
+}

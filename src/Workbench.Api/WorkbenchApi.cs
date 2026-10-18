@@ -33,6 +33,7 @@ public static class WorkbenchApi
         v1.MapSecurityAdminEndpoints();
         v1.MapContractDetailEndpoints();
         v1.MapIndirectRateEndpoints();
+        v1.MapBillingEndpoints();
 
         return app;
     }

@@ -168,3 +168,9 @@ await notifications.PublishAsync(
   `ListChargeCodesAsync`: no WBS mapped to an unexercised option or outside its CLIN's period. Limitation of Funds notices
   (`funding.limitation`) fire once per CLIN, threshold (`FundingNotices:WarningThreshold` 0.75 / `CriticalThreshold` 0.90)
   and funded value.
+- Billing and AR (`Contracts/Billing/BillingContracts.cs`, `Application/Billing/`): `IInvoiceService`, `IBillingMilestoneService`,
+  `IPaymentService`, `IArReportService`. Invoices post through `BillingLedger` (GL source `Billing`, source id = invoice,
+  payment or accrual id) in the same unit of work as the approval. A hour, ODC or milestone is billed once: `BilledSource`
+  rows hold it until the invoice is voided. Cost-plus bills cumulative cost less billed cost, so it reads
+  `IBurdenedCostService` from the contract start; without a registered implementation it bills direct cost only and says
+  so. Other modules can add a period-close checklist item by registering `Application.Accounting.IPeriodCloseCheck`.

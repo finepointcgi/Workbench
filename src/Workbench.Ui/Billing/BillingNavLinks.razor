@@ -1,0 +1,30 @@
+@* The Billing menu, for Finance and administrators. The pages and the server check again. *@
+@inject ICurrentUserContext UserContext
+
+@if (_show)
+{
+    <MudNavGroup Title="Billing" Icon="@Icons.Material.Filled.RequestPage" data-testid="billing-nav">
+        <MudNavLink Href="billing" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Receipt">Invoices</MudNavLink>
+        <MudNavLink Href="billing/new" Icon="@Icons.Material.Filled.NoteAdd">New invoice</MudNavLink>
+        <MudNavLink Href="billing/contracts" Icon="@Icons.Material.Filled.Flag">Contracts and milestones</MudNavLink>
+        <MudNavLink Href="billing/payments" Icon="@Icons.Material.Filled.Payments">Payments</MudNavLink>
+        <MudNavLink Href="billing/aging" Icon="@Icons.Material.Filled.HourglassBottom">AR aging</MudNavLink>
+        <MudNavLink Href="billing/accrual" Icon="@Icons.Material.Filled.EventRepeat">Unbilled accrual</MudNavLink>
+    </MudNavGroup>
+}
+
+@code {
+    private bool _show;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _show = (await UserContext.GetAsync()).IsFinance;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _show = false;
+        }
+    }
+}

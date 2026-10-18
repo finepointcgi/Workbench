@@ -1,0 +1,52 @@
+@* Asks for a reason (or other text) before an audited billing action. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <MudText>@Message</MudText>
+            }
+            @foreach (var w in Warnings)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">@w</MudAlert>
+            }
+            @if (AskText)
+            {
+                <MudTextField @bind-Value="_text" Label="@Label" Required="Required" Immediate="true" Lines="2" AutoFocus="true" HelperText="Recorded in the audit log." data-testid="dialog-text" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="ConfirmColor" Variant="Variant.Filled" Disabled="@(AskText && Required && string.IsNullOrWhiteSpace(_text))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_text?.Trim() ?? string.Empty))" data-testid="dialog-confirm">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<string> Warnings { get; set; } = [];
+
+    [Parameter]
+    public bool AskText { get; set; } = true;
+
+    [Parameter]
+    public bool Required { get; set; } = true;
+
+    [Parameter]
+    public string Label { get; set; } = "Reason";
+
+    [Parameter]
+    public string ConfirmText { get; set; } = "Save";
+
+    [Parameter]
+    public Color ConfirmColor { get; set; } = Color.Primary;
+
+    private string? _text;
+}

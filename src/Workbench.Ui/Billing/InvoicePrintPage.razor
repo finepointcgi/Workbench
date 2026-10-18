@@ -1,0 +1,244 @@
+@page "/billing/invoices/{InvoiceId:guid}/print"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@inject IInvoiceService Invoices
+@inject IJSRuntime JS
+
+<PageTitle>@(_print?.Invoice.Summary.Number ?? "Invoice") · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"billing/invoices/{InvoiceId}")">← Back to the invoice</a>
+    <span class="spacer"></span>
+    <a href="@($"billing/invoices/{InvoiceId}/print?form=sf1034")" class="@(IsSf1034 ? "active" : "")">SF 1034 voucher</a>
+    <a href="@($"billing/invoices/{InvoiceId}/print?form=commercial")" class="@(IsSf1034 ? "" : "active")">Commercial invoice</a>
+    <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_print is null)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var inv = _print.Invoice;
+    var s = inv.Summary;
+    <div class="page" data-testid="print-view">
+        @if (s.Status is InvoiceState.Draft or InvoiceState.Void)
+        {
+            <div class="watermark">@(s.Status == InvoiceState.Draft ? "DRAFT" : "VOID")</div>
+        }
+
+        @if (IsSf1034)
+        {
+            <div class="form-head">
+                <div>
+                    <div class="small">Standard Form 1034 (style)</div>
+                    <h1>Public Voucher for Purchases and Services Other Than Personal</h1>
+                </div>
+                <table class="boxes narrow">
+                    <tr><th>Voucher no.</th><td data-testid="voucher-number">@s.Number</td></tr>
+                    <tr><th>Date prepared</th><td>@BillingFormat.Date(s.InvoiceDate)</td></tr>
+                    <tr><th>Contract number</th><td>@_print.ContractNumber</td></tr>
+                </table>
+            </div>
+            <table class="boxes">
+                <tr>
+                    <th>U.S. department, bureau or establishment</th>
+                    <th>Payee's name and address</th>
+                    <th>Paying office</th>
+                </tr>
+                <tr>
+                    <td><Party Value="_print.Payer" /></td>
+                    <td><Party Value="_print.Payee" /></td>
+                    <td>@(_print.PayingOffice ?? "—")<div class="small">Admin office: @(_print.AdminOffice ?? "—")</div></td>
+                </tr>
+                <tr>
+                    <th>Contract</th>
+                    <th>Period of service</th>
+                    <th>Discount terms</th>
+                </tr>
+                <tr>
+                    <td>@_print.ContractName<div class="small">@_print.ContractType</div></td>
+                    <td>@BillingFormat.Date(s.PeriodFrom) through @BillingFormat.Date(s.PeriodTo)</td>
+                    <td>Net @inv.PaymentTermsDays days · due @BillingFormat.Date(s.DueDate)</td>
+                </tr>
+            </table>
+        }
+        else
+        {
+            <div class="form-head">
+                <div>
+                    <h1 class="company">@_print.Payee.Name</h1>
+                    <div class="pre">@_print.Payee.Address</div>
+                    <div class="small">@_print.Payee.Code</div>
+                </div>
+                <table class="boxes narrow">
+                    <tr><th>@(s.Type == InvoiceKind.CreditMemo ? "Credit memo" : "Invoice")</th><td data-testid="voucher-number">@s.Number</td></tr>
+                    <tr><th>Date</th><td>@BillingFormat.Date(s.InvoiceDate)</td></tr>
+                    <tr><th>Terms</th><td>Net @inv.PaymentTermsDays</td></tr>
+                    <tr><th>Due</th><td>@BillingFormat.Date(s.DueDate)</td></tr>
+                </table>
+            </div>
+            <table class="boxes">
+                <tr><th>Bill to</th><th>Contract</th><th>Period of service</th></tr>
+                <tr>
+                    <td><Party Value="_print.Payer" /></td>
+                    <td>@_print.ContractNumber<div class="small">@_print.ContractName · @_print.ContractType</div></td>
+                    <td>@BillingFormat.Date(s.PeriodFrom) – @BillingFormat.Date(s.PeriodTo)</td>
+                </tr>
+            </table>
+        }
+
+        <h2>@(IsSf1034 ? "Articles or services" : "Charges")</h2>
+        <table class="lines">
+            <thead>
+                <tr><th>CLIN</th><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var group in inv.Lines.GroupBy(l => l.ClinNumber))
+                {
+                    @foreach (var l in group)
+                    {
+                        <tr>
+                            <td>@l.ClinNumber</td>
+                            <td>@l.Description</td>
+                            <td class="num">@BillingFormat.LineQuantity(l)</td>
+                            <td class="num">@BillingFormat.LineRate(l)</td>
+                            <td class="num">@BillingFormat.Amount(l.Amount)</td>
+                        </tr>
+                    }
+                    <tr class="subtotal">
+                        <td></td><td>CLIN @group.Key total</td><td></td><td></td><td class="num">@BillingFormat.Amount(group.Sum(l => l.Amount))</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td></td><td>Total amount @(s.Type == InvoiceKind.CreditMemo ? "credited" : "claimed")</td><td></td><td></td><td class="num" data-testid="print-total">@BillingFormat.Money(s.Total)</td></tr>
+                @if (inv.Withheld > 0)
+                {
+                    <tr class="small"><td></td><td colspan="4">Includes fee withheld until the final invoice: @BillingFormat.Money(inv.Withheld)</td></tr>
+                }
+            </tfoot>
+        </table>
+
+        @if (inv.RateNote is not null)
+        {
+            <p class="small">Indirect rates: @inv.RateNote</p>
+        }
+        @if (inv.Notes is not null)
+        {
+            <p class="pre">@inv.Notes</p>
+        }
+
+        <h2>Billed to date by CLIN</h2>
+        <table class="lines">
+            <thead><tr><th>CLIN</th><th>Description</th><th class="num">This invoice</th><th class="num">Billed to date</th><th class="num">Funded</th></tr></thead>
+            <tbody>
+                @foreach (var c in _print.ClinTotals)
+                {
+                    <tr><td>@c.ClinNumber</td><td>@c.Description</td><td class="num">@BillingFormat.Amount(c.ThisInvoice)</td><td class="num">@BillingFormat.Amount(c.BilledToDate)</td><td class="num">@BillingFormat.Amount(c.FundedValue)</td></tr>
+                }
+            </tbody>
+            <tfoot><tr><td></td><td>Contract billed to date</td><td></td><td class="num">@BillingFormat.Amount(_print.BilledToDate)</td><td></td></tr></tfoot>
+        </table>
+
+        @if (IsSf1034)
+        {
+            <div class="certify">
+                <p>I certify that the above bill is correct and just, and that payment has not been received.</p>
+                <div class="sign"><span>Signature and title</span><span>Date</span></div>
+            </div>
+        }
+        else
+        {
+            <p class="small">Please remit to @_print.Payee.Name@(_print.Payee.Address is null ? "" : ", " + _print.Payee.Address.Replace("\n", ", ")). Reference invoice @s.Number with your payment.</p>
+        }
+
+        <div class="attachment">
+            <h2>Attachment: hours by employee and labor category</h2>
+            @if (_print.Labor.Count == 0)
+            {
+                <p class="small">No labor on this invoice.</p>
+            }
+            else
+            {
+                var hasRates = _print.Labor.Any(l => l.Rate != 0);
+                <table class="lines" data-testid="labor-detail">
+                    <thead><tr><th>CLIN</th><th>Employee</th><th>Labor category</th><th class="num">Hours</th>@if (hasRates){<th class="num">Rate</th><th class="num">Amount</th>}</tr></thead>
+                    <tbody>
+                        @foreach (var l in _print.Labor)
+                        {
+                            <tr>
+                                <td>@l.ClinNumber</td><td>@l.EmployeeName <span class="small">@l.EmployeeNumber</span></td><td>@l.LaborCategory</td><td class="num">@BillingFormat.Hours(l.Hours)</td>
+                                @if (hasRates)
+                                {
+                                    <td class="num">@BillingFormat.Money(l.Rate)</td><td class="num">@BillingFormat.Amount(l.Amount)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><td></td><td>Total</td><td></td><td class="num">@BillingFormat.Hours(_print.Labor.Sum(l => l.Hours))</td>@if (hasRates){<td></td><td class="num">@BillingFormat.Amount(_print.Labor.Sum(l => l.Amount))</td>}</tr></tfoot>
+                </table>
+                @if (!hasRates)
+                {
+                    <p class="small">Approved hours in the billing period behind the cost billed above.</p>
+                }
+            }
+
+            <h2>Attachment: other direct costs</h2>
+            @if (_print.Odcs.Count == 0)
+            {
+                <p class="small">No ODCs on this invoice.</p>
+            }
+            else
+            {
+                <table class="lines" data-testid="odc-detail">
+                    <thead><tr><th>Date</th><th>CLIN</th><th>Type</th><th>Description</th><th>Vendor</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _print.Odcs)
+                        {
+                            <tr><td>@BillingFormat.Date(o.Date)</td><td>@o.ClinNumber</td><td>@o.Type</td><td>@o.Description</td><td>@o.Vendor</td><td class="num">@BillingFormat.Amount(o.Amount)</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><td></td><td></td><td></td><td>Total</td><td></td><td class="num">@BillingFormat.Amount(_print.Odcs.Sum(o => o.Amount))</td></tr></tfoot>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid InvoiceId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "form")]
+    public string? Form { get; set; }
+
+    private InvoicePrintDto? _print;
+    private string? _error;
+
+    private bool IsSf1034 => !string.Equals(Form, "commercial", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _print ??= await Invoices.GetPrintAsync(InvoiceId);
+        }
+        catch (Exception ex)
+        {
+            _error = BillingFormat.IsForbidden(ex)
+                ? "Invoices are for Finance, administrators and the managers of the contract's projects."
+                : BillingFormat.Error(ex);
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/billing.js");
+        await module.InvokeVoidAsync("printPage");
+    }
+}

@@ -1,0 +1,64 @@
+@* Aging buckets per row (customer or contract), with a total line. *@
+<MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
+    <MudSimpleTable Dense="true" Hover="true" data-testid="@TestId">
+        <thead>
+            <tr>
+                <th>Customer</th>
+                @if (ShowContract)
+                {
+                    <th>Contract</th>
+                }
+                <th style="text-align:right">Current</th><th style="text-align:right">1–30</th><th style="text-align:right">31–60</th>
+                <th style="text-align:right">61–90</th><th style="text-align:right">90+</th><th style="text-align:right">Total</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Rows.Count == 0)
+            {
+                <tr><td colspan="9" class="mud-text-secondary">Nothing outstanding.</td></tr>
+            }
+            @foreach (var r in Rows)
+            {
+                <tr>
+                    <td>@r.CustomerName</td>
+                    @if (ShowContract)
+                    {
+                        <td>@r.ContractNumber</td>
+                    }
+                    <Buckets Value="r.Buckets" />
+                    <td>
+                        @if (!ShowContract)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"billing/statements/{r.CustomerId}")">Statement</MudButton>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td><strong>Total</strong></td>
+                @if (ShowContract)
+                {
+                    <td></td>
+                }
+                <Buckets Value="Totals" Bold="true" />
+                <td></td>
+            </tr>
+        </tfoot>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AgingRowDto> Rows { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public AgingBuckets Totals { get; set; } = AgingBuckets.Zero;
+
+    [Parameter]
+    public bool ShowContract { get; set; }
+
+    [Parameter]
+    public string TestId { get; set; } = "aging";
+}
