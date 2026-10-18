@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Dashboards;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
 
@@ -9,7 +9,8 @@ namespace Workbench.Application.Dashboards;
 
 /// <summary>
 /// Computes widget data. Sheet data comes only from <see cref="ISheetService"/>, <see cref="IItemService"/>,
-/// <see cref="IDependencyService"/> and <see cref="ICostpointService"/>, never EF, so visibility rules apply.
+/// <see cref="IDependencyService"/>, <see cref="IContractService"/> and <see cref="IProjectService"/>, never EF, so
+/// visibility rules apply.
 /// A sheet the user can't see is reported as missing.
 /// </summary>
 public sealed class WidgetDataService(
@@ -17,7 +18,8 @@ public sealed class WidgetDataService(
     ISheetService sheets,
     IItemService items,
     IDependencyService dependencies,
-    ICostpointService costpoint,
+    IContractService contracts,
+    IProjectService projects,
     TimeProvider clock) : IWidgetDataService
 {
     public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default)
@@ -31,9 +33,16 @@ public sealed class WidgetDataService(
     public async Task<WidgetDataDto> ComputeAsync(WidgetDto widget, CancellationToken cancellationToken = default)
     {
         var config = widget.Config;
-        if (widget.Type == WidgetType.RichText)
+        switch (widget.Type)
         {
-            return new WidgetDataDto(widget.Id, widget.Type, null, null, null, Markdown: config.Markdown ?? string.Empty);
+            case WidgetType.RichText:
+                return new WidgetDataDto(widget.Id, widget.Type, null, null, null, Markdown: config.Markdown ?? string.Empty);
+            case WidgetType.ContractFunding:
+                return await ContractFundingAsync(widget, cancellationToken);
+            case WidgetType.ProjectFinancials:
+                // TODO(financials): build from the native project financials contracts (budget, actuals, burn for the
+                // project whose plan sheet is config.SheetId) once that session lands. Never from ICostpointService.
+                return Error(widget, config.SheetId, null, "Project financials widgets aren't available yet.");
         }
 
         if (config.SheetId is not { } sheetId)
@@ -71,13 +80,6 @@ public sealed class WidgetDataService(
                     {
                         Schedule = WidgetCalculator.ScheduleHealth(sheet, await items.ListAsync(sheetId, cancellationToken), analysis, today),
                     };
-                case WidgetType.PlanVsActual:
-                    if (sheet.Summary.CostpointProjectId is null)
-                    {
-                        return Error(widget, sheetId, name, $"\"{name}\" isn't linked to a Costpoint project.");
-                    }
-
-                    return data with { PlanVsActual = WidgetCalculator.PlanVsActual(await costpoint.GetPlanVsActualAsync(sheetId, cancellationToken)) };
                 default:
                     return Error(widget, sheetId, name, $"Unknown widget type {widget.Type}.");
             }
@@ -90,6 +92,24 @@ public sealed class WidgetDataService(
         {
             return Error(widget, sheetId, name, "The sheet for this widget no longer exists or isn't shared with you.");
         }
+    }
+
+    private async Task<WidgetDataDto> ContractFundingAsync(WidgetDto widget, CancellationToken cancellationToken)
+    {
+        if (widget.Config.ContractId is not { } contractId)
+        {
+            return Error(widget, null, null, "Pick a contract for this widget.");
+        }
+
+        var contract = await contracts.GetContractAsync(contractId, cancellationToken);
+        if (contract is null)
+        {
+            return Error(widget, null, null, "The contract for this widget no longer exists or isn't shared with you.");
+        }
+
+        var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+        var data = WidgetCalculator.ContractFunding(contract, await projects.ListProjectsAsync(cancellationToken), today);
+        return new WidgetDataDto(widget.Id, widget.Type, null, null, null, ContractFunding: data);
     }
 
     private static WidgetDataDto Error(WidgetDto widget, Guid? sheetId, string? sheetName, string message) =>

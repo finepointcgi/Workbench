@@ -29,6 +29,18 @@
     }
 </MudGrid>
 
+@* TODO(timekeeping): replace with this week's timesheet status (hours entered, submitted/approved) once the
+   timekeeping contracts land; keep the link to /time. *@
+<MudPaper Class="pa-4 mb-4 d-flex align-center gap-3" Outlined="true" data-card="timesheet">
+    <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" />
+    <div>
+        <MudText Typo="Typo.subtitle1">Timesheet for the week of @WeekStart().ToString("d MMM")</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Enter and submit your hours for this week.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Href="time" Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Open timesheet</MudButton>
+</MudPaper>
+
 @if (_loading && _work is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
@@ -122,6 +134,13 @@ else if (_work is not null)
         yield return ("Due this week", c.DueThisWeek, Color.Info);
         yield return ("Overdue", c.Overdue, c.Overdue > 0 ? Color.Error : Color.Default);
         yield return ("Done this week", c.DoneThisWeek, Color.Success);
+    }
+
+    // Monday of the current week; matches MyWorkDto.WeekEnd once loaded.
+    private DateOnly WeekStart()
+    {
+        var today = _work?.Today ?? DateOnly.FromDateTime(DateTime.Today);
+        return today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
     }
 
     private static string BucketLabel(MyWorkBucket bucket) => bucket switch

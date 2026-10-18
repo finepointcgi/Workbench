@@ -178,9 +178,19 @@ public sealed class DashboardService(IWorkbenchDbContextFactory dbFactory, ICurr
             throw new ArgumentException("Widget width must be between 1 and 12 columns.", nameof(request));
         }
 
-        if (request.Type != WidgetType.RichText && request.Config.SheetId is null)
+        switch (request.Type)
         {
-            throw new ArgumentException($"A {request.Type} widget needs a sheet.", nameof(request));
+            case WidgetType.RichText:
+                break;
+            case WidgetType.ProjectFinancials:
+                // TODO(financials): accept once WidgetDataService can compute it.
+                throw new ArgumentException("Project financials widgets aren't available yet.", nameof(request));
+            case WidgetType.ContractFunding when request.Config.ContractId is null:
+                throw new ArgumentException("A contracts and funding widget needs a contract.", nameof(request));
+            case WidgetType.ContractFunding:
+                break;
+            case var _ when request.Config.SheetId is null:
+                throw new ArgumentException($"A {request.Type} widget needs a sheet.", nameof(request));
         }
 
         if (request.Config.MaxItems is < 1 or > 100)

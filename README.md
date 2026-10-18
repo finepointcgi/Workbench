@@ -1,6 +1,8 @@
 # Workbench
 
-A Smartsheet / Asana-style work management app with native Deltek Costpoint integration.
+A standalone project ERP and work-management system for government contractors: projects, contracts and WBS,
+DCAA timesheets, budgets, ODCs and plan vs. actual, plus Smartsheet/Asana-style sheets, boards and Gantt charts.
+It replaces Costpoint, Unanet and Asana; a Costpoint connector comes later.
 Built with .NET 10, Blazor and MudBlazor. Runs in the browser and as a desktop app.
 
 Product and technical plan: https://claude.ai/code/artifact/6cda230a-5649-42ac-9dc0-5ec505da3921

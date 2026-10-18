@@ -1,5 +1,7 @@
 @using Workbench.Contracts.Dashboards
+@using Workbench.Contracts.ProjectAccounting
 @inject ISheetService SheetService
+@inject IContractService ContractService
 
 @* Configures a widget: type, title and size, then a sheet, then that sheet's columns. Closes with a SaveWidgetRequest. *@
 
@@ -7,7 +9,7 @@
     <DialogContent>
         <MudStack Spacing="3" Style="min-width:min(520px, 80vw)">
             <MudSelect T="WidgetType" Value="_type" ValueChanged="TypeChanged" Label="Widget type" Disabled="Widget is not null" data-field="type">
-                @foreach (var type in Enum.GetValues<WidgetType>())
+                @foreach (var type in OfferedTypes)
                 {
                     <MudSelectItem T="WidgetType" Value="type">@TypeLabel(type)</MudSelectItem>
                 }
@@ -32,6 +34,15 @@
             {
                 <MudTextField @bind-Value="_markdown" Label="Text (Markdown)" Lines="8" Variant="Variant.Outlined"
                               HelperText="Headings (#), lists (-, 1.), **bold**, *italic*, `code` and [links](https://…). HTML is shown as text." />
+            }
+            else if (_type == WidgetType.ContractFunding)
+            {
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" data-field="contract">
+                    @foreach (var contract in _contracts ?? [])
+                    {
+                        <MudSelectItem T="Guid?" Value="contract.Id">@contract.ContractNumber · @contract.Name</MudSelectItem>
+                    }
+                </MudSelect>
             }
             else
             {
@@ -148,9 +159,16 @@
     private Guid? _groupColumnId;
     private int _maxItems = 10;
     private string? _markdown;
+    private Guid? _contractId;
+    private IReadOnlyList<ContractDto>? _contracts;
+
+    // ProjectFinancials is an extension point with no data yet. TODO(financials): offer it once it computes.
+    private static readonly WidgetType[] OfferedTypes =
+        Enum.GetValues<WidgetType>().Where(t => t != WidgetType.ProjectFinancials).ToArray();
 
     protected override async Task OnInitializedAsync()
     {
+        _contracts = await ContractService.ListContractsAsync();
         if (Widget is not { } w)
         {
             _title = TypeLabel(_type);
@@ -162,6 +180,7 @@
         (_aggregate, _valueColumnId, _filterColumnId, _filterValue, _chart, _groupColumnId, _maxItems, _markdown) =
             (c.Aggregate, c.ValueColumnId, c.FilterColumnId, c.FilterValue, c.Chart, c.GroupColumnId, c.MaxItems, c.Markdown);
         _sheetId = c.SheetId;
+        _contractId = c.ContractId;
         await LoadColumnsAsync();
     }
 
@@ -174,7 +193,8 @@
     private ColumnDto? FilterColumn => _sheet?.Columns.FirstOrDefault(c => c.Id == _filterColumnId);
 
     private bool CanSave =>
-        !string.IsNullOrWhiteSpace(_title) && (_type == WidgetType.RichText || (_sheet is not null && _type switch
+        !string.IsNullOrWhiteSpace(_title) && (_type == WidgetType.RichText
+            || (_type == WidgetType.ContractFunding ? _contractId is not null : _sheet is not null && _type switch
         {
             WidgetType.Metric => _aggregate == MetricAggregate.Count || _valueColumnId is not null,
             WidgetType.Chart => _groupColumnId is not null,
@@ -184,14 +204,12 @@
     private IEnumerable<SheetSummary> SheetsFor(WidgetType type) => type switch
     {
         WidgetType.ScheduleHealth => Sheets.Where(s => s.SchedulingEnabled),
-        WidgetType.PlanVsActual => Sheets.Where(s => s.CostpointProjectId is not null),
         _ => Sheets,
     };
 
     private string? SheetHelp() => _type switch
     {
         WidgetType.ScheduleHealth => "Sheets with scheduling turned on",
-        WidgetType.PlanVsActual => "Sheets linked to a Costpoint project",
         _ => null,
     };
 
@@ -201,7 +219,8 @@
         WidgetType.Chart => "Chart",
         WidgetType.ItemList => "Item list",
         WidgetType.ScheduleHealth => "Schedule health",
-        WidgetType.PlanVsActual => "Plan vs actual",
+        WidgetType.ProjectFinancials => "Project financials",
+        WidgetType.ContractFunding => "Contracts and funding",
         _ => "Rich text",
     };
 
@@ -249,8 +268,8 @@
 
     private void Submit()
     {
-        var config = _type == WidgetType.RichText
-            ? new WidgetConfig(Markdown: _markdown ?? string.Empty)
+        var config = _type == WidgetType.RichText ? new WidgetConfig(Markdown: _markdown ?? string.Empty)
+            : _type == WidgetType.ContractFunding ? new WidgetConfig(ContractId: _contractId)
             : new WidgetConfig(
                 SheetId: _sheetId,
                 Aggregate: _aggregate,

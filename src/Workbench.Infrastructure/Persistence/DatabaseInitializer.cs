@@ -79,7 +79,8 @@ public static class DatabaseInitializer
         db.Add(original);
         await db.SaveChangesAsync(cancellationToken);
 
-        // Dashboards sample: one dashboard over the schedule, using every widget type.
+        await ProjectAccountingSeed.SeedAsync(db, schedule, cancellationToken);
+        // Dashboards sample: one dashboard over the schedule and its contract (runs after the project-accounting seed).
         static string Config(Contracts.Dashboards.WidgetConfig config) =>
             System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         var overview = new Domain.Dashboards.Dashboard
@@ -111,10 +112,15 @@ public static class DatabaseInitializer
             new(schedule.Id)));
         overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ItemList, "PM's tasks", 6, Domain.Dashboards.WidgetHeight.Medium,
             new(schedule.Id, FilterColumnId: owner.Id, FilterValue: "pm@example.com")));
-        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.PlanVsActual, "Plan vs actual", 6, Domain.Dashboards.WidgetHeight.Medium,
-            new(schedule.Id)));
+        var contract = await db.Set<Domain.ProjectAccounting.Contract>().OrderBy(c => c.ContractNumber).FirstOrDefaultAsync(cancellationToken);
+        if (contract is not null)
+        {
+            overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ContractFunding, "Contracts and funding", 6, Domain.Dashboards.WidgetHeight.Medium,
+                new(ContractId: contract.Id)));
+        }
+
         overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.RichText, "About this dashboard", 12, Domain.Dashboards.WidgetHeight.Small,
-            new(Markdown: "## Program Office overview\nFigures come from the **Integrated Master Schedule** and the Costpoint mirror.\n\n- Widgets refresh when the sheet changes\n- Choose *Edit* to add, move or resize widgets")));
+            new(Markdown: "## Program Office overview\nFigures come from the **Integrated Master Schedule** and the program's contract.\n\n- Widgets refresh when the sheet changes\n- Choose *Edit* to add, move or resize widgets")));
         db.Add(overview);
         await db.SaveChangesAsync(cancellationToken);
     }
