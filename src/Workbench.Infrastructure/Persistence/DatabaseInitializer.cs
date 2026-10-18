@@ -80,5 +80,6 @@ public static class DatabaseInitializer
         await db.SaveChangesAsync(cancellationToken);
 
         await ProjectAccountingSeed.SeedAsync(db, schedule, cancellationToken);
+        await FinancialsSeed.SeedAsync(db, cancellationToken);
     }
 }
