@@ -150,6 +150,12 @@ else
                 <Workbench.Ui.Setup.Clins.FundingStatusTab Status="_fundingStatus" Clins="_clins" Changed="ReloadDetailAsync" />
             }
         </MudTabPanel>
+        <MudTabPanel Text="Ceilings" data-testid="tab-ceilings">
+            <Workbench.Ui.Ceilings.CeilingsPanel ContractId="detail.Id" />
+        </MudTabPanel>
+        <MudTabPanel Text="Closeout" data-testid="tab-closeout">
+            <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Contract" TargetId="detail.Id" Changed="ReloadDetailAsync" />
+        </MudTabPanel>
     }
     </MudTabs>
 }
@@ -200,7 +206,7 @@ else
             (_start, _end, _ceiling, _funded, _isPrime) = (SetupFormat.ToDateTime(c.PeriodStart), SetupFormat.ToDateTime(c.PeriodEnd), c.CeilingValue, c.FundedValue, c.IsPrime);
             _rates = await Contracts.ListBillRatesAsync(c.Id);
             await LoadDetailAsync(c.Id);
-            _tab = Tab switch { "clins" => 1, "modifications" => 2, "history" => 3, "funding" => 4, _ => 0 };
+            _tab = Tab switch { "clins" => 1, "modifications" => 2, "history" => 3, "funding" => 4, "ceilings" => 5, "closeout" => 6, _ => 0 };
         }
         else if (_customers.Count == 1)
         {
@@ -226,6 +232,7 @@ else
         }
 
         _contract = await Contracts.GetContractAsync(c.Id) ?? c;
+        _status = _contract.Status;
         (_end, _ceiling, _funded) = (SetupFormat.ToDateTime(_contract.PeriodEnd), _contract.CeilingValue, _contract.FundedValue);
         await LoadDetailAsync(c.Id);
     }

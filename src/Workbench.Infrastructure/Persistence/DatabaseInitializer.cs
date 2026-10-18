@@ -167,6 +167,7 @@ public static class DatabaseInitializer
         await RevenueSeed.SeedAsync(db, services, cancellationToken);
         await IncurredCostSeed.SeedAsync(db, cancellationToken); // Incurred cost: a FY2026 draft from the seeded books (last: reads every ledger seed).
         await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
+        await CeilingsSeed.SeedAsync(db, cancellationToken);
     }
 
     /// <summary>
