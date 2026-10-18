@@ -18,10 +18,12 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddWorkbenchApplication();
 builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
+
+// Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
+builder.AddWorkbenchAuthentication();
 builder.Services.AddWorkbenchLiveUpdatesHub();
 builder.Services.AddWorkbenchNotificationsHub();
 builder.Services.AddCostpointSource(builder.Configuration);
-builder.AddWorkbenchAuthentication();
 
 var app = builder.Build();
 

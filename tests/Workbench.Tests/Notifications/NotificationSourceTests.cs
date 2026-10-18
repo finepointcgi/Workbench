@@ -13,7 +13,8 @@ public sealed class NotificationSourceTests
     public async Task Comment_service_is_decorated()
     {
         await using var host = new AutomationHost();
-        Assert.IsType<MentionNotifyingCommentService>(host.Comments);
+        // Permission checks are the outermost decorator; mention notification sits inside them (see the mention tests below).
+        Assert.IsType<Workbench.Application.Identity.PermissionCheckingCommentService>(host.Comments);
     }
 
     [Fact]
@@ -56,6 +57,7 @@ public sealed class NotificationSourceTests
         await host.SetAsync(sheetId, item, (owner, "Bob@Example.com"));
         await host.SetAsync(sheetId, item, (owner, "bob@example.com"));
         await host.SetAsync(sheetId, item, (owner, "alice@example.com"));
+        await host.AddMemberAsync(sheetId, "carol@example.com", Workbench.Contracts.Identity.WorkspaceRole.Editor);
         host.User.Email = "carol@example.com";
         await host.Items.CreateAsync(sheetId, new CreateItemRequest("New", Values: new Dictionary<string, string?> { [owner.Id.ToString()] = "dave@example.com" }));
 
