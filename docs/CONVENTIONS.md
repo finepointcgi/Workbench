@@ -58,3 +58,22 @@ Only append to these, one line per feature, never reorder: `Application/Dependen
 `ApiClient/DependencyInjection.cs`, `Api/WorkbenchApi.cs`, `Ui/Layout/NavMenu.razor`, `Ui/_Imports.razor`.
 Don't change existing contracts in `Workbench.Contracts/Sheets`; if a feature needs more, add new records or
 interfaces next to them and say so in the commit message.
+
+## Project accounting (system of record)
+
+Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Costpoint/Unanet code paths
+(`Workbench.Costpoint`, `Cp*` mirror tables, `/admin/costpoint`) are kept for future import and are hidden in the UI.
+
+- Entities live in `src/Workbench.Domain/ProjectAccounting/` (people, contracts, projects/WBS, fiscal calendar,
+  timesheets, ODCs, budgets, audit). Mappings in `Configurations/ProjectAccountingConfigurations.cs`.
+- Foreign keys **restrict** deletes. Setup data is closed or deactivated, never deleted out from under history.
+- Every change to rates, setup, budgets and approvals writes an `AuditEvent` through `AuditRecorder.Record(...)` in the
+  same unit of work. Audit rows are append-only.
+- Rates are effective-dated and append-only: a correction is a new rate with a reason.
+- Money is `decimal` (18,2), rates (18,4), hours (9,2). Never use `double` for money or hours.
+- A charge code is an open, chargeable **leaf** `WbsElement` of an active project. `IProjectService.ListChargeCodesAsync`
+  is the single source of truth for what an employee may charge on a date.
+- Labor cost is always computed (approved hours × the employee's cost rate effective on the work date), never stored as typed.
+- The plan sheet and the WBS are one tree: `Project.SheetId` points at the plan sheet and `WbsElement.ItemId` at its task.
+- The signed-in person's employee record: `IPeopleService.GetCurrentEmployeeAsync()` (matched by `ICurrentUser.Email`).
+- Seeded dev data: `ProjectAccountingSeed.cs` (FY runs Oct–Sep; employees pm@, analyst@, dev@workbench.local, viewer@).
