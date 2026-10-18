@@ -14,11 +14,17 @@ public enum WidgetType
     /// <summary>Critical path, late tasks and upcoming milestones of a scheduling sheet.</summary>
     ScheduleHealth,
 
-    /// <summary>Plan-vs-actual totals for a sheet linked to a Costpoint project.</summary>
-    PlanVsActual,
+    /// <summary>
+    /// Extension point, not built yet: budget, actuals and burn for a project from native project financials.
+    /// TODO(financials): compute in WidgetDataService once the financials contracts land, then offer it in WidgetDialog.
+    /// </summary>
+    ProjectFinancials,
 
     /// <summary>Markdown text. Raw HTML is never rendered.</summary>
     RichText,
+
+    /// <summary>Ceiling, funded value and days left in the period of performance for one contract.</summary>
+    ContractFunding,
 }
 
 public enum WidgetHeight
@@ -52,6 +58,7 @@ public enum ChartKind
 /// <param name="GroupColumnId">Chart: the Dropdown or Person column to group by.</param>
 /// <param name="MaxItems">Item list: how many rows to show.</param>
 /// <param name="Markdown">Rich text: the Markdown source.</param>
+/// <param name="ContractId">Contracts and funding: the contract to show.</param>
 public sealed record WidgetConfig(
     Guid? SheetId = null,
     MetricAggregate Aggregate = MetricAggregate.Count,
@@ -61,7 +68,8 @@ public sealed record WidgetConfig(
     ChartKind Chart = ChartKind.Bar,
     Guid? GroupColumnId = null,
     int MaxItems = 10,
-    string? Markdown = null);
+    string? Markdown = null,
+    Guid? ContractId = null);
 
 public sealed record WidgetDto(
     Guid Id,

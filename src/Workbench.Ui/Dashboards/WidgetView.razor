@@ -89,24 +89,33 @@ else
             }
             break;
 
-        case WidgetType.PlanVsActual when Data.PlanVsActual is { } p:
-            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                Costpoint @p.ProjectId@(p.ProjectName is { } n ? $" · {n}" : "")
-            </MudText>
-            <MudGrid Spacing="2" Class="mt-1">
-                <MudItem xs="6"><Stat Label="Planned budget" Value="@FormatNumber(p.PlannedBudget, true)" /></MudItem>
-                <MudItem xs="6"><Stat Label="Actual cost" Value="@FormatNumber(p.ActualCost, true)" Color="@(p.ActualCost > p.PlannedBudget && p.PlannedBudget > 0 ? Color.Error : Color.Default)" /></MudItem>
-                <MudItem xs="6"><Stat Label="Planned hours" Value="@p.PlannedHours.ToString("N0", Culture)" /></MudItem>
-                <MudItem xs="6"><Stat Label="Actual hours" Value="@p.ActualHours.ToString("N0", Culture)" /></MudItem>
-            </MudGrid>
-            @if (p.Burn is { } burn)
-            {
-                <MudProgressLinear Value="@((double)Math.Min(burn, 1m) * 100)" Color="@(burn > 1 ? Color.Error : burn > 0.9m ? Color.Warning : Color.Success)" Class="mt-3" />
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">@burn.ToString("P0", Culture) of planned budget spent</MudText>
-            }
+        case WidgetType.ContractFunding when Data.ContractFunding is { } f:
             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
-                @(p.LastSyncedAtUtc is { } synced ? $"Actuals as of {synced:yyyy-MM-dd HH:mm} UTC" : "Not synced yet")
+                @f.ContractNumber · @f.CustomerName · @f.Status
             </MudText>
+            <MudText Typo="Typo.body2" Class="mb-1">@f.Name</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="4"><Stat Label="Ceiling" Value="@FormatNumber(f.CeilingValue, true)" /></MudItem>
+                <MudItem xs="4"><Stat Label="Funded" Value="@FormatNumber(f.FundedValue, true)" /></MudItem>
+                <MudItem xs="4">
+                    <Stat Label="Days left" Value="@f.DaysLeft.ToString("N0", Culture)"
+                          Color="@(f.DaysLeft == 0 ? Color.Error : f.DaysLeft <= 90 ? Color.Warning : Color.Default)" />
+                </MudItem>
+            </MudGrid>
+            @if (f.FundedShare is { } share)
+            {
+                <MudProgressLinear Value="@((double)Math.Min(share, 1m) * 100)" Color="Color.Primary" Class="mt-2" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@share.ToString("P0", Culture) of ceiling funded</MudText>
+            }
+            <MudProgressLinear Value="@(f.PeriodElapsed * 100)" Color="@(f.PeriodElapsed > 0.9 ? Color.Warning : Color.Info)" Class="mt-2" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                Period of performance @f.PeriodStart.ToString("d MMM yyyy") – @f.PeriodEnd.ToString("d MMM yyyy")
+                (@f.PeriodElapsed.ToString("P0", Culture) elapsed)
+            </MudText>
+            @if (f.Projects.Count > 0)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Projects: @string.Join(", ", f.Projects)</MudText>
+            }
             break;
 
         case WidgetType.RichText:

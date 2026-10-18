@@ -17,8 +17,9 @@ public enum WidgetType
     Chart,
     ItemList,
     ScheduleHealth,
-    PlanVsActual,
+    ProjectFinancials,
     RichText,
+    ContractFunding,
 }
 
 public enum WidgetHeight

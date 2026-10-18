@@ -3,7 +3,8 @@ using Workbench.Application.Dashboards;
 using Workbench.Application.Scheduling;
 using Workbench.Application.Sheets;
 using Workbench.Contracts;
-using Workbench.Contracts.Costpoint;
+using Workbench.Application.ProjectAccounting;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Sheets;
 using Workbench.Tests.Collaboration;
@@ -78,6 +79,10 @@ public sealed class DashboardServiceTests
             new SaveWidgetRequest("No sheet", WidgetType.Chart, 6, WidgetHeight.Medium, new WidgetConfig())));
         await Assert.ThrowsAsync<ArgumentException>(() => service.ReorderWidgetsAsync(dashboard.Id, new ReorderWidgetsRequest([a.Id])));
         await Assert.ThrowsAsync<ArgumentException>(() => service.ReorderWidgetsAsync(dashboard.Id, new ReorderWidgetsRequest([a.Id, a.Id])));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddWidgetAsync(dashboard.Id,
+            new SaveWidgetRequest("No contract", WidgetType.ContractFunding, 6, WidgetHeight.Medium, new WidgetConfig())));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddWidgetAsync(dashboard.Id, // extension point, not built yet
+            new SaveWidgetRequest("Financials", WidgetType.ProjectFinancials, 6, WidgetHeight.Medium, new WidgetConfig(Guid.NewGuid()))));
         await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => service.DeleteWidgetAsync(dashboard.Id, Guid.NewGuid()));
     }
 
@@ -103,24 +108,27 @@ public sealed class DashboardServiceTests
             new WidgetConfig(hidden.Id)));
         var text = await dashboards.AddWidgetAsync(dashboard.Id, Text("Text"));
 
+        var audit = new AuditRecorder(new TestUser(), _clock);
+        var contracts = new ContractService(_db, audit);
+        var projects = new ProjectService(_db, audit);
+        var customer = await contracts.CreateCustomerAsync(new SaveCustomerRequest("ARMY", "Army"));
+        var contract = await contracts.CreateContractAsync(new SaveContractRequest(customer.Id, "W56-0001", "Support", ContractKind.LaborHour,
+            ContractState.Active, true, new DateOnly(2026, 10, 1), new DateOnly(2026, 12, 30), 900_000m, 300_000m));
+        await projects.CreateProjectAsync(new SaveProjectRequest("P-1", "Support", contract.Id, null, ProjectState.Active, null, null));
+        var funding = await dashboards.AddWidgetAsync(dashboard.Id, new SaveWidgetRequest("Funding", WidgetType.ContractFunding, 6, WidgetHeight.Medium,
+            new WidgetConfig(ContractId: contract.Id)));
+
         var data = new WidgetDataService(dashboards, new FilteringSheetService(sheets, hidden.Id), items,
-            new DependencyService(_db), new NoCostpoint(), _clock);
+            new DependencyService(_db), contracts, projects, _clock);
 
         var metric = await data.GetAsync(dashboard.Id, open.Id);
         Assert.Equal((1m, "Tracker", tracker.Id), (metric.Metric!.Value, metric.SheetName, metric.SheetId));
         Assert.Contains("scheduling", (await data.GetAsync(dashboard.Id, health.Id)).Error);
         Assert.Contains("isn't shared with you", (await data.GetAsync(dashboard.Id, secret.Id)).Error);
         Assert.Equal("# Hi", (await data.GetAsync(dashboard.Id, text.Id)).Markdown);
+        var f = (await data.GetAsync(dashboard.Id, funding.Id)).ContractFunding!;
+        Assert.Equal((900_000m, 300_000m, 77, "Active"), (f.CeilingValue, f.FundedValue, f.DaysLeft, f.Status)); // today is 14 Oct
+        Assert.Equal(["P-1"], f.Projects);
         await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => data.GetAsync(dashboard.Id, Guid.NewGuid()));
-    }
-
-    private sealed class NoCostpoint : ICostpointService
-    {
-        public Task<CostpointStatusDto> GetStatusAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<CostpointSyncRunDto>> ListSyncRunsAsync(int take = 20, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CostpointSyncRunDto> SyncNowAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<CostpointProjectDto>> SearchProjectsAsync(string? query, int take = 20, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<CostpointWbsDto>> SearchWbsAsync(string? projectId, string? query, int take = 20, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<PlanVsActualDto> GetPlanVsActualAsync(Guid sheetId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

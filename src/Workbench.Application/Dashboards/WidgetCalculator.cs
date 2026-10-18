@@ -1,6 +1,6 @@
 using System.Globalization;
 using Workbench.Application.MyWork;
-using Workbench.Contracts.Costpoint;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
@@ -95,9 +95,17 @@ public static class WidgetCalculator
         return new ScheduleHealthData(analysis.Items.Count, analysis.CriticalPath.Count, late, analysis.ProjectFinish, milestones);
     }
 
-    public static PlanVsActualSummary PlanVsActual(PlanVsActualDto plan) =>
-        new(plan.ProjectId, plan.ProjectName, plan.Totals.PlannedHours, plan.Totals.ActualHours, plan.Totals.PlannedBudget,
-            plan.Totals.ActualCost, plan.Totals.Burn, plan.LastSyncedAtUtc, plan.Notes);
+    /// <summary>Contract value and period of performance, with the projects charged against it.</summary>
+    public static ContractFundingData ContractFunding(ContractDto contract, IEnumerable<ProjectDto> projects, DateOnly today)
+    {
+        var totalDays = contract.PeriodEnd.DayNumber - contract.PeriodStart.DayNumber;
+        var elapsed = totalDays <= 0 ? (today >= contract.PeriodEnd ? 1d : 0d)
+            : Math.Clamp((today.DayNumber - contract.PeriodStart.DayNumber) / (double)totalDays, 0d, 1d);
+        var codes = projects.Where(p => p.ContractId == contract.Id).Select(p => p.Code).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        return new ContractFundingData(contract.Id, contract.ContractNumber, contract.Name, contract.CustomerName, contract.Status.ToString(),
+            contract.CeilingValue, contract.FundedValue, contract.PeriodStart, contract.PeriodEnd,
+            Math.Max(0, contract.PeriodEnd.DayNumber - Math.Max(today.DayNumber, contract.PeriodStart.DayNumber)), elapsed, codes);
+    }
 
     /// <summary>Leaf items that pass the optional "column equals value" filter (case-insensitive; blank matches empty cells).</summary>
     public static IEnumerable<ItemDto> Filtered(SheetDetail sheet, IReadOnlyList<ItemDto> items, WidgetConfig config)

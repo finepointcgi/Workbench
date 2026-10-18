@@ -23,16 +23,26 @@ public sealed record ScheduleHealthData(
     DateOnly? ProjectFinish,
     IReadOnlyList<MilestoneRow> NextMilestones);
 
-public sealed record PlanVsActualSummary(
-    string? ProjectId,
-    string? ProjectName,
-    decimal PlannedHours,
-    decimal ActualHours,
-    decimal PlannedBudget,
-    decimal ActualCost,
-    decimal? Burn,
-    DateTime? LastSyncedAtUtc,
-    IReadOnlyList<string> Notes);
+/// <param name="DaysLeft">Calendar days left in the period of performance: the whole period before it starts, 0 once it has ended.</param>
+/// <param name="PeriodElapsed">Fraction of the period of performance that has passed, 0–1.</param>
+/// <param name="Projects">Codes of the projects charged against the contract.</param>
+public sealed record ContractFundingData(
+    Guid ContractId,
+    string ContractNumber,
+    string Name,
+    string CustomerName,
+    string Status,
+    decimal CeilingValue,
+    decimal FundedValue,
+    DateOnly PeriodStart,
+    DateOnly PeriodEnd,
+    int DaysLeft,
+    double PeriodElapsed,
+    IReadOnlyList<string> Projects)
+{
+    /// <summary>Funded value as a fraction of the ceiling, or null when there is no ceiling.</summary>
+    public decimal? FundedShare => CeilingValue == 0 ? null : FundedValue / CeilingValue;
+}
 
 /// <summary>
 /// Computed data for one widget. Exactly one of the typed parts is set for the widget's type, unless
@@ -49,12 +59,12 @@ public sealed record WidgetDataDto(
     ChartData? Chart = null,
     ItemListData? ItemList = null,
     ScheduleHealthData? Schedule = null,
-    PlanVsActualSummary? PlanVsActual = null,
-    string? Markdown = null);
+    string? Markdown = null,
+    ContractFundingData? ContractFunding = null);
 
 /// <summary>
-/// Computes widget data on the server. Sheet data is read through <c>ISheetService</c>/<c>IItemService</c> and the
-/// scheduling and Costpoint contracts, so it's limited to what the current user can see.
+/// Computes widget data on the server. Sheet data is read through <c>ISheetService</c>/<c>IItemService</c>, the
+/// scheduling contract and the project-accounting contracts, so it's limited to what the current user can see.
 /// </summary>
 public interface IWidgetDataService
 {

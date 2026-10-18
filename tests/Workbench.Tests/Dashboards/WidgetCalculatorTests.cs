@@ -1,5 +1,5 @@
 using Workbench.Application.Dashboards;
-using Workbench.Contracts.Costpoint;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
@@ -133,16 +133,27 @@ public sealed class WidgetCalculatorTests
         Assert.Equal(["Today", "M1", "M2", "M3", "M4"], health.NextMilestones.Select(m => m.Title)); // late = "Late" + past milestone
     }
 
-    [Fact]
-    public void Plan_vs_actual_takes_the_totals()
+    [Theory]
+    [InlineData("2026-10-14", 351, 0.519)] // about halfway through a two-year period
+    [InlineData("2025-01-01", 729, 0.0)]   // before it starts: the whole period is left
+    [InlineData("2027-12-31", 0, 1.0)]     // after it ends
+    public void Contract_funding_reports_value_and_period_of_performance(string today, int daysLeft, double elapsed)
     {
-        var totals = new PlanVsActualRow("TOTAL", null, 3, 100, 15000, 120, 18000, 80, 12500);
-        var plan = new PlanVsActualDto(Guid.NewGuid(), "1001.01", "Program", [], totals, new DateTime(2026, 10, 1), ["note"]);
+        var contract = new ContractDto(Guid.NewGuid(), Guid.NewGuid(), "Army", "W56-0001", "Logistics support", ContractKind.TimeAndMaterials,
+            ContractState.Active, true, new DateOnly(2025, 10, 1), new DateOnly(2027, 9, 30), 2_000_000m, 500_000m);
+        ProjectDto[] projects =
+        [
+            new(Guid.NewGuid(), "P-200", "Phase 2", contract.Id, contract.ContractNumber, null, ProjectState.Active, null, null, null),
+            new(Guid.NewGuid(), "P-100", "Phase 1", contract.Id, contract.ContractNumber, null, ProjectState.Active, null, null, null),
+            new(Guid.NewGuid(), "X-1", "Other", Guid.NewGuid(), "OTHER", null, ProjectState.Active, null, null, null),
+        ];
 
-        var summary = WidgetCalculator.PlanVsActual(plan);
+        var data = WidgetCalculator.ContractFunding(contract, projects, DateOnly.Parse(today));
 
-        Assert.Equal(("1001.01", 100m, 80m, 15000m, 12500m), (summary.ProjectId, summary.PlannedHours, summary.ActualHours, summary.PlannedBudget, summary.ActualCost));
-        Assert.Equal(12500m / 15000m, summary.Burn);
-        Assert.Equal(["note"], summary.Notes);
+        Assert.Equal(("W56-0001", "Army", "Active", 2_000_000m, 500_000m), (data.ContractNumber, data.CustomerName, data.Status, data.CeilingValue, data.FundedValue));
+        Assert.Equal(0.25m, data.FundedShare);
+        Assert.Equal(daysLeft, data.DaysLeft);
+        Assert.Equal(elapsed, data.PeriodElapsed, 0.01);
+        Assert.Equal(["P-100", "P-200"], data.Projects);
     }
 }
