@@ -1,0 +1,109 @@
+@* Pool setup: which GL accounts form each pool, its allocation base and cascade order. *@
+@inject IIndirectRateService Rates
+@inject IChartOfAccountsService Chart
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_setups is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Pools run in cascade order: each pool's base can include the burden of the pools before it. Unallowable and applied-burden accounts never count.
+        </MudText>
+        <MudSpacer />
+        @if (IndirectRatesFormat.Pools.Any(p => _setups.All(s => s.Pool != p)))
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="InstallAsync" data-testid="install-pools">Install default pools</MudButton>
+        }
+    </MudStack>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="pool-setup">
+            <thead><tr><th>Order</th><th>Pool</th><th>Base</th><th>Pool accounts</th><th>Applied (debit)</th><th>Contra (credit)</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _setups)
+                {
+                    <tr>
+                        <td>@s.CascadeOrder</td>
+                        <td>@s.Name</td>
+                        <td>@IndirectRatesFormat.Label(s.Base)</td>
+                        <td>
+                            @foreach (var a in s.PoolAccounts)
+                            {
+                                <div><MudText Typo="Typo.body2">@a</MudText></div>
+                            }
+                        </td>
+                        <td>@s.AppliedAccount</td>
+                        <td>@s.AbsorbedAccount</td>
+                        <td>@(s.IsActive ? "Yes" : "No")</td>
+                        <td><MudButton Size="Size.Small" OnClick="() => EditAsync(s)">Edit</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<PoolSetupDto>? _setups;
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _setups = await Rates.ListPoolSetupsAsync();
+            _accounts = await Chart.ListAccountsAsync(includeInactive: false);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    private async Task InstallAsync()
+    {
+        try
+        {
+            var created = await Rates.InstallDefaultPoolsAsync();
+            Snackbar.Add($"Installed {created} pool(s).", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(PoolSetupDto setup)
+    {
+        var parameters = new DialogParameters<PoolSetupDialog> { { d => d.Setup, setup }, { d => d.Accounts, _accounts } };
+        var dialog = await DialogService.ShowAsync<PoolSetupDialog>($"Edit {setup.Name} pool", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SavePoolSetupRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            await Rates.SavePoolSetupAsync(setup.Pool, request);
+            Snackbar.Add($"{request.Name} pool saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

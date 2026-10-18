@@ -1,0 +1,56 @@
+@page "/accounting/indirect-rates"
+@layout Workbench.Ui.Layout.AccountingLayout
+@inject IFiscalCalendarService Calendar
+
+<PageTitle>Indirect rates · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Indirect rates"
+                  Subtitle="Fringe, overhead and G&A pools, their provisional and actual rates, the monthly allocation that applies burden to projects, and the year-end true-up." />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_periods.Count == 0)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab" data-testid="indirect-tabs">
+        <MudTabPanel Text="Rates">
+            <RatesTab Periods="_periods" />
+        </MudTabPanel>
+        <MudTabPanel Text="Actual vs provisional">
+            <RateCalculationTab Periods="_periods" />
+        </MudTabPanel>
+        <MudTabPanel Text="Allocation runs">
+            <AllocationRunsTab Periods="_periods" />
+        </MudTabPanel>
+        <MudTabPanel Text="True-up">
+            <TrueUpTab Periods="_periods" />
+        </MudTabPanel>
+        <MudTabPanel Text="Pool setup">
+            <PoolSetupTab />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private int _tab;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+}

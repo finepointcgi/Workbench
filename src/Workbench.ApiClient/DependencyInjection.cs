@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddAccountingClients(serverBaseAddress);
         services.AddSecurityAdminClients(serverBaseAddress);
         services.AddContractDetailClients(serverBaseAddress);
+        services.AddIndirectRateClients(serverBaseAddress);
         return services;
     }
 }

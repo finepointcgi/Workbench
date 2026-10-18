@@ -5,6 +5,7 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
+using Workbench.Application.IndirectRates;
 using Workbench.Application.Odcs;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.AddWorkbenchFinancials();
         services.AddWorkbenchSetup();
         services.AddWorkbenchAccounting(); // GL posting decorators wrap time/ODC approvals; must stay above AddWorkbenchIdentity.
+        services.AddWorkbenchIndirectRates(); // After AddWorkbenchAccounting (decorates its reports, adds a close check); above AddWorkbenchIdentity.
         services.AddWorkbenchSecurity();
         services.AddWorkbenchContractDetail();
 

@@ -8,7 +8,7 @@ public enum AccountKind { Asset, Liability, Equity, Revenue, Expense }
 
 public enum BalanceSide { Debit, Credit }
 
-public enum CostClass { None, DirectLabor, DirectOdc, IndirectLabor, Fringe, Overhead, GeneralAndAdministrative, Unallowable, Other }
+public enum CostClass { None, DirectLabor, DirectOdc, IndirectLabor, Fringe, Overhead, GeneralAndAdministrative, Unallowable, Other, AppliedBurden }
 
 public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal }
 
@@ -210,7 +210,7 @@ public interface IPostingService
 
 // ---- Period close ----
 
-public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced }
+public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted }
 
 public sealed record CloseCheckDto(CloseCheckKind Kind, string Title, bool Passed, int Count, string Summary, IReadOnlyList<string> Details);
 
@@ -349,8 +349,18 @@ public sealed record ReconciliationRowDto(
     decimal FinancialsLabor,
     decimal FinancialsOdc,
     decimal GlLabor,
-    decimal GlOdc)
+    decimal GlOdc,
+
+    /// <summary>Burden applied in the GL by allocation runs and true-ups (applied-burden accounts); not part of <see cref="Difference"/>.</summary>
+    decimal GlAppliedBurden = 0,
+
+    /// <summary>Burden at provisional rates on the financials actuals (filled in by indirect rates; 0 without rates).</summary>
+    decimal ExpectedBurden = 0)
 {
+    public decimal BurdenDifference => GlAppliedBurden - ExpectedBurden;
+
+    public decimal BurdenedTotal => FinancialsTotal + ExpectedBurden;
+
     public decimal FinancialsTotal => FinancialsLabor + FinancialsOdc;
 
     public decimal GlTotal => GlLabor + GlOdc;
