@@ -1,0 +1,136 @@
+@page "/projects/{ProjectId:guid}"
+@page "/projects/{ProjectId:guid}/{Tab}"
+@* One project's page. Tabs reuse the feature pages (rendered Embedded); each shows only when the server would allow it.
+   The older routes (/projects/{id}/financials, /budgets, /revenue, /evm) land here with that tab selected. *@
+@inject IProjectHubService Hub
+@inject NavigationManager Navigation
+
+<PageTitle>@(_hub is { } h ? $"{h.Project.Code} {TabLabel}" : "Project") · Workbench</PageTitle>
+
+@if (_notFound)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Project not found</MudText>
+    <MudText Class="mud-text-secondary mt-2">It doesn't exist, or you aren't on it (as its manager, by charging to it or as a member of its plan sheet).</MudText>
+    <MudButton Href="projects" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">Back to Projects</MudButton>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_hub is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var p = _hub.Project;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+        <MudIconButton Href="projects" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Projects" />
+        <MudText Typo="Typo.h4" HtmlTag="h1">@p.Code · @p.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(p.Status)">@ProjectsFormat.Status(p.Status)</MudChip>
+        @if (p.Money is { } money)
+        {
+            <ProjectHealthChip Money="money" />
+        }
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Style="padding-left: 52px">
+        @(p.ContractNumber is { } cn ? $"{cn}{(_hub.ContractName is { } name ? $" · {name}" : "")}{(_hub.CustomerName is { } cust ? $" · {cust}" : "")}" : "No contract")
+        · Manager: @(p.ProjectManagerName ?? "none")
+        · @ProjectsFormat.Period(p.Start, p.Finish)
+    </MudText>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" KeepPanelsAlive="false"
+             ActivePanelIndex="_tabs.IndexOf(_tab)" ActivePanelIndexChanged="OnTabChanged" data-testid="project-tabs">
+        @foreach (var slug in _tabs)
+        {
+            <MudTabPanel Text="@ProjectsFormat.Tabs.First(t => t.Slug == slug).Label" @key="slug" data-testid="@($"tab-{slug}")">
+                @if (slug == _tab)
+                {
+                    @TabContent(slug)
+                }
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+
+    [Parameter]
+    public string? Tab { get; set; }
+
+    private ProjectHubDto? _hub;
+    private Guid _loadedProject;
+    private List<string> _tabs = [];
+    private string _tab = "overview";
+    private bool _notFound;
+    private string? _error;
+
+    private string TabLabel => ProjectsFormat.Tabs.FirstOrDefault(t => t.Slug == _tab).Label ?? "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_hub is null || _loadedProject != ProjectId)
+        {
+            await LoadAsync();
+        }
+
+        var requested = ProjectsFormat.Normalize(Tab);
+        _tab = _tabs.Contains(requested) ? requested : "overview";
+    }
+
+    private async Task LoadAsync()
+    {
+        _notFound = false;
+        _error = null;
+        try
+        {
+            _hub = await Hub.GetProjectAsync(ProjectId);
+            _loadedProject = ProjectId;
+            _tabs = ProjectsFormat.Tabs.Select(t => t.Slug).Where(s => ProjectsFormat.Allows(_hub.Tabs, s)).ToList();
+        }
+        catch (WorkbenchNotFoundException)
+        {
+            (_hub, _notFound) = (null, true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            (_hub, _error) = (null, $"Couldn't load the project: {ex.Message}");
+        }
+    }
+
+    private void OnTabChanged(int index)
+    {
+        if (index >= 0 && index < _tabs.Count && _tabs[index] != _tab)
+        {
+            var slug = _tabs[index];
+            Navigation.NavigateTo(slug == "overview" ? $"projects/{ProjectId}" : $"projects/{ProjectId}/{slug}");
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private RenderFragment TabContent(string slug) => slug switch
+    {
+        "overview" => @<ProjectOverviewTab Hub="_hub!" />,
+        "plan" => @<Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />,
+        "financials" => @<Workbench.Ui.Pages.Projects.ProjectFinancialsPage ProjectId="ProjectId" Embedded="true" />,
+        "budgets" => @<Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />,
+        "revenue" => @<Workbench.Ui.Revenue.ProjectRevenueView ProjectId="ProjectId" Embedded="true" />,
+        "evm" => @<Workbench.Ui.Pages.Projects.ProjectEvmPage ProjectId="ProjectId" Embedded="true" />,
+        "ceilings" => @<div>
+            <Workbench.Ui.Ceilings.CeilingsPanel ProjectId="ProjectId" />
+            <MudDivider Class="my-4" />
+            <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="ProjectId" Changed="ReloadAsync" />
+        </div>,
+        "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
+        "team" => @<ProjectTeamTab ProjectId="ProjectId" />,
+        "setup" => @<ProjectSetupTab Hub="_hub!" />,
+        _ => @<span />,
+    };
+}
