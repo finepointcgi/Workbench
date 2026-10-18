@@ -33,17 +33,29 @@ public sealed class RuleEngine(IWorkbenchDbContextFactory dbFactory, Notifier no
             !sheet.FormulaColumnIds.Contains(rule.Trigger.Field ?? "")
             && RuleLogic.ChangeMatches(rule.Trigger, before, after));
 
-    /// <summary>Fires date rules that are due today (or were missed in the last few days). Returns how many ran.</summary>
-    public async Task<int> RunDateTriggersAsync(IItemService items, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Fires date rules that are due today (or were missed in the last few days) through <paramref name="items"/>,
+    /// as whoever that service checks. Returns how many ran. The hourly job uses the overload taking a
+    /// <see cref="DateRuleAuthor"/> instead, so each rule runs as its author.
+    /// </summary>
+    public Task<int> RunDateTriggersAsync(IItemService items, CancellationToken cancellationToken = default) =>
+        RunDateTriggersAsync(items, null, cancellationToken);
+
+    /// <summary>The distinct authors (lower-case emails) of enabled date rules, for running each author's rules in their own scope.</summary>
+    public async Task<IReadOnlyList<string>> ListDateRuleAuthorsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadDateRulesAsync(cancellationToken)).Select(r => AuthorOf(r)).Distinct().Order(StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// Fires the due date rules written by <paramref name="author"/> (all of them when null). Before a sheet's rules
+    /// run, <see cref="DateRuleAuthor.WhyNotAsync"/> is asked whether the author may still change that sheet; when
+    /// not, the rules are skipped and the reason is logged and recorded as a skipped run (once per rule and day).
+    /// </summary>
+    public async Task<int> RunDateTriggersAsync(IItemService items, DateRuleAuthor? author, CancellationToken cancellationToken = default)
     {
         var today = Today();
-        List<Rule> rules;
-        await using (var db = await dbFactory.CreateAsync(cancellationToken))
-        {
-            rules = (await db.Set<Rule>().AsNoTracking().Where(r => r.Enabled).ToListAsync(cancellationToken))
-                .Where(r => r.Trigger.Kind == RuleTriggerKind.DateReached && r.Trigger.Field is not null)
-                .ToList();
-        }
+        var rules = (await LoadDateRulesAsync(cancellationToken))
+            .Where(r => author is null || AuthorOf(r) == author.Email)
+            .ToList();
 
         var fired = 0;
         foreach (var bySheet in rules.GroupBy(r => r.SheetId))
@@ -51,6 +63,16 @@ public sealed class RuleEngine(IWorkbenchDbContextFactory dbFactory, Notifier no
             var sheet = await LoadSheetAsync(bySheet.Key, cancellationToken);
             if (sheet is null)
             {
+                continue;
+            }
+
+            if (author is not null && await author.WhyNotAsync(sheet.Id, cancellationToken) is { } reason)
+            {
+                foreach (var rule in bySheet)
+                {
+                    await RecordSkippedAsync(rule, reason, cancellationToken);
+                }
+
                 continue;
             }
 
@@ -85,6 +107,41 @@ public sealed class RuleEngine(IWorkbenchDbContextFactory dbFactory, Notifier no
         }
 
         return fired;
+    }
+
+    private async Task<List<Rule>> LoadDateRulesAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return (await db.Set<Rule>().AsNoTracking().Where(r => r.Enabled).ToListAsync(cancellationToken))
+            .Where(r => r.Trigger.Kind == RuleTriggerKind.DateReached && r.Trigger.Field is not null)
+            .ToList();
+    }
+
+    private static string AuthorOf(Rule rule) => (rule.CreatedBy ?? "").Trim().ToLowerInvariant();
+
+    /// <summary>Logs why a date rule didn't run and records it as a skipped run, at most once per rule and day.</summary>
+    private async Task RecordSkippedAsync(Rule rule, string reason, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var since = now.Date;
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        if (await db.Set<RuleRun>().AnyAsync(r => r.RuleId == rule.Id && r.ItemId == null && r.Outcome == RuleRunOutcome.Skipped
+                && r.FiredAtUtc >= since, cancellationToken))
+        {
+            _log.LogDebug("Date rule {RuleId} is still skipped: {Reason}", rule.Id, reason);
+            return;
+        }
+
+        _log.LogWarning("Skipped date rule {RuleId} (\"{RuleName}\") on sheet {SheetId}: {Reason}", rule.Id, rule.Name, rule.SheetId, reason);
+        db.Set<RuleRun>().Add(new RuleRun
+        {
+            RuleId = rule.Id,
+            SheetId = rule.SheetId,
+            FiredAtUtc = now,
+            Outcome = RuleRunOutcome.Skipped,
+            Error = Truncate(reason),
+        });
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private async Task EvaluateAsync(IItemService items, Guid sheetId, ItemDto item, Func<Rule, SheetContext, bool> triggered)
@@ -130,7 +187,7 @@ public sealed class RuleEngine(IWorkbenchDbContextFactory dbFactory, Notifier no
             var details = new List<string>();
             try
             {
-                using (AutomationContext.Enter())
+                using (AutomationContext.Enter(rule.Name, rule.CreatedBy))
                 {
                     foreach (var action in rule.Actions)
                     {
@@ -290,3 +347,9 @@ public sealed class RuleEngine(IWorkbenchDbContextFactory dbFactory, Notifier no
 
     private sealed record SheetContext(Guid Id, string Name, IReadOnlyList<Column> Columns, IReadOnlyList<Rule> Rules, HashSet<string> FormulaColumnIds);
 }
+
+/// <summary>
+/// Whose date rules a run fires, and the run-time check that the author may still change a sheet: returns why not
+/// (deactivated, no edit access), or null when the rules may run.
+/// </summary>
+public sealed record DateRuleAuthor(string Email, Func<Guid, CancellationToken, Task<string?>> WhyNotAsync);
