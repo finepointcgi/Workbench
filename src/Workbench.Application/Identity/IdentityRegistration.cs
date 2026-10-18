@@ -61,6 +61,7 @@ public static class IdentityRegistration
         services.Decorate<IOdcService, PermissionCheckingOdcService>();
         services.Decorate<IRuleService, PermissionCheckingRuleService>();
         services.Decorate<IDashboardService, PermissionCheckingDashboardService>();
+        services.AddWorkbenchAccountingPermissions(); // General ledger (accounting branch): Finance or Admin only on all five GL services.
         return services;
     }
 

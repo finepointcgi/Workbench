@@ -104,6 +104,22 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - Timesheets are approved by the supervisor, or by Admins for employees without one; Timekeeper/Finance/Admin view all.
 - Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
   analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
+## Security events, user lifecycle and retention
+
+- Record security-relevant actions with `Application.Security.SecurityEventLog.RecordAsync(SecurityEventTypes.X, target,
+  outcome, detail)` (scoped; writes its own row, never throws). It's append-only: never update or delete rows. Details
+  are short and never contain secrets, tokens or cost/bill rates. Permission denials from `AccessControl` and HTTP 403s
+  are recorded for you.
+- Sensitive exports (CSV of labor, rates or financials) must record an `export.*` event; see
+  `Application/Security/SecurityAuditDecorators.cs` for the decorator pattern (registered in `AddWorkbenchSecurity`,
+  above `AddWorkbenchIdentity`).
+- Users are deactivated, never deleted (`UserLifecycle`); deactivated users can't sign in and their sessions end at once.
+  Which employee a user is: `Identity.EmployeeLinks.FindForUserAsync` (explicit admin link, else matching email).
+- Before deleting anything tied to a contract or project, call `RetentionService.EnsureNotHeldAsync(db, "Contract" |
+  "Project", id)`: legal holds block deletion. Time, ODC, journal and audit records are protected and never purged.
+- Keep pages working under the Content-Security-Policy: no inline `<script>` or `on*=` handlers, no `eval`; put JS in
+  files under `wwwroot` and import them. Inline styles are allowed (MudBlazor needs them).
+
 ## Notifications (any feature)
 
 To tell someone something, inject `INotificationPublisher` (`Workbench.Application.Notifications`, a singleton) and

@@ -1,0 +1,84 @@
+@inject IAccountingReportService Reports
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Trial balance, @Period.Name</MudText>
+    @if (_report is { } r)
+    {
+        <MudChip T="string" Size="Size.Small" Color="@(r.IsBalanced ? Color.Success : Color.Error)" Variant="Variant.Outlined" data-testid="tb-balanced">
+            @(r.IsBalanced ? "Balanced" : "Out of balance")
+        </MudChip>
+    }
+    <MudSpacer />
+    <ExportButton Request="new AccountingExportRequest(AccountingReport.TrialBalance, Period.Id)" />
+</MudStack>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_report.Rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary">Nothing posted through @Period.Name yet. Post the backlog from Period close.</MudText>
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="trial-balance">
+            <thead>
+                <tr><th>Account</th><th>Type</th><th style="text-align:right">Opening</th><th style="text-align:right">Debits</th><th style="text-align:right">Credits</th>
+                    <th style="text-align:right">Ending debit</th><th style="text-align:right">Ending credit</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _report.Rows)
+                {
+                    <tr>
+                        <td style="white-space:nowrap">@row.AccountNumber @row.AccountName</td>
+                        <td>@row.Type</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(row.Opening)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(row.PeriodDebit)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(row.PeriodCredit)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(row.EndingDebit)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(row.EndingCredit)</td>
+                    </tr>
+                }
+                <tr style="font-weight:600">
+                    <td colspan="3">Total</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.TotalPeriodDebit)</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.TotalPeriodCredit)</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.TotalEndingDebit)</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.TotalEndingCredit)</td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public FiscalPeriodDto Period { get; set; } = default!;
+
+    private TrialBalanceDto? _report;
+    private string? _error;
+    private Guid _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == Period.Id)
+        {
+            return;
+        }
+
+        (_loaded, _report, _error) = (Period.Id, null, null);
+        try
+        {
+            _report = await Reports.GetTrialBalanceAsync(Period.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}
