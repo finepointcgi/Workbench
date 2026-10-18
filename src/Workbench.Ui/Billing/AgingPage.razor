@@ -6,7 +6,9 @@
 
 <BillingHeader Title="Accounts receivable aging" Subtitle="Open invoice balances by days past due, by customer and by contract.">
     <MudDatePicker Label="As of" Date="_asOf" DateChanged="AsOfChanged" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
-    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="RemindAsync">Send overdue reminders</MudButton>
+    <FinanceOnly>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="RemindAsync" data-testid="send-reminders">Send overdue reminders</MudButton>
+    </FinanceOnly>
 </BillingHeader>
 
 @if (_error is not null)

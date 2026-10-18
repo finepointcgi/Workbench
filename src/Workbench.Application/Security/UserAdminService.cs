@@ -101,7 +101,7 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
     }
 
     internal static UserAdminDto ToDto(AppUser u, Guid? employeeId, string? employeeName, EmployeeLinkMode mode) =>
-        new(u.Id, u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper), u.IsActive, u.CreatedAtUtc,
+        new(u.Id, u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager), u.IsActive, u.CreatedAtUtc,
             u.LastSeenAtUtc, u.LastSignInAtUtc, u.DeactivatedAtUtc, u.DeactivatedBy, employeeId, employeeName, mode, u.ScimManaged);
 }
 
@@ -154,6 +154,7 @@ public sealed class InviteService(
             IsAdmin = request.Roles.IsAdmin(),
             IsFinance = request.Roles.HasFlag(OrgRoles.Finance),
             IsTimekeeper = request.Roles.HasFlag(OrgRoles.Timekeeper),
+            IsResourceManager = request.Roles.HasFlag(OrgRoles.ResourceManager),
             InvitedBy = access.Email,
             CreatedAtUtc = now,
             ExpiresAtUtc = now + options.InviteLifetime,
@@ -205,7 +206,7 @@ public sealed class InviteService(
     }
 
     internal static InviteDto ToDto(UserInvite i, DateTime now) =>
-        new(i.Id, i.Email, i.DisplayName, AccessControl.ToRoles(i.IsAdmin, i.IsFinance, i.IsTimekeeper), i.InvitedBy, i.CreatedAtUtc, i.ExpiresAtUtc,
+        new(i.Id, i.Email, i.DisplayName, AccessControl.ToRoles(i.IsAdmin, i.IsFinance, i.IsTimekeeper, i.IsResourceManager), i.InvitedBy, i.CreatedAtUtc, i.ExpiresAtUtc,
             i.AcceptedAtUtc, i.RevokedAtUtc,
             i.AcceptedAtUtc is not null ? InviteStatus.Accepted
             : i.RevokedAtUtc is not null ? InviteStatus.Revoked

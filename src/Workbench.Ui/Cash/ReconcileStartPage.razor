@@ -1,0 +1,117 @@
+@page "/cash/reconcile"
+@inject IBankAccountService Accounts
+@inject IBankReconciliationService Reconciliations
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Reconcile · Cash · Workbench</PageTitle>
+
+<CashHeader Title="Reconcile a bank account"
+            Subtitle="Choose the account and the statement's end date and ending balance, then match bank items to GL cash entries." />
+
+@if (_error is not null)
+{
+    <CashError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.End">
+            <MudSelect T="Guid?" Value="_accountId" ValueChanged="AccountChangedAsync" Label="Bank account" Style="min-width:260px" data-testid="rec-account">
+                @foreach (var a in _accounts.Where(a => a.IsActive))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Name @a.MaskedAccountNumber</MudSelectItem>
+                }
+            </MudSelect>
+            <MudDatePicker @bind-Date="_endDate" Label="Statement end date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:190px" data-testid="rec-end" />
+            <MudNumericField T="decimal?" @bind-Value="_balance" Label="Statement ending balance" Format="N2" Style="max-width:220px" data-testid="rec-balance" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartAsync" Disabled="@(_accountId is null || _endDate is null)" data-testid="rec-start">
+                @(_defaults?.InProgressId is not null ? "Continue" : "Start reconciling")
+            </MudButton>
+        </MudStack>
+        @if (_defaults is not null)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+                @(_defaults.ReconciledThrough is { } t ? $"Reconciled through {CashFormat.Date(t)}." : "Not reconciled yet.")
+                @(_defaults.StatementEndDate is not null ? " The end date and balance come from the latest imported statement." : " Import a statement first, or enter the end date and balance from the paper statement.")
+            </MudText>
+        }
+    </MudPaper>
+
+    @if (_open.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">In progress</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="in-progress">
+                <thead><tr><th>Account</th><th>Statement end</th><th style="text-align:right">Ending balance</th><th style="text-align:right">Difference</th><th>Started</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _open)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"cash/reconcile/{r.Id}")">@r.BankAccountName @r.MaskedAccountNumber</MudLink></td>
+                            <td>@CashFormat.Date(r.StatementEndDate)</td>
+                            <td style="text-align:right">@CashFormat.Amount(r.StatementEndingBalance)</td>
+                            <td style="text-align:right">@CashFormat.Amount(r.Math.Difference)</td>
+                            <td>@r.StartedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "account")] public Guid? AccountQuery { get; set; }
+
+    private IReadOnlyList<BankAccountDto> _accounts = [];
+    private List<BankReconciliationDto> _open = [];
+    private ReconciliationDefaultsDto? _defaults;
+    private Guid? _accountId;
+    private DateTime? _endDate;
+    private decimal? _balance;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = await Accounts.ListAsync();
+            _open = (await Reconciliations.ListAsync()).Where(r => r.Status == ReconciliationState.InProgress).ToList();
+            await AccountChangedAsync(AccountQuery ?? _accounts.FirstOrDefault(a => a.IsActive)?.Id);
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task AccountChangedAsync(Guid? id)
+    {
+        _accountId = id;
+        _defaults = null;
+        if (id is null)
+        {
+            return;
+        }
+
+        _defaults = await Reconciliations.GetDefaultsAsync(id.Value);
+        var open = _open.FirstOrDefault(r => r.BankAccountId == id);
+        _endDate = open is not null ? CashFormat.ToDateTime(open.StatementEndDate) : _defaults.StatementEndDate is { } d ? CashFormat.ToDateTime(d) : null;
+        _balance = open?.StatementEndingBalance ?? _defaults.StatementEndingBalance;
+    }
+
+    private async Task StartAsync()
+    {
+        try
+        {
+            var rec = await Reconciliations.StartAsync(new StartReconciliationRequest(_accountId!.Value, DateOnly.FromDateTime(_endDate!.Value), _balance));
+            Navigation.NavigateTo($"cash/reconcile/{rec.Id}");
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+}

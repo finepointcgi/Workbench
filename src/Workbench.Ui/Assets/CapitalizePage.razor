@@ -1,0 +1,81 @@
+@page "/assets/capitalize"
+@inject IAssetService AssetService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Capitalize · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Capitalize from AP" Subtitle="@($"Posted bills' GL-account lines of {AssetFormat.Amount(_threshold)} or more (the capitalization threshold) that aren't assets yet.")" />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_lines.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">No bill lines to capitalize.</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="capitalizable">
+            <thead><tr><th>Bill</th><th>Vendor</th><th>Invoice date</th><th>Line</th><th>Account</th><th>Org</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var l in _lines)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"purchasing/bills/{l.BillId}")">@l.BillNumber</MudLink></td>
+                        <td>@l.VendorName</td>
+                        <td>@AssetFormat.Date(l.InvoiceDate)</td>
+                        <td>@l.LineNumber · @l.Description</td>
+                        <td>@l.AccountNumber @l.AccountName</td>
+                        <td>@l.OrgUnitCode</td>
+                        <td style="text-align:right">@AssetFormat.Amount(l.Amount)</td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => CapitalizeAsync(l))" data-testid="capitalize">Capitalize</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<CapitalizableBillLineDto> _lines = [];
+    private decimal _threshold;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _threshold = (await AssetService.GetSettingsAsync()).CapitalizationThreshold;
+            _lines = await AssetService.ListCapitalizableBillLinesAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task CapitalizeAsync(CapitalizableBillLineDto line)
+    {
+        var dialog = await DialogService.ShowAsync<CapitalizeDialog>($"Capitalize {line.BillNumber} line {line.LineNumber}",
+            new DialogParameters<CapitalizeDialog> { { d => d.BillLineId, line.BillLineId }, { d => d.Description, line.Description }, { d => d.Amount, line.Amount } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: CapitalizeBillLineRequest request })
+        {
+            try
+            {
+                var asset = await AssetService.CapitalizeAsync(request);
+                Snackbar.Add($"Capitalized as {asset.Asset.TagNumber}.", Severity.Success);
+                Navigation.NavigateTo($"assets/{asset.Asset.Id}");
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+}

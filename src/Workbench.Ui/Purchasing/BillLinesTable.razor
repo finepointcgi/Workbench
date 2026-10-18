@@ -1,6 +1,6 @@
 @* A bill's lines: what each charges, where it's routed and whether it's decided. *@
 <MudSimpleTable Dense="true" Elevation="0" data-testid="bill-lines" Style="overflow-x:auto">
-    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th>Routed to</th><th>Status</th></tr></thead>
+    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th>Routed to</th><th>Status</th>@if (CanCapitalize is not null) { <th></th> }</tr></thead>
     <tbody>
         @foreach (var l in Lines)
         {
@@ -22,11 +22,44 @@
                         </span>
                     }
                 </td>
-                <td>@l.Description</td>
+                <td>
+                    @l.Description
+                    @if (l.PurchaseOrderLineId is not null)
+                    {
+                        <div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@l.PurchaseOrderNumber: @Q(l.Quantity) × @Q(l.UnitPrice)</MudText>
+                            @if (l.MatchProblem is null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text" Class="ma-0" data-testid="match-ok">Matched</MudChip>
+                            }
+                            else if (l.MatchOverrideBy is not null)
+                            {
+                                <MudTooltip Text="@($"{l.MatchProblem} Overridden by {l.MatchOverrideBy}: {l.MatchOverrideReason}")">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text" Class="ma-0">Match overridden</MudChip>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@l.MatchProblem">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Class="ma-0" data-testid="match-failed">Match failed</MudChip>
+                                </MudTooltip>
+                            }
+                        </div>
+                    }
+                </td>
                 <td style="text-align:right">@PurchasingFormat.Amount(l.Amount)</td>
                 <td style="text-align:right">@(l.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(l.RetainageAmount))</td>
                 <td>@l.RoutedTo</td>
                 <td>@l.Status@(l.DecidedBy is null ? "" : $" by {l.DecidedBy}")</td>
+                @if (CanCapitalize is not null)
+                {
+                    <td>
+                        @if (CanCapitalize(l))
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="@(() => OnCapitalize.InvokeAsync(l))" data-testid="capitalize">Capitalize</MudButton>
+                        }
+                    </td>
+                }
             </tr>
         }
     </tbody>
@@ -34,4 +67,11 @@
 
 @code {
     [Parameter] public IReadOnlyList<BillLineDto> Lines { get; set; } = [];
+
+    /// <summary>Fixed assets: which lines show a Capitalize action (null: no action column).</summary>
+    [Parameter] public Func<BillLineDto, bool>? CanCapitalize { get; set; }
+
+    [Parameter] public EventCallback<BillLineDto> OnCapitalize { get; set; }
+
+    private static string Q(decimal? value) => value is { } v ? v.ToString("#,##0.####", System.Globalization.CultureInfo.InvariantCulture) : "";
 }

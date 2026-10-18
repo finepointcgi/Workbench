@@ -1,15 +1,13 @@
 @page "/billing"
 @page "/billing/invoices"
 @inject IInvoiceService Invoices
-@inject ICurrentUserContext UserContext
 
 <PageTitle>Invoices · Billing · Workbench</PageTitle>
 
 <BillingHeader Title="Invoices" Subtitle="Customer invoices and credit memos by contract. Approving an invoice posts it to the general ledger; voiding reverses it and frees what it billed.">
-    @if (_isFinance)
-    {
+    <FinanceOnly>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="billing/new" data-testid="new-invoice">New invoice</MudButton>
-    }
+    </FinanceOnly>
 </BillingHeader>
 
 @if (_error is not null)
@@ -100,7 +98,6 @@ else
     private string? _search;
     private bool _openOnly;
     private bool _loading = true;
-    private bool _isFinance;
     private string? _error;
     private bool _forbidden;
 
@@ -108,7 +105,6 @@ else
     {
         try
         {
-            _isFinance = (await UserContext.GetAsync()).IsFinance;
             _contracts = await Invoices.ListBillingContractsAsync();
         }
         catch (Exception ex)

@@ -14,9 +14,9 @@ internal sealed class SqliteTestDb : IWorkbenchDbContextFactory, IDisposable
     public SqliteTestDb()
     {
         _connection.Open();
-        _options = new DbContextOptionsBuilder<WorkbenchDbContext>().UseSqlite(_connection).Options;
+        _options = new DbContextOptionsBuilder<WorkbenchDbContext>().UseSqlite(_connection, o => o.MigrationsAssembly(DatabaseProviders.SqliteMigrationsAssembly)).Options;
         using var db = new WorkbenchDbContext(_options);
-        db.Database.EnsureCreated();
+        db.Database.Migrate();
     }
 
     public Task<IWorkbenchDbContext> CreateAsync(CancellationToken cancellationToken = default) =>

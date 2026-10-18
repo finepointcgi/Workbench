@@ -30,11 +30,14 @@ public sealed class TimesheetService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var me = await MeAsync(db, cancellationToken);
-        var (start, end) = clock.PeriodFor(date);
+
+        // A timesheet keeps the period it was opened with, even if the organization's cadence changed since.
         var sheet = await db.Set<Timesheet>().Include(t => t.Entries)
-            .FirstOrDefaultAsync(t => t.EmployeeId == me.Id && t.PeriodStart == start, cancellationToken);
+            .FirstOrDefaultAsync(t => t.EmployeeId == me.Id && t.PeriodStart <= date && t.PeriodEnd >= date, cancellationToken);
         if (sheet is null)
         {
+            var (start, end) = await clock.PeriodForAsync(db, date, cancellationToken);
+
             // DCAA: no time for future dates, so there's no reason to open a timesheet for a period that hasn't started.
             if (start > clock.Today)
             {

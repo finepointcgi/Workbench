@@ -1,0 +1,70 @@
+@* Move an asset to another location, custodian, organization or project (kept in its history), or transfer government property out. *@
+@inject IPeopleService People
+@inject IProjectService Projects
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="6"><MudDatePicker @bind-Date="_on" Label="Transfer date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6"><MudTextField T="string" @bind-Value="_location" Label="Location" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6">
+                <MudSelect T="Guid?" @bind-Value="_custodianId" Label="Custodian" Dense="true" Clearable="true">
+                    @foreach (var e in _employees) { <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect T="Guid?" @bind-Value="_orgId" Label="Organization" Dense="true" Clearable="true">
+                    @foreach (var o in _orgs) { <MudSelectItem T="Guid?" Value="o.Id">@o.Code · @o.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Dense="true" Clearable="true">
+                    @foreach (var p in _projects) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Margin="Margin.Dense" /></MudItem>
+            @if (Asset.Asset.IsGovernmentFurnished || Asset.Asset.IsContractorAcquired)
+            {
+                <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_out" Label="Transfer out (returned to the government or another contract)" Dense="true" /></MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_on is null" OnClick="Save" data-testid="transfer-save">Transfer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public AssetDto Asset { get; set; } = default!;
+
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private IReadOnlyList<OrgUnitDto> _orgs = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private DateTime? _on = DateTime.Today;
+    private string? _location;
+    private Guid? _custodianId;
+    private Guid? _orgId;
+    private Guid? _projectId;
+    private string? _reason;
+    private bool _out;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_location, _custodianId, _orgId, _projectId) = (Asset.Asset.Location, Asset.CustodianEmployeeId, Asset.OrgUnitId, Asset.ProjectId);
+        try
+        {
+            _employees = await People.ListEmployeesAsync();
+            _orgs = await People.ListOrgUnitsAsync();
+            _projects = await Projects.ListProjectsAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _employees = [];
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new TransferAssetRequest(DateOnly.FromDateTime(_on!.Value), _location, _custodianId, _orgId, _projectId, _reason, _out)));
+}

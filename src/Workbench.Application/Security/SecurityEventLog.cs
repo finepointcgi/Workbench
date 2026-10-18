@@ -31,7 +31,8 @@ public sealed class SecurityEventLog(
     ICurrentUser currentUser,
     ISecurityEventContext context,
     TimeProvider clock,
-    ILogger<SecurityEventLog> logger)
+    ILogger<SecurityEventLog> logger,
+    Tenancy.TenancyOptions? tenancy = null)
 {
     public async Task RecordAsync(
         string eventType,
@@ -55,6 +56,13 @@ public sealed class SecurityEventLog(
 
         try
         {
+            if (tenancy?.IsMultiTenant == true && Tenancy.TenantScope.Current is null)
+            {
+                // The host admin site has no tenant database; its events go to the server log (host actions to the catalog's audit).
+                logger.LogInformation("Host security event {EventType} ({Outcome}) by {Actor}: {Detail}", eventType, outcome, row.Actor, row.Detail);
+                return;
+            }
+
             await using var db = await dbFactory.CreateAsync(CancellationToken.None);
             db.Set<SecurityEvent>().Add(row);
             await db.SaveChangesAsync(CancellationToken.None);
@@ -75,7 +83,9 @@ public sealed class SecurityEventLog(
     {
         try
         {
-            return string.IsNullOrWhiteSpace(currentUser.Email) ? "anonymous" : currentUser.Email.Trim().ToLowerInvariant();
+            return string.IsNullOrWhiteSpace(currentUser.Email) ? "anonymous"
+                : currentUser.Email == Identity.SystemExecutionContext.Actor ? Identity.SystemExecutionContext.Actor
+                : currentUser.Email.Trim().ToLowerInvariant();
         }
         catch (Exception)
         {

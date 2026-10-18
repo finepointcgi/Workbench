@@ -1,0 +1,132 @@
+@page "/assets"
+@inject IAssetService AssetService
+@inject IAssetReportService Reports
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Asset register · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Asset register" BackHref="" BackLabel="My Work"
+             Subtitle="Contractor-owned assets depreciate monthly into the general ledger; government-furnished and contractor-acquired property is tracked for FAR 52.245-1.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_error is not null">Export CSV</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AddBox" Href="assets/capitalize">Capitalize from AP</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_error is not null" data-testid="new-asset">New asset</MudButton>
+</AssetHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudSelect T="AssetState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:160px">
+            @foreach (var s in Enum.GetValues<AssetState>())
+            {
+                <MudSelectItem T="AssetState?" Value="s">@AssetFormat.Label(s)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSwitch T="bool" Value="_govOnly" ValueChanged="v => SetAsync(() => _govOnly = v)" Label="Government property only" Color="Color.Primary" />
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+        <MudSpacer />
+        <MudText>Cost <b>@AssetFormat.Amount(_assets.Sum(a => a.Cost))</b> · Net book value <b>@AssetFormat.Amount(_assets.Sum(a => a.NetBookValue))</b></MudText>
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (_assets.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No assets.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="assets">
+                <thead><tr><th>Tag</th><th>Description</th><th>Category</th><th>Acquired</th><th>Method</th><th style="text-align:right">Cost</th><th style="text-align:right">Accum. depr.</th><th style="text-align:right">Net book value</th><th>Location</th><th>Custodian</th><th>Org</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var a in _assets)
+                    {
+                        <tr>
+                            <td style="white-space:nowrap"><MudLink Href="@($"assets/{a.Id}")">@a.TagNumber</MudLink></td>
+                            <td>
+                                @a.Description
+                                @if (a.IsGovernmentFurnished || a.IsContractorAcquired)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text" Class="ma-0">@(a.IsGovernmentFurnished ? "GFP" : "CAP") @a.GovernmentPropertyNumber</MudChip>
+                                }
+                            </td>
+                            <td>@a.CategoryCode</td>
+                            <td style="white-space:nowrap">@AssetFormat.Date(a.AcquisitionDate)</td>
+                            <td>@(a.IsGovernmentFurnished || a.IsContractorAcquired ? "—" : $"{AssetFormat.Label(a.Method)}, {a.UsefulLifeYears} yrs")</td>
+                            <td style="text-align:right">@AssetFormat.Amount(a.Cost)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(a.AccumulatedDepreciation)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(a.NetBookValue)</td>
+                            <td>@a.Location</td>
+                            <td>@a.CustodianName</td>
+                            <td>@a.OrgUnitCode</td>
+                            <td><AssetStatusChip Status="a.Status" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<AssetSummaryDto> _assets = [];
+    private AssetState? _status;
+    private bool _govOnly;
+    private string? _search;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _assets = await AssetService.ListAsync(new AssetQuery(_status, null, _search, _govOnly));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task NewAsync()
+    {
+        var dialog = await DialogService.ShowAsync<AssetDialog>("New asset", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveAssetRequest request })
+        {
+            try
+            {
+                var asset = await AssetService.CreateAsync(request);
+                Navigation.NavigateTo($"assets/{asset.Asset.Id}");
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            await AssetFormat.DownloadAsync(JS, await Reports.ExportRegisterCsvAsync());
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

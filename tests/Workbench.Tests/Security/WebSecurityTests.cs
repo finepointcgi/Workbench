@@ -111,6 +111,7 @@ public sealed partial class WebSecurityTests
             ["Authentication:Oidc:Authority"] = "https://login.example.test/",
             ["urls"] = "http://0.0.0.0:8080",
             ["Scim:BearerToken"] = "short",
+            ["Database:Provider"] = "Sqlite",
         });
         var strong = Problems("Production", new()
         {
@@ -299,12 +300,22 @@ public sealed partial class WebSecurityTests
         using var labor = await pm.GetAsync("/api/v1/time/reports/labor-distribution.csv?from=2026-01-01&to=2026-12-31");
         var project = (await pm.GetFromJsonAsync<List<ProjectDto>>("/api/v1/projects"))!.First();
         using var financial = await pm.GetAsync($"/api/v1/projects/{project.Id}/financials/wbs.csv");
-        var period = (await pm.GetFromJsonAsync<List<FiscalPeriodDto>>("/api/v1/fiscal/periods"))!.First();
+        var periods = (await pm.GetFromJsonAsync<List<FiscalPeriodDto>>("/api/v1/fiscal/periods"))!;
+        // Setup's Close runs the period-close checklist: the earliest open seeded period has work outstanding; the last is empty.
+        var current = periods.Where(p => p.Status == FiscalPeriodState.Open).MinBy(p => p.Start)!;
+        using var blocked = await pm.PutAsJsonAsync($"/api/v1/fiscal/periods/{current.Id}/status", new { Status = FiscalPeriodState.Closed, Reason = "Month end" });
+        var period = periods.Where(p => p.Status == FiscalPeriodState.Open).MaxBy(p => p.Start)!;
+        // The seeded bank account is never reconciled that far and seeded assets depreciate every month: Finance waives and runs them.
+        using var waive = await pm.PostAsJsonAsync("/api/v1/cash/close-waivers", new { FiscalPeriodId = period.Id, Reason = "No statement yet" });
+        using var depreciate = await pm.PostAsync($"/api/v1/assets/depreciation/{period.Id}/run", null);
+        Assert.True(waive.IsSuccessStatusCode && depreciate.IsSuccessStatusCode, $"{waive.StatusCode} {depreciate.StatusCode}");
         using var close = await pm.PutAsJsonAsync($"/api/v1/fiscal/periods/{period.Id}/status", new { Status = FiscalPeriodState.Closed, Reason = "Month end" });
 
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
         Assert.Equal(HttpStatusCode.OK, labor.StatusCode);
         Assert.Equal(HttpStatusCode.OK, financial.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
+        Assert.Contains("can't close yet", (await blocked.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.OK, close.StatusCode);
 
         var events = await EventsAsync(factory, null);

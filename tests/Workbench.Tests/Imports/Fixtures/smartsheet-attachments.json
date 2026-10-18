@@ -1,0 +1,7 @@
+{
+  "pageNumber": 1, "pageSize": 100, "totalPages": 1, "totalCount": 2,
+  "data": [
+    { "id": 3333333333333333, "name": "wireframes.pdf", "attachmentType": "FILE", "mimeType": "application/pdf", "sizeInKb": 1, "parentType": "ROW", "parentId": 6865355806140292, "createdAt": "2026-10-06T15:05:00Z" },
+    { "id": 4444444444444444, "name": "Figma board", "attachmentType": "LINK", "parentType": "ROW", "parentId": 6865355806140292, "url": "https://figma.example.com/file/1", "createdAt": "2026-10-06T15:06:00Z" }
+  ]
+}

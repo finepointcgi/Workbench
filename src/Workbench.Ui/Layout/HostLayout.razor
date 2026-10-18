@@ -1,0 +1,20 @@
+@inherits LayoutComponentBase
+@* The host admin site (MultiTenant): no tenant, so none of the tenant layout's menus, bell or user lookups. *@
+
+<MudThemeProvider Theme="WorkbenchTheme.Default" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Dense="true">
+        <MudText Typo="Typo.h6">Workbench host administration</MudText>
+        <MudSpacer />
+        <MudButton Href="account/signout" Color="Color.Inherit" Variant="Variant.Text">Sign out</MudButton>
+    </MudAppBar>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

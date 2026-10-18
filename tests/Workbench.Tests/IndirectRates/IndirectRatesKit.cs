@@ -49,6 +49,8 @@ internal sealed class IndirectRatesKit
     public WbsElement Task2 { get; private set; } = default!;
     public WbsElement Overhead { get; private set; } = default!;
     public Guid ClinId { get; } = Guid.NewGuid();
+
+    public LaborCategory Category { get; } = new() { Code = "ENG2", Name = "Engineer II" };
     public Dictionary<string, FiscalPeriod> Periods { get; } = [];
 
     public FiscalPeriod Oct => Periods["2026-10"];
@@ -85,15 +87,20 @@ internal sealed class IndirectRatesKit
         }
 
         Employee = new Employee { EmployeeNumber = "E1", Email = "dana@example.com", DisplayName = "Dana", HireDate = new DateOnly(2020, 1, 1) };
-        Contract = new Contract { ContractNumber = "W91-26-C-0001", Name = "Modernization", PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2028, 1, 1) };
+        var customer = new Customer { Code = "ARMY", Name = "U.S. Army" };
+        Contract = new Contract { ContractNumber = "W91-26-C-0001", Name = "Modernization", CustomerId = customer.Id, PeriodStart = new DateOnly(2025, 1, 1), PeriodEnd = new DateOnly(2028, 1, 1) };
+        var clin = new Clin { Id = ClinId, ContractId = Contract.Id, Number = "0001", Description = "Engineering", PeriodStart = Contract.PeriodStart, PeriodEnd = Contract.PeriodEnd };
         Project = new Project { Code = "2001", Name = "Modernization", ContractId = Contract.Id };
         Task1 = new WbsElement { ProjectId = Project.Id, Code = "2001.01", Name = "Design", ClinId = ClinId };
         Task2 = new WbsElement { ProjectId = Project.Id, Code = "2001.02", Name = "Build", Order = 1 };
         var indirect = new Project { Code = "IND", Name = "Indirect" };
         Overhead = new WbsElement { ProjectId = indirect.Id, Code = "IND.OH", Name = "Overhead", Kind = ChargeKind.Indirect, RequiresAssignment = false };
+        db.Set<LaborCategory>().Add(Category);
         db.Set<Employee>().Add(Employee);
         db.Set<EmployeeCostRate>().Add(new EmployeeCostRate { EmployeeId = Employee.Id, EffectiveFrom = new DateOnly(2020, 1, 1), HourlyCost = 100m });
+        db.Set<Customer>().Add(customer);
         db.Set<Contract>().Add(Contract);
+        db.Set<Clin>().Add(clin);
         db.Set<Project>().AddRange(Project, indirect);
         db.Set<WbsElement>().AddRange(Task1, Task2, Overhead);
         await db.SaveChangesAsync();
@@ -104,9 +111,16 @@ internal sealed class IndirectRatesKit
     {
         await using var db = await Factory.CreateAsync();
         var start = entries.Min(e => e.Date);
-        var sheet = new Timesheet { EmployeeId = Employee.Id, PeriodStart = start, PeriodEnd = start.AddDays(6), Status = TimesheetStatus.Approved, ApprovedAtUtc = DateTime.UtcNow };
-        sheet.Entries.AddRange(entries.Select(e => new TimeEntry { TimesheetId = sheet.Id, WbsElementId = e.Wbs.Id, WorkDate = e.Date, Hours = e.Hours, LaborCategoryId = Guid.NewGuid() }));
-        db.Set<Timesheet>().Add(sheet);
+
+        // One timesheet per employee and period (a unique index): more hours for a period go on the same sheet.
+        var sheet = await db.Set<Timesheet>().FirstOrDefaultAsync(t => t.EmployeeId == Employee.Id && t.PeriodStart == start);
+        if (sheet is null)
+        {
+            sheet = new Timesheet { EmployeeId = Employee.Id, PeriodStart = start, PeriodEnd = start.AddDays(6), Status = TimesheetStatus.Approved, ApprovedAtUtc = DateTime.UtcNow };
+            db.Set<Timesheet>().Add(sheet);
+        }
+
+        db.Set<TimeEntry>().AddRange(entries.Select(e => new TimeEntry { TimesheetId = sheet.Id, WbsElementId = e.Wbs.Id, WorkDate = e.Date, Hours = e.Hours, LaborCategoryId = Category.Id }));
         await db.SaveChangesAsync();
     }
 

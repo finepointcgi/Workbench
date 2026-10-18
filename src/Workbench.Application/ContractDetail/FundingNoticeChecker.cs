@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Contracts.Contracts;
 using Workbench.Domain.Identity;
@@ -21,9 +22,18 @@ public sealed class FundingNoticeChecker(
 
     private static readonly CultureInfo Us = CultureInfo.GetCultureInfo("en-US");
 
-    public async Task<IReadOnlyList<FundingNoticeDto>> CheckAsync(Guid contractId, CancellationToken ct)
+    public async Task<IReadOnlyList<FundingNoticeDto>> CheckAsync(Guid contractId, CancellationToken ct) =>
+        (await CheckWithStatusAsync(contractId, ct)).Sent;
+
+    /// <summary>The notices sent, and whether the check used burdened cost (it falls back to direct cost when it can't).</summary>
+    internal async Task<(IReadOnlyList<FundingNoticeDto> Sent, bool IsBurdened)> CheckWithStatusAsync(Guid contractId, CancellationToken ct)
     {
         var status = await calculator.ComputeAsync(contractId, ct);
+        return (await SendDueAsync(contractId, status, ct), status.IsBurdened);
+    }
+
+    private async Task<IReadOnlyList<FundingNoticeDto>> SendDueAsync(Guid contractId, ContractFundingStatusDto status, CancellationToken ct)
+    {
         var thresholds = new[] { calculator.Options.WarningThreshold, calculator.Options.CriticalThreshold }
             .Where(t => t > 0).Distinct().Order().ToList();
 
@@ -117,8 +127,12 @@ public sealed class FundingNoticeChecker(
     }
 }
 
-/// <summary>Re-checks every active contract with CLINs hourly, so newly approved cost raises notices without a page visit.</summary>
-public sealed class FundingNoticeBackgroundService(IServiceScopeFactory scopes, TimeProvider clock, ILogger<FundingNoticeBackgroundService> logger)
+/// <summary>
+/// Re-checks every active contract with CLINs hourly, so newly approved cost raises notices without a page visit. Runs as
+/// Workbench System (<see cref="SystemExecution"/>), once per tenant, which may read burdened cost, so notices use the
+/// same burdened numbers the funding tab shows.
+/// </summary>
+public sealed class FundingNoticeBackgroundService(IServiceScopeFactory scopes, Tenancy.ITenantJobRunner tenants, TimeProvider clock, ILogger<FundingNoticeBackgroundService> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -128,25 +142,33 @@ public sealed class FundingNoticeBackgroundService(IServiceScopeFactory scopes, 
         {
             try
             {
-                await using var scope = scopes.CreateAsyncScope();
-                var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync(stoppingToken);
-                List<Guid> contracts;
-                await using (db)
+                await tenants.ForEachTenantAsync(async ct =>
                 {
-                    contracts = await db.Set<Clin>().AsNoTracking()
-                        .Join(db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active), c => c.ContractId, k => k.Id, (c, _) => c.ContractId)
-                        .Distinct().ToListAsync(stoppingToken);
-                }
-
-                var checker = scope.ServiceProvider.GetRequiredService<FundingNoticeChecker>();
-                foreach (var id in contracts)
-                {
-                    var sent = await checker.CheckAsync(id, stoppingToken);
-                    if (sent.Count > 0)
+                    await using var scope = SystemExecution.CreateScope(scopes);
+                    var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync(ct);
+                    List<Guid> contracts;
+                    await using (db)
                     {
-                        logger.LogInformation("Sent {Count} funding notices for contract {ContractId}", sent.Count, id);
+                        contracts = await db.Set<Clin>().AsNoTracking()
+                            .Join(db.Set<Contract>().AsNoTracking().Where(c => c.Status == ContractStatus.Active), c => c.ContractId, k => k.Id, (c, _) => c.ContractId)
+                            .Distinct().ToListAsync(ct);
                     }
-                }
+
+                    var checker = scope.ServiceProvider.GetRequiredService<FundingNoticeChecker>();
+                    var burdened = 0;
+                    foreach (var id in contracts)
+                    {
+                        var (sent, isBurdened) = await checker.CheckWithStatusAsync(id, ct);
+                        burdened += isBurdened ? 1 : 0;
+                        if (sent.Count > 0)
+                        {
+                            logger.LogInformation("Sent {Count} funding notices for contract {ContractId}", sent.Count, id);
+                        }
+                    }
+
+                    logger.LogInformation("Funding notice check as {Actor}: {Contracts} contracts, {Burdened} on burdened cost, {Direct} on direct cost",
+                        SystemExecutionContext.Actor, contracts.Count, burdened, contracts.Count - burdened);
+                }, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

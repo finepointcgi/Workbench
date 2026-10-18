@@ -166,7 +166,7 @@ public sealed class OverdueInvoiceCheck(IWorkbenchDbContextFactory dbFactory, IN
 }
 
 /// <summary>Runs <see cref="OverdueInvoiceCheck"/> every few hours; the check is idempotent.</summary>
-public sealed class OverdueInvoiceBackgroundService(IServiceScopeFactory scopes, TimeProvider clock, ILogger<OverdueInvoiceBackgroundService> logger) : BackgroundService
+public sealed class OverdueInvoiceBackgroundService(IServiceScopeFactory scopes, Tenancy.ITenantJobRunner tenants, TimeProvider clock, ILogger<OverdueInvoiceBackgroundService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -175,12 +175,15 @@ public sealed class OverdueInvoiceBackgroundService(IServiceScopeFactory scopes,
         {
             try
             {
-                await using var scope = scopes.CreateAsyncScope();
-                var sent = await scope.ServiceProvider.GetRequiredService<OverdueInvoiceCheck>().RunAsync(stoppingToken);
-                if (sent > 0)
+                await tenants.ForEachTenantAsync(async ct =>
                 {
-                    logger.LogInformation("Sent {Count} overdue invoice reminders", sent);
-                }
+                    await using var scope = scopes.CreateAsyncScope();
+                    var sent = await scope.ServiceProvider.GetRequiredService<OverdueInvoiceCheck>().RunAsync(ct);
+                    if (sent > 0)
+                    {
+                        logger.LogInformation("Sent {Count} overdue invoice reminders", sent);
+                    }
+                }, stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

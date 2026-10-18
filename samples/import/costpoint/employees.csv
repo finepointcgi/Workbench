@@ -1,0 +1,6 @@
+EMPL_ID,LAST_FIRST_NAME,EMAIL_ID,ORG_ID,BILL_LAB_CAT_CD,ORIG_HIRE_DT,TERM_DT,SUPERVISOR_EMPL_ID,STD_EST_HRS,EXMPT_FL,HRLY_AMT,EFFECT_DT
+E2001,"Nguyen, Robin",robin.nguyen@example.com,1.01.10,PM4,03/15/2021,,,40,Y,92.50,10/01/2025
+E2002,"Okafor, Chris",chris.okafor@example.com,1.02.20,SWE3,06/01/2022,,E2001,40,Y,78.00,10/01/2025
+E2003,"Patel, Morgan",morgan.patel@example.com,1.02.20,SWE2,01/09/2023,,E2001,40,Y,64.25,10/01/2025
+E2004,"Garcia, Sam",sam.garcia@example.com,1.02.20,DS2,08/21/2023,,E2002,40,Y,71.00,10/01/2025
+E2005,"Brooks, Jamie",jamie.brooks@example.com,1.01.10,TW1,02/12/2024,,E2001,30,N,41.50,10/01/2025

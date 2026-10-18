@@ -1,0 +1,176 @@
+@page "/purchasing/orders"
+@inject IPurchaseOrderService Orders
+@inject IRequisitionService Requisitions
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Purchase orders · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Purchase orders" Subtitle="Order approved requisitions (or enter a PO directly), issue it, receive against it and bill it with a three-way match. Open amounts are commitments on the project.">
+    <MudButton Variant="Variant.Outlined" Href="purchasing/receiving" StartIcon="@Icons.Material.Filled.Inventory">Receiving</MudButton>
+    <FinanceOnly>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewOrderAsync" Disabled="_options is null" data-testid="new-po">New PO</MudButton>
+    </FinanceOnly>
+</PurchasingHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    @if (_orderable.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="orderable">
+            <MudText Typo="Typo.h6" Class="mb-2">Approved requisitions to order</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto">
+                <thead><tr><th></th><th>Requisition</th><th>Requester</th><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit cost</th><th style="text-align:right">Amount</th><th>Charge to</th><th>Suggested vendor</th></tr></thead>
+                <tbody>
+                    @foreach (var o in _orderable)
+                    {
+                        <tr>
+                            <td><MudCheckBox T="bool" Value="_selected.Contains(o.Line.Id)" ValueChanged="@(v => Toggle(o, v))" Dense="true" data-testid="orderable-pick" /></td>
+                            <td><MudLink Href="@($"purchasing/requisitions/{o.RequisitionId}")">@o.RequisitionNumber</MudLink></td>
+                            <td>@o.RequesterEmail</td>
+                            <td>@o.Line.Description</td>
+                            <td style="text-align:right">@ProcurementFormat.Quantity(o.Line.Quantity)</td>
+                            <td style="text-align:right">@ProcurementFormat.Price(o.Line.UnitCost)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(o.Line.Amount)</td>
+                            <td>@ProcurementFormat.Charge(o.Line.ProjectCode, o.Line.WbsCode, o.Line.AccountNumber, o.Line.OrgUnitCode)</td>
+                            <td>@o.Line.SuggestedVendorName</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudStack Row="true" Spacing="2" Class="mt-3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Vendor" Dense="true" Style="min-width:240px" data-testid="order-vendor">
+                    @foreach (var v in _options?.Vendors ?? [])
+                    {
+                        <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField T="string" @bind-Value="_shipTo" Label="Ship to" Margin="Margin.Dense" Style="min-width:260px" />
+                <MudTextField T="string" @bind-Value="_receivers" Label="Receivers (emails)" Margin="Margin.Dense" Style="min-width:240px" />
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_selected.Count == 0 || _vendorId is null)" OnClick="CreateFromRequisitionsAsync" data-testid="create-po">
+                    Create PO from @_selected.Count line(s)
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudSelect T="PurchaseOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
+            @foreach (var s in Enum.GetValues<PurchaseOrderState>())
+            {
+                <MudSelectItem T="PurchaseOrderState?" Value="s">@ProcurementFormat.Label(s)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2"><OrderTable Orders="_orders" /></MudPaper>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "requisition")] public Guid? RequisitionQuery { get; set; }
+
+    private IReadOnlyList<PurchaseOrderSummaryDto> _orders = [];
+    private IReadOnlyList<OrderableRequisitionLineDto> _orderable = [];
+    private RequisitionOptionsDto? _options;
+    private readonly HashSet<Guid> _selected = [];
+    private PurchaseOrderState? _status;
+    private string? _search;
+    private Guid? _vendorId;
+    private string? _shipTo;
+    private string? _receivers;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _orderable = await Orders.ListOrderableRequisitionLinesAsync();
+            _options = await Requisitions.GetOptionsAsync();
+            foreach (var o in _orderable.Where(o => o.RequisitionId == RequisitionQuery))
+            {
+                Toggle(o, true);
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        await LoadAsync();
+    }
+
+    private void Toggle(OrderableRequisitionLineDto o, bool on)
+    {
+        if (on)
+        {
+            _selected.Add(o.Line.Id);
+            _vendorId ??= o.Line.SuggestedVendorId;
+            _receivers ??= o.RequesterEmail;
+        }
+        else
+        {
+            _selected.Remove(o.Line.Id);
+        }
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _orders = await Orders.ListAsync(new PurchaseOrderQuery(_status, null, _search));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task CreateFromRequisitionsAsync()
+    {
+        var lines = _orderable.Where(o => _selected.Contains(o.Line.Id)).ToList();
+        try
+        {
+            var po = await Orders.CreateFromRequisitionsAsync(new CreatePurchaseOrderFromRequisitionsRequest(
+                lines.Select(l => l.RequisitionId).Distinct().ToList(), _vendorId!.Value, DateOnly.FromDateTime(DateTime.Today), null, _shipTo,
+                (_receivers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), lines.Select(l => l.Line.Id).ToList()));
+            Snackbar.Add($"{po.Order.Number} created as a draft.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/orders/{po.Order.Id}");
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task NewOrderAsync()
+    {
+        var dialog = await DialogService.ShowAsync<PurchaseOrderDialog>("New purchase order",
+            new DialogParameters<PurchaseOrderDialog> { { d => d.Options, _options! } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SavePurchaseOrderRequest request })
+        {
+            try
+            {
+                var po = await Orders.CreateAsync(request);
+                Navigation.NavigateTo($"purchasing/orders/{po.Order.Id}");
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+}

@@ -1,0 +1,101 @@
+@* Balances of the user's reports (supervisors) or everyone (Finance/Admin), with adjustments and accrual runs for Finance. *@
+@inject ILeaveBalanceService Balances
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudTable T="LeaveBalanceDto" Items="Rows" Dense="true" Class="mb-4" data-testid="balances">
+    <HeaderContent>
+        <MudTh>Employee</MudTh><MudTh>Leave</MudTh><MudTh Style="text-align:right">Balance</MudTh><MudTh Style="text-align:right">Planned</MudTh><MudTh Style="text-align:right">Available</MudTh><MudTh Style="text-align:right">Accrued YTD</MudTh><MudTh Style="text-align:right">Used YTD</MudTh><MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.EmployeeName</MudTd>
+        <MudTd>@context.PolicyName</MudTd>
+        <MudTd Style="text-align:right">@LeavePage.Hours(context.Balance)</MudTd>
+        <MudTd Style="text-align:right">@LeavePage.Hours(context.Planned)</MudTd>
+        <MudTd Style="text-align:right">@LeavePage.Hours(context.Available)</MudTd>
+        <MudTd Style="text-align:right">@LeavePage.Hours(context.AccruedThisYear)</MudTd>
+        <MudTd Style="text-align:right">@LeavePage.Hours(context.UsedThisYear)</MudTd>
+        <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => HistoryAsync(context)">History</MudButton></MudTd>
+    </RowTemplate>
+</MudTable>
+
+@if (CanAdjust)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" Style="max-width:900px">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Adjust a balance</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="5">
+                <MudSelect T="LeaveBalanceDto?" @bind-Value="_target" Label="Employee and leave" Variant="Variant.Outlined" Margin="Margin.Dense" ToStringFunc="@(b => b is null ? "" : $"{b.EmployeeName} · {b.PolicyName}")">
+                    @foreach (var b in Rows)
+                    {
+                        <MudSelectItem T="LeaveBalanceDto?" Value="b">@b.EmployeeName · @b.PolicyName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="2"><MudNumericField T="decimal" @bind-Value="_hours" Label="Hours (±)" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12" sm="5"><MudTextField @bind-Value="_reason" Label="Reason (required)" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+        <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" OnClick="AdjustAsync" Disabled="@(_busy || _target is null || _hours == 0 || string.IsNullOrWhiteSpace(_reason))">Record adjustment</MudButton>
+    </MudPaper>
+    <MudPaper Outlined="true" Class="pa-4" Style="max-width:900px">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Year end</MudText>
+        <MudText Class="mud-text-secondary mb-2">Forfeit hours above each policy's carryover limit as of December 31. Accruals run when payroll posts (or from Payroll › pay periods).</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudNumericField T="int" @bind-Value="_year" Label="Year" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:120px" />
+            <MudButton Variant="Variant.Outlined" OnClick="YearEndAsync" Disabled="_busy">Run year end</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<LeaveBalanceDto> Rows { get; set; } = [];
+    [Parameter] public bool CanAdjust { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private LeaveBalanceDto? _target;
+    private decimal _hours;
+    private string? _reason;
+    private int _year = DateTime.Today.Year - 1;
+    private bool _busy;
+
+    private async Task AdjustAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var entry = await Balances.AdjustAsync(new AdjustLeaveRequest(_target!.EmployeeId, _target.PolicyId, _hours, _reason!));
+            Snackbar.Add($"Adjusted. New balance {LeavePage.Hours(entry.BalanceAfter)} h.", Severity.Success);
+            (_target, _hours, _reason) = (null, 0, null);
+        });
+    }
+
+    private async Task YearEndAsync() =>
+        await RunAsync(async () =>
+        {
+            var result = await Balances.RunYearEndAsync(_year);
+            Snackbar.Add($"{result.EmployeesForfeited} balance(s) over the carryover limit; {LeavePage.Hours(result.HoursForfeited)} h forfeited.", Severity.Info);
+        });
+
+    private async Task HistoryAsync(LeaveBalanceDto balance)
+    {
+        var parameters = new DialogParameters<LeaveHistoryDialog> { { x => x.Balance, balance } };
+        await DialogService.ShowAsync<LeaveHistoryDialog>($"{balance.EmployeeName} · {balance.PolicyName}", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (LeavePage.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

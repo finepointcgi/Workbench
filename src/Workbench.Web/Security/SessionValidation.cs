@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Workbench.Application.Identity;
 using Workbench.Application.Security;
+using Workbench.Application.Tenancy;
 using Workbench.Contracts.Security;
 using Workbench.Web.Identity;
 
@@ -21,6 +22,11 @@ public static class SessionValidation
 {
     /// <summary>When the user signed in (Unix milliseconds). Survives the cookie's sliding renewals, unlike its issue time.</summary>
     public const string SignedInAtClaim = "wb_signed_in_at";
+
+    /// <summary>MultiTenant: the tenant id (or <c>(host)</c>) the cookie was issued for.</summary>
+    public const string TenantClaim = "wb_tenant";
+
+    public static string CurrentTenantClaimValue() => TenantScope.Current is { } tenant ? tenant.Id.ToString("N") : "(host)";
 
     public static Claim SignedInAt(DateTimeOffset now) =>
         new(SignedInAtClaim, now.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64);
@@ -70,7 +76,10 @@ public static class SessionValidation
     public static async Task ValidateCookieAsync(CookieValidatePrincipalContext context)
     {
         var services = context.HttpContext.RequestServices;
-        var reason = await CheckAsync(context.Principal, services.GetRequiredService<UserStatusCache>(), services.GetRequiredService<SessionSettings>(),
+        var multiTenant = services.GetRequiredService<TenancyOptions>().IsMultiTenant;
+        var reason = multiTenant && context.Principal?.FindFirst(TenantClaim)?.Value != CurrentTenantClaimValue()
+            ? "The session belongs to another organization."
+            : await CheckAsync(context.Principal, services.GetRequiredService<UserStatusCache>(), services.GetRequiredService<SessionSettings>(),
             services.GetRequiredService<TimeProvider>(), enforceLifetime: true, context.HttpContext.RequestAborted);
         if (reason is null)
         {

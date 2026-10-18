@@ -29,14 +29,16 @@ public sealed class RetentionTests
             var free = new Project { Code = "P-FREE", Name = "Free", ContractId = contract.Id, SheetId = seeded.FinanceSheetId };
             var wbs = new WbsElement { ProjectId = free.Id, Code = "P-FREE.1", Name = "Work" };
             var employee = new Employee { EmployeeNumber = "E1", Email = Viewer, DisplayName = "Val" };
+            var category = new LaborCategory { Code = "LC1", Name = "Analyst" };
             var sheet = new Timesheet { EmployeeId = employee.Id, PeriodStart = new DateOnly(2019, 1, 7), PeriodEnd = new DateOnly(2019, 1, 13) };
             db.Set<Customer>().Add(customer);
             db.Set<Contract>().Add(contract);
             db.Set<Project>().AddRange(held, free);
             db.Set<WbsElement>().Add(wbs);
             db.Set<Employee>().Add(employee);
+            db.Set<LaborCategory>().Add(category);
             db.Set<Timesheet>().Add(sheet);
-            db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = wbs.Id, WorkDate = new DateOnly(2019, 1, 7), Hours = 8 });
+            db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = wbs.Id, LaborCategoryId = category.Id, WorkDate = new DateOnly(2019, 1, 7), Hours = 8 });
             db.Set<AuditEvent>().Add(new AuditEvent { EntityType = "Contract", EntityId = contract.Id, Action = "Created", Actor = Admin, OccurredAtUtc = old });
             db.Set<SecurityEvent>().AddRange(
                 new SecurityEvent { EventType = "signin.success", Actor = Viewer, Outcome = "success", OccurredAtUtc = old },

@@ -1,0 +1,314 @@
+@page "/payroll/runs/{RunId:guid}"
+@inject IPayrollRunService Runs
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Payroll run · Workbench</PageTitle>
+
+<MudBreadcrumbs Items="_crumbs" Class="px-0" />
+
+@if (_forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="Payroll is for Finance and administrators" Message="@_error" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_run is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_run.PayGroupCode · @PayrollFormat.Range(_run.PeriodStart, _run.PeriodEnd)</MudText>
+        <MudChip T="string" Color="@PayrollFormat.Color(_run.Status)" Variant="Variant.Outlined" data-testid="run-status">@PayrollFormat.Label(_run.Status)</MudChip>
+        <MudSpacer />
+        <MudText Class="mud-text-secondary">Check date @PayrollFormat.Date(_run.CheckDate)</MudText>
+        @if (_run.Status != PayrollRunState.Voided)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Block" OnClick="VoidAsync" Disabled="_busy">Void run</MudButton>
+        }
+    </MudStack>
+    @if (_run.Status == PayrollRunState.Voided)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">Voided: @_run.VoidReason. Any posted journal was reversed. Open the period again from Payroll to start a new run.</MudAlert>
+    }
+
+    @* 1. Period *@
+    <Step Number="1" Title="Pay group and period" Done="true">
+        <MudText>@_run.PayGroupCode, @PayrollFormat.Range(_run.PeriodStart, _run.PeriodEnd), checks dated @PayrollFormat.Date(_run.CheckDate). Provider: @_run.ProviderKey.</MudText>
+    </Step>
+
+    @* 2. Preview *@
+    <Step Number="2" Title="Preview approved hours" Done="@(_run.Status >= PayrollRunState.Exported)">
+        @if (_hours is not null)
+        {
+            @if (_hours.FlaggedCount > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="flagged">
+                    @_hours.FlaggedCount employee(s) flagged. DCAA: pay must come from approved time, so only approved hours are exported.
+                </MudAlert>
+            }
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="hours">
+                <thead><tr><th>Employee</th><th>Provider id</th><th>Type</th><th class="num">Regular</th><th class="num">Overtime</th><th>Leave</th><th class="num">Total</th><th>Flags</th></tr></thead>
+                <tbody>
+                    @foreach (var e in _hours.Employees)
+                    {
+                        <tr>
+                            <td>@e.EmployeeName</td>
+                            <td>@e.ProviderEmployeeId</td>
+                            <td>@(e.IsExempt ? "Exempt" : "Non-exempt") · @e.PayType</td>
+                            <td class="num">@PayrollFormat.Hours(e.RegularHours)</td>
+                            <td class="num">@PayrollFormat.Hours(e.OvertimeHours)</td>
+                            <td>@string.Join(", ", e.Leave.Select(l => $"{l.EarningCode} {PayrollFormat.Hours(l.Hours)}"))</td>
+                            <td class="num"><b>@PayrollFormat.Hours(e.TotalHours)</b></td>
+                            <td>
+                                @foreach (var issue in e.Issues)
+                                {
+                                    <div><MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Color="Color.Warning" Style="vertical-align:middle" /> @issue.Message</div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </Step>
+
+    @* 3. Export *@
+    <Step Number="3" Title="Export hours to the provider" Done="@(_run.Status >= PayrollRunState.Exported)">
+        @if (_run.ExportedAtUtc is { } exported)
+        {
+            <MudText Class="mb-2">Exported @exported.ToLocalTime().ToString("MMM d h:mm tt", CultureInfo.InvariantCulture) as <code>@_run.ExportFileName</code>.</MudText>
+        }
+        @if (_run.Status is PayrollRunState.Draft or PayrollRunState.Exported)
+        {
+            @if (_hours?.FlaggedCount > 0)
+            {
+                <MudCheckBox T="bool" @bind-Value="_acknowledge" Label="Export anyway: flagged employees' unapproved hours are left out" Color="Color.Warning" data-testid="acknowledge" />
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="export">
+                @(_run.Status == PayrollRunState.Exported ? "Export again" : "Export Paylocity hours file")
+            </MudButton>
+        }
+    </Step>
+
+    @* 4. Register *@
+    <Step Number="4" Title="Import the payroll register" Done="@(_run.Status >= PayrollRunState.RegisterImported)">
+        @if (_run.RegisterFileName is not null)
+        {
+            <MudText Class="mb-2">Register <code>@_run.RegisterFileName</code> imported, gross @PayrollFormat.Money(_run.RegisterGross).</MudText>
+        }
+        @if (_run.Status is PayrollRunState.Exported or PayrollRunState.RegisterImported)
+        {
+            <MudText Class="mud-text-secondary mb-2">Export the payroll register from Paylocity as CSV, then choose the file or paste its contents.</MudText>
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudFileUpload T="IBrowserFile" Accept=".csv,text/csv" FilesChanged="FileChosenAsync" Class="mt-0">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync">Choose register file</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate />
+                </MudFileUpload>
+                @if (_fileName is not null)
+                {
+                    <MudText Typo="Typo.body2">@_fileName</MudText>
+                }
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_registerText" Label="Register CSV" Lines="6" Variant="Variant.Outlined" Class="mb-2" data-testid="register-text"
+                          Style="font-family:monospace;font-size:12px" Immediate="true" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_registerText))" data-testid="import">Import register</MudButton>
+        }
+        @foreach (var w in _importWarnings)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@w</MudAlert>
+        }
+        @if (_register.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Outlined="true" Class="mt-3" data-testid="register">
+                <thead><tr><th>Employee</th><th>Id</th><th>Check date</th><th class="num">Gross</th><th class="num">EE taxes</th><th class="num">Deductions</th><th class="num">Net</th><th class="num">ER taxes</th><th class="num">ER benefits</th></tr></thead>
+                <tbody>
+                    @foreach (var l in _register)
+                    {
+                        <tr>
+                            <td>@l.EmployeeName</td><td>@l.ProviderEmployeeId</td><td>@PayrollFormat.Date(l.CheckDate)</td>
+                            <td class="num">@PayrollFormat.Money(l.GrossWages)</td><td class="num">@PayrollFormat.Money(l.EmployeeTaxes)</td><td class="num">@PayrollFormat.Money(l.Deductions)</td>
+                            <td class="num">@PayrollFormat.Money(l.NetPay)</td><td class="num">@PayrollFormat.Money(l.EmployerTaxes)</td><td class="num">@PayrollFormat.Money(l.EmployerBenefits)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </Step>
+
+    @* 5. Reconcile *@
+    <Step Number="5" Title="Reconcile" Done="@(_run.Status >= PayrollRunState.Posted)">
+        @if (_recon is not null && _register.Count > 0)
+        {
+            <MudText Class="mud-text-secondary mb-2">
+                Register gross against labor at pay rates. Expected = worked hours × pay rate + leave pay + overtime premium + salaried variance.
+                Labor variance (posted) = gross − labor the GL accrued at cost rates.
+            </MudText>
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="reconciliation">
+                <thead><tr><th>Employee</th><th class="num">Worked h</th><th class="num">OT h</th><th class="num">Leave h</th><th class="num">Pay rate</th><th class="num">Worked pay</th><th class="num">Leave pay</th><th class="num">OT premium</th><th class="num">Salaried var.</th><th class="num">Expected</th><th class="num">Register gross</th><th class="num">Unexplained</th><th class="num">Accrued (cost)</th><th class="num">Labor variance</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _recon.Rows.Append(_recon.Totals))
+                    {
+                        var total = r.EmployeeName == "Total" && r.EmployeeId is null;
+                        <tr style="@(total ? "font-weight:600;border-top:2px solid var(--mud-palette-divider)" : "")">
+                            <td>@r.EmployeeName @foreach (var n in r.Notes) { <div class="mud-text-secondary" style="font-size:12px">@n</div> }</td>
+                            <td class="num">@PayrollFormat.Hours(r.WorkedHours)</td><td class="num">@PayrollFormat.Hours(r.OvertimeHours)</td><td class="num">@PayrollFormat.Hours(r.LeaveHours)</td>
+                            <td class="num">@(r.PayRate is { } rate ? rate.ToString("N2", CultureInfo.InvariantCulture) : "")</td>
+                            <td class="num">@PayrollFormat.Money(r.WorkedAtPayRate)</td><td class="num">@PayrollFormat.Money(r.LeavePay)</td><td class="num">@PayrollFormat.Money(r.OvertimePremium)</td>
+                            <td class="num">@PayrollFormat.Money(r.SalariedVariance)</td><td class="num">@PayrollFormat.Money(r.ExpectedGross)</td><td class="num">@PayrollFormat.Money(r.RegisterGross)</td>
+                            <td class="num" style="@(r.Unexplained != 0 ? "color:var(--mud-palette-warning)" : "")">@PayrollFormat.Money(r.Unexplained)</td>
+                            <td class="num">@PayrollFormat.Money(r.AccruedLaborCost)</td><td class="num">@PayrollFormat.Money(r.LaborVariance)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudText Class="mt-2">Employer taxes @PayrollFormat.Money(_recon.EmployerTaxes) · employer benefits @PayrollFormat.Money(_recon.EmployerBenefits) · withholding and deductions @PayrollFormat.Money(_recon.Withholding) · net pay @PayrollFormat.Money(_recon.NetPay)</MudText>
+        }
+    </Step>
+
+    @* 6. Post *@
+    <Step Number="6" Title="Post the payroll journal" Done="@(_run.Status == PayrollRunState.Posted)" Last="true">
+        @if (_run.JournalEntryId is { } entryId)
+        {
+            <MudText data-testid="journal">Posted as <MudLink Href="@($"accounting/journal/{entryId}")">@_run.JournalNumber</MudLink>. Leave accrued for the period.</MudText>
+        }
+        else if (_run.Status == PayrollRunState.RegisterImported)
+        {
+            <MudText Class="mud-text-secondary mb-2">Dr accrued payroll (2100), labor variance (6050), employer taxes (6020) and benefits (6030); Cr net pay clearing (2120), taxes payable (2130) and benefits and deductions payable (2140).</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PostAdd" OnClick="PostAsync" Disabled="_busy" data-testid="post">Post payroll journal</MudButton>
+        }
+    </Step>
+}
+
+<style>
+    td.num, th.num { text-align: right; white-space: nowrap; }
+</style>
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+
+    private PayrollRunDto? _run;
+    private HoursPreviewDto? _hours;
+    private IReadOnlyList<RegisterLineDto> _register = [];
+    private PayrollReconciliationDto? _recon;
+    private IReadOnlyList<string> _importWarnings = [];
+    private string? _registerText;
+    private string? _fileName;
+    private bool _acknowledge;
+    private bool _busy;
+    private bool _forbidden;
+    private string? _error;
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Payroll", "payroll"), new("Run", null, disabled: true)];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PayrollFormat.Error(ex), PayrollFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _run = await Runs.GetAsync(RunId);
+        _hours = await Runs.PreviewHoursAsync(RunId);
+        _register = await Runs.GetRegisterAsync(RunId);
+        _recon = _register.Count > 0 ? await Runs.GetReconciliationAsync(RunId) : null;
+    }
+
+    private async Task ExportAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var file = await Runs.ExportHoursAsync(RunId, new ExportHoursRequest(_acknowledge));
+            await PayrollFormat.DownloadAsync(JS, file.FileName, file.ContentType, file.Content);
+            Snackbar.Add($"Exported {file.FileName}. Import it into Paylocity, run payroll there, then import the register.", Severity.Success);
+        });
+    }
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _registerText = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+        });
+    }
+
+    private async Task ImportAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var result = await Runs.ImportRegisterAsync(RunId, new ImportRegisterRequest(_fileName ?? "register.csv", _registerText ?? ""));
+            _importWarnings = result.Warnings;
+            Snackbar.Add(result.AlreadyImported ? "That register was already imported." : $"Imported {result.Lines.Count} check(s).", Severity.Success);
+        });
+    }
+
+    private async Task PostAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var run = await Runs.PostAsync(RunId);
+            Snackbar.Add($"Payroll posted as {run.JournalNumber}.", Severity.Success);
+        });
+    }
+
+    private async Task VoidAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Time.ReasonDialog>
+        {
+            { x => x.Message, "Voiding reverses the posted payroll journal (if any). The hours export and register stay on record." },
+            { x => x.Label, "Reason" },
+            { x => x.ConfirmText, "Void run" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Time.ReasonDialog>("Void payroll run", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Runs.VoidAsync(RunId, new VoidPayrollRequest(reason));
+            Snackbar.Add("Payroll run voided.", Severity.Info);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex) || ex is IOException)
+        {
+            Snackbar.Add(PayrollFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

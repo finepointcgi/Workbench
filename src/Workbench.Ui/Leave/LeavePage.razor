@@ -1,0 +1,272 @@
+@page "/leave"
+@inject ILeaveBalanceService Balances
+@inject ILeaveRequestService Requests
+@inject ILeavePolicyService Policies
+@inject IHolidayService Holidays
+@inject ICurrentUserContext UserContext
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Leave · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">Leave</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="My leave" data-testid="tab-mine">
+            @if (_myError is not null)
+            {
+                <MudAlert Severity="Severity.Info">@_myError</MudAlert>
+            }
+            else
+            {
+                <MudGrid Class="mb-4">
+                    @foreach (var b in _mine)
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Outlined="true" Class="pa-4" data-balance="@b.PolicyCode">
+                                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">@b.PolicyName</MudText>
+                                <MudText Typo="Typo.h4" data-testid="@($"available-{b.PolicyCode}")">@Hours(b.Available) h</MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    available · balance @Hours(b.Balance) h@(b.Planned > 0 ? $", {Hours(b.Planned)} h planned" : "")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">This year: +@Hours(b.AccruedThisYear) accrued, −@Hours(b.UsedThisYear) used</MudText>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Class="mt-1 ml-n2" OnClick="() => HistoryAsync(b)">History</MudButton>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                <MudPaper Outlined="true" Class="pa-4 mb-4" Style="max-width:900px">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Request leave</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="Guid?" @bind-Value="_form.PolicyId" Label="Leave type" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-policy">
+                                @foreach (var p in _policies.Where(p => p.Type != LeaveTypeKind.Holiday))
+                                {
+                                    <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_form.Start" Editable="true" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-start" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_form.End" Editable="true" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="request-end" /></MudItem>
+                        <MudItem xs="12" sm="2"><MudNumericField T="decimal?" @bind-Value="_form.HoursPerDay" Label="Hours/day" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="standard" /></MudItem>
+                        <MudItem xs="12"><MudTextField @bind-Value="_form.Comment" Label="Comment (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                    </MudGrid>
+                    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="RequestAsync" Disabled="@(_busy || _form.PolicyId is null || _form.Start is null)" data-testid="request-submit">Send request</MudButton>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Weekends and holidays are skipped. Your supervisor approves; approved days are pre-filled on your timesheet.</MudText>
+                </MudPaper>
+
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">My requests</MudText>
+                <RequestTable Items="_myRequests" ShowEmployee="false">
+                    <Actions>
+                        @if (context.Status is LeaveRequestState.Pending or LeaveRequestState.Approved)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CancelAsync(context)">Cancel</MudButton>
+                        }
+                    </Actions>
+                </RequestTable>
+            }
+        </MudTabPanel>
+
+        @if (_isApprover)
+        {
+            <MudTabPanel Text="@($"Approvals ({_pending.Count})")" data-testid="tab-approvals">
+                <RequestTable Items="_pending" ShowEmployee="true">
+                    <Actions>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="() => DecideAsync(context, true)" data-testid="@($"approve-{context.Id}")">Approve</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => DecideAsync(context, false)">Reject</MudButton>
+                    </Actions>
+                </RequestTable>
+            </MudTabPanel>
+        }
+
+        <MudTabPanel Text="Team calendar" data-testid="tab-team">
+            <TeamCalendar />
+        </MudTabPanel>
+
+        @if (_finance || _teamBalances.Count > 0)
+        {
+            <MudTabPanel Text="Balances" data-testid="tab-balances">
+                <LeaveBalancesAdmin Rows="_teamBalances" CanAdjust="_finance" Changed="ReloadAsync" />
+            </MudTabPanel>
+        }
+
+        @if (_admin)
+        {
+            <MudTabPanel Text="Policies" data-testid="tab-policies">
+                <LeavePoliciesAdmin />
+            </MudTabPanel>
+            <MudTabPanel Text="Holidays" data-testid="tab-holidays">
+                <HolidaysAdmin />
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<LeaveBalanceDto> _mine = [];
+    private IReadOnlyList<LeaveBalanceDto> _teamBalances = [];
+    private IReadOnlyList<LeaveRequestDto> _myRequests = [];
+    private IReadOnlyList<LeaveRequestDto> _pending = [];
+    private IReadOnlyList<LeavePolicyDto> _policies = [];
+    private bool _isApprover;
+    private bool _finance;
+    private bool _admin;
+    private bool _loading = true;
+    private bool _busy;
+    private int _tab;
+    private string? _myError;
+    private readonly RequestForm _form = new();
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    private sealed class RequestForm
+    {
+        public Guid? PolicyId { get; set; }
+        public DateTime? Start { get; set; }
+        public DateTime? End { get; set; }
+        public decimal? HoursPerDay { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var me = await UserContext.GetAsync();
+            (_finance, _admin) = (me.IsFinance, me.IsAdmin);
+            _isApprover = await Requests.IsApproverAsync();
+            _policies = await Policies.ListAsync();
+            _form.PolicyId = _policies.FirstOrDefault(p => p.Type == LeaveTypeKind.Pto)?.Id;
+            await ReloadAsync();
+            _tab = Tab switch
+            {
+                "approvals" when _isApprover => 1,
+                "team" => _isApprover ? 2 : 1,
+                _ => 0,
+            };
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _myError = ex.Message;
+        }
+
+        _loading = false;
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _myError = null;
+            _mine = await Balances.GetMyBalancesAsync();
+            _myRequests = await Requests.ListMineAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _myError = ex.Message;
+        }
+
+        _pending = _isApprover ? await Requests.ListPendingApprovalsAsync() : [];
+        _teamBalances = await Balances.ListBalancesAsync();
+    }
+
+    private async Task RequestAsync()
+    {
+        var start = DateOnly.FromDateTime(_form.Start!.Value);
+        var end = _form.End is { } e ? DateOnly.FromDateTime(e) : start;
+        await RunAsync(async () =>
+        {
+            var request = await Requests.CreateAsync(new CreateLeaveRequest(_form.PolicyId!.Value, start, end, _form.HoursPerDay, _form.Comment));
+            Snackbar.Add($"Requested {Hours(request.Hours)} h. Your supervisor has been notified.", Severity.Success);
+            foreach (var w in request.Warnings)
+            {
+                Snackbar.Add(w, Severity.Warning);
+            }
+
+            _form.Start = _form.End = null;
+            _form.Comment = null;
+        });
+    }
+
+    private async Task CancelAsync(LeaveRequestDto request) =>
+        await RunAsync(async () =>
+        {
+            await Requests.CancelAsync(request.Id);
+            Snackbar.Add("Request cancelled.", Severity.Info);
+        });
+
+    private async Task DecideAsync(LeaveRequestDto request, bool approve)
+    {
+        string? comment = null;
+        if (!approve)
+        {
+            var parameters = new DialogParameters<Workbench.Ui.Time.ReasonDialog>
+            {
+                { x => x.Message, $"{request.EmployeeName}: {request.PolicyName}, {Range(request)}." },
+                { x => x.Label, "Reason" },
+                { x => x.ConfirmText, "Reject" },
+            };
+            var dialog = await DialogService.ShowAsync<Workbench.Ui.Time.ReasonDialog>("Reject leave request", parameters);
+            if (await dialog.Result is not { Canceled: false, Data: string reason })
+            {
+                return;
+            }
+
+            comment = reason;
+        }
+
+        await RunAsync(async () =>
+        {
+            var decided = approve
+                ? await Requests.ApproveAsync(request.Id, new DecideLeaveRequest())
+                : await Requests.RejectAsync(request.Id, new DecideLeaveRequest(comment));
+            Snackbar.Add(approve ? $"Approved {request.EmployeeName}'s leave." : "Request rejected.", Severity.Success);
+            foreach (var w in decided.Warnings)
+            {
+                Snackbar.Add(w, Severity.Warning);
+            }
+        });
+    }
+
+    private async Task HistoryAsync(LeaveBalanceDto balance)
+    {
+        var parameters = new DialogParameters<LeaveHistoryDialog> { { x => x.Balance, balance } };
+        await DialogService.ShowAsync<LeaveHistoryDialog>($"{balance.PolicyName} history", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await ReloadAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    internal static bool IsExpected(Exception ex) =>
+        ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException or InvalidOperationException or WorkbenchNotFoundException;
+
+    internal static string Hours(decimal h) => h.ToString("0.##", CultureInfo.InvariantCulture);
+
+    internal static string Range(LeaveRequestDto r) => r.StartDate == r.EndDate
+        ? r.StartDate.ToString("ddd MMM d", CultureInfo.InvariantCulture)
+        : $"{r.StartDate.ToString("MMM d", CultureInfo.InvariantCulture)} – {r.EndDate.ToString("MMM d", CultureInfo.InvariantCulture)}";
+}

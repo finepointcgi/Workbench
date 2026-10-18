@@ -1,0 +1,544 @@
+@page "/cash/reconcile/{ReconciliationId:guid}"
+@implements IAsyncDisposable
+@inject IBankReconciliationService Reconciliations
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Reconcile @(_ws?.Reconciliation.BankAccountName) · Cash · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <CashHeader Title="Reconcile" BackHref="cash/reconcile" BackLabel="Reconcile" />
+    <CashError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_ws is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var rec = _ws.Reconciliation;
+    var m = rec.Math;
+    var completed = rec.Status == ReconciliationState.Completed;
+    <CashHeader Title="@($"{rec.BankAccountName} {rec.MaskedAccountNumber}")" BackHref="cash/reconcile" BackLabel="Reconcile"
+                Subtitle="@($"Statement ending {CashFormat.Date(rec.StatementEndDate)} · GL {rec.GlAccountNumber}{(completed ? $" · completed by {rec.CompletedBy}" : "")}")">
+        <MudButton Variant="Variant.Outlined" Href="@($"cash/reconciliations/{rec.Id}/print")" StartIcon="@Icons.Material.Filled.Print" data-testid="print-report">Report</MudButton>
+        @if (completed)
+        {
+            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined">Completed</MudChip>
+            <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="ReopenAsync" data-testid="reopen">Reopen</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="AutoMatchAsync" StartIcon="@Icons.Material.Filled.AutoFixHigh" Disabled="_busy" data-testid="auto-match">Auto-match</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CompleteAsync" Disabled="@(_busy || !m.IsBalanced || m.UnrecordedItems.Count > 0)" data-testid="complete">Complete</MudButton>
+        }
+    </CashHeader>
+
+    @* The math *@
+    <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="rec-math">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="6">
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <tbody>
+                        <tr>
+                            <td>Statement ending balance</td>
+                            <td style="text-align:right; width:200px">
+                                @if (completed)
+                                {
+                                    @CashFormat.Amount(m.StatementEndingBalance)
+                                }
+                                else
+                                {
+                                    <MudNumericField T="decimal" Value="_balance" ValueChanged="BalanceChangedAsync" Format="N2" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="statement-balance" />
+                                }
+                            </td>
+                        </tr>
+                        <tr><td>+ Deposits in transit</td><td style="text-align:right" data-testid="dit">@CashFormat.Amount(m.DepositsInTransit)</td></tr>
+                        <tr><td>− Outstanding checks and payments</td><td style="text-align:right" data-testid="outstanding">@CashFormat.Amount(m.OutstandingPayments)</td></tr>
+                        <tr><td><b>Adjusted bank balance</b></td><td style="text-align:right" data-testid="adjusted-bank"><b>@CashFormat.Amount(m.AdjustedBankBalance)</b></td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <tbody>
+                        <tr><td>GL balance (@rec.GlAccountNumber) at @CashFormat.Date(rec.StatementEndDate)</td><td style="text-align:right; width:200px" data-testid="gl-balance">@CashFormat.Amount(m.GlBalance)</td></tr>
+                        <tr><td>± Bank items not in the GL (@m.UnrecordedItems.Count)</td><td style="text-align:right" data-testid="unrecorded">@CashFormat.Amount(m.UnrecordedBankItems)</td></tr>
+                        <tr><td><b>Adjusted book balance</b></td><td style="text-align:right" data-testid="adjusted-book"><b>@CashFormat.Amount(m.AdjustedBookBalance)</b></td></tr>
+                        <tr>
+                            <td><b>Difference</b></td>
+                            <td style="text-align:right" data-testid="difference">
+                                <MudChip T="string" Size="Size.Small" Color="@(m.IsBalanced ? Color.Success : Color.Error)" Variant="Variant.Filled">@CashFormat.Amount(m.Difference)</MudChip>
+                            </td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+        </MudGrid>
+        @if (!completed && m.IsBalanced && m.UnrecordedItems.Count > 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">The balances agree, but @m.UnrecordedItems.Count bank item(s) aren't in the GL yet: match them or book them before completing.</MudText>
+        }
+    </MudPaper>
+
+    @if (!completed)
+    {
+        @* Filters and the selection *@
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudTextField T="string" @bind-Value="_search" Immediate="true" Placeholder="Filter by description, reference or amount" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:280px" data-testid="filter" />
+            <MudSwitch T="bool" @bind-Value="_showMatched" Label="Show matched" Color="Color.Primary" />
+            <MudSpacer />
+            <MudText Typo="Typo.body2" data-testid="selection">
+                Bank @_selBank.Count · @CashFormat.Amount(SelectedBankTotal) &nbsp;|&nbsp; GL @_selGl.Count · @CashFormat.Amount(SelectedGlTotal)
+                @if (_selBank.Count + _selGl.Count > 0)
+                {
+                    <span style="@(SelectedBankTotal == SelectedGlTotal ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)")"> &nbsp;difference @CashFormat.Amount(SelectedBankTotal - SelectedGlTotal)</span>
+                }
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="MatchAsync" Disabled="@(!CanMatch)" data-testid="match">Match (Enter)</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="BookAsync" Disabled="@(BookCandidate is null)" data-testid="book">Book to GL (B)</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ClearSelection" Disabled="@(_selBank.Count + _selGl.Count == 0)">Clear (Esc)</MudButton>
+        </MudStack>
+
+        <div @ref="_panes" tabindex="0" @onkeydown="OnKeyDownAsync" class="rec-panes" data-testid="panes" aria-label="Bank and GL items. Arrow keys move, Space selects, Enter matches."
+             style="outline:none; display:grid; grid-template-columns:repeat(auto-fit, minmax(380px, 1fr)); gap:12px">
+            @foreach (var pane in new[] { 0, 1 })
+            {
+                var active = _pane == pane;
+                <MudPaper Outlined="true" Class="pa-2" Style="@($"border-color:{(active ? "var(--mud-palette-primary)" : "var(--mud-palette-lines-default)")}; min-width:0")">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="px-1 mb-1">
+                        <MudText Typo="Typo.subtitle1"><b>@(pane == 0 ? "Bank statement" : "General ledger")</b></MudText>
+                        <MudSpacer />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@(pane == 0 ? VisibleBank.Count : VisibleGl.Count) shown</MudText>
+                    </MudStack>
+                    <div style="max-height:52vh; overflow:auto">
+                        <table class="mud-table-root" style="width:100%; border-collapse:collapse; font-size:13px" data-testid="@(pane == 0 ? "bank-pane" : "gl-pane")">
+                            <thead>
+                                <tr style="text-align:left; color:var(--mud-palette-text-secondary)">
+                                    <th style="width:28px"></th><th>Date</th><th>Description</th><th>@(pane == 0 ? "Check / ref" : "Entry / ref")</th><th style="text-align:right">Amount</th><th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (pane == 0)
+                                {
+                                    var i = 0;
+                                    foreach (var b in VisibleBank)
+                                    {
+                                        var index = i++;
+                                        var selected = _selBank.Contains(b.Id);
+                                        <tr id="@($"bank-{b.Id}")" @onclick="() => Click(0, index)" style="@RowStyle(active && _cursor[0] == index, selected)" data-testid="bank-row">
+                                            <td><MudCheckBox T="bool" Value="selected" Dense="true" Size="Size.Small" ReadOnly="true" /></td>
+                                            <td style="white-space:nowrap">@CashFormat.Date(b.Date)</td>
+                                            <td>@b.Description <span class="mud-text-secondary">· @CashFormat.Label(b.Type)</span></td>
+                                            <td>@(b.CheckNumber ?? b.BankReference)</td>
+                                            <td style="text-align:right; white-space:nowrap">@CashFormat.Amount(b.Amount)</td>
+                                            <td>@MatchChip(b.MatchId)</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    var i = 0;
+                                    foreach (var g in VisibleGl)
+                                    {
+                                        var index = i++;
+                                        var selected = _selGl.Contains(g.JournalLineId);
+                                        <tr id="@($"gl-{g.JournalLineId}")" @onclick="() => Click(1, index)" style="@RowStyle(active && _cursor[1] == index, selected)" data-testid="gl-row">
+                                            <td><MudCheckBox T="bool" Value="selected" Dense="true" Size="Size.Small" ReadOnly="true" /></td>
+                                            <td style="white-space:nowrap">@CashFormat.Date(g.Date)</td>
+                                            <td>@g.Description <span class="mud-text-secondary">· @CashFormat.Label(g.Source)</span></td>
+                                            <td>@g.EntryNumber @(g.Reference is null ? "" : $"· {g.Reference}")</td>
+                                            <td style="text-align:right; white-space:nowrap">@CashFormat.Amount(g.Amount)</td>
+                                            <td>@MatchChip(g.MatchId)</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                        @if ((pane == 0 ? VisibleBank.Count : VisibleGl.Count) == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary pa-3">@(pane == 0 ? "No open bank items." : "No open GL cash entries.")</MudText>
+                        }
+                    </div>
+                </MudPaper>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1 mb-3">
+            Click the panes, then: ↑/↓ move · ←/→ switch pane · Space select · Enter match · U unmatch · B book bank item · A auto-match · Esc clear.
+        </MudText>
+    }
+
+    @* Matches *@
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" Class="mb-2">@(completed ? "Matches" : $"Matches ({_ws.Matches.Count})")</MudText>
+        @if (_ws.Matches.Count == 0 && completed)
+        {
+            <MudText Class="mud-text-secondary">This reconciliation locked its matches; the report lists every item it cleared.</MudText>
+        }
+        else if (_ws.Matches.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Nothing matched yet. Auto-match pairs AR receipts by payment reference, AP checks by number and ACH payments by reference, then amounts within @_ws.MatchDateWindowDays days.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="matches">
+                <thead><tr><th>Rule</th><th>Confidence</th><th>Bank</th><th>GL</th><th style="text-align:right">Amount</th><th>By</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var match in _ws.Matches.OrderByDescending(x => x.MatchedAtUtc))
+                    {
+                        <tr>
+                            <td>@CashFormat.Label(match.Rule) <span class="mud-text-secondary">@match.Note</span></td>
+                            <td><MudChip T="string" Size="Size.Small" Color="@CashFormat.ConfidenceColor(match.Confidence)" Variant="Variant.Outlined">@match.Confidence%</MudChip></td>
+                            <td>@string.Join(", ", match.BankItemIds.Select(BankLabel))</td>
+                            <td>@string.Join(", ", match.JournalLineIds.Select(GlLabel))</td>
+                            <td style="text-align:right">@CashFormat.Amount(match.GlTotal)</td>
+                            <td>@match.MatchedBy</td>
+                            <td>
+                                @if (!completed && !match.IsLocked)
+                                {
+                                    <MudButton Size="Size.Small" OnClick="() => UnmatchAsync(match.Id)" data-testid="unmatch">Unmatch</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    @if (m.OutstandingItems.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Outstanding at @CashFormat.Date(rec.StatementEndDate)</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="outstanding-items">
+                <thead><tr><th>Date</th><th>Entry</th><th>Description</th><th>Reference</th><th style="text-align:right">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var o in m.OutstandingItems)
+                    {
+                        <tr><td>@CashFormat.Date(o.Date)</td><td>@o.EntryNumber</td><td>@o.Description</td><td>@o.Reference</td><td style="text-align:right">@CashFormat.Amount(o.Amount)</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public Guid ReconciliationId { get; set; }
+
+    private ReconcileWorkspaceDto? _ws;
+    private readonly HashSet<Guid> _selBank = [];
+    private readonly HashSet<Guid> _selGl = [];
+    private readonly int[] _cursor = [0, 0];
+    private int _pane;
+    private decimal _balance;
+    private string? _search, _error;
+    private bool _forbidden, _busy, _showMatched;
+    private ElementReference _panes;
+    private IJSObjectReference? _module;
+
+    private List<BankItemDto> VisibleBank => (_ws?.BankItems ?? []).Where(b => (_showMatched || b.MatchId is null) && Filter(b.Description, b.CheckNumber, b.BankReference, b.Amount))
+        .OrderBy(b => b.Date).ThenBy(b => b.Amount).ToList();
+
+    private List<GlCashItemDto> VisibleGl => (_ws?.GlItems ?? []).Where(g => (_showMatched || g.MatchId is null) && Filter(g.Description, g.EntryNumber, g.Reference, g.Amount))
+        .OrderBy(g => g.Date).ThenBy(g => g.Amount).ToList();
+
+    private decimal SelectedBankTotal => (_ws?.BankItems ?? []).Where(b => _selBank.Contains(b.Id)).Sum(b => b.Amount);
+
+    private decimal SelectedGlTotal => (_ws?.GlItems ?? []).Where(g => _selGl.Contains(g.JournalLineId)).Sum(g => g.Amount);
+
+    private bool CanMatch => _selGl.Count > 0 && SelectedBankTotal == SelectedGlTotal
+        && (_ws?.BankItems ?? []).Where(b => _selBank.Contains(b.Id)).All(b => b.MatchId is null)
+        && (_ws?.GlItems ?? []).Where(g => _selGl.Contains(g.JournalLineId)).All(g => g.MatchId is null);
+
+    private BankItemDto? BookCandidate
+    {
+        get
+        {
+            if (_selGl.Count > 0 || _selBank.Count > 1)
+            {
+                return null;
+            }
+
+            var id = _selBank.Count == 1 ? _selBank.First() : _pane == 0 && VisibleBank.Count > _cursor[0] ? VisibleBank[_cursor[0]].Id : (Guid?)null;
+            var item = _ws?.BankItems.FirstOrDefault(b => b.Id == id);
+            return item is { MatchId: null } ? item : null;
+        }
+    }
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_ws is not null && _module is null && _ws.Reconciliation.Status == ReconciliationState.InProgress)
+        {
+            try
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/cash.js");
+                await _module.InvokeVoidAsync("trapKeys", _panes);
+            }
+            catch (JSException)
+            {
+                // Keyboard trapping is a convenience; the page works without it.
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _ws = await Reconciliations.GetWorkspaceAsync(ReconciliationId);
+            _balance = _ws.Reconciliation.StatementEndingBalance;
+            _selBank.RemoveWhere(id => _ws.BankItems.All(b => b.Id != id));
+            _selGl.RemoveWhere(id => _ws.GlItems.All(g => g.JournalLineId != id));
+            _cursor[0] = Math.Clamp(_cursor[0], 0, Math.Max(0, VisibleBank.Count - 1));
+            _cursor[1] = Math.Clamp(_cursor[1], 0, Math.Max(0, VisibleGl.Count - 1));
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private bool Filter(string description, string? a, string? b, decimal amount)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            return true;
+        }
+
+        var s = _search.Trim();
+        return description.Contains(s, StringComparison.OrdinalIgnoreCase)
+            || (a?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (b?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || amount.ToString("0.00", CultureInfo.InvariantCulture).Contains(s.Replace(",", "").Replace("$", ""), StringComparison.Ordinal);
+    }
+
+    private static string RowStyle(bool cursor, bool selected) =>
+        "cursor:pointer; border-bottom:1px solid var(--mud-palette-lines-default);"
+        + (selected ? " background:var(--mud-palette-primary-hover);" : "")
+        + (cursor ? " outline:2px solid var(--mud-palette-primary); outline-offset:-2px;" : "");
+
+    private RenderFragment MatchChip(Guid? matchId) => builder =>
+    {
+        if (matchId is null || _ws is null)
+        {
+            return;
+        }
+
+        var match = _ws.Matches.FirstOrDefault(x => x.Id == matchId);
+        builder.OpenComponent<MudChip<string>>(0);
+        builder.AddAttribute(1, "Size", Size.Small);
+        builder.AddAttribute(2, "Variant", Variant.Outlined);
+        builder.AddAttribute(3, "Color", match is null ? Color.Default : CashFormat.ConfidenceColor(match.Confidence));
+        builder.AddAttribute(4, "ChildContent", (RenderFragment)(b => b.AddContent(0, match is null ? "Matched" : $"{match.Confidence}%")));
+        builder.CloseComponent();
+    };
+
+    private string BankLabel(Guid id) => _ws?.BankItems.FirstOrDefault(b => b.Id == id) is { } b ? $"{CashFormat.Date(b.Date)} {b.Description}" : "bank item";
+
+    private string GlLabel(Guid id) => _ws?.GlItems.FirstOrDefault(g => g.JournalLineId == id) is { } g ? $"{g.EntryNumber} {CashFormat.Date(g.Date)}" : "GL item";
+
+    private void Click(int pane, int index)
+    {
+        _pane = pane;
+        _cursor[pane] = index;
+        Toggle(pane, index);
+    }
+
+    private void Toggle(int pane, int index)
+    {
+        if (pane == 0 && index < VisibleBank.Count)
+        {
+            var id = VisibleBank[index].Id;
+            if (!_selBank.Remove(id))
+            {
+                _selBank.Add(id);
+            }
+        }
+        else if (pane == 1 && index < VisibleGl.Count)
+        {
+            var id = VisibleGl[index].JournalLineId;
+            if (!_selGl.Remove(id))
+            {
+                _selGl.Add(id);
+            }
+        }
+    }
+
+    private void ClearSelection()
+    {
+        _selBank.Clear();
+        _selGl.Clear();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        var count = _pane == 0 ? VisibleBank.Count : VisibleGl.Count;
+        switch (e.Key)
+        {
+            case "ArrowDown" or "j":
+                _cursor[_pane] = Math.Min(Math.Max(0, count - 1), _cursor[_pane] + 1);
+                await ScrollToCursorAsync();
+                break;
+            case "ArrowUp" or "k":
+                _cursor[_pane] = Math.Max(0, _cursor[_pane] - 1);
+                await ScrollToCursorAsync();
+                break;
+            case "Home":
+                _cursor[_pane] = 0;
+                break;
+            case "End":
+                _cursor[_pane] = Math.Max(0, count - 1);
+                break;
+            case "ArrowLeft":
+                _pane = 0;
+                break;
+            case "ArrowRight":
+                _pane = 1;
+                break;
+            case " " or "x":
+                Toggle(_pane, _cursor[_pane]);
+                break;
+            case "Enter" or "m":
+                if (CanMatch)
+                {
+                    await MatchAsync();
+                }
+
+                break;
+            case "u":
+                var under = _pane == 0
+                    ? VisibleBank.ElementAtOrDefault(_cursor[0])?.MatchId
+                    : VisibleGl.ElementAtOrDefault(_cursor[1])?.MatchId;
+                if (under is { } matchId)
+                {
+                    await UnmatchAsync(matchId);
+                }
+
+                break;
+            case "b":
+                await BookAsync();
+                break;
+            case "a":
+                await AutoMatchAsync();
+                break;
+            case "Escape":
+                ClearSelection();
+                break;
+        }
+    }
+
+    private async Task ScrollToCursorAsync()
+    {
+        var id = _pane == 0 ? VisibleBank.ElementAtOrDefault(_cursor[0])?.Id : VisibleGl.ElementAtOrDefault(_cursor[1])?.JournalLineId;
+        if (_module is not null && id is not null)
+        {
+            await _module.InvokeVoidAsync("scrollIntoView", $"{(_pane == 0 ? "bank" : "gl")}-{id}");
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string? success = null)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            if (success is not null)
+            {
+                Snackbar.Add(success, Severity.Success);
+            }
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private Task AutoMatchAsync() => RunAsync(async () =>
+    {
+        var result = await Reconciliations.AutoMatchAsync(new AutoMatchRequest(_ws!.Reconciliation.BankAccountId, _ws.Reconciliation.StatementEndDate));
+        Snackbar.Add(result.MatchesCreated == 0 ? "Nothing new to match automatically." : $"Matched {result.BankItemsMatched} bank item(s) to {result.GlItemsMatched} GL item(s).",
+            result.MatchesCreated == 0 ? Severity.Info : Severity.Success);
+    });
+
+    private Task MatchAsync() => RunAsync(async () =>
+    {
+        await Reconciliations.MatchAsync(new MatchItemsRequest(_ws!.Reconciliation.BankAccountId, _selBank.ToList(), _selGl.ToList()));
+        ClearSelection();
+    }, "Matched.");
+
+    private Task UnmatchAsync(Guid matchId) => RunAsync(() => Reconciliations.UnmatchAsync(matchId), "Unmatched.");
+
+    private async Task BalanceChangedAsync(decimal value)
+    {
+        _balance = value;
+        await RunAsync(() => Reconciliations.UpdateAsync(ReconciliationId, new UpdateReconciliationRequest(value)));
+    }
+
+    private async Task BookAsync()
+    {
+        var item = BookCandidate;
+        if (item is null)
+        {
+            return;
+        }
+
+        var dialog = await Dialogs.ShowAsync<BookBankItemDialog>("Book bank item to the GL", new DialogParameters<BookBankItemDialog> { { d => d.Item, item } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: BankMatchDto match })
+        {
+            Snackbar.Add($"Posted and matched ({match.Note}).", Severity.Success);
+            ClearSelection();
+            await LoadAsync();
+        }
+    }
+
+    private async Task CompleteAsync()
+    {
+        var note = await ReasonDialog.AskAsync(Dialogs, "Complete reconciliation", "Complete",
+            "Completing locks the matched items through the statement date. It can be reopened later with a reason.", required: false, label: "Note (optional)");
+        if (note is null)
+        {
+            return;
+        }
+
+        await RunAsync(() => Reconciliations.CompleteAsync(ReconciliationId, new CompleteReconciliationRequest(note)), "Reconciliation completed.");
+    }
+
+    private async Task ReopenAsync()
+    {
+        var reason = await ReasonDialog.AskAsync(Dialogs, "Reopen reconciliation", "Reopen", "Reopening unlocks its matched items so they can change.", color: Color.Warning);
+        if (reason is null)
+        {
+            return;
+        }
+
+        _module = null;
+        await RunAsync(() => Reconciliations.ReopenAsync(ReconciliationId, new ReconciliationReasonRequest(reason)), "Reopened.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+}

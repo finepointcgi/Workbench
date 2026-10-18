@@ -1,0 +1,233 @@
+@page "/assets/{AssetId:guid}"
+@inject IAssetService AssetService
+@inject IAssetReportService Reports
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>@(_asset?.Asset.TagNumber ?? "Asset") · Fixed assets · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <AssetHeader Title="Asset" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_asset is not { } asset)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var a = asset.Asset;
+    var gov = a.IsGovernmentFurnished || a.IsContractorAcquired;
+    <AssetHeader Title="@($"{a.TagNumber} · {a.Description}")">
+        <AssetStatusChip Status="a.Status" />
+        @if (a.Status == AssetState.InService)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="TransferAsync" data-testid="asset-transfer">Transfer</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteSweep" OnClick="DisposeAsync" data-testid="asset-dispose">Dispose</MudButton>
+        }
+    </AssetHeader>
+
+    @if (gov)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            @(a.IsGovernmentFurnished ? "Government-furnished" : "Contractor-acquired") property on @asset.ContractNumber, government property no. @(a.GovernmentPropertyNumber ?? "—"). Tracked for FAR 52.245-1; not depreciated by us.
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[] { ("Cost", AssetFormat.Amount(a.Cost)), ("Accumulated depreciation", AssetFormat.Amount(a.AccumulatedDepreciation)), ("Net book value", AssetFormat.Amount(a.NetBookValue)),
+            ("Acquired", AssetFormat.Date(a.AcquisitionDate)), ("Method", gov ? "—" : $"{AssetFormat.Label(a.Method)}, {a.UsefulLifeYears} yrs"), ("Salvage", AssetFormat.Amount(asset.SalvageValue)) })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudSimpleTable Dense="true" Elevation="0">
+            <tbody>
+                <tr><th style="width:200px">Category</th><td>@a.CategoryCode</td><th style="width:200px">Serial number</th><td>@asset.SerialNumber</td></tr>
+                <tr><th>Location</th><td>@a.Location</td><th>Custodian</th><td>@a.CustodianName</td></tr>
+                <tr><th>Organization</th><td>@a.OrgUnitCode</td><th>Project / WBS</th><td>@a.ProjectCode @asset.WbsCode</td></tr>
+                <tr><th>Accounts</th><td>Asset @asset.AssetAccountNumber · accumulated @asset.AccumulatedDepreciationAccountNumber · expense @asset.ExpenseAccountNumber</td><th>In service</th><td>@AssetFormat.Date(asset.InServiceDate)</td></tr>
+                <tr><th>Vendor</th><td>@asset.VendorName</td><th>Source</th><td>@(asset.SourceBillNumber is { } sb ? $"Capitalized from {sb}" : $"Entered by {asset.CreatedBy}")</td></tr>
+                @if (asset.CapitalizationEntryId is { } ce)
+                {
+                    <tr><th>Capitalization entry</th><td colspan="3"><MudLink Href="@($"accounting/journal/{ce}")">Reclass journal entry</MudLink></td></tr>
+                }
+                @if (asset.DisposedOn is { } d)
+                {
+                    <tr><th>@(a.Status == AssetState.Transferred ? "Transferred out" : "Disposed")</th><td>@AssetFormat.Date(d)@(asset.DisposalProceeds is { } p ? $", proceeds {AssetFormat.Amount(p)}" : "")</td><th>Reason</th><td>@asset.DisposalReason @if (asset.DisposalEntryId is { } de) { <MudLink Href="@($"accounting/journal/{de}")">(journal entry)</MudLink> }</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6">Depreciation schedule</MudText>
+                    <MudSpacer />
+                    <MudToggleGroup T="DepreciationBook" Value="_book" ValueChanged="BookChanged" Size="Size.Small" Color="Color.Primary" Disabled="@(asset.MacrsRecoveryYears is null || gov)">
+                        <MudToggleItem Value="DepreciationBook.Book" Text="Book" />
+                        <MudToggleItem Value="DepreciationBook.Tax" Text="Tax (MACRS)" />
+                    </MudToggleGroup>
+                    <MudIconButton Icon="@Icons.Material.Filled.Download" aria-label="Export schedule" OnClick="ExportScheduleAsync" Disabled="gov" />
+                </MudStack>
+                @if (_schedule is { } s && !gov)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@s.Method</MudText>
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="asset-schedule">
+                        <thead><tr><th>Year</th><th style="text-align:right">Beginning</th><th style="text-align:right">Depreciation</th><th style="text-align:right">Ending</th>@if (_book == DepreciationBook.Book) { <th style="text-align:right">Posted</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var r in s.Rows)
+                            {
+                                <tr>
+                                    <td>@r.Label</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.BeginningBookValue)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.Depreciation)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.EndingBookValue)</td>
+                                    @if (_book == DepreciationBook.Book) { <td style="text-align:right">@(r.Posted == 0 ? "" : AssetFormat.Amount(r.Posted))</td> }
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.h6" Class="mb-2">Posted depreciation</MudText>
+                @if (asset.Depreciation.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">None yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="asset-depreciation">
+                        <tbody>
+                            @foreach (var d in asset.Depreciation)
+                            {
+                                <tr><td>@d.PeriodName</td><td style="text-align:right">@AssetFormat.Amount(d.Amount)</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Transfers</MudText>
+                @if (asset.Transfers.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No transfers.</MudText>
+                }
+                @foreach (var t in asset.Transfers)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-1" data-testid="asset-transfer-row">
+                        <b>@AssetFormat.Date(t.TransferredOn)</b> by @t.TransferredBy:
+                        @string.Join("; ", new[] { Change("location", t.FromLocation, t.ToLocation), Change("custodian", t.FromCustodian, t.ToCustodian), Change("org", t.FromOrgUnit, t.ToOrgUnit), Change("project", t.FromProject, t.ToProject) }.Where(x => x is not null))
+                        @(t.Reason is null ? "" : $" ({t.Reason})")
+                    </MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid AssetId { get; set; }
+
+    private AssetDto? _asset;
+    private DepreciationScheduleDto? _schedule;
+    private DepreciationBook _book = DepreciationBook.Book;
+    private string? _error;
+    private bool _forbidden;
+
+    private static string? Change(string what, string? from, string? to) => from == to ? null : $"{what} {from ?? "—"} → {to ?? "—"}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _asset = await AssetService.GetAsync(AssetId);
+            await LoadScheduleAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        if (_asset is { Asset.IsGovernmentFurnished: false, Asset.IsContractorAcquired: false })
+        {
+            _schedule = await Reports.GetScheduleAsync(AssetId, _book);
+        }
+    }
+
+    private async Task BookChanged(DepreciationBook book)
+    {
+        _book = book;
+        try
+        {
+            await LoadScheduleAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ExportScheduleAsync()
+    {
+        try
+        {
+            await AssetFormat.DownloadAsync(JS, await Reports.ExportScheduleCsvAsync(AssetId, _book));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task TransferAsync()
+    {
+        var dialog = await DialogService.ShowAsync<TransferDialog>($"Transfer {_asset!.Asset.TagNumber}", new DialogParameters<TransferDialog> { { d => d.Asset, _asset } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: TransferAssetRequest request })
+        {
+            await RunAsync(() => AssetService.TransferAsync(AssetId, request), "Transferred.");
+        }
+    }
+
+    private async Task DisposeAsync()
+    {
+        var dialog = await DialogService.ShowAsync<DisposeDialog>($"Dispose of {_asset!.Asset.TagNumber}", new DialogParameters<DisposeDialog> { { d => d.Asset, _asset } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: DisposeAssetRequest request })
+        {
+            await RunAsync(() => AssetService.DisposeAsync(AssetId, request), "Disposed.");
+        }
+    }
+
+    private async Task RunAsync(Func<Task<AssetDto>> action, string success)
+    {
+        try
+        {
+            _asset = await action();
+            await LoadScheduleAsync();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

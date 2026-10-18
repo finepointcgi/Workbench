@@ -1,0 +1,196 @@
+@page "/host"
+@inject IHostAdminService Host
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Tenants · Host · Workbench</PageTitle>
+
+@if (_access is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (!_access.IsMultiTenant || !_access.IsHostSite || !_access.IsHostAdmin)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+        @(!_access.IsMultiTenant ? "This server runs a single organization, so there are no tenants to manage."
+          : !_access.IsHostSite ? $"Host administration is only available at {_access.BaseDomain}, not at an organization's address."
+          : "Only host administrators can manage tenants. Being an Admin of an organization doesn't grant this.")
+    </MudAlert>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudText Typo="Typo.h4" HtmlTag="h1">Tenants</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _creating = !_creating">New tenant</MudButton>
+    </MudStack>
+
+    @if (_creating)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">New tenant</MudText>
+            <MudText Class="mud-text-secondary mb-3">
+                Creates the organization's database, applies the migrations, seeds the default chart of accounts and fiscal calendar,
+                and invites its first Admin by email.
+            </MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="4"><MudTextField @bind-Value="_slug" Label="Tenant id (subdomain)" HelperText="@($"{(_slug ?? "acme")}.{_access.BaseDomain}")" /></MudItem>
+                <MudItem xs="12" sm="8"><MudTextField @bind-Value="_name" Label="Organization name" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_adminEmail" Label="First Admin's email" InputType="InputType.Email" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_adminName" Label="First Admin's name" /></MudItem>
+                <MudItem xs="12" sm="4"><MudTextField @bind-Value="_plan" Label="Plan" /></MudItem>
+                <MudItem xs="12" sm="8"><MudTextField @bind-Value="_notes" Label="Notes" /></MudItem>
+            </MudGrid>
+            <MudStack Row="true" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="CreateAsync">Create tenant</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="() => _creating = false">Cancel</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudTable Items="_tenants" Dense="true" Hover="true" Outlined="true" Loading="_busy">
+        <HeaderContent>
+            <MudTh>Tenant</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Plan</MudTh>
+            <MudTh Style="text-align:right">Database</MudTh>
+            <MudTh>Last activity</MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudText Typo="Typo.body2"><b>@context.DisplayName</b></MudText>
+                <MudLink Href="@context.Url" Target="_blank" Typo="Typo.caption">@context.Slug</MudLink>
+            </MudTd>
+            <MudTd><MudChip T="string" Size="Size.Small" Color="StatusColor(context.Status)">@context.Status</MudChip></MudTd>
+            <MudTd>@context.Plan</MudTd>
+            <MudTd Style="text-align:right">@FormatBytes(context.DatabaseBytes)</MudTd>
+            <MudTd>@(context.LastActivityUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</MudTd>
+            <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</MudTd>
+            <MudTd>
+                @if (context.Status == "Active")
+                {
+                    <MudButton Size="Size.Small" Color="Color.Warning" OnClick="() => ChangeAsync(context, suspend: true)">Suspend</MudButton>
+                }
+                else if (context.Status == "Suspended")
+                {
+                    <MudButton Size="Size.Small" Color="Color.Primary" OnClick="() => ChangeAsync(context, suspend: false)">Reactivate</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>No tenants yet.</MudText></NoRecordsContent>
+    </MudTable>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-2">Host audit log</MudText>
+    <MudTable Items="_audit" Dense="true" Outlined="true">
+        <HeaderContent>
+            <MudTh>When (UTC)</MudTh>
+            <MudTh>Who</MudTh>
+            <MudTh>Action</MudTh>
+            <MudTh>Detail</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.AtUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+            <MudTd>@context.Actor</MudTd>
+            <MudTd>@context.Action</MudTd>
+            <MudTd>@context.Detail</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private HostAccessDto? _access;
+    private IReadOnlyList<HostTenantDto> _tenants = [];
+    private IReadOnlyList<HostAuditEventDto> _audit = [];
+    private bool _busy;
+    private bool _creating;
+    private string? _slug;
+    private string? _name;
+    private string? _adminEmail;
+    private string? _adminName;
+    private string? _plan;
+    private string? _notes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _access = await Host.GetAccessAsync();
+        if (_access is { IsMultiTenant: true, IsHostSite: true, IsHostAdmin: true })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _tenants = await Host.ListTenantsAsync();
+        _audit = await Host.ListAuditAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var created = await Host.CreateTenantAsync(new CreateHostTenantRequest(_slug ?? "", _name ?? "", _adminEmail ?? "", _adminName, _plan, _notes));
+            Snackbar.Add($"Created {created.DisplayName}. The first Admin has been invited.", Severity.Success);
+            _creating = false;
+            _slug = _name = _adminEmail = _adminName = _plan = _notes = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ChangeAsync(HostTenantDto tenant, bool suspend)
+    {
+        var verb = suspend ? "Suspend" : "Reactivate";
+        var confirmed = await DialogService.ShowMessageBoxAsync($"{verb} {tenant.DisplayName}?",
+            suspend ? "Nobody can use the organization until it is reactivated. Its data is kept and background jobs skip it."
+                    : "Its users can sign in again and background jobs resume.",
+            yesText: verb, cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var request = new HostTenantStatusRequest(null);
+            _ = suspend ? await Host.SuspendTenantAsync(tenant.Id, request) : await Host.ReactivateTenantAsync(tenant.Id, request);
+            Snackbar.Add($"{tenant.DisplayName} is {(suspend ? "suspended" : "active again")}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "Active" => Color.Success,
+        "Suspended" => Color.Warning,
+        "Failed" => Color.Error,
+        _ => Color.Default,
+    };
+
+    private static string FormatBytes(long? bytes) => bytes switch
+    {
+        null => "—",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024.0:0.#} MB",
+        _ => $"{bytes / 1024.0 / 1024.0 / 1024.0:0.##} GB",
+    };
+}

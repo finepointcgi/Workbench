@@ -1,0 +1,135 @@
+@page "/assets/depreciation"
+@inject IDepreciationService Depreciation
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+
+<PageTitle>Depreciation · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Monthly depreciation" Subtitle="Posts one balanced entry per run: depreciation expense by organization and project, credited to accumulated depreciation. Running a period again only picks up assets that still need it; closed periods are refused." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudSelect T="Guid?" Value="_periodId" ValueChanged="PeriodChanged" Label="Fiscal period" Dense="true" Style="min-width:200px" data-testid="depr-period">
+            @foreach (var p in _periods)
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSpacer />
+        @if (_preview is { } pv)
+        {
+            <MudText>To post: <b>@AssetFormat.Amount(pv.Total)</b> on @pv.Lines.Count asset(s)</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="RunAsync"
+                       Disabled="@(_running || pv.PeriodIsClosed || pv.Lines.Count == 0)" data-testid="depr-run">Run depreciation</MudButton>
+        }
+    </MudStack>
+
+    @if (_preview is { } preview)
+    {
+        @if (preview.PeriodIsClosed)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@preview.PeriodName is closed; depreciation can't be posted into it.</MudAlert>
+        }
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            <MudText Typo="Typo.h6" Class="mb-2">Still to depreciate in @preview.PeriodName</MudText>
+            @if (preview.Lines.Count == 0)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" data-testid="depr-done">Every in-service asset is depreciated for @preview.PeriodName.</MudAlert>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="depr-preview">
+                    <thead><tr><th>Tag</th><th>Description</th><th>Expense account</th><th>Org</th><th>Project</th><th style="text-align:right">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in preview.Lines)
+                        {
+                            <tr><td><MudLink Href="@($"assets/{l.AssetId}")">@l.TagNumber</MudLink></td><td>@l.Description</td><td>@l.ExpenseAccountNumber</td><td>@l.OrgUnitCode</td><td>@l.ProjectCode</td><td style="text-align:right">@AssetFormat.Amount(l.Amount)</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Runs</MudText>
+        @if (_runs.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No runs yet.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="depr-runs">
+                <thead><tr><th>Period</th><th>Run</th><th style="text-align:right">Assets</th><th style="text-align:right">Total</th><th>Journal entry</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _runs)
+                    {
+                        <tr>
+                            <td>@r.PeriodName</td>
+                            <td>@r.RunAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") by @r.RunBy</td>
+                            <td style="text-align:right">@r.AssetCount</td>
+                            <td style="text-align:right">@AssetFormat.Amount(r.Total)</td>
+                            <td>@if (r.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">@r.JournalEntryNumber</MudLink> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<DepreciationRunDto> _runs = [];
+    private DepreciationPreviewDto? _preview;
+    private Guid? _periodId;
+    private bool _running;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = (await Calendar.ListPeriodsAsync()).OrderBy(p => p.Start).ToList();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            _runs = await Depreciation.ListRunsAsync();
+            await PeriodChanged(_periods.FirstOrDefault(p => p.Start <= today && p.End >= today)?.Id ?? _periods.LastOrDefault()?.Id);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task PeriodChanged(Guid? id)
+    {
+        _periodId = id;
+        _preview = id is { } p ? await Depreciation.PreviewAsync(p) : null;
+    }
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        try
+        {
+            var run = await Depreciation.RunAsync(_periodId!.Value);
+            Snackbar.Add(run is null ? "Nothing left to depreciate." : $"Posted {run.JournalEntryNumber}: {AssetFormat.Amount(run.Total)} on {run.AssetCount} asset(s).", Severity.Success);
+            _runs = await Depreciation.ListRunsAsync();
+            await PeriodChanged(_periodId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+}

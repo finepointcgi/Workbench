@@ -1,0 +1,189 @@
+@* Every import job, newest first, with its details, audit trail and roll back. *@
+@inject IImportService Imports
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" lg="@(_selected is null ? 12 : 6)">
+        <MudDataGrid T="ImportJobDto" Items="_jobs" Loading="_loading" Dense="true" Hover="true" RowClick="@(a => SelectAsync(a.Item.Id))" Style="cursor:pointer"
+                     RowClassFunc="@((j, _) => j.Id == _selected?.Job.Id ? "mud-selected-item" : "")" data-testid="import-history">
+            <Columns>
+                <PropertyColumn Property="j => j.CreatedAtUtc" Title="When" Format="yyyy-MM-dd HH:mm" />
+                <TemplateColumn Title="Source" SortBy="@(j => j.Source)"><CellTemplate>@ImportFormat.Label(context.Item.Source)</CellTemplate></TemplateColumn>
+                <PropertyColumn Property="j => j.Kind" />
+                <TemplateColumn Title="Files" Sortable="false"><CellTemplate>@string.Join(", ", context.Item.Files.Select(f => f.FileName))</CellTemplate></TemplateColumn>
+                <TemplateColumn Title="Status" SortBy="@(j => j.Status)">
+                    <CellTemplate><MudChip T="string" Size="Size.Small" Color="@ImportFormat.Color(context.Item.Status)" Class="ma-0">@ImportFormat.Label(context.Item.Status)</MudChip></CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Created / updated / skipped / errors" Sortable="false">
+                    <CellTemplate>@context.Item.Counts.Creates / @context.Item.Counts.Updates / @context.Item.Counts.Skips / @context.Item.Counts.Errors</CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="j => j.CreatedBy" Title="By" />
+            </Columns>
+            <NoRecordsContent><MudText>No imports yet.</MudText></NoRecordsContent>
+        </MudDataGrid>
+    </MudItem>
+
+    @if (_selected is { } detail)
+    {
+        var job = detail.Job;
+        <MudItem xs="12" lg="6">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="import-detail">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">@detail.Definition.Title</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="@ImportFormat.Color(job.Status)">@ImportFormat.Label(job.Status)</MudChip>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="Close details" OnClick="() => _selected = null" />
+                </MudStack>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    @ImportFormat.Label(job.Source) · @string.Join(", ", job.Files.Select(f => f.FileName)) · started @job.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC by @job.CreatedBy
+                    @if (job.ImportedAtUtc is { } imported) { <span> · imported @imported.ToString("yyyy-MM-dd HH:mm") UTC</span> }
+                    @if (job.RolledBackAtUtc is { } rolled) { <span> · rolled back @rolled.ToString("yyyy-MM-dd HH:mm") UTC by @job.RolledBackBy</span> }
+                </MudText>
+                @if (job.Message is { } message)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@message</MudAlert>
+                }
+
+                <MudStack Row="true" Spacing="2" Class="my-3">
+                    @if (job.Status is ImportJobStatus.Imported or ImportJobStatus.Failed)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Undo" Disabled="_busy" OnClick="RollBackAsync" data-testid="rollback">Roll back</MudButton>
+                    }
+                    else if (job.Status is not ImportJobStatus.RolledBack)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"setup/import/{job.Id}")">Continue</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="_busy" OnClick="DiscardAsync">Discard</MudButton>
+                    }
+                </MudStack>
+
+                @if (_check is { CanRollBack: false } check && check.Blockers.Count > 0 && job.Status is ImportJobStatus.Imported or ImportJobStatus.Failed)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="rollback-blockers">
+                        <MudText Typo="Typo.body2"><b>This import can't be rolled back</b>: things it created or changed have been used or edited since.</MudText>
+                        <ul class="mt-1" style="padding-left:18px">
+                            @foreach (var blocker in check.Blockers)
+                            {
+                                <li><MudText Typo="Typo.body2">@blocker</MudText></li>
+                            }
+                        </ul>
+                    </MudAlert>
+                }
+
+                <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+                    <MudTabPanel Text="Results">
+                        <ImportResults Job="detail" ShowPlan="@(job.Status is not (ImportJobStatus.Uploaded or ImportJobStatus.Mapped or ImportJobStatus.Validated))" />
+                    </MudTabPanel>
+                    <MudTabPanel Text="@($"Audit trail ({_records.Count})")">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Every record this job created, changed or replaced, in order. Each change is also in the audit log.</MudText>
+                        <MudSimpleTable Dense="true" Style="max-height:420px;overflow:auto" data-testid="import-records">
+                            <thead><tr><th>#</th><th>Action</th><th>Type</th><th>Record</th></tr></thead>
+                            <tbody>
+                                @foreach (var record in _records.Take(1000))
+                                {
+                                    <tr><td>@record.Sequence</td><td>@record.Action</td><td>@record.EntityType</td><td>@record.Label</td></tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter]
+    public Guid? SelectedJobId { get; set; }
+
+    private IReadOnlyList<ImportJobDto> _jobs = [];
+    private ImportJobDetailDto? _selected;
+    private IReadOnlyList<ImportRecordDto> _records = [];
+    private RollbackCheckDto? _check;
+    private bool _loading = true;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (SelectedJobId is { } id)
+        {
+            await SelectAsync(id);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _jobs = await Imports.ListJobsAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+
+        _loading = false;
+    }
+
+    private async Task SelectAsync(Guid id)
+    {
+        _selected = await Imports.GetJobAsync(id);
+        _records = _selected is null ? [] : await Imports.ListRecordsAsync(id);
+        _check = null;
+    }
+
+    private async Task RollBackAsync()
+    {
+        var job = _selected!.Job;
+        _busy = true;
+        try
+        {
+            _check = await Imports.CheckRollbackAsync(job.Id);
+            if (!_check.CanRollBack)
+            {
+                return;
+            }
+
+            var go = await DialogService.ShowMessageBoxAsync("Roll back this import?",
+                $"This deletes the {_records.Count(r => r.Action == ImportRecordAction.Created)} record(s) the import created and restores the {_records.Count(r => r.Action != ImportRecordAction.Created)} it changed. The audit log keeps a record of both.",
+                yesText: "Roll back", cancelText: "Cancel");
+            if (go != true)
+            {
+                return;
+            }
+
+            _selected = await Imports.RollBackAsync(job.Id);
+            _check = null;
+            Snackbar.Add("Import rolled back.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DiscardAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Imports.DeleteJobAsync(_selected!.Job.Id);
+            _selected = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

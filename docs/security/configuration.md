@@ -30,6 +30,8 @@ Workbench reads them at startup, so restart the web host after rotating.
 | `Authentication:Oidc:ClientSecret` | The confidential client secret at your identity provider (or use certificate credentials there). |
 | `Scim:BearerToken` | Random token (32+ characters) the identity provider sends to `/scim/v2`. Generate with `openssl rand -base64 48`. |
 | `ConnectionStrings:Workbench` | Database connection string, including the password for PostgreSQL. Prefer a managed identity / IAM auth where available. |
+| `ConnectionStrings:Catalog` | MultiTenant only: the catalog database (tenants, the shared Data Protection key ring, the host audit log). |
+| `Tenancy:TenantConnectionString` | MultiTenant only: the template for new tenant databases (`{tenant}` is replaced). Its account needs `CREATEDB`. |
 | `Email:Smtp:Password` | SMTP relay password. |
 | `DataProtection:CertificatePassword` | Password of the PFX that encrypts Data Protection keys. |
 
@@ -55,7 +57,15 @@ Workbench reads them at startup, so restart the web host after rotating.
 | `DataProtection:KeysFolder` | (none) | Folder for `FileSystem`. Restrict it to the service account. |
 | `DataProtection:CertificatePath` / `:CertificatePassword` | (none) | PFX that encrypts keys at rest. |
 | `DataProtection:CertificateThumbprint` | (none) | Alternatively, a certificate in the Windows certificate store. |
+| `Database:Provider` | `PostgreSQL` | `PostgreSQL` (production) or `Sqlite` (Development's default, tests, single-user evaluation). |
+| `Database:MigrateOnStartup` | `true` in Development, else `false` | Apply pending migrations on startup. Production deploys run `Workbench.Web --migrate` instead (A.8.32). |
 | `Database:AllowSqliteInProduction` | `false` | SQLite is refused in Production unless this is set (single-user evaluation only). |
+| `Tenancy:Mode` | `SingleTenant` | `SingleTenant` (self-hosted, one database) or `MultiTenant` (SaaS, one database per tenant; A.8.3, A.5.23). |
+| `Tenancy:BaseDomain` | (none) | MultiTenant: tenants are its subdomains (`acme.workbench.example`); the base domain itself is the host admin site. |
+| `Tenancy:HostAdmins` | `[]` | MultiTenant: emails of the host administrators who create and suspend tenants. Not a tenant's Admin role. |
+| `Tenancy:AllowTenantHeader` | `true` | Lets the `X-Tenant` header pick the tenant. Honoured **only in Development**, whatever this says. |
+| `Tenancy:DevelopmentTenants` | `[]` | Development only: tenants created with the sample data on startup when missing. |
+| `Tenancy:FiscalYearStartMonth` | `10` | First month of the fiscal year seeded for a new tenant. |
 | `Retention:SecurityEventDays` | `365` | A.8.15, A.5.33 |
 | `Retention:NotificationDays` | `180` | |
 | `Retention:ExpiredInviteDays` | `90` | |
@@ -76,7 +86,9 @@ Outside Development, the web host lists every problem and refuses to start when:
 - `Authentication:Oidc:RequireHttpsMetadata` is `false`;
 - it only listens on plain HTTP and `Security:TlsTerminatedByProxy` isn't set;
 - SCIM is enabled and `Scim:BearerToken` is empty or shorter than 32 characters;
-- the environment is Production, the database is SQLite and `Database:AllowSqliteInProduction` isn't `true`.
+- the environment is Production, the database is SQLite and `Database:AllowSqliteInProduction` isn't `true`;
+- in MultiTenant mode: `Authentication:RequireInvite` is `false` (anyone the identity provider vouches for could join
+  any tenant), `Tenancy:HostAdmins` is empty, or `Tenancy:BaseDomain` is missing or `localhost`.
 
 ## Data Protection keys
 
@@ -86,6 +98,36 @@ Configure a certificate (`DataProtection:CertificatePath` + `:CertificatePasswor
 the keys are encrypted at rest; without one they're protected only by database access controls. Keys rotate every
 90 days automatically. Back up the database (and the certificate, separately) so cookies and protected data survive a
 restore.
+
+In **MultiTenant** mode there is one key ring for the whole service, stored in the catalog database
+(`DataProtectionKeys`), and every protector is isolated per tenant by purpose: Workbench wraps the Data Protection
+provider so each Protect/Unprotect call adds the current tenant's id to the purpose chain (the host admin site has its
+own purpose). An auth cookie, antiforgery token, Blazor circuit token or encrypted vendor TIN made for one tenant
+therefore fails to unprotect in any other tenant, even if copied. Tenant connection strings in the catalog are
+protected with the undecorated provider under their own purpose. We chose purpose isolation over a key ring per
+tenant because ASP.NET Core caches one key ring per application: per-tenant rings would need one key manager per tenant
+and per-tenant key rotation, for no gain in separation (the purposes already derive different keys) and with more ways
+to lose keys. A database restore of one tenant never needs the keys of another; restoring the catalog restores the ring.
+
+## Multi-tenancy (SaaS)
+
+`Tenancy:Mode=MultiTenant` runs one database per tenant (A.8.3, A.8.31). The catalog database (`ConnectionStrings:
+Catalog`) lists tenants with their status and their encrypted connection strings; nothing tenant-specific is stored in
+it. Every request is resolved to a tenant from its subdomain before authentication runs; unknown, provisioning or
+failed tenants get 404 and suspended ones 403. Blazor circuits stay pinned to the tenant they started in, SignalR hub
+calls run in the tenant of their connection, and background jobs run once per active tenant. Without a tenant, opening
+a tenant database throws: nothing falls back to a shared database.
+
+- **Host admin site** (`https://<BaseDomain>/host`, API `/api/v1/host/...`): only `Tenancy:HostAdmins`, only on the base
+  domain. Create a tenant (database, migrations, default chart of accounts and fiscal calendar, an invite for its first
+  Admin), suspend or reactivate it, see each tenant's database size and last activity, and read the host audit log.
+- **Identity provider:** the sign-in redirect URI is per tenant (`https://acme.<BaseDomain>/signin-oidc`). Register each
+  tenant's URI, or use an IdP that allows a wildcard for your domain. Cookies are bound to the tenant that issued them.
+- **Stays SingleTenant for now:** SCIM (one server-wide token) is off in MultiTenant mode; `Authentication:Admins`
+  bootstrap admins are ignored (a tenant's first admin comes from provisioning); the Costpoint worker
+  (`Workbench.Worker`) syncs one database.
+- `Notifications:PublicBaseUrl` may contain `{tenant}` (e.g. `https://{tenant}.workbench.example`) so email links point at
+  the right tenant.
 
 ## Logging
 

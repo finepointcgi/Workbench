@@ -1,0 +1,10 @@
+@* Page heading for the fixed asset screens. *@
+<PurchasingHeader Title="@Title" Subtitle="@Subtitle" BackHref="@(BackHref ?? "assets")" BackLabel="@(BackLabel ?? "Fixed assets")">@ChildContent</PurchasingHeader>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? BackHref { get; set; }
+    [Parameter] public string? BackLabel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

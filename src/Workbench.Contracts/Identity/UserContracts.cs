@@ -18,6 +18,9 @@ public enum OrgRoles
 
     /// <summary>Everything, including users and every workspace.</summary>
     Admin = 4,
+
+    /// <summary>Staffs every project: manages anyone's allocations and sees capacity and utilization (no cost rates).</summary>
+    ResourceManager = 8,
 }
 
 public static class OrgRoleChecks
@@ -28,7 +31,10 @@ public static class OrgRoleChecks
     public static bool IsFinance(this OrgRoles roles) => (roles & (OrgRoles.Finance | OrgRoles.Admin)) != 0;
 
     /// <summary>Timekeeper, Finance or Admin: may see everyone's timesheets.</summary>
-    public static bool CanViewAllTimesheets(this OrgRoles roles) => roles != OrgRoles.Employee;
+    public static bool CanViewAllTimesheets(this OrgRoles roles) => (roles & (OrgRoles.Timekeeper | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
+    /// <summary>ResourceManager or Admin: manages every project's allocations.</summary>
+    public static bool IsResourceManager(this OrgRoles roles) => (roles & (OrgRoles.ResourceManager | OrgRoles.Admin)) != 0;
 }
 
 public sealed record UserDto(string Email, string DisplayName, OrgRoles Roles, DateTime CreatedAtUtc, DateTime? LastSeenAtUtc)

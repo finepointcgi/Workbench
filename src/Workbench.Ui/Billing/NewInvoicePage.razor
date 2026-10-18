@@ -9,7 +9,11 @@
     <MudButton Variant="Variant.Outlined" Href="billing" StartIcon="@Icons.Material.Filled.ArrowBack">All invoices</MudButton>
 </BillingHeader>
 
-@if (_error is not null)
+@if (Access?.IsFinance != true)
+{
+    <BillingError Forbidden="true" />
+}
+else if (_error is not null)
 {
     <BillingError Message="@_error" Forbidden="_forbidden" />
 }
@@ -118,6 +122,9 @@ else
 }
 
 @code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
     private IReadOnlyList<BillingContractDto>? _contracts;
     private BillingContractDto? _contract;
     private Guid? _contractId;

@@ -1,0 +1,31 @@
+@* One numbered step of the payroll run wizard. *@
+<div class="d-flex gap-3 mb-4" data-step="@Number">
+    <div class="d-flex flex-column align-center">
+        <MudAvatar Size="Size.Small" Color="@(Done ? Color.Success : Color.Primary)" Variant="@(Done ? Variant.Filled : Variant.Outlined)">
+            @if (Done)
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+            }
+            else
+            {
+                @Number
+            }
+        </MudAvatar>
+        @if (!Last)
+        {
+            <div style="flex:1;width:2px;background:var(--mud-palette-divider);margin-top:4px"></div>
+        }
+    </div>
+    <div style="flex:1;min-width:0;overflow-x:auto">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@Title</MudText>
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Number { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool Done { get; set; }
+    [Parameter] public bool Last { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

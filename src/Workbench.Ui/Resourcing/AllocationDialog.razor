@@ -1,0 +1,106 @@
+@* Create or edit an allocation: person, project (only those you may manage), optional WBS element, hours or percent per week. *@
+@inject IProjectService ProjectService
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudSelect T="Guid" Label="Person" @bind-Value="_employeeId" Required="true" data-testid="alloc-person">
+                @foreach (var e in Employees)
+                {
+                    <MudSelectItem T="Guid" Value="e.Id">@e.DisplayName</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid" Label="Project" Value="_projectId" ValueChanged="OnProjectChangedAsync" Required="true" data-testid="alloc-project">
+                @foreach (var p in Projects)
+                {
+                    <MudSelectItem T="Guid" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" Label="WBS element (optional)" @bind-Value="_wbsId" Clearable="true">
+                <MudSelectItem T="Guid?" Value="null">Whole project</MudSelectItem>
+                @foreach (var w in _wbs)
+                {
+                    <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudDatePicker Label="Week of" @bind-Date="_week" DateFormat="yyyy-MM-dd" HelperText="Moved to its Monday" />
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
+                <MudToggleGroup T="bool" @bind-Value="_byPercent" Size="Size.Small" Color="Color.Primary" Style="max-width:200px">
+                    <MudToggleItem Value="false" Text="Hours" />
+                    <MudToggleItem Value="true" Text="Percent" />
+                </MudToggleGroup>
+                <MudNumericField T="decimal" Label="@(_byPercent ? "% of standard week" : "Hours per week")" @bind-Value="_amount" Min="0" Max="@(_byPercent ? 200 : 168)" data-testid="alloc-hours" />
+            </MudStack>
+            @if (Existing is null)
+            {
+                <MudNumericField T="int" Label="Number of weeks" @bind-Value="_weeks" Min="1" Max="104" />
+            }
+            <MudTextField T="string" Label="Notes" @bind-Value="_notes" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(_employeeId == Guid.Empty || _projectId == Guid.Empty || _week is null)" data-testid="alloc-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public AllocationDto? Existing { get; set; }
+    [Parameter] public IReadOnlyList<EmployeeDto> Employees { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
+    [Parameter] public Guid? DefaultEmployeeId { get; set; }
+    [Parameter] public Guid? DefaultProjectId { get; set; }
+    [Parameter] public DateOnly? DefaultWeek { get; set; }
+
+    private Guid _employeeId;
+    private Guid _projectId;
+    private Guid? _wbsId;
+    private DateTime? _week;
+    private bool _byPercent;
+    private decimal _amount = 40;
+    private int _weeks = 1;
+    private string? _notes;
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } a)
+        {
+            (_employeeId, _projectId, _wbsId, _week, _notes) = (a.EmployeeId, a.ProjectId, a.WbsElementId, a.WeekStart.ToDateTime(TimeOnly.MinValue), a.Notes);
+            (_byPercent, _amount) = a.Percent is { } p ? (true, p) : (false, a.Hours);
+        }
+        else
+        {
+            _employeeId = DefaultEmployeeId ?? Employees.FirstOrDefault()?.Id ?? Guid.Empty;
+            _projectId = DefaultProjectId is { } d && Projects.Any(p => p.Id == d) ? d : Projects.FirstOrDefault()?.Id ?? Guid.Empty;
+            _week = (DefaultWeek ?? ResourcingFormat.ThisWeek).ToDateTime(TimeOnly.MinValue);
+        }
+
+        await LoadWbsAsync();
+    }
+
+    private async Task OnProjectChangedAsync(Guid id)
+    {
+        _projectId = id;
+        _wbsId = null;
+        await LoadWbsAsync();
+    }
+
+    private async Task LoadWbsAsync()
+    {
+        try
+        {
+            _wbs = _projectId == Guid.Empty ? [] : await ProjectService.ListWbsAsync(_projectId);
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _wbs = [];
+        }
+    }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(new SaveAllocationRequest(
+        _employeeId, _projectId, DateOnly.FromDateTime(_week!.Value),
+        _byPercent ? null : _amount, _byPercent ? _amount : null, _wbsId, null, Existing is null ? _weeks : 1, _notes)));
+}

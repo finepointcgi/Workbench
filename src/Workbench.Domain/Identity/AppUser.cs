@@ -17,6 +17,9 @@ public sealed class AppUser : Entity
     /// <summary>Organization role Timekeeper: can view everyone's timesheets.</summary>
     public bool IsTimekeeper { get; set; }
 
+    /// <summary>Organization role ResourceManager: manages every project's allocations (resource planning).</summary>
+    public bool IsResourceManager { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }
 

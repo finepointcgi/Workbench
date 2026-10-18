@@ -3,12 +3,13 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject Workbench.Contracts.Assets.IAssetService AssetService
 
 <PageTitle>@(_bill?.Bill.Number ?? "Bill") · Purchasing · Workbench</PageTitle>
 
 @if (_error is not null)
 {
-    <PurchasingHeader Title="Bill" BackHref="purchasing/bills" BackLabel="Bills" />
+    <PurchasingHeader Title="Bill" BackHref="@BackHref" BackLabel="@BackLabel" />
     <PurchasingError Message="@_error" Forbidden="_forbidden" />
 }
 else if (_bill is not { } bill)
@@ -18,26 +19,30 @@ else if (_bill is not { } bill)
 else
 {
     var b = bill.Bill;
-    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="purchasing/bills" BackLabel="Bills">
+    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="@BackHref" BackLabel="@BackLabel">
         <BillStatusChip Status="b.Status" />
-        @if (bill.CanEdit)
-        {
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/bills/{b.Id}/edit")" data-testid="edit-bill">Edit</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" data-testid="submit">Submit</MudButton>
-        }
+        <FinanceOnly>
+            @if (bill.CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/bills/{b.Id}/edit")" data-testid="edit-bill">Edit</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" data-testid="submit">Submit</MudButton>
+            }
+        </FinanceOnly>
         @if (bill.CanApprove)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" data-testid="reject">Reject</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(() => Bills.ApproveAsync(b.Id), "Approved."))" data-testid="approve">Approve</MudButton>
         }
-        @if (b.Status == BillState.Approved)
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
-        }
-        @if (b.Status is BillState.Draft or BillState.Rejected or BillState.PendingApproval)
-        {
-            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="VoidAsync">Void</MudButton>
-        }
+        <FinanceOnly>
+            @if (b.Status == BillState.Approved)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
+            }
+            @if (b.Status is BillState.Draft or BillState.Rejected or BillState.PendingApproval)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="VoidAsync" data-testid="void">Void</MudButton>
+            }
+        </FinanceOnly>
     </PurchasingHeader>
 
     @if (b.PostingProblem is not null)
@@ -89,7 +94,7 @@ else
         {
             <MudText Class="mb-2">@bill.Description</MudText>
         }
-        <BillLinesTable Lines="bill.Lines" />
+        <BillLinesTable Lines="bill.Lines" CanCapitalize="@(_capitalizable.Count > 0 ? l => _capitalizable.Contains(l.Id) : null)" OnCapitalize="CapitalizeAsync" />
     </MudPaper>
 
     @if (bill.Payments.Count > 0)
@@ -114,6 +119,13 @@ else
 }
 
 @code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
+    // Someone outside Finance gets here from Bill approvals; the bill list is Finance's.
+    private string BackHref => Access?.IsFinance == true ? "purchasing/bills" : "purchasing/approvals";
+    private string BackLabel => Access?.IsFinance == true ? "Bills" : "Bill approvals";
+
     [Parameter] public Guid BillId { get; set; }
 
     private BillDto? _bill;
@@ -125,6 +137,7 @@ else
         try
         {
             _bill = await Bills.GetAsync(BillId);
+            await LoadCapitalizableAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
@@ -137,6 +150,7 @@ else
         try
         {
             _bill = await action();
+            await LoadCapitalizableAsync();
             Snackbar.Add(_bill.Bill.PostingProblem is { } problem ? $"Saved, but posting failed: {problem}" : success,
                 _bill.Bill.PostingProblem is null ? Severity.Success : Severity.Warning);
         }
@@ -170,6 +184,43 @@ else
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
             Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    /// <summary>Posted GL-account lines over the capitalization threshold not yet capitalized (Finance only; others see no action).</summary>
+    private HashSet<Guid> _capitalizable = [];
+
+    private async Task LoadCapitalizableAsync()
+    {
+        try
+        {
+            _capitalizable = _bill?.Bill.Status == BillState.Posted
+                ? (await AssetService.ListCapitalizableBillLinesAsync()).Where(l => l.BillId == BillId).Select(l => l.BillLineId).ToHashSet()
+                : [];
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _capitalizable = [];
+        }
+    }
+
+    private async Task CapitalizeAsync(BillLineDto line)
+    {
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Assets.CapitalizeDialog>($"Capitalize {_bill!.Bill.Number} line {line.LineNumber}",
+            new DialogParameters<Workbench.Ui.Assets.CapitalizeDialog> { { d => d.BillLineId, line.Id }, { d => d.Description, line.Description }, { d => d.Amount, line.Amount } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: Workbench.Contracts.Assets.CapitalizeBillLineRequest request })
+        {
+            try
+            {
+                var asset = await AssetService.CapitalizeAsync(request);
+                Snackbar.Add($"Capitalized as {asset.Asset.TagNumber}.", Severity.Success);
+                Navigation.NavigateTo($"assets/{asset.Asset.Id}");
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            }
         }
     }
 

@@ -1,0 +1,95 @@
+@* Capitalize an AP bill line: the category (accounts, method and life default from it), and the asset's details. *@
+@inject IAssetService AssetService
+@inject IPeopleService People
+
+<MudDialog>
+    <DialogContent>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+        }
+        <MudText Typo="Typo.body2" Class="mb-2">Cost @AssetFormat.Amount(Amount). When the bill expensed it to another account, a reclass entry moves it to the category's asset account.</MudText>
+        <MudSelect T="Guid?" Value="_categoryId" ValueChanged="CategoryChanged" Label="Category" Required="true" Dense="true" data-testid="cap-category">
+            @foreach (var c in _categories.Where(c => c.IsActive))
+            {
+                <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name (@c.AssetAccountNumber)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" @bind-Value="_description" Label="Description" Margin="Margin.Dense" />
+        <MudGrid Spacing="2">
+            <MudItem xs="6">
+                <MudSelect T="AssetDepreciationMethod" @bind-Value="_method" Label="Method" Dense="true">
+                    @foreach (var m in Enum.GetValues<AssetDepreciationMethod>())
+                    {
+                        <MudSelectItem Value="m">@AssetFormat.Label(m)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="3"><MudNumericField T="int" @bind-Value="_life" Label="Life (years)" Min="1" Max="50" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="3"><MudNumericField T="decimal" @bind-Value="_salvage" Label="Salvage" Min="0" Format="N2" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6"><MudTextField T="string" @bind-Value="_serial" Label="Serial number" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6"><MudTextField T="string" @bind-Value="_location" Label="Location" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12">
+                <MudSelect T="Guid?" @bind-Value="_custodianId" Label="Custodian" Dense="true" Clearable="true">
+                    @foreach (var e in _employees)
+                    {
+                        <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_categoryId is null)" OnClick="Save" data-testid="cap-save">Capitalize</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid BillLineId { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public decimal Amount { get; set; }
+
+    private IReadOnlyList<AssetCategoryDto> _categories = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private Guid? _categoryId;
+    private string? _description;
+    private AssetDepreciationMethod _method;
+    private int _life = 5;
+    private decimal _salvage;
+    private string? _serial;
+    private string? _location;
+    private Guid? _custodianId;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _description = Description;
+        try
+        {
+            _categories = await AssetService.ListCategoriesAsync();
+            _employees = await People.ListEmployeesAsync();
+            if (_categories.FirstOrDefault(c => c.IsActive) is { } first)
+            {
+                CategoryChanged(first.Id);
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private void CategoryChanged(Guid? id)
+    {
+        _categoryId = id;
+        if (_categories.FirstOrDefault(c => c.Id == id) is { } c)
+        {
+            (_method, _life) = (c.DefaultMethod, c.DefaultLifeYears);
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new CapitalizeBillLineRequest(BillLineId, _categoryId!.Value, _description, _life, _method, _salvage, _serial, _location, _custodianId)));
+}

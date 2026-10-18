@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Color="@AssetFormat.Color(Status)" Variant="Variant.Outlined" Class="ma-0">@AssetFormat.Label(Status)</MudChip>
+
+@code {
+    [Parameter] public AssetState Status { get; set; }
+}

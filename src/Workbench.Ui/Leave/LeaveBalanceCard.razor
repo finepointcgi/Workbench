@@ -1,0 +1,40 @@
+@* My Work card: the signed-in employee's leave balances. Hidden when they have none (or leave isn't registered). *@
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+@if (_balances.Count > 0)
+{
+    <MudPaper Class="pa-4 mb-4 d-flex align-center gap-3" Outlined="true" data-card="leave">
+        <MudIcon Icon="@Icons.Material.Filled.BeachAccess" Color="Color.Primary" />
+        <div>
+            <MudText Typo="Typo.subtitle1">Leave balance</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @string.Join(" · ", _balances.Select(b => $"{b.PolicyName}: {b.Available.ToString("0.##", CultureInfo.InvariantCulture)} h available"
+                    + (b.Planned > 0 ? $" ({b.Planned.ToString("0.##", CultureInfo.InvariantCulture)} h planned)" : "")))
+            </MudText>
+        </div>
+        <MudSpacer />
+        <MudButton Href="leave" Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Request leave</MudButton>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<LeaveBalanceDto> _balances = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (Services.GetService<ILeaveBalanceService>() is not { } balances)
+            {
+                return;
+            }
+
+            _balances = (await balances.GetMyBalancesAsync()).Where(b => b.Type != LeaveTypeKind.Holiday).ToList();
+        }
+        catch (Exception ex) when (LeavePage.IsExpected(ex))
+        {
+            _balances = [];
+        }
+    }
+}

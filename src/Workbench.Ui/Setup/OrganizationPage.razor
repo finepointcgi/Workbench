@@ -1,0 +1,182 @@
+@page "/setup/organization"
+@using Workbench.Contracts.Time
+@inject IOrganizationSettingsService Settings
+@inject ISnackbar Snackbar
+
+<PageTitle>Organization · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Organization" Subtitle="Settings for the whole organization, kept in its own database." />
+
+@if (_settings is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Timesheet periods</MudText>
+        <MudText Class="mud-text-secondary mb-3">
+            How timesheets are cut. A change starts at the next period boundary, so timesheets already started keep their period.
+        </MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <tbody>
+                <tr><td style="width:220px">In force</td><td data-testid="current-cadence"><b>@Capitalized(_settings.Current.Description)</b></td></tr>
+                <tr><td>Today's period</td><td>@Range(_settings.CurrentPeriodStart, _settings.CurrentPeriodEnd)</td></tr>
+                @if (_settings.Pending is { } pending)
+                {
+                    <tr>
+                        <td>Pending change</td>
+                        <td data-testid="pending-cadence">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">@Capitalized(pending.Description) from @Date(pending.EffectiveFrom)</MudChip>
+                            <span class="mud-text-secondary">by @pending.ChangedBy: @pending.Reason</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+
+        @if (_settings.CanEdit)
+        {
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-4 mb-2">Change</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="TimesheetCadenceKind" Label="Cadence" Value="_cadence" ValueChanged="CadenceChanged">
+                        <MudSelectItem Value="TimesheetCadenceKind.Weekly">Weekly</MudSelectItem>
+                        <MudSelectItem Value="TimesheetCadenceKind.Biweekly">Biweekly</MudSelectItem>
+                        <MudSelectItem Value="TimesheetCadenceKind.SemiMonthly">Semi-monthly (1st–15th, 16th–end)</MudSelectItem>
+                        <MudSelectItem Value="TimesheetCadenceKind.Monthly">Monthly</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                @if (_cadence == TimesheetCadenceKind.Weekly)
+                {
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="DayOfWeek" Label="Week starts on" Value="_weekStart" ValueChanged="WeekStartChanged">
+                            @foreach (var day in Enum.GetValues<DayOfWeek>())
+                            {
+                                <MudSelectItem Value="day">@day</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                }
+                else if (_cadence == TimesheetCadenceKind.Biweekly)
+                {
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker Label="Anchor (first day of any period)" Date="_anchor" DateChanged="AnchorChanged" />
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_reason" Label="Reason (audited)" Lines="2" />
+                </MudItem>
+            </MudGrid>
+
+            @if (_preview is { } preview)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3" data-testid="cadence-preview">
+                    Takes effect @Date(preview.EffectiveFrom). First periods:
+                    @string.Join("; ", preview.FirstPeriods.Select(p => Range(p.Start, p.End))).
+                </MudAlert>
+            }
+
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync" data-testid="save-cadence">Save</MudButton>
+        }
+        else
+        {
+            <MudText Class="mud-text-secondary mt-3">Only administrators can change organization settings.</MudText>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">History</MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>From</th><th>Setting</th><th>Changed by</th><th>Reason</th></tr></thead>
+            <tbody>
+                @foreach (var row in _settings.History)
+                {
+                    <tr><td>@(row.EffectiveFrom is { } from ? Date(from) : "The start")</td><td>@Capitalized(row.Description)</td><td>@row.ChangedBy</td><td>@row.Reason</td></tr>
+                }
+                @if (_settings.History.Count == 0)
+                {
+                    <tr><td colspan="4" class="mud-text-secondary">Never changed: the server's default applies.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private OrganizationSettingsDto? _settings;
+    private TimesheetCadencePreviewDto? _preview;
+    private TimesheetCadenceKind _cadence;
+    private DayOfWeek _weekStart = DayOfWeek.Monday;
+    private DateTime? _anchor;
+    private string? _reason;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await Settings.GetAsync();
+        var shown = _settings.Pending ?? _settings.Current;
+        _cadence = shown.Cadence;
+        _weekStart = shown.WeekStartDay;
+        _anchor = shown.BiweeklyAnchor?.ToDateTime(TimeOnly.MinValue) ?? _settings.NextBoundary.ToDateTime(TimeOnly.MinValue);
+        await PreviewAsync();
+    }
+
+    private Task CadenceChanged(TimesheetCadenceKind value)
+    {
+        _cadence = value;
+        return PreviewAsync();
+    }
+
+    private Task WeekStartChanged(DayOfWeek value)
+    {
+        _weekStart = value;
+        return PreviewAsync();
+    }
+
+    private Task AnchorChanged(DateTime? value)
+    {
+        _anchor = value;
+        return PreviewAsync();
+    }
+
+    private ChangeTimesheetCadenceRequest Request() =>
+        new(_cadence, _weekStart, _anchor is { } a ? DateOnly.FromDateTime(a) : null, _reason ?? "");
+
+    private async Task PreviewAsync()
+    {
+        try
+        {
+            _preview = await Settings.PreviewTimesheetCadenceAsync(Request());
+        }
+        catch (ArgumentException)
+        {
+            _preview = null;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            _settings = await Settings.ChangeTimesheetCadenceAsync(Request());
+            _reason = null;
+            Snackbar.Add(_settings.Pending is { } p ? $"Saved. {Capitalized(p.Description)} from {Date(p.EffectiveFrom)}." : "Saved.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Date(DateOnly? date) => date?.ToString("ddd, MMM d, yyyy") ?? "";
+
+    private static string Range(DateOnly start, DateOnly end) => $"{start:MMM d} – {end:MMM d, yyyy}";
+
+    private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+}

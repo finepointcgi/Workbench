@@ -1,0 +1,20 @@
+.toolbar { display: flex; gap: 16px; align-items: center; padding: 12px 24px; border-bottom: 1px solid #ddd; font-family: sans-serif; }
+.toolbar .spacer { flex: 1; }
+.toolbar button { padding: 6px 14px; }
+.page { position: relative; max-width: 8.5in; margin: 0 auto; padding: 0.5in; font-family: Georgia, serif; font-size: 11pt; }
+.watermark { position: absolute; top: 40%; left: 15%; font-size: 72pt; color: rgba(200, 0, 0, 0.12); transform: rotate(-25deg); pointer-events: none; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+h1 { margin: 0; font-size: 22pt; }
+.number { font-size: 13pt; margin-top: 4px; }
+.meta th { text-align: left; padding-right: 12px; font-weight: normal; color: #555; }
+.parties { display: flex; gap: 48px; margin-bottom: 24px; }
+.parties > div { flex: 1; }
+.label { font-size: 9pt; text-transform: uppercase; color: #555; margin-bottom: 4px; }
+.pre { white-space: pre-line; }
+.lines { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.lines th, .lines td { border-bottom: 1px solid #ccc; padding: 6px 4px; text-align: left; vertical-align: top; }
+.lines .num { text-align: right; }
+.small { font-size: 9pt; color: #444; }
+.sign { display: flex; gap: 48px; margin-top: 48px; border-top: 1px solid #000; padding-top: 8px; }
+.error { color: #b00; }
+@media print { .no-print { display: none; } .page { padding: 0; } }

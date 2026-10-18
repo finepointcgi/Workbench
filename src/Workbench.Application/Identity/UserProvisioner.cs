@@ -48,7 +48,7 @@ public sealed class UserProvisioner(IWorkbenchDbContextFactory dbFactory, TimePr
                 return await retry.Set<AppUser>().AsNoTracking().FirstAsync(u => u.Email == email, cancellationToken);
             }
 
-            _lastWritten[email] = now;
+            _lastWritten[Tenancy.TenantScope.Qualify(email)] = now;
             return user;
         }
 
@@ -65,11 +65,11 @@ public sealed class UserProvisioner(IWorkbenchDbContextFactory dbFactory, TimePr
             changed = true;
         }
 
-        if (changed || !_lastWritten.TryGetValue(email, out var written) || now - written >= SeenInterval)
+        if (changed || !_lastWritten.TryGetValue(Tenancy.TenantScope.Qualify(email), out var written) || now - written >= SeenInterval)
         {
             user.LastSeenAtUtc = now;
             await db.SaveChangesAsync(cancellationToken);
-            _lastWritten[email] = now;
+            _lastWritten[Tenancy.TenantScope.Qualify(email)] = now;
         }
 
         return user;

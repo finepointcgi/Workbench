@@ -114,7 +114,7 @@ public static class CostpointCsv
     }
 
     /// <summary>RFC 4180 records: quoted fields may contain commas, doubled quotes and line breaks.</summary>
-    private static IEnumerable<(int Line, IReadOnlyList<string> Fields)> ReadRecords(TextReader reader)
+    public static IEnumerable<(int Line, IReadOnlyList<string> Fields)> ReadRecords(TextReader reader)
     {
         var fields = new List<string>();
         var field = new StringBuilder();
