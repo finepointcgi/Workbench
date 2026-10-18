@@ -1,0 +1,129 @@
+@* The contract's CLINs and SLINs as a tree grid with value, funding, cost and status. *@
+@inject IClinService ClinService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Contract line items</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+        Value = sum of exercised CLINs · funded = sum of CLIN funding@(Status?.IsBurdened == true ? " · incurred is fully burdened" : " · incurred is direct cost")
+    </MudText>
+    <MudSpacer />
+    @if (CanEdit)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="clin-add">Add CLIN</MudButton>
+    }
+</MudStack>
+
+<MudPaper Outlined="true">
+    <MudSimpleTable Dense="true" Hover="true" data-testid="clin-grid">
+        <thead>
+            <tr>
+                <th>CLIN</th><th>Description</th><th>Type</th><th>Period</th>
+                <th style="text-align:right">Ceiling</th><th style="text-align:right">Funded</th>
+                <th style="text-align:right">Incurred</th><th style="text-align:right">Remaining</th><th>Status</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Clins.Count == 0)
+            {
+                <tr><td colspan="10" class="mud-text-secondary">No CLINs yet. Add the awarded CLINs; option CLINs start unexercised.</td></tr>
+            }
+            @foreach (var clin in Clins)
+            {
+                var status = Status?.Clins.FirstOrDefault(s => s.ClinId == clin.Id);
+                <tr data-testid="clin-row">
+                    <td style="white-space:nowrap; padding-left:@(clin.IsSlin ? "32px" : "12px")">
+                        @if (clin.HasSlins)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Class="mr-1" Style="vertical-align:middle" title="Rolls up its SLINs" />
+                        }
+                        <b>@clin.Number</b>
+                    </td>
+                    <td>@clin.Description</td>
+                    <td>@ClinFormat.Label(clin.Pricing)@(clin.FeeRate is { } f ? $" {f:P1}" : "")</td>
+                    <td style="white-space:nowrap">@SetupFormat.Date(clin.PeriodStart) – @SetupFormat.Date(clin.PeriodEnd)</td>
+                    <td style="text-align:right">@ClinFormat.Money(clin.CeilingValue)</td>
+                    <td style="text-align:right">@ClinFormat.Money(clin.FundedValue)</td>
+                    <td style="text-align:right">@(status is null ? "—" : ClinFormat.Money(status.Incurred))</td>
+                    <td style="text-align:right" class="@(status?.Remaining < 0 ? "mud-error-text" : "")">@(status is null ? "—" : ClinFormat.Money(status.Remaining))</td>
+                    <td>
+                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                            @if (clin.IsOption)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(clin.IsExercised ? Color.Info : Color.Default)" Class="ma-0">
+                                    @(clin.IsExercised ? "Option exercised" : "Option · unexercised")
+                                </MudChip>
+                            }
+                            @if (status is not null && status.Level != FundingLevel.NotActive)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="ClinFormat.Color(status.Level)" Class="ma-0">@ClinFormat.Label(status.Level)</MudChip>
+                            }
+                        </MudStack>
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(clin)" aria-label="@($"Edit CLIN {clin.Number}")" />
+                        }
+                    </td>
+                </tr>
+            }
+            @if (Clins.Count > 0)
+            {
+                var top = Clins.Where(c => !c.IsSlin).ToList();
+                <tr>
+                    <td colspan="4"><b>Contract total</b> <span class="mud-text-secondary">(exercised CLINs)</span></td>
+                    <td style="text-align:right"><b>@ClinFormat.Money(Contract.CeilingValue)</b></td>
+                    <td style="text-align:right"><b>@ClinFormat.Money(Contract.FundedValue)</b></td>
+                    <td style="text-align:right"><b>@(Status is null ? "—" : ClinFormat.Money(Status.Clins.Where(s => top.Any(t => t.Id == s.ClinId)).Sum(s => s.Incurred)))</b></td>
+                    <td colspan="3"></td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContractDto Contract { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public ContractFundingStatusDto? Status { get; set; }
+
+    [Parameter]
+    public bool CanEdit { get; set; } = true;
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private async Task EditAsync(ClinDto? clin)
+    {
+        var parameters = new DialogParameters<ClinDialog>
+        {
+            { d => d.Clin, clin },
+            { d => d.DefaultStart, Contract.PeriodStart },
+            { d => d.DefaultEnd, Contract.PeriodEnd },
+        };
+        var dialog = await DialogService.ShowAsync<ClinDialog>(clin is null ? "Add CLIN" : $"Edit CLIN {clin.Number}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveClinRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            var saved = clin is null ? await ClinService.CreateClinAsync(Contract.Id, request) : await ClinService.UpdateClinAsync(clin.Id, request);
+            Snackbar.Add($"Saved CLIN {saved.Number}.", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

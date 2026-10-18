@@ -347,14 +347,16 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
         // GL side: allowable cost on project WBS lines. Direct ODC accounts are ODCs; every other allowable expense
         // account (direct and indirect labor, leave) is labor. Unallowable accounts are excluded, like the financials.
         var accounts = ledger.Lookups.Accounts;
+        // Applied burden (indirect rates' allocations) is reported beside, not inside, the direct cost.
         var gl = ledger.Lines
             .Where(l => l.WbsElementId is not null && accounts[l.AccountId].Type == AccountType.Expense
                 && accounts[l.AccountId].CostClass != CostClassification.Unallowable
                 && (projectId is null || l.ProjectId == projectId))
             .GroupBy(l => l.WbsElementId!.Value)
             .ToDictionary(g => g.Key, g => (
-                Labor: g.Where(l => accounts[l.AccountId].CostClass != CostClassification.DirectOdc).Sum(l => l.Net),
-                Odc: g.Where(l => accounts[l.AccountId].CostClass == CostClassification.DirectOdc).Sum(l => l.Net)));
+                Labor: g.Where(l => accounts[l.AccountId].CostClass is not (CostClassification.DirectOdc or CostClassification.AppliedBurden)).Sum(l => l.Net),
+                Odc: g.Where(l => accounts[l.AccountId].CostClass == CostClassification.DirectOdc).Sum(l => l.Net),
+                Burden: g.Where(l => accounts[l.AccountId].CostClass == CostClassification.AppliedBurden).Sum(l => l.Net)));
         var finLabor = labor.GroupBy(l => l.WbsElementId).ToDictionary(g => g.Key, g => g.Sum(l => l.Cost));
         var finOdc = odcs.GroupBy(o => o.WbsElementId).ToDictionary(g => g.Key, g => g.Sum(o => o.Amount));
 
@@ -364,9 +366,9 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
                 var wbs = ledger.Lookups.Wbs.GetValueOrDefault(id);
                 var g = gl.GetValueOrDefault(id);
                 return new ReconciliationRowDto(wbs?.ProjectId ?? Guid.Empty, wbs is null ? "?" : ledger.Lookups.Projects.GetValueOrDefault(wbs.ProjectId) ?? "?",
-                    id, wbs?.Code ?? "?", finLabor.GetValueOrDefault(id), finOdc.GetValueOrDefault(id), g.Labor, g.Odc);
+                    id, wbs?.Code ?? "?", finLabor.GetValueOrDefault(id), finOdc.GetValueOrDefault(id), g.Labor, g.Odc, g.Burden);
             })
-            .Where(r => r.FinancialsTotal != 0 || r.GlTotal != 0)
+            .Where(r => r.FinancialsTotal != 0 || r.GlTotal != 0 || r.GlAppliedBurden != 0)
             .OrderBy(r => r.ProjectCode, StringComparer.Ordinal).ThenBy(r => r.WbsCode, StringComparer.Ordinal)
             .ToList();
         var unreconciled = rows.Count(r => !r.IsReconciled);

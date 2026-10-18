@@ -1,0 +1,36 @@
+@* CLIN funding for one project: the CLINs its WBS charges, with bars and any Limitation of Funds notices. Renders nothing off-contract. *@
+@inject IFundingService Funding
+
+@if (_status is { Clins.Count: > 0 } status)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="clin-funding-card">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">CLIN funding</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3">
+            @status.ContractNumber · @(status.IsBurdened ? "burdened cost" : "direct cost") · as of @SetupFormat.Date(status.AsOf)
+        </MudText>
+        @foreach (var notice in status.Notices.Take(3))
+        {
+            <MudAlert Severity="@(notice.ThresholdPercent >= 90 ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">@notice.Title</MudAlert>
+        }
+        <ClinFundingBars Status="status" />
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    private ContractFundingStatusDto? _status;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _status = await Funding.GetProjectFundingStatusAsync(ProjectId);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            _status = null;
+        }
+    }
+}

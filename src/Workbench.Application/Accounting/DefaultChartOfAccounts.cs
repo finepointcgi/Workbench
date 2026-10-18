@@ -23,6 +23,7 @@ public static class DefaultChartOfAccounts
 
         new("2000", "Liabilities", AccountType.Liability),
         new("2010", "Accounts payable", AccountType.Liability, "2000", Description: "Vendor ODCs and subcontract invoices"),
+        new("2020", "AP retainage", AccountType.Liability, "2000", Description: "Subcontract retainage withheld from AP bills until release"),
         new("2100", "Accrued payroll", AccountType.Liability, "2000", Description: "Labor cost from approved timesheets until payroll is paid"),
         new("2110", "Accrued employee reimbursements", AccountType.Liability, "2000", Description: "Approved expense reports not yet reimbursed"),
         new("2200", "Accrued liabilities", AccountType.Liability, "2000"),
@@ -67,6 +68,15 @@ public static class DefaultChartOfAccounts
         new("7010", "Unallowable - entertainment and alcohol", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-14, 31.205-51"),
         new("7020", "Unallowable - travel over per diem", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-46"),
         new("7090", "Unallowable - other", AccountType.Expense, "7000", CostClassification.Unallowable),
+
+        // Indirect rates: burden applied to projects (debit, with project/WBS segments) against a contra account in each pool.
+        new("5900", "Applied indirect costs", AccountType.Expense),
+        new("5910", "Applied fringe", AccountType.Expense, "5900", CostClassification.AppliedBurden),
+        new("5920", "Applied overhead", AccountType.Expense, "5900", CostClassification.AppliedBurden),
+        new("5930", "Applied G&A", AccountType.Expense, "5900", CostClassification.AppliedBurden),
+        new("6090", "Fringe applied", AccountType.Expense, "6000", CostClassification.AppliedBurden, "Contra: fringe allocated to projects"),
+        new("6190", "Overhead applied", AccountType.Expense, "6100", CostClassification.AppliedBurden, "Contra: overhead allocated to projects"),
+        new("6290", "G&A applied", AccountType.Expense, "6200", CostClassification.AppliedBurden, "Contra: G&A allocated to projects"),
     ];
 
     private static readonly (PostingRuleKind Kind, string Key, string Account)[] Rules =

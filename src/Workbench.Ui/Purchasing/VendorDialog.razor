@@ -1,0 +1,165 @@
+@* Creates or edits a vendor; warns about possible duplicates (same UEI or a similar name) and returns the saved vendor. *@
+@inject IVendorService Vendors
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudStack Row="true" Spacing="3">
+                <MudTextField T="string" @bind-Value="_code" Label="Code" Required="true" Immediate="true" Style="max-width:140px" data-testid="vendor-code" />
+                <MudTextField T="string" Value="_name" ValueChanged="NameChanged" Label="Legal name" Required="true" Immediate="true" DebounceInterval="400" data-testid="vendor-name" />
+            </MudStack>
+            <MudStack Row="true" Spacing="3">
+                <MudTextField T="string" Value="_uei" ValueChanged="UeiChanged" Label="UEI (SAM.gov)" Immediate="true" DebounceInterval="400" MaxLength="12" Style="max-width:200px" />
+                <MudSelect T="VendorState" @bind-Value="_status" Label="Status" Style="max-width:160px"
+                           HelperText="@(_status == VendorState.OnHold ? "On hold blocks new bills and payments." : null)">
+                    @foreach (var s in Enum.GetValues<VendorState>())
+                    {
+                        <MudSelectItem Value="s">@(s == VendorState.OnHold ? "On hold" : s.ToString())</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="int" @bind-Value="_terms" Label="Terms (net days)" Min="0" Max="365" Style="max-width:150px" />
+            </MudStack>
+            @if (_duplicates.Count > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" data-testid="vendor-duplicates">
+                    Possible duplicate: @string.Join("; ", _duplicates.Select(d => $"{d.Code} {d.Name} ({d.Reason.ToLowerInvariant()})"))
+                    @if (_duplicates.All(d => !d.Reason.StartsWith("Same UEI", StringComparison.Ordinal)))
+                    {
+                        <MudCheckBox T="bool" @bind-Value="_confirmDuplicate" Label="This is a different vendor" Dense="true" />
+                    }
+                </MudAlert>
+            }
+            <MudStack Row="true" Spacing="3">
+                <MudSelect T="string" @bind-Value="_size" Label="Business size" Clearable="true" Style="max-width:200px">
+                    @foreach (var s in PurchasingCatalog.BusinessSizes)
+                    {
+                        <MudSelectItem Value="s">@s</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_categories" Label="Socio-economic categories">
+                    @foreach (var c in PurchasingCatalog.SocioEconomicCategories)
+                    {
+                        <MudSelectItem Value="c">@c</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+                <MudSwitch T="bool" @bind-Value="_is1099" Label="1099 vendor" Color="Color.Primary" />
+                @if (_is1099)
+                {
+                    <MudSelect T="string" @bind-Value="_box" Label="1099 box">
+                        @foreach (var (box, label) in PurchasingCatalog.Form1099Boxes)
+                        {
+                            <MudSelectItem Value="box">@label</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_remitTo" Label="Remit-to address" Lines="3" />
+            <MudStack Row="true" Spacing="3">
+                <MudTextField T="string" @bind-Value="_contactName" Label="Contact" />
+                <MudTextField T="string" @bind-Value="_contactEmail" Label="Email" InputType="InputType.Email" />
+                <MudTextField T="string" @bind-Value="_contactPhone" Label="Phone" Style="max-width:170px" />
+            </MudStack>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" data-testid="save-vendor"
+                   Disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public VendorDto? Vendor { get; set; }
+
+    private string? _code;
+    private string? _name;
+    private string? _uei;
+    private VendorState _status;
+    private int _terms = 30;
+    private string? _size;
+    private IReadOnlyCollection<string> _categories = [];
+    private bool _is1099;
+    private string _box = PurchasingCatalog.DefaultForm1099Box;
+    private string? _remitTo;
+    private string? _contactName;
+    private string? _contactEmail;
+    private string? _contactPhone;
+    private IReadOnlyList<VendorDuplicateDto> _duplicates = [];
+    private bool _confirmDuplicate;
+    private bool _saving;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (Vendor is { } v)
+        {
+            (_code, _name, _uei, _status, _terms, _size) = (v.Code, v.Name, v.Uei, v.Status, v.PaymentTermsDays, v.BusinessSize);
+            (_categories, _is1099, _box, _remitTo) = (v.SocioEconomicCategories.ToList(), v.Is1099, v.Form1099Box, v.RemitToAddress);
+            (_contactName, _contactEmail, _contactPhone) = (v.ContactName, v.ContactEmail, v.ContactPhone);
+        }
+    }
+
+    private async Task NameChanged(string? value)
+    {
+        _name = value;
+        await CheckAsync();
+    }
+
+    private async Task UeiChanged(string? value)
+    {
+        _uei = value;
+        await CheckAsync();
+    }
+
+    private async Task CheckAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name) && string.IsNullOrWhiteSpace(_uei))
+        {
+            _duplicates = [];
+            return;
+        }
+
+        try
+        {
+            _duplicates = await Vendors.FindDuplicatesAsync(_name ?? "", _uei, Vendor?.Id);
+            if (Vendor is not null && string.Equals(_name, Vendor.Name, StringComparison.Ordinal))
+            {
+                _duplicates = _duplicates.Where(d => d.Reason.StartsWith("Same UEI", StringComparison.Ordinal)).ToList();
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _duplicates = [];
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        var request = new SaveVendorRequest(_code ?? "", _name ?? "", _status, _is1099, _is1099 ? _box : null, _uei, _size, _categories.ToList(),
+            _terms, _remitTo, _contactName, _contactEmail, _contactPhone, _confirmDuplicate);
+        try
+        {
+            var saved = Vendor is null ? await Vendors.CreateAsync(request) : await Vendors.UpdateAsync(Vendor.Id, request);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+            await CheckAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

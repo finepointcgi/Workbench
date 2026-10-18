@@ -1,0 +1,80 @@
+@page "/purchasing/vendors"
+@inject IVendorService Vendors
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+
+<PageTitle>Vendors · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Vendors" Subtitle="Suppliers and subcontractors. On hold blocks new bills and payments; TINs are stored encrypted and shown masked.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="_error is not null" data-testid="new-vendor">New vendor</MudButton>
+</PurchasingHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudTextField T="string" @bind-Value="_search" Label="Search" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:280px" />
+        <MudSwitch T="bool" @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />
+    </MudStack>
+    <MudTable T="VendorDto" Items="Visible" Loading="_loading" Dense="true" Hover="true" OnRowClick="@(e => Navigation.NavigateTo($"purchasing/vendors/{e.Item!.Id}"))" RowStyle="cursor:pointer" data-testid="vendors">
+        <HeaderContent>
+            <MudTh>Code</MudTh><MudTh>Name</MudTh><MudTh>Status</MudTh><MudTh>Size</MudTh><MudTh>Categories</MudTh><MudTh>UEI</MudTh><MudTh>TIN</MudTh><MudTh>Terms</MudTh><MudTh>1099</MudTh><MudTh>W-9</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><MudLink Href="@($"purchasing/vendors/{context.Id}")">@context.Code</MudLink></MudTd>
+            <MudTd>@context.Name</MudTd>
+            <MudTd><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@PurchasingFormat.Color(context.Status)" Class="ma-0">@(context.Status == VendorState.OnHold ? "On hold" : context.Status.ToString())</MudChip></MudTd>
+            <MudTd>@context.BusinessSize</MudTd>
+            <MudTd>@string.Join(", ", context.SocioEconomicCategories)</MudTd>
+            <MudTd>@context.Uei</MudTd>
+            <MudTd style="font-family:monospace">@context.TaxIdMasked</MudTd>
+            <MudTd>Net @context.PaymentTermsDays</MudTd>
+            <MudTd>@(context.Is1099 ? context.Form1099Box : "")</MudTd>
+            <MudTd>@(context.W9FileId is null ? "" : "On file")</MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No vendors match.</MudText></NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<VendorDto> _vendors = [];
+    private string? _search;
+    private bool _showInactive;
+    private bool _loading = true;
+    private string? _error;
+    private bool _forbidden;
+
+    private IEnumerable<VendorDto> Visible => _vendors
+        .Where(v => _showInactive || v.Status != VendorState.Inactive)
+        .Where(v => string.IsNullOrWhiteSpace(_search) || v.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) || v.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || (v.Uei ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _vendors = await Vendors.ListAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<VendorDialog>("New vendor", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: VendorDto vendor })
+        {
+            Navigation.NavigateTo($"purchasing/vendors/{vendor.Id}");
+        }
+    }
+}

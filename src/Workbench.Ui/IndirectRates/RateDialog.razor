@@ -1,0 +1,68 @@
+@* Sets a pool's rate for a fiscal year and basis (entered as a percentage). A change needs a reason. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="CostPool" @bind-Value="Pool" Label="Pool" Dense="true">
+                @foreach (var p in IndirectRatesFormat.Pools)
+                {
+                    <MudSelectItem T="CostPool" Value="p">@AccountingFormat.Label(p)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="RateBasis" @bind-Value="Basis" Label="Basis" Dense="true">
+                @foreach (var b in IndirectRatesFormat.Bases)
+                {
+                    <MudSelectItem T="RateBasis" Value="b">@b</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField T="decimal?" @bind-Value="_percent" Label="Rate (%)" Format="0.####" Min="0" Max="500" Immediate="true" AutoFocus="true" data-testid="rate-percent" />
+            <MudTextField T="string" @bind-Value="_note" Label="Note" HelperText="For example: from the FY2025 DCAA-approved rates" />
+            <MudCheckBox T="bool" @bind-Value="_approve" Label="Approved" />
+            @if (Replaces is { } existing)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">Replaces the current rate of @IndirectRatesFormat.Percent(existing.Rate).</MudAlert>
+                <MudTextField T="string" @bind-Value="_reason" Label="Reason for the change" Required="true" Immediate="true" HelperText="Recorded in the audit log." />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_percent is null || (Replaces is not null && string.IsNullOrWhiteSpace(_reason)))" OnClick="Save"
+                   data-testid="save-rate">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int FiscalYear { get; set; }
+
+    [Parameter]
+    public CostPool Pool { get; set; }
+
+    [Parameter]
+    public RateBasis Basis { get; set; }
+
+    [Parameter]
+    public IndirectRateDto? Existing { get; set; }
+
+    [Parameter]
+    public Func<CostPool, RateBasis, IndirectRateDto?>? Lookup { get; set; }
+
+    private decimal? _percent;
+    private string? _note;
+    private string? _reason;
+    private bool _approve = true;
+
+    private IndirectRateDto? Replaces => Lookup?.Invoke(Pool, Basis) ?? Existing;
+
+    protected override void OnInitialized()
+    {
+        _percent = Existing is { } e ? e.Rate * 100 : null;
+        _note = Existing?.Note;
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveIndirectRateRequest(Pool, FiscalYear, Basis, Math.Round(_percent!.Value / 100, 6),
+        null, _note, _approve, string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim())));
+}

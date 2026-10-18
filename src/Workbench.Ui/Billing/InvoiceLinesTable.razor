@@ -1,0 +1,83 @@
+@* Invoice lines grouped by CLIN, with a subtotal per CLIN and the invoice total. *@
+<MudPaper Outlined="true" Style="overflow-x:auto">
+    <MudSimpleTable Dense="true" Hover="true" data-testid="invoice-lines">
+        <thead>
+            <tr>
+                <th>#</th><th>Kind</th><th>Description</th><th>WBS</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th>
+                <th style="text-align:right">Amount</th>
+                @if (OnRemove.HasDelegate)
+                {
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (Lines.Count == 0)
+            {
+                <tr><td colspan="8" class="mud-text-secondary">No lines.</td></tr>
+            }
+            @foreach (var group in Lines.GroupBy(l => l.ClinNumber))
+            {
+                <tr style="background: var(--mud-palette-background-gray)">
+                    <td colspan="@(OnRemove.HasDelegate ? 8 : 7)"><strong>@(group.Key is null ? "Not assigned to a CLIN" : $"CLIN {group.Key}")</strong>@ClinDescription(group.Key)</td>
+                </tr>
+                @foreach (var l in group)
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td style="white-space:nowrap">@BillingFormat.Label(l.Kind)@(l.IsGenerated ? "" : " (manual)")</td>
+                        <td>
+                            @l.Description
+                            @if (l.SourceCount > 0)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@l.SourceCount source record@(l.SourceCount == 1 ? "" : "s")</MudText>
+                            }
+                        </td>
+                        <td style="white-space:nowrap">@l.WbsCode</td>
+                        <td style="text-align:right; white-space:nowrap">@BillingFormat.LineQuantity(l)</td>
+                        <td style="text-align:right; white-space:nowrap">@BillingFormat.LineRate(l)</td>
+                        <td style="text-align:right; white-space:nowrap">@BillingFormat.Amount(l.Amount)</td>
+                        @if (OnRemove.HasDelegate)
+                        {
+                            <td>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove line" OnClick="() => OnRemove.InvokeAsync(l)" />
+                            </td>
+                        }
+                    </tr>
+                }
+                <tr>
+                    <td colspan="6" style="text-align:right" class="mud-text-secondary">CLIN @group.Key subtotal</td>
+                    <td style="text-align:right; white-space:nowrap"><strong>@BillingFormat.Amount(group.Sum(l => l.Amount))</strong></td>
+                    @if (OnRemove.HasDelegate)
+                    {
+                        <td></td>
+                    }
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="6" style="text-align:right"><strong>Invoice total</strong></td>
+                <td style="text-align:right; white-space:nowrap" data-testid="invoice-total"><strong>@BillingFormat.Money(Lines.Sum(l => l.Amount))</strong></td>
+                @if (OnRemove.HasDelegate)
+                {
+                    <td></td>
+                }
+            </tr>
+        </tfoot>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<InvoiceLineDto> Lines { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<ClinFundingCheckDto> Funding { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<InvoiceLineDto> OnRemove { get; set; }
+
+    private string ClinDescription(string? number) =>
+        Funding.FirstOrDefault(f => f.ClinNumber == number) is { } f ? $" · {f.Description} ({f.Pricing})" : "";
+}

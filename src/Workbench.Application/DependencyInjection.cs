@@ -1,12 +1,16 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
+using Workbench.Application.Billing;
 using Workbench.Application.Collaboration;
+using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
+using Workbench.Application.IndirectRates;
 using Workbench.Application.Odcs;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
+using Workbench.Application.Purchasing;
 using Workbench.Application.Dashboards;
 using Workbench.Application.MyWork;
 using Workbench.Application.Security;
@@ -36,7 +40,11 @@ public static class DependencyInjection
         services.AddWorkbenchFinancials();
         services.AddWorkbenchSetup();
         services.AddWorkbenchAccounting(); // GL posting decorators wrap time/ODC approvals; must stay above AddWorkbenchIdentity.
+        services.AddWorkbenchIndirectRates(); // After AddWorkbenchAccounting (decorates its reports, adds a close check); above AddWorkbenchIdentity.
         services.AddWorkbenchSecurity();
+        services.AddWorkbenchContractDetail();
+        services.AddWorkbenchBilling(); // Billing/AR: posts through the GL; must stay above AddWorkbenchIdentity.
+        services.AddWorkbenchPurchasing(); // AP bills post through AddWorkbenchAccounting's engine; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

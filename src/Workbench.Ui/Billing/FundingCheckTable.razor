@@ -1,0 +1,46 @@
+@* Billed to date against funding and ceiling for each CLIN on the invoice. *@
+<MudPaper Outlined="true" Style="overflow-x:auto">
+    <MudSimpleTable Dense="true" data-testid="funding-check">
+        <thead>
+            <tr><th>CLIN</th><th style="text-align:right">Previously billed</th><th style="text-align:right">This invoice</th><th style="text-align:right">Billed to date</th>
+                <th style="text-align:right">Funded</th><th style="text-align:right">Funded remaining</th><th style="text-align:right">Ceiling</th><th>Check</th></tr>
+        </thead>
+        <tbody>
+            @if (Funding.Count == 0)
+            {
+                <tr><td colspan="8" class="mud-text-secondary">No CLIN lines to check.</td></tr>
+            }
+            @foreach (var f in Funding)
+            {
+                <tr>
+                    <td style="white-space:nowrap">@f.ClinNumber <span class="mud-text-secondary">@f.Pricing</span></td>
+                    <td style="text-align:right">@BillingFormat.Amount(f.PreviouslyBilled)</td>
+                    <td style="text-align:right">@BillingFormat.Amount(f.ThisInvoice)</td>
+                    <td style="text-align:right">@BillingFormat.Amount(f.CumulativeBilled)</td>
+                    <td style="text-align:right">@BillingFormat.Amount(f.FundedValue)</td>
+                    <td style="text-align:right" class="@(f.FundedRemaining < 0 ? "mud-error-text" : "")">@BillingFormat.Amount(f.FundedRemaining)</td>
+                    <td style="text-align:right">@BillingFormat.Amount(f.CeilingValue)</td>
+                    <td>
+                        @switch (f.Level)
+                        {
+                            case FundingCheckLevel.Ok:
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text" Class="ma-0">Within funding</MudChip>
+                                break;
+                            case FundingCheckLevel.OverFunded:
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ma-0">Over funded value</MudChip>
+                                break;
+                            default:
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Class="ma-0">Over ceiling</MudChip>
+                                break;
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ClinFundingCheckDto> Funding { get; set; } = [];
+}
