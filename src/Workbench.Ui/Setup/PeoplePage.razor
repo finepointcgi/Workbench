@@ -10,7 +10,7 @@
 </SetupHeader>
 
 <MudGrid Spacing="3">
-    <MudItem xs="12" md="6" lg="5">
+    <MudItem xs="12" lg="5">
         <MudDataGrid T="EmployeeDto" Items="Filtered" Loading="_loading" Dense="true" Hover="true" RowClick="@(a => Select(a.Item))"
                      RowClassFunc="@((e, _) => e.Id == _selected?.Id ? "mud-selected-item" : "")" Style="cursor:pointer">
             <ToolBarContent>
@@ -48,7 +48,7 @@
             </NoRecordsContent>
         </MudDataGrid>
     </MudItem>
-    <MudItem xs="12" md="6" lg="7">
+    <MudItem xs="12" lg="7">
         @if (_editing)
         {
             <MudPaper Outlined="true" Class="pa-4 mb-3">
@@ -125,5 +125,8 @@
         Snackbar.Add(_selected is null ? $"Created {saved.DisplayName}. Add a cost rate next." : $"Saved {saved.DisplayName}.", Severity.Success);
         await LoadAsync();
         _selected = _employees.FirstOrDefault(e => e.Id == saved.Id) ?? saved;
+
+        // Save is a plain delegate (so the editor can catch errors), which doesn't re-render this page by itself.
+        StateHasChanged();
     }
 }

@@ -8,7 +8,7 @@
 
 <MudPaper Outlined="true" Class="pa-3 mb-3">
     <MudGrid Spacing="2">
-        <MudItem xs="12" sm="6" md="3">
+        <MudItem xs="12" sm="6" lg="3">
             <MudSelect T="string" @bind-Value="_entityType" Label="Entity type" Clearable="true" Dense="true" data-testid="audit-type">
                 @foreach (var type in _types)
                 {
@@ -16,17 +16,17 @@
                 }
             </MudSelect>
         </MudItem>
-        <MudItem xs="12" sm="6" md="3">
+        <MudItem xs="12" sm="6" lg="3">
             <MudTextField @bind-Value="_entityId" Label="Entity id" Clearable="true" Margin="Margin.Dense"
                           Validation="@(new Func<string?, string?>(v => string.IsNullOrWhiteSpace(v) || Guid.TryParse(v, out _) ? null : "Not a valid id."))" />
         </MudItem>
-        <MudItem xs="6" md="2">
+        <MudItem xs="6" lg="2">
             <MudDatePicker @bind-Date="_from" Label="From" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
         </MudItem>
-        <MudItem xs="6" md="2">
+        <MudItem xs="6" lg="2">
             <MudDatePicker @bind-Date="_to" Label="To" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" />
         </MudItem>
-        <MudItem xs="12" md="2" Class="d-flex align-center gap-2">
+        <MudItem xs="12" lg="2" Class="d-flex align-center gap-2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SearchAsync" data-testid="audit-search">Search</MudButton>
             <MudButton Variant="Variant.Text" OnClick="ResetAsync">Reset</MudButton>
         </MudItem>
