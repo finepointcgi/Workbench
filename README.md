@@ -57,6 +57,10 @@ Production deploys apply migrations as their own step, then start the host:
 dotnet Workbench.Web.dll --migrate
 ```
 
+Production runs from the container image (`Dockerfile`; `docker-compose.prod.yml` is a complete single-host example
+with PostgreSQL, the migrate job and a TLS proxy). Deployment, every configuration setting, key encryption, backups,
+monitoring, alerts and incident steps are in `docs/operations/` (start with `docs/operations/README.md`).
+
 Build and test everything except the desktop app:
 
 ```bash
@@ -125,6 +129,7 @@ validate, dry run, import; each job can be rolled back. Sample files and expecte
 - Users and security (`/admin/users`): users and roles, invites, quarterly access reviews, the security event log and
   records retention with legal holds. SCIM 2.0 provisioning at `/scim/v2/Users`; health at `/health/live` and
   `/health/ready`.
-- Backups: `scripts/backup.sh` / `scripts/restore.sh` and `docs/operations/backup-restore.md`.
+- Backups: `scripts/backup-all.sh` (encrypted, per database), `scripts/restore-test.sh` and
+  `docs/operations/backup-restore.md`; run `scripts/test-backup-restore.sh` locally.
 - `SECURITY.md` (reporting vulnerabilities), `docs/security/threat-model.md`, and the ISMS templates in `docs/iso/`
   (start with `docs/iso/README.md`).
