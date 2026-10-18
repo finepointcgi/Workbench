@@ -25,6 +25,9 @@ public enum WidgetType
 
     /// <summary>Ceiling, funded value and days left in the period of performance for one contract.</summary>
     ContractFunding,
+
+    /// <summary>CPI, SPI, EAC and the S-curve for the project whose plan sheet is <c>Config.SheetId</c> (Finance, Admin and its PM).</summary>
+    EarnedValue,
 }
 
 public enum WidgetHeight

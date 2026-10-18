@@ -34,6 +34,7 @@ else
         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Financials</MudChip>
         <MudSpacer />
         <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.EditNote">Budgets</MudButton>
+        <MudButton Href="@($"projects/{ProjectId}/evm")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ShowChart">Earned value</MudButton>
         <MudMenu Label="Export CSV" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download">
             <MudMenuItem OnClick="ExportWbsAsync">WBS financials</MudMenuItem>
             <MudMenuItem OnClick="ExportBurnAsync">Time-phased burn</MudMenuItem>
