@@ -1,0 +1,57 @@
+@* App bar menu for the signed-in user: name, email and sign out. *@
+@inject IUserDirectory Users
+@inject ISignOutService SignOut
+
+@if (_me is { } me)
+{
+    <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
+        <ActivatorContent>
+            @* A custom activator has to open the menu itself (MudBlazor 9). *@
+            <MudIconButton Color="Color.Inherit" OnClick="e => context.ToggleAsync(e)" aria-label="@($"Account: {me.DisplayName}")" Class="pa-1">
+                <MudAvatar Size="Size.Small" Color="Color.Secondary" Class="wb-user-avatar" title="@me.DisplayName">@Initials(me)</MudAvatar>
+            </MudIconButton>
+        </ActivatorContent>
+        <ChildContent>
+            <div class="px-4 py-2" style="min-width:220px">
+                <MudText Typo="Typo.subtitle2">@me.DisplayName</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@me.Email</MudText>
+                @if (me.IsAdmin)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-0 mt-1">Admin</MudChip>
+                }
+            </div>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOutAsync">Sign out</MudMenuItem>
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    private UserDto? _me;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _me = await Users.GetMeAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            // Not signed in (or the server is unreachable): show nothing.
+        }
+    }
+
+    private Task SignOutAsync() => SignOut.SignOutAsync();
+
+    private static string Initials(UserDto user)
+    {
+        var parts = user.DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var initials = parts.Length switch
+        {
+            0 => user.Email[..1],
+            1 => parts[0][..1],
+            _ => $"{parts[0][0]}{parts[1][0]}",
+        };
+        return initials.ToUpperInvariant();
+    }
+}

@@ -4,14 +4,17 @@
 @inject IAttachmentService Attachments
 @inject ISnackbar Snackbar
 
-<MudFileUpload T="IBrowserFile" @ref="_upload" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="_uploading" Class="mt-0">
-    <CustomContent>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.UploadFile"
-                   OnClick="@context.OpenFilePickerAsync" Disabled="_uploading">Upload file</MudButton>
-    </CustomContent>
-    <SelectedTemplate />
-</MudFileUpload>
-<MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Up to @(AttachmentRules.MaxSizeBytes / (1024 * 1024)) MB. Office documents, PDFs, images, text, email and zip files.</MudText>
+@if (CanEdit)
+{
+    <MudFileUpload T="IBrowserFile" @ref="_upload" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="_uploading" Class="mt-0">
+        <CustomContent>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.UploadFile"
+                       OnClick="@context.OpenFilePickerAsync" Disabled="_uploading">Upload file</MudButton>
+        </CustomContent>
+        <SelectedTemplate />
+    </MudFileUpload>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Up to @(AttachmentRules.MaxSizeBytes / (1024 * 1024)) MB. Office documents, PDFs, images, text, email and zip files.</MudText>
+}
 @if (_uploading)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
@@ -39,7 +42,10 @@ else
                         </MudText>
                     </div>
                     <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Download" Href="@Attachments.GetDownloadUrl(SheetId, file.Id)" aria-label="@($"Download {file.FileName}")" />
-                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" OnClick="() => DeleteAsync(file)" aria-label="@($"Remove {file.FileName}")" />
+                    @if (CanEdit)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" OnClick="() => DeleteAsync(file)" aria-label="@($"Remove {file.FileName}")" />
+                    }
                 </MudStack>
             </MudListItem>
         }
@@ -47,6 +53,12 @@ else
 }
 
 @code {
+    /// <summary>The user's role on the sheet; uploading and removing files needs Editor. Null means full access.</summary>
+    [CascadingParameter]
+    public Workbench.Ui.Views.SheetAccess? Access { get; set; }
+
+    private bool CanEdit => Access?.CanEdit ?? true;
+
     [Parameter, EditorRequired]
     public Guid SheetId { get; set; }
 
@@ -81,7 +93,7 @@ else
         {
             _attachments = await Attachments.ListAsync(SheetId, ItemId);
         }
-        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             _attachments = [];
             Snackbar.Add($"Couldn't load attachments: {ex.Message}", Severity.Error);
@@ -113,7 +125,7 @@ else
                 await Attachments.UploadAsync(SheetId, ItemId, file.Name, stream);
                 await LoadAsync();
             }
-            catch (Exception ex) when (ex is ArgumentException or IOException or HttpRequestException or WorkbenchNotFoundException)
+            catch (Exception ex) when (ex is ArgumentException or IOException or HttpRequestException or WorkbenchNotFoundException or UnauthorizedAccessException)
             {
                 Snackbar.Add($"Couldn't upload {file.Name}: {ex.Message}", Severity.Error);
             }
@@ -136,7 +148,7 @@ else
             await Attachments.DeleteAsync(SheetId, file.Id);
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add(ex.Message, Severity.Error);
         }

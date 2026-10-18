@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Sheets;
+using Workbench.Domain.Identity;
 
 namespace Workbench.Tests.Collaboration;
 
@@ -50,6 +52,15 @@ internal sealed class CollaborationHost : IAsyncDisposable
         return (sheetId, item);
     }
 
+    /// <summary>Gives <paramref name="email"/> a role in the sheet's workspace (the sheet's creator is its Owner).</summary>
+    public async Task AddMemberAsync(Guid sheetId, string email, WorkspaceRole role)
+    {
+        await using var db = await Get<IWorkbenchDbContextFactory>().CreateAsync();
+        var workspaceId = await db.Sheets.Where(s => s.Id == sheetId).Select(s => s.WorkspaceId).SingleAsync();
+        db.Set<WorkspaceMember>().Add(new WorkspaceMember { WorkspaceId = workspaceId, UserEmail = email, Role = role });
+        await db.SaveChangesAsync();
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _scope.DisposeAsync();
@@ -57,6 +68,7 @@ internal sealed class CollaborationHost : IAsyncDisposable
     }
 }
 
+/// <summary>A switchable signed-in user for service tests.</summary>
 internal sealed class TestUser : ICurrentUser
 {
     public string Email { get; set; } = "alice@example.com";

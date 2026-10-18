@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Domain;
+using Workbench.Domain.Identity;
 
 namespace Workbench.Infrastructure.Persistence;
 
@@ -15,6 +16,7 @@ public static class DatabaseInitializer
         var factory = services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>();
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         await db.Database.EnsureCreatedAsync(cancellationToken);
+        await SeedUsersAsync(db, cancellationToken);
 
         if (await db.Workspaces.AnyAsync(cancellationToken))
         {
@@ -77,6 +79,32 @@ public static class DatabaseInitializer
             Finish = i.ParentId is null ? i.Finish : i.Finish?.AddDays(-3),
         }));
         db.Add(original);
+
+        db.AddRange(
+            new WorkspaceMember { WorkspaceId = workspace.Id, UserEmail = "pm@example.com", Role = WorkspaceRole.Owner },
+            new WorkspaceMember { WorkspaceId = workspace.Id, UserEmail = "analyst@example.com", Role = WorkspaceRole.Editor },
+            new WorkspaceMember { WorkspaceId = workspace.Id, UserEmail = "viewer@example.com", Role = WorkspaceRole.Viewer });
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>The people offered by the development sign-in page. <c>dev@workbench.local</c> is an admin.</summary>
+    public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin)> DevUsers { get; } =
+    [
+        ("dev@workbench.local", "Dev Admin", true),
+        ("pm@example.com", "Pat Morgan (PM)", false),
+        ("analyst@example.com", "Alex Rivera (Analyst)", false),
+        ("viewer@example.com", "Val Chen (Viewer)", false),
+    ];
+
+    private static async Task SeedUsersAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
+    {
+        if (await db.Set<AppUser>().AnyAsync(cancellationToken))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        db.Set<AppUser>().AddRange(DevUsers.Select(u => new AppUser { Email = u.Email, DisplayName = u.DisplayName, IsAdmin = u.IsAdmin, CreatedAtUtc = now }));
         await db.SaveChangesAsync(cancellationToken);
     }
 }

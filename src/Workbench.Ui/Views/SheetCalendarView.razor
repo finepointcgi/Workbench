@@ -114,7 +114,7 @@
     private Color ColorOf(ItemDto item) =>
         _colorColumn is { } column ? BoardLanes.ColorFor(column, BoardLanes.ValueOf(item, column)) : Color.Primary;
 
-    private void StartAdd(DateOnly day) => _addingDate = day;
+    private void StartAdd(DateOnly day) => _addingDate = CanEdit ? day : null;
 
     private void Open(ItemDto item) => Navigation.NavigateTo($"sheets/{SheetId}?item={item.Id}");
 
@@ -134,7 +134,7 @@
             await ItemService.CreateAsync(SheetId, request);
             await Changed.InvokeAsync();
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't add the item: {ex.Message}", Severity.Error);
         }
