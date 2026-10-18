@@ -41,7 +41,13 @@ public static class Observability
     {
         if (builder.Configuration["SecretsDirectory"] is { Length: > 0 } secrets && Directory.Exists(secrets))
         {
-            builder.Configuration.AddKeyPerFile(secrets, optional: true);
+            // One file per key; files with a dot in their name (a mounted .pfx) aren't configuration.
+            builder.Configuration.AddKeyPerFile(source =>
+            {
+                source.FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(secrets);
+                source.Optional = true;
+                source.IgnoreCondition = name => name.Contains('.', StringComparison.Ordinal);
+            });
         }
 
         builder.Logging.AddConsoleFormatter<RedactingJsonConsoleFormatter, JsonConsoleFormatterOptions>();
@@ -373,7 +379,14 @@ public sealed class RedactingJsonConsoleFormatter(IOptionsMonitor<JsonConsoleFor
         }
 
         using var buffer = new MemoryStream();
-        using (var json = new Utf8JsonWriter(buffer, options.CurrentValue.JsonWriterOptions))
+        var writerOptions = options.CurrentValue.JsonWriterOptions;
+        if (writerOptions.Encoder is null)
+        {
+            // Log lines aren't HTML: keep '+', quotes and non-ASCII names readable instead of \u escapes.
+            writerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
+        }
+
+        using (var json = new Utf8JsonWriter(buffer, writerOptions))
         {
             json.WriteStartObject();
             json.WriteString("Timestamp", DateTimeOffset.UtcNow.ToString("O"));
