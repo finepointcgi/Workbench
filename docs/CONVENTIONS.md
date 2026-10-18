@@ -39,6 +39,7 @@ branches, so these rules keep merges small and predictable.
 - `MudText` uses `HtmlTag="h1"` (not `Component`). `MudTabs` uses `TabPanelsClass` (not `PanelClass`).
 - Avoid `Color.Secondary` for quiet text (it is pink); use `Class="mud-text-secondary"`.
 - Dialogs: `[CascadingParameter] IMudDialogInstance MudDialog`, `DialogService.ShowAsync<T>()`, `await dialog.Result`.
+- `MudMenu` with `ActivatorContent`: the activator must call `context.ToggleAsync(e)`; it isn't wired automatically.
 - Treat MudBlazor analyzer warnings (`MUD0002`) as errors: they flag removed parameters.
 
 ## Build and verify
@@ -95,3 +96,28 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
   affordances with it. A missing cascade means full access, so components still render in tests.
 - Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
   analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
+## Notifications (any feature)
+
+To tell someone something, inject `INotificationPublisher` (`Workbench.Application.Notifications`, a singleton) and
+call it **after** your change is saved:
+
+```csharp
+await notifications.PublishAsync(
+    approver.Email, NotificationKinds.TimesheetSubmitted,
+    $"{employee.Name} submitted a timesheet", "Week of Oct 12: 40.0 h",
+    link: $"time/approvals?week={weekStart:yyyy-MM-dd}");
+```
+
+- It saves the notification, pushes it live to the recipient's bell (and desktop app), and emails it according to the
+  recipient's preference: right away, in the daily digest (default), or not at all. You don't pick the delivery.
+- There's an overload taking several emails (each distinct valid email is notified once). Invalid or blank emails are
+  skipped, never thrown; delivery failures are logged, never thrown.
+- `kind`: a `NotificationKinds` constant (`timesheet.submitted/approved/rejected/missing`, `expense.approval`, ...) or
+  your own short lower-case string. `link` is app-relative (`time/...`); absolute URLs throw `ArgumentException`.
+  Pass `sheetId`/`itemId` instead of a link to point at a sheet item.
+- The actor isn't added for you: say who did what in the title. Don't notify people about their own actions.
+- For a raw email with no in-app notification, use `IEmailSender` with an `EmailMessage(to, subject, text, html)`.
+  Keep HTML plain and self-contained (no external images, fonts or styles); see `NotificationEmails` for the layout.
+- Scheduled checks (e.g. "timesheet missing for yesterday") belong in a `BackgroundService` registered from the web
+  host (like `DateTriggerBackgroundService`), so notifications reach the in-process bell. Make them idempotent.
+

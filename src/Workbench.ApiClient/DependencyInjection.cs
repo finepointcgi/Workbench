@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);
         services.AddProjectAccountingClients(serverBaseAddress);
         services.AddIdentityClients(serverBaseAddress);
+        services.AddAutomationClients(serverBaseAddress);
         return services;
     }
 }
