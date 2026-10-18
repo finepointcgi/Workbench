@@ -16,7 +16,8 @@ public sealed class ApprovalTodoProvider : IMyTodoProvider
 
     public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
     {
-        var inbox = await context.InboxAsync(cancellationToken);
+        // Leave requests have their own to-dos (due before the leave starts, with an inline Approve): not counted twice.
+        var inbox = (await context.InboxAsync(cancellationToken)).Where(i => i.DocumentType != ApprovalDocumentTypes.LeaveRequest).ToList();
         return inbox.Count == 0 ? [] : [For(inbox, context)];
     }
 

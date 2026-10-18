@@ -163,6 +163,7 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
         await LeaveEngine.SyncUsageAsync(db, ids, audit.Actor, UtcNow, ct);
         var policies = await db.Set<LeavePolicy>().AsNoTracking().Where(p => p.IsActive && p.Type != LeaveType.Holiday).OrderBy(p => p.Code).ToListAsync(ct);
         var codes = await LeavePolicyService.WbsCodesAsync(db, policies.Select(p => p.WbsElementId), ct);
+        var eligibility = await LeaveEligibility.LoadAsync(db, ids, ct);
         var balances = await LeaveEngine.BalancesAsync(db, ids, null, ct);
         var planned = await LeaveEngine.PlannedAsync(db, ids, null, null, ct);
         var yearStart = new DateOnly(Today.Year, 1, 1);
@@ -175,9 +176,9 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
             {
                 var key = (e.Id, p.Id);
                 var hasRows = balances.ContainsKey(key) || planned.ContainsKey(key) || yearRows.Any(r => r.EmployeeId == e.Id && r.PolicyId == p.Id);
-                if (p.Method == AccrualMethod.None && !hasRows)
+                if ((p.Method == AccrualMethod.None || !eligibility.Applies(p, e)) && !hasRows)
                 {
-                    continue;
+                    continue; // A policy that doesn't apply shows only while there's history in it (hours from before).
                 }
 
                 var balance = balances.GetValueOrDefault(key);

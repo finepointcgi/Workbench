@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts.Approvals;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
+using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -62,6 +63,17 @@ public static class ApprovalSubjects
     public static ApprovalSubject JournalEntry(JournalEntry entry) =>
         new(ApprovalDocumentTypes.JournalEntry, entry.Id, $"Journal entry {entry.Description}", entry.CreatedBy, $"accounting/journal/{entry.Id}",
             entry.Lines.Sum(l => l.Debit), entry.Description);
+
+    /// <summary>The amount is the hours requested; nothing is charged to a project, so routing is by the employee (supervisor, org unit).</summary>
+    public static async Task<ApprovalSubject> LeaveRequestAsync(IWorkbenchDbContext db, LeaveRequest request, CancellationToken ct)
+    {
+        var owner = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == request.EmployeeId, ct);
+        var policy = await db.Set<LeavePolicy>().AsNoTracking().Where(p => p.Id == request.PolicyId).Select(p => p.Name).FirstOrDefaultAsync(ct) ?? "Leave";
+        var range = request.StartDate == request.EndDate ? $"{request.StartDate:MMM d}" : $"{request.StartDate:MMM d}–{request.EndDate:MMM d}";
+        return new ApprovalSubject(ApprovalDocumentTypes.LeaveRequest, request.Id, $"{owner.DisplayName}: {policy} {range}",
+            owner.Email, "leave?tab=approvals", request.Hours, $"{request.Hours:0.##} h{(string.IsNullOrWhiteSpace(request.Comment) ? "" : $" · {request.Comment}")}",
+            owner.Id, [new ApprovalCharge(null, request.Hours, owner.OrgUnitId, "Leave")]);
+    }
 
     private static ApprovalCharge Charge(OdcEntry l, Guid? orgUnitId) =>
         new(l.ProjectId, l.Amount, orgUnitId, l.Type.ToString(), l.IsUnallowable);

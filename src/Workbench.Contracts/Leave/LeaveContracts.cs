@@ -17,6 +17,22 @@ public enum LeaveRequestState { Pending, Approved, Rejected, Cancelled }
 
 public sealed record AccrualTierDto(int MinYearsOfService, decimal Rate, decimal? MaxBalance = null);
 
+/// <summary>
+/// Who a policy applies to. Empty lists (and a null <see cref="Exempt"/>) mean everyone; an employee must match every
+/// criterion that is set, any of its values. Org units include their sub-units; pay group and employment type come from
+/// the employee's payroll profile (no profile: no pay group, full-time).
+/// </summary>
+public sealed record LeaveEligibilityDto(
+    IReadOnlyList<Guid> OrgUnitIds,
+    IReadOnlyList<Guid> PayGroupIds,
+    bool? Exempt,
+    IReadOnlyList<Payroll.EmploymentTypeKind> EmploymentTypes)
+{
+    public static readonly LeaveEligibilityDto Everyone = new([], [], null, []);
+
+    public bool IsEveryone => OrgUnitIds.Count == 0 && PayGroupIds.Count == 0 && Exempt is null && EmploymentTypes.Count == 0;
+}
+
 public sealed record LeavePolicyDto(
     Guid Id,
     string Code,
@@ -30,7 +46,8 @@ public sealed record LeavePolicyDto(
     decimal? CarryoverLimit,
     int WaitingPeriodDays,
     bool AllowNegativeBalance,
-    bool IsActive);
+    bool IsActive,
+    LeaveEligibilityDto? Eligibility = null);
 
 public sealed record SaveLeavePolicyRequest(
     string Code,
@@ -43,7 +60,8 @@ public sealed record SaveLeavePolicyRequest(
     decimal? CarryoverLimit = null,
     int WaitingPeriodDays = 0,
     bool AllowNegativeBalance = false,
-    bool IsActive = true);
+    bool IsActive = true,
+    LeaveEligibilityDto? Eligibility = null);
 
 /// <summary>Leave charge code a policy can map to.</summary>
 public sealed record LeaveChargeCodeDto(Guid WbsElementId, string Code, string Name);
@@ -54,6 +72,12 @@ public interface ILeavePolicyService
     Task<IReadOnlyList<LeavePolicyDto>> ListAsync(bool includeInactive = false, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<LeaveChargeCodeDto>> ListLeaveChargeCodesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What the signed-in employee can request: the active policies that apply to them, plus any they still have hours in
+    /// from before it stopped applying.
+    /// </summary>
+    Task<IReadOnlyList<LeavePolicyDto>> ListMineAsync(CancellationToken cancellationToken = default);
 
     Task<LeavePolicyDto> CreateAsync(SaveLeavePolicyRequest request, CancellationToken cancellationToken = default);
 
