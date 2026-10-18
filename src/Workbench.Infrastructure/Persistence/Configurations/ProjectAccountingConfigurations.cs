@@ -125,6 +125,7 @@ internal sealed class WbsElementConfiguration : IEntityTypeConfiguration<WbsElem
         b.HasOne<Project>().WithMany().HasForeignKey(w => w.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(w => w.ParentId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Item>().WithMany().HasForeignKey(w => w.ItemId).OnDelete(DeleteBehavior.SetNull);
+        b.HasOne<Clin>().WithMany().HasForeignKey(w => w.ClinId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -217,6 +218,8 @@ internal sealed class OdcEntryConfiguration : IEntityTypeConfiguration<OdcEntry>
         b.HasOne<Project>().WithMany().HasForeignKey(o => o.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(o => o.WbsElementId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Employee>().WithMany().HasForeignKey(o => o.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Workbench.Domain.Purchasing.Vendor>().WithMany().HasForeignKey(o => o.VendorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Workbench.Domain.Purchasing.Subcontract>().WithMany().HasForeignKey(o => o.SubcontractId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

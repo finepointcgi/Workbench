@@ -28,6 +28,12 @@ public sealed class OdcEntry : Entity
     public decimal Amount { get; set; }
     public required string Description { get; set; }
     public string? Vendor { get; set; }
+
+    /// <summary>The vendor record, when known (vendor ODCs and AP bills). <see cref="Vendor"/> stays as the display name.</summary>
+    public Guid? VendorId { get; set; }
+
+    /// <summary>Set when the cost comes from a subcontract invoice.</summary>
+    public Guid? SubcontractId { get; set; }
     public string? InvoiceNumber { get; set; }
 
     /// <summary>Employee who incurred it (expenses); null for vendor ODCs such as subcontract invoices.</summary>
