@@ -210,7 +210,7 @@ public interface IPostingService
 
 // ---- Period close ----
 
-public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted }
+public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted, UnbilledAccrual }
 
 public sealed record CloseCheckDto(CloseCheckKind Kind, string Title, bool Passed, int Count, string Summary, IReadOnlyList<string> Details);
 

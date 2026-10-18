@@ -1,0 +1,15 @@
+@* A name, address and code block on a printed invoice. *@
+<div>@Value.Name</div>
+@if (Value.Address is not null)
+{
+    <div style="white-space:pre-line">@Value.Address</div>
+}
+@if (!string.IsNullOrEmpty(Value.Code))
+{
+    <div style="font-size:11px; color:#444">@Value.Code</div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public InvoicePartyDto Value { get; set; } = default!;
+}

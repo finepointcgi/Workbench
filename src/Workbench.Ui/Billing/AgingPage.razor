@@ -1,0 +1,87 @@
+@page "/billing/aging"
+@inject IArReportService Ar
+@inject ISnackbar Snackbar
+
+<PageTitle>AR aging · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="Accounts receivable aging" Subtitle="Open invoice balances by days past due, by customer and by contract.">
+    <MudDatePicker Label="As of" Date="_asOf" DateChanged="AsOfChanged" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="RemindAsync">Send overdue reminders</MudButton>
+</BillingHeader>
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_aging is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By customer</MudText>
+    <AgingRows Rows="_aging.Customers" Totals="_aging.Totals" TestId="aging-customers" />
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By contract</MudText>
+    <AgingRows Rows="_aging.Contracts" Totals="_aging.Totals" ShowContract="true" TestId="aging-contracts" />
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Open invoices</MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>Invoice</th><th>Customer</th><th>Contract</th><th>Invoice date</th><th>Due</th><th style="text-align:right">Days past due</th><th style="text-align:right">Balance</th></tr></thead>
+            <tbody>
+                @foreach (var i in _aging.Invoices)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"billing/invoices/{i.Id}")">@i.Number</MudLink></td>
+                        <td>@i.CustomerName</td>
+                        <td>@i.ContractNumber</td>
+                        <td>@BillingFormat.Date(i.InvoiceDate)</td>
+                        <td>@BillingFormat.Date(i.DueDate)</td>
+                        <td style="text-align:right" class="@(i.DaysPastDue > 0 ? "mud-error-text" : "")">@(i.DaysPastDue > 0 ? i.DaysPastDue.ToString(CultureInfo.InvariantCulture) : "current")</td>
+                        <td style="text-align:right">@BillingFormat.Amount(i.Balance)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private ArAgingDto? _aging;
+    private DateTime? _asOf = DateTime.Today;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task AsOfChanged(DateTime? date)
+    {
+        _asOf = date;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _aging = await Ar.GetAgingAsync(_asOf is { } d ? DateOnly.FromDateTime(d) : null);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RemindAsync()
+    {
+        try
+        {
+            var sent = await Ar.SendOverdueRemindersAsync();
+            Snackbar.Add(sent == 0 ? "No new overdue reminders to send." : $"Sent {sent} overdue reminder{(sent == 1 ? "" : "s")} to Finance.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

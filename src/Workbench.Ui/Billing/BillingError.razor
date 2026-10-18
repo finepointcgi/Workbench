@@ -1,0 +1,12 @@
+@* Shown when a billing page can't load; explains who may use billing when the server refused. *@
+<MudAlert Severity="@(Forbidden ? Severity.Info : Severity.Error)" Class="mb-4" data-testid="load-error">
+    @(Forbidden ? "Billing is for Finance and administrators; project managers can open the invoices of their own contracts." : Message)
+</MudAlert>
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public bool Forbidden { get; set; }
+}

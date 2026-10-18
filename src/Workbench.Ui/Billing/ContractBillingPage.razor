@@ -1,0 +1,243 @@
+@page "/billing/contracts/{ContractId:guid}"
+@inject IInvoiceService Invoices
+@inject IBillingMilestoneService Milestones
+@inject ICurrentUserContext UserContext
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_contract?.ContractNumber ?? "Contract") · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="@(_contract is null ? "Contract billing" : $"{_contract.ContractNumber} · {_contract.Name}")">
+    <MudButton Variant="Variant.Outlined" Href="billing/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">All contracts</MudButton>
+    @if (_isFinance && _contract is not null)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@($"billing/new?contract={ContractId}")">New invoice</MudButton>
+    }
+</BillingHeader>
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_milestones is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="7">
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">FFP milestones</MudText>
+                    <MudSpacer />
+                    @if (_isFinance && FfpClins.Count > 0)
+                    {
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="add-milestone">Add milestone</MudButton>
+                    }
+                </MudStack>
+                @if (FfpClins.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">This contract has no firm-fixed-price CLINs, so it has no billing milestones.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true" data-testid="milestones">
+                        <thead><tr><th>CLIN</th><th>Milestone</th><th>Planned</th><th>Completed</th><th style="text-align:right">Amount</th><th>Billed on</th><th></th></tr></thead>
+                        <tbody>
+                            @if (_milestones.Count == 0)
+                            {
+                                <tr><td colspan="7" class="mud-text-secondary">No milestones yet.</td></tr>
+                            }
+                            @foreach (var m in _milestones)
+                            {
+                                <tr>
+                                    <td>@m.ClinNumber</td>
+                                    <td>@m.Description</td>
+                                    <td>@BillingFormat.Date(m.PlannedDate)</td>
+                                    <td>@BillingFormat.Date(m.CompletedDate)</td>
+                                    <td style="text-align:right">@BillingFormat.Amount(m.Amount)</td>
+                                    <td>@if (m.InvoiceId is { } inv) { <MudLink Href="@($"billing/invoices/{inv}")">@m.InvoiceNumber</MudLink> }</td>
+                                    <td style="white-space:nowrap">
+                                        @if (_isFinance && !m.IsBilled)
+                                        {
+                                            @if (m.CompletedDate is null)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CompleteAsync(m)">Complete</MudButton>
+                                            }
+                                            else
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ReopenAsync(m)">Reopen</MudButton>
+                                            }
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit milestone" OnClick="() => EditAsync(m)" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete milestone" OnClick="() => DeleteAsync(m)" />
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Completed, unbilled milestones go on the next FFP milestone invoice.</MudText>
+                }
+            </MudPaper>
+
+            @if (_isFinance && _settings is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Billing settings</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6"><MudTextField @bind-Value="_prefix" Label="Invoice number prefix" HelperText="Invoices are numbered PREFIX-0001, -0002, ..." /></MudItem>
+                        <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_withholdPercent" Label="Fee withhold %" Min="0" Max="100" HideSpinButtons="true" HelperText="Of fee, until final" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_withholdCap" Label="Withhold cap" Min="0" HideSpinButtons="true" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_handlingPercent" Label="Material handling %" Min="0" Max="100" HideSpinButtons="true" HelperText="T&M materials" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudNumericField T="int?" @bind-Value="_terms" Label="Payment terms (days)" Min="0" Max="365" HideSpinButtons="true" HelperText="@($"Blank: the customer's {_customerTerms}")" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudNumericField T="int" @bind-Value="_customerTerms" Label="Customer default terms" Min="0" Max="365" HideSpinButtons="true" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudTextField @bind-Value="_cage" Label="CAGE code" MaxLength="5" /></MudItem>
+                        <MudItem xs="12" sm="6"><MudTextField @bind-Value="_paying" Label="Paying office (DoDAAC)" /></MudItem>
+                        <MudItem xs="12" sm="6"><MudTextField @bind-Value="_admin" Label="Contract administration office" /></MudItem>
+                        <MudItem xs="12"><MudTextField @bind-Value="_address" Label="Customer billing address" Lines="2" /></MudItem>
+                    </MudGrid>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettingsAsync" Disabled="_busy">Save settings</MudButton>
+                </MudPaper>
+            }
+        </MudItem>
+        <MudItem xs="12" lg="5">
+            <BilledToDateCard ContractId="ContractId" @key="_refresh" />
+            @if (_contract is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mt-3">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">CLINs</MudText>
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <thead><tr><th>CLIN</th><th>Pricing</th><th style="text-align:right">Fee</th><th style="text-align:right">Funded</th><th style="text-align:right">Ceiling</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _contract.Clins)
+                            {
+                                <tr>
+                                    <td>@c.Number<div class="mud-text-secondary">@c.Description@(c.IsExercised ? "" : " (unexercised option)")</div></td>
+                                    <td>@c.Pricing</td>
+                                    <td style="text-align:right">@(c.FeeRate is { } f ? BillingFormat.Percent(f) : "")</td>
+                                    <td style="text-align:right">@BillingFormat.Amount(c.FundedValue)</td>
+                                    <td style="text-align:right">@BillingFormat.Amount(c.CeilingValue)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid ContractId { get; set; }
+
+    private BillingContractDto? _contract;
+    private IReadOnlyList<BillingMilestoneDto>? _milestones;
+    private ContractBillingSettingsDto? _settings;
+    private bool _isFinance;
+    private bool _busy;
+    private int _refresh;
+    private string? _error;
+    private bool _forbidden;
+    private string? _prefix;
+    private decimal _withholdPercent;
+    private decimal? _withholdCap;
+    private decimal _handlingPercent;
+    private int? _terms;
+    private int _customerTerms = 30;
+    private string? _cage;
+    private string? _paying;
+    private string? _admin;
+    private string? _address;
+
+    private IReadOnlyList<BillingClinDto> FfpClins => _contract?.Clins.Where(c => c.Pricing == "FFP").ToList() ?? [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _isFinance = (await UserContext.GetAsync()).IsFinance;
+            _contract = (await Invoices.ListBillingContractsAsync()).FirstOrDefault(c => c.Id == ContractId)
+                ?? throw new WorkbenchNotFoundException("That contract doesn't exist or you can't see it.");
+            _milestones = await Milestones.ListAsync(ContractId);
+            if (_isFinance)
+            {
+                Apply(await Invoices.GetSettingsAsync(ContractId));
+            }
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Apply(ContractBillingSettingsDto s)
+    {
+        _settings = s;
+        _prefix = s.InvoicePrefix;
+        _withholdPercent = s.FeeWithholdRate * 100;
+        _withholdCap = s.FeeWithholdCap;
+        _handlingPercent = (s.MaterialHandlingRate ?? 0) * 100;
+        _terms = s.PaymentTermsDays;
+        _customerTerms = s.CustomerPaymentTermsDays;
+        _cage = s.CageCode;
+        _paying = s.PayingOffice;
+        _admin = s.AdminOffice;
+        _address = s.CustomerBillingAddress;
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        _busy = true;
+        try
+        {
+            Apply(await Invoices.SaveSettingsAsync(ContractId, new SaveContractBillingSettingsRequest(
+                _prefix ?? "", _withholdPercent / 100, _withholdCap, _handlingPercent / 100, _terms, _paying, _admin, _cage, _customerTerms, _address ?? "")));
+            Snackbar.Add("Billing settings saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private async Task ReloadMilestonesAsync()
+    {
+        _milestones = await Milestones.ListAsync(ContractId);
+        _refresh++;
+    }
+
+    private async Task RunAsync(Func<Task> action, string done)
+    {
+        try
+        {
+            await action();
+            await ReloadMilestonesAsync();
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(BillingMilestoneDto? milestone)
+    {
+        var dialog = await DialogService.ShowAsync<MilestoneDialog>(milestone is null ? "Add milestone" : "Edit milestone",
+            new DialogParameters<MilestoneDialog> { { d => d.Clins, FfpClins }, { d => d.Milestone, milestone } });
+        if (await dialog.Result is { Canceled: false, Data: SaveMilestoneRequest request })
+        {
+            await RunAsync(() => milestone is null ? Milestones.CreateAsync(ContractId, request) : Milestones.UpdateAsync(milestone.Id, request), "Milestone saved.");
+        }
+    }
+
+    private Task CompleteAsync(BillingMilestoneDto m) =>
+        RunAsync(() => Milestones.CompleteAsync(m.Id, new CompleteMilestoneRequest(DateOnly.FromDateTime(DateTime.Today))), $"\"{m.Description}\" completed; it's ready to bill.");
+
+    private Task ReopenAsync(BillingMilestoneDto m) => RunAsync(() => Milestones.ReopenAsync(m.Id), "Milestone reopened.");
+
+    private Task DeleteAsync(BillingMilestoneDto m) => RunAsync(() => Milestones.DeleteAsync(m.Id), "Milestone deleted.");
+}

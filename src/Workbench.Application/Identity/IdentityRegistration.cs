@@ -64,6 +64,7 @@ public static class IdentityRegistration
         services.AddWorkbenchAccountingPermissions(); // General ledger (accounting branch): Finance or Admin only on all five GL services.
         services.AddWorkbenchContractDetailPermissions(); // Contract detail: reads Finance/Admin/PM on the contract, writes Finance/Admin.
         services.AddWorkbenchIndirectRatePermissions(); // Indirect rates: Finance or Admin; burdened cost: Finance, Admin or the project's PM.
+        services.AddScoped<BillingAccess>(); services.AddWorkbenchBillingPermissions(); // Billing/AR: Finance or Admin; PMs read their contracts' invoices.
         return services;
     }
 
