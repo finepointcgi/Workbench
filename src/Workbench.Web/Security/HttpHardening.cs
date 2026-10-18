@@ -26,6 +26,10 @@ public static class RateLimiting
                     context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }
 
+                // A body keeps the status-code pages from turning the 429 into a sign-in redirect.
+                context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+                await context.HttpContext.Response.WriteAsync("Too many requests. Try again in a minute.", cancellationToken);
+
                 var log = context.HttpContext.RequestServices.GetRequiredService<SecurityEventLog>();
                 await log.RecordAsync(SecurityEventTypes.RateLimited, context.HttpContext.Request.Path, SecurityOutcomes.Denied,
                     actor: ClaimsUser.EmailOf(context.HttpContext.User) ?? "anonymous", cancellationToken: CancellationToken.None);
