@@ -1,0 +1,261 @@
+@page "/expenses/{ReportId:guid}"
+@using Workbench.Contracts.Odcs
+@using Workbench.Ui.Odcs
+@inject IExpenseReportService Reports
+@inject IOdcService Odcs
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@(_detail?.Report.Title ?? "Expense report") · Workbench</PageTitle>
+
+<MudBreadcrumbs Items="_crumbs" Class="px-0 pt-0" />
+
+@if (_detail is null)
+{
+    <MudProgressLinear Indeterminate="@_loading" />
+}
+else
+{
+    var report = _detail.Report;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@report.Title</MudText>
+        <OdcStatusChip Status="report.Status" />
+        <MudSpacer />
+        @if (report.IsEditable)
+        {
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditReportAsync">Edit details</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteReportAsync">Delete</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync"
+                       Disabled="@(_detail.Lines.Count == 0 || _busy)">Submit for approval</MudButton>
+        }
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        @report.EmployeeName
+        @if (Expenses.TripText(report) is { Length: > 0 } trip)
+        {
+            <text> · @trip</text>
+        }
+        @if (report.Purpose is { } purpose)
+        {
+            <text> · @purpose</text>
+        }
+    </MudText>
+
+    @if (report.Status == OdcApprovalState.Rejected && report.RejectionReason is { } reason)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">Rejected: @reason. Fix the lines and submit again.</MudAlert>
+    }
+    else if (report.Status == OdcApprovalState.Submitted)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">Submitted @report.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") UTC; waiting for your supervisor.</MudAlert>
+    }
+    else if (report.Status == OdcApprovalState.Approved)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-3">Approved by @report.ApprovedBy. The report is locked; your approver can reopen it for corrections.</MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="px-2">
+            <MudText Typo="Typo.h6">Lines</MudText>
+            <MudSpacer />
+            @if (report.IsEditable)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLineAsync">Add line</MudButton>
+            }
+        </MudStack>
+        <MudTable T="OdcEntryDto" Items="_detail.Lines" Dense="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Charge code</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh Style="text-align:right">Amount</MudTh>
+                <MudTh>Receipt</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Date">@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
+                <MudTd DataLabel="Type">@context.Type</MudTd>
+                <MudTd DataLabel="Charge code">@context.WbsCode</MudTd>
+                <MudTd DataLabel="Description">
+                    @context.Description
+                    @if (context.Vendor is { } vendor)
+                    {
+                        <span class="mud-text-secondary"> · @vendor</span>
+                    }
+                    @if (context.IsUnallowable)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" title="@context.UnallowableReason">Unallowable</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Amount" Style="text-align:right">@OdcFormat.Money(context.Amount)</MudTd>
+                <MudTd DataLabel="Receipt">
+                    @if (context.ReceiptFileId is not null)
+                    {
+                        <MudLink Href="@Odcs.GetReceiptUrl(context.Id)" Typo="Typo.body2" download="@context.ReceiptFileName">@context.ReceiptFileName</MudLink>
+                    }
+                    else if (context.Amount >= _threshold)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error">Required</MudText>
+                    }
+                    @if (report.IsEditable)
+                    {
+                        <ReceiptUpload Label="@(context.ReceiptFileId is null ? "Attach receipt" : "Replace")" OnUpload="(name, stream) => UploadReceiptAsync(context, name, stream)" />
+                    }
+                </MudTd>
+                <MudTd Style="white-space:nowrap">
+                    @if (report.IsEditable)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" OnClick="() => EditLineAsync(context)" aria-label="Edit line" />
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" OnClick="() => RemoveLineAsync(context)" aria-label="Remove line" />
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No lines yet. Add airfare, lodging, meals and other trip costs.</MudText>
+            </NoRecordsContent>
+            <FooterContent>
+                <MudTd colspan="4" Style="text-align:right"><b>Total</b> (allowable @OdcFormat.Money(report.AllowableTotal))</MudTd>
+                <MudTd Style="text-align:right"><b>@OdcFormat.Money(report.Total)</b></MudTd>
+                <MudTd colspan="2"></MudTd>
+            </FooterContent>
+        </MudTable>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block px-2 pb-1">Receipts are required for lines of @OdcFormat.Money(_threshold) or more.</MudText>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid ReportId { get; set; }
+
+    private ExpenseReportDetailDto? _detail;
+    private decimal _threshold = 75m;
+    private bool _loading = true;
+    private bool _busy;
+    private List<BreadcrumbItem> _crumbs = [new("Expenses", "expenses")];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _threshold = (await Odcs.GetPolicyAsync()).ReceiptThreshold;
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _detail = await Reports.GetReportAsync(ReportId);
+            _crumbs = [new("Expenses", "expenses"), new(_detail.Report.Title, null, disabled: true)];
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<bool> RunAsync(Func<Task> action, string? success = null)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            if (success is not null)
+            {
+                Snackbar.Add(success, Severity.Success);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+            await LoadAsync();
+        }
+    }
+
+    private async Task<SaveExpenseLineRequest?> AskLineAsync(OdcEntryDto? existing)
+    {
+        var parameters = new DialogParameters<ExpenseLineDialog>
+        {
+            { d => d.EmployeeId, _detail!.Report.EmployeeId },
+            { d => d.Existing, existing },
+            { d => d.DefaultDate, _detail.Report.TripStart },
+            { d => d.ReceiptThreshold, _threshold },
+        };
+        var dialog = await DialogService.ShowAsync<ExpenseLineDialog>(existing is null ? "Add expense line" : "Edit expense line", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        return await dialog.Result is { Canceled: false, Data: SaveExpenseLineRequest request } ? request : null;
+    }
+
+    private async Task AddLineAsync()
+    {
+        if (await AskLineAsync(null) is { } request)
+        {
+            await RunAsync(() => Reports.AddLineAsync(ReportId, request));
+        }
+    }
+
+    private async Task EditLineAsync(OdcEntryDto line)
+    {
+        if (await AskLineAsync(line) is { } request)
+        {
+            await RunAsync(() => Reports.UpdateLineAsync(ReportId, line.Id, request));
+        }
+    }
+
+    private Task RemoveLineAsync(OdcEntryDto line) => RunAsync(() => Reports.RemoveLineAsync(ReportId, line.Id));
+
+    private async Task UploadReceiptAsync(OdcEntryDto line, string fileName, Stream content)
+    {
+        await Reports.AttachReceiptAsync(ReportId, line.Id, fileName, content);
+        Snackbar.Add($"Attached {fileName}.", Severity.Success);
+        await LoadAsync();
+
+        // Called from ReceiptUpload's delegate, which doesn't re-render this page by itself.
+        StateHasChanged();
+    }
+
+    private async Task EditReportAsync()
+    {
+        var parameters = new DialogParameters<ExpenseReportDialog> { { d => d.Existing, _detail!.Report } };
+        var dialog = await DialogService.ShowAsync<ExpenseReportDialog>("Edit expense report", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveExpenseReportRequest request })
+        {
+            await RunAsync(() => Reports.UpdateReportAsync(ReportId, request));
+        }
+    }
+
+    private async Task DeleteReportAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete expense report", $"Delete \"{_detail!.Report.Title}\" and its lines?", yesText: "Delete", cancelText: "Cancel") == true)
+        {
+            try
+            {
+                await Reports.DeleteReportAsync(ReportId);
+                Navigation.NavigateTo("expenses");
+            }
+            catch (Exception ex) when (OdcFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private Task SubmitAsync() => RunAsync(() => Reports.SubmitAsync(ReportId), "Submitted to your supervisor for approval.");
+}

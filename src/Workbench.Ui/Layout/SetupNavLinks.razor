@@ -1,0 +1,33 @@
+@* The Setup group, for Finance and administrators only. Pages under /setup check again (SetupLayout). *@
+@inject ICurrentUserContext CurrentUser
+
+@if (_show)
+{
+    <MudNavGroup Title="Setup" Icon="@Icons.Material.Filled.Settings">
+        <MudNavLink Href="setup" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Checklist">Getting started</MudNavLink>
+        <MudNavLink Href="setup/people" Icon="@Icons.Material.Filled.People">People</MudNavLink>
+        <MudNavLink Href="setup/org-units" Icon="@Icons.Material.Filled.AccountTree">Org units</MudNavLink>
+        <MudNavLink Href="setup/labor-categories" Icon="@Icons.Material.Filled.Badge">Labor categories</MudNavLink>
+        <MudNavLink Href="setup/customers" Icon="@Icons.Material.Filled.Business">Customers</MudNavLink>
+        <MudNavLink Href="setup/contracts" Icon="@Icons.Material.Filled.Description">Contracts</MudNavLink>
+        <MudNavLink Href="setup/projects" Icon="@Icons.Material.Filled.Work">Projects</MudNavLink>
+        <MudNavLink Href="setup/fiscal-calendar" Icon="@Icons.Material.Filled.CalendarMonth">Fiscal calendar</MudNavLink>
+        <MudNavLink Href="setup/audit" Icon="@Icons.Material.Filled.History">Audit log</MudNavLink>
+    </MudNavGroup>
+}
+
+@code {
+    private bool _show;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _show = (await CurrentUser.GetAsync()).IsFinance;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _show = false;
+        }
+    }
+}

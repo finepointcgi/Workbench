@@ -25,14 +25,14 @@ else
                             @CommentView(reply)
                         }
                     </MudStack>
-                    @if (_replyingTo == comment.Id)
+                    @if (CanComment && _replyingTo == comment.Id)
                     {
                         <div class="mt-2">
                             <MentionComposer People="People" Placeholder="Write a reply" SubmitText="Reply" Lines="1"
                                              OnSubmit="text => CreateAsync(text, comment.Id)" OnCancel="() => _replyingTo = null" />
                         </div>
                     }
-                    else
+                    else if (CanComment)
                     {
                         <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Reply"
                                    OnClick="() => _replyingTo = comment.Id">Reply</MudButton>
@@ -41,10 +41,19 @@ else
             </div>
         }
     </MudStack>
-    <MentionComposer People="People" OnSubmit="text => CreateAsync(text, null)" />
+    @if (CanComment)
+    {
+        <MentionComposer People="People" OnSubmit="text => CreateAsync(text, null)" />
+    }
 }
 
 @code {
+    /// <summary>The user's role on the sheet; writing comments needs Commenter. Null means full access.</summary>
+    [CascadingParameter]
+    public Workbench.Ui.Views.SheetAccess? Access { get; set; }
+
+    private bool CanComment => Access?.CanComment ?? true;
+
     [Parameter, EditorRequired]
     public Guid SheetId { get; set; }
 
@@ -84,7 +93,7 @@ else
         {
             _comments = await Comments.ListAsync(SheetId, ItemId);
         }
-        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             _comments = [];
             Snackbar.Add($"Couldn't load comments: {ex.Message}", Severity.Error);
@@ -100,7 +109,7 @@ else
             await LoadAsync();
             return true;
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
         {
             Snackbar.Add(ex.Message, Severity.Error);
             return false;
@@ -147,7 +156,7 @@ else
                         @CollaborationFormat.Ago(comment.CreatedAtUtc, DateTime.UtcNow)@(comment.EditedAtUtc is null ? "" : " · edited")
                     </MudText>
                     <MudSpacer />
-                    @if (comment.CanEdit && _editing != comment.Id)
+                    @if (comment.CanEdit && CanComment && _editing != comment.Id)
                     {
                         <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" aria-label="Edit comment" OnClick="() => _editing = comment.Id" />
                         <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" aria-label="Delete comment" OnClick="() => DeleteAsync(comment.Id)" />

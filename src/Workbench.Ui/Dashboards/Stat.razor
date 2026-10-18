@@ -1,0 +1,13 @@
+<MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@Label</MudText>
+<MudText Typo="Typo.h6" Color="Color">@Value</MudText>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter]
+    public Color Color { get; set; } = Color.Default;
+}

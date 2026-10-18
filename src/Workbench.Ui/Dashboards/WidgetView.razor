@@ -1,0 +1,184 @@
+@using System.Globalization
+@using Workbench.Contracts.Dashboards
+
+@* Renders computed widget data. Layout (card, title, edit controls) belongs to the dashboard page. *@
+
+@if (Data is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+}
+else if (Data.Error is { } error)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" data-widget-error>@error</MudAlert>
+}
+else
+{
+    switch (Data.Type)
+    {
+        case WidgetType.Metric when Data.Metric is { } m:
+            <div class="d-flex flex-column justify-center" style="height:100%">
+                <MudText Typo="Typo.h4" data-metric-value>@FormatNumber(m.Value, m.IsCurrency)</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@m.Label</MudText>
+                @if (m.Label.StartsWith("Items", StringComparison.Ordinal) is false)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">over @m.ItemCount item@(m.ItemCount == 1 ? "" : "s")</MudText>
+                }
+            </div>
+            break;
+
+        case WidgetType.Chart when Data.Chart is { } c:
+            @if (c.Values.All(v => v == 0))
+            {
+                <MudText Class="mud-text-secondary">No data to chart yet.</MudText>
+            }
+            else
+            {
+                <MudChart T="double" ChartType="@ChartTypeFor(c.Kind)" ChartSeries="@Series(c)" ChartLabels="@c.Labels.ToArray()"
+                          ChartOptions="@OptionsFor(c)" Width="100%" Height="@ChartHeight" LegendPosition="Position.Bottom" />
+            }
+            break;
+
+        case WidgetType.ItemList when Data.ItemList is { } list:
+            @if (list.Items.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">No matching items.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+                    <tbody>
+                        @foreach (var row in list.Items)
+                        {
+                            <tr @key="row.ItemId">
+                                <td><MudLink Href="@($"sheets/{Data.SheetId}?item={row.ItemId}")" Typo="Typo.body2">@row.Title</MudLink></td>
+                                <td class="mud-text-secondary" style="white-space:nowrap">@(row.Finish?.ToString("d MMM") ?? "—")</td>
+                                <td>@if (row.Status is { } s) { <MudChip T="string" Size="Size.Small">@s</MudChip> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                @if (list.Total > list.Items.Count)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Showing @list.Items.Count of @list.Total</MudText>
+                }
+            }
+            break;
+
+        case WidgetType.ScheduleHealth when Data.Schedule is { } s:
+            <MudGrid Spacing="2">
+                <MudItem xs="4"><Stat Label="Critical tasks" Value="@s.CriticalTasks.ToString()" /></MudItem>
+                <MudItem xs="4"><Stat Label="Late tasks" Value="@s.LateTasks.ToString()" Color="@(s.LateTasks > 0 ? Color.Error : Color.Default)" /></MudItem>
+                <MudItem xs="4"><Stat Label="Finish" Value="@(s.ProjectFinish?.ToString("d MMM yyyy") ?? "—")" /></MudItem>
+            </MudGrid>
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Next milestones</MudText>
+            @if (s.NextMilestones.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No upcoming milestones.</MudText>
+            }
+            else
+            {
+                @foreach (var milestone in s.NextMilestones)
+                {
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.Diamond" Size="Size.Small" Color="Color.Primary" />
+                        <MudLink Href="@($"sheets/{Data.SheetId}?item={milestone.ItemId}")" Typo="Typo.body2">@milestone.Title</MudLink>
+                        <MudSpacer />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@milestone.Date.ToString("d MMM")</MudText>
+                    </MudStack>
+                }
+            }
+            break;
+
+        case WidgetType.ContractFunding when Data.ContractFunding is { } f:
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                @f.ContractNumber · @f.CustomerName · @f.Status
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mb-1">@f.Name</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="4"><Stat Label="Ceiling" Value="@FormatNumber(f.CeilingValue, true)" /></MudItem>
+                <MudItem xs="4"><Stat Label="Funded" Value="@FormatNumber(f.FundedValue, true)" /></MudItem>
+                <MudItem xs="4">
+                    <Stat Label="Days left" Value="@f.DaysLeft.ToString("N0", Culture)"
+                          Color="@(f.DaysLeft == 0 ? Color.Error : f.DaysLeft <= 90 ? Color.Warning : Color.Default)" />
+                </MudItem>
+            </MudGrid>
+            @if (f.FundedShare is { } share)
+            {
+                <MudProgressLinear Value="@((double)Math.Min(share, 1m) * 100)" Color="Color.Primary" Class="mt-2" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@share.ToString("P0", Culture) of ceiling funded</MudText>
+            }
+            <MudProgressLinear Value="@(f.PeriodElapsed * 100)" Color="@(f.PeriodElapsed > 0.9 ? Color.Warning : Color.Info)" Class="mt-2" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                Period of performance @f.PeriodStart.ToString("d MMM yyyy") – @f.PeriodEnd.ToString("d MMM yyyy")
+                (@f.PeriodElapsed.ToString("P0", Culture) elapsed)
+            </MudText>
+            @if (f.Projects.Count > 0)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Projects: @string.Join(", ", f.Projects)</MudText>
+            }
+            break;
+
+        case WidgetType.ProjectFinancials when Data.ProjectFinancials is { } pf:
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                @pf.ProjectCode · @pf.ProjectName@(pf.BudgetVersionName is { } v ? $" · {v}" : "")
+            </MudText>
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="6" sm="3"><Stat Label="Budget" Value="@FormatNumber(pf.Totals.BudgetAmount, true)" /></MudItem>
+                <MudItem xs="6" sm="3"><Stat Label="Actual" Value="@FormatNumber(pf.Totals.ActualCost, true)" /></MudItem>
+                <MudItem xs="6" sm="3"><Stat Label="EAC" Value="@FormatNumber(pf.Totals.EacAmount, true)" /></MudItem>
+                <MudItem xs="6" sm="3">
+                    <Stat Label="VAC" Value="@FormatNumber(pf.Totals.VacAmount, true)" Color="@(pf.Totals.VacAmount < 0 ? Color.Error : Color.Default)" />
+                </MudItem>
+            </MudGrid>
+            @if (pf.Totals.PercentSpent is { } spent)
+            {
+                <MudProgressLinear Value="@((double)Math.Min(spent, 1m) * 100)" Color="@(spent > 1m ? Color.Error : spent > 0.9m ? Color.Warning : Color.Primary)" Class="mt-2" data-financials-spent />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@spent.ToString("P0", Culture) of budget spent</MudText>
+            }
+            <MudLink Href="@($"projects/{pf.ProjectId}/financials")" Typo="Typo.caption">Open financials</MudLink>
+            break;
+
+        case WidgetType.RichText:
+            <MarkdownView Source="@Data.Markdown" />
+            break;
+    }
+}
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-US");
+
+    [Parameter]
+    public WidgetDataDto? Data { get; set; }
+
+    [Parameter]
+    public string ChartHeight { get; set; } = "220px";
+
+    private static ChartType ChartTypeFor(ChartKind kind) => kind switch
+    {
+        ChartKind.Pie => ChartType.Pie,
+        ChartKind.Donut => ChartType.Donut,
+        ChartKind.Line => ChartType.Line,
+        _ => ChartType.Bar,
+    };
+
+    private static List<ChartSeries<double>> Series(ChartData chart) =>
+        [new ChartSeries<double> { Name = chart.SeriesName, Data = new ChartData<double>(chart.Values) }];
+
+    // MudChart's default y-axis step is large, which flattens small counts; pick roughly five ticks instead.
+    private static MudBlazor.Charts.IChartOptions? OptionsFor(ChartData chart)
+    {
+        var max = chart.Values.DefaultIfEmpty(0).Max();
+        var rough = Math.Max(1, max / 5);
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rough)));
+        var step = (int)Math.Max(1, new[] { 1, 2, 5, 10 }.Select(m => m * magnitude).First(v => v >= rough));
+        return chart.Kind switch
+        {
+            ChartKind.Bar => new BarChartOptions { YAxisTicks = step },
+            ChartKind.Line => new LineChartOptions { YAxisTicks = step },
+            _ => null,
+        };
+    }
+
+    private static string FormatNumber(decimal value, bool currency) =>
+        currency ? value.ToString("C0", Culture) : value == Math.Round(value) ? value.ToString("N0", Culture) : value.ToString("N2", Culture);
+}

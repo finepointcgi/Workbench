@@ -1,0 +1,114 @@
+@* Who may charge a WBS element, with an optional labor category and date range. *@
+@inject IProjectService Projects
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudText Typo="Typo.h6" HtmlTag="h3">Charge assignments</MudText>
+    @if (!Element.RequiresAssignment)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">This element doesn't require an assignment: anyone may charge it.</MudText>
+    }
+    <MudSimpleTable Dense="true" Hover="true" Class="mb-3">
+        <thead><tr><th>Employee</th><th>Labor category</th><th>From</th><th>To</th><th></th></tr></thead>
+        <tbody>
+            @if (_assignments.Count == 0)
+            {
+                <tr><td colspan="5" class="mud-text-secondary">No one is assigned.</td></tr>
+            }
+            @foreach (var a in _assignments)
+            {
+                <tr>
+                    <td>@(Employees.FirstOrDefault(e => e.Id == a.EmployeeId)?.DisplayName ?? "(inactive)")</td>
+                    <td>@(LaborCategories.FirstOrDefault(c => c.Id == a.LaborCategoryId)?.Code ?? "default")</td>
+                    <td>@SetupFormat.Date(a.From)</td>
+                    <td>@SetupFormat.Date(a.To)</td>
+                    <td style="text-align:right">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove assignment" OnClick="() => RemoveAsync(a)" />
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+    <MudText Typo="Typo.subtitle2" Class="mb-1">Assign someone</MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" @bind-Value="_employeeId" Label="Employee" Dense="true" data-testid="assign-employee">
+                @foreach (var e in Employees.Where(e => _assignments.All(a => a.EmployeeId != e.Id)))
+                {
+                    <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" @bind-Value="_categoryId" Label="Labor category" Clearable="true" Dense="true" HelperText="Empty uses their default.">
+                @foreach (var c in LaborCategories.Where(c => c.IsActive))
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6">
+            <MudDatePicker @bind-Date="_from" Label="From" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" />
+        </MudItem>
+        <MudItem xs="6">
+            <MudDatePicker @bind-Date="_to" Label="To" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" />
+        </MudItem>
+    </MudGrid>
+    <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_employeeId is null" OnClick="AddAsync" data-testid="assign-add">Assign</MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public WbsElementDto Element { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<EmployeeDto> Employees { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<LaborCategoryDto> LaborCategories { get; set; } = [];
+
+    private IReadOnlyList<ChargeAssignmentDto> _assignments = [];
+    private Guid _loadedFor;
+    private Guid? _employeeId;
+    private Guid? _categoryId;
+    private DateTime? _from;
+    private DateTime? _to;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != Element.Id)
+        {
+            _loadedFor = Element.Id;
+            _assignments = await Projects.ListAssignmentsAsync(Element.Id);
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        try
+        {
+            await Projects.AddAssignmentAsync(Element.Id, new AddChargeAssignmentRequest(_employeeId!.Value, _categoryId, SetupFormat.ToDateOnly(_from), SetupFormat.ToDateOnly(_to)));
+            _assignments = await Projects.ListAssignmentsAsync(Element.Id);
+            (_employeeId, _categoryId, _from, _to) = (null, null, null, null);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task RemoveAsync(ChargeAssignmentDto assignment)
+    {
+        try
+        {
+            await Projects.RemoveAssignmentAsync(assignment.Id);
+            _assignments = await Projects.ListAssignmentsAsync(Element.Id);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

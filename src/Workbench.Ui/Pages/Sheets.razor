@@ -66,7 +66,7 @@
         {
             _sheets = await SheetService.ListAsync();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
         }
@@ -91,7 +91,7 @@
             Snackbar.Add($"Created \"{created.Name}\"", Severity.Success);
             await LoadAsync();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't create the sheet: {ex.Message}", Severity.Error);
         }

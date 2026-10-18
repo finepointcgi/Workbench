@@ -10,8 +10,8 @@ public static class WorkbenchApi
 {
     public static IEndpointRouteBuilder MapWorkbenchApi(this IEndpointRouteBuilder app)
     {
-        // TODO: require OIDC bearer auth once identity is wired up.
-        var v1 = app.MapGroup("/api/v1").AddEndpointFilter(MapErrors);
+        // Signed-in users only: the web app's auth cookie or a bearer token from the OIDC authority (desktop app).
+        var v1 = app.MapGroup("/api/v1").RequireAuthorization().AddEndpointFilter(MapErrors);
 
         v1.MapSheetEndpoints();
         v1.MapColumnEndpoints();
@@ -20,6 +20,15 @@ public static class WorkbenchApi
         v1.MapCollaborationEndpoints();
         v1.MapCostpointEndpoints();
         v1.MapProjectAccountingEndpoints();
+        v1.MapIdentityEndpoints();
+        v1.MapAutomationEndpoints();
+        v1.MapNotificationEndpoints();
+        v1.MapMyWorkEndpoints();
+        v1.MapDashboardEndpoints();
+        v1.MapTimeEndpoints();
+        v1.MapOdcEndpoints();
+        v1.MapFinancialsEndpoints();
+        v1.MapSetupEndpoints();
 
         return app;
     }
@@ -29,6 +38,10 @@ public static class WorkbenchApi
         try
         {
             return await next(context);
+        }
+        catch (WorkbenchForbiddenException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status403Forbidden);
         }
         catch (WorkbenchNotFoundException ex)
         {

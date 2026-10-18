@@ -16,6 +16,13 @@ public static class DependencyInjection
         services.AddCollaborationClients(serverBaseAddress);
         services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);
         services.AddProjectAccountingClients(serverBaseAddress);
+        services.AddIdentityClients(serverBaseAddress);
+        services.AddAutomationClients(serverBaseAddress);
+        services.AddDashboardClients(serverBaseAddress);
+        services.AddTimekeepingClients(serverBaseAddress);
+        services.AddOdcClients(serverBaseAddress);
+        services.AddFinancialsClients(serverBaseAddress);
+        services.AddSetupClients(serverBaseAddress);
         return services;
     }
 }

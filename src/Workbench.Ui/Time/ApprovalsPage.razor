@@ -1,0 +1,144 @@
+@page "/time/approvals"
+@inject ITimesheetApprovalService Approvals
+@inject ITimesheetService Timesheets
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Timesheet approvals · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Timesheet approvals</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Text" Href="time/team" StartIcon="@Icons.Material.Filled.Groups">Team status</MudButton>
+</MudStack>
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudPaper Outlined="true">
+            <MudList T="TimesheetDto" SelectedValue="_selected" SelectedValueChanged="SelectAsync" data-testid="pending">
+                <MudListSubheader>Waiting for you (@_pending.Count)</MudListSubheader>
+                @foreach (var t in _pending)
+                {
+                    <MudListItem T="TimesheetDto" Value="t" @key="t.Id">
+                        <div><b>@t.EmployeeName</b></div>
+                        <div class="mud-text-secondary">@TimePage.PeriodLabel(t) · @t.TotalHours.ToString("0.##") h@(t.Revision > 0 ? $" · rev {t.Revision}" : "")</div>
+                    </MudListItem>
+                }
+                @if (!_loading && _pending.Count == 0)
+                {
+                    <MudText Class="pa-4 mud-text-secondary">No timesheets are waiting for approval.</MudText>
+                }
+            </MudList>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="8">
+        @if (_detail is not null)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudText Typo="Typo.h6">@_detail.Timesheet.EmployeeName · @TimePage.PeriodLabel(_detail.Timesheet)</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Text" Href="@($"time/history/{_detail.Timesheet.Id}")" StartIcon="@Icons.Material.Filled.History">History</MudButton>
+            </MudStack>
+            <TimesheetStatusBanner Timesheet="_detail.Timesheet" />
+            @if (_detail.Timesheet.TotalHours < _detail.Timesheet.StandardHours)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                    @_detail.Timesheet.TotalHours.ToString("0.##") hours, below the standard @_detail.Timesheet.StandardHours.ToString("0.##").
+                </MudAlert>
+            }
+            @if (_detail.Days.Any(d => d.EnteredLate))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                    Some days were entered late: @string.Join(", ", _detail.Days.Where(d => d.EnteredLate).Select(d => d.Date.ToString("ddd M/d")))
+                </MudAlert>
+            }
+            <MudPaper Outlined="true" Class="pa-3">
+                <TimesheetGrid Detail="_detail" Editable="false" />
+            </MudPaper>
+            @if (_detail.Timesheet.Status == TimesheetState.Submitted)
+            {
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="RejectAsync">Reject</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="_busy" OnClick="ApproveAsync">Approve</MudButton>
+                </MudStack>
+            }
+        }
+        else if (_pending.Count > 0)
+        {
+            <MudText Class="mud-text-secondary">Select a timesheet to review.</MudText>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private IReadOnlyList<TimesheetDto> _pending = [];
+    private TimesheetDto? _selected;
+    private TimesheetDetailDto? _detail;
+    private bool _loading = true;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _pending = await Approvals.ListPendingAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectAsync(TimesheetDto? timesheet)
+    {
+        _selected = timesheet;
+        _detail = timesheet is null ? null : await Timesheets.GetAsync(timesheet.Id);
+    }
+
+    private async Task ApproveAsync() => await ReviewAsync(() => Approvals.ApproveAsync(_detail!.Timesheet.Id), "Timesheet approved.");
+
+    private async Task RejectAsync()
+    {
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { x => x.Message, "The employee will see your reason and can correct and resubmit. You can't change their hours yourself." },
+            { x => x.Label, "Reason for rejecting" },
+            { x => x.ConfirmText, "Reject" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>("Reject timesheet", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await ReviewAsync(() => Approvals.RejectAsync(_detail!.Timesheet.Id, reason), "Timesheet rejected.");
+        }
+    }
+
+    private async Task ReviewAsync(Func<Task<TimesheetDto>> action, string message)
+    {
+        _busy = true;
+        try
+        {
+            var reviewed = await action();
+            Snackbar.Add(message, Severity.Success);
+            _detail = await Timesheets.GetAsync(reviewed.Id);
+            _selected = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

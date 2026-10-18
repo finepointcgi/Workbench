@@ -9,6 +9,9 @@
         <!-- When App Sandbox is enabled, this value is required to open outgoing network connections. -->
         <key>com.apple.security.network.client</key>
         <true/>
+        <!-- Sign-in listens on http://127.0.0.1:{port}/ for the identity provider's redirect. -->
+        <key>com.apple.security.network.server</key>
+        <true/>
     </dict>
 </plist>
 

@@ -23,6 +23,7 @@ public static class MauiProgram
         builder.Services.AddMudServices();
 
         var serverUrl = Environment.GetEnvironmentVariable("WORKBENCH_SERVER_URL") ?? DefaultServerUrl;
+        builder.Services.AddDesktopSignIn();
         builder.Services.AddWorkbenchApiClient(new Uri(serverUrl));
 
 #if DEBUG

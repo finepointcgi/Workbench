@@ -1,0 +1,35 @@
+@* DCAA: the employee certifies the timesheet before it is submitted. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-2">You are submitting @TotalHours.ToString("0.##") hours for @Period.</MudText>
+        @if (TotalHours < StandardHours)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                That's below your standard @StandardHours.ToString("0.##") hours. Record every hour worked, including indirect and leave time.
+            </MudAlert>
+        }
+        <MudPaper Outlined="true" Class="pa-3 mb-2">
+            <MudText Typo="Typo.body2">@TimesheetCertification.Text</MudText>
+        </MudPaper>
+        <MudCheckBox T="bool" @bind-Value="_certified" Label="I certify this timesheet" Color="Color.Primary" data-testid="certify" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!_certified" OnClick="Confirm">Certify and submit</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _certified;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public decimal TotalHours { get; set; }
+    [Parameter] public decimal StandardHours { get; set; }
+    [Parameter] public string Period { get; set; } = "";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(true));
+}

@@ -1,0 +1,186 @@
+@page "/notifications"
+@using Workbench.Contracts.Notifications
+@using Workbench.Ui.Notifications
+@implements IAsyncDisposable
+@inject INotificationService Service
+@inject INotificationFeed Feed
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Notifications · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">Notifications</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="8">
+        <MudPaper Outlined="true">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="px-3 py-2">
+                <MudSwitch T="bool" Value="_unreadOnly" ValueChanged="OnUnreadOnlyChanged" Color="Color.Primary" Label="Unread only" />
+                <MudSpacer />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mr-2">@_unread unread</MudText>
+                <MudButton Size="Size.Small" Disabled="_unread == 0" OnClick="MarkAllReadAsync">Mark all read</MudButton>
+            </MudStack>
+            <MudDivider />
+            @if (_items is null)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_items.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4">@(_unreadOnly ? "No unread notifications." : "No notifications yet.")</MudText>
+            }
+            else
+            {
+                @foreach (var n in _items)
+                {
+                    <NotificationRow @key="n.Id" Notification="n" OnOpen="OpenAsync" OnMarkRead="MarkReadAsync" />
+                    <MudDivider />
+                }
+                @if (_items.Count < _total)
+                {
+                    <div class="pa-2 d-flex justify-center">
+                        <MudButton OnClick="LoadMoreAsync">Show more</MudButton>
+                    </div>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2" id="delivery-heading">Email delivery</MudText>
+            <MudRadioGroup T="NotificationDelivery" Value="_delivery" ValueChanged="SetDeliveryAsync" aria-labelledby="delivery-heading">
+                <MudRadio T="NotificationDelivery" Value="NotificationDelivery.ImmediateEmail" Color="Color.Primary">Email me right away</MudRadio>
+                <MudRadio T="NotificationDelivery" Value="NotificationDelivery.DailyDigest" Color="Color.Primary">Daily digest of unread notifications</MudRadio>
+                <MudRadio T="NotificationDelivery" Value="NotificationDelivery.InAppOnly" Color="Color.Primary">In the app only</MudRadio>
+            </MudRadioGroup>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private const int PageSize = 25;
+    private List<NotificationDto>? _items;
+    private int _total;
+    private int _unread;
+    private bool _unreadOnly;
+    private NotificationDelivery _delivery = NotificationDelivery.DailyDigest;
+    private IAsyncDisposable? _subscription;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync(PageSize);
+        try
+        {
+            _delivery = (await Service.GetPreferenceAsync()).Delivery;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load your settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _subscription = await Feed.SubscribeAsync(_ => InvokeAsync(async () =>
+            {
+                if (!_disposed)
+                {
+                    await LoadAsync(Math.Max(PageSize, _items?.Count ?? 0));
+                    StateHasChanged();
+                }
+            }));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private async Task LoadAsync(int take)
+    {
+        try
+        {
+            var page = await Service.ListMineAsync(0, Math.Min(take, 100), _unreadOnly);
+            _items = page.Items.ToList();
+            _total = page.TotalCount;
+            _unread = page.UnreadCount;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _items ??= [];
+            Snackbar.Add($"Couldn't load notifications: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        var page = await Service.ListMineAsync(_items!.Count, PageSize, _unreadOnly);
+        _items.AddRange(page.Items.Where(n => _items.All(i => i.Id != n.Id)));
+        _total = page.TotalCount;
+        _unread = page.UnreadCount;
+    }
+
+    private async Task OnUnreadOnlyChanged(bool value)
+    {
+        _unreadOnly = value;
+        await LoadAsync(PageSize);
+    }
+
+    private async Task OpenAsync(NotificationDto n)
+    {
+        if (!n.IsRead)
+        {
+            await Service.MarkReadAsync(n.Id);
+        }
+
+        if (n.Link is { } link)
+        {
+            Navigation.NavigateTo(link);
+        }
+        else
+        {
+            await LoadAsync(_items?.Count ?? PageSize);
+        }
+    }
+
+    private async Task MarkReadAsync(NotificationDto n)
+    {
+        await Service.MarkReadAsync(n.Id);
+        await LoadAsync(Math.Max(PageSize, _items?.Count ?? 0));
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await Service.MarkAllReadAsync();
+        await LoadAsync(Math.Max(PageSize, _items?.Count ?? 0));
+    }
+
+    private async Task SetDeliveryAsync(NotificationDelivery delivery)
+    {
+        try
+        {
+            _delivery = (await Service.SetPreferenceAsync(new NotificationPreferenceDto(delivery))).Delivery;
+            Snackbar.Add("Saved", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't save: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_subscription is not null)
+        {
+            await _subscription.DisposeAsync();
+        }
+    }
+}

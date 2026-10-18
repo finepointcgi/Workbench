@@ -1,0 +1,111 @@
+@page "/time/history/{TimesheetId:guid}"
+@inject ITimesheetService Timesheets
+
+<PageTitle>Timesheet history · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_detail is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    var t = _detail.Timesheet;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudText Typo="Typo.h4" HtmlTag="h1">Timesheet history</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Href="@($"time?date={t.PeriodStart:yyyy-MM-dd}")" StartIcon="@Icons.Material.Filled.ArrowBack">Back to timesheet</MudButton>
+    </MudStack>
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@t.EmployeeName · @TimePage.PeriodLabel(t) · @t.TotalHours.ToString("0.##") h</MudText>
+    <TimesheetStatusBanner Timesheet="t" />
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Entry changes after submission</MudText>
+    <MudTable Items="_detail.Revisions" Dense="true" Outlined="true" data-testid="revisions">
+        <HeaderContent>
+            <MudTh>Changed (local)</MudTh>
+            <MudTh>By</MudTh>
+            <MudTh>Rev</MudTh>
+            <MudTh>Work date</MudTh>
+            <MudTh>Charge code</MudTh>
+            <MudTh>Labor category</MudTh>
+            <MudTh Style="text-align:right">Hours</MudTh>
+            <MudTh>Reason</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.ChangedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+            <MudTd>@context.ChangedBy</MudTd>
+            <MudTd>@context.TimesheetRevision</MudTd>
+            <MudTd>@context.WorkDate.ToString("ddd yyyy-MM-dd")</MudTd>
+            <MudTd>@Change(context.OldWbsCode, context.NewWbsCode)</MudTd>
+            <MudTd>@Change(context.OldLaborCategoryCode, context.NewLaborCategoryCode)</MudTd>
+            <MudTd Style="text-align:right">@Change(context.OldHours?.ToString("0.##"), context.NewHours?.ToString("0.##"))</MudTd>
+            <MudTd>@context.Reason</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="mud-text-secondary">No entries have changed since the timesheet was first submitted.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-2">Audit trail</MudText>
+    <MudTable Items="_detail.Audit" Dense="true" Outlined="true" data-testid="audit">
+        <HeaderContent>
+            <MudTh>When (local)</MudTh>
+            <MudTh>Action</MudTh>
+            <MudTh>By</MudTh>
+            <MudTh>Reason / note</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.OccurredAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+            <MudTd>@context.Action</MudTd>
+            <MudTd>@context.Actor</MudTd>
+            <MudTd>@context.Reason</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="mud-text-secondary">Not submitted yet.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-2">Daily entry</MudText>
+    <MudTable Items="_detail.Days.Where(d => d.FirstEnteredAtUtc is not null)" Dense="true" Outlined="true">
+        <HeaderContent>
+            <MudTh>Work date</MudTh>
+            <MudTh>First entered (local)</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Date.ToString("ddd yyyy-MM-dd")</MudTd>
+            <MudTd>@context.FirstEnteredAtUtc!.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+            <MudTd>
+                @if (context.EnteredLate)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning">Late</MudChip>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private TimesheetDetailDto? _detail;
+    private string? _error;
+
+    [Parameter] public Guid TimesheetId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _detail = await Timesheets.GetAsync(TimesheetId);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string Change(string? before, string? after) =>
+        before == after ? before ?? "" : $"{before ?? "—"} → {after ?? "deleted"}";
+}

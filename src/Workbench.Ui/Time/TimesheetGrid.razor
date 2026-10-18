@@ -1,0 +1,251 @@
+@using System.Globalization
+@inject IDialogService DialogService
+
+@* Weekly (or semi-monthly) time grid: rows are charge codes, columns are days. *@
+<div class="timesheet-grid">
+    <table class="mud-table-root" data-testid="timesheet-grid">
+        <thead>
+            <tr>
+                <th class="code">Charge code</th>
+                @foreach (var day in Detail.Days)
+                {
+                    <th class="day @(day.Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "weekend" : "")" title="@DayTitle(day)">
+                        <div>@day.Date.ToString("ddd", CultureInfo.InvariantCulture)</div>
+                        <div class="mud-text-secondary">@day.Date.ToString("M/d", CultureInfo.InvariantCulture)</div>
+                        @if (day.EnteredLate)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Warning" title="Entered late" />
+                        }
+                    </th>
+                }
+                <th class="total">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _rows)
+            {
+                <tr @key="row.Code.WbsElementId">
+                    <td class="code">
+                        <div><b>@row.Code.Code</b> <span class="mud-text-secondary">@row.Code.ProjectCode</span></div>
+                        <div class="mud-text-secondary name">@row.Code.Name</div>
+                    </td>
+                    @foreach (var day in Detail.Days)
+                    {
+                        var cell = row.Cell(day.Date);
+                        var enabled = CanEdit(row, day);
+                        <td class="cell">
+                            <input type="number" min="0" max="24" step="0.25" inputmode="decimal"
+                                   aria-label="@($"{row.Code.Code} {day.Date:yyyy-MM-dd}")"
+                                   data-testid="@($"cell-{row.Code.Code}-{day.Date:yyyy-MM-dd}")"
+                                   value="@Format(cell.Hours)"
+                                   readonly="@(Locked || !Editable)"
+                                   disabled="@(!enabled && !Locked)"
+                                   @onclick="() => LockedClickAsync()"
+                                   @onchange="e => SetHours(row, day.Date, e.Value?.ToString())" />
+                            <button type="button" class="comment @(string.IsNullOrEmpty(cell.Comment) ? "" : "has-comment")"
+                                    title="@(cell.Comment ?? "Add a comment")" aria-label="Comment"
+                                    disabled="@(!enabled && string.IsNullOrEmpty(cell.Comment))"
+                                    @onclick="() => EditCommentAsync(row, day)">
+                                <MudIcon Icon="@(string.IsNullOrEmpty(cell.Comment) ? Icons.Material.Outlined.ChatBubbleOutline : Icons.Material.Filled.ChatBubble)" Size="Size.Small" />
+                            </button>
+                        </td>
+                    }
+                    <td class="total">@row.Total.ToString("0.##")</td>
+                </tr>
+            }
+            @if (_rows.Count == 0)
+            {
+                <tr><td colspan="@(Detail.Days.Count + 2)" class="mud-text-secondary pa-4">No charge codes yet. Add one below.</td></tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td class="code"><b>Daily total</b></td>
+                @foreach (var day in Detail.Days)
+                {
+                    var total = DayTotal(day.Date);
+                    <td class="total @(total > 24 ? "over" : "")" data-testid="@($"total-{day.Date:yyyy-MM-dd}")">@total.ToString("0.##")</td>
+                }
+                <td class="total" data-testid="grand-total"><b>@GrandTotal.ToString("0.##")</b></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+@if (Editable && !Locked)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3" Style="max-width: 640px">
+        <MudSelect T="Guid?" @bind-Value="_newCode" Label="Add a charge code" Dense="true" Variant="Variant.Outlined" Clearable="true" data-testid="add-code">
+            @foreach (var option in AvailableCodes)
+            {
+                <MudSelectItem T="Guid?" Value="option.ChargeCode.WbsElementId">
+                    @option.ChargeCode.Code · @option.ChargeCode.Name (@option.ChargeCode.ProjectCode)@(option.RecentlyUsed ? " · recent" : "")
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Disabled="_newCode is null" OnClick="AddRow">Add row</MudButton>
+    </MudStack>
+}
+
+@code {
+    private readonly List<Row> _rows = [];
+    private TimesheetDetailDto? _loaded;
+    private Guid? _newCode;
+
+    [Parameter, EditorRequired] public TimesheetDetailDto Detail { get; set; } = default!;
+
+    /// <summary>False for reviewers: they never edit hours.</summary>
+    [Parameter] public bool Editable { get; set; } = true;
+
+    /// <summary>Raised when the employee tries to edit a locked timesheet, so the page can ask for a reason.</summary>
+    [Parameter] public EventCallback OnLockedEdit { get; set; }
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    public bool IsDirty { get; private set; }
+
+    private bool Locked => Detail.Timesheet.IsLocked;
+
+    private decimal GrandTotal => _rows.Sum(r => r.Total);
+
+    private IEnumerable<TimesheetChargeCodeDto> AvailableCodes => Detail.ChargeCodes
+        .Where(c => _rows.All(r => r.Code.WbsElementId != c.ChargeCode.WbsElementId))
+        .OrderByDescending(c => c.RecentlyUsed).ThenBy(c => c.ChargeCode.Kind).ThenBy(c => c.ChargeCode.Code, StringComparer.Ordinal);
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_loaded, Detail))
+        {
+            return;
+        }
+
+        _loaded = Detail;
+        IsDirty = false;
+        _rows.Clear();
+        foreach (var group in Detail.Entries.GroupBy(e => e.WbsElementId))
+        {
+            var first = group.First();
+            var known = Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == group.Key);
+            var row = new Row(new RowCode(group.Key, first.WbsCode, first.WbsName, first.ProjectCode), known?.ChargeableDates ?? []);
+            foreach (var e in group)
+            {
+                row.Cells[e.WorkDate] = new Cell { Hours = e.Hours, Comment = e.Comment, EntryId = e.Id };
+            }
+
+            _rows.Add(row);
+        }
+
+        // Remember recently used charge codes so the week starts with the usual rows.
+        if (!Locked)
+        {
+            foreach (var recent in Detail.ChargeCodes.Where(c => c.RecentlyUsed && _rows.All(r => r.Code.WbsElementId != c.ChargeCode.WbsElementId)))
+            {
+                _rows.Add(Row.For(recent));
+            }
+        }
+
+        _rows.Sort((a, b) => string.CompareOrdinal(a.Code.Code, b.Code.Code));
+    }
+
+    /// <summary>
+    /// The grid as entries for <see cref="ITimesheetService.SaveEntriesAsync"/> with whole-period scope: cells left
+    /// empty are omitted, which removes their entries.
+    /// </summary>
+    public IReadOnlyList<TimeEntryInput> BuildEntries() =>
+        _rows.SelectMany(r => r.Cells.Where(c => c.Value.Hours is > 0)
+                .Select(c => new TimeEntryInput(r.Code.WbsElementId, c.Key, c.Value.Hours!.Value, c.Value.Comment, c.Value.EntryId)))
+            .ToList();
+
+    private bool CanEdit(Row row, TimesheetDayDto day) =>
+        Editable && day.CanEnter && (row.Dates.Contains(day.Date) || row.Cell(day.Date).Hours is > 0);
+
+    private decimal DayTotal(DateOnly date) => _rows.Sum(r => r.Cell(date).Hours ?? 0);
+
+    private async Task LockedClickAsync()
+    {
+        if (Locked && Editable)
+        {
+            await OnLockedEdit.InvokeAsync();
+        }
+    }
+
+    private async Task SetHours(Row row, DateOnly date, string? text)
+    {
+        if (Locked || !Editable)
+        {
+            return;
+        }
+
+        decimal? hours = string.IsNullOrWhiteSpace(text) ? null
+            : decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? Math.Clamp(decimal.Round(v, 2), 0, 24) : row.Cell(date).Hours;
+        row.Edit(date).Hours = hours;
+        IsDirty = true;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task EditCommentAsync(Row row, TimesheetDayDto day)
+    {
+        var cell = row.Cell(day.Date);
+        var readOnly = Locked || !Editable || !CanEdit(row, day);
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { d => d.Label, "Comment" },
+            { d => d.InitialValue, cell.Comment },
+            { d => d.Required, false },
+            { d => d.ReadOnly, readOnly },
+            { d => d.ConfirmText, "Save comment" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>($"{row.Code.Code} · {day.Date:ddd M/d}", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string comment } && !readOnly)
+        {
+            row.Edit(day.Date).Comment = string.IsNullOrWhiteSpace(comment) ? null : comment;
+            IsDirty = true;
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private void AddRow()
+    {
+        if (Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == _newCode) is { } code)
+        {
+            _rows.Add(Row.For(code));
+        }
+
+        _newCode = null;
+    }
+
+    private static string DayTitle(TimesheetDayDto day) =>
+        day.IsFuture ? "Future date: time can't be entered yet"
+        : !day.IsInOpenPeriod ? "Not in an open fiscal period"
+        : !day.IsEmployed ? "Outside employment dates"
+        : day.EnteredLate ? $"First entered {day.FirstEnteredAtUtc!.Value.ToLocalTime():MMM d h:mm tt} (late)"
+        : day.FirstEnteredAtUtc is { } first ? $"First entered {first.ToLocalTime():MMM d h:mm tt}" : "";
+
+    private static string Format(decimal? hours) => hours?.ToString("0.##", CultureInfo.InvariantCulture) ?? "";
+
+    private sealed record RowCode(Guid WbsElementId, string Code, string Name, string ProjectCode);
+
+    private sealed class Cell
+    {
+        public decimal? Hours { get; set; }
+        public string? Comment { get; set; }
+        public Guid? EntryId { get; set; }
+    }
+
+    private sealed class Row(RowCode code, IReadOnlyList<DateOnly> dates)
+    {
+        private static readonly Cell Empty = new();
+
+        public RowCode Code { get; } = code;
+        public HashSet<DateOnly> Dates { get; } = [.. dates];
+        public Dictionary<DateOnly, Cell> Cells { get; } = [];
+        public decimal Total => Cells.Values.Sum(c => c.Hours ?? 0);
+
+        public Cell Cell(DateOnly date) => Cells.GetValueOrDefault(date) ?? Empty;
+
+        public Cell Edit(DateOnly date) => Cells.TryGetValue(date, out var c) ? c : Cells[date] = new Cell();
+
+        public static Row For(TimesheetChargeCodeDto code) =>
+            new(new RowCode(code.ChargeCode.WbsElementId, code.ChargeCode.Code, code.ChargeCode.Name, code.ChargeCode.ProjectCode), code.ChargeableDates);
+    }
+}

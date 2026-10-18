@@ -1,8 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.Application.Automation;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Costpoint;
+using Workbench.Application.Identity;
+using Workbench.Application.Odcs;
+using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
+using Workbench.Application.Dashboards;
+using Workbench.Application.MyWork;
 using Workbench.Application.Sheets;
+using Workbench.Application.Time;
 using Workbench.Contracts.Sheets;
 
 namespace Workbench.Application;
@@ -19,6 +26,17 @@ public static class DependencyInjection
         services.AddWorkbenchCollaboration();
         services.AddWorkbenchCostpoint();
         services.AddWorkbenchProjectAccounting();
+        services.AddWorkbenchAutomation();
+        services.AddWorkbenchMyWork();
+        services.AddWorkbenchDashboards();
+        services.AddWorkbenchTimekeeping();
+        services.AddWorkbenchOdcs();
+        services.AddWorkbenchFinancials();
+        services.AddWorkbenchSetup();
+
+        // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
+        // (activity recording and any later feature's), so new decorators belong above this line.
+        services.AddWorkbenchIdentity();
         return services;
     }
 }

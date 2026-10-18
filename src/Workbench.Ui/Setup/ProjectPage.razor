@@ -1,0 +1,169 @@
+@page "/setup/projects/new"
+@page "/setup/projects/{ProjectId:guid}"
+@inject IProjectService Projects
+@inject IContractService Contracts
+@inject IPeopleService People
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_project?.Code ?? "New project") · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="@(_project is null ? "New project" : $"{_project.Code} · {_project.Name}")">
+    @if (_project?.SheetId is { } sheetId)
+    {
+        <MudButton Variant="Variant.Outlined" Href="@($"sheets/{sheetId}")" StartIcon="@Icons.Material.Filled.ViewTimeline">Open plan sheet</MudButton>
+    }
+    <MudButton Variant="Variant.Outlined" Href="setup/projects" StartIcon="@Icons.Material.Filled.ArrowBack">All projects</MudButton>
+</SetupHeader>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" @bind-ActivePanelIndex="_tab" TabPanelsClass="pa-4" Class="mt-2">
+        <MudTabPanel Text="Details">
+            <MudForm @ref="_form">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_code" Label="Code" Required="true" RequiredError="Code is required." Immediate="true"
+                                      HelperText="Top-level WBS codes start with this." data-testid="project-code" />
+                    </MudItem>
+                    <MudItem xs="12" sm="8">
+                        <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" data-testid="project-name" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects.">
+                            @foreach (var c in _contracts)
+                            {
+                                <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true">
+                            @foreach (var e in _employees)
+                            {
+                                <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="ProjectState" @bind-Value="_status" Label="Status">
+                            @foreach (var state in Enum.GetValues<ProjectState>())
+                            {
+                                <MudSelectItem T="ProjectState" Value="state">@SetupFormat.Label(state)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_start" Label="Start" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_finish" Label="Finish" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                                       Validation="@(new Func<DateTime?, string?>(f => f is { } x && _start is { } s && x < s ? "Finish can't be before start." : null))" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="project-save">
+                    @(_project is null ? "Create project" : "Save")
+                </MudButton>
+            </MudStack>
+        </MudTabPanel>
+        <MudTabPanel Text="WBS and assignments" Disabled="_project is null">
+            @if (_project is not null)
+            {
+                <WbsEditor Project="_project" Employees="_employees" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Plan sheet" Disabled="_project is null">
+            @if (_project is not null)
+            {
+                <PlanSyncPanel Project="_project" ProjectChanged="p => _project = p" />
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public Guid? ProjectId { get; set; }
+
+    private ProjectDto? _project;
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private MudForm _form = default!;
+    private bool _loading = true;
+    private bool _saving;
+    private int _tab;
+
+    private string? _code;
+    private string? _name;
+    private Guid? _contractId;
+    private Guid? _pmId;
+    private ProjectState _status = ProjectState.Active;
+    private DateTime? _start;
+    private DateTime? _finish;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _contracts = await Contracts.ListContractsAsync();
+        _employees = await People.ListEmployeesAsync();
+        _project = ProjectId is { } id ? await Projects.GetProjectAsync(id) : null;
+        if (_project is { } p)
+        {
+            (_code, _name, _contractId, _pmId, _status) = (p.Code, p.Name, p.ContractId, p.ProjectManagerId, p.Status);
+            (_start, _finish) = (SetupFormat.ToDateTime(p.Start), SetupFormat.ToDateTime(p.Finish));
+        }
+        else
+        {
+            _tab = 0;
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var request = new SaveProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, _pmId, _status, SetupFormat.ToDateOnly(_start), SetupFormat.ToDateOnly(_finish));
+            if (_project is null)
+            {
+                // Default the dates to the contract's period of performance.
+                if (request.Start is null && _contracts.FirstOrDefault(c => c.Id == _contractId) is { } contract)
+                {
+                    request = request with { Start = contract.PeriodStart, Finish = request.Finish ?? contract.PeriodEnd };
+                }
+
+                var created = await Projects.CreateProjectAsync(request);
+                Snackbar.Add($"Created {created.Code}. Build its WBS next.", Severity.Success);
+                Navigation.NavigateTo($"setup/projects/{created.Id}");
+                _tab = 1;
+            }
+            else
+            {
+                _project = await Projects.UpdateProjectAsync(_project.Id, request);
+                Snackbar.Add("Project saved.", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

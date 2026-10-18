@@ -27,6 +27,19 @@ public sealed class Timesheet : Entity
     /// <summary>Incremented each time an approved timesheet is reopened for correction.</summary>
     public int Revision { get; set; }
 
+    /// <summary>Set the first time the timesheet is submitted. From then on every entry change needs a revision and a reason.</summary>
+    public DateTime? FirstSubmittedAtUtc { get; set; }
+
+    /// <summary>The attestation text the employee certified, kept with the timesheet as evidence.</summary>
+    public string? CertificationText { get; set; }
+
+    /// <summary>Email of whoever approved or rejected the timesheet (a supervisor or, without one, an admin).</summary>
+    public string? ReviewedBy { get; set; }
+
+    public DateTime? RejectedAtUtc { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+
     public List<TimeEntry> Entries { get; } = [];
 }
 
@@ -40,6 +53,7 @@ public sealed class TimeEntry : Entity
     public decimal Hours { get; set; }
     public string? Comment { get; set; }
     public DateTime EnteredAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
 }
 
 /// <summary>
@@ -54,6 +68,13 @@ public sealed class TimeEntryRevision : Entity
     public decimal? NewHours { get; set; }
     public Guid? OldWbsElementId { get; set; }
     public Guid? NewWbsElementId { get; set; }
+    public Guid? OldLaborCategoryId { get; set; }
+    public Guid? NewLaborCategoryId { get; set; }
+    public DateOnly WorkDate { get; set; }
+
+    /// <summary>The timesheet's <see cref="Timesheet.Revision"/> when the change was made.</summary>
+    public int TimesheetRevision { get; set; }
+
     public required string ChangedBy { get; set; }
     public DateTime ChangedAtUtc { get; set; }
     public required string Reason { get; set; }

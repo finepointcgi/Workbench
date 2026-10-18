@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="bunit" Version="2.11.3" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.13" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -24,6 +25,8 @@
     <ProjectReference Include="..\..\src\Workbench.Application\Workbench.Application.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Infrastructure\Workbench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Ui\Workbench.Ui.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Web\Workbench.Web.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.ApiClient\Workbench.ApiClient.csproj" />
   </ItemGroup>
 
 </Project>

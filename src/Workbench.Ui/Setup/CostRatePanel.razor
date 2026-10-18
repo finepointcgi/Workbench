@@ -1,0 +1,75 @@
+@* An employee's cost-rate history. Rates are masked until "Show rates" is on; adding a rate requires a reason. *@
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Cost rates</MudText>
+        <MudSpacer />
+        @* TODO(auth): only Finance may reveal or add rates once roles land; the server will enforce it too. *@
+        <MudSwitch @bind-Value="_showRates" Label="Show rates" Color="Color.Primary" data-testid="show-rates" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync" data-testid="add-rate">Add rate</MudButton>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        Rates are append-only. A correction is a new rate with a reason; each rate applies until the next one starts.
+    </MudText>
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>Effective from</th><th>Effective to</th><th style="text-align:right">Hourly cost</th></tr></thead>
+        <tbody>
+            @if (_rates.Count == 0)
+            {
+                <tr><td colspan="3" class="mud-text-secondary">No cost rates yet. Labor cost can't be computed without one.</td></tr>
+            }
+            @for (var i = 0; i < _rates.Count; i++)
+            {
+                var rate = _rates[i];
+                var next = i > 0 ? _rates[i - 1] : null;
+                <tr>
+                    <td>@SetupFormat.Date(rate.EffectiveFrom)</td>
+                    <td>@(next is null ? "current" : SetupFormat.Date(next.EffectiveFrom.AddDays(-1)))</td>
+                    <td style="text-align:right" data-testid="cost-rate">@(_showRates ? SetupFormat.Rate(rate.HourlyCost) : SetupFormat.Masked)</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid EmployeeId { get; set; }
+
+    private IReadOnlyList<CostRateDto> _rates = [];
+    private bool _showRates;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != EmployeeId)
+        {
+            _loadedFor = EmployeeId;
+            _showRates = false;
+            _rates = await People.ListCostRatesAsync(EmployeeId);
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        var dialog = await DialogService.ShowAsync<AddCostRateDialog>("Add cost rate", new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: AddCostRateRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            await People.AddCostRateAsync(EmployeeId, request);
+            _rates = await People.ListCostRatesAsync(EmployeeId);
+            Snackbar.Add("Cost rate added.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}
