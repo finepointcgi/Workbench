@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddImportClients(serverBaseAddress);
         services.AddProcurementClients(serverBaseAddress);
         services.AddAssetClients(serverBaseAddress);
+        services.AddCashClients(serverBaseAddress);
         return services;
     }
 }

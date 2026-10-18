@@ -17,6 +17,8 @@ public enum JournalSource
 
     /// <summary>Monthly depreciation runs (source id = the run).</summary>
     Depreciation,
+
+    Bank,
 }
 
 public enum JournalStatus

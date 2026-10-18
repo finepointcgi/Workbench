@@ -43,6 +43,7 @@ public static class DefaultChartOfAccounts
         new("4030", "Revenue - labor hour", AccountType.Revenue, "4000"),
         new("4040", "Revenue - firm fixed price", AccountType.Revenue, "4000"),
         new("4900", "Gain (loss) on disposal of assets", AccountType.Revenue, Description: "Fixed asset disposals: proceeds less net book value"),
+        new("4910", "Interest income", AccountType.Revenue, "4000", Description: "Bank interest booked from bank reconciliation"),
 
         new("5000", "Direct costs", AccountType.Expense),
         new("5010", "Direct labor", AccountType.Expense, "5000", CostClassification.DirectLabor),
@@ -70,6 +71,7 @@ public static class DefaultChartOfAccounts
         new("6210", "G&A labor", AccountType.Expense, "6200", CostClassification.IndirectLabor, "Includes bid and proposal labor"),
         new("6220", "Professional fees", AccountType.Expense, "6200", CostClassification.GeneralAndAdministrative),
         new("6230", "Office and IT", AccountType.Expense, "6200", CostClassification.GeneralAndAdministrative),
+        new("6240", "Bank fees", AccountType.Expense, "6200", CostClassification.GeneralAndAdministrative, "Bank service charges booked from bank reconciliation"),
 
         new("7000", "Unallowable costs", AccountType.Expense),
         new("7010", "Unallowable - entertainment and alcohol", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-14, 31.205-51"),
