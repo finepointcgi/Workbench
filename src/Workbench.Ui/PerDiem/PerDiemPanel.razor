@@ -1,0 +1,454 @@
+@* Per diem on a travel expense report: destinations and daily claims, the computed allowance per day against what was
+   claimed, and "Update expense lines" to (re)generate the Lodging, taxes, M&IE and overage lines. *@
+@inject ITravelPerDiemService PerDiem
+@inject IPerDiemRateService Rates
+@inject IProjectService Projects
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-3 mt-4" data-testid="per-diem">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+        <MudIcon Icon="@Icons.Material.Filled.Hotel" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">Per diem</MudText>
+        @if (_dto is { Exists: true })
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@string.Join(" → ", _dto.Destinations.Select(d => d.Destination + (d.State.Length > 0 ? ", " + d.State : "")))</MudText>
+        }
+        <MudSpacer />
+        @if (Editable && !_editing)
+        {
+            @if (_dto is { Exists: true })
+            {
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="StartEdit">Edit trip</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="RemoveAsync" Disabled="_busy">Remove</MudButton>
+                <MudButton Variant="@(_dto.LinesOutOfDate ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync"
+                           OnClick="ApplyAsync" Disabled="_busy" data-testid="apply-per-diem">Update expense lines</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartEdit" data-testid="add-per-diem">Add per diem</MudButton>
+            }
+        }
+    </MudStack>
+
+    @if (_editing)
+    {
+        <MudText Typo="Typo.subtitle2" Class="mb-1">Destinations</MudText>
+        @for (var i = 0; i < _stops.Count; i++)
+        {
+            var stop = _stops[i];
+            var index = i;
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-1">
+                <MudAutocomplete T="PerDiemLocationDto" Label="Destination" Value="stop.Location" ValueChanged="v => { stop.Location = v; }"
+                                 SearchFunc="SearchLocationsAsync" ToStringFunc="@(l => l?.Label ?? "")" MaxItems="50" Dense="true" ResetValueOnEmptyText="true"
+                                 Style="min-width:280px" data-testid="@($"destination-{index}")" />
+                <MudDatePicker Label="Arrive" Date="stop.Arrive" DateChanged="d => OnArriveChanged(index, d)" DateFormat="yyyy-MM-dd" Style="max-width:150px" data-testid="@($"arrive-{index}")" />
+                <MudDatePicker Label="Leave" Date="stop.Depart" DateChanged="d => OnDepartChanged(index, d)" DateFormat="yyyy-MM-dd" Style="max-width:150px" data-testid="@($"depart-{index}")" />
+                @if (_stops.Count > 1)
+                {
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" OnClick="() => RemoveStop(index)" aria-label="Remove destination" />
+                }
+            </MudStack>
+        }
+        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.AddLocationAlt" OnClick="AddStop">Add a destination</MudButton>
+
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="my-2">
+            <MudSelect T="Guid?" Label="Charge code" @bind-Value="_wbsId" Style="min-width:300px" Dense="true">
+                @foreach (var charge in _codes)
+                {
+                    <MudSelectItem T="Guid?" Value="charge.WbsElementId">@charge.Code · @charge.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch T="bool" @bind-Value="_taxesSeparate" Color="Color.Primary" Label="Lodging taxes claimed separately (not counted against the maximum)" />
+        </MudStack>
+
+        <MudSimpleTable Dense="true" Class="mb-2" data-testid="per-diem-days">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Lodging (night)</th>
+                    @if (_taxesSeparate)
+                    {
+                        <th>Lodging taxes</th>
+                    }
+                    <th>Meals provided</th>
+                    <th>M&amp;IE claimed</th>
+                    <th>Justification for lodging above the maximum</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var date in TripDays())
+                {
+                    var day = Day(date);
+                    var last = date == TripDays().Last() && TripDays().Count > 1;
+                    <tr>
+                        <td style="white-space:nowrap">@date.ToString("ddd MMM d")</td>
+                        <td>
+                            @if (!last)
+                            {
+                                <MudNumericField T="decimal" @bind-Value="day.Lodging" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:120px" />
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">—</span>
+                            }
+                        </td>
+                        @if (_taxesSeparate)
+                        {
+                            <td>
+                                @if (!last)
+                                {
+                                    <MudNumericField T="decimal" @bind-Value="day.Tax" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:110px" />
+                                }
+                            </td>
+                        }
+                        <td style="white-space:nowrap">
+                            <MudCheckBox T="bool" @bind-Value="day.Breakfast" Label="B" Dense="true" Size="Size.Small" />
+                            <MudCheckBox T="bool" @bind-Value="day.Lunch" Label="L" Dense="true" Size="Size.Small" />
+                            <MudCheckBox T="bool" @bind-Value="day.Dinner" Label="D" Dense="true" Size="Size.Small" />
+                        </td>
+                        <td>
+                            <MudNumericField T="decimal?" @bind-Value="day.Mie" Min="0" Format="N2" Placeholder="Allowable" Adornment="Adornment.Start" AdornmentText="$" Variant="Variant.Text" Style="max-width:120px" />
+                        </td>
+                        <td>
+                            @if (!last)
+                            {
+                                <MudTextField T="string" @bind-Value="day.Justification" Variant="Variant.Text" Placeholder="Only needed above the maximum" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+            <MudButton Variant="Variant.Text" OnClick="CancelEdit">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="save-per-diem">Save and compute</MudButton>
+        </MudStack>
+    }
+    else if (_dto is { Exists: true } dto)
+    {
+        @foreach (var note in dto.Notes.Concat(dto.Days.SelectMany(d => d.Notes)).Distinct())
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">@note</MudAlert>
+        }
+        @if (dto.LinesOutOfDate && Editable)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-1">The expense lines don't reflect this per diem yet. Choose "Update expense lines".</MudAlert>
+        }
+        <MudSimpleTable Dense="true" Hover="true" Style="overflow-x:auto" data-testid="per-diem-computed">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Location · rate</th>
+                    <th style="text-align:right">Lodging max</th>
+                    <th style="text-align:right">Lodging claimed</th>
+                    <th style="text-align:right">Lodging allowed</th>
+                    <th>Lodging</th>
+                    <th style="text-align:right">Taxes</th>
+                    <th style="text-align:right">M&amp;IE rate</th>
+                    <th style="text-align:right">Travel day</th>
+                    <th style="text-align:right">Meals deducted</th>
+                    <th style="text-align:right">M&amp;IE allowed</th>
+                    <th style="text-align:right">M&amp;IE claimed</th>
+                    <th style="text-align:right">Unallowable</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in dto.Days)
+                {
+                    var (text, color) = PerDiemFormat.Status(d.LodgingStatus);
+                    <tr data-date="@d.Date.ToString("yyyy-MM-dd")">
+                        <td style="white-space:nowrap">@d.Date.ToString("ddd MMM d")</td>
+                        <td style="min-width:180px">
+                            @(d.IsStandardRate ? d.Location : d.RateDescription)
+                            @if (d.IsStandardRate)
+                            {
+                                <div class="mud-text-secondary" style="font-size:0.75rem">@d.RateDescription</div>
+                            }
+                        </td>
+                        <td style="text-align:right">@(d.HasLodging ? PerDiemFormat.Money(d.LodgingMax) : "—")</td>
+                        <td style="text-align:right">@(d.HasLodging ? PerDiemFormat.Money(d.LodgingClaimed) : "—")</td>
+                        <td style="text-align:right">@(d.HasLodging ? PerDiemFormat.Money(d.LodgingAllowable + d.LodgingJustified) : "—")</td>
+                        <td>
+                            @if (d.HasLodging && d.LodgingClaimed > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="color" title="@d.Justification">@text</MudChip>
+                            }
+                        </td>
+                        <td style="text-align:right">@(d.LodgingTaxAllowable > 0 ? PerDiemFormat.Money(d.LodgingTaxAllowable) : "")</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(d.MieRate)</td>
+                        <td style="text-align:right">@(d.MieFactor < 1 ? "75%" : "")</td>
+                        <td style="text-align:right" title="@MealsText(d)">@(d.MealDeduction > 0 ? "−" + PerDiemFormat.Money(d.MealDeduction) : "")</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(d.MieAllowable)</td>
+                        <td style="text-align:right">@PerDiemFormat.Money(d.MieClaimed)</td>
+                        <td style="text-align:right" class="@(d.LodgingUnallowable + d.MieUnallowable > 0 ? "mud-error-text" : null)">
+                            @(d.LodgingUnallowable + d.MieUnallowable > 0 ? PerDiemFormat.Money(d.LodgingUnallowable + d.MieUnallowable) : "")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3"><b>Total</b> · claimed @PerDiemFormat.Money(dto.Totals.Claimed)</td>
+                    <td style="text-align:right"><b>@PerDiemFormat.Money(dto.Totals.LodgingClaimed)</b></td>
+                    <td style="text-align:right"><b>@PerDiemFormat.Money(dto.Totals.LodgingAllowable + dto.Totals.LodgingJustified)</b></td>
+                    <td></td>
+                    <td style="text-align:right"><b>@PerDiemFormat.Money(dto.Totals.LodgingTax)</b></td>
+                    <td colspan="3"></td>
+                    <td style="text-align:right"><b>@PerDiemFormat.Money(dto.Totals.MieAllowable)</b></td>
+                    <td style="text-align:right"><b>@PerDiemFormat.Money(dto.Totals.MieClaimed)</b></td>
+                    <td style="text-align:right"><b>@PerDiemFormat.Money(dto.Totals.Unallowable)</b></td>
+                </tr>
+            </tfoot>
+        </MudSimpleTable>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" data-testid="per-diem-allowable">
+            Allowable per diem @PerDiemFormat.Money(dto.Totals.Allowable) of @PerDiemFormat.Money(dto.Totals.Claimed) claimed · charged to @dto.WbsCode ·
+            lodging above the maximum @(dto.Policy == LodgingOveragePolicy.Unallowable ? "is unallowable" : "requires a justification") (FAR 31.205-46; 75% M&IE on the first and last day, FTR 301-11.101).
+        </MudText>
+    }
+    else if (_dto is not null)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            For a trip, add its destinations and nightly lodging: Workbench applies the GSA lodging maximum and M&amp;IE rate for each day,
+            75% on the first and last day, and deducts provided meals.
+        </MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public Guid ReportId { get; set; }
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+    [Parameter] public bool Editable { get; set; }
+    [Parameter] public DateOnly? TripStart { get; set; }
+    [Parameter] public DateOnly? TripEnd { get; set; }
+
+    /// <summary>Raised after expense lines change, so the page reloads them.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private TravelPerDiemDto? _dto;
+    private bool _editing;
+    private bool _busy;
+    private List<StopModel> _stops = [];
+    private readonly Dictionary<DateOnly, DayModel> _days = [];
+    private IReadOnlyList<ChargeCodeDto> _codes = [];
+    private IReadOnlyList<PerDiemLocationDto> _locations = [];
+    private Guid? _wbsId;
+    private bool _taxesSeparate = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _dto = await PerDiem.GetAsync(ReportId);
+        }
+        catch (Exception ex) when (PerDiemFormat.IsExpected(ex))
+        {
+            _dto = null;
+        }
+    }
+
+    private async Task StartEdit()
+    {
+        _stops.Clear();
+        _days.Clear();
+        if (_dto is { Exists: true } dto)
+        {
+            foreach (var s in dto.Destinations)
+            {
+                _stops.Add(new StopModel
+                {
+                    Location = new PerDiemLocationDto(s.Kind, s.Country, s.State, s.Destination),
+                    Arrive = s.ArriveOn.ToDateTime(TimeOnly.MinValue),
+                    Depart = s.DepartOn.ToDateTime(TimeOnly.MinValue),
+                });
+            }
+
+            foreach (var d in dto.Days)
+            {
+                _days[d.Date] = new DayModel
+                {
+                    Lodging = d.LodgingClaimed, Tax = d.LodgingTaxClaimed, Breakfast = d.BreakfastProvided, Lunch = d.LunchProvided, Dinner = d.DinnerProvided,
+                    Mie = d.MieClaimed == d.MieAllowable ? null : d.MieClaimed, Justification = d.Justification,
+                };
+            }
+
+            (_wbsId, _taxesSeparate) = (dto.WbsElementId, dto.LodgingTaxesSeparate);
+        }
+        else
+        {
+            var start = TripStart ?? DateOnly.FromDateTime(DateTime.Today);
+            var end = TripEnd is { } e && e >= start ? e : start.AddDays(2);
+            _stops.Add(new StopModel { Arrive = start.ToDateTime(TimeOnly.MinValue), Depart = end.ToDateTime(TimeOnly.MinValue) });
+        }
+
+        _editing = true;
+        await LoadChoicesAsync();
+    }
+
+    private async Task LoadChoicesAsync()
+    {
+        var start = Start() ?? DateOnly.FromDateTime(DateTime.Today);
+        try
+        {
+            _locations = await Rates.ListLocationsAsync(PerDiemFormat.FiscalYearOf(start));
+            _codes = await Projects.ListChargeCodesAsync(EmployeeId, start);
+            if (_wbsId is null || _codes.All(c => c.WbsElementId != _wbsId))
+            {
+                _wbsId = _codes.FirstOrDefault(c => c.Kind == ChargeCodeKind.Direct)?.WbsElementId ?? _codes.FirstOrDefault()?.WbsElementId;
+            }
+        }
+        catch (Exception ex) when (PerDiemFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load destinations or charge codes: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Task<IEnumerable<PerDiemLocationDto>> SearchLocationsAsync(string? text, CancellationToken ct) =>
+        Task.FromResult(string.IsNullOrWhiteSpace(text)
+            ? _locations.AsEnumerable()
+            : _locations.Where(l => l.Label.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    private void CancelEdit() => _editing = false;
+
+    private DateOnly? Start() => _stops.FirstOrDefault()?.Arrive is { } d ? DateOnly.FromDateTime(d) : null;
+
+    private IReadOnlyList<DateOnly> TripDays()
+    {
+        var start = Start();
+        var end = _stops.LastOrDefault()?.Depart is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
+        if (start is null || end is null || end < start || end.Value.DayNumber - start.Value.DayNumber > 180)
+        {
+            return [];
+        }
+
+        return Enumerable.Range(0, end.Value.DayNumber - start.Value.DayNumber + 1).Select(i => start.Value.AddDays(i)).ToList();
+    }
+
+    private DayModel Day(DateOnly date) => _days.TryGetValue(date, out var day) ? day : _days[date] = new DayModel();
+
+    private async Task OnArriveChanged(int index, DateTime? date)
+    {
+        _stops[index].Arrive = date;
+        if (index > 0)
+        {
+            _stops[index - 1].Depart = date;
+        }
+
+        if (index == 0)
+        {
+            await LoadChoicesAsync();
+        }
+    }
+
+    private void OnDepartChanged(int index, DateTime? date)
+    {
+        _stops[index].Depart = date;
+        if (index + 1 < _stops.Count)
+        {
+            _stops[index + 1].Arrive = date;
+        }
+    }
+
+    private void AddStop()
+    {
+        var last = _stops[^1];
+        var from = last.Depart ?? last.Arrive ?? DateTime.Today;
+        last.Depart = from;
+        _stops.Add(new StopModel { Arrive = from, Depart = from.AddDays(2) });
+    }
+
+    private void RemoveStop(int index)
+    {
+        _stops.RemoveAt(index);
+        for (var i = 1; i < _stops.Count; i++)
+        {
+            _stops[i].Arrive = _stops[i - 1].Depart;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_wbsId is null)
+        {
+            Snackbar.Add("Pick a charge code.", Severity.Warning);
+            return;
+        }
+
+        if (_stops.Any(s => s.Location is null || s.Arrive is null || s.Depart is null))
+        {
+            Snackbar.Add("Each destination needs a place, an arrival and a departure date.", Severity.Warning);
+            return;
+        }
+
+        var stops = _stops.Select(s => new TravelDestinationDto(s.Location!.Kind, s.Location.Country, s.Location.State, s.Location.Destination,
+            DateOnly.FromDateTime(s.Arrive!.Value), DateOnly.FromDateTime(s.Depart!.Value))).ToList();
+        var days = TripDays().Select(date =>
+        {
+            var d = Day(date);
+            return new TravelDayInput(date, d.Lodging, _taxesSeparate ? d.Tax : 0, d.Mie, d.Breakfast, d.Lunch, d.Dinner, d.Justification);
+        }).ToList();
+        await RunAsync(async () =>
+        {
+            _dto = await PerDiem.SaveAsync(ReportId, new SaveTravelPerDiemRequest(_wbsId.Value, _taxesSeparate, stops, days));
+            _editing = false;
+        }, "Per diem computed. Choose \"Update expense lines\" to add it to the report.");
+    }
+
+    private Task ApplyAsync() => RunAsync(async () =>
+    {
+        _dto = await PerDiem.ApplyToReportAsync(ReportId);
+        await Changed.InvokeAsync();
+    }, "Expense lines updated from the per diem.");
+
+    private async Task RemoveAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Remove per diem", "Remove the per diem and the expense lines generated from it?", yesText: "Remove", cancelText: "Cancel") == true)
+        {
+            await RunAsync(async () =>
+            {
+                await PerDiem.RemoveAsync(ReportId);
+                _dto = await PerDiem.GetAsync(ReportId);
+                await Changed.InvokeAsync();
+            }, "Per diem removed.");
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (PerDiemFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string MealsText(PerDiemDayDto d) =>
+        string.Join(", ", new[] { d.BreakfastProvided ? "breakfast" : null, d.LunchProvided ? "lunch" : null, d.DinnerProvided ? "dinner" : null }.OfType<string>());
+
+    private sealed class StopModel
+    {
+        public PerDiemLocationDto? Location { get; set; }
+        public DateTime? Arrive { get; set; }
+        public DateTime? Depart { get; set; }
+    }
+
+    private sealed class DayModel
+    {
+        public decimal Lodging { get; set; }
+        public decimal Tax { get; set; }
+        public bool Breakfast { get; set; }
+        public bool Lunch { get; set; }
+        public bool Dinner { get; set; }
+        public decimal? Mie { get; set; }
+        public string? Justification { get; set; }
+    }
+}

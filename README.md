@@ -97,6 +97,9 @@ dotnet build src/Workbench.Desktop -t:Run
   (and `:WeekStartDay`, `:BiweeklyAnchor`) only give the starting value until an Admin saves one.
 - `Purchasing:RequisitionFinanceThreshold`: requisitions over this total also need Finance approval after the project manager (default 10000); `Purchasing:MatchPriceTolerancePercent`: three-way match price tolerance (default 5)
 - `Assets:CapitalizationThreshold`: AP bill lines at or above this can be capitalized (default 5000); `Assets:GainLossAccountNumber` (default 4900) and `Assets:CashAccountNumber` (default 1010) for disposals
+- `PerDiem:LodgingOveragePolicy`: lodging above the GSA maximum is `RequiresJustification` (default; allowable up to `PerDiem:JustifiedLodgingCapPercent`, 300) or `Unallowable`
+- `PerDiem:Gsa:ApiKey` (secret, an api.data.gov key) and `PerDiem:Gsa:BaseUrl`: enables "Import from GSA API" on `/setup/per-diem`
+- `Resourcing:NonBillableAllowancePercent` (10), `Resourcing:FullThresholdPercent` (90), `Resourcing:StaffingTolerancePercent` (10): capacity, heat map and staffing-gap thresholds
 - `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
 - `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
 - `Timekeeping:MissingTimeReminderHour`: local hour from which employees with no hours for the previous business day get a reminder (default 9)

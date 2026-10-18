@@ -1,0 +1,146 @@
+@* People × weeks: allocated hours against capacity. Click a cell to see, change or add that week's allocations. *@
+@inject IResourcePlanningService Planning
+@inject IResourceAllocationService Allocations
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-2">
+    <MudDatePicker Label="From week" Date="_from.ToDateTime(TimeOnly.MinValue)" DateChanged="async d => { _from = ResourcingFormat.WeekStart(DateOnly.FromDateTime(d ?? DateTime.Today)); await LoadAsync(); }"
+                   DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+    <MudSelect T="int" Label="Weeks" Value="_weeks" ValueChanged="async v => { _weeks = v; await LoadAsync(); }" Style="max-width:110px">
+        <MudSelectItem T="int" Value="8">8</MudSelectItem>
+        <MudSelectItem T="int" Value="12">12</MudSelectItem>
+        <MudSelectItem T="int" Value="26">26</MudSelectItem>
+    </MudSelect>
+    <MudSelect T="Guid?" Label="Project" Value="_projectId" ValueChanged="async v => { _projectId = v; await LoadAsync(); }" Style="min-width:240px" Clearable="true">
+        <MudSelectItem T="Guid?" Value="null">Everyone</MudSelectItem>
+        @foreach (var p in Lookups.Projects)
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSpacer />
+    @if (Lookups.ManageableProjects.Count > 0)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddAsync(null, null)" data-testid="add-allocation">Add allocation</MudButton>
+    }
+</MudStack>
+
+<MudStack Row="true" Spacing="2" Class="mb-2" AlignItems="AlignItems.Center">
+    @foreach (var status in new[] { LoadStatus.Under, LoadStatus.Full, LoadStatus.Over })
+    {
+        <span style="@ResourcingFormat.CellStyle(status) padding:2px 10px; border-radius:4px; font-size:0.8rem">@ResourcingFormat.Label(status)</span>
+    }
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">Allocated / capacity hours. Full from @(_map?.FullThresholdPercent ?? 90)% of capacity.</MudText>
+</MudStack>
+
+@if (_map is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_map.Rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary">Nobody to show for these weeks.</MudText>
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Bordered="true" data-testid="heat-map">
+            <thead>
+                <tr>
+                    <th style="min-width:180px">Person</th>
+                    @foreach (var week in _map.Weeks)
+                    {
+                        <th style="text-align:center; white-space:nowrap">@week.ToString("MMM d")</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _map.Rows)
+                {
+                    <tr data-person="@row.EmployeeName">
+                        <td>
+                            <div>@row.EmployeeName</div>
+                            <div class="mud-text-secondary" style="font-size:0.75rem">@string.Join(" · ", new[] { row.LaborCategory, row.OrgUnit }.OfType<string>())</div>
+                        </td>
+                        @foreach (var cell in row.Weeks)
+                        {
+                            <td style="@ResourcingFormat.CellStyle(cell.Status) text-align:center; cursor:pointer; white-space:nowrap"
+                                title="@($"{ResourcingFormat.Label(cell.Status)}: {cell.Allocated:0.#} h allocated of {cell.Capacity:0.#} h capacity" + (cell.HolidayHours + cell.LeaveHours > 0 ? $" ({cell.HolidayHours + cell.LeaveHours:0.#} h holidays/leave)" : ""))"
+                                data-status="@cell.Status" data-week="@cell.WeekStart.ToString("yyyy-MM-dd")"
+                                @onclick="() => OpenCellAsync(row, cell)">
+                                @ResourcingFormat.Hours(cell.Allocated)<span class="mud-text-secondary">/@ResourcingFormat.Hours(cell.Capacity)</span>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ResourcingContext Lookups { get; set; } = default!;
+
+    private HeatMapDto? _map;
+    private DateOnly _from = ResourcingFormat.ThisWeek;
+    private int _weeks = 8;
+    private Guid? _projectId;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _map = await Planning.GetHeatMapAsync(new HeatMapQuery(_from, _weeks, null, _projectId));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the heat map: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenCellAsync(HeatMapRowDto row, HeatMapCellDto cell)
+    {
+        var parameters = new DialogParameters<AllocationWeekDialog>
+        {
+            { d => d.EmployeeId, row.EmployeeId },
+            { d => d.EmployeeName, row.EmployeeName },
+            { d => d.Week, cell.WeekStart },
+            { d => d.Capacity, cell.Capacity },
+            { d => d.Lookups, Lookups },
+        };
+        var dialog = await DialogService.ShowAsync<AllocationWeekDialog>($"{row.EmployeeName} · week of {cell.WeekStart:MMM d}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        await dialog.Result;
+        await LoadAsync();
+    }
+
+    private async Task AddAsync(Guid? employeeId, DateOnly? week)
+    {
+        var parameters = new DialogParameters<AllocationDialog>
+        {
+            { d => d.Employees, Lookups.Employees },
+            { d => d.Projects, Lookups.ManageableProjects },
+            { d => d.DefaultEmployeeId, employeeId },
+            { d => d.DefaultProjectId, _projectId },
+            { d => d.DefaultWeek, week ?? _from },
+        };
+        var dialog = await DialogService.ShowAsync<AllocationDialog>("Add allocation", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveAllocationRequest request })
+        {
+            try
+            {
+                await Allocations.CreateAsync(request);
+                Snackbar.Add("Allocation saved.", Severity.Success);
+            }
+            catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+
+            await LoadAsync();
+        }
+    }
+}

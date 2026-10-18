@@ -1,0 +1,145 @@
+@* One person's allocations in one week, with inline hour edits and deletes on the projects the user may staff. *@
+@inject IResourceAllocationService Allocations
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Capacity @ResourcingFormat.Hours(Capacity) h · allocated <b>@ResourcingFormat.Hours(_rows.Sum(r => r.Hours)) h</b>
+            @if (_rows.Sum(r => r.Hours) > Capacity)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">Over by @ResourcingFormat.Hours(_rows.Sum(r => r.Hours) - Capacity) h</MudChip>
+            }
+        </MudText>
+        <MudSimpleTable Dense="true" data-testid="week-allocations">
+            <thead><tr><th>Project</th><th>WBS</th><th>Labor category</th><th>Source</th><th style="width:140px">Hours</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    var editable = _manageable.Contains(row.ProjectId);
+                    <tr>
+                        <td>@row.ProjectCode</td>
+                        <td>@row.WbsCode</td>
+                        <td>@row.LaborCategoryCode</td>
+                        <td>@row.Source</td>
+                        <td>
+                            @if (editable)
+                            {
+                                <MudNumericField T="decimal" Value="row.Hours" ValueChanged="v => UpdateAsync(row, v)" Min="0" Max="168" Variant="Variant.Text" DebounceInterval="600"
+                                                 data-testid="@($"hours-{row.ProjectCode}-{row.WbsCode}")" />
+                            }
+                            else
+                            {
+                                @ResourcingFormat.Hours(row.Hours)
+                            }
+                        </td>
+                        <td>
+                            @if (editable)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" OnClick="() => DeleteAsync(row)" aria-label="Delete allocation" />
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_rows.Count == 0)
+                {
+                    <tr><td colspan="6" class="mud-text-secondary">No allocations this week.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        @if (Lookups.ManageableProjects.Count > 0)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync">Add allocation</MudButton>
+        }
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => MudDialog.Close()" data-testid="week-done">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid EmployeeId { get; set; }
+    [Parameter] public string EmployeeName { get; set; } = "";
+    [Parameter] public DateOnly Week { get; set; }
+    [Parameter] public decimal Capacity { get; set; }
+    [Parameter] public ResourcingContext Lookups { get; set; } = default!;
+
+    private List<AllocationDto> _rows = [];
+    private HashSet<Guid> _manageable = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _manageable = Lookups.ManageableProjects.Select(p => p.Id).ToHashSet();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = (await Allocations.ListAsync(new AllocationQuery(Week, Week.AddDays(6), null, EmployeeId))).ToList();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task UpdateAsync(AllocationDto row, decimal hours)
+    {
+        try
+        {
+            await Allocations.UpdateAsync(row.Id, new SaveAllocationRequest(row.EmployeeId, row.ProjectId, row.WeekStart, hours, null, row.WbsElementId, row.LaborCategoryId, 1, row.Notes));
+            Snackbar.Add($"{row.ProjectCode} {row.WbsCode}: {ResourcingFormat.Hours(hours)} h.", Severity.Success);
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(AllocationDto row)
+    {
+        try
+        {
+            await Allocations.DeleteAsync(row.Id);
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        var parameters = new DialogParameters<AllocationDialog>
+        {
+            { d => d.Employees, Lookups.Employees },
+            { d => d.Projects, Lookups.ManageableProjects },
+            { d => d.DefaultEmployeeId, EmployeeId },
+            { d => d.DefaultWeek, Week },
+        };
+        var dialog = await DialogService.ShowAsync<AllocationDialog>("Add allocation", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveAllocationRequest request })
+        {
+            try
+            {
+                await Allocations.CreateAsync(request);
+            }
+            catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+
+            await LoadAsync();
+        }
+    }
+}

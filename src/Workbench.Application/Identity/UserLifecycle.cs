@@ -109,6 +109,7 @@ public sealed class UserLifecycle(
             IsAdmin = roles.IsAdmin(),
             IsFinance = roles.HasFlag(OrgRoles.Finance),
             IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper),
+            IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager),
             CreatedAtUtc = now,
             IsActive = active,
             DeactivatedAtUtc = active ? null : now,
@@ -153,7 +154,7 @@ public sealed class UserLifecycle(
         email = AccessControl.Normalize(email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await LoadAsync(db, email, cancellationToken);
-        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper);
+        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager);
         if (user.IsAdmin && !roles.IsAdmin())
         {
             if (IsSelf(actor, email))
@@ -167,6 +168,7 @@ public sealed class UserLifecycle(
         user.IsAdmin = roles.IsAdmin();
         user.IsFinance = roles.HasFlag(OrgRoles.Finance);
         user.IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper);
+        user.IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager);
         await db.SaveChangesAsync(cancellationToken);
         if (before != roles)
         {
@@ -278,7 +280,7 @@ public sealed class UserLifecycle(
 
     internal static string RoleText(OrgRoles roles)
     {
-        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
+        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
         return names.Count == 0 ? "Employee" : string.Join(", ", names);
     }
 
