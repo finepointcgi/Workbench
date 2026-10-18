@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
 using Workbench.Infrastructure.Collaboration;
+using Workbench.Infrastructure.Notifications;
 using Workbench.Infrastructure.Persistence;
 
 namespace Workbench.Infrastructure;
@@ -35,6 +36,7 @@ public static class DependencyInjection
         });
         services.AddSingleton<IWorkbenchDbContextFactory, WorkbenchDbContextFactory>();
         services.AddCollaborationInfrastructure(configuration);
+        services.AddNotificationInfrastructure(configuration);
         return services;
     }
 }

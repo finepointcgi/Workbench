@@ -35,7 +35,7 @@ public static class LiveUpdatesHosting
 
     public static IEndpointRouteBuilder MapWorkbenchLiveUpdatesHub(this IEndpointRouteBuilder app)
     {
-        app.MapHub<SheetsHub>(SheetsHub.Path);
+        app.MapHub<SheetsHub>(SheetsHub.Path).RequireAuthorization();
         return app;
     }
 }

@@ -1,0 +1,267 @@
+@page "/dashboards/{DashboardId:guid}"
+@using Workbench.Contracts
+@using Workbench.Contracts.Dashboards
+@using Workbench.Ui.Collaboration
+@using Workbench.Ui.Dashboards
+@implements IDisposable
+@inject IDashboardService DashboardService
+@inject IWidgetDataService WidgetData
+@inject ISheetService SheetService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_dashboard?.Summary.Name ?? "Dashboard") · Workbench</PageTitle>
+
+@if (_notFound)
+{
+    <MudAlert Severity="Severity.Info">This dashboard doesn't exist any more. <MudLink Href="dashboards">Back to dashboards</MudLink></MudAlert>
+}
+else if (_dashboard is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+        <div>
+            <MudText Typo="Typo.h4" HtmlTag="h1">@_dashboard.Summary.Name</MudText>
+            @if (_dashboard.Summary.Description is { } description)
+            {
+                <MudText Class="mud-text-secondary">@description</MudText>
+            }
+        </div>
+        <MudSpacer />
+        @if (_editing)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddWidgetAsync" data-action="add-widget">Add widget</MudButton>
+        }
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Refresh widgets" OnClick="RefreshAllAsync" data-action="refresh" />
+        <MudButton Variant="@(_editing ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                   StartIcon="@(_editing ? Icons.Material.Filled.Check : Icons.Material.Filled.Edit)"
+                   OnClick="() => _editing = !_editing" data-action="edit">@(_editing ? "Done" : "Edit")</MudButton>
+    </MudStack>
+
+    @if (_dashboard.Widgets.Count == 0)
+    {
+        <MudPaper Class="pa-6" Outlined="true">
+            <MudText>This dashboard has no widgets yet. Choose <b>Edit</b>, then <b>Add widget</b>.</MudText>
+        </MudPaper>
+    }
+
+    <MudGrid Spacing="3">
+        @for (var index = 0; index < _dashboard.Widgets.Count; index++)
+        {
+            var widget = _dashboard.Widgets[index];
+            var position = index;
+            <MudItem xs="12" sm="@(Math.Max(widget.Width, 6))" md="@widget.Width" @key="widget.Id">
+                <MudPaper Outlined="true" Class="pa-3 d-flex flex-column" Style="@($"height:{HeightPx(widget.Height)}px")" data-widget="@widget.Title">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="@widget.Title">@widget.Title</MudText>
+                        @if (widget.Width >= 6 && !_editing && Data(widget) is { SheetName: { } sheetName, SheetId: { } sheetId })
+                        {
+                            <MudLink Href="@($"sheets/{sheetId}")" Typo="Typo.caption" Class="mud-text-secondary">@sheetName</MudLink>
+                        }
+                        <MudSpacer />
+                        @if (_editing)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="position == 0"
+                                           aria-label="Move up" OnClick="() => MoveAsync(position, -1)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="position == _dashboard.Widgets.Count - 1"
+                                           aria-label="Move down" OnClick="() => MoveAsync(position, 1)" />
+                            <MudMenu Icon="@Icons.Material.Filled.AspectRatio" Size="Size.Small" AriaLabel="Change width" Dense="true">
+                                @foreach (var (cols, label) in WidthOptions)
+                                {
+                                    <MudMenuItem OnClick="() => ResizeAsync(widget, cols)" Icon="@(cols == widget.Width ? Icons.Material.Filled.Check : null)">@label</MudMenuItem>
+                                }
+                            </MudMenu>
+                            <MudIconButton Icon="@Icons.Material.Filled.Settings" Size="Size.Small" aria-label="Edit widget" OnClick="() => EditWidgetAsync(widget)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete widget" OnClick="() => DeleteWidgetAsync(widget)" />
+                        }
+                    </MudStack>
+                    <div style="flex:1;overflow:auto;min-height:0">
+                        <WidgetView Data="Data(widget)" ChartHeight="@($"{HeightPx(widget.Height) - 180}px")" />
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @foreach (var sheetId in WatchedSheets())
+    {
+        <SheetLiveRefresher @key="sheetId" SheetId="sheetId" Debounce="LiveDebounce" Changed="() => RefreshSheetAsync(sheetId)" />
+    }
+}
+
+@code {
+    private static readonly (int Cols, string Label)[] WidthOptions =
+        [(3, "Quarter"), (4, "Third"), (6, "Half"), (8, "Two thirds"), (12, "Full width")];
+
+    [Parameter]
+    public Guid DashboardId { get; set; }
+
+    /// <summary>How long to wait after the last change to a sheet before recomputing its widgets.</summary>
+    [Parameter]
+    public TimeSpan LiveDebounce { get; set; } = TimeSpan.FromSeconds(1);
+
+    private DashboardDto? _dashboard;
+    private readonly Dictionary<Guid, WidgetDataDto> _data = [];
+    private IReadOnlyList<SheetSummary>? _sheets;
+    private bool _editing;
+    private bool _notFound;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _data.Clear();
+        _dashboard = null;
+        _notFound = false;
+        await LoadDashboardAsync();
+        await RefreshAllAsync();
+    }
+
+    private WidgetDataDto? Data(WidgetDto widget) => _data.GetValueOrDefault(widget.Id);
+
+    private static int HeightPx(WidgetHeight height) => height switch
+    {
+        WidgetHeight.Small => 190,
+        WidgetHeight.Large => 480,
+        _ => 330,
+    };
+
+    private IEnumerable<Guid> WatchedSheets() =>
+        _dashboard?.Widgets.Select(w => w.Config.SheetId).OfType<Guid>().Distinct() ?? [];
+
+    private async Task LoadDashboardAsync()
+    {
+        try
+        {
+            _dashboard = await DashboardService.GetAsync(DashboardId, _cts.Token);
+        }
+        catch (WorkbenchNotFoundException)
+        {
+            _notFound = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Task RefreshAllAsync() => RefreshAsync(_dashboard?.Widgets ?? []);
+
+    private Task RefreshSheetAsync(Guid sheetId) =>
+        RefreshAsync(_dashboard?.Widgets.Where(w => w.Config.SheetId == sheetId).ToList() ?? []);
+
+    private async Task RefreshAsync(IReadOnlyList<WidgetDto> widgets)
+    {
+        await Task.WhenAll(widgets.Select(LoadDataAsync));
+        StateHasChanged();
+    }
+
+    private async Task LoadDataAsync(WidgetDto widget)
+    {
+        try
+        {
+            _data[widget.Id] = await WidgetData.GetAsync(DashboardId, widget.Id, _cts.Token);
+        }
+        catch (WorkbenchNotFoundException)
+        {
+            _data.Remove(widget.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            _data[widget.Id] = new WidgetDataDto(widget.Id, widget.Type, widget.Config.SheetId, null, $"Couldn't load: {ex.Message}");
+        }
+    }
+
+    private async Task<SaveWidgetRequest?> ConfigureAsync(WidgetDto? widget)
+    {
+        _sheets ??= await SheetService.ListAsync();
+        var parameters = new DialogParameters<WidgetDialog> { { x => x.Widget, widget }, { x => x.Sheets, _sheets } };
+        var dialog = await DialogService.ShowAsync<WidgetDialog>(widget is null ? "Add widget" : "Edit widget", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        return await dialog.Result is { Canceled: false, Data: SaveWidgetRequest request } ? request : null;
+    }
+
+    private async Task AddWidgetAsync()
+    {
+        if (await ConfigureAsync(null) is not { } request)
+        {
+            return;
+        }
+
+        await SaveAsync(async () =>
+        {
+            var created = await DashboardService.AddWidgetAsync(DashboardId, request);
+            await ReloadAsync(created);
+        });
+    }
+
+    private async Task EditWidgetAsync(WidgetDto widget)
+    {
+        if (await ConfigureAsync(widget) is not { } request)
+        {
+            return;
+        }
+
+        await SaveAsync(async () => await ReloadAsync(await DashboardService.UpdateWidgetAsync(DashboardId, widget.Id, request)));
+    }
+
+    private Task ResizeAsync(WidgetDto widget, int width) =>
+        SaveAsync(async () =>
+        {
+            await DashboardService.UpdateWidgetAsync(DashboardId, widget.Id,
+                new SaveWidgetRequest(widget.Title, widget.Type, width, widget.Height, widget.Config));
+            await LoadDashboardAsync();
+        });
+
+    private async Task DeleteWidgetAsync(WidgetDto widget)
+    {
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete widget",
+            new DialogParameters<ConfirmDialog> { { x => x.Message, $"Delete the \"{widget.Title}\" widget?" } });
+        if (await dialog.Result is not { Canceled: false })
+        {
+            return;
+        }
+
+        await SaveAsync(async () =>
+        {
+            await DashboardService.DeleteWidgetAsync(DashboardId, widget.Id);
+            _data.Remove(widget.Id);
+            await LoadDashboardAsync();
+        });
+    }
+
+    private Task MoveAsync(int index, int delta) =>
+        SaveAsync(async () =>
+        {
+            var ids = _dashboard!.Widgets.Select(w => w.Id).ToList();
+            (ids[index], ids[index + delta]) = (ids[index + delta], ids[index]);
+            _dashboard = await DashboardService.ReorderWidgetsAsync(DashboardId, new ReorderWidgetsRequest(ids));
+        });
+
+    // Reload the layout, then recompute the one widget whose configuration changed.
+    private async Task ReloadAsync(WidgetDto changed)
+    {
+        await LoadDashboardAsync();
+        await LoadDataAsync(changed);
+    }
+
+    private async Task SaveAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or WorkbenchNotFoundException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't save the dashboard: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

@@ -20,6 +20,13 @@ public sealed class BudgetVersion : Entity
     public bool IsLocked { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public required string CreatedBy { get; set; }
+    public string? Description { get; set; }
+
+    /// <summary>The version this one was copied from, if any.</summary>
+    public Guid? SourceVersionId { get; set; }
+
+    public DateTime? LockedAtUtc { get; set; }
+    public string? LockedBy { get; set; }
     public List<BudgetLine> Lines { get; } = [];
 }
 
@@ -45,5 +52,9 @@ public sealed class BudgetLine : Entity
     public DateOnly? PeriodStart { get; set; }
 
     public decimal Hours { get; set; }
+
+    /// <summary>Hourly planning rate used to price a labor line (Amount = Hours × rate); 0 for ODC lines.</summary>
+    public decimal PlanningRate { get; set; }
+
     public decimal Amount { get; set; }
 }

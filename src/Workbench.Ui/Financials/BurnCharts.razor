@@ -1,0 +1,57 @@
+@* Time-phased burn: cumulative budget vs actual (line) and budget vs actual per fiscal period (bars). *@
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2">Cumulative budget vs actual</MudText>
+    @if (Burn.Periods.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No fiscal periods cover this project.</MudText>
+    }
+    else
+    {
+        <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_cumulative" ChartLabels="_labels" Width="100%" Height="260px"
+                  LegendPosition="Position.Bottom" />
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mt-4">Per period</MudText>
+        <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_perPeriod" ChartLabels="_labels" Width="100%" Height="260px"
+                  LegendPosition="Position.Bottom" />
+    }
+    @if (Burn.UnphasedBudgetAmount != 0)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            @FinancialFormat.Money(Burn.UnphasedBudgetAmount) of budget isn't phased by period and isn't in these charts.
+        </MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public TimePhasedBurnDto Burn { get; set; } = default!;
+
+    private string[] _labels = [];
+    private List<ChartSeries<double>> _cumulative = [];
+    private List<ChartSeries<double>> _perPeriod = [];
+    private TimePhasedBurnDto? _builtFor;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_builtFor, Burn))
+        {
+            return;
+        }
+
+        _builtFor = Burn;
+        _labels = Burn.Periods.Select(p => p.PeriodName).ToArray();
+
+        // The actual line ends at the current period; extending it flat into future periods would read as zero spend.
+        var actualToDate = Burn.Periods.TakeWhile(p => !p.IsFuture).Select(p => (double)(p.CumulativeActual ?? 0)).ToList();
+        _cumulative =
+        [
+            new() { Name = "Cumulative budget", Data = new ChartData<double>(Burn.Periods.Select(p => (double)p.CumulativeBudget).ToList()) },
+            new() { Name = "Cumulative actual", Data = new ChartData<double>(actualToDate) },
+        ];
+        _perPeriod =
+        [
+            new() { Name = "Budget", Data = new ChartData<double>(Burn.Periods.Select(p => (double)p.BudgetAmount).ToList()) },
+            new() { Name = "Actual", Data = new ChartData<double>(Burn.Periods.Select(p => (double)p.ActualCost).ToList()) },
+        ];
+    }
+}

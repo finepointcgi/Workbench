@@ -1,0 +1,181 @@
+@using Workbench.Contracts.Automation
+@using Workbench.Ui.Collaboration
+@inject IRuleService Rules
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@* The sheet's rules (with enable toggles) and their recent runs. *@
+<MudStack Spacing="4">
+    <MudStack Row="true" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Rules</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">New rule</MudButton>
+    </MudStack>
+
+    @if (_rules is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_rules.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            No rules yet. Rules notify people, set fields or add subitems when something happens in this sheet.
+        </MudText>
+    }
+    else
+    {
+        <MudPaper Outlined="true">
+            <MudList T="RuleDto" Dense="true">
+                @foreach (var rule in _rules)
+                {
+                    <MudListItem T="RuleDto" @key="rule.Id">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudSwitch T="bool" Value="rule.Enabled" ValueChanged="v => SetEnabledAsync(rule, v)" Color="Color.Primary"
+                                       aria-label="@($"Enable {rule.Name}")" />
+                            <div style="flex:1;min-width:0">
+                                <MudText Typo="Typo.body1">@rule.Name</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="overflow-wrap:anywhere">@RuleFormat.Describe(Sheet, rule)</MudText>
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {rule.Name}")" OnClick="() => EditAsync(rule)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Delete {rule.Name}")" OnClick="() => DeleteAsync(rule)" />
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" HtmlTag="h2">Recent runs</MudText>
+    @if (_runs is { Count: 0 })
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing has run yet.</MudText>
+    }
+    else if (_runs is not null)
+    {
+        <MudSimpleTable Dense="true" Hover="true" Outlined="true">
+            <thead>
+                <tr><th>When</th><th>Rule</th><th>Item</th><th>Result</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var run in _runs)
+                {
+                    <tr @key="run.Id">
+                        <td title="@run.FiredAtUtc.ToLocalTime().ToString("f")" style="white-space:nowrap">@CollaborationFormat.Ago(run.FiredAtUtc, DateTime.UtcNow)</td>
+                        <td>@run.RuleName</td>
+                        <td>
+                            @if (run.ItemId is { } itemId && run.ItemTitle is not null)
+                            {
+                                <MudLink Href="@($"sheets/{Sheet.Summary.Id}?item={itemId}")">@run.ItemTitle</MudLink>
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">(deleted)</span>
+                            }
+                        </td>
+                        <td>
+                            <MudChip T="string" Size="Size.Small" Color="@OutcomeColor(run.Outcome)" Variant="Variant.Text">@run.Outcome</MudChip>
+                            <span style="overflow-wrap:anywhere">@(run.Error ?? run.Detail)</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired]
+    public SheetDetail Sheet { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ItemDto> Items { get; set; } = [];
+
+    /// <summary>Bumped by the page on live changes, so new runs show up.</summary>
+    [Parameter]
+    public int Version { get; set; }
+
+    private IReadOnlyList<RuleDto>? _rules;
+    private IReadOnlyList<RuleRunDto>? _runs;
+    private (Guid, int)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != (Sheet.Summary.Id, Version))
+        {
+            _loaded = (Sheet.Summary.Id, Version);
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rules = await Rules.ListAsync(Sheet.Summary.Id);
+            _runs = await Rules.ListRunsAsync(Sheet.Summary.Id, limit: 25);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _rules ??= [];
+            _runs ??= [];
+            Snackbar.Add($"Couldn't load rules: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(RuleDto? rule)
+    {
+        var parameters = new DialogParameters<RuleEditorDialog>
+        {
+            { d => d.Sheet, Sheet },
+            { d => d.Items, Items },
+            { d => d.Rule, rule },
+        };
+        var dialog = await DialogService.ShowAsync<RuleEditorDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task SetEnabledAsync(RuleDto rule, bool enabled)
+    {
+        try
+        {
+            await Rules.SetEnabledAsync(Sheet.Summary.Id, rule.Id, enabled);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't update the rule: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(RuleDto rule)
+    {
+        var parameters = new DialogParameters<ConfirmDialog> { { d => d.Message, $"Delete \"{rule.Name}\" and its run history?" } };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete rule", parameters);
+        if (await dialog.Result is not { Canceled: false })
+        {
+            return;
+        }
+
+        try
+        {
+            await Rules.DeleteAsync(Sheet.Summary.Id, rule.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't delete the rule: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static Color OutcomeColor(RuleRunOutcome outcome) => outcome switch
+    {
+        RuleRunOutcome.Succeeded => Color.Success,
+        RuleRunOutcome.Failed => Color.Error,
+        _ => Color.Warning,
+    };
+}

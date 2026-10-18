@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
 
 namespace Workbench.ApiClient;
@@ -36,7 +37,7 @@ public sealed class HttpCommentService(HttpClient http) : ICommentService
     {
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
-            throw new UnauthorizedAccessException(await response.Content.ReadAsStringAsync(cancellationToken));
+            throw new WorkbenchForbiddenException(await response.Content.ReadAsStringAsync(cancellationToken));
         }
     }
 }

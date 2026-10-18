@@ -39,6 +39,7 @@ branches, so these rules keep merges small and predictable.
 - `MudText` uses `HtmlTag="h1"` (not `Component`). `MudTabs` uses `TabPanelsClass` (not `PanelClass`).
 - Avoid `Color.Secondary` for quiet text (it is pink); use `Class="mud-text-secondary"`.
 - Dialogs: `[CascadingParameter] IMudDialogInstance MudDialog`, `DialogService.ShowAsync<T>()`, `await dialog.Result`.
+- `MudMenu` with `ActivatorContent`: the activator must call `context.ToggleAsync(e)`; it isn't wired automatically.
 - Treat MudBlazor analyzer warnings (`MUD0002`) as errors: they flag removed parameters.
 
 ## Build and verify
@@ -77,3 +78,54 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - The plan sheet and the WBS are one tree: `Project.SheetId` points at the plan sheet and `WbsElement.ItemId` at its task.
 - The signed-in person's employee record: `IPeopleService.GetCurrentEmployeeAsync()` (matched by `ICurrentUser.Email`).
 - Seeded dev data: `ProjectAccountingSeed.cs` (FY runs Oct–Sep; employees pm@, analyst@, dev@workbench.local, viewer@).
+
+## Authentication and permissions
+
+- Who is signed in: `ICurrentUser` (sync: email, name). Roles and the linked employee: `ICurrentUserContext.GetAsync()`
+  (`CurrentUserInfo`: `Roles`, `EmployeeId`, `IsFinance`, `CanViewAllTimesheets`). Server code can also inject
+  `Application.Identity.AccessControl` (`RequireSheetRoleAsync`, `RequireFinanceAsync`, `RequireAdminAsync`).
+- Two kinds of roles. **Workspace roles** (Viewer < Commenter < Editor < Owner) govern sheets, through membership of the
+  sheet's workspace. **Organization roles** (`OrgRoles` flags: Timekeeper, Finance, Admin; everyone is an Employee)
+  govern project accounting. Admin can do everything.
+- Enforce on the server with decorators registered by `AddWorkbenchIdentity()`, which stays the **last** line of
+  `AddWorkbenchApplication` so the permission checks wrap every other decorator. Put new feature registrations
+  (and their own decorators) above it, and add the new service's permission decorator inside `AddWorkbenchIdentity`.
+- A sheet the user can't see is not found (404); something they can see but not change is
+  `WorkbenchForbiddenException` (403, a subclass of `UnauthorizedAccessException`). UI catch filters should include it.
+- Views get the user's sheet role as a cascading `SheetAccess` (`CanEdit`, `CanComment`) from `SheetPage`; hide edit
+  affordances with it. A missing cascade means full access, so components still render in tests.
+- Project accounting rules (`ProjectAccess`, also `IFinancialAccessService` for the UI): labor cost (the labor distribution)
+  is Finance/Admin; project financials, budgets (reads and writes) and financial exports are Finance, Admin or the project's
+  manager; contract funding is Finance, Admin or the manager of a project on that contract; hours and daily-entry reports
+  show everyone to Timekeeper/Finance/Admin, direct reports to a supervisor, and only yourself otherwise; a project's ODC
+  list is Finance/Admin/PM, others see only their own entries. Automation rules: Viewer reads, Editor changes. Dashboards:
+  the owner (or an admin) edits; workspace members view workspace dashboards. Pages under `/setup` use `SetupLayout`
+  (Finance/Admin, friendly 403 via `ForbiddenNotice`).
+- Timesheets are approved by the supervisor, or by Admins for employees without one; Timekeeper/Finance/Admin view all.
+- Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
+  analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
+## Notifications (any feature)
+
+To tell someone something, inject `INotificationPublisher` (`Workbench.Application.Notifications`, a singleton) and
+call it **after** your change is saved:
+
+```csharp
+await notifications.PublishAsync(
+    approver.Email, NotificationKinds.TimesheetSubmitted,
+    $"{employee.Name} submitted a timesheet", "Week of Oct 12: 40.0 h",
+    link: $"time/approvals?week={weekStart:yyyy-MM-dd}");
+```
+
+- It saves the notification, pushes it live to the recipient's bell (and desktop app), and emails it according to the
+  recipient's preference: right away, in the daily digest (default), or not at all. You don't pick the delivery.
+- There's an overload taking several emails (each distinct valid email is notified once). Invalid or blank emails are
+  skipped, never thrown; delivery failures are logged, never thrown.
+- `kind`: a `NotificationKinds` constant (`timesheet.submitted/approved/rejected/missing`, `expense.approval`, ...) or
+  your own short lower-case string. `link` is app-relative (`time/...`); absolute URLs throw `ArgumentException`.
+  Pass `sheetId`/`itemId` instead of a link to point at a sheet item.
+- The actor isn't added for you: say who did what in the title. Don't notify people about their own actions.
+- For a raw email with no in-app notification, use `IEmailSender` with an `EmailMessage(to, subject, text, html)`.
+  Keep HTML plain and self-contained (no external images, fonts or styles); see `NotificationEmails` for the layout.
+- Scheduled checks (e.g. "timesheet missing for yesterday") belong in a `BackgroundService` registered from the web
+  host (like `DateTriggerBackgroundService`), so notifications reach the in-process bell. Make them idempotent.
+

@@ -1,3 +1,4 @@
+using Workbench.Application.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Sheets;
@@ -13,8 +14,9 @@ public sealed class ActivityRecordingTests
     {
         await using var host = new CollaborationHost();
 
-        Assert.IsType<ActivityRecordingItemService>(host.Items);
-        Assert.IsType<ActivityRecordingColumnService>(host.Columns);
+        // Permission checks wrap activity recording, so refused calls never reach it; the tests below show recording still runs.
+        Assert.IsType<PermissionCheckingItemService>(host.Items);
+        Assert.IsType<PermissionCheckingColumnService>(host.Columns);
     }
 
     [Fact]

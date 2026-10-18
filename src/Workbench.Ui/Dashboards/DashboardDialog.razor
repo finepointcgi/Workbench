@@ -1,0 +1,40 @@
+@using Workbench.Contracts.Dashboards
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
+            <MudTextField @bind-Value="_description" Label="Description" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">@SubmitText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string? Name { get; set; }
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string SubmitText { get; set; } = "Create";
+
+    private string _name = string.Empty;
+    private string? _description;
+
+    protected override void OnInitialized()
+    {
+        _name = Name ?? string.Empty;
+        _description = Description;
+    }
+
+    /// <summary>Closes with an <see cref="UpdateDashboardRequest"/> (also used for create).</summary>
+    private void Submit() => MudDialog.Close(DialogResult.Ok(new UpdateDashboardRequest(_name.Trim(), _description)));
+}

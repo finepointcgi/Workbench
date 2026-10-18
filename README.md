@@ -56,3 +56,16 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Costpoint:Source`: `None` (default), `Csv`, `Rest` or `Database` (see `src/Workbench.Costpoint/README.md`)
 - `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)
+- `Authentication:Oidc:Authority`, `:ClientId`, `:ClientSecret`, `:Audience`, `:Scopes`: OpenID Connect sign-in (Entra ID
+  or any OIDC provider). Required outside Development; without an authority, Development uses the dev sign-in page.
+- `Authentication:Admins`: emails made administrators when they sign in (bootstrap for a new install)
+- Desktop sign-in: `WORKBENCH_OIDC_AUTHORITY`, `WORKBENCH_OIDC_CLIENT_ID` and optional `WORKBENCH_OIDC_SCOPE`
+  (a public client that allows `http://127.0.0.1` loopback redirects)
+- `Email:Mode`: `Pickup` (write `.eml` files to `Email:PickupFolder`, default `App_Data/mail`; Development default) or `Smtp`
+  (`Email:Smtp:Host`, `Port`, `EnableSsl`, `UserName`, `Password`); `Email:From` sets the sender
+- `Notifications:PublicBaseUrl`: makes links in emails absolute; `Notifications:DigestHourLocal`: daily digest hour (default 7)
+- `Timekeeping:Cadence`: timesheet period, `Weekly` (Monday–Sunday, default) or `SemiMonthly` (1st–15th, 16th–end)
+- `Timekeeping:TimeZone`: time zone that decides "today" for future-date and late-entry checks (default: server local)
+- `Timekeeping:LateEntryBusinessDays`: a day's hours are flagged late when first entered more than this many business days after the work date (default 1)
+- `Timekeeping:MissingTimeReminderHour`: local hour from which employees with no hours for the previous business day get a reminder (default 9)
+- Timesheet approval follows roles, not configuration: the supervisor approves; administrators approve for employees without a supervisor; Timekeeper, Finance and Admin can view every timesheet

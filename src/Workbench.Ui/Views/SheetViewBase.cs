@@ -19,6 +19,12 @@ public abstract class SheetViewBase : ComponentBase
     [Parameter]
     public EventCallback Changed { get; set; }
 
+    /// <summary>The user's role on the sheet, from the sheet page. Null (no cascade) means full access.</summary>
+    [CascadingParameter]
+    public SheetAccess? Access { get; set; }
+
+    protected bool CanEdit => Access?.CanEdit ?? true;
+
     protected Guid SheetId => Sheet.Summary.Id;
 
     protected ColumnDto? FindColumn(string name) =>

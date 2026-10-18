@@ -1,0 +1,65 @@
+@inject IProjectFinancialsService Financials
+@inject ISnackbar Snackbar
+
+@* Compact financials for a project's plan sheet: tiles and the WBS grid in dollars, with a link to the full page. *@
+
+@if (_summary is null)
+{
+    <MudProgressLinear Indeterminate="_loading" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">@_summary.ProjectCode · @_summary.ProjectName</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            @(_summary.BudgetVersionName is { } v ? $"Budget: {v}" : "No budget") · as of @_summary.AsOf.ToString("yyyy-MM-dd")
+        </MudText>
+        <MudSpacer />
+        <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.EditNote">Budgets</MudButton>
+        <MudButton Href="@($"projects/{ProjectId}/financials")" Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Filled.OpenInNew">Full financials</MudButton>
+    </MudStack>
+    @foreach (var note in _summary.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+    @foreach (var alert in _summary.Funding?.Alerts.Where(a => a.Level != FundingAlertLevel.Info) ?? [])
+    {
+        <MudAlert Severity="@(alert.Level == FundingAlertLevel.Critical ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">@alert.Message</MudAlert>
+    }
+    <FinancialTiles Summary="_summary" />
+    <WbsFinancialsGrid Rows="_rows" Totals="_summary.Totals" Compact="true" />
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    private ProjectFinancialSummaryDto? _summary;
+    private IReadOnlyList<WbsFinancialRowDto> _rows = [];
+    private bool _loading;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_summary is not null && _loadedFor == ProjectId)
+        {
+            return;
+        }
+
+        _loadedFor = ProjectId;
+        _loading = true;
+        try
+        {
+            _summary = await Financials.GetProjectSummaryAsync(ProjectId);
+            _rows = await Financials.GetWbsFinancialsAsync(ProjectId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load financials: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

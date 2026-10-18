@@ -1,0 +1,163 @@
+@page "/setup/fiscal-calendar"
+@inject IFiscalCalendarService Calendar
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Fiscal calendar · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Fiscal calendar" Subtitle="Accounting periods. Closed periods reject new time, ODCs and changes; closing or reopening one needs a reason.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateNextAsync" Disabled="_busy"
+               data-testid="next-fy">Create @(NextYear is { } y ? $"FY{y}" : "next fiscal year")</MudButton>
+</SetupHeader>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_periods.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Class="mb-3">No fiscal years yet. The federal fiscal year runs October to September.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateNextAsync">Create FY@(NextYear)</MudButton>
+    </MudPaper>
+}
+else
+{
+    @foreach (var year in _periods.GroupBy(p => p.FiscalYear).OrderByDescending(g => g.Key))
+    {
+        var open = year.Count(p => p.Status == FiscalPeriodState.Open);
+        <MudExpansionPanels Class="mb-3" Elevation="0" Outlined="true">
+            <MudExpansionPanel Expanded="year.Any(p => p.Start <= Today && p.End >= Today) || year.Key == _periods.Max(p => p.FiscalYear)">
+                <TitleContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.h6" HtmlTag="h2">FY@(year.Key)</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @SetupFormat.Date(year.Min(p => p.Start)) – @SetupFormat.Date(year.Max(p => p.End)) · @open open, @(year.Count() - open) closed
+                        </MudText>
+                    </MudStack>
+                </TitleContent>
+                <ChildContent>
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead><tr><th>#</th><th>Period</th><th>Dates</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var p in year.OrderBy(p => p.Number))
+                            {
+                                <tr data-testid="@($"period-{p.Name}")">
+                                    <td>@p.Number</td>
+                                    <td>
+                                        @p.Name
+                                        @if (p.Start <= Today && p.End >= Today)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text" Class="ma-0 ml-1">current</MudChip>
+                                        }
+                                    </td>
+                                    <td>@SetupFormat.Date(p.Start) – @SetupFormat.Date(p.End)</td>
+                                    <td>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0"
+                                                 Color="@(p.Status == FiscalPeriodState.Open ? Color.Success : Color.Default)"
+                                                 Icon="@(p.Status == FiscalPeriodState.Open ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)">@p.Status</MudChip>
+                                    </td>
+                                    <td style="text-align:right">
+                                        @if (p.Status == FiscalPeriodState.Open)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => SetStatusAsync(p, FiscalPeriodState.Closed)">Close</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => SetStatusAsync(p, FiscalPeriodState.Open)">Reopen</MudButton>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </ChildContent>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private bool _loading = true;
+    private bool _busy;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>The year after the latest one, or the current federal fiscal year when there are none.</summary>
+    private int? NextYear => _loading ? null : _periods.Count > 0 ? _periods.Max(p => p.FiscalYear) + 1 : (Today.Month >= 10 ? Today.Year + 1 : Today.Year);
+
+    private DateOnly NextStart => _periods.Count > 0 ? _periods.Max(p => p.End).AddDays(1) : new DateOnly(NextYear!.Value - 1, 10, 1);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _periods = await Calendar.ListPeriodsAsync();
+        _loading = false;
+    }
+
+    private async Task CreateNextAsync()
+    {
+        if (NextYear is not { } year)
+        {
+            return;
+        }
+
+        var start = NextStart;
+        var confirm = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = $"Create FY{year}?",
+            Message = $"Twelve monthly periods from {SetupFormat.Date(start)} to {SetupFormat.Date(start.AddYears(1).AddDays(-1))}, all open.",
+            YesText = "Create",
+            CancelText = "Cancel",
+        });
+        if (confirm != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Calendar.CreateFiscalYearAsync(year, start);
+            await LoadAsync();
+            Snackbar.Add($"Created FY{year}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SetStatusAsync(FiscalPeriodDto period, FiscalPeriodState status)
+    {
+        var closing = status == FiscalPeriodState.Closed;
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { d => d.Message, closing ? $"Closing {period.Name} stops new time, ODCs and changes dated in it." : $"Reopening {period.Name} allows changes dated in it again." },
+            { d => d.ConfirmText, closing ? "Close period" : "Reopen period" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>(closing ? $"Close {period.Name}" : $"Reopen {period.Name}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        try
+        {
+            await Calendar.SetPeriodStatusAsync(period.Id, status, reason);
+            await LoadAsync();
+            Snackbar.Add($"{period.Name} {(closing ? "closed" : "reopened")}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

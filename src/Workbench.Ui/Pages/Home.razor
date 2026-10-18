@@ -1,25 +1,198 @@
 @page "/"
+@using Workbench.Contracts.MyWork
+@inject IMyWorkService MyWorkService
+@inject IItemService ItemService
+@inject ISnackbar Snackbar
 
 <PageTitle>My Work · Workbench</PageTitle>
 
-<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">My Work</MudText>
-<MudGrid>
-    <MudItem xs="12" md="4">
-        <MudPaper Class="pa-4" Outlined="true">
-            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Assigned to me</MudText>
-            <MudText Typo="Typo.h5">0</MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" md="4">
-        <MudPaper Class="pa-4" Outlined="true">
-            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Due this week</MudText>
-            <MudText Typo="Typo.h5">0</MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" md="4">
-        <MudPaper Class="pa-4" Outlined="true">
-            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Last Costpoint sync</MudText>
-            <MudText Typo="Typo.h5">Not configured</MudText>
-        </MudPaper>
-    </MudItem>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4" HtmlTag="h1">My Work</MudText>
+    @if (_work is not null)
+    {
+        <MudText Class="mud-text-secondary">@_work.Email</MudText>
+    }
+    <MudSpacer />
+    <MudSwitch T="bool" @bind-Value="_showDone" Label="Show done" Color="Color.Primary" />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Refresh" OnClick="LoadAsync" />
+</MudStack>
+
+<MudGrid Class="mb-4">
+    @foreach (var (label, value, color) in Tiles())
+    {
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Outlined="true">
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">@label</MudText>
+                <MudText Typo="Typo.h5" Color="color" data-tile="@label">@value</MudText>
+            </MudPaper>
+        </MudItem>
+    }
 </MudGrid>
+
+@* TODO(timekeeping): replace with this week's timesheet status (hours entered, submitted/approved) once the
+   timekeeping contracts land; keep the link to /time. *@
+<MudPaper Class="pa-4 mb-4 d-flex align-center gap-3" Outlined="true" data-card="timesheet">
+    <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" />
+    <div>
+        <MudText Typo="Typo.subtitle1">Timesheet for the week of @WeekStart().ToString("d MMM")</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Enter and submit your hours for this week.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Href="time" Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Open timesheet</MudButton>
+</MudPaper>
+
+@if (_loading && _work is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_work is not null && !_work.Items.Any(i => _showDone || i.Bucket != MyWorkBucket.Done))
+{
+    <MudPaper Class="pa-6" Outlined="true">
+        <MudText>Nothing is assigned to you. Items appear here when a Person column on a sheet is set to @_work.Email.</MudText>
+    </MudPaper>
+}
+else if (_work is not null)
+{
+    @foreach (var group in _work.Items.Where(i => _showDone || i.Bucket != MyWorkBucket.Done).GroupBy(i => i.Bucket))
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2" data-bucket="@group.Key">
+            @BucketLabel(group.Key) <MudChip T="string" Size="Size.Small">@group.Count()</MudChip>
+        </MudText>
+        <MudPaper Outlined="true">
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr>
+                        <th style="width:22%">Sheet</th>
+                        <th>Title</th>
+                        <th style="width:14%">Due</th>
+                        <th style="width:20%">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in group)
+                    {
+                        <tr @key="row.Item.Id" data-item="@row.Item.Id">
+                            <td class="mud-text-secondary">@row.SheetName</td>
+                            <td><MudLink Href="@($"sheets/{row.SheetId}?item={row.Item.Id}")" Typo="Typo.body2">@row.Item.Title</MudLink></td>
+                            <td class="@(row.Bucket == MyWorkBucket.Overdue ? "mud-error-text" : null)">@(row.Due?.ToString("ddd d MMM") ?? "—")</td>
+                            <td>
+                                @if (row.StatusColumn is { } column)
+                                {
+                                    @* Keyed on the value: MudSelect keeps showing the old text when Value changes during its own ValueChanged. *@
+                                    <MudSelect @key="row.Status" T="string" Value="@(row.Status ?? string.Empty)" Dense="true" Margin="Margin.Dense"
+                                               Variant="Variant.Outlined" aria-label="Status" Disabled="_saving.Contains(row.Item.Id)"
+                                               ValueChanged="@(v => SetStatusAsync(row, v))">
+                                        <MudSelectItem T="string" Value="@string.Empty">(none)</MudSelectItem>
+                                        @foreach (var option in OptionsFor(row, column))
+                                        {
+                                            <MudSelectItem T="string" Value="@option">@option</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@(row.Status ?? "—")</MudText>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private MyWorkDto? _work;
+    private bool _loading = true;
+    private bool _showDone;
+    private readonly HashSet<Guid> _saving = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _work = await MyWorkService.GetAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't reach the Workbench server: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private IEnumerable<(string Label, int Value, Color Color)> Tiles()
+    {
+        var c = _work?.Counts ?? new MyWorkCounts(0, 0, 0, 0);
+        yield return ("Assigned to me", c.Assigned, Color.Default);
+        yield return ("Due this week", c.DueThisWeek, Color.Info);
+        yield return ("Overdue", c.Overdue, c.Overdue > 0 ? Color.Error : Color.Default);
+        yield return ("Done this week", c.DoneThisWeek, Color.Success);
+    }
+
+    // Monday of the current week; matches MyWorkDto.WeekEnd once loaded.
+    private DateOnly WeekStart()
+    {
+        var today = _work?.Today ?? DateOnly.FromDateTime(DateTime.Today);
+        return today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+    }
+
+    private static string BucketLabel(MyWorkBucket bucket) => bucket switch
+    {
+        MyWorkBucket.Overdue => "Overdue",
+        MyWorkBucket.DueThisWeek => "Due this week",
+        MyWorkBucket.Later => "Later",
+        MyWorkBucket.NoDate => "No date",
+        _ => "Done",
+    };
+
+    // Keep a value that isn't an option any more selectable so it still shows.
+    private static IEnumerable<string> OptionsFor(MyWorkItem row, ColumnDto column) =>
+        row.Status is null || column.Options.Contains(row.Status) ? column.Options : column.Options.Append(row.Status);
+
+    private async Task SetStatusAsync(MyWorkItem row, string value)
+    {
+        if (row.StatusColumn is not { } column || value == (row.Status ?? string.Empty))
+        {
+            return;
+        }
+
+        var values = new Dictionary<string, string?>(row.Item.Values)
+        {
+            [column.Id.ToString()] = value.Length == 0 ? null : value,
+        };
+        // Show the new value right away; otherwise the re-render during the save puts the old value back in the select.
+        if (_work is not null)
+        {
+            _work = _work with
+            {
+                Items = _work.Items.Select(i => i.Item.Id == row.Item.Id ? i with { Status = value.Length == 0 ? null : value } : i).ToList(),
+            };
+        }
+
+        _saving.Add(row.Item.Id);
+        try
+        {
+            var item = row.Item;
+            await ItemService.UpdateAsync(row.SheetId, item.Id,
+                new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values));
+            Snackbar.Add($"\"{item.Title}\" is now {(value.Length == 0 ? "unset" : value)}", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't update the status: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving.Remove(row.Item.Id);
+        }
+
+        await LoadAsync();
+    }
+}

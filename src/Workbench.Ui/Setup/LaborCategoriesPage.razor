@@ -1,0 +1,83 @@
+@page "/setup/labor-categories"
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Labor categories · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Labor categories" Subtitle="Used for budgets, charge assignments and contract bill rates. Deactivate a category instead of deleting it.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">New category</MudButton>
+</SetupHeader>
+
+<MudDataGrid T="LaborCategoryDto" Items="_categories" Loading="_loading" Dense="true" Hover="true" QuickFilter="Matches">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" Clearable="true" />
+        <MudSpacer />
+        <MudSwitch @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="c => c.Code" />
+        <PropertyColumn Property="c => c.Name" />
+        <TemplateColumn Title="Status" SortBy="@(c => c.IsActive)">
+            <CellTemplate>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(context.Item.IsActive ? Color.Success : Color.Default)">
+                    @(context.Item.IsActive ? "Active" : "Inactive")
+                </MudChip>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Sortable="false" CellStyle="text-align:right">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {context.Item.Code}")"
+                               OnClick="() => EditAsync(context.Item)" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent><MudText>No labor categories yet.</MudText></NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private bool _loading = true;
+    private bool _showInactive;
+    private string? _search;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _categories = await People.ListLaborCategoriesAsync();
+        _loading = false;
+    }
+
+    private bool Matches(LaborCategoryDto c) =>
+        (_showInactive || c.IsActive)
+        && (string.IsNullOrWhiteSpace(_search) || c.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) || c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private async Task EditAsync(LaborCategoryDto? category)
+    {
+        var parameters = new DialogParameters<CodeNameDialog>
+        {
+            { d => d.Code, category?.Code },
+            { d => d.Name, category?.Name },
+            { d => d.ShowActive, true },
+            { d => d.IsActive, category?.IsActive ?? true },
+        };
+        var dialog = await DialogService.ShowAsync<CodeNameDialog>(category is null ? "New labor category" : "Edit labor category", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: CodeNameResult result })
+        {
+            return;
+        }
+
+        try
+        {
+            var request = new SaveLaborCategoryRequest(result.Code, result.Name, result.IsActive);
+            _ = category is null ? await People.CreateLaborCategoryAsync(request) : await People.UpdateLaborCategoryAsync(category.Id, request);
+            _categories = await People.ListLaborCategoriesAsync();
+            Snackbar.Add($"Saved {result.Code}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

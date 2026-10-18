@@ -208,7 +208,11 @@ internal sealed class OdcEntryConfiguration : IEntityTypeConfiguration<OdcEntry>
         b.Property(o => o.SubmittedBy).HasMaxLength(320);
         b.Property(o => o.ApprovedBy).HasMaxLength(320);
         b.Property(o => o.RejectionReason).HasMaxLength(1000);
+        b.Property(o => o.RejectedBy).HasMaxLength(320);
+        b.Property(o => o.UnallowableReason).HasMaxLength(500);
         b.HasIndex(o => new { o.ProjectId, o.IncurredOn });
+        b.HasIndex(o => o.ExpenseReportId);
+        b.HasOne<ExpenseReport>().WithMany().HasForeignKey(o => o.ExpenseReportId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(o => o.Status);
         b.HasOne<Project>().WithMany().HasForeignKey(o => o.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(o => o.WbsElementId).OnDelete(DeleteBehavior.Restrict);
@@ -223,6 +227,8 @@ internal sealed class BudgetVersionConfiguration : IEntityTypeConfiguration<Budg
         b.Property(v => v.Name).HasMaxLength(200);
         b.Property(v => v.Kind).HasConversion<string>().HasMaxLength(16);
         b.Property(v => v.CreatedBy).HasMaxLength(320);
+        b.Property(v => v.Description).HasMaxLength(2000);
+        b.Property(v => v.LockedBy).HasMaxLength(320);
         b.HasIndex(v => new { v.ProjectId, v.Kind });
         b.HasOne<Project>().WithMany().HasForeignKey(v => v.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(v => v.Lines).WithOne().HasForeignKey(l => l.BudgetVersionId).OnDelete(DeleteBehavior.Cascade);
@@ -236,6 +242,7 @@ internal sealed class BudgetLineConfiguration : IEntityTypeConfiguration<BudgetL
         b.Property(l => l.CostType).HasConversion<string>().HasMaxLength(16);
         b.Property(l => l.OdcType).HasConversion<string>().HasMaxLength(16);
         b.Property(l => l.Hours).Hours();
+        b.Property(l => l.PlanningRate).Rate();
         b.Property(l => l.Amount).Money();
         b.HasIndex(l => new { l.BudgetVersionId, l.WbsElementId });
         b.HasOne<WbsElement>().WithMany().HasForeignKey(l => l.WbsElementId).OnDelete(DeleteBehavior.Restrict);

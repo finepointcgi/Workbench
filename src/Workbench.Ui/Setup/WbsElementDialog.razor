@@ -1,0 +1,88 @@
+@* Adds a WBS element (a child's code is pre-filled with its parent's code + ".") or edits one. *@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                @if (Parent is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Under <b>@Parent.Code</b> · @Parent.Name</MudText>
+                }
+                <MudTextField @bind-Value="_code" Label="Code" Required="true" RequiredError="Code is required." Immediate="true"
+                              Validation="@(new Func<string?, string?>(ValidateCode))" HelperText="Unique across all projects." data-testid="wbs-code" />
+                <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." AutoFocus="true" Immediate="true"
+                              data-testid="wbs-name" />
+                <MudSelect T="ChargeCodeKind" @bind-Value="_kind" Label="Kind">
+                    @foreach (var kind in Enum.GetValues<ChargeCodeKind>())
+                    {
+                        <MudSelectItem T="ChargeCodeKind" Value="kind">@kind</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSwitch @bind-Value="_chargeable" Label="Chargeable" Color="Color.Primary" />
+                <MudSwitch @bind-Value="_open" Label="Open" Color="Color.Primary" />
+                <MudSwitch @bind-Value="_requiresAssignment" Label="Requires a charge assignment" Color="Color.Primary" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Only open, chargeable leaf elements of active projects are charge codes.
+                </MudText>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" data-testid="wbs-submit">@(Element is null ? "Add" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The parent for a new element, or the current parent when editing. Null for a top-level element.</summary>
+    [Parameter]
+    public WbsElementDto? Parent { get; set; }
+
+    /// <summary>The element being edited, or null to add one.</summary>
+    [Parameter]
+    public WbsElementDto? Element { get; set; }
+
+    /// <summary>Prefix for top-level codes (the project code).</summary>
+    [Parameter]
+    public string ProjectCode { get; set; } = "";
+
+    private MudForm _form = default!;
+    private string? _code;
+    private string? _name;
+    private ChargeCodeKind _kind;
+    private bool _chargeable = true;
+    private bool _open = true;
+    private bool _requiresAssignment = true;
+
+    private string Prefix => Parent is null ? (ProjectCode.Length > 0 ? ProjectCode + "." : "") : Parent.Code + ".";
+
+    protected override void OnInitialized()
+    {
+        if (Element is { } e)
+        {
+            (_code, _name, _kind, _chargeable, _open, _requiresAssignment) = (e.Code, e.Name, e.Kind, e.IsChargeable, e.IsOpen, e.RequiresAssignment);
+        }
+        else
+        {
+            _code = Prefix;
+            _kind = Parent?.Kind ?? ChargeCodeKind.Direct;
+            _requiresAssignment = Parent?.RequiresAssignment ?? true;
+        }
+    }
+
+    internal string? ValidateCode(string? code) =>
+        Parent is not null && (code is null || !code.StartsWith(Parent.Code + ".", StringComparison.Ordinal) || code.Length <= Parent.Code.Length + 1)
+            ? $"Code must start with \"{Parent.Code}.\" followed by this element's number."
+            : null;
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(new SaveWbsElementRequest(Parent?.Id, _code!.Trim(), _name!.Trim(), _kind, _chargeable, _open, _requiresAssignment)));
+        }
+    }
+}

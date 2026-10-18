@@ -1,0 +1,46 @@
+@using Workbench.Contracts.Odcs
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_title" Label="Title" Placeholder="e.g. Site visit, Fort Belvoir" Required="true" AutoFocus="true" Immediate="true" />
+            <MudStack Row="true" Spacing="3">
+                <MudDatePicker Editable="true" Label="Trip start" @bind-Date="_start" DateFormat="MM/dd/yyyy" AutoClose="true" Clearable="true" />
+                <MudDatePicker Editable="true" Label="Trip end" @bind-Date="_end" DateFormat="MM/dd/yyyy" AutoClose="true" Clearable="true" />
+            </MudStack>
+            <MudTextField @bind-Value="_purpose" Label="Business purpose" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_title) || (_start > _end))" OnClick="Save">
+            @(Existing is null ? "Create" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public ExpenseReportDto? Existing { get; set; }
+
+    private string? _title;
+    private DateTime? _start;
+    private DateTime? _end;
+    private string? _purpose;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } r)
+        {
+            _title = r.Title;
+            _start = OdcFormat.ToDateTime(r.TripStart);
+            _end = OdcFormat.ToDateTime(r.TripEnd);
+            _purpose = r.Purpose;
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(
+        new SaveExpenseReportRequest(_title!.Trim(), OdcFormat.ToDateOnly(_start), OdcFormat.ToDateOnly(_end), _purpose)));
+}

@@ -15,7 +15,7 @@
                 The board puts items in lanes by a Dropdown column. Add a Status column to get started.
             </MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="CreateStatusColumnAsync" Disabled="_busy">Add Status column</MudButton>
+                       OnClick="CreateStatusColumnAsync" Disabled="_busy || !CanEdit">Add Status column</MudButton>
         </MudPaper>
     }
     else
@@ -34,6 +34,7 @@
         </MudStack>
 
         <MudDropContainer @ref="_container" T="ItemDto" Items="VisibleItems" ItemsSelector="IsInLane" ItemDropped="OnItemDroppedAsync"
+                          CanDrop="(_, _) => CanEdit"
                           Class="board-lanes">
             <ChildContent>
                 @foreach (var lane in Lanes)
@@ -46,7 +47,10 @@
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">@lane.Items.Count</MudChip>
                         </MudStack>
                         <MudDropZone T="ItemDto" Identifier="@LaneId(lane.Value)" Class="board-lane-zone" AllowReorder="false" />
-                        <BoardQuickAdd LaneLabel="@lane.Label" OnAdd="title => QuickAddAsync(lane.Value, title)" />
+                        @if (CanEdit)
+                        {
+                            <BoardQuickAdd LaneLabel="@lane.Label" OnAdd="title => QuickAddAsync(lane.Value, title)" />
+                        }
                     </MudPaper>
                 }
             </ChildContent>
@@ -149,7 +153,7 @@
                 new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values));
             await Changed.InvokeAsync();
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             if (previous is not null)
             {
@@ -176,7 +180,7 @@
             await ItemService.CreateAsync(SheetId, new CreateItemRequest(title, Values: values));
             await Changed.InvokeAsync();
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't add the item: {ex.Message}", Severity.Error);
         }
@@ -192,7 +196,7 @@
             _chosenColumnId = column.Id;
             await Changed.InvokeAsync();
         }
-        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't add the Status column: {ex.Message}", Severity.Error);
         }

@@ -1,0 +1,354 @@
+@* Budget line editor: labor hours by WBS leaf × labor category (optionally phased by fiscal period) and ODC dollars. *@
+
+<style>
+    .budget-grid th, .budget-grid td { white-space: nowrap; }
+    .budget-grid td.num, .budget-grid th.num { text-align: right; }
+    .budget-grid .cell-input { width: 84px; }
+    .budget-grid .cell-input input { text-align: right; }
+</style>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Labor</MudText>
+    <MudSwitch T="bool" @bind-Value="_phased" Label="Phase by fiscal period" Color="Color.Primary" />
+    @if (_phased)
+    {
+        <MudSelect T="int" @bind-Value="_fiscalYear" Label="Fiscal year" Dense="true" Style="max-width: 140px">
+            @foreach (var year in Periods.Select(p => p.FiscalYear).Distinct().Order())
+            {
+                <MudSelectItem Value="year">FY@(year)</MudSelectItem>
+            }
+        </MudSelect>
+    }
+    <MudSpacer />
+    @if (ReadOnly)
+    {
+        <MudChip T="string" Icon="@Icons.Material.Filled.Lock" Size="Size.Small">Locked — read only</MudChip>
+    }
+</MudStack>
+
+<div style="overflow-x: auto" class="mb-2">
+    <MudSimpleTable Dense="true" Outlined="true" Class="budget-grid">
+        <thead>
+            <tr>
+                <th>WBS</th>
+                <th>Labor category</th>
+                <th class="num">@(_phased ? "Unphased" : "Hours")</th>
+                @if (_phased)
+                {
+                    @foreach (var p in YearPeriods)
+                    {
+                        <th class="num">@p.Name</th>
+                    }
+                }
+                @if (OtherPeriodsShown)
+                {
+                    <th class="num">@(_phased ? "Other periods" : "Phased")</th>
+                }
+                <th class="num">Total hrs</th>
+                <th class="num">Rate</th>
+                <th class="num">Amount</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _labor)
+            {
+                <tr>
+                    <td>@WbsCode(row.WbsId)</td>
+                    <td>@CategoryName(row.CategoryId)</td>
+                    <td class="num">@Cell(row.Unphased, v => { row.Unphased = v; })</td>
+                    @if (_phased)
+                    {
+                        @foreach (var p in YearPeriods)
+                        {
+                            var start = p.Start;
+                            <td class="num">@Cell(row.ByPeriod.GetValueOrDefault(start), v => { row.ByPeriod[start] = v; })</td>
+                        }
+                    }
+                    @if (OtherPeriodsShown)
+                    {
+                        <td class="num">@FinancialFormat.Hours(OtherPeriodHours(row))</td>
+                    }
+                    <td class="num">@FinancialFormat.Hours(row.Total)</td>
+                    <td class="num">@(row.Rate > 0 ? FinancialFormat.MoneyCents(row.Rate) : "on save")</td>
+                    <td class="num">@(row.Rate > 0 ? FinancialFormat.Money(row.Total * row.Rate) : "—")</td>
+                    <td>
+                        @if (!ReadOnly)
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => RemoveLabor(row)" aria-label="Remove labor row" />
+                        }
+                    </td>
+                </tr>
+            }
+            @if (_labor.Count == 0)
+            {
+                <tr><td colspan="20" class="mud-text-secondary">No labor lines.</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</div>
+
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-6" Wrap="Wrap.Wrap">
+        <MudSelect T="Guid?" @bind-Value="_newWbs" Label="WBS leaf" Dense="true" Style="min-width: 240px" ToStringFunc="WbsLabel">
+            @foreach (var w in Leaves)
+            {
+                <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="Guid?" @bind-Value="_newCategory" Label="Labor category" Dense="true" Style="min-width: 220px" ToStringFunc="CategoryLabel">
+            @foreach (var c in Categories.Where(c => c.IsActive))
+            {
+                <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Disabled="_newWbs is null || _newCategory is null" OnClick="AddLabor">Add labor row</MudButton>
+    </MudStack>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Other direct costs</MudText>
+<MudSimpleTable Dense="true" Outlined="true" Class="budget-grid mb-2">
+    <thead>
+        <tr><th>WBS</th><th>ODC type</th><th>Period</th><th class="num">Amount</th><th></th></tr>
+    </thead>
+    <tbody>
+        @foreach (var row in _odcs)
+        {
+            <tr>
+                <td>@WbsCode(row.WbsId)</td>
+                <td>@row.Type</td>
+                <td>
+                    @if (ReadOnly)
+                    {
+                        @(PeriodName(row.Period))
+                    }
+                    else
+                    {
+                        <MudSelect T="DateOnly?" Value="row.Period" ValueChanged="v => { row.Period = v; _dirty = true; }" Dense="true" ToStringFunc="PeriodName"
+                                   Style="min-width: 140px" Margin="Margin.Dense">
+                            <MudSelectItem T="DateOnly?" Value="null">Unphased</MudSelectItem>
+                            @foreach (var p in Periods)
+                            {
+                                <MudSelectItem T="DateOnly?" Value="p.Start">@p.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </td>
+                <td class="num">@MoneyCell(row.Amount, v => { row.Amount = v; })</td>
+                <td>
+                    @if (!ReadOnly)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => RemoveOdc(row)" aria-label="Remove ODC row" />
+                    }
+                </td>
+            </tr>
+        }
+        @if (_odcs.Count == 0)
+        {
+            <tr><td colspan="5" class="mud-text-secondary">No ODC lines.</td></tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudSelect T="Guid?" @bind-Value="_newOdcWbs" Label="WBS" Dense="true" Style="min-width: 240px" ToStringFunc="WbsLabel">
+            @foreach (var w in Wbs)
+            {
+                <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="BudgetOdcType" @bind-Value="_newOdcType" Label="ODC type" Dense="true" Style="min-width: 160px">
+            @foreach (var t in Enum.GetValues<BudgetOdcType>())
+            {
+                <MudSelectItem Value="t">@t</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Disabled="_newOdcWbs is null" OnClick="AddOdc">Add ODC row</MudButton>
+    </MudStack>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Disabled="!_dirty || Saving" OnClick="SaveAsync">Save lines</MudButton>
+        <MudButton Variant="Variant.Text" Disabled="!_dirty || Saving" OnClick="Reset">Discard changes</MudButton>
+        @if (_dirty)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Unsaved changes. New labor rows are priced at the planning rate when saved.</MudText>
+        }
+    </MudStack>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public BudgetVersionDetailDto Detail { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<WbsElementDto> Wbs { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<LaborCategoryDto> Categories { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    [Parameter]
+    public bool Saving { get; set; }
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<SaveBudgetLineRequest>> OnSave { get; set; }
+
+    private sealed class LaborRow
+    {
+        public Guid WbsId { get; init; }
+        public Guid? CategoryId { get; init; }
+        public decimal Unphased { get; set; }
+        public Dictionary<DateOnly, decimal> ByPeriod { get; } = [];
+        public decimal Rate { get; set; }
+        public decimal Total => Unphased + ByPeriod.Values.Sum();
+    }
+
+    private sealed class OdcRow
+    {
+        public Guid WbsId { get; init; }
+        public BudgetOdcType Type { get; init; }
+        public DateOnly? Period { get; set; }
+        public decimal Amount { get; set; }
+    }
+
+    private List<LaborRow> _labor = [];
+    private List<OdcRow> _odcs = [];
+    private bool _phased;
+    private int _fiscalYear;
+    private bool _dirty;
+    private BudgetVersionDetailDto? _builtFor;
+    private Guid? _newWbs, _newCategory, _newOdcWbs;
+    private BudgetOdcType _newOdcType = BudgetOdcType.Travel;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_builtFor, Detail))
+        {
+            _builtFor = Detail;
+            Reset();
+        }
+    }
+
+    private void Reset()
+    {
+        _labor = Detail.Lines.Where(l => l.CostType == BudgetCostKind.Labor)
+            .GroupBy(l => (l.WbsElementId, l.LaborCategoryId))
+            .Select(g =>
+            {
+                var row = new LaborRow { WbsId = g.Key.WbsElementId, CategoryId = g.Key.LaborCategoryId, Rate = g.Max(l => l.PlanningRate) };
+                foreach (var line in g)
+                {
+                    if (line.PeriodStart is { } start)
+                    {
+                        row.ByPeriod[start] = row.ByPeriod.GetValueOrDefault(start) + line.Hours;
+                    }
+                    else
+                    {
+                        row.Unphased += line.Hours;
+                    }
+                }
+
+                return row;
+            })
+            .OrderBy(r => WbsCode(r.WbsId), StringComparer.Ordinal).ThenBy(r => CategoryName(r.CategoryId), StringComparer.Ordinal)
+            .ToList();
+        _odcs = Detail.Lines.Where(l => l.CostType == BudgetCostKind.Odc)
+            .Select(l => new OdcRow { WbsId = l.WbsElementId, Type = l.OdcType ?? BudgetOdcType.Other, Period = l.PeriodStart, Amount = l.Amount })
+            .ToList();
+
+        var phasedStarts = _labor.SelectMany(r => r.ByPeriod.Keys).ToList();
+        _phased = phasedStarts.Count > 0;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _fiscalYear = Periods.Where(p => phasedStarts.Count > 0 ? phasedStarts.Contains(p.Start) : p.Start <= today && today <= p.End)
+            .GroupBy(p => p.FiscalYear).OrderByDescending(g => g.Count()).Select(g => g.Key)
+            .DefaultIfEmpty(Periods.FirstOrDefault()?.FiscalYear ?? today.Year).First();
+        _dirty = false;
+    }
+
+    private IEnumerable<FiscalPeriodDto> YearPeriods => Periods.Where(p => p.FiscalYear == _fiscalYear);
+
+    private IEnumerable<WbsElementDto> Leaves => Wbs.Where(w => !Wbs.Any(c => c.ParentId == w.Id));
+
+    private bool OtherPeriodsShown => _labor.Any(r => OtherPeriodHours(r) != 0);
+
+    private decimal OtherPeriodHours(LaborRow row) =>
+        _phased ? row.ByPeriod.Where(kv => !YearPeriods.Any(p => p.Start == kv.Key)).Sum(kv => kv.Value) : row.ByPeriod.Values.Sum();
+
+    private RenderFragment Cell(decimal value, Action<decimal> set) => ReadOnly
+        ? @<span>@(value == 0 ? "" : FinancialFormat.Hours(value))</span>
+        : @<MudNumericField T="decimal" Value="value" ValueChanged="v => { set(Math.Max(0, v)); _dirty = true; }" HideSpinButtons="true"
+                            Margin="Margin.Dense" Variant="Variant.Text" Class="cell-input" Format="0.##" Culture="FinancialFormat.Culture" />;
+
+    private RenderFragment MoneyCell(decimal value, Action<decimal> set) => ReadOnly
+        ? @<span>@FinancialFormat.MoneyCents(value)</span>
+        : @<MudNumericField T="decimal" Value="value" ValueChanged="v => { set(Math.Max(0, v)); _dirty = true; }" HideSpinButtons="true"
+                            Margin="Margin.Dense" Variant="Variant.Text" Class="cell-input" Format="0.00" Culture="FinancialFormat.Culture" Style="width: 120px" />;
+
+    private void AddLabor()
+    {
+        if (_newWbs is { } wbs && !_labor.Any(r => r.WbsId == wbs && r.CategoryId == _newCategory))
+        {
+            _labor.Add(new LaborRow { WbsId = wbs, CategoryId = _newCategory });
+            _dirty = true;
+        }
+    }
+
+    private void RemoveLabor(LaborRow row)
+    {
+        _labor.Remove(row);
+        _dirty = true;
+    }
+
+    private void AddOdc()
+    {
+        if (_newOdcWbs is { } wbs)
+        {
+            _odcs.Add(new OdcRow { WbsId = wbs, Type = _newOdcType });
+            _dirty = true;
+        }
+    }
+
+    private void RemoveOdc(OdcRow row)
+    {
+        _odcs.Remove(row);
+        _dirty = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        var lines = new List<SaveBudgetLineRequest>();
+        foreach (var row in _labor)
+        {
+            if (row.Unphased > 0)
+            {
+                lines.Add(new SaveBudgetLineRequest(row.WbsId, BudgetCostKind.Labor, row.CategoryId, null, null, row.Unphased));
+            }
+
+            lines.AddRange(row.ByPeriod.Where(kv => kv.Value > 0)
+                .Select(kv => new SaveBudgetLineRequest(row.WbsId, BudgetCostKind.Labor, row.CategoryId, null, kv.Key, kv.Value)));
+        }
+
+        lines.AddRange(_odcs.Where(o => o.Amount > 0).Select(o => new SaveBudgetLineRequest(o.WbsId, BudgetCostKind.Odc, null, o.Type, o.Period, 0, o.Amount)));
+        await OnSave.InvokeAsync(lines);
+    }
+
+    private string WbsCode(Guid id) => Wbs.FirstOrDefault(w => w.Id == id)?.Code ?? "?";
+
+    private string WbsLabel(Guid? id) => Wbs.FirstOrDefault(w => w.Id == id) is { } w ? $"{w.Code} · {w.Name}" : "";
+
+    private string CategoryName(Guid? id) =>
+        id is null ? "(unassigned)" : Categories.FirstOrDefault(c => c.Id == id) is { } c ? $"{c.Code} · {c.Name}" : "?";
+
+    private string CategoryLabel(Guid? id) => id is null ? "" : CategoryName(id);
+
+    private string PeriodName(DateOnly? start) =>
+        start is null ? "Unphased" : Periods.FirstOrDefault(p => p.Start == start)?.Name ?? start.Value.ToString("yyyy-MM-dd");
+}
