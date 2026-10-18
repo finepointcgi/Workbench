@@ -1,0 +1,143 @@
+@inject IAccountingReportService Reports
+@inject IProjectService Projects
+@inject IPeopleService People
+
+<MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudSelect T="Guid?" @bind-Value="_accountId" Label="Account" Clearable="true" Dense="true" Style="min-width:260px">
+        @foreach (var a in Accounts)
+        {
+            <MudSelectItem T="Guid?" Value="a.Id">@AccountingFormat.AccountLabel(a)@(a.HasChildren ? " (summary)" : "")</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="Guid?" Value="_projectId" ValueChanged="SetProjectAsync" Label="Project" Clearable="true" Dense="true" Style="min-width:140px">
+        @foreach (var p in _projects)
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Code</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="Guid?" @bind-Value="_wbsId" Label="WBS" Clearable="true" Dense="true" Style="min-width:160px" Disabled="_projectId is null">
+        @foreach (var w in _wbs)
+        {
+            <MudSelectItem T="Guid?" Value="w.Id">@w.Code</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="Guid?" @bind-Value="_orgUnitId" Label="Org unit" Clearable="true" Dense="true" Style="min-width:120px">
+        @foreach (var o in _orgUnits)
+        {
+            <MudSelectItem T="Guid?" Value="o.Id">@o.Code</MudSelectItem>
+        }
+    </MudSelect>
+    <MudDatePicker Label="From" @bind-Date="_from" DateFormat="yyyy-MM-dd" Style="max-width:150px" />
+    <MudDatePicker Label="To" @bind-Date="_to" DateFormat="yyyy-MM-dd" Style="max-width:150px" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">Run</MudButton>
+    <MudSpacer />
+    <ExportButton Request="new AccountingExportRequest(AccountingReport.LedgerDetail, Period.Id, Query())" />
+</MudStack>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="ledger-detail">
+            <thead>
+                <tr><th>Date</th><th>Entry</th><th>Description</th><th>Account</th><th>Project</th><th>WBS</th><th>Org</th>
+                    <th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr>
+            </thead>
+            <tbody>
+                <tr class="mud-text-secondary"><td colspan="9">Opening balance</td><td style="text-align:right">@AccountingFormat.Amount(_report.OpeningBalance)</td></tr>
+                @foreach (var l in _report.Lines)
+                {
+                    <tr>
+                        <td style="white-space:nowrap">@AccountingFormat.Date(l.Date)</td>
+                        <td style="white-space:nowrap"><MudLink Href="@($"accounting/journal/{l.JournalEntryId}")">@l.EntryNumber</MudLink></td>
+                        <td>@l.Description@(l.Memo is null ? "" : $" · {l.Memo}")</td>
+                        <td style="white-space:nowrap">@l.AccountNumber</td>
+                        <td>@l.ProjectCode</td>
+                        <td>@l.WbsCode</td>
+                        <td>@l.OrgUnitCode</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(l.Debit)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(l.Credit)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(l.RunningBalance)</td>
+                    </tr>
+                }
+                <tr style="font-weight:600">
+                    <td colspan="7">Totals</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.TotalDebit)</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.TotalCredit)</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(_report.ClosingBalance)</td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public FiscalPeriodDto Period { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<AccountDto> Accounts { get; set; } = [];
+
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private IReadOnlyList<OrgUnitDto> _orgUnits = [];
+    private Guid? _accountId, _projectId, _wbsId, _orgUnitId;
+    private DateTime? _from, _to;
+    private LedgerDetailDto? _report;
+    private string? _error;
+    private Guid _loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+            _orgUnits = await People.ListOrgUnitsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == Period.Id)
+        {
+            return;
+        }
+
+        _loaded = Period.Id;
+        (_from, _to) = (Period.Start.ToDateTime(TimeOnly.MinValue), Period.End.ToDateTime(TimeOnly.MinValue));
+        await LoadAsync();
+    }
+
+    private LedgerQuery Query() => new(_accountId, ToDate(_from), ToDate(_to), _orgUnitId, _projectId, _wbsId);
+
+    private static DateOnly? ToDate(DateTime? value) => value is { } d ? DateOnly.FromDateTime(d) : null;
+
+    private async Task SetProjectAsync(Guid? projectId)
+    {
+        (_projectId, _wbsId) = (projectId, null);
+        _wbs = projectId is { } id ? (await Projects.ListWbsAsync(id)).OrderBy(w => w.Code, StringComparer.Ordinal).ToList() : [];
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            _report = await Reports.GetLedgerDetailAsync(Query());
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}

@@ -1,0 +1,147 @@
+@page "/accounting/posting-rules"
+@inject IPostingService Posting
+@inject IChartOfAccountsService Chart
+@inject ISnackbar Snackbar
+
+<PageTitle>Posting rules · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Posting rules" Subtitle="Which accounts approved timesheets and ODCs post to. Changes apply to the next posting; posted entries keep their accounts." />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_setup is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" lg="7">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Cost sources</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    Labor posts by the charge code's kind: Direct to direct labor, Indirect to the labor account of the WBS element's pool, Leave to fringe.
+                    Each ODC type has its own account; unallowable costs always go to unallowable accounts.
+                </MudText>
+                <MudSimpleTable Dense="true" data-testid="posting-rules">
+                    <thead><tr><th>Source</th><th style="min-width:280px">Account</th></tr></thead>
+                    <tbody>
+                        @foreach (var rule in _setup.Rules)
+                        {
+                            <tr>
+                                <td>@rule.Label</td>
+                                <td>
+                                    <MudSelect T="Guid?" Value="rule.AccountId" ValueChanged="v => SaveAsync(rule, v)" Dense="true" Margin="Margin.Dense"
+                                               Clearable="@IsOptional(rule)" Placeholder="@(IsOptional(rule) ? "Use the default" : "Choose an account")"
+                                               Error="@(rule.AccountId is null && !IsOptional(rule))">
+                                        @foreach (var a in Eligible(rule))
+                                        {
+                                            <MudSelectItem T="Guid?" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="5">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Indirect pools</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    The pool each indirect or leave charge code belongs to. Children inherit their parent's pool; without one, indirect work is overhead and leave is fringe.
+                </MudText>
+                @if (_setup.IndirectWbs.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No indirect or leave WBS elements yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" data-testid="wbs-pools">
+                        <thead><tr><th>WBS</th><th>Kind</th><th style="min-width:180px">Pool</th></tr></thead>
+                        <tbody>
+                            @foreach (var w in _setup.IndirectWbs)
+                            {
+                                <tr>
+                                    <td><b>@w.WbsCode</b> @w.WbsName</td>
+                                    <td>@w.Kind</td>
+                                    <td>
+                                        <MudSelect T="CostPool?" Value="w.Pool" ValueChanged="v => SetPoolAsync(w, v)" Dense="true" Margin="Margin.Dense" Clearable="true"
+                                                   Placeholder="@($"{(w.Inherited ? "Inherited" : "Default")}: {AccountingFormat.Label(w.EffectivePool)}")">
+                                            @foreach (var pool in Enum.GetValues<CostPool>())
+                                            {
+                                                <MudSelectItem T="CostPool?" Value="pool">@AccountingFormat.Label(pool)</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private PostingSetupDto? _setup;
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _accounts = (await Chart.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren).ToList();
+            _setup = await Posting.GetSetupAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private static bool IsOptional(PostingRuleDto rule) => rule.Kind == PostingRuleType.UnallowableOdc && rule.Key.Length > 0;
+
+    private IEnumerable<AccountDto> Eligible(PostingRuleDto rule) => rule.Kind switch
+    {
+        PostingRuleType.AccruedPayroll or PostingRuleType.AccountsPayable or PostingRuleType.AccruedReimbursement => _accounts.Where(a => a.Type == AccountKind.Liability),
+        PostingRuleType.UnallowableOdc => _accounts.Where(a => a.Type == AccountKind.Expense && a.CostClass == CostClass.Unallowable),
+        _ => _accounts.Where(a => a.Type == AccountKind.Expense && a.CostClass != CostClass.Unallowable),
+    };
+
+    private async Task SaveAsync(PostingRuleDto rule, Guid? accountId)
+    {
+        try
+        {
+            var saved = await Posting.SaveRuleAsync(new SavePostingRuleRequest(rule.Kind, rule.Key, accountId ?? Guid.Empty));
+            Snackbar.Add(saved.AccountId is null ? $"{rule.Label} uses the default." : $"{rule.Label} → {saved.AccountNumber} {saved.AccountName}", Severity.Success);
+            _setup = await Posting.GetSetupAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SetPoolAsync(WbsPoolDto wbs, CostPool? pool)
+    {
+        try
+        {
+            await Posting.SetWbsPoolAsync(wbs.WbsElementId, new SetWbsPoolRequest(pool));
+            Snackbar.Add($"{wbs.WbsCode}: {(pool is { } p ? AccountingFormat.Label(p) + " pool" : "pool cleared")}.", Severity.Success);
+            _setup = await Posting.GetSetupAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

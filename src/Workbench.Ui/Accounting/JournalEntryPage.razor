@@ -1,0 +1,378 @@
+@page "/accounting/journal/new"
+@page "/accounting/journal/{Id:guid}"
+@inject IJournalService Journal
+@inject IChartOfAccountsService Chart
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@(Title) · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="@Title" Subtitle="@Subtitle">
+    @if (IsEditable)
+    {
+        @if (Id is not null)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteAsync" Disabled="_busy">Delete draft</MudButton>
+        }
+        <MudButton Variant="Variant.Outlined" OnClick="SaveDraftAsync" Disabled="@(_busy || !CanSave)" data-testid="save-draft">Save draft</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PostAsync" Disabled="@(_busy || !CanPost)" data-testid="post-entry">Post</MudButton>
+    }
+    else if (_entry is { } e && e.Entry.Status == JournalEntryState.Posted && e.Entry.ReversalOfId is null
+             && e.Entry.Source is not (JournalEntrySource.Timesheet or JournalEntrySource.Odc))
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Undo" OnClick="ReverseAsync" data-testid="reverse-entry">Reverse</MudButton>
+    }
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (!IsEditable && _entry is { } entry)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" Spacing="6" Wrap="Wrap.Wrap">
+            <Field Label="Date">@AccountingFormat.Date(entry.Entry.Date)</Field>
+            <Field Label="Period">@entry.Entry.FiscalPeriodName</Field>
+            <Field Label="Source">@AccountingFormat.Label(entry.Entry.Source)@(entry.SourceRevision > 0 ? $" (revision {entry.SourceRevision})" : "")</Field>
+            <Field Label="Status"><JournalStatusChip Status="entry.Entry.Status" /></Field>
+            <Field Label="Posted">@entry.Entry.PostedBy @(entry.Entry.PostedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))</Field>
+        </MudStack>
+        <MudText Class="mt-3">@entry.Entry.Description</MudText>
+        @if (entry.Entry.ReversalOfId is { } of)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">Reverses <MudLink Href="@($"accounting/journal/{of}")">the original entry</MudLink>. Reason: @entry.ReversalReason</MudText>
+        }
+        @if (entry.Entry.ReversedById is { } by)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Reversed by <MudLink Href="@($"accounting/journal/{by}")">its reversing entry</MudLink>. Reason: @entry.ReversalReason</MudAlert>
+        }
+        @if (entry.Entry.Source is JournalEntrySource.Timesheet or JournalEntrySource.Odc && entry.Entry.Status == JournalEntryState.Posted)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Posted automatically on approval. Reopening the @(entry.Entry.Source == JournalEntrySource.Timesheet ? "timesheet" : "ODC") reverses it.</MudText>
+        }
+    </MudPaper>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="entry-lines">
+            <thead><tr><th>#</th><th>Account</th><th>Org unit</th><th>Project</th><th>WBS</th><th>Memo</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead>
+            <tbody>
+                @foreach (var l in entry.Lines)
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td style="white-space:nowrap">@l.AccountNumber @l.AccountName</td>
+                        <td>@l.OrgUnitCode</td>
+                        <td>@l.ProjectCode</td>
+                        <td>@l.WbsCode</td>
+                        <td>@l.Memo</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(l.Debit)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(l.Credit)</td>
+                    </tr>
+                }
+                <tr style="font-weight:600">
+                    <td colspan="6">Total</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(entry.Entry.TotalDebit)</td>
+                    <td style="text-align:right">@AccountingFormat.Amount(entry.Entry.TotalCredit)</td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+            <MudDatePicker Label="Date" @bind-Date="_date" DateFormat="yyyy-MM-dd" Style="max-width:180px" Required="true" />
+            <MudTextField T="string" @bind-Value="_description" Label="Description" Required="true" Immediate="true" Style="min-width:360px" data-testid="entry-description" />
+        </MudStack>
+    </MudPaper>
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-3">
+        <MudSimpleTable Dense="true" data-testid="entry-editor">
+            <thead><tr><th style="min-width:240px">Account</th><th style="min-width:150px">Project</th><th style="min-width:170px">WBS</th><th style="min-width:120px">Org unit</th><th style="min-width:120px">Debit</th><th style="min-width:120px">Credit</th><th style="min-width:160px">Memo</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var line in _lines)
+                {
+                    <tr>
+                        <td>
+                            <MudSelect T="Guid?" @bind-Value="line.AccountId" Dense="true" Placeholder="Account" Margin="Margin.Dense">
+                                @foreach (var a in _postable)
+                                {
+                                    <MudSelectItem T="Guid?" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                        <td>
+                            <MudSelect T="Guid?" Value="line.ProjectId" ValueChanged="v => SetProjectAsync(line, v)" Dense="true" Clearable="true" Margin="Margin.Dense">
+                                @foreach (var p in _projects)
+                                {
+                                    <MudSelectItem T="Guid?" Value="p.Id">@p.Code</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                        <td>
+                            <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Dense="true" Clearable="true" Margin="Margin.Dense" Disabled="line.ProjectId is null">
+                                @foreach (var w in WbsFor(line.ProjectId))
+                                {
+                                    <MudSelectItem T="Guid?" Value="w.Id">@w.Code @w.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                        <td>
+                            <MudSelect T="Guid?" @bind-Value="line.OrgUnitId" Dense="true" Clearable="true" Margin="Margin.Dense">
+                                @foreach (var o in _orgUnits)
+                                {
+                                    <MudSelectItem T="Guid?" Value="o.Id">@o.Code</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                        <td><MudNumericField T="decimal" Value="line.Debit" ValueChanged="v => SetDebit(line, v)" HideSpinButtons="true" Format="N2" Min="0" Margin="Margin.Dense" Immediate="true" /></td>
+                        <td><MudNumericField T="decimal" Value="line.Credit" ValueChanged="v => SetCredit(line, v)" HideSpinButtons="true" Format="N2" Min="0" Margin="Margin.Dense" Immediate="true" /></td>
+                        <td><MudTextField T="string" @bind-Value="line.Memo" Margin="Margin.Dense" /></td>
+                        <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _lines.Remove(line)" Disabled="_lines.Count <= 2" aria-label="Remove line" /></td>
+                    </tr>
+                }
+                <tr>
+                    <td colspan="4">
+                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _lines.Add(new LineModel())">Add line</MudButton>
+                    </td>
+                    <td style="text-align:right; font-weight:600" data-testid="total-debit">@AccountingFormat.Amount(TotalDebit)</td>
+                    <td style="text-align:right; font-weight:600" data-testid="total-credit">@AccountingFormat.Amount(TotalCredit)</td>
+                    <td colspan="2">
+                        @if (TotalDebit == 0 && TotalCredit == 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Class="ma-0" data-testid="balance-check">No amounts yet</MudChip>
+                        }
+                        else if (TotalDebit == TotalCredit)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Class="ma-0" data-testid="balance-check">Balanced</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error" Class="ma-0" data-testid="balance-check">
+                                Out of balance by @AccountingFormat.Amount(Math.Abs(TotalDebit - TotalCredit))
+                            </MudChip>
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">Posting needs balanced debits and credits to the cent and a date in an open fiscal period. Choosing a WBS element fills in its project.</MudText>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private sealed class LineModel
+    {
+        public Guid? AccountId { get; set; }
+        public Guid? ProjectId { get; set; }
+        public Guid? WbsElementId { get; set; }
+        public Guid? OrgUnitId { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public string? Memo { get; set; }
+    }
+
+    private JournalEntryDto? _entry;
+    private IReadOnlyList<AccountDto> _postable = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<OrgUnitDto> _orgUnits = [];
+    private readonly Dictionary<Guid, IReadOnlyList<WbsElementDto>> _wbs = [];
+    private List<LineModel> _lines = [];
+    private DateTime? _date = DateTime.Today;
+    private string? _description;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    private bool IsEditable => _entry is null || _entry.Entry.Status == JournalEntryState.Draft;
+    private string Title => _entry is { } e && e.Entry.Status != JournalEntryState.Draft ? $"Journal entry {e.Entry.Number}" : Id is null ? "New journal entry" : "Draft journal entry";
+    private string? Subtitle => IsEditable ? "A manual entry: save it as a draft or post it." : null;
+    private decimal TotalDebit => _lines.Sum(l => l.Debit);
+    private decimal TotalCredit => _lines.Sum(l => l.Credit);
+    private bool CanSave => _date is not null && !string.IsNullOrWhiteSpace(_description);
+    private bool CanPost => CanSave && TotalDebit == TotalCredit && TotalDebit > 0 && _lines.Count(l => l.AccountId is not null) >= 2 && _lines.All(l => l.AccountId is not null);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _postable = (await Chart.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren).ToList();
+            _projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+            _orgUnits = await People.ListOrgUnitsAsync();
+            if (Id is { } id)
+            {
+                _entry = await Journal.GetAsync(id);
+                _date = _entry.Entry.Date.ToDateTime(TimeOnly.MinValue);
+                _description = _entry.Entry.Description;
+                _lines = _entry.Lines.Select(l => new LineModel
+                {
+                    AccountId = l.AccountId, ProjectId = l.ProjectId, WbsElementId = l.WbsElementId, OrgUnitId = l.OrgUnitId, Debit = l.Debit, Credit = l.Credit, Memo = l.Memo,
+                }).ToList();
+                foreach (var projectId in _lines.Where(l => l.ProjectId is not null).Select(l => l.ProjectId!.Value).Distinct())
+                {
+                    await LoadWbsAsync(projectId);
+                }
+            }
+            else
+            {
+                _entry = null;
+                _lines = [new LineModel(), new LineModel()];
+            }
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+
+        _loading = false;
+    }
+
+    private IEnumerable<WbsElementDto> WbsFor(Guid? projectId) =>
+        projectId is { } id && _wbs.TryGetValue(id, out var list) ? list : [];
+
+    private async Task LoadWbsAsync(Guid projectId)
+    {
+        if (!_wbs.ContainsKey(projectId))
+        {
+            _wbs[projectId] = (await Projects.ListWbsAsync(projectId)).OrderBy(w => w.Code, StringComparer.Ordinal).ToList();
+        }
+    }
+
+    private async Task SetProjectAsync(LineModel line, Guid? projectId)
+    {
+        line.ProjectId = projectId;
+        line.WbsElementId = null;
+        if (projectId is { } id)
+        {
+            await LoadWbsAsync(id);
+        }
+    }
+
+    private static void SetDebit(LineModel line, decimal value)
+    {
+        line.Debit = value;
+        if (value != 0)
+        {
+            line.Credit = 0;
+        }
+    }
+
+    private static void SetCredit(LineModel line, decimal value)
+    {
+        line.Credit = value;
+        if (value != 0)
+        {
+            line.Debit = 0;
+        }
+    }
+
+    private SaveJournalEntryRequest Request() => new(
+        DateOnly.FromDateTime(_date!.Value),
+        _description!.Trim(),
+        _lines.Where(l => l.AccountId is not null)
+            .Select(l => new JournalLineInput(l.AccountId!.Value, l.Debit, l.Credit, l.Memo, l.OrgUnitId, l.ProjectId, l.WbsElementId))
+            .ToList());
+
+    private async Task SaveDraftAsync() => await RunAsync(async () =>
+    {
+        var saved = Id is { } id ? await Journal.UpdateDraftAsync(id, Request()) : await Journal.CreateDraftAsync(Request());
+        Snackbar.Add("Draft saved.", Severity.Success);
+        if (Id is null)
+        {
+            Navigation.NavigateTo($"accounting/journal/{saved.Entry.Id}", replace: true);
+        }
+        else
+        {
+            _entry = saved;
+        }
+    });
+
+    private async Task PostAsync() => await RunAsync(async () =>
+    {
+        JournalEntryDto posted;
+        if (Id is { } id)
+        {
+            await Journal.UpdateDraftAsync(id, Request());
+            posted = await Journal.PostAsync(id);
+        }
+        else
+        {
+            posted = await Journal.CreateAndPostAsync(Request());
+        }
+
+        Snackbar.Add($"Posted {posted.Entry.Number}.", Severity.Success);
+        if (Id == posted.Entry.Id)
+        {
+            _entry = posted;
+        }
+        else
+        {
+            Navigation.NavigateTo($"accounting/journal/{posted.Entry.Id}", replace: true);
+        }
+    });
+
+    private async Task DeleteAsync()
+    {
+        if (Id is not { } id || await DialogService.ShowMessageBoxAsync("Delete draft?", "The draft is removed. Posted entries can't be deleted.", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Journal.DeleteDraftAsync(id);
+            Navigation.NavigateTo("accounting/journal");
+        });
+    }
+
+    private async Task ReverseAsync()
+    {
+        if (_entry is null)
+        {
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<ReverseDialog>($"Reverse {_entry.Entry.Number}",
+            new DialogParameters<ReverseDialog> { { d => d.Date, _entry.Entry.Date } }, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: ReverseJournalEntryRequest request })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var reversal = await Journal.ReverseAsync(_entry.Entry.Id, request);
+            Snackbar.Add($"Posted reversal {reversal.Entry.Number}.", Severity.Success);
+            Navigation.NavigateTo($"accounting/journal/{reversal.Entry.Id}");
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

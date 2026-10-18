@@ -1,0 +1,28 @@
+@* Asks for the reason (audited) and the reversal date. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText>The reversal posts the same lines with debits and credits swapped. The original stays in the ledger, marked reversed.</MudText>
+            <MudDatePicker Label="Reversal date" @bind-Date="_date" DateFormat="yyyy-MM-dd" HelperText="Must fall in an open fiscal period." />
+            <MudTextField T="string" @bind-Value="_reason" Label="Reason" Required="true" Immediate="true" Lines="2" AutoFocus="true" HelperText="Recorded in the audit log." />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_reason) || _date is null)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new ReverseJournalEntryRequest(_reason!.Trim(), DateOnly.FromDateTime(_date!.Value))))">Reverse entry</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public DateOnly Date { get; set; }
+
+    private DateTime? _date;
+    private string? _reason;
+
+    protected override void OnInitialized() => _date = Date.ToDateTime(TimeOnly.MinValue);
+}

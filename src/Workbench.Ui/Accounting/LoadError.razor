@@ -1,0 +1,12 @@
+@* Shown when a page can't load: Finance-only pages explain who may use them. *@
+<MudAlert Severity="@(Forbidden ? Severity.Info : Severity.Error)" Class="mb-4" data-testid="load-error">
+    @(Forbidden ? "The general ledger is for Finance and administrators." : Message)
+</MudAlert>
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public bool Forbidden { get; set; }
+}

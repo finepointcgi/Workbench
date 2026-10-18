@@ -1,0 +1,75 @@
+@inject IAccountingReportService Reports
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h6" HtmlTag="h2">GL vs project financials</MudText>
+    @if (_report is { } r)
+    {
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(r.IsReconciled ? Color.Success : Color.Error)"
+                 Icon="@(r.IsReconciled ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)" data-testid="reconciled">
+            @(r.IsReconciled ? "Reconciled" : $"Differences: {AccountingFormat.Amount(r.TotalDifference)}")
+        </MudChip>
+    }
+    <MudSpacer />
+    <ExportButton Request="new AccountingExportRequest(AccountingReport.Reconciliation)" />
+</MudStack>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+    Inception to date, per WBS element: allowable cost in the ledger against the project financials actuals (approved labor at cost plus approved allowable ODCs).
+</MudText>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @foreach (var note in _report.Notes)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="reconciliation">
+            <thead>
+                <tr><th>Project</th><th>WBS</th><th style="text-align:right">Financials labor</th><th style="text-align:right">Financials ODC</th><th style="text-align:right">GL labor</th>
+                    <th style="text-align:right">GL ODC</th><th style="text-align:right">Difference</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _report.Rows)
+                {
+                    <tr class="@(r.IsReconciled ? "" : "mud-error-text")">
+                        <td>@r.ProjectCode</td>
+                        <td>@r.WbsCode</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.FinancialsLabor)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.FinancialsOdc)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.GlLabor)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.GlOdc)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(r.Difference)</td>
+                        <td>
+                            <MudIcon Size="Size.Small" Icon="@(r.IsReconciled ? Icons.Material.Filled.Check : Icons.Material.Filled.Flag)"
+                                     Color="@(r.IsReconciled ? Color.Success : Color.Error)" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    private ReconciliationDto? _report;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _report = await Reports.GetReconciliationAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}
