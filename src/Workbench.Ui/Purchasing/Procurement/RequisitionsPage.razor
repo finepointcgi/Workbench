@@ -1,0 +1,92 @@
+@page "/purchasing/requisitions"
+@inject IRequisitionService Requisitions
+@inject ICurrentUserContext UserContext
+
+<PageTitle>Requisitions · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Purchase requisitions" BackHref="@(_finance ? "purchasing/bills" : "")" BackLabel="@(_finance ? "Purchasing" : "My Work")"
+                  Subtitle="Ask to buy something for a project you're on or for your organization. The project manager approves, then Finance above the threshold; approved requisitions become purchase orders.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="purchasing/requisitions/new" data-testid="new-requisition">New requisition</MudButton>
+</PurchasingHeader>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+else
+{
+    @if (_queue.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="requisition-queue">
+            <MudText Typo="Typo.h6" Class="mb-2">Waiting on you (@_queue.Count)</MudText>
+            <RequisitionTable Requisitions="_queue" />
+        </MudPaper>
+    }
+
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudSelect T="RequisitionState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
+            @foreach (var s in Enum.GetValues<RequisitionState>())
+            {
+                <MudSelectItem T="RequisitionState?" Value="s">@ProcurementFormat.Label(s)</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_finance)
+        {
+            <MudSwitch T="bool" Value="_mine" ValueChanged="v => SetAsync(() => _mine = v)" Label="Only mine" Color="Color.Primary" />
+        }
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+    </MudStack>
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    <MudPaper Outlined="true" Class="pa-2"><RequisitionTable Requisitions="_list" /></MudPaper>
+}
+
+@code {
+    private IReadOnlyList<RequisitionSummaryDto> _list = [];
+    private IReadOnlyList<RequisitionSummaryDto> _queue = [];
+    private RequisitionState? _status;
+    private bool _mine;
+    private string? _search;
+    private bool _finance;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _finance = (await UserContext.GetAsync()).IsFinance;
+            _queue = await Requisitions.ListApprovalQueueAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _list = await Requisitions.ListAsync(new RequisitionQuery(_status, _mine, _search));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+
+        _loading = false;
+    }
+}

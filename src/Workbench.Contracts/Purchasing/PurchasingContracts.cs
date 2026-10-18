@@ -300,7 +300,16 @@ public sealed record BillLineDto(
     /// <summary>The project manager's email, or "Finance".</summary>
     string RoutedTo,
     string? DecidedBy,
-    DateTime? DecidedAtUtc);
+    DateTime? DecidedAtUtc,
+
+    // Added by procure-to-pay: the PO line billed and the three-way match result.
+    Guid? PurchaseOrderLineId = null,
+    string? PurchaseOrderNumber = null,
+    decimal? Quantity = null,
+    decimal? UnitPrice = null,
+    string? MatchProblem = null,
+    string? MatchOverrideBy = null,
+    string? MatchOverrideReason = null);
 
 public sealed record BillDuplicateDto(Guid BillId, string Number, string InvoiceNumber, DateOnly InvoiceDate, decimal Amount, BillState Status, string Reason);
 
@@ -334,7 +343,15 @@ public sealed record SaveBillLineRequest(
     Guid? SubcontractId = null,
     Guid? OdcEntryId = null,
     Guid? AccountId = null,
-    Guid? OrgUnitId = null);
+    Guid? OrgUnitId = null,
+
+    /// <summary>
+    /// Added by procure-to-pay: the PO line this bills. The line takes the PO line's charging (WBS or account) and its amount
+    /// is <see cref="Quantity"/> × <see cref="UnitPrice"/> (default: the PO price); the three-way match checks both.
+    /// </summary>
+    Guid? PurchaseOrderLineId = null,
+    decimal? Quantity = null,
+    decimal? UnitPrice = null);
 
 /// <summary>A bill. The due date defaults to the invoice date plus the vendor's payment terms.</summary>
 public sealed record SaveBillRequest(

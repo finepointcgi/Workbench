@@ -1,0 +1,32 @@
+@* A list of requisitions. *@
+@if (Requisitions.Count == 0)
+{
+    <MudText Class="mud-text-secondary">@Empty</MudText>
+}
+else
+{
+    <MudPaper Elevation="0" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="requisitions">
+            <thead><tr><th>Number</th><th>Requester</th><th>Justification</th><th>Created</th><th style="text-align:right">Total</th><th>Status</th><th>Waiting on</th></tr></thead>
+            <tbody>
+                @foreach (var r in Requisitions)
+                {
+                    <tr>
+                        <td style="white-space:nowrap"><MudLink Href="@($"purchasing/requisitions/{r.Id}")">@r.Number</MudLink></td>
+                        <td>@(r.RequesterName ?? r.RequesterEmail)</td>
+                        <td>@r.Justification</td>
+                        <td style="white-space:nowrap">@PurchasingFormat.Date(DateOnly.FromDateTime(r.CreatedAtUtc))</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(r.Total)</td>
+                        <td><RequisitionStatusChip Status="r.Status" /></td>
+                        <td>@(r.Stage is { } s ? ProcurementFormat.Label(s) : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<RequisitionSummaryDto> Requisitions { get; set; } = [];
+    [Parameter] public string Empty { get; set; } = "No requisitions.";
+}

@@ -6,6 +6,8 @@
 @inject IProjectService Projects
 @inject IChartOfAccountsService Chart
 @inject IPeopleService People
+@inject IPurchaseOrderService Orders
+@inject IThreeWayMatchService Match
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -69,6 +71,16 @@ else
             <MudText Typo="Typo.h6">Lines</MudText>
             <MudSpacer />
             <MudText Class="mr-4">Total <b>@PurchasingFormat.Amount(_lines.Sum(l => l.Amount))</b></MudText>
+            @if (_openOrders.Count > 0)
+            {
+                <MudSelect T="Guid?" @bind-Value="_fromOrderId" Label="Purchase order" Dense="true" Clearable="true" Style="max-width:280px" Class="mr-2" data-testid="bill-po">
+                    @foreach (var o in _openOrders.Where(o => _vendorId is null || o.VendorId == _vendorId))
+                    {
+                        <MudSelectItem T="Guid?" Value="o.Id">@o.Number · @o.VendorCode (@PurchasingFormat.Amount(o.Total))</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="AddFromOrderAsync" Disabled="_fromOrderId is null" Class="mr-2" data-testid="bill-from-po">Create bill from PO</MudButton>
+            }
             <MudMenu Label="Add line" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" data-testid="add-line">
                 @foreach (var kind in Enum.GetValues<BillLineKind>())
                 {
@@ -78,6 +90,31 @@ else
         </MudStack>
         @foreach (var line in _lines)
         {
+            @if (line.PurchaseOrderLineId is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="bill-po-line">
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="3" Class="d-flex flex-column justify-center">
+                            <MudText Typo="Typo.body2"><b>@line.PoLabel</b></MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@line.ChargeLabel · three-way match on approval</MudText>
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudTextField T="string" @bind-Value="line.Description" Label="Description" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="4" md="2">
+                            <MudNumericField T="decimal" Value="line.Quantity" ValueChanged="@(v => PoQuantityChanged(line, v, line.UnitPrice))" Label="Quantity billed" Min="0" Margin="Margin.Dense" data-testid="bill-po-qty" />
+                        </MudItem>
+                        <MudItem xs="4" md="2">
+                            <MudNumericField T="decimal" Value="line.UnitPrice" ValueChanged="@(v => PoQuantityChanged(line, line.Quantity, v))" Label="Unit price" Format="N2" Min="0" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="3" md="1" Class="d-flex align-center"><MudText>@PurchasingFormat.Amount(line.Amount)</MudText></MudItem>
+                        <MudItem xs="1" md="1" Class="d-flex align-center">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" aria-label="Remove line" OnClick="@(() => RemoveLine(line))" />
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+                continue;
+            }
             <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="bill-line">
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="2">
@@ -210,6 +247,9 @@ else
 
     [SupplyParameterFromQuery(Name = "vendor")] public Guid? VendorQuery { get; set; }
 
+    /// <summary>Procure-to-pay: start the bill from this purchase order's received, unbilled quantities.</summary>
+    [SupplyParameterFromQuery(Name = "po")] public Guid? OrderQuery { get; set; }
+
     private sealed class LineModel
     {
         public BillLineKind Kind { get; set; }
@@ -222,7 +262,17 @@ else
         public Guid? OdcEntryId { get; set; }
         public Guid? AccountId { get; set; }
         public Guid? OrgUnitId { get; set; }
+
+        // Billed from a PO line (procure-to-pay): the charging comes from the PO; amount = quantity × unit price.
+        public Guid? PurchaseOrderLineId { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public string? PoLabel { get; set; }
+        public string? ChargeLabel { get; set; }
     }
+
+    private IReadOnlyList<PurchaseOrderSummaryDto> _openOrders = [];
+    private Guid? _fromOrderId;
 
     private IReadOnlyList<VendorDto> _vendors = [];
     private IReadOnlyList<SubcontractDto> _subcontracts = [];
@@ -264,6 +314,7 @@ else
             var accounts = await Chart.ListAccountsAsync(includeInactive: false);
             _accounts = accounts.Where(a => !a.HasChildren && a.Type is AccountKind.Expense or AccountKind.Asset).ToList();
             _orgs = await People.ListOrgUnitsAsync();
+            _openOrders = await Orders.ListAsync(new PurchaseOrderQuery(OpenOnly: true));
             if (BillId is { } id)
             {
                 var bill = await Bills.GetAsync(id);
@@ -282,6 +333,8 @@ else
                     {
                         Kind = l.Kind, Description = l.Description, Amount = l.Amount, ProjectId = l.ProjectId, WbsElementId = l.WbsElementId,
                         OdcType = l.OdcType ?? OdcCostType.Materials, SubcontractId = l.SubcontractId, OdcEntryId = l.OdcEntryId, AccountId = l.AccountId, OrgUnitId = l.OrgUnitId,
+                        PurchaseOrderLineId = l.PurchaseOrderLineId, Quantity = l.Quantity ?? 0, UnitPrice = l.UnitPrice ?? 0, PoLabel = l.PurchaseOrderNumber,
+                        ChargeLabel = l.AccountNumber is { } acct ? $"{acct} {l.AccountName}" : $"{l.ProjectCode} {l.WbsCode}",
                     });
                     await EnsureWbsAsync(l.ProjectId);
                 }
@@ -289,6 +342,11 @@ else
             else if (VendorQuery is { } vendor)
             {
                 _vendorId = vendor;
+            }
+            else if (OrderQuery is { } order)
+            {
+                _fromOrderId = order;
+                await AddFromOrderAsync();
             }
 
             await LoadLinkableAsync();
@@ -397,6 +455,53 @@ else
         _lines.Add(line);
     }
 
+    /// <summary>Adds a line per PO line for what's received and not yet billed (and takes the PO's vendor).</summary>
+    private async Task AddFromOrderAsync()
+    {
+        if (_fromOrderId is not { } orderId)
+        {
+            return;
+        }
+
+        _saveError = null;
+        try
+        {
+            var request = await Match.BuildBillAsync(new CreateBillFromPurchaseOrderRequest(orderId, _invoiceNumber ?? "", DateOnly.FromDateTime(_invoiceDate ?? DateTime.Today)));
+            var order = await Orders.GetAsync(orderId);
+            if (_vendorId != request.VendorId)
+            {
+                await VendorChanged(request.VendorId);
+            }
+
+            _description ??= request.Description;
+            _lines.RemoveAll(l => l.PurchaseOrderLineId is { } id && request.Lines.Any(r => r.PurchaseOrderLineId == id));
+            foreach (var r in request.Lines)
+            {
+                var poLine = order.Lines.First(l => l.Id == r.PurchaseOrderLineId);
+                _lines.Add(new LineModel
+                {
+                    Kind = r.Kind, Description = r.Description, Amount = r.Amount, WbsElementId = r.WbsElementId, AccountId = r.AccountId, OrgUnitId = r.OrgUnitId,
+                    OdcType = r.OdcType ?? OdcCostType.Materials, PurchaseOrderLineId = r.PurchaseOrderLineId, Quantity = r.Quantity ?? 0, UnitPrice = r.UnitPrice ?? 0,
+                    PoLabel = $"{order.Order.Number} line {poLine.LineNumber}",
+                    ChargeLabel = poLine.AccountNumber is { } a ? $"{a}" : $"{poLine.ProjectCode} {poLine.WbsCode}",
+                });
+            }
+
+            await CheckDuplicatesAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _saveError = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private async Task PoQuantityChanged(LineModel line, decimal quantity, decimal unitPrice)
+    {
+        (line.Quantity, line.UnitPrice) = (quantity, unitPrice);
+        line.Amount = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
+        await CheckDuplicatesAsync();
+    }
+
     private async Task RemoveLine(LineModel line)
     {
         _lines.Remove(line);
@@ -442,7 +547,10 @@ else
                 l.Kind == BillLineKind.Subcontract ? l.SubcontractId : null,
                 l.Kind == BillLineKind.Account ? null : l.OdcEntryId,
                 l.Kind == BillLineKind.Account ? l.AccountId : null,
-                l.Kind == BillLineKind.Account ? l.OrgUnitId : null)).ToList(),
+                l.Kind == BillLineKind.Account ? l.OrgUnitId : null,
+                l.PurchaseOrderLineId,
+                l.PurchaseOrderLineId is null ? null : l.Quantity,
+                l.PurchaseOrderLineId is null ? null : l.UnitPrice)).ToList(),
             PurchasingFormat.ToDateOnly(_dueDate), _description);
         try
         {

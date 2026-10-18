@@ -20,6 +20,11 @@ public static class DefaultChartOfAccounts
         new("1110", "Accounts receivable - billed", AccountType.Asset, "1100"),
         new("1120", "Accounts receivable - unbilled", AccountType.Asset, "1100", Description: "Earned on contracts but not yet invoiced"),
         new("1300", "Prepaid expenses", AccountType.Asset, "1000"),
+        new("1500", "Property and equipment", AccountType.Asset, "1000"),
+        new("1510", "Computer equipment", AccountType.Asset, "1500"),
+        new("1520", "Furniture and office equipment", AccountType.Asset, "1500"),
+        new("1530", "Leasehold improvements", AccountType.Asset, "1500"),
+        new("1590", "Accumulated depreciation", AccountType.Asset, "1500", Description: "Contra asset: depreciation posted by the fixed asset runs"),
 
         new("2000", "Liabilities", AccountType.Liability),
         new("2010", "Accounts payable", AccountType.Liability, "2000", Description: "Vendor ODCs and subcontract invoices"),
@@ -37,6 +42,7 @@ public static class DefaultChartOfAccounts
         new("4020", "Revenue - time and materials", AccountType.Revenue, "4000"),
         new("4030", "Revenue - labor hour", AccountType.Revenue, "4000"),
         new("4040", "Revenue - firm fixed price", AccountType.Revenue, "4000"),
+        new("4900", "Gain (loss) on disposal of assets", AccountType.Revenue, Description: "Fixed asset disposals: proceeds less net book value"),
 
         new("5000", "Direct costs", AccountType.Expense),
         new("5010", "Direct labor", AccountType.Expense, "5000", CostClassification.DirectLabor),
@@ -58,6 +64,7 @@ public static class DefaultChartOfAccounts
         new("6110", "Overhead labor", AccountType.Expense, "6100", CostClassification.IndirectLabor),
         new("6120", "Facilities and rent", AccountType.Expense, "6100", CostClassification.Overhead),
         new("6130", "Overhead supplies", AccountType.Expense, "6100", CostClassification.Overhead),
+        new("6140", "Depreciation", AccountType.Expense, "6100", CostClassification.Overhead, "Fixed asset depreciation (FAR 31.205-11)"),
 
         new("6200", "G&A pool", AccountType.Expense),
         new("6210", "G&A labor", AccountType.Expense, "6200", CostClassification.IndirectLabor, "Includes bid and proposal labor"),

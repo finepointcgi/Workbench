@@ -10,7 +10,7 @@ public enum BalanceSide { Debit, Credit }
 
 public enum CostClass { None, DirectLabor, DirectOdc, IndirectLabor, Fringe, Overhead, GeneralAndAdministrative, Unallowable, Other, AppliedBurden }
 
-public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal }
+public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal, Asset, Depreciation }
 
 public enum JournalEntryState { Draft, Posted, Reversed }
 
@@ -210,7 +210,7 @@ public interface IPostingService
 
 // ---- Period close ----
 
-public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted, UnbilledAccrual }
+public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted, UnbilledAccrual, DepreciationPosted }
 
 public sealed record CloseCheckDto(CloseCheckKind Kind, string Title, bool Passed, int Count, string Summary, IReadOnlyList<string> Details);
 

@@ -1,0 +1,120 @@
+@page "/purchasing/orders/{OrderId:guid}/print"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@inject IPurchaseOrderService Orders
+@inject IVendorService Vendors
+@inject IJSRuntime JS
+
+<PageTitle>@(_po?.Order.Number ?? "Purchase order") · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"purchasing/orders/{OrderId}")">← Back to the order</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_po is not { } po)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var o = po.Order;
+    <div class="page" data-testid="po-print-view">
+        @if (o.Status is PurchaseOrderState.Draft or PurchaseOrderState.Cancelled)
+        {
+            <div class="watermark">@(o.Status == PurchaseOrderState.Draft ? "DRAFT" : "CANCELLED")</div>
+        }
+        <div class="head">
+            <div>
+                <h1>Purchase Order</h1>
+                <div class="number">@o.Number@(o.Revision > 0 ? $" · Revision {o.Revision}" : "")</div>
+            </div>
+            <table class="meta">
+                <tr><th>Order date</th><td>@PurchasingFormat.Date(o.OrderDate)</td></tr>
+                <tr><th>Terms</th><td>@po.Terms</td></tr>
+                <tr><th>Status</th><td>@ProcurementFormat.Label(o.Status)</td></tr>
+            </table>
+        </div>
+        <div class="parties">
+            <div>
+                <div class="label">Vendor</div>
+                <div><b>@o.VendorName</b> (@o.VendorCode)</div>
+                <div class="pre">@_vendor?.RemitToAddress</div>
+                @if (_vendor?.ContactEmail is { } email) { <div>@email</div> }
+            </div>
+            <div>
+                <div class="label">Ship to</div>
+                <div class="pre">@(po.ShipTo ?? "As directed")</div>
+            </div>
+        </div>
+        <table class="lines">
+            <thead><tr><th>#</th><th>Description</th><th>Charge</th><th>Needed by</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+                @foreach (var l in po.Lines)
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Description@(l.IsService ? " (services)" : "")</td>
+                        <td>@ProcurementFormat.Charge(l.ProjectCode, l.WbsCode, l.AccountNumber, l.OrgUnitCode)</td>
+                        <td>@PurchasingFormat.Date(l.NeededBy)</td>
+                        <td class="num">@ProcurementFormat.Quantity(l.Quantity)</td>
+                        <td class="num">@ProcurementFormat.Price(l.UnitPrice)</td>
+                        <td class="num">@PurchasingFormat.Amount(l.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><td colspan="6" class="num"><b>Total</b></td><td class="num"><b>@PurchasingFormat.Amount(o.Total)</b></td></tr></tfoot>
+        </table>
+        @if (po.Notes is not null)
+        {
+            <p><b>Notes:</b> @po.Notes</p>
+        }
+        @if (po.Revisions.Count > 0)
+        {
+            <p class="small"><b>Change orders:</b> @string.Join("; ", po.Revisions.Select(r => $"Rev {r.Revision} ({r.ChangedAtUtc:yyyy-MM-dd}): {r.Reason}"))</p>
+        }
+        <p class="small">Reference @o.Number on every invoice and packing slip. Invoices are matched to this order and to the goods received before payment.</p>
+        <div class="sign">
+            <div>Authorized by: @(po.IssuedBy ?? "—")</div>
+            <div>Date: @(po.IssuedAtUtc is { } at ? at.ToString("yyyy-MM-dd") : "—")</div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+
+    private PurchaseOrderDto? _po;
+    private VendorDto? _vendor;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _po = await Orders.GetAsync(OrderId);
+            try
+            {
+                _vendor = await Vendors.GetAsync(_po.Order.VendorId);
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                _vendor = null;
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/billing.js");
+        await module.InvokeVoidAsync("printPage");
+    }
+}

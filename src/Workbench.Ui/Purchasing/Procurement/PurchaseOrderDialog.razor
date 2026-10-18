@@ -1,0 +1,157 @@
+@* A new PO (entered directly by Finance) or a change order on an issued one: header fields and the full line list. *@
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2" Class="mb-2">
+            @if (Order is null)
+            {
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Vendor" Required="true" Dense="true" data-testid="po-vendor">
+                        @foreach (var v in Options.Vendors)
+                        {
+                            <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudDatePicker @bind-Date="_orderDate" Label="Order date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+                </MudItem>
+                <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_shipTo" Label="Ship to" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_receivers" Label="Receivers (emails, comma separated)" Margin="Margin.Dense" /></MudItem>
+            }
+            else
+            {
+                <MudItem xs="12" md="8">
+                    <MudTextField T="string" @bind-Value="_reason" Label="Reason for the change order" Required="true" Margin="Margin.Dense" data-testid="co-reason" />
+                </MudItem>
+            }
+            <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="_terms" Label="Terms" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+        @foreach (var line in _lines)
+        {
+            <MudPaper Outlined="true" Class="pa-2 mb-2">
+                <MudGrid Spacing="1">
+                    <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="line.Description" Label="Description" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="4" md="2">
+                        <MudNumericField T="decimal" @bind-Value="line.Quantity" Label="Qty" Min="0" Margin="Margin.Dense"
+                                         HelperText="@(line.Received > 0 ? $"{ProcurementFormat.Quantity(line.Received)} received" : null)" />
+                    </MudItem>
+                    <MudItem xs="4" md="2"><MudNumericField T="decimal" @bind-Value="line.UnitPrice" Label="Unit price" Format="N2" Min="0" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="4" md="3">
+                        <MudSelect T="string" @bind-Value="line.Charge" Label="Charge to" Dense="true" Disabled="@(line.Received > 0)">
+                            @foreach (var c in Options.ChargeCodes)
+                            {
+                                <MudSelectItem Value="@($"w:{c.WbsElementId}")">@c.WbsCode @c.Name</MudSelectItem>
+                            }
+                            @foreach (var a in Options.Accounts)
+                            {
+                                <MudSelectItem Value="@($"a:{a.AccountId}")">@a.Number @a.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" aria-label="Remove line" Disabled="@(line.Received > 0)" OnClick="@(() => _lines.Remove(line))" />
+                    </MudItem>
+                    @if (line.Charge?.StartsWith("a:") == true)
+                    {
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="Guid?" @bind-Value="line.OrgUnitId" Label="Organization" Dense="true">
+                                @foreach (var o in Options.Orgs)
+                                {
+                                    <MudSelectItem T="Guid?" Value="o.OrgUnitId">@o.Code · @o.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+                    else
+                    {
+                        <MudItem xs="12" md="4">
+                            <MudSelect T="OdcCostType" @bind-Value="line.OdcType" Label="Cost type" Dense="true">
+                                @foreach (var t in Enum.GetValues<OdcCostType>())
+                                {
+                                    <MudSelectItem Value="t">@t</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+                    <MudItem xs="12" md="3"><MudCheckBox T="bool" @bind-Value="line.IsService" Label="Service (accepted, not delivered)" Dense="true" /></MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _lines.Add(new LineModel()))">Add line</MudButton>
+            <MudSpacer />
+            <MudText>Total <b>@PurchasingFormat.Amount(_lines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2, MidpointRounding.AwayFromZero)))</b></MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanSave)" OnClick="Save" data-testid="po-dialog-save">@(Order is null ? "Create draft PO" : "Save change order")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public RequisitionOptionsDto Options { get; set; } = default!;
+
+    /// <summary>The order being changed; null for a new order.</summary>
+    [Parameter] public PurchaseOrderDto? Order { get; set; }
+
+    private sealed class LineModel
+    {
+        public Guid? LineId { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; } = 1;
+        public decimal UnitPrice { get; set; }
+        public string? Charge { get; set; }
+        public Guid? OrgUnitId { get; set; }
+        public OdcCostType OdcType { get; set; } = OdcCostType.Materials;
+        public bool IsService { get; set; }
+        public decimal Received { get; set; }
+    }
+
+    private readonly List<LineModel> _lines = [];
+    private Guid? _vendorId;
+    private DateTime? _orderDate = DateTime.Today;
+    private string? _terms;
+    private string? _shipTo;
+    private string? _receivers;
+    private string? _reason;
+
+    private bool CanSave => _lines.Count > 0 && (Order is null ? _vendorId is not null && _orderDate is not null : !string.IsNullOrWhiteSpace(_reason));
+
+    protected override void OnInitialized()
+    {
+        if (Order is { } o)
+        {
+            _terms = o.Terms;
+            _lines.AddRange(o.Lines.Select(l => new LineModel
+            {
+                LineId = l.Id, Description = l.Description, Quantity = l.Quantity, UnitPrice = l.UnitPrice, OrgUnitId = l.OrgUnitId,
+                Charge = l.AccountId is { } a ? $"a:{a}" : $"w:{l.WbsElementId}", OdcType = l.OdcType ?? OdcCostType.Materials, IsService = l.IsService, Received = l.QuantityReceived,
+            }));
+        }
+        else
+        {
+            _lines.Add(new LineModel());
+        }
+    }
+
+    private SavePurchaseOrderLineRequest ToRequest(LineModel l)
+    {
+        var isAccount = l.Charge?.StartsWith("a:") == true;
+        Guid? id = Guid.TryParse(l.Charge?[2..], out var g) ? g : null;
+        return new SavePurchaseOrderLineRequest(l.Description ?? "", l.Quantity, l.UnitPrice,
+            isAccount ? null : id, isAccount ? null : l.OdcType, isAccount ? id : null, isAccount ? l.OrgUnitId : null, null, l.IsService, l.LineId);
+    }
+
+    private void Save()
+    {
+        var lines = _lines.Select(ToRequest).ToList();
+        object result = Order is null
+            ? new SavePurchaseOrderRequest(_vendorId!.Value, DateOnly.FromDateTime(_orderDate!.Value), lines, _terms, _shipTo, null,
+                (_receivers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            : new ChangeOrderRequest(_reason!, lines, _terms);
+        MudDialog.Close(DialogResult.Ok(result));
+    }
+}
