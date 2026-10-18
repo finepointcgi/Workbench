@@ -1,0 +1,62 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Collaboration
+@inject ISnackbar Snackbar
+
+<MudFileUpload T="IBrowserFile" @ref="_upload" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="@(_uploading || Disabled)" Class="mt-0">
+    <CustomContent>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.UploadFile"
+                   OnClick="@context.OpenFilePickerAsync" Disabled="@(_uploading || Disabled)">@(_uploading ? "Uploading…" : Label)</MudButton>
+    </CustomContent>
+    <SelectedTemplate />
+</MudFileUpload>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Attach receipt";
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Receives the file name and stream; throw to report a failure.</summary>
+    [Parameter, EditorRequired] public Func<string, Stream, Task> OnUpload { get; set; } = default!;
+
+    private MudFileUpload<IBrowserFile>? _upload;
+    private bool _uploading;
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!AttachmentRules.IsAllowed(file.Name))
+        {
+            Snackbar.Add($"\"{Path.GetExtension(file.Name)}\" files can't be uploaded.", Severity.Warning);
+        }
+        else if (file.Size > AttachmentRules.MaxSizeBytes)
+        {
+            Snackbar.Add($"{file.Name} is larger than {AttachmentRules.MaxSizeBytes / (1024 * 1024)} MB.", Severity.Warning);
+        }
+        else
+        {
+            _uploading = true;
+            StateHasChanged();
+            try
+            {
+                await using var stream = file.OpenReadStream(AttachmentRules.MaxSizeBytes);
+                await OnUpload(file.Name, stream);
+            }
+            catch (Exception ex) when (OdcFormat.IsExpected(ex))
+            {
+                Snackbar.Add($"Couldn't upload {file.Name}: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _uploading = false;
+            }
+        }
+
+        if (_upload is not null)
+        {
+            await _upload.ClearAsync();
+        }
+    }
+}

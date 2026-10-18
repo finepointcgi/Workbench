@@ -1,0 +1,306 @@
+@page "/odcs"
+@page "/projects/{ProjectId:guid}/odcs"
+@using Workbench.Contracts.Odcs
+@using Workbench.Contracts.ProjectAccounting
+@using Workbench.Ui.Odcs
+@inject IOdcService Odcs
+@inject IProjectService Projects
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>ODCs · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Other direct costs</MudText>
+    <MudSelect T="Guid?" Value="ProjectId" ValueChanged="SelectProject" Label="Project" Dense="true" Style="min-width:280px" Class="ml-4">
+        @foreach (var p in _projects)
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="ProjectId is null">New vendor ODC</MudButton>
+</MudStack>
+
+@if (ProjectId is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-3">
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudDatePicker Editable="true" Label="From" Date="_from" DateChanged="@(async d => { _from = d; await LoadAsync(); })" Clearable="true" DateFormat="MM/dd/yyyy" AutoClose="true" Style="max-width:170px" />
+            <MudDatePicker Editable="true" Label="To" Date="_to" DateChanged="@(async d => { _to = d; await LoadAsync(); })" Clearable="true" DateFormat="MM/dd/yyyy" AutoClose="true" Style="max-width:170px" />
+            <MudSelect T="OdcCostType?" Value="_type" ValueChanged="@(async v => { _type = v; await LoadAsync(); })" Label="Type" Clearable="true" Style="max-width:170px">
+                @foreach (var type in Enum.GetValues<OdcCostType>())
+                {
+                    <MudSelectItem T="OdcCostType?" Value="type">@type</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="OdcApprovalState?" Value="_status" ValueChanged="@(async v => { _status = v; await LoadAsync(); })" Label="Status" Clearable="true" Style="max-width:170px">
+                @foreach (var status in Enum.GetValues<OdcApprovalState>())
+                {
+                    <MudSelectItem T="OdcApprovalState?" Value="status">@status</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch T="bool" Value="_includeExpenses" ValueChanged="@(async v => { _includeExpenses = v; await LoadAsync(); })" Label="Include employee expenses" Color="Color.Primary" />
+        </MudStack>
+    </MudPaper>
+
+    @if (_list is { } list)
+    {
+        <MudGrid Spacing="2" Class="mb-3">
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Total</MudText>
+                    <MudText Typo="Typo.h6">@OdcFormat.Money(list.Total)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Allowable</MudText>
+                    <MudText Typo="Typo.h6">@OdcFormat.Money(list.AllowableTotal)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Approved allowable (actuals)</MudText>
+                    <MudText Typo="Typo.h6">@OdcFormat.Money(list.ApprovedAllowableTotal)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Unallowable</MudText>
+                    <MudText Typo="Typo.h6">@OdcFormat.Money(list.UnallowableTotal)</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        @if (list.ByType.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Outlined="true" Class="mb-3">
+                <thead>
+                    <tr><th>Type</th><th style="text-align:right">Entries</th><th style="text-align:right">Amount</th><th style="text-align:right">Allowable</th><th style="text-align:right">Unallowable</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in list.ByType)
+                    {
+                        <tr>
+                            <td>@t.Type</td>
+                            <td style="text-align:right">@t.Count</td>
+                            <td style="text-align:right">@OdcFormat.Money(t.Amount)</td>
+                            <td style="text-align:right">@OdcFormat.Money(t.AllowableAmount)</td>
+                            <td style="text-align:right">@OdcFormat.Money(t.UnallowableAmount)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    }
+
+    <MudTable T="OdcEntryDto" Items="_list?.Entries ?? []" Loading="_loading" Dense="true" Hover="true">
+        <HeaderContent>
+            <MudTh>Date</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>WBS</MudTh>
+            <MudTh>Vendor / invoice</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh Style="text-align:right">Amount</MudTh>
+            <MudTh>Receipt</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Date">@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
+            <MudTd DataLabel="Type">@context.Type</MudTd>
+            <MudTd DataLabel="WBS">@context.WbsCode</MudTd>
+            <MudTd DataLabel="Vendor">
+                @(context.ExpenseReportId is null ? $"{context.Vendor} · {context.InvoiceNumber}" : $"Expense: {context.SubmittedBy}")
+            </MudTd>
+            <MudTd DataLabel="Description">
+                @context.Description
+                @if (context.IsUnallowable)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" title="@context.UnallowableReason">Unallowable</MudChip>
+                }
+                @if (context.Status == OdcApprovalState.Rejected && context.RejectionReason is { } reason)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">Rejected: @reason</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Amount" Style="text-align:right">@OdcFormat.Money(context.Amount)</MudTd>
+            <MudTd DataLabel="Receipt">
+                @if (context.ReceiptFileId is not null)
+                {
+                    <MudLink Href="@Odcs.GetReceiptUrl(context.Id)" Typo="Typo.body2" download="@context.ReceiptFileName">@context.ReceiptFileName</MudLink>
+                }
+                @if (context.IsEditable && context.ExpenseReportId is null)
+                {
+                    <ReceiptUpload Label="@(context.ReceiptFileId is null ? "Attach invoice" : "Replace")" OnUpload="(name, stream) => UploadAsync(context, name, stream)" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Status"><OdcStatusChip Status="context.Status" /></MudTd>
+            <MudTd Style="white-space:nowrap">
+                @if (context.IsEditable && context.ExpenseReportId is null)
+                {
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" OnClick="() => EditAsync(context)" aria-label="Edit" />
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" OnClick="() => DeleteAsync(context)" aria-label="Delete" />
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => SubmitAsync(context)">Submit</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">No ODCs match these filters.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+else if (!_loading)
+{
+    <MudText Class="mud-text-secondary">Choose a project.</MudText>
+}
+
+@code {
+    [Parameter] public Guid? ProjectId { get; set; }
+
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private OdcListDto? _list;
+    private decimal _threshold = 75m;
+    private bool _loading = true;
+    private DateTime? _from;
+    private DateTime? _to;
+    private OdcCostType? _type;
+    private OdcApprovalState? _status;
+    private bool _includeExpenses;
+    private Guid? _loadedProject;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await Projects.ListProjectsAsync();
+            _threshold = (await Odcs.GetPolicyAsync()).ReceiptThreshold;
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load projects: {ex.Message}", Severity.Error);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ProjectId is null)
+        {
+            _loading = false;
+            if ((_projects.FirstOrDefault(p => p.ContractId is not null) ?? _projects.FirstOrDefault()) is { } first)
+            {
+                Navigation.NavigateTo($"projects/{first.Id}/odcs", replace: true);
+            }
+
+            return;
+        }
+
+        if (_loadedProject != ProjectId)
+        {
+            _loadedProject = ProjectId;
+            _wbs = await Projects.ListWbsAsync(ProjectId.Value);
+            await LoadAsync();
+        }
+    }
+
+    private void SelectProject(Guid? projectId)
+    {
+        if (projectId is { } id)
+        {
+            Navigation.NavigateTo($"projects/{id}/odcs");
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (ProjectId is not { } projectId)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _list = await Odcs.ListProjectOdcsAsync(projectId,
+                new OdcListQuery(OdcFormat.ToDateOnly(_from), OdcFormat.ToDateOnly(_to), _type, _status, _includeExpenses));
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load ODCs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string? success = null)
+    {
+        try
+        {
+            await action();
+            if (success is not null)
+            {
+                Snackbar.Add(success, Severity.Success);
+            }
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task<SaveVendorOdcRequest?> AskAsync(OdcEntryDto? existing)
+    {
+        var parameters = new DialogParameters<VendorOdcDialog>
+        {
+            { d => d.Wbs, _wbs },
+            { d => d.Existing, existing },
+            { d => d.ReceiptThreshold, _threshold },
+        };
+        var dialog = await DialogService.ShowAsync<VendorOdcDialog>(existing is null ? "New vendor ODC" : "Edit vendor ODC", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        return await dialog.Result is { Canceled: false, Data: SaveVendorOdcRequest request } ? request : null;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (await AskAsync(null) is { } request)
+        {
+            await RunAsync(() => Odcs.CreateVendorOdcAsync(ProjectId!.Value, request), "ODC saved as a draft. Attach the invoice and submit it.");
+        }
+    }
+
+    private async Task EditAsync(OdcEntryDto entry)
+    {
+        if (await AskAsync(entry) is { } request)
+        {
+            await RunAsync(() => Odcs.UpdateVendorOdcAsync(entry.Id, request));
+        }
+    }
+
+    private async Task DeleteAsync(OdcEntryDto entry)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete ODC", $"Delete {entry.Vendor} invoice {entry.InvoiceNumber}?", yesText: "Delete", cancelText: "Cancel") == true)
+        {
+            await RunAsync(() => Odcs.DeleteVendorOdcAsync(entry.Id));
+        }
+    }
+
+    private Task SubmitAsync(OdcEntryDto entry) => RunAsync(() => Odcs.SubmitAsync(entry.Id), "Submitted for approval.");
+
+    private async Task UploadAsync(OdcEntryDto entry, string fileName, Stream content)
+    {
+        await Odcs.AttachReceiptAsync(entry.Id, fileName, content);
+        Snackbar.Add($"Attached {fileName}.", Severity.Success);
+        await LoadAsync();
+
+        // Called from ReceiptUpload's delegate, which doesn't re-render this page by itself.
+        StateHasChanged();
+    }
+}

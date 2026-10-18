@@ -1,0 +1,7 @@
+@using Workbench.Contracts.Odcs
+<MudChip T="string" Size="Size.Small" Color="OdcFormat.StatusColor(Status)" Variant="Variant.Outlined">@Status</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public OdcApprovalState Status { get; set; }
+}
