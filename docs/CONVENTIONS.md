@@ -304,3 +304,19 @@ await notifications.PublishAsync(
   (dashboards, My Work) inherits this; code that reads `Item.Values` straight from the database must not show them to users.
 - Activity is read by everyone on the sheet, so it records restricted changes without names or values
   ("Restricted column changed"). Activity written before a column was restricted keeps what it said.
+
+## Reports (wave 7)
+
+- `Contracts/Reports`: `IStandardReportService` (catalog, run, drill-down, export), `IReportWriterService` (curated data
+  sources) and `ISavedReportService` (saved reports, schedules). Every result is a `ReportResultDto` with invariant string
+  cells; `Application/Reports/ReportFiles` renders it as .xlsx (ClosedXML) or .csv (formula injection neutralized).
+- A report never shows more than the pages it summarizes: standard reports call the permission-checked services; report-writer
+  sources (`ReportSource`) filter rows through `ReportAccess` (the same rules as `ProjectAccess`) and mark fields
+  `FieldRestriction.Finance` (cost rates, labor cost) or `ProjectFinancials` (contract values, blanked per row). Fields a
+  user can't see aren't listed, and saved definitions that name them have those columns, filters and sorts dropped. Users
+  choose fields by key; there is no SQL or expression input. To add a source, subclass `ReportSource` and add it to `All`.
+- Saved reports are private or shared with organization roles; readers run them with their own access, only the owner edits.
+- Schedules run as the user who created them (`ReportRunAs` + `RunAsAwareCurrentUser`, switched on only by
+  `ReportScheduleRunner` outside HTTP requests), never as Workbench System. The next run is saved before sending (no repeats);
+  deactivated owners' schedules stop. The attachment goes only to the owner; extra recipients (active users) get a link.
+  `EmailMessage` takes optional `Attachments`. Exports record `export.report` security events.

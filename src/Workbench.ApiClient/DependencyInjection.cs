@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddPerDiemResourcingClients(serverBaseAddress);
         services.AddRevenueClients(serverBaseAddress);
         services.AddIncurredCostClients(serverBaseAddress);
+        services.AddReportClients(serverBaseAddress);
         return services;
     }
 }

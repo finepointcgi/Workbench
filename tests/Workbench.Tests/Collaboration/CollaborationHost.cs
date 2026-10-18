@@ -15,7 +15,8 @@ internal sealed class CollaborationHost : IAsyncDisposable
     private readonly ServiceProvider _provider;
     private readonly AsyncServiceScope _scope;
 
-    public CollaborationHost()
+    /// <param name="configure">Extra registrations after the application's (a fixed clock, a recording email sender, ...).</param>
+    public CollaborationHost(Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(TestDb.CreateFactory());
@@ -23,6 +24,7 @@ internal sealed class CollaborationHost : IAsyncDisposable
         services.AddSingleton<ICurrentUser>(User);
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddWorkbenchApplication();
+        configure?.Invoke(services);
         _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _scope = _provider.CreateAsyncScope();
         Events.SubscribeAll(change =>

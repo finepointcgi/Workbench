@@ -1,0 +1,326 @@
+@page "/reports/standard/{Key}"
+@inject IStandardReportService Standard
+@inject ISavedReportService Saved
+@inject IProjectService Projects
+@inject IContractService Contracts
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_entry?.Name ?? "Report") · Reports · Workbench</PageTitle>
+
+<ReportsHeader Title="@(_saved?.Name ?? _entry?.Name ?? "Report")" Subtitle="@(_entry?.Description)">
+    @if (_result is not null)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.GridOn" OnClick="() => ExportAsync(ReportFileFormat.Xlsx)" data-testid="export-xlsx">Excel</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description" OnClick="() => ExportAsync(ReportFileFormat.Csv)" data-testid="export-csv">CSV</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@PrintLink" Target="_blank" data-testid="print">Print</MudButton>
+    }
+    @if (_entry is { Available: true })
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" data-testid="save-report">@(_saved is { CanEdit: true } ? "Save" : "Save as")</MudButton>
+    }
+</ReportsHeader>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" Class="mb-4" data-testid="load-error">@_error</MudAlert>
+}
+
+@if (_entry is not null && _entry.Available)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4">
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" AlignItems="AlignItems.End">
+            @if (Has(ReportParameterKind.DateRange))
+            {
+                <MudSelect T="ReportDateRange" @bind-Value="_range" Label="Dates" Style="min-width:180px" data-testid="param-range">
+                    @foreach (var r in Enum.GetValues<ReportDateRange>())
+                    {
+                        <MudSelectItem T="ReportDateRange" Value="r">@(r == ReportDateRange.Custom ? "Custom dates" : ReportFormat.Words(r.ToString()))</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_range == ReportDateRange.Custom)
+                {
+                    <MudDatePicker @bind-Date="_from" Label="From" DateFormat="yyyy-MM-dd" Style="max-width:160px" data-testid="param-from" />
+                    <MudDatePicker @bind-Date="_to" Label="To" DateFormat="yyyy-MM-dd" Style="max-width:160px" data-testid="param-to" />
+                }
+            }
+            @if (Has(ReportParameterKind.AsOf))
+            {
+                <MudDatePicker @bind-Date="_asOf" Label="As of" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+            }
+            @if (Has(ReportParameterKind.Project))
+            {
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Clearable="true" Style="min-width:220px" data-testid="param-project">
+                    <MudSelectItem T="Guid?" Value="null">All projects</MudSelectItem>
+                    @foreach (var p in _projects)
+                    {
+                        <MudSelectItem T="Guid?" Value="p.Id">@p.Code @p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (Has(ReportParameterKind.Contract))
+            {
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" Style="min-width:220px">
+                    <MudSelectItem T="Guid?" Value="null">All contracts</MudSelectItem>
+                    @foreach (var c in _contracts)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber @c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (Has(ReportParameterKind.Employee))
+            {
+                <MudSelect T="Guid?" @bind-Value="_employeeId" Label="Employee" Clearable="true" Style="min-width:200px">
+                    <MudSelectItem T="Guid?" Value="null">Everyone I can see</MudSelectItem>
+                    @foreach (var e in _employees)
+                    {
+                        <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (Has(ReportParameterKind.FiscalYear))
+            {
+                <MudNumericField T="int?" @bind-Value="_fiscalYear" Label="Fiscal year" Placeholder="Current" Style="max-width:140px" />
+            }
+            @if (Has(ReportParameterKind.RateBasis))
+            {
+                <MudSelect T="RateBasis" @bind-Value="_basis" Label="Period burden at" Style="min-width:160px">
+                    @foreach (var b in Enum.GetValues<RateBasis>())
+                    {
+                        <MudSelectItem T="RateBasis" Value="b">@b rates</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (Has(ReportParameterKind.PeriodGrouping))
+            {
+                <MudSelect T="ReportPeriodGrouping" @bind-Value="_grouping" Label="Split by" Style="min-width:150px">
+                    @foreach (var g in Enum.GetValues<ReportPeriodGrouping>())
+                    {
+                        <MudSelectItem T="ReportPeriodGrouping" Value="g">@ReportFormat.Words(g.ToString())</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (Has(ReportParameterKind.IncludeUnapproved))
+            {
+                <MudSwitch T="bool" @bind-Value="_includeUnapproved" Label="Include unapproved" Color="Color.Primary" />
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="RunAsync" Disabled="_running" data-testid="run-report">Run</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@if (_running)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@if (_result is not null)
+{
+    @if (_result.Subtitle is not null)
+    {
+        <MudText Typo="Typo.subtitle2" Class="mb-2" data-testid="report-subtitle">@_result.Subtitle</MudText>
+    }
+    <ReportTable Result="_result" OnDrill="DrillAsync" />
+}
+
+@if (_drill is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mt-4" data-testid="drill-panel">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6" HtmlTag="h2">@_drill.Title</MudText>
+                @if (_drill.Subtitle is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@_drill.Subtitle</MudText>
+                }
+            </MudStack>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="Close the detail" OnClick="() => _drill = null" />
+        </MudStack>
+        <ReportTable Result="_drill" />
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public string Key { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    public Guid? SavedId { get; set; }
+
+    private StandardReportDto? _entry;
+    private SavedReportDto? _saved;
+    private ReportResultDto? _result;
+    private ReportResultDto? _drill;
+    private string? _error;
+    private bool _forbidden;
+    private bool _running;
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+
+    private ReportDateRange _range = ReportDateRange.ThisMonth;
+    private DateTime? _from;
+    private DateTime? _to;
+    private DateTime? _asOf = DateTime.Today;
+    private Guid? _projectId;
+    private Guid? _contractId;
+    private Guid? _employeeId;
+    private int? _fiscalYear;
+    private RateBasis _basis = RateBasis.Provisional;
+    private ReportPeriodGrouping _grouping = ReportPeriodGrouping.FiscalPeriod;
+    private bool _includeUnapproved;
+
+    private bool Has(ReportParameterKind kind) => _entry?.Parameters.Contains(kind) == true;
+
+    private string PrintLink => $"reports/print?key={Uri.EscapeDataString(Key)}&p={ReportFormat.Encode(Parameters())}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _entry = (await Standard.ListAsync()).FirstOrDefault(r => r.Key == Key);
+            if (_entry is null)
+            {
+                _error = "There is no such report.";
+                return;
+            }
+
+            if (!_entry.Available)
+            {
+                (_error, _forbidden) = (_entry.UnavailableReason, true);
+                return;
+            }
+
+            if (Has(ReportParameterKind.Project))
+            {
+                _projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+            }
+
+            if (Has(ReportParameterKind.Contract))
+            {
+                _contracts = (await Contracts.ListContractsAsync()).OrderBy(c => c.ContractNumber, StringComparer.Ordinal).ToList();
+            }
+
+            if (Has(ReportParameterKind.Employee))
+            {
+                _employees = (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName).ToList();
+            }
+
+            if (SavedId is { } id)
+            {
+                _saved = await Saved.GetAsync(id);
+                if (_saved.Parameters is { } p)
+                {
+                    Load(p);
+                }
+            }
+
+            await RunAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            (_error, _forbidden) = (ReportFormat.Error(ex), ReportFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Load(ReportParameters p)
+    {
+        _range = p.Range;
+        (_from, _to) = (ReportFormat.ToDateTime(p.From), ReportFormat.ToDateTime(p.To));
+        if (p.Range == ReportDateRange.Custom && p.From is null && p.To is null)
+        {
+            _range = ReportDateRange.ThisMonth;
+        }
+
+        _asOf = ReportFormat.ToDateTime(p.AsOf) ?? DateTime.Today;
+        (_projectId, _contractId, _employeeId, _fiscalYear) = (p.ProjectId, p.ContractId, p.EmployeeId, p.FiscalYear);
+        (_basis, _grouping, _includeUnapproved) = (p.Basis ?? RateBasis.Provisional, p.Grouping, p.IncludeUnapproved);
+    }
+
+    private ReportParameters Parameters() => new(
+        _range == ReportDateRange.Custom ? ReportFormat.ToDateOnly(_from) : null,
+        _range == ReportDateRange.Custom ? ReportFormat.ToDateOnly(_to) : null,
+        _range,
+        Has(ReportParameterKind.AsOf) ? ReportFormat.ToDateOnly(_asOf) : null,
+        _projectId, _contractId, _employeeId, _fiscalYear,
+        Has(ReportParameterKind.RateBasis) ? _basis : null,
+        _grouping, _includeUnapproved);
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        _error = null;
+        _drill = null;
+        try
+        {
+            _result = await Standard.RunAsync(Key, Parameters());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            (_error, _forbidden, _result) = (ReportFormat.Error(ex), ReportFormat.IsForbidden(ex), null);
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task DrillAsync(ReportRowDto row)
+    {
+        try
+        {
+            _drill = await Standard.DrillAsync(Key, Parameters(), row.DrillKey!);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ExportAsync(ReportFileFormat format)
+    {
+        try
+        {
+            await ReportFormat.DownloadAsync(JS, await Standard.ExportAsync(Key, Parameters(), format));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var editing = _saved is { CanEdit: true } ? _saved : null;
+        var dialog = await DialogService.ShowAsync<SaveReportDialog>(editing is null ? "Save report" : "Save changes",
+            new DialogParameters<SaveReportDialog> { { d => d.Existing, editing } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveReportRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            request = request with { StandardKey = Key, Parameters = Parameters() };
+            if (editing is null)
+            {
+                var created = await Saved.CreateAsync(request);
+                Snackbar.Add($"Saved \"{created.Name}\".", Severity.Success);
+                Nav.NavigateTo($"reports/saved/{created.Id}");
+            }
+            else
+            {
+                _saved = await Saved.UpdateAsync(editing.Id, request);
+                Snackbar.Add("Saved.", Severity.Success);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or ArgumentException)
+        {
+            Snackbar.Add(ReportFormat.Error(ex), Severity.Error);
+        }
+    }
+}
