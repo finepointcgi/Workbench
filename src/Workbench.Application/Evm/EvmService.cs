@@ -274,7 +274,7 @@ public sealed class EvmService(IWorkbenchDbContextFactory dbFactory, AuditRecord
         return (await EvmBaselines.ToDtoAsync(db, baseline.ProjectId, Today, [], cancellationToken))!;
     }
 
-    private static void ReplaceMilestones(IWorkbenchDbContext db, EvmWorkPackage wp, IReadOnlyList<SaveMilestoneRequest> milestones)
+    private static void ReplaceMilestones(IWorkbenchDbContext db, EvmWorkPackage wp, IReadOnlyList<SaveEvmMilestoneRequest> milestones)
     {
         if (milestones.Count == 0)
         {

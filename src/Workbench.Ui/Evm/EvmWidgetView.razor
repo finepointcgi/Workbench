@@ -1,0 +1,42 @@
+@* The dashboards' earned value widget: CPI, SPI, EAC, VAC and a small S-curve. *@
+
+<MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@Data.ProjectCode · @Data.ProjectName · @Data.PeriodName</MudText>
+<MudGrid Spacing="2" Class="mt-1" data-evm-widget>
+    <MudItem xs="6" lg="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">CPI</MudText><MudText Typo="Typo.subtitle1" Class="@EvmFormat.IndexClass(Data.Total.Cpi)">@EvmFormat.Index(Data.Total.Cpi)</MudText></MudItem>
+    <MudItem xs="6" lg="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">SPI</MudText><MudText Typo="Typo.subtitle1" Class="@EvmFormat.IndexClass(Data.Total.Spi)">@EvmFormat.Index(Data.Total.Spi)</MudText></MudItem>
+    <MudItem xs="6" lg="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">EAC</MudText><MudText Typo="Typo.subtitle1">@EvmFormat.Money(Data.Total.Eac)</MudText></MudItem>
+    <MudItem xs="6" lg="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">VAC</MudText><MudText Typo="Typo.subtitle1" Class="@EvmFormat.VarianceClass(Data.Total.Vac)">@EvmFormat.Money(Data.Total.Vac)</MudText></MudItem>
+</MudGrid>
+@if (_labels.Length > 0)
+{
+    <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_curve" ChartLabels="_labels" ChartOptions="_options" Width="100%" Height="180px" LegendPosition="Position.Bottom" />
+}
+@if (Data.ControlAccountsNeedingVar > 0)
+{
+    <MudText Typo="Typo.caption" Class="mud-warning-text d-block">@Data.ControlAccountsNeedingVar control account(s) beyond variance thresholds</MudText>
+}
+<MudLink Href="@($"projects/{Data.ProjectId}/evm")" Typo="Typo.caption">Open earned value</MudLink>
+
+@code {
+    [Parameter, EditorRequired]
+    public EvmWidgetData Data { get; set; } = default!;
+
+    private string[] _labels = [];
+    private List<ChartSeries<double>> _curve = [];
+    private LineChartOptions _options = new();
+
+    protected override void OnParametersSet()
+    {
+        var points = Data.Points;
+        var max = (double)points.Select(p => Math.Max(p.Bcws, Math.Max(p.Bcwp ?? 0, p.Acwp ?? 0))).DefaultIfEmpty(0).Max();
+        _options = new LineChartOptions { YAxisTicks = (int)Math.Max(1, Math.Ceiling(max / 4 / 1000) * 1000) };
+        _labels = points.Select(p => p.Name).ToArray();
+        var statused = points.TakeWhile((p, i) => points.Skip(i).Any(q => q.Bcwp is not null)).ToList();
+        _curve =
+        [
+            new() { Name = "BCWS", Data = new ChartData<double>(points.Select(p => (double)p.Bcws).ToList()) },
+            new() { Name = "BCWP", Data = new ChartData<double>(statused.Select(p => (double)(p.Bcwp ?? 0)).ToList()) },
+            new() { Name = "ACWP", Data = new ChartData<double>(statused.Select(p => (double)(p.Acwp ?? 0)).ToList()) },
+        ];
+    }
+}

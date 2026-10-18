@@ -235,8 +235,10 @@ public static class EvmEngine
             var planned = wp.Budget == 0 ? (asOf >= wp.PlannedFinish ? 100m : 0m) : bcws / wp.Budget * 100m;
             var percent = Math.Round(EvmCalculator.EarnedPercent(wp.Technique, input, planned), 2, MidpointRounding.AwayFromZero);
             progress[wp.Id] = (percent, source);
+            // Level of effort earns exactly what was planned (no rounding through the %).
+            var bcwp = wp.Technique == EarnedValueTechnique.LevelOfEffort ? bcws : EvmCalculator.Earned(wp.Budget, percent);
             rows.Add(new EvRow(wp.Id, wp.WbsElementId, wp.ControlAccountWbsId, wp.Technique, wp.Budget, bcws,
-                EvmCalculator.Earned(wp.Budget, percent), Money(acwp.GetValueOrDefault(wp.Id)), percent, source));
+                bcwp, Money(acwp.GetValueOrDefault(wp.Id)), percent, source));
         }
 
         foreach (var (wbsId, amount) in unassigned.Where(u => u.Value != 0))

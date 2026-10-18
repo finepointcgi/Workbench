@@ -1,0 +1,257 @@
+@* Baseline change requests: log a change to the PMB; Finance approves or rejects it. Approved ones keep a before/after snapshot. *@
+@inject IEvmChangeRequestService Changes
+@inject IProjectService Projects
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Management reserve @EvmFormat.Money(Baseline.ManagementReserve) · undistributed budget @EvmFormat.Money(Baseline.UndistributedBudget) · revision @Baseline.Revision
+    </MudText>
+    <MudSpacer />
+    @if (_draft is null)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="StartDraft">New change request</MudButton>
+    }
+</MudStack>
+
+@if (_draft is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="bcr-form">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">New baseline change request</MudText>
+        <MudTextField @bind-Value="_draft.Title" Label="Title" Variant="Variant.Outlined" Class="mb-2" MaxLength="200" />
+        <MudTextField @bind-Value="_draft.Justification" Label="Justification" Lines="3" Variant="Variant.Outlined" Class="mb-2" MaxLength="4000" />
+        @foreach (var line in _draft.Lines)
+        {
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+                <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Label="To" Dense="true" Variant="Variant.Outlined" Style="min-width: 240px"
+                           ToStringFunc="LeafLabel">
+                    <MudSelectItem T="Guid?" Value="null">Undistributed budget</MudSelectItem>
+                    @foreach (var w in _leaves)
+                    {
+                        <MudSelectItem T="Guid?" Value="w.Id">@w.Code @w.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="EvmBudgetSourceKind" @bind-Value="line.Source" Label="From" Dense="true" Variant="Variant.Outlined" Style="min-width: 200px">
+                    <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.ManagementReserve">Management reserve</MudSelectItem>
+                    <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.UndistributedBudget">Undistributed budget</MudSelectItem>
+                    <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.ContractChange">Contract change</MudSelectItem>
+                </MudSelect>
+                <MudNumericField T="decimal" @bind-Value="line.Amount" Label="Budget change" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 150px" />
+                <MudDatePicker Label="New start" Date="line.Start" DateChanged="d => line.Start = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
+                <MudDatePicker Label="New finish" Date="line.Finish" DateChanged="d => line.Finish = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="() => _draft.Lines.Remove(line)" aria-label="Remove this change" Disabled="_draft.Lines.Count == 1" />
+            </MudStack>
+        }
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _draft.Lines.Add(new LineDraft())">Add a change</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Text" OnClick="() => _draft = null">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="_busy">Submit</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@if (_requests is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_requests.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No baseline changes yet.</MudText>
+}
+else
+{
+    <MudExpansionPanels MultiExpansion="true" data-testid="bcr-list">
+        @foreach (var r in _requests)
+        {
+            <MudExpansionPanel Expanded="@(r.Status == EvmChangeStatus.Pending)">
+                <TitleContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText><b>@r.DisplayNumber</b> @r.Title</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="@(r.Status switch { EvmChangeStatus.Approved => Color.Success, EvmChangeStatus.Rejected => Color.Error, _ => Color.Warning })">@r.Status</MudChip>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@r.RequestedBy · @r.RequestedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</MudText>
+                    </MudStack>
+                </TitleContent>
+                <ChildContent>
+                    <MudText Typo="Typo.body2" Class="mb-2">@r.Justification</MudText>
+                    <ul>
+                        @foreach (var l in r.Lines)
+                        {
+                            <li>
+                                <MudText Typo="Typo.body2">
+                                    @EvmFormat.Money(l.BudgetChange) from @Source(l.Source) to @(l.WbsCode ?? "undistributed budget")
+                                    @(l.NewTechnique is { } t ? $" · technique {EvmFormat.Technique(t)}" : "")
+                                    @(l.NewStart is { } s ? $" · start {s:yyyy-MM-dd}" : "")
+                                    @(l.NewFinish is { } f ? $" · finish {f:yyyy-MM-dd}" : "")
+                                </MudText>
+                            </li>
+                        }
+                    </ul>
+                    @if (r.Before is { } before && r.After is { } after)
+                    {
+                        <MudSimpleTable Dense="true" Class="mb-2" Style="max-width: 760px">
+                            <thead><tr><th></th><th style="text-align:right">Before (rev @before.Revision)</th><th style="text-align:right">After (rev @after.Revision)</th></tr></thead>
+                            <tbody>
+                                <tr><td>Management reserve</td><td style="text-align:right">@EvmFormat.Money(before.ManagementReserve)</td><td style="text-align:right">@EvmFormat.Money(after.ManagementReserve)</td></tr>
+                                <tr><td>Undistributed budget</td><td style="text-align:right">@EvmFormat.Money(before.UndistributedBudget)</td><td style="text-align:right">@EvmFormat.Money(after.UndistributedBudget)</td></tr>
+                                @foreach (var wp in after.WorkPackages)
+                                {
+                                    var old = before.WorkPackages.FirstOrDefault(b => b.WbsElementId == wp.WbsElementId);
+                                    <tr>
+                                        <td>@wp.WbsCode</td>
+                                        <td style="text-align:right">@(old is null ? "(new)" : $"{EvmFormat.Money(old.Budget)} · {old.PlannedStart:yyyy-MM-dd}–{old.PlannedFinish:yyyy-MM-dd} · {EvmFormat.Technique(old.Technique)}")</td>
+                                        <td style="text-align:right">@EvmFormat.Money(wp.Budget) · @wp.PlannedStart.ToString("yyyy-MM-dd")–@wp.PlannedFinish.ToString("yyyy-MM-dd") · @EvmFormat.Technique(wp.Technique)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    @if (r.DecidedBy is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@r.Status by @r.DecidedBy on @r.DecidedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd")@(r.DecisionNote is { } n ? $": {n}" : "")</MudText>
+                    }
+                    else if (CanApprove)
+                    {
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <MudTextField T="string" @bind-Value="_notes[r.Id]" Label="Decision note" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width: 320px" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="() => DecideAsync(r, true)" Disabled="_busy">Approve</MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="() => DecideAsync(r, false)" Disabled="_busy">Reject</MudButton>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Waiting for Finance to approve.</MudText>
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    [Parameter, EditorRequired]
+    public EvmBaselineDto Baseline { get; set; } = default!;
+
+    [Parameter]
+    public bool CanApprove { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<EvmChangeRequestDto>? _requests;
+    private IReadOnlyList<WbsElementDto> _leaves = [];
+    private readonly Dictionary<Guid, string?> _notes = [];
+    private Draft? _draft;
+    private bool _busy;
+
+    private sealed class Draft
+    {
+        public string? Title { get; set; }
+        public string? Justification { get; set; }
+        public List<LineDraft> Lines { get; } = [new()];
+    }
+
+    private sealed class LineDraft
+    {
+        public Guid? WbsElementId { get; set; }
+        public EvmBudgetSourceKind Source { get; set; }
+        public decimal Amount { get; set; }
+        public DateTime? Start { get; set; }
+        public DateTime? Finish { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            var wbs = await Projects.ListWbsAsync(ProjectId);
+            _leaves = wbs.Where(w => !wbs.Any(c => c.ParentId == w.Id)).OrderBy(w => w.Code, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            _leaves = [];
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _requests = await Changes.ListAsync(ProjectId);
+            foreach (var r in _requests.Where(r => !_notes.ContainsKey(r.Id)))
+            {
+                _notes[r.Id] = null;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            _requests = [];
+            Snackbar.Add($"Couldn't load the change requests: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void StartDraft() => _draft = new Draft();
+
+    private string LeafLabel(Guid? id) =>
+        id is not { } i ? "Undistributed budget" : _leaves.FirstOrDefault(w => w.Id == i) is { } w ? $"{w.Code} {w.Name}" : string.Empty;
+
+    private static string Source(EvmBudgetSourceKind source) => source switch
+    {
+        EvmBudgetSourceKind.ManagementReserve => "management reserve",
+        EvmBudgetSourceKind.UndistributedBudget => "undistributed budget",
+        _ => "a contract change",
+    };
+
+    private static DateOnly? Day(DateTime? d) => d is { } v ? DateOnly.FromDateTime(v) : null;
+
+    private async Task SubmitAsync()
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var created = await Changes.CreateAsync(ProjectId, new CreateChangeRequestRequest(_draft.Title ?? "", _draft.Justification ?? "",
+                _draft.Lines.Select(l => new SaveChangeLineRequest(l.WbsElementId, l.Source, l.Amount, null, Day(l.Start), Day(l.Finish))).ToList()));
+            Snackbar.Add($"Submitted {created.DisplayNumber}.", Severity.Success);
+            _draft = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DecideAsync(EvmChangeRequestDto r, bool approve)
+    {
+        _busy = true;
+        try
+        {
+            var request = new DecideChangeRequestRequest(_notes.GetValueOrDefault(r.Id));
+            var decided = approve ? await Changes.ApproveAsync(r.Id, request) : await Changes.RejectAsync(r.Id, request);
+            Snackbar.Add($"{decided.DisplayNumber} {decided.Status.ToString().ToLowerInvariant()}.", Severity.Success);
+            await LoadAsync();
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

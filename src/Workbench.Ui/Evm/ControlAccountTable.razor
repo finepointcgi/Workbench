@@ -1,0 +1,121 @@
+@* Control accounts with their period and cumulative figures; expand one to see its work packages. *@
+
+<MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="false" Style="overflow-x: auto" data-testid="ca-table">
+    <thead>
+        <tr>
+            <th></th>
+            <th>WBS</th>
+            <th>Name</th>
+            <th style="text-align:right">Period SV</th>
+            <th style="text-align:right">Period CV</th>
+            <th style="text-align:right">BCWS</th>
+            <th style="text-align:right">BCWP</th>
+            <th style="text-align:right">ACWP</th>
+            <th style="text-align:right">SV</th>
+            <th style="text-align:right">CV</th>
+            <th style="text-align:right">SPI</th>
+            <th style="text-align:right">CPI</th>
+            <th style="text-align:right">BAC</th>
+            <th style="text-align:right">EAC</th>
+            <th style="text-align:right">VAC</th>
+            <th>VAR</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var ca in Status.ControlAccounts)
+        {
+            var open = _open.Contains(ca.WbsElementId);
+            <tr data-ca="@ca.Code">
+                <td>
+                    <MudIconButton Size="Size.Small" Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                   OnClick="() => Toggle(ca.WbsElementId)" aria-label="@($"Show the work packages of {ca.Code}")" />
+                </td>
+                <td><b>@ca.Code</b></td>
+                <td>@ca.Name</td>
+                @Cells(ca.Period, ca.Cumulative)
+                <td>
+                    @if (ca.NeedsVar)
+                    {
+                        <MudTooltip Text="@string.Join("; ", ca.VarianceReasons)">
+                            <MudChip T="string" Size="Size.Small" Color="@(ca.VarComplete ? Color.Success : Color.Warning)" Variant="Variant.Outlined">
+                                @(ca.VarComplete ? "Written" : "Required")
+                            </MudChip>
+                        </MudTooltip>
+                    }
+                </td>
+            </tr>
+            @if (open)
+            {
+                @foreach (var wp in ca.WorkPackages)
+                {
+                    <tr class="mud-text-secondary" data-wp="@wp.Code">
+                        <td></td>
+                        <td style="padding-left: 24px">@wp.Code</td>
+                        <td>
+                            @wp.Name
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block">
+                                @(wp.WorkPackageId is null ? "Not in a work package" : EvmFormat.Technique(wp.Technique)) · @EvmFormat.Percent(wp.PercentComplete) · @wp.ProgressSource
+                            </MudText>
+                        </td>
+                        @Cells(wp.Period, wp.Cumulative)
+                        <td></td>
+                    </tr>
+                }
+            }
+        }
+        <tr style="font-weight: 600">
+            <td></td>
+            <td></td>
+            <td>Total (distributed)</td>
+            @Cells(Status.PeriodTotal, Status.Total)
+            <td></td>
+        </tr>
+        <tr>
+            <td></td>
+            <td></td>
+            <td>Undistributed budget</td>
+            <td colspan="9"></td>
+            <td style="text-align:right">@EvmFormat.Money(Status.UndistributedBudget)</td>
+            <td colspan="3"></td>
+        </tr>
+        <tr>
+            <td></td>
+            <td></td>
+            <td>Management reserve</td>
+            <td colspan="9"></td>
+            <td style="text-align:right">@EvmFormat.Money(Status.ManagementReserve)</td>
+            <td colspan="3"></td>
+        </tr>
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public EvmStatusDto Status { get; set; } = default!;
+
+    private readonly HashSet<Guid> _open = [];
+
+    private void Toggle(Guid id)
+    {
+        if (!_open.Remove(id))
+        {
+            _open.Add(id);
+        }
+    }
+
+    private static RenderFragment Cells(EvmPeriodAmounts period, EvmMetrics m) => __builder =>
+    {
+        <td style="text-align:right" class="@EvmFormat.VarianceClass(period.Sv)">@EvmFormat.Money(period.Sv)</td>
+        <td style="text-align:right" class="@EvmFormat.VarianceClass(period.Cv)">@EvmFormat.Money(period.Cv)</td>
+        <td style="text-align:right">@EvmFormat.Money(m.Bcws)</td>
+        <td style="text-align:right">@EvmFormat.Money(m.Bcwp)</td>
+        <td style="text-align:right">@EvmFormat.Money(m.Acwp)</td>
+        <td style="text-align:right" class="@EvmFormat.VarianceClass(m.Sv)">@EvmFormat.Money(m.Sv)</td>
+        <td style="text-align:right" class="@EvmFormat.VarianceClass(m.Cv)">@EvmFormat.Money(m.Cv)</td>
+        <td style="text-align:right" class="@EvmFormat.IndexClass(m.Spi)">@EvmFormat.Index(m.Spi)</td>
+        <td style="text-align:right" class="@EvmFormat.IndexClass(m.Cpi)">@EvmFormat.Index(m.Cpi)</td>
+        <td style="text-align:right">@EvmFormat.Money(m.Bac)</td>
+        <td style="text-align:right">@EvmFormat.Money(m.Eac)</td>
+        <td style="text-align:right" class="@EvmFormat.VarianceClass(m.Vac)">@EvmFormat.Money(m.Vac)</td>
+    };
+}

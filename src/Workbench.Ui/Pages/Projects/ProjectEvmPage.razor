@@ -1,0 +1,271 @@
+@page "/projects/{ProjectId:guid}/evm"
+@using Workbench.Contracts.Evm
+@using Workbench.Ui.Evm
+@inject IProjectService Projects
+@inject IEvmService Evm
+@inject IEvmExportService Exports
+@inject IFinancialAccessService Access
+@inject ICurrentUserContext CurrentUser
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_project?.Code ?? "Project") earned value · Workbench</PageTitle>
+
+@if (_forbidden is not null)
+{
+    <ForbiddenNotice Title="You don't have access to this project's earned value" Message="@_forbidden" />
+}
+else if (_loading && _project is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_project is null)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Project not found</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+        <MudIconButton Href="@($"projects/{ProjectId}/financials")" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the project's financials" />
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_project.Code · @_project.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Earned value</MudChip>
+        <MudSpacer />
+        @if (_baseline is not null && _status is not null)
+        {
+            <MudSelect T="Guid" Value="_status.Period.FiscalPeriodId" ValueChanged="OnPeriodChangedAsync" Label="Status period" Dense="true" Style="min-width: 220px"
+                       ToStringFunc="PeriodLabel" data-testid="period-select">
+                @foreach (var p in _periods.Where(p => p.State != EvmPeriodState.Future))
+                {
+                    <MudSelectItem T="Guid" Value="p.FiscalPeriodId">@PeriodLabel(p.FiscalPeriodId)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_status.IsFrozen)
+            {
+                @if (_isFinance)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LockOpen" OnClick="ReopenAsync" Disabled="_busy">Reopen period</MudButton>
+                }
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Lock" OnClick="CloseAsync" Disabled="_busy" data-testid="close-period">Close @_status.Period.Name</MudButton>
+            }
+            <MudMenu Label="Export IPMDAR" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download">
+                <MudMenuItem OnClick="() => ExportAsync(true)">Format 1 (WBS) .xlsx</MudMenuItem>
+                <MudMenuItem OnClick="() => ExportAsync(false)">Format 5 (narrative) .xlsx</MudMenuItem>
+            </MudMenu>
+        }
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
+    </MudStack>
+
+    @if (_status is not null)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2" Style="display:block">
+            @_status.Period.Name (@_status.Period.Start.ToString("yyyy-MM-dd") – @_status.Period.End.ToString("yyyy-MM-dd")) ·
+            @(_status.IsFrozen ? $"closed by {_status.Period.ClosedBy} on {_status.Period.ClosedAtUtc?.ToLocalTime():yyyy-MM-dd}" : $"{EvmFormat.State(_status.Period.State).ToLowerInvariant()}, figures are live")
+            · PMB revision @_status.BaselineRevision · @_status.CostBasis
+        </MudText>
+        @foreach (var note in _status.Notes)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-1">@note</MudAlert>
+        }
+    }
+
+    <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Dashboard" Disabled="_status is null">
+            @if (_status is not null && _series is not null)
+            {
+                <EvmTiles Status="_status" />
+                <EvmCharts Series="_series" />
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Control accounts</MudText>
+                <ControlAccountTable Status="_status" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="@VarLabel" Disabled="_status is null">
+            @if (_status is not null && _baseline is not null)
+            {
+                <VarianceTab ProjectId="ProjectId" PeriodId="_status.Period.FiscalPeriodId" Frozen="_status.IsFrozen"
+                             ThresholdPercent="_baseline.ThresholdPercent" ThresholdAmount="_baseline.ThresholdAmount" Saved="LoadStatusAsync" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Baseline">
+            <BaselineTab ProjectId="ProjectId" Baseline="_baseline" Changed="OnBaselineChangedAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Change requests" Disabled="_baseline is null">
+            @if (_baseline is not null)
+            {
+                <ChangeRequestsTab ProjectId="ProjectId" Baseline="_baseline" CanApprove="_isFinance" Changed="LoadAsync" />
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+
+    private ProjectDto? _project;
+    private EvmBaselineDto? _baseline;
+    private IReadOnlyList<EvmPeriodRefDto> _periods = [];
+    private EvmStatusDto? _status;
+    private EvmSeriesDto? _series;
+    private Guid? _periodId;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _isFinance;
+    private string? _forbidden;
+    private int _tab;
+
+    private string VarLabel => _status is null ? "Variance analysis" : $"Variance analysis ({_status.ControlAccounts.Count(c => c.NeedsVar)})";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _isFinance = (await CurrentUser.GetAsync()).IsFinance;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            _isFinance = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _forbidden = null;
+        try
+        {
+            _project = await Projects.GetProjectAsync(ProjectId);
+            if (_project is null)
+            {
+                return;
+            }
+
+            if (!await Access.CanReadProjectFinancialsAsync(ProjectId))
+            {
+                _forbidden = "Only Finance, administrators and the project's manager can see its earned value.";
+                return;
+            }
+
+            _baseline = await Evm.GetBaselineAsync(ProjectId);
+            if (_baseline is null)
+            {
+                (_status, _series, _periods) = (null, null, []);
+                _tab = 2;
+                return;
+            }
+
+            _periods = await Evm.ListPeriodsAsync(ProjectId);
+            await LoadStatusAsync();
+            _series = await Evm.GetSeriesAsync(ProjectId);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _forbidden = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException)
+        {
+            Snackbar.Add($"Couldn't load earned value: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadStatusAsync()
+    {
+        try
+        {
+            _status = await Evm.GetStatusAsync(ProjectId, _periodId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load the status: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string PeriodLabel(Guid id) =>
+        _periods.FirstOrDefault(p => p.FiscalPeriodId == id) is { } p ? $"{p.Name} · {EvmFormat.State(p.State)}" : "";
+
+    private async Task OnPeriodChangedAsync(Guid id)
+    {
+        _periodId = id;
+        await LoadStatusAsync();
+    }
+
+    private async Task OnBaselineChangedAsync(EvmBaselineDto baseline)
+    {
+        var first = _baseline is null;
+        _baseline = baseline;
+        await LoadAsync();
+        if (first)
+        {
+            _tab = 0;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_status is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var closed = await Evm.ClosePeriodAsync(ProjectId, _status.Period.FiscalPeriodId);
+            Snackbar.Add($"Closed {closed.Name}; its status is frozen.", Severity.Success);
+        });
+    }
+
+    private async Task ReopenAsync()
+    {
+        if (_status is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var reopened = await Evm.ReopenPeriodAsync(ProjectId, _status.Period.FiscalPeriodId, new ReopenEvmPeriodRequest("Reopened from the earned value page"));
+            Snackbar.Add($"Reopened {reopened.Name}.", Severity.Success);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportAsync(bool format1)
+    {
+        try
+        {
+            var periodId = _status?.Period.FiscalPeriodId;
+            var file = format1 ? await Exports.ExportFormat1Async(ProjectId, periodId) : await Exports.ExportFormat5Async(ProjectId, periodId);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/evm.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or JSException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't export: {ex.Message}", Severity.Error);
+        }
+    }
+}

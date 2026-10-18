@@ -84,14 +84,14 @@ public sealed record CreateEvmBaselineRequest(
     decimal UndistributedBudget = 0,
     EvTechnique DefaultTechnique = EvTechnique.PercentComplete);
 
-public sealed record SaveMilestoneRequest(string Name, decimal Weight, Guid? ItemId = null, DateOnly? PlannedDate = null);
+public sealed record SaveEvmMilestoneRequest(string Name, decimal Weight, Guid? ItemId = null, DateOnly? PlannedDate = null);
 
 /// <summary>
 /// Changes a work package's technique (and milestones). Allowed until the first status period closes; after that, use a
 /// baseline change request. Milestones: weights must add up to 100; null keeps the existing ones (or, when there are none,
 /// creates one per plan subtask).
 /// </summary>
-public sealed record UpdateWorkPackageRequest(EvTechnique Technique, Guid? ApportionedToId = null, IReadOnlyList<SaveMilestoneRequest>? Milestones = null);
+public sealed record UpdateWorkPackageRequest(EvTechnique Technique, Guid? ApportionedToId = null, IReadOnlyList<SaveEvmMilestoneRequest>? Milestones = null);
 
 public sealed record SetEvmThresholdsRequest(decimal ThresholdPercent, decimal ThresholdAmount);
 
