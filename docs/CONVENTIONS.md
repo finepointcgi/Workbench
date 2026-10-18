@@ -277,3 +277,16 @@ await notifications.PublishAsync(
   per approved timesheet on the policy's charge code. Accrual (per pay period, idempotent by `SourceKey`) runs when payroll posts.
   Holidays aren't a balance. Seeds: `PayrollSeed.cs`, `LeaveSeed.cs`.
 
+## Per diem and resource planning (wave 6)
+
+- Per diem (`Domain/PerDiem`, `Application/PerDiem`, `Contracts/PerDiem`): rate tables are append-only batches (the latest
+  `PerDiemRateBatch` per fiscal year and CONUS/OCONUS is in force). Pick rates through `PerDiemTables.Resolve` (season →
+  standard CONUS → latest earlier year → built-in $110/$68); compute with the pure `PerDiemCalculator`. A travel report's
+  per diem lives in `TravelPerDiem` (one per `ExpenseReport`); "Update expense lines" generates ordinary Travel `OdcEntry`
+  lines through `IExpenseReportService` and links them in `PerDiemLine`. `PerDiemSubmitGuard` decorates
+  `IExpenseReportService.SubmitAsync`; per diem lines other than Lodging need no receipt (`PerDiemReceipts`).
+- Resourcing (`Domain/Resourcing`, `Application/Resourcing`, `Contracts/Resourcing`): `ResourceAllocation` is
+  employee × project (× WBS) × week (Monday). Capacity = standard hours − holidays − approved leave − the non-billable
+  allowance (`Resourcing:*`). Holidays and leave come from `IResourceLeaveCalendar` (no-op `NoLeaveCalendar` TryAdd'ed);
+  the leave module registers its own. Who may do what: `ResourcingAccess` (org role `ResourceManager` manages every
+  project, PMs their own, Finance reads; employees see themselves).

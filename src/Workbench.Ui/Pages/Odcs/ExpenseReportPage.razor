@@ -123,6 +123,7 @@ else
         </MudTable>
         <MudText Typo="Typo.caption" Class="mud-text-secondary d-block px-2 pb-1">Receipts are required for lines of @OdcFormat.Money(_threshold) or more.</MudText>
     </MudPaper>
+    <Workbench.Ui.PerDiem.PerDiemPanel ReportId="ReportId" EmployeeId="report.EmployeeId" Editable="report.IsEditable" TripStart="report.TripStart" TripEnd="report.TripEnd" Changed="LoadAsync" />
 }
 
 @code {

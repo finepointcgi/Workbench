@@ -1,0 +1,75 @@
+@* Approved hours against available hours (standard − holidays − leave), by person, org unit and month. *@
+@inject IResourcePlanningService Planning
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-2">
+    <MudDatePicker Label="From" @bind-Date="_from" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+    <MudDatePicker Label="To" @bind-Date="_to" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+    <MudButton Variant="Variant.Outlined" OnClick="LoadAsync" StartIcon="@Icons.Material.Filled.Refresh">Show</MudButton>
+</MudStack>
+
+@if (_data is not null)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" data-testid="utilization-total">
+        Total: direct utilization <b>@ResourcingFormat.Percent(_data.Total.DirectUtilization)</b> · total @ResourcingFormat.Percent(_data.Total.TotalUtilization) ·
+        target @ResourcingFormat.Percent(_data.TargetUtilization) (after the non-billable allowance)
+    </MudText>
+    <MudGrid Spacing="3">
+        @foreach (var (title, column, rows) in new[] { ("By person", "Person", _data.ByPerson), ("By org unit", "Org unit", _data.ByOrgUnit), ("By month", "Month", _data.ByMonth) })
+        {
+            <MudItem xs="12" md="@(title == "By person" ? 12 : 6)">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">@title</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead>
+                        <tr>
+                            <th>@column</th>
+                            <th style="text-align:right">Available h</th>
+                            <th style="text-align:right">Approved h</th>
+                            <th style="text-align:right">Direct h</th>
+                            <th style="text-align:right">Direct %</th>
+                            <th style="text-align:right">Total %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr>
+                                <td>@row.Name</td>
+                                <td style="text-align:right">@ResourcingFormat.Hours(row.AvailableHours)</td>
+                                <td style="text-align:right">@ResourcingFormat.Hours(row.ActualHours)</td>
+                                <td style="text-align:right">@ResourcingFormat.Hours(row.DirectHours)</td>
+                                <td style="text-align:right" class="@(row.DirectUtilization < _data.TargetUtilization ? "mud-warning-text" : null)">@ResourcingFormat.Percent(row.DirectUtilization)</td>
+                                <td style="text-align:right">@ResourcingFormat.Percent(row.TotalUtilization)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-2);
+    private DateTime? _to = DateTime.Today;
+    private UtilizationDto? _data;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_from is null || _to is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _data = await Planning.GetUtilizationAsync(DateOnly.FromDateTime(_from.Value), DateOnly.FromDateTime(_to.Value));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load utilization: {ex.Message}", Severity.Error);
+        }
+    }
+}

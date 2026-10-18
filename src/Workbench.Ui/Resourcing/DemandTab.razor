@@ -1,0 +1,135 @@
+@* Budgeted hours nobody is allocated to yet, and a search for people with free capacity in a labor category. *@
+@inject IResourcePlanningService Planning
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.subtitle1" Class="mb-1">Open demand</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Labor hours budgeted in future fiscal periods (current budget) that no allocation covers.</MudText>
+<MudSimpleTable Dense="true" Hover="true" Class="mb-4" data-testid="open-demand">
+    <thead>
+        <tr>
+            <th>Period</th>
+            <th>Project</th>
+            <th>Labor category</th>
+            <th style="text-align:right">Budget h</th>
+            <th style="text-align:right">Allocated h</th>
+            <th style="text-align:right">Open h</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var d in _demand)
+        {
+            <tr>
+                <td>@d.PeriodName</td>
+                <td>@d.ProjectCode</td>
+                <td>@d.LaborCategory</td>
+                <td style="text-align:right">@ResourcingFormat.Hours(d.BudgetHours)</td>
+                <td style="text-align:right">@ResourcingFormat.Hours(d.AllocatedHours)</td>
+                <td style="text-align:right"><b>@ResourcingFormat.Hours(d.OpenHours)</b></td>
+                <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => FindForAsync(d)">Find people</MudButton></td>
+            </tr>
+        }
+        @if (_demand.Count == 0)
+        {
+            <tr><td colspan="7" class="mud-text-secondary">No open demand.</td></tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+<MudText Typo="Typo.subtitle1" Class="mb-1">Find available people</MudText>
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-2">
+    <MudSelect T="Guid?" Label="Labor category" @bind-Value="_categoryId" Style="min-width:240px" Clearable="true" data-testid="find-category">
+        <MudSelectItem T="Guid?" Value="null">Any</MudSelectItem>
+        @foreach (var c in Lookups.LaborCategories.Where(c => c.IsActive))
+        {
+            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudDatePicker Label="From" @bind-Date="_from" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+    <MudDatePicker Label="To" @bind-Date="_to" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
+    <MudNumericField T="decimal" Label="At least (h)" @bind-Value="_minHours" Min="0" Style="max-width:120px" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonSearch" OnClick="FindAsync" data-testid="find-people">Search</MudButton>
+</MudStack>
+@if (_people is not null)
+{
+    <MudSimpleTable Dense="true" Hover="true" data-testid="find-results">
+        <thead>
+            <tr>
+                <th>Person</th>
+                <th>Labor category</th>
+                <th>Org unit</th>
+                <th style="text-align:right">Capacity h</th>
+                <th style="text-align:right">Allocated h</th>
+                <th style="text-align:right">Available h</th>
+                <th>By week (available)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in _people)
+            {
+                <tr>
+                    <td>@p.EmployeeName</td>
+                    <td>@p.LaborCategory</td>
+                    <td>@p.OrgUnit</td>
+                    <td style="text-align:right">@ResourcingFormat.Hours(p.CapacityHours)</td>
+                    <td style="text-align:right">@ResourcingFormat.Hours(p.AllocatedHours)</td>
+                    <td style="text-align:right"><b>@ResourcingFormat.Hours(p.AvailableHours)</b></td>
+                    <td class="mud-text-secondary" style="font-size:0.8rem">@string.Join(" · ", p.Weeks.Select(w => $"{w.WeekStart:MMM d}: {ResourcingFormat.Hours(w.Available)}"))</td>
+                </tr>
+            }
+            @if (_people.Count == 0)
+            {
+                <tr><td colspan="7" class="mud-text-secondary">Nobody has that much free capacity in those weeks.</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public ResourcingContext Lookups { get; set; } = default!;
+
+    private IReadOnlyList<OpenDemandDto> _demand = [];
+    private IReadOnlyList<AvailablePersonDto>? _people;
+    private Guid? _categoryId;
+    private DateTime? _from = ResourcingFormat.ThisWeek.ToDateTime(TimeOnly.MinValue);
+    private DateTime? _to = ResourcingFormat.ThisWeek.AddDays(27).ToDateTime(TimeOnly.MinValue);
+    private decimal _minHours = 8;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _demand = await Planning.ListOpenDemandAsync();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load open demand: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task FindForAsync(OpenDemandDto demand)
+    {
+        _categoryId = demand.LaborCategoryId;
+        var start = demand.PeriodStart < ResourcingFormat.ThisWeek ? ResourcingFormat.ThisWeek : demand.PeriodStart;
+        _from = start.ToDateTime(TimeOnly.MinValue);
+        _to = new DateOnly(demand.PeriodStart.Year, demand.PeriodStart.Month, 1).AddMonths(1).AddDays(-1).ToDateTime(TimeOnly.MinValue);
+        await FindAsync();
+    }
+
+    private async Task FindAsync()
+    {
+        if (_from is null || _to is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _people = await Planning.FindAvailablePeopleAsync(new FindPeopleQuery(DateOnly.FromDateTime(_from.Value), DateOnly.FromDateTime(_to.Value), _categoryId, _minHours));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
