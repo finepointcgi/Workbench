@@ -1,0 +1,43 @@
+@* A list of bills with their status and balance. *@
+@if (Bills.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No bills.</MudText>
+}
+else
+{
+    <MudPaper Elevation="0" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="bills">
+            <thead><tr><th>Voucher</th><th>Vendor</th><th>Invoice</th><th>Invoice date</th><th>Due</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th style="text-align:right">Balance</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var b in Bills)
+                {
+                    <tr>
+                        <td style="white-space:nowrap"><MudLink Href="@($"purchasing/bills/{b.Id}")">@b.Number</MudLink></td>
+                        <td>@b.VendorCode</td>
+                        <td>@b.InvoiceNumber</td>
+                        <td style="white-space:nowrap">@PurchasingFormat.Date(b.InvoiceDate)</td>
+                        <td style="white-space:nowrap">@PurchasingFormat.Date(b.DueDate)</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(b.Amount)</td>
+                        <td style="text-align:right">@(b.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(b.RetainageAmount))</td>
+                        <td style="text-align:right">@(b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "")</td>
+                        <td>
+                            <BillStatusChip Status="b.Status" />
+                            @if (b.IsPaid)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0 ml-1">Paid</MudChip>
+                            }
+                            @if (b.PostingProblem is not null)
+                            {
+                                <MudTooltip Text="@b.PostingProblem"><MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" /></MudTooltip>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<BillSummaryDto> Bills { get; set; } = [];
+}

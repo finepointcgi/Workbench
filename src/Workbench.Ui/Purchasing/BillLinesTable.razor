@@ -1,0 +1,37 @@
+@* A bill's lines: what each charges, where it's routed and whether it's decided. *@
+<MudSimpleTable Dense="true" Elevation="0" data-testid="bill-lines" Style="overflow-x:auto">
+    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Retainage</th><th>Routed to</th><th>Status</th></tr></thead>
+    <tbody>
+        @foreach (var l in Lines)
+        {
+            <tr>
+                <td>@l.LineNumber</td>
+                <td>@PurchasingFormat.Label(l.Kind)</td>
+                <td>
+                    @if (l.Kind == BillLineKind.Account)
+                    {
+                        <span>@l.AccountNumber @l.AccountName · @l.OrgUnitCode</span>
+                    }
+                    else
+                    {
+                        <span>
+                            @if (l.SubcontractId is { } sub) { <MudLink Href="@($"purchasing/subcontracts/{sub}")">@l.SubcontractNumber</MudLink><span> · </span> }
+                            @if (l.ProjectId is { } p) { <MudLink Href="@($"projects/{p}/odcs")">@l.ProjectCode</MudLink> }
+                            <span>@($" {l.WbsCode}{(l.OdcType is { } t ? $" · {t}" : "")}")</span>
+                            @if (l.OdcEntryId is not null) { <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">ODC</MudChip> }
+                        </span>
+                    }
+                </td>
+                <td>@l.Description</td>
+                <td style="text-align:right">@PurchasingFormat.Amount(l.Amount)</td>
+                <td style="text-align:right">@(l.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(l.RetainageAmount))</td>
+                <td>@l.RoutedTo</td>
+                <td>@l.Status@(l.DecidedBy is null ? "" : $" by {l.DecidedBy}")</td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter] public IReadOnlyList<BillLineDto> Lines { get; set; } = [];
+}
