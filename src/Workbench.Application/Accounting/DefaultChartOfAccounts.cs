@@ -26,6 +26,9 @@ public static class DefaultChartOfAccounts
         new("2020", "AP retainage", AccountType.Liability, "2000", Description: "Subcontract retainage withheld from AP bills until release"),
         new("2100", "Accrued payroll", AccountType.Liability, "2000", Description: "Labor cost from approved timesheets until payroll is paid"),
         new("2110", "Accrued employee reimbursements", AccountType.Liability, "2000", Description: "Approved expense reports not yet reimbursed"),
+        new("2120", "Net pay clearing", AccountType.Liability, "2000", Description: "Net pay owed to employees until the payroll provider pays it"),
+        new("2130", "Payroll taxes payable", AccountType.Liability, "2000", Description: "Withheld and employer payroll taxes until remitted"),
+        new("2140", "Benefits and deductions payable", AccountType.Liability, "2000", Description: "Employee deductions and employer benefit contributions until remitted"),
         new("2200", "Accrued liabilities", AccountType.Liability, "2000"),
 
         new("3000", "Equity", AccountType.Equity),
@@ -53,6 +56,7 @@ public static class DefaultChartOfAccounts
         new("6020", "Payroll taxes", AccountType.Expense, "6000", CostClassification.Fringe),
         new("6030", "Health and retirement benefits", AccountType.Expense, "6000", CostClassification.Fringe),
         new("6040", "Fringe administration labor", AccountType.Expense, "6000", CostClassification.IndirectLabor),
+        new("6050", "Payroll labor variance", AccountType.Expense, "6000", CostClassification.Fringe, "Gross pay less labor accrued at cost rates"),
 
         new("6100", "Overhead pool", AccountType.Expense),
         new("6110", "Overhead labor", AccountType.Expense, "6100", CostClassification.IndirectLabor),

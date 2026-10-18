@@ -1,0 +1,43 @@
+@* Leave requests with per-row actions. *@
+<MudTable T="LeaveRequestDto" Items="Items" Dense="true" data-testid="@(ShowEmployee ? "approval-requests" : "my-requests")">
+    <HeaderContent>
+        @if (ShowEmployee)
+        {
+            <MudTh>Employee</MudTh>
+        }
+        <MudTh>Leave</MudTh><MudTh>Dates</MudTh><MudTh>Hours</MudTh><MudTh>Status</MudTh><MudTh>Comment</MudTh><MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        @if (ShowEmployee)
+        {
+            <MudTd>@context.EmployeeName</MudTd>
+        }
+        <MudTd>@context.PolicyName <span class="mud-text-secondary">@context.WbsCode</span></MudTd>
+        <MudTd>@LeavePage.Range(context) <span class="mud-text-secondary">(@context.Days.Count day@(context.Days.Count == 1 ? "" : "s"))</span></MudTd>
+        <MudTd>@LeavePage.Hours(context.Hours)</MudTd>
+        <MudTd><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" Color="@StatusColor(context.Status)">@context.Status</MudChip></MudTd>
+        <MudTd>
+            @context.Comment
+            @if (context.DecisionComment is { } d)
+            {
+                <div class="mud-text-secondary">@context.DecidedBy: @d</div>
+            }
+        </MudTd>
+        <MudTd>@Actions?.Invoke(context)</MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText Class="mud-text-secondary">@(ShowEmployee ? "Nothing waiting for you." : "No requests yet.")</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter] public IReadOnlyList<LeaveRequestDto> Items { get; set; } = [];
+    [Parameter] public bool ShowEmployee { get; set; }
+    [Parameter] public RenderFragment<LeaveRequestDto>? Actions { get; set; }
+
+    private static Color StatusColor(LeaveRequestState s) => s switch
+    {
+        LeaveRequestState.Approved => Color.Success,
+        LeaveRequestState.Pending => Color.Warning,
+        LeaveRequestState.Rejected => Color.Error,
+        _ => Color.Default,
+    };
+}
