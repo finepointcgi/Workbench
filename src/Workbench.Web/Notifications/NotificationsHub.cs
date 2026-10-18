@@ -57,6 +57,8 @@ public static class NotificationsHosting
     {
         services.AddSignalR();
         services.AddHostedService<NotificationRelay>();
+        // Before the automation hosting, so a rule's change inside a background job still reads "Workbench Automation".
+        Workbench.Application.Identity.IdentityRegistration.AddWorkbenchSystemExecutionHosting(services);
         services.AddWorkbenchAutomationHosting();
         services.AddWorkbenchTimekeepingHosting();
         Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);
