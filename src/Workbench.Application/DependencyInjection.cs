@@ -3,6 +3,7 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Costpoint;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Sheets;
+using Workbench.Application.Time;
 using Workbench.Contracts.Sheets;
 
 namespace Workbench.Application;
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.AddWorkbenchCollaboration();
         services.AddWorkbenchCostpoint();
         services.AddWorkbenchProjectAccounting();
+        services.AddWorkbenchTimekeeping();
         return services;
     }
 }

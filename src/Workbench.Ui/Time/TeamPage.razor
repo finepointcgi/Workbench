@@ -1,0 +1,79 @@
+@page "/time/team"
+@using System.Globalization
+@inject ITimesheetApprovalService Approvals
+@inject ISnackbar Snackbar
+
+<PageTitle>Team time · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Team time</MudText>
+    <MudSpacer />
+    @if (_status is not null)
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" aria-label="Previous period" OnClick="() => LoadAsync(_status.PeriodStart.AddDays(-1))" />
+        <MudText Typo="Typo.subtitle1">
+            @_status.PeriodStart.ToString("MMM d", CultureInfo.InvariantCulture) – @_status.PeriodEnd.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" aria-label="Next period"
+                       Disabled="@(_status.PeriodEnd >= DateOnly.FromDateTime(DateTime.Now))"
+                       OnClick="() => LoadAsync(_status.PeriodEnd.AddDays(1))" />
+    }
+    <MudButton Variant="Variant.Text" Href="time/approvals" StartIcon="@Icons.Material.Filled.FactCheck">Approvals</MudButton>
+</MudStack>
+
+<MudTable Items="_status?.Members ?? []" Dense="true" Hover="true" Loading="_status is null" data-testid="team">
+    <HeaderContent>
+        <MudTh>Employee</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh Style="text-align:right">Hours</MudTh>
+        <MudTh Style="text-align:right">Standard</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.EmployeeName</MudTd>
+        <MudTd>
+            @if (context.IsMissing)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error">Missing</MudChip>
+            }
+            <MudChip T="string" Size="Size.Small" Color="@ChipColor(context.Status)">@(context.Status?.ToString() ?? "Not started")</MudChip>
+        </MudTd>
+        <MudTd Style="text-align:right">@context.Hours.ToString("0.##")</MudTd>
+        <MudTd Style="text-align:right">@context.StandardHours.ToString("0.##")</MudTd>
+        <MudTd>
+            @if (context.TimesheetId is { } id)
+            {
+                <MudLink Href="@($"time/history/{id}")">History</MudLink>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Class="mud-text-secondary">You don't approve anyone's timesheets.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private TeamStatusDto? _status;
+
+    protected override Task OnInitializedAsync() => LoadAsync(DateOnly.FromDateTime(DateTime.Now));
+
+    private async Task LoadAsync(DateOnly date)
+    {
+        try
+        {
+            _status = await Approvals.GetTeamStatusAsync(date);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static Color ChipColor(TimesheetState? state) => state switch
+    {
+        TimesheetState.Approved => Color.Success,
+        TimesheetState.Submitted => Color.Info,
+        TimesheetState.Rejected => Color.Error,
+        _ => Color.Default,
+    };
+}
