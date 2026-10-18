@@ -60,6 +60,9 @@ public sealed class WbsElement : Entity
 
     public Guid? ItemId { get; set; }
     public int Order { get; set; }
+
+    /// <summary>The CLIN this element's cost is billed and funded against (direct elements of contract projects).</summary>
+    public Guid? ClinId { get; set; }
 }
 
 /// <summary>Allows an employee to charge a WBS element, optionally for a date range and labor category.</summary>

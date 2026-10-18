@@ -145,3 +145,18 @@ await notifications.PublishAsync(
 - Scheduled checks (e.g. "timesheet missing for yesterday") belong in a `BackgroundService` registered from the web
   host (like `DateTriggerBackgroundService`), so notifications reach the in-process bell. Make them idempotent.
 
+
+## Contract detail, indirect rates, billing and purchasing (wave 5)
+
+- Shared entities: `Clin`, `ContractModification`, `FundingAction` (Domain/ProjectAccounting/Clins.cs) and `Vendor`,
+  `Subcontract` (Domain/Purchasing/Vendors.cs). `WbsElement.ClinId` maps cost to a CLIN; `OdcEntry.VendorId` /
+  `SubcontractId` link vendor ODCs. Seed: `ContractDetailSeed.cs` (CLIN 0001 CPFF 7% fee, CLIN 0002 cost-no-fee,
+  P00001, vendors ACME and PRIMA, subcontract SUB-1001-01).
+- `Clin.FundedValue` and `Subcontract.FundedValue` are running totals; change them only through funding actions,
+  in the same unit of work, with an audit row.
+- Burdened cost crosses modules through `Contracts/Billing/IBurdenedCostService` (implemented by indirect rates,
+  consumed by billing and financials). Cascade: fringe on direct labor; overhead on direct labor + fringe; G&A on
+  total cost input. Unallowable cost is never burdened or billed.
+- Posting: every new module posts through the GL's journal service (sources `Billing`, `AP`, `Allocation` already
+  exist in `JournalSource`), idempotently per source document, and registers its decorators above
+  `AddWorkbenchIdentity`.
