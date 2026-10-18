@@ -1,6 +1,5 @@
 @page "/billing/invoices/{InvoiceId:guid}"
 @inject IInvoiceService Invoices
-@inject ICurrentUserContext UserContext
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -163,12 +162,15 @@ else
 }
 
 @code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
     [Parameter]
     public Guid InvoiceId { get; set; }
 
     private InvoiceDto? _invoice;
     private IReadOnlyList<BillingClinDto> _clins = [];
-    private bool _isFinance;
+    private bool _isFinance => Access?.IsFinance == true;
     private bool _busy;
     private string? _error;
     private bool _forbidden;
@@ -177,7 +179,6 @@ else
     {
         try
         {
-            _isFinance = (await UserContext.GetAsync()).IsFinance;
             _invoice = await Invoices.GetAsync(InvoiceId);
             _error = null;
             if (_isFinance)

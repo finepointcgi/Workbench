@@ -1,0 +1,32 @@
+@* Looks up once whether the user is Finance/Admin and cascades it as FinanceAccess to the pages below. *@
+@inject ICurrentUserContext CurrentUser
+
+@if (_access is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <CascadingValue Value="_access" IsFixed="true">
+        @ChildContent
+    </CascadingValue>
+}
+
+@code {
+    private FinanceAccess? _access;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _access = new FinanceAccess((await CurrentUser.GetAsync()).IsFinance);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _access = new FinanceAccess(false);
+        }
+    }
+}

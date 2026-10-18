@@ -7,7 +7,8 @@ using Workbench.Contracts.IndirectRates;
 namespace Workbench.Application.Identity;
 
 // Indirect rates are Finance's (Finance or Admin). Burdened cost follows the project financials rule: Finance, Admin or
-// the project's manager. Billing calls IBurdenedCostService in-process for whoever runs billing (Finance).
+// the project's manager. Billing calls IBurdenedCostService in-process for whoever runs billing (Finance). Burdened
+// cost is also the one read a trusted background job (Workbench System) may make; nothing here lets it write.
 
 public static class IndirectRatePermissionRegistration
 {
@@ -116,7 +117,12 @@ public sealed class PermissionCheckingBurdenedCostService(IBurdenedCostService i
 {
     public async Task<BurdenedCostResult> GetProjectCostAsync(Guid projectId, DateOnly from, DateOnly to, RateBasis basis, CancellationToken cancellationToken = default)
     {
-        await projects.RequireProjectFinancialsAsync(projectId, "see this project's burdened cost", cancellationToken);
+        // A read the Limitation of Funds background check makes as Workbench System (see SystemExecutionContext).
+        if (!projects.Access.IsSystemReader)
+        {
+            await projects.RequireProjectFinancialsAsync(projectId, "see this project's burdened cost", cancellationToken);
+        }
+
         return await inner.GetProjectCostAsync(projectId, from, to, basis, cancellationToken);
     }
 }

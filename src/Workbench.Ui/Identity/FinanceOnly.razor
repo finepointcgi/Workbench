@@ -1,0 +1,22 @@
+@* Shows its content only to Finance and administrators (the cascaded FinanceAccess); everyone else sees NotAllowed, if
+   given. With no FinanceAccess cascaded it shows nothing: Finance-only actions fail closed. *@
+@if (Access?.IsFinance == true)
+{
+    @ChildContent
+}
+else
+{
+    @NotAllowed
+}
+
+@code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>What to show instead, e.g. the page's "Billing is for Finance" note.</summary>
+    [Parameter]
+    public RenderFragment? NotAllowed { get; set; }
+}
