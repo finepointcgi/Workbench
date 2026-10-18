@@ -1,0 +1,169 @@
+@page "/cash/reconciliations"
+@inject IBankReconciliationService Reconciliations
+@inject IFiscalCalendarService Calendar
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Reconciliation history · Cash · Workbench</PageTitle>
+
+<CashHeader Title="Reconciliation history"
+            Subtitle="Every bank reconciliation, completed or in progress. Completed ones lock their matched items; reopening the latest one needs a reason and is audited.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="cash/reconcile" StartIcon="@Icons.Material.Filled.FactCheck">Reconcile</MudButton>
+</CashHeader>
+
+@if (_error is not null)
+{
+    <CashError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        @if (_recs.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No reconciliations yet.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="history">
+                <thead>
+                    <tr><th>Account</th><th>Statement end</th><th>Status</th><th style="text-align:right">Statement balance</th><th style="text-align:right">GL balance</th>
+                        <th style="text-align:right">In transit</th><th style="text-align:right">Outstanding</th><th style="text-align:right">Difference</th><th>Completed</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _recs)
+                    {
+                        <tr>
+                            <td>@r.BankAccountName @r.MaskedAccountNumber</td>
+                            <td><MudLink Href="@($"cash/reconcile/{r.Id}")">@CashFormat.Date(r.StatementEndDate)</MudLink></td>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(r.Status == ReconciliationState.Completed ? Color.Success : Color.Warning)">
+                                    @(r.Status == ReconciliationState.Completed ? "Completed" : "In progress")
+                                </MudChip>
+                                @if (r.ReopenReason is not null)
+                                {
+                                    <MudTooltip Text="@($"Reopened by {r.ReopenedBy}: {r.ReopenReason}")"><MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" /></MudTooltip>
+                                }
+                            </td>
+                            <td style="text-align:right">@CashFormat.Amount(r.StatementEndingBalance)</td>
+                            <td style="text-align:right">@CashFormat.Amount(r.Math.GlBalance)</td>
+                            <td style="text-align:right">@CashFormat.Amount(r.Math.DepositsInTransit)</td>
+                            <td style="text-align:right">@CashFormat.Amount(r.Math.OutstandingPayments)</td>
+                            <td style="text-align:right">@CashFormat.Amount(r.Math.Difference)</td>
+                            <td>@(r.CompletedBy is null ? "" : $"{r.CompletedBy}, {r.CompletedAtUtc?.ToLocalTime():yyyy-MM-dd}")</td>
+                            <td style="white-space:nowrap">
+                                <MudButton Size="Size.Small" Href="@($"cash/reconciliations/{r.Id}/print")" StartIcon="@Icons.Material.Filled.Print">Report</MudButton>
+                                @if (r.Status == ReconciliationState.Completed && IsLatest(r))
+                                {
+                                    <MudButton Size="Size.Small" Color="Color.Warning" OnClick="() => ReopenAsync(r)" data-testid="history-reopen">Reopen</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6">Period close</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Closing a fiscal period checks that every active bank account is reconciled through the period end. When that can't happen in time
+            (a late statement), Finance can waive the check for the period with a reason; the waiver is audited and shown on the close checklist.
+        </MudText>
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.End">
+            <MudSelect T="Guid?" @bind-Value="_periodId" Label="Fiscal period" Style="min-width:200px">
+                @foreach (var p in _periods.Where(p => p.Status == FiscalPeriodState.Open))
+                {
+                    <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" OnClick="WaiveAsync" Disabled="@(_periodId is null)" data-testid="waive">Waive bank reconciliation check</MudButton>
+        </MudStack>
+        @if (_waivers.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Elevation="0" Class="mt-3" data-testid="waivers">
+                <thead><tr><th>Period</th><th>Reason</th><th>Waived by</th><th>When</th></tr></thead>
+                <tbody>
+                    @foreach (var w in _waivers)
+                    {
+                        <tr><td>@(_periods.FirstOrDefault(p => p.Id == w.FiscalPeriodId)?.Name)</td><td>@w.Reason</td><td>@w.WaivedBy</td><td>@w.WaivedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<BankReconciliationDto> _recs = [];
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<BankCloseWaiverDto> _waivers = [];
+    private Guid? _periodId;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            _periodId = AccountingFormat.DefaultPeriod(_periods)?.Id;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _recs = await Reconciliations.ListAsync();
+        _waivers = await Reconciliations.ListCloseWaiversAsync();
+    }
+
+    private bool IsLatest(BankReconciliationDto r) => _recs.Where(x => x.BankAccountId == r.BankAccountId).MaxBy(x => x.StatementEndDate)?.Id == r.Id;
+
+    private async Task ReopenAsync(BankReconciliationDto r)
+    {
+        var reason = await ReasonDialog.AskAsync(Dialogs, $"Reopen {r.BankAccountName} through {CashFormat.Date(r.StatementEndDate)}", "Reopen",
+            "Reopening unlocks its matched items so they can change.", color: Color.Warning);
+        if (reason is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Reconciliations.ReopenAsync(r.Id, new ReconciliationReasonRequest(reason));
+            Snackbar.Add("Reopened.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task WaiveAsync()
+    {
+        var period = _periods.First(p => p.Id == _periodId);
+        var reason = await ReasonDialog.AskAsync(Dialogs, $"Waive the bank reconciliation check for {period.Name}", "Waive",
+            "The period can then close without every bank account reconciled through its end. Say why.");
+        if (reason is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Reconciliations.WaiveCloseCheckAsync(new WaiveBankCloseCheckRequest(period.Id, reason));
+            Snackbar.Add($"Waived for {period.Name}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+}

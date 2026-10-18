@@ -1,0 +1,79 @@
+@* Creates or edits a bank account. The full account number is never shown here: leave it empty to keep the stored one. *@
+@inject IBankAccountService Accounts
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" HelperText="For example Operating account" data-testid="account-name" />
+            <MudTextField @bind-Value="_bank" Label="Bank" Required="true" data-testid="account-bank" />
+            <MudTextField @bind-Value="_number" Label="@(Account is null ? "Account number" : $"New account number (now {Account.MaskedAccountNumber})")"
+                          HelperText="The full number is stored encrypted and only the last four digits are shown; or enter just the last four."
+                          InputType="InputType.Password" autocomplete="off" data-testid="account-number" />
+            <MudTextField @bind-Value="_routing" Label="Routing number (ABA)" MaxLength="9" data-testid="account-routing" />
+            <MudSelect T="Guid?" @bind-Value="_glAccountId" Label="GL cash account" Required="true" data-testid="account-gl">
+                @foreach (var a in _glAccounts)
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch T="bool" @bind-Value="_active" Label="Active" Color="Color.Primary" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_saving" data-testid="save-account">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public BankAccountDto? Account { get; set; }
+
+    private IReadOnlyList<CashGlAccountDto> _glAccounts = [];
+    private string? _name, _bank, _number, _routing, _error;
+    private Guid? _glAccountId;
+    private bool _active = true, _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _name = Account?.Name;
+        _bank = Account?.BankName;
+        _routing = Account?.RoutingNumber;
+        _glAccountId = Account?.GlAccountId;
+        _active = Account?.IsActive ?? true;
+        try
+        {
+            _glAccounts = await Accounts.ListCashGlAccountsAsync();
+            _glAccountId ??= _glAccounts.FirstOrDefault(a => a.Number == "1010")?.Id ?? _glAccounts.FirstOrDefault()?.Id;
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            _error = CashFormat.Error(ex);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var request = new SaveBankAccountRequest(_name ?? "", _bank ?? "", _number, _routing, _glAccountId ?? Guid.Empty, _active);
+            var saved = Account is null ? await Accounts.CreateAsync(request) : await Accounts.UpdateAsync(Account.Id, request);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            _error = CashFormat.Error(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

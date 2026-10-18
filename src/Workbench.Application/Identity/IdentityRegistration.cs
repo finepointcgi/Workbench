@@ -66,6 +66,7 @@ public static class IdentityRegistration
         services.AddWorkbenchIndirectRatePermissions(); // Indirect rates: Finance or Admin; burdened cost: Finance, Admin or the project's PM.
         services.AddScoped<BillingAccess>(); services.AddWorkbenchBillingPermissions(); // Billing/AR: Finance or Admin; PMs read their contracts' invoices.
         services.AddWorkbenchPurchasingPermissions(); // Purchasing: Finance or Admin; PMs approve the AP bill lines routed to them.
+        services.AddWorkbenchCashPermissions(); // Cash management and bank reconciliation: Finance or Admin only.
         return services;
     }
 

@@ -1,0 +1,223 @@
+@page "/cash/import"
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBankAccountService Accounts
+@inject IBankStatementService Statements
+@inject ISnackbar Snackbar
+
+<PageTitle>Import statements · Cash · Workbench</PageTitle>
+
+<CashHeader Title="Import statements"
+            Subtitle="Bring in a bank statement as CSV (columns mapped once per account), OFX/QFX or BAI2. Items already imported from an overlapping statement are skipped." />
+
+@if (_error is not null)
+{
+    <CashError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mb-3">
+            <MudSelect T="Guid?" Value="_accountId" ValueChanged="AccountChangedAsync" Label="Bank account" Style="min-width:260px" data-testid="import-account">
+                @foreach (var a in _accounts.Where(a => a.IsActive))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Name @a.MaskedAccountNumber</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="StatementFileFormat?" @bind-Value="_format" Label="Format" Style="max-width:200px" Clearable="true" Placeholder="Detect from the file" data-testid="import-format">
+                <MudSelectItem T="StatementFileFormat?" Value="StatementFileFormat.Csv">CSV</MudSelectItem>
+                <MudSelectItem T="StatementFileFormat?" Value="StatementFileFormat.Ofx">OFX / QFX</MudSelectItem>
+                <MudSelectItem T="StatementFileFormat?" Value="StatementFileFormat.Bai2">BAI2</MudSelectItem>
+            </MudSelect>
+            <MudNumericField T="decimal?" @bind-Value="_closingBalance" Label="Statement ending balance" Format="N2" HelperText="Optional; OFX and BAI2 files state it" Style="max-width:220px" />
+            <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".csv,.txt,.ofx,.qfx,.bai,.bai2">
+                <CustomContent>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="@context.OpenFilePickerAsync">Choose file</MudButton>
+                </CustomContent>
+                <SelectedTemplate />
+            </MudFileUpload>
+        </MudStack>
+        <MudTextField T="string" @bind-Value="_content" Label="@(_fileName is null ? "Or paste the statement file here" : $"{_fileName}")" Lines="8" Variant="Variant.Outlined"
+                      Immediate="true" Style="font-family:monospace; font-size:12px" data-testid="import-content" />
+
+        @if (IsCsv)
+        {
+            <MudText Typo="Typo.subtitle1" Class="mt-4">CSV columns</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Header names (or column numbers, 1 = first). Saved for this account when you import.
+                @if (_headers.Count > 0)
+                {
+                    <span> Columns in this file: @string.Join(", ", _headers).</span>
+                }
+            </MudText>
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.Date" Label="Date" data-testid="map-date" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.DateFormat" Label="Date format" Placeholder="MM/dd/yyyy" /></MudItem>
+                <MudItem xs="6" md="3"><MudTextField @bind-Value="_m.Description" Label="Description" data-testid="map-description" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.Amount" Label="Amount (signed)" data-testid="map-amount" /></MudItem>
+                <MudItem xs="6" md="1"><MudTextField @bind-Value="_m.Debit" Label="Debit" data-testid="map-debit" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.Credit" Label="Credit" data-testid="map-credit" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.CheckNumber" Label="Check number" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.Reference" Label="Bank reference" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.Type" Label="Type" /></MudItem>
+                <MudItem xs="6" md="2"><MudTextField @bind-Value="_m.Delimiter" Label="Delimiter" MaxLength="3" HelperText="Comma, ; or \t" /></MudItem>
+                <MudItem xs="6" md="2"><MudCheckBox T="bool" @bind-Value="_m.HasHeader" Label="Header row" /></MudItem>
+                <MudItem xs="6" md="2"><MudCheckBox T="bool" @bind-Value="_m.InvertSign" Label="Invert signs" /></MudItem>
+            </MudGrid>
+        }
+
+        <MudStack Row="true" Class="mt-3" AlignItems="AlignItems.Center">
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ImportAsync" Disabled="@(_accountId is null || string.IsNullOrWhiteSpace(_content) || _busy)"
+                       StartIcon="@Icons.Material.Filled.CloudUpload" data-testid="import-button">Import</MudButton>
+        </MudStack>
+
+        @if (_result is not null)
+        {
+            <MudAlert Severity="@(_result.Import.TransactionCount > 0 ? Severity.Success : Severity.Warning)" Class="mt-3" data-testid="import-result">
+                Imported @_result.Import.TransactionCount item(s) from @_result.Import.FileName (@CashFormat.Label(_result.Import.Format)),
+                @CashFormat.Date(_result.Import.PeriodStart) to @CashFormat.Date(_result.Import.PeriodEnd)@(_result.Import.ClosingBalance is { } c ? $", ending balance {CashFormat.Amount(c)}" : "").
+                @foreach (var w in _result.Warnings)
+                {
+                    <div>@w</div>
+                }
+                <MudLink Href="@($"cash/reconcile?account={_result.Import.BankAccountId}")" Class="ml-1">Reconcile now</MudLink>
+            </MudAlert>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Imported statements</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="imports">
+            <thead><tr><th>Account</th><th>File</th><th>Format</th><th>Period</th><th style="text-align:right">Ending balance</th><th style="text-align:right">Items</th><th style="text-align:right">Duplicates skipped</th><th>Imported</th></tr></thead>
+            <tbody>
+                @foreach (var i in _imports)
+                {
+                    <tr>
+                        <td>@(_accounts.FirstOrDefault(a => a.Id == i.BankAccountId)?.Name)</td>
+                        <td>@i.FileName</td>
+                        <td>@CashFormat.Label(i.Format)</td>
+                        <td>@CashFormat.Date(i.PeriodStart) – @CashFormat.Date(i.PeriodEnd)</td>
+                        <td style="text-align:right">@CashFormat.Amount(i.ClosingBalance)</td>
+                        <td style="text-align:right">@i.TransactionCount</td>
+                        <td style="text-align:right">@(i.DuplicateCount == 0 ? "" : i.DuplicateCount.ToString(CultureInfo.InvariantCulture))</td>
+                        <td>@i.ImportedBy, @i.ImportedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "account")] public Guid? AccountQuery { get; set; }
+
+    private IReadOnlyList<BankAccountDto> _accounts = [];
+    private IReadOnlyList<StatementImportDto> _imports = [];
+    private Guid? _accountId;
+    private StatementFileFormat? _format;
+    private decimal? _closingBalance;
+    private string? _content, _fileName, _error;
+    private bool _forbidden, _busy;
+    private StatementImportResultDto? _result;
+    private MappingModel _m = new();
+    private List<string> _headers = [];
+
+    private bool IsCsv => _format == StatementFileFormat.Csv
+        || (_format is null && !string.IsNullOrWhiteSpace(_content) && !_content.Contains("<OFX>", StringComparison.OrdinalIgnoreCase)
+            && !_content.Contains("OFXHEADER", StringComparison.OrdinalIgnoreCase) && !_content.TrimStart().StartsWith("01,", StringComparison.Ordinal));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = await Accounts.ListAsync();
+            _imports = await Statements.ListImportsAsync();
+            await AccountChangedAsync(AccountQuery ?? _accounts.FirstOrDefault(a => a.IsActive)?.Id);
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private Task AccountChangedAsync(Guid? id)
+    {
+        _accountId = id;
+        var saved = _accounts.FirstOrDefault(a => a.Id == id)?.CsvMapping;
+        _m = saved is null ? new MappingModel() : MappingModel.From(saved);
+        return Task.CompletedTask;
+    }
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _content = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+            _result = null;
+            var first = _content.Split('\n').FirstOrDefault() ?? "";
+            _headers = first.Contains(',') && !first.StartsWith("01,", StringComparison.Ordinal) ? first.Split(',').Select(h => h.Trim().Trim('"')).ToList() : [];
+        }
+        catch (IOException ex)
+        {
+            Snackbar.Add($"Couldn't read the file: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        try
+        {
+            var mapping = IsCsv ? _m.ToMapping() : null;
+            _result = await Statements.ImportAsync(new ImportStatementRequest(_accountId!.Value, _fileName ?? "pasted statement", _content!, _format, mapping, _closingBalance));
+            _imports = await Statements.ListImportsAsync();
+            _accounts = await Accounts.ListAsync();
+            Snackbar.Add($"Imported {_result.Import.TransactionCount} item(s).", _result.Import.TransactionCount > 0 ? Severity.Success : Severity.Warning);
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The editable form of a <see cref="CsvColumnMapping"/>.</summary>
+    private sealed class MappingModel
+    {
+        public string? Date { get; set; } = "Date";
+        public string? Description { get; set; } = "Description";
+        public string? Amount { get; set; } = "Amount";
+        public string? Debit { get; set; }
+        public string? Credit { get; set; }
+        public string? CheckNumber { get; set; }
+        public string? Reference { get; set; }
+        public string? Type { get; set; }
+        public string? DateFormat { get; set; }
+        public string? Delimiter { get; set; } = ",";
+        public bool HasHeader { get; set; } = true;
+        public bool InvertSign { get; set; }
+
+        public static MappingModel From(CsvColumnMapping m) => new()
+        {
+            Date = m.Date, Description = m.Description, Amount = m.Amount, Debit = m.Debit, Credit = m.Credit, CheckNumber = m.CheckNumber,
+            Reference = m.Reference, Type = m.Type, DateFormat = m.DateFormat, Delimiter = m.Delimiter, HasHeader = m.HasHeader, InvertSign = m.InvertSign,
+        };
+
+        public CsvColumnMapping ToMapping()
+        {
+            static string? N(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+            return new CsvColumnMapping(Date ?? "", Description ?? "", N(Amount), N(Debit), N(Credit), N(CheckNumber), N(Reference), N(Type), N(DateFormat),
+                HasHeader, string.IsNullOrEmpty(Delimiter) ? "," : Delimiter, InvertSign);
+        }
+    }
+}

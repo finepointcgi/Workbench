@@ -1,0 +1,57 @@
+.toolbar {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 10px 24px;
+    border-bottom: 1px solid #ddd;
+    font: 14px system-ui, sans-serif;
+    background: #f7f7f7;
+}
+
+.toolbar .spacer { flex: 1; }
+.toolbar a { color: #1a4f8b; text-decoration: none; }
+.toolbar button { padding: 6px 14px; border: 1px solid #1a4f8b; background: #1a4f8b; color: #fff; border-radius: 4px; cursor: pointer; }
+
+.page {
+    position: relative;
+    max-width: 8.5in;
+    margin: 24px auto;
+    padding: 0.5in;
+    background: #fff;
+    color: #000;
+    font: 12px/1.4 system-ui, sans-serif;
+    box-shadow: 0 0 0 1px #ddd;
+}
+
+.watermark {
+    position: absolute;
+    top: 35%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 96px;
+    color: rgba(200, 0, 0, 0.12);
+    transform: rotate(-20deg);
+    pointer-events: none;
+}
+
+h1 { font-size: 18px; margin: 0 0 12px; }
+h2 { font-size: 13px; margin: 18px 0 6px; border-bottom: 1px solid #999; padding-bottom: 2px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 3px 6px; vertical-align: top; }
+.meta th { width: 18%; color: #444; font-weight: 600; }
+.columns { display: flex; gap: 24px; margin-top: 12px; }
+.sums { border: 1px solid #999; }
+.sums th { background: #f0f0f0; }
+.sums .total td { border-top: 1px solid #000; font-weight: 700; }
+.items th { border-bottom: 1px solid #999; }
+.items td { border-bottom: 1px solid #eee; }
+.num { text-align: right; white-space: nowrap; }
+.diff { margin-top: 8px; }
+.signatures { display: flex; justify-content: space-between; margin-top: 36px; }
+.error { color: #b00020; }
+
+@media print {
+    .no-print { display: none; }
+    .page { box-shadow: none; margin: 0; max-width: none; }
+}

@@ -1,0 +1,245 @@
+@page "/cash/forecast"
+@inject ICashForecastService Forecast
+@inject ISnackbar Snackbar
+
+<PageTitle>Cash forecast · Cash · Workbench</PageTitle>
+
+<CashHeader Title="13-week cash forecast"
+            Subtitle="From today's GL cash: open AR by due date (shifted by each customer's typical days late), open AP bills and approved payment runs, payroll, and recurring items. Type a what-if amount on any week to see its effect." />
+
+@if (_error is not null)
+{
+    <CashError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_forecast is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var low = Weeks.MinBy(w => w.Closing);
+    <MudGrid Class="mb-2">
+        <MudItem xs="12" sm="4">
+            <MudPaper Outlined="true" Class="pa-4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Cash today</MudText>
+                <MudText Typo="Typo.h5" data-testid="forecast-opening">@CashFormat.Amount(_forecast.OpeningBalance)</MudText></MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Outlined="true" Class="pa-4"><MudText Typo="Typo.caption" Class="mud-text-secondary">End of week @Weeks.Count</MudText>
+                <MudText Typo="Typo.h5" data-testid="forecast-closing">@CashFormat.Amount(Weeks.LastOrDefault()?.Closing ?? _forecast.OpeningBalance)</MudText></MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Outlined="true" Class="pa-4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Lowest week</MudText>
+                <MudText Typo="Typo.h5" Style="@(low?.Closing < 0 ? "color:var(--mud-palette-error)" : "")">@CashFormat.Amount(low?.Closing ?? 0) <span class="mud-text-secondary" style="font-size:14px">week @low?.Week</span></MudText></MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudChart T="double" ChartType="ChartType.Line" ChartSeries="Series" ChartLabels="Labels" Width="100%" Height="300px" LegendPosition="Position.Bottom" data-testid="forecast-chart" />
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="mb-3" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="forecast-table">
+            <thead>
+                <tr><th>Week</th><th>Starting</th><th style="text-align:right">Opening</th><th style="text-align:right">Receivables</th><th style="text-align:right">Payables</th>
+                    <th style="text-align:right">Payroll</th><th style="text-align:right">Other</th><th style="text-align:right; width:150px">What-if</th><th style="text-align:right">Closing</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var w in Weeks)
+                {
+                    var week = w.Week;
+                    <tr>
+                        <td><MudLink OnClick="() => _detailWeek = _detailWeek == week ? null : week">@week</MudLink></td>
+                        <td>@CashFormat.Date(w.Start)</td>
+                        <td style="text-align:right">@CashFormat.Amount(w.Opening)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(w.Receivables)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(w.Payables)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(w.Payroll)</td>
+                        <td style="text-align:right">@AccountingFormat.Blank(w.Other)</td>
+                        <td><MudNumericField T="decimal" Value="_whatIf[week - 1]" ValueChanged="v => _whatIf[week - 1] = v" Format="N2" Margin="Margin.Dense" HideSpinButtons="true" data-testid="what-if" /></td>
+                        <td style="text-align:right; @(w.Closing < 0 ? "color:var(--mud-palette-error)" : "")"><b>@CashFormat.Amount(w.Closing)</b></td>
+                    </tr>
+                    @if (_detailWeek == week)
+                    {
+                        <tr>
+                            <td></td>
+                            <td colspan="8">
+                                @foreach (var l in _forecast.Lines.Where(l => l.Week == week))
+                                {
+                                    <div style="display:flex; gap:12px"><span style="width:90px">@CashFormat.Date(l.ExpectedDate)</span><span style="flex:1">@l.Description</span><span>@CashFormat.Amount(l.Amount)</span></div>
+                                }
+                                @if (!_forecast.Lines.Any(l => l.Week == week))
+                                {
+                                    <span class="mud-text-secondary">Nothing expected this week.</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-1">Payroll: @CashFormat.Amount(_forecast.PayrollPerCycle) every @_forecast.PayCycleDays days (@_forecast.PayrollBasis). Click a week number for its items.</MudText>
+    @foreach (var n in _forecast.Notes)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@n</MudText>
+    }
+
+    <MudGrid Class="mt-3">
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Recurring items</MudText>
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="forecast-items">
+                    <thead><tr><th>Name</th><th style="text-align:right">Amount</th><th>Repeats</th><th>From</th><th>Until</th><th>Active</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _items)
+                        {
+                            <tr><td>@i.Name</td><td style="text-align:right">@CashFormat.Amount(i.Amount)</td><td>@i.Frequency</td><td>@CashFormat.Date(i.StartDate)</td><td>@CashFormat.Date(i.EndDate)</td>
+                                <td><MudSwitch T="bool" Value="i.IsActive" ValueChanged="v => SetActiveAsync(i, v)" Color="Color.Primary" /></td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mt-2">
+                    <MudTextField @bind-Value="_newName" Label="Name" Placeholder="Rent, insurance, loan payment…" Style="min-width:180px" />
+                    <MudNumericField T="decimal" @bind-Value="_newAmount" Label="Amount (− for payments)" Format="N2" Style="max-width:170px" />
+                    <MudSelect T="ForecastRepeat" @bind-Value="_newRepeat" Label="Repeats" Style="max-width:130px">
+                        @foreach (var f in Enum.GetValues<ForecastRepeat>())
+                        {
+                            <MudSelectItem Value="f">@f</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudDatePicker @bind-Date="_newStart" Label="Starting" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:150px" />
+                    <MudButton Variant="Variant.Outlined" OnClick="AddItemAsync" Disabled="@(string.IsNullOrWhiteSpace(_newName) || _newAmount == 0 || _newStart is null)">Add</MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">Settings</MudText>
+                <MudNumericField T="decimal?" @bind-Value="_payroll" Label="Payroll per pay date" Format="N2" HelperText="Leave empty to use the average of recent payroll accruals" Clearable="true" />
+                <MudNumericField T="int" @bind-Value="_cycle" Label="Days between pay dates" Min="7" Max="31" Class="mt-2" />
+                <MudDatePicker @bind-Date="_anchor" Label="A known pay date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" HelperText="Empty: the next Friday" Class="mt-2" />
+                <MudNumericField T="int" @bind-Value="_window" Label="Auto-match date window (days)" Min="0" Max="31" Class="mt-2" />
+                <MudButton Variant="Variant.Outlined" Class="mt-3" OnClick="SaveSettingsAsync">Save settings</MudButton>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private CashForecastDto? _forecast;
+    private IReadOnlyList<ForecastItemDto> _items = [];
+    private decimal[] _whatIf = new decimal[13];
+    private int? _detailWeek;
+    private string? _error, _newName;
+    private bool _forbidden;
+    private decimal _newAmount;
+    private ForecastRepeat _newRepeat = ForecastRepeat.Monthly;
+    private DateTime? _newStart = DateTime.Today;
+    private decimal? _payroll;
+    private int _cycle = 14, _window = 5;
+    private DateTime? _anchor;
+
+    /// <summary>The weeks with the what-if amounts rolled into the running balance.</summary>
+    private List<ForecastWeekDto> Weeks
+    {
+        get
+        {
+            var result = new List<ForecastWeekDto>();
+            var balance = _forecast?.OpeningBalance ?? 0;
+            foreach (var w in _forecast?.Weeks ?? [])
+            {
+                var closing = balance + w.Net + _whatIf[w.Week - 1];
+                result.Add(w with { Opening = balance, Closing = closing });
+                balance = closing;
+            }
+
+            return result;
+        }
+    }
+
+    private string[] Labels => (_forecast?.Weeks ?? []).Select(w => w.Start.ToString("MM/dd", CultureInfo.InvariantCulture)).ToArray();
+
+    private List<ChartSeries<double>> Series
+    {
+        get
+        {
+            var series = new List<ChartSeries<double>>
+            {
+                new() { Name = "Forecast closing cash", Data = new ChartData<double>((_forecast?.Weeks ?? []).Select(w => (double)w.Closing).ToList()) },
+            };
+            if (_whatIf.Any(v => v != 0))
+            {
+                series.Add(new() { Name = "With what-if", Data = new ChartData<double>(Weeks.Select(w => (double)w.Closing).ToList()) });
+            }
+
+            return series;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadAsync();
+            var s = await Forecast.GetSettingsAsync();
+            (_payroll, _cycle, _window) = (s.PayrollAmount, s.PayCycleDays, s.MatchDateWindowDays);
+            _anchor = s.PayDateAnchor is { } a ? CashFormat.ToDateTime(a) : null;
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _forecast = await Forecast.GetForecastAsync(13);
+        if (_whatIf.Length != _forecast.Weeks.Count)
+        {
+            _whatIf = new decimal[_forecast.Weeks.Count];
+        }
+
+        _items = await Forecast.ListItemsAsync();
+    }
+
+    private async Task AddItemAsync()
+    {
+        try
+        {
+            await Forecast.CreateItemAsync(new SaveForecastItemRequest(_newName!, _newAmount, _newRepeat, DateOnly.FromDateTime(_newStart!.Value)));
+            (_newName, _newAmount) = (null, 0);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SetActiveAsync(ForecastItemDto item, bool active)
+    {
+        try
+        {
+            await Forecast.UpdateItemAsync(item.Id, new SaveForecastItemRequest(item.Name, item.Amount, item.Frequency, item.StartDate, item.EndDate, active));
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        try
+        {
+            await Forecast.SaveSettingsAsync(new CashSettingsDto(_payroll, _cycle, CashFormat.ToDateOnly(_anchor), _window));
+            Snackbar.Add("Settings saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+    }
+}

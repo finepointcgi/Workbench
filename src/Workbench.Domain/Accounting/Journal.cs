@@ -11,6 +11,7 @@ public enum JournalSource
     AP,
     Allocation,
     Reversal,
+    Bank,
 }
 
 public enum JournalStatus
