@@ -1,6 +1,7 @@
 @* The project's WBS as a tree, with the selected element's settings and charge assignments beside it. *@
 @inject IProjectService Projects
 @inject IPeopleService People
+@inject Workbench.Contracts.Contracts.IClinService ClinService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -51,6 +52,17 @@
                         <MudChip T="string" Size="Size.Small" Color="Color.Primary">Charge code</MudChip>
                     }
                 </MudStack>
+                @if (Project.ContractId is not null)
+                {
+                    <MudSelect T="Guid?" Value="ClinOf(el.Id)?.Id" ValueChanged="v => SetClinAsync(el, v)" Label="CLIN" Clearable="true" Class="mt-3"
+                               Dense="true" Margin="Margin.Dense" data-testid="wbs-clin-picker"
+                               HelperText="@ClinHelp(el)">
+                        @foreach (var c in _clins)
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description@(c.IsActiveOption ? "" : " (unexercised option)")</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
                 @if (HasChildren(el.Id))
                 {
                     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">A parent element is a roll-up; only leaf elements take charges.</MudText>
@@ -88,15 +100,48 @@
         }
     }
 
+    private IReadOnlyList<Workbench.Contracts.Contracts.ClinDto> _clins = [];
+    private Dictionary<Guid, Guid?> _clinMap = [];
+
+    private Workbench.Contracts.Contracts.ClinDto? ClinOf(Guid wbsId) =>
+        _clinMap.GetValueOrDefault(wbsId) is { } id ? _clins.FirstOrDefault(c => c.Id == id) : null;
+
+    private string ClinHelp(WbsElementDto el) => ClinOf(el.Id) switch
+    {
+        { IsActiveOption: false } => "Unexercised option: time and ODCs can't be charged here until it's exercised.",
+        { } c => $"Charges allowed {SetupFormat.Date(c.PeriodStart)} – {SetupFormat.Date(c.PeriodEnd)}.",
+        null => "Cost on this element isn't tied to a CLIN.",
+    };
+
+    private async Task SetClinAsync(WbsElementDto el, Guid? clinId)
+    {
+        try
+        {
+            var mapping = await ClinService.SetWbsClinAsync(el.Id, clinId);
+            _clinMap[el.Id] = mapping.ClinId;
+            Snackbar.Add(clinId is null ? $"{el.Code} unmapped." : $"{el.Code} mapped to CLIN {ClinOf(el.Id)?.Number}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
     private async Task LoadAsync()
     {
+        if (Project.ContractId is not null)
+        {
+            _clins = await ClinService.ListClinsForProjectAsync(Project.Id);
+            _clinMap = (await ClinService.ListWbsMappingsAsync(Project.Id)).ToDictionary(m => m.WbsElementId, m => m.ClinId);
+        }
+
         _wbs = await Projects.ListWbsAsync(Project.Id);
         _selected = _selected is null ? null : _wbs.FirstOrDefault(w => w.Id == _selected.Id);
     }
 
     private bool HasChildren(Guid id) => _wbs.Any(w => w.ParentId == id);
 
-    private bool IsChargeCode(WbsElementDto w) => w.IsOpen && w.IsChargeable && !HasChildren(w.Id);
+    private bool IsChargeCode(WbsElementDto w) => w.IsOpen && w.IsChargeable && !HasChildren(w.Id) && ClinOf(w.Id)?.IsActiveOption != false;
 
     private RenderFragment Tree(Guid? parentId) => __builder =>
     {
@@ -111,6 +156,13 @@
                         <MudText Typo="Typo.body2" Style="white-space:nowrap"><b>@el.Code</b></MudText>
                         <MudText Typo="Typo.body2" Class="text-truncate">@el.Name</MudText>
                         <MudSpacer />
+                        @if (ClinOf(el.Id) is { } clin)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" data-testid="wbs-clin"
+                                     Color="@(clin.IsActiveOption ? Color.Default : Color.Warning)" title="@(clin.IsActiveOption ? clin.Description : "Unexercised option: not chargeable")">
+                                CLIN @clin.Number
+                            </MudChip>
+                        }
                         @if (el.Kind != ChargeCodeKind.Direct)
                         {
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">@el.Kind</MudChip>

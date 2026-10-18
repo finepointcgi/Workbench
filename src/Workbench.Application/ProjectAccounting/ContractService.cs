@@ -69,6 +69,12 @@ public sealed class ContractService(IWorkbenchDbContextFactory dbFactory, AuditR
         var oldCustomer = await db.Set<Customer>().AsNoTracking().FirstAsync(c => c.Id == contract.CustomerId, cancellationToken);
         var before = contract.ToDto(oldCustomer.Name);
         var customerName = await ApplyAsync(db, contract, request, cancellationToken);
+        if (await db.Set<Clin>().AnyAsync(c => c.ContractId == contractId, cancellationToken))
+        {
+            // Contracts with CLINs roll their value and funding up from the CLINs; change those through modifications.
+            (contract.CeilingValue, contract.FundedValue) = (before.CeilingValue, before.FundedValue);
+        }
+
         audit.Record(db, nameof(Contract), contract.Id, "Updated", before, contract.ToDto(customerName));
         await db.SaveChangesAsync(cancellationToken);
         return contract.ToDto(customerName);

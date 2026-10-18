@@ -1,0 +1,97 @@
+@* Adds or edits a CLIN / SLIN. Returns a SaveClinRequest. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudTextField @bind-Value="_number" Label="Number" Required="true" RequiredError="Number is required." Disabled="Clin is not null"
+                                  HelperText="0001, or 0001AA for a SLIN" Immediate="true" data-testid="clin-number" />
+                </MudItem>
+                <MudItem xs="12" sm="8">
+                    <MudTextField @bind-Value="_description" Label="Description" Required="true" RequiredError="Description is required." Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="ClinPricingKind" @bind-Value="_pricing" Label="Pricing">
+                        @foreach (var p in Enum.GetValues<ClinPricingKind>())
+                        {
+                            <MudSelectItem T="ClinPricingKind" Value="p">@ClinFormat.Label(p) · @p</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal?" @bind-Value="_feePercent" Label="Fee %" Min="0" Max="99" Format="N2" Clearable="true"
+                                     HelperText="Cost-plus CLINs (7 = 7%)" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_start" Label="Period start" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_end" Label="Period end" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Value" Adornment="Adornment.Start" AdornmentText="$" Min="0" Format="N2"
+                                     Disabled="@(Clin is { } c && (c.FundedValue > 0 || c.HasSlins))"
+                                     HelperText="@(Clin is { FundedValue: > 0 } ? "Funded: change the value with a modification." : "")" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSwitch @bind-Value="_isOption" Label="Option CLIN (starts unexercised)" Color="Color.Primary" Disabled="@(Clin is { FundedValue: > 0 })" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" data-testid="clin-save">@(Clin is null ? "Add CLIN" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public ClinDto? Clin { get; set; }
+
+    [Parameter]
+    public DateOnly DefaultStart { get; set; }
+
+    [Parameter]
+    public DateOnly DefaultEnd { get; set; }
+
+    private MudForm _form = default!;
+    private string? _number;
+    private string? _description;
+    private ClinPricingKind _pricing = ClinPricingKind.CostPlusFixedFee;
+    private decimal? _feePercent;
+    private DateTime? _start;
+    private DateTime? _end;
+    private decimal _ceiling;
+    private bool _isOption;
+
+    protected override void OnInitialized()
+    {
+        if (Clin is { } c)
+        {
+            (_number, _description, _pricing, _ceiling, _isOption) = (c.Number, c.Description, c.Pricing, c.CeilingValue, c.IsOption);
+            _feePercent = c.FeeRate * 100;
+            (_start, _end) = (SetupFormat.ToDateTime(c.PeriodStart), SetupFormat.ToDateTime(c.PeriodEnd));
+        }
+        else
+        {
+            (_start, _end) = (SetupFormat.ToDateTime(DefaultStart), SetupFormat.ToDateTime(DefaultEnd));
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || _start is null || _end is null)
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(new SaveClinRequest(_number!.Trim(), _description!.Trim(), _pricing,
+            SetupFormat.ToDateOnly(_start)!.Value, SetupFormat.ToDateOnly(_end)!.Value, _ceiling, _feePercent / 100m, _isOption)));
+    }
+}
