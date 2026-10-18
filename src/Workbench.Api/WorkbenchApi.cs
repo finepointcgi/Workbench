@@ -46,6 +46,7 @@ public static class WorkbenchApi
         v1.MapRevenueEndpoints();
         v1.MapIncurredCostEndpoints();
         v1.MapReportEndpoints();
+        v1.MapEvmEndpoints();
 
         return app;
     }

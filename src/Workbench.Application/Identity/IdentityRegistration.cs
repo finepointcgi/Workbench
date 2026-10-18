@@ -77,6 +77,7 @@ public static class IdentityRegistration
         services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
         services.AddWorkbenchIncurredCostPermissions(); // Incurred cost submissions: Finance or Admin only.
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
+        services.AddWorkbenchEvmPermissions(); // Earned value: Finance, Admin or the project's PM; BCR approval and period reopen Finance/Admin.
         return services;
     }
 

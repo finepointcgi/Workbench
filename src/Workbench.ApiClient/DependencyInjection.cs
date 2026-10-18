@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddRevenueClients(serverBaseAddress);
         services.AddIncurredCostClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
+        services.AddEvmClients(serverBaseAddress);
         return services;
     }
 }
