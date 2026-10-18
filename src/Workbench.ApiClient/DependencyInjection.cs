@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddOdcClients(serverBaseAddress);
         services.AddFinancialsClients(serverBaseAddress);
         services.AddSetupClients(serverBaseAddress);
+        services.AddAccountingClients(serverBaseAddress);
         return services;
     }
 }

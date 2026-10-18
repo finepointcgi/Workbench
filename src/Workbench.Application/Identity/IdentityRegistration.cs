@@ -47,6 +47,7 @@ public static class IdentityRegistration
         services.Decorate<IProjectService, PermissionCheckingProjectService>();
         services.Decorate<IFiscalCalendarService, PermissionCheckingFiscalCalendarService>();
         services.Decorate<IAuditLogService, PermissionCheckingAuditLogService>();
+        services.AddWorkbenchAccountingPermissions(); // General ledger (accounting branch): Finance or Admin only on all five GL services.
         return services;
     }
 

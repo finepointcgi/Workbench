@@ -1,0 +1,74 @@
+@inject IAccountingReportService Reports
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudText Typo="Typo.h6" HtmlTag="h2">@(Report == AccountingReport.IncomeStatement ? "Income statement" : "Balance sheet"), @Period.Name</MudText>
+    @if (_report is { } r)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Fiscal year from @AccountingFormat.Date(r.YearStart)</MudText>
+    }
+    <MudSpacer />
+    <ExportButton Request="new AccountingExportRequest(Report, Period.Id)" />
+</MudStack>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="@(Report == AccountingReport.IncomeStatement ? "income-statement" : "balance-sheet")">
+            <thead><tr><th></th><th style="text-align:right">@_report.PeriodLabel</th><th style="text-align:right">@_report.YearToDateLabel</th></tr></thead>
+            <tbody>
+                @foreach (var section in _report.Lines.GroupBy(l => l.Section))
+                {
+                    @if (section.Key != "Summary")
+                    {
+                        <tr><td colspan="3" class="pt-4"><MudText Typo="Typo.subtitle2">@section.Key</MudText></td></tr>
+                    }
+                    @foreach (var line in section)
+                    {
+                        <tr style="@(line.IsTotal ? "font-weight:600" : "")">
+                            <td style="@(line.IsTotal ? "" : "padding-left:24px")">@(line.AccountNumber is null ? "" : line.AccountNumber + " ")@line.Label</td>
+                            <td style="text-align:right">@AccountingFormat.Amount(line.Period)</td>
+                            <td style="text-align:right">@AccountingFormat.Amount(line.YearToDate)</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public FiscalPeriodDto Period { get; set; } = default!;
+
+    [Parameter]
+    public AccountingReport Report { get; set; } = AccountingReport.IncomeStatement;
+
+    private FinancialStatementDto? _report;
+    private string? _error;
+    private Guid _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == Period.Id)
+        {
+            return;
+        }
+
+        (_loaded, _report, _error) = (Period.Id, null, null);
+        try
+        {
+            _report = Report == AccountingReport.IncomeStatement ? await Reports.GetIncomeStatementAsync(Period.Id) : await Reports.GetBalanceSheetAsync(Period.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}

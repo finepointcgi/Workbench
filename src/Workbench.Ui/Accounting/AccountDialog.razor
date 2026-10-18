@@ -1,0 +1,75 @@
+@* Creates or edits an account; returns a SaveAccountRequest. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudStack Row="true" Spacing="3">
+                <MudTextField T="string" @bind-Value="_number" Label="Number" Required="true" Immediate="true" Style="max-width:140px" data-testid="account-number" />
+                <MudTextField T="string" @bind-Value="_name" Label="Name" Required="true" Immediate="true" data-testid="account-name" />
+            </MudStack>
+            <MudSelect T="AccountKind" @bind-Value="_type" Label="Type" Disabled="@(Account?.HasPostings == true)"
+                       HelperText="@(Account?.HasPostings == true ? "The type can't change once the account has postings." : null)">
+                @foreach (var kind in Enum.GetValues<AccountKind>())
+                {
+                    <MudSelectItem Value="kind">@kind</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_parentId" Label="Rolls up into" Clearable="true">
+                @foreach (var a in Accounts.Where(a => a.Type == _type && a.Id != Account?.Id && !a.HasPostings && a.IsActive))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_type == AccountKind.Expense)
+            {
+                <MudSelect T="CostClass" @bind-Value="_costClass" Label="Cost classification" HelperText="How indirect rates and DCAA reports treat this cost.">
+                    @foreach (var c in Enum.GetValues<CostClass>())
+                    {
+                        <MudSelectItem Value="c">@(c == CostClass.None ? "None" : AccountingFormat.Label(c))</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField T="string" @bind-Value="_description" Label="Description" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_number) || string.IsNullOrWhiteSpace(_name))"
+                   OnClick="Save" data-testid="save-account">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public AccountDto? Account { get; set; }
+
+    [Parameter]
+    public AccountDto? Parent { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<AccountDto> Accounts { get; set; } = [];
+
+    private string? _number;
+    private string? _name;
+    private AccountKind _type = AccountKind.Expense;
+    private Guid? _parentId;
+    private CostClass _costClass;
+    private string? _description;
+
+    protected override void OnInitialized()
+    {
+        if (Account is { } a)
+        {
+            (_number, _name, _type, _parentId, _costClass, _description) = (a.Number, a.Name, a.Type, a.ParentId, a.CostClass, a.Description);
+        }
+        else if (Parent is { } p)
+        {
+            (_type, _parentId, _costClass) = (p.Type, p.Id, p.CostClass);
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveAccountRequest(_number!.Trim(), _name!.Trim(), _type, _parentId,
+        _type == AccountKind.Expense ? _costClass : CostClass.None, null, _description)));
+}
