@@ -75,6 +75,8 @@ public static class DependencyInjection
         Approvals.ApprovalRegistration.AddWorkbenchApprovals(services); // Approval workflow engine, inbox, delegation; above AddWorkbenchIdentity.
         services.AddScoped<Contracts.Projects.IProjectHubService, Projects.ProjectHubService>(); // Projects hub (list and project overview); above AddWorkbenchIdentity.
         services.AddWorkbenchMyTodo(); // Home page to-dos: providers read through the permission-checked services above.
+        Payroll.PayrollLayoutRegistration.AddWorkbenchPayrollLayouts(services); // Configurable Paylocity hours export and register layouts; above AddWorkbenchIdentity.
+        Migration.MigrationRegistration.AddWorkbenchMigration(services); // Go-live checklist and Costpoint reconciliation; reads imports and reports; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

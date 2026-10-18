@@ -1,0 +1,37 @@
+ACCT_ID,ACCT_NAME,ACCT_TYPE_CD,PARENT_ACCT_ID,COST_CLASS,ACTIVE_FL
+1000,Assets,A,,,Y
+1010,Cash - operating,A,1000,,Y
+1020,Cash - payroll,A,1000,,Y
+1100,Accounts receivable,A,1000,,Y
+1110,Accounts receivable - billed,A,1100,,Y
+1120,Accounts receivable - unbilled,A,1100,,Y
+1500,Property and equipment,A,1000,,Y
+1510,Computer equipment,A,1500,,Y
+1590,Accumulated depreciation,A,1500,,Y
+2000,Liabilities,L,,,Y
+2010,Accounts payable,L,2000,,Y
+2020,AP retainage,L,2000,,Y
+2100,Accrued payroll,L,2000,,Y
+3000,Equity,C,,,Y
+3100,Paid-in capital,C,3000,,Y
+3200,Retained earnings,C,3000,,Y
+3990,Conversion clearing,C,3000,,Y
+4000,Revenue,R,,,Y
+4010,Revenue - cost-plus contracts,R,4000,,Y
+5000,Direct costs,E,,,Y
+5010,Direct labor,E,5000,Direct Labor,Y
+5100,Direct ODCs,E,5000,,Y
+5110,Direct travel,E,5100,ODC,Y
+5140,Subcontracts,E,5100,ODC,Y
+6000,Fringe pool,E,,,Y
+6010,Paid leave and holidays,E,6000,Fringe,Y
+6020,Payroll taxes,E,6000,Fringe,Y
+6030,Health and retirement benefits,E,6000,Fringe,Y
+6100,Overhead pool,E,,,Y
+6110,Overhead labor,E,6100,Indirect Labor,Y
+6120,Facilities and rent,E,6100,Overhead,Y
+6130,Overhead supplies,E,6100,Overhead,Y
+6200,G&A pool,E,,,Y
+6210,G&A labor,E,6200,Indirect Labor,Y
+6220,Professional fees,E,6200,G&A,Y
+6230,Office and IT,E,6200,G&A,Y

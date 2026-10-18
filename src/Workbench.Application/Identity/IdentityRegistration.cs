@@ -81,6 +81,8 @@ public static class IdentityRegistration
         services.AddWorkbenchCeilingPermissions(); // Ceilings and closeout: reads Finance/Admin/PMs; changes Finance/Admin (PMs may override where allowed).
         services.Decorate<Workbench.Contracts.Approvals.IApprovalWorkflowService, Approvals.PermissionCheckingApprovalWorkflowService>(); // Approval workflows: read Finance/Admin, change Admin.
         services.AddScoped<Projects.ProjectHubAccess>(); services.Decorate<Workbench.Contracts.Projects.IProjectHubService, PermissionCheckingProjectHubService>(); // Projects hub: list scoped in the service; project page for those on it; team Finance/Admin/PM.
+        services.Decorate<Workbench.Contracts.Payroll.IPayrollLayoutService, PermissionCheckingPayrollLayoutService>(); // Payroll file layouts: Finance or Admin only.
+        services.AddWorkbenchMigrationPermissions(); // Cut-over checklist and Costpoint reconciliation: Finance or Admin only.
         return services;
     }
 

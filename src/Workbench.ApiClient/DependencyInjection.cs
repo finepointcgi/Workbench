@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddEvmClients(serverBaseAddress);
         services.AddCeilingClients(serverBaseAddress);
         services.AddApprovalClients(serverBaseAddress);
+        services.AddMigrationClients(serverBaseAddress);
         services.AddHttpClient<Contracts.Projects.IProjectHubService, HttpProjectHubService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.MyTodo.IMyTodoService, HttpMyTodoService>(client => client.BaseAddress = serverBaseAddress);
         return services;

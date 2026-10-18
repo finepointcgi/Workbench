@@ -1,0 +1,376 @@
+@* Paylocity file layouts: the hours export columns and the register columns, each with a "test against a sample file". *@
+@inject IPayrollLayoutService Layouts
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="paylocity-layouts">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Paylocity file layouts</MudText>
+        @if (_layout is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(_layout.HoursIsDefault && _layout.RegisterIsDefault ? Color.Default : Color.Info)">
+                @(_layout.HoursIsDefault && _layout.RegisterIsDefault ? "Built-in layout" : $"Customized by {_layout.UpdatedBy}")
+            </MudChip>
+        }
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" OnClick="ResetAsync" Disabled="@(_busy || _layout is null || (_layout.HoursIsDefault && _layout.RegisterIsDefault))">Back to built-in</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || _hours is null)" data-testid="save-layout">Save layouts</MudButton>
+    </MudStack>
+    <MudText Class="mud-text-secondary mb-3">
+        Paylocity imports are set up per company, so match these to the customer's own import template and payroll register export. Test each against a sample file before saving.
+        Earning codes (REG, OT, leave) come from the earning code map above.
+    </MudText>
+
+    @if (_hours is not null && _register is not null)
+    {
+        <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+            <MudTabPanel Text="Hours export" data-testid="tab-hours-layout">
+                <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-2">
+                    <MudTextField T="string" Label="Date format" @bind-Value="_dateFormat" Style="max-width:160px" HelperText="e.g. MM/dd/yyyy" />
+                    <MudSelect T="string" Label="Delimiter" @bind-Value="_hoursDelimiter" Style="max-width:140px">
+                        <MudSelectItem T="string" Value="@(",")">Comma</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("|")">Pipe</MudSelectItem>
+                        <MudSelectItem T="string" Value="@(";")">Semicolon</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("\\t")">Tab</MudSelectItem>
+                    </MudSelect>
+                    <MudTextField T="string" Label="Hours format" @bind-Value="_hoursFormat" Style="max-width:140px" HelperText="e.g. 0.00" />
+                    <MudSwitch T="bool" @bind-Value="_includeHeader" Color="Color.Primary" Label="Header row" />
+                </MudStack>
+                <MudSimpleTable Dense="true" Elevation="0" Bordered="true">
+                    <thead><tr><th>#</th><th>Header</th><th>Contains</th><th>Fixed text</th><th></th></tr></thead>
+                    <tbody>
+                        @for (var i = 0; i < _hours.Count; i++)
+                        {
+                            var index = i;
+                            var column = _hours[index];
+                            <tr>
+                                <td>@(index + 1)</td>
+                                <td><MudTextField T="string" @bind-Value="column.Header" Margin="Margin.Dense" aria-label="@($"Header of column {index + 1}")" /></td>
+                                <td>
+                                    <MudSelect T="HoursColumnValue" @bind-Value="column.Value" Margin="Margin.Dense" Dense="true" aria-label="@($"Contents of column {index + 1}")">
+                                        @foreach (var value in Enum.GetValues<HoursColumnValue>())
+                                        {
+                                            <MudSelectItem T="HoursColumnValue" Value="value">@value</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </td>
+                                <td><MudTextField T="string" @bind-Value="column.Constant" Margin="Margin.Dense" Disabled="@(column.Value is not (HoursColumnValue.Constant or HoursColumnValue.Det))" aria-label="@($"Fixed text of column {index + 1}")" /></td>
+                                <td style="white-space:nowrap">
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="index == 0" OnClick="() => Move(index, -1)" aria-label="Move up" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="index == _hours.Count - 1" OnClick="() => Move(index, 1)" aria-label="Move down" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _hours.RemoveAt(index)" aria-label="Remove column" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddColumn">Add column</MudButton>
+
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle2">Test against the customer's import template</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Upload Paylocity's import template (or a past import file): its header row is compared with these columns.</MudText>
+                <div class="mt-1">
+                    <label class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-button-outlined-size-small mud-ripple" style="cursor:pointer">
+                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Small" Class="mr-1" /> Test a template file
+                        <InputFile OnChange="TestHoursAsync" accept=".csv,.txt" style="display:none" data-testid="hours-template-file" />
+                    </label>
+                </div>
+                @if (_hoursTest is not null)
+                {
+                    <MudAlert Severity="@(_hoursTest.Ok ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2" data-testid="hours-test-result">
+                        @(_hoursTest.Error ?? (_hoursTest.Ok ? "Every template column is written, in the same order." : "The layout and the template differ: see below."))
+                    </MudAlert>
+                    @if (_hoursTest.Columns.Count > 0)
+                    {
+                        <MudSimpleTable Dense="true" Elevation="0" Class="mt-1">
+                            <thead><tr><th>Template column</th><th>Written by</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var c in _hoursTest.Columns)
+                                {
+                                    <tr>
+                                        <td>@c.Position. @c.TemplateHeader</td>
+                                        <td>@(c.LayoutHeader is null ? "—" : $"{c.LayoutPosition}. {c.LayoutHeader}")</td>
+                                        <td><MudIcon Icon="@(c.SamePosition ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)" Color="@(c.SamePosition ? Color.Success : Color.Warning)" Size="Size.Small" />
+                                            @(c.LayoutHeader is null ? "Not written" : c.SamePosition ? "" : "Different position")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                    @if (_hoursTest.ExtraLayoutColumns.Count > 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1">Written but not in the template: @string.Join(", ", _hoursTest.ExtraLayoutColumns)</MudText>
+                    }
+                    @if (_hoursTest.Example.Length > 0)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-2">Example export</MudText>
+                        <pre style="font-size:12px;overflow:auto;max-height:200px" data-testid="hours-example">@_hoursTest.Example</pre>
+                    }
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Payroll register" data-testid="tab-register-layout">
+                <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-2">
+                    <MudTextField T="string" Label="Date formats" @bind-Value="_registerDates" Style="min-width:300px" HelperText="Comma-separated, e.g. MM/dd/yyyy, yyyy-MM-dd" />
+                    <MudSelect T="string" Label="Delimiter" @bind-Value="_registerDelimiter" Style="max-width:140px">
+                        <MudSelectItem T="string" Value="@(",")">Comma</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("|")">Pipe</MudSelectItem>
+                        <MudSelectItem T="string" Value="@(";")">Semicolon</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("\\t")">Tab</MudSelectItem>
+                    </MudSelect>
+                </MudStack>
+                <MudSimpleTable Dense="true" Elevation="0" Bordered="true">
+                    <thead><tr><th>Workbench reads</th><th>Accepted headers (comma-separated, any of)</th></tr></thead>
+                    <tbody>
+                        @foreach (var field in Enum.GetValues<RegisterField>())
+                        {
+                            var f = field;
+                            <tr>
+                                <td>@f</td>
+                                <td><MudTextField T="string" Value="_registerHeaders.GetValueOrDefault(f)" ValueChanged="v => _registerHeaders[f] = v" Margin="Margin.Dense" aria-label="@($"Headers for {f}")" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudSwitch T="bool" @bind-Value="_detail" Color="Color.Primary" Class="mt-2" Label="Detail register: one row per check and earning, tax or deduction code" />
+                @if (_detail)
+                {
+                    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                        <MudTextField T="string" Label="Code column" @bind-Value="_codeColumn" Style="max-width:200px" HelperText="e.g. Det Code" />
+                        <MudTextField T="string" Label="Amount column" @bind-Value="_amountColumn" Style="max-width:200px" HelperText="e.g. Amount" />
+                    </MudStack>
+                    <MudText Typo="Typo.subtitle2" Class="mt-2">Code map</MudText>
+                    @foreach (var row in _codeMap)
+                    {
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-1">
+                            <MudTextField T="string" @bind-Value="row.Code" Label="Code" Margin="Margin.Dense" Style="max-width:160px" />
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" />
+                            <MudSelect T="RegisterAmountTarget" @bind-Value="row.Target" Margin="Margin.Dense" Dense="true" Style="max-width:200px" aria-label="Adds to">
+                                @foreach (var target in Enum.GetValues<RegisterAmountTarget>())
+                                {
+                                    <MudSelectItem T="RegisterAmountTarget" Value="target">@target</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _codeMap.Remove(row)" aria-label="Remove code" />
+                        </MudStack>
+                    }
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _codeMap.Add(new CodeRow())">Add code</MudButton>
+                }
+
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle2">Test against a sample register</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Upload a payroll register export: see which columns are found and what every line parses into. Nothing is imported.</MudText>
+                <div class="mt-1">
+                    <label class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-button-outlined-size-small mud-ripple" style="cursor:pointer">
+                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Small" Class="mr-1" /> Test a register file
+                        <InputFile OnChange="TestRegisterAsync" accept=".csv,.txt" style="display:none" data-testid="register-sample-file" />
+                    </label>
+                </div>
+                @if (_registerTest is { } t)
+                {
+                    <MudAlert Severity="@(t.Ok ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2" data-testid="register-test-result">
+                        @(t.Error ?? (t.Ok ? $"All {t.Checks} check(s) parse: gross {t.TotalGross:N2}, net {t.TotalNet:N2}." : $"{t.Rows.Count(r => !r.Parsed)} line(s) don't parse; {t.Checks} check(s) do."))
+                    </MudAlert>
+                    @if (t.Columns.Count > 0)
+                    {
+                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-1">
+                            @foreach (var c in t.Columns)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(c.MatchedHeader is not null ? Color.Success : c.Required ? Color.Error : Color.Default)">
+                                    @c.Field: @(c.MatchedHeader ?? "not found")
+                                </MudChip>
+                            }
+                        </MudStack>
+                    }
+                    @if (t.UnusedHeaders.Count > 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1">Columns not used: @string.Join(", ", t.UnusedHeaders)</MudText>
+                    }
+                    @foreach (var w in t.Warnings)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-warning-text">@w</MudText>
+                    }
+                    @if (t.Rows.Count > 0)
+                    {
+                        <div style="max-height:320px;overflow:auto" class="mt-1">
+                            <MudSimpleTable Dense="true" Elevation="0" FixedHeader="true" data-testid="register-test-rows">
+                                <thead><tr><th>Line</th><th></th><th>Employee</th><th>Check date</th><th>Gross</th><th>EE taxes</th><th>ER taxes</th><th>Deductions</th><th>ER benefits</th><th>Net</th><th>Note</th></tr></thead>
+                                <tbody>
+                                    @foreach (var r in t.Rows)
+                                    {
+                                        <tr>
+                                            <td>@r.Line</td>
+                                            <td><MudIcon Icon="@(r.Parsed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)" Color="@(r.Parsed ? Color.Success : Color.Error)" Size="Size.Small" /></td>
+                                            <td>@r.EmployeeId @r.EmployeeName</td>
+                                            <td>@r.CheckDate?.ToString("yyyy-MM-dd")</td>
+                                            <td>@r.GrossPay?.ToString("N2")</td>
+                                            <td>@r.EmployeeTaxes?.ToString("N2")</td>
+                                            <td>@r.EmployerTaxes?.ToString("N2")</td>
+                                            <td>@r.Deductions?.ToString("N2")</td>
+                                            <td>@r.EmployerBenefits?.ToString("N2")</td>
+                                            <td>@r.NetPay?.ToString("N2")</td>
+                                            <td class="@(r.Parsed ? "" : "mud-error-text")">@r.Message</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        </div>
+                    }
+                }
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudPaper>
+
+@code {
+    private const string Provider = "paylocity";
+
+    private PayrollLayoutDto? _layout;
+    private List<HoursRow>? _hours;
+    private string _dateFormat = "MM/dd/yyyy";
+    private string _hoursDelimiter = ",";
+    private string _hoursFormat = "0.00";
+    private bool _includeHeader = true;
+    private RegisterLayoutDto? _register;
+    private Dictionary<RegisterField, string> _registerHeaders = [];
+    private string _registerDates = "";
+    private string _registerDelimiter = ",";
+    private bool _detail;
+    private string? _codeColumn;
+    private string? _amountColumn;
+    private List<CodeRow> _codeMap = [];
+    private HoursTemplateTestDto? _hoursTest;
+    private RegisterTestResultDto? _registerTest;
+    private bool _busy;
+
+    private sealed class HoursRow
+    {
+        public string Header { get; set; } = "";
+        public HoursColumnValue Value { get; set; }
+        public string? Constant { get; set; }
+    }
+
+    private sealed class CodeRow
+    {
+        public string Code { get; set; } = "";
+        public RegisterAmountTarget Target { get; set; } = RegisterAmountTarget.GrossPay;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Show(await Layouts.GetAsync(Provider));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void Show(PayrollLayoutDto layout)
+    {
+        _layout = layout;
+        _hours = layout.Hours.Columns.Select(c => new HoursRow { Header = c.Header, Value = c.Value, Constant = c.Constant }).ToList();
+        _dateFormat = layout.Hours.DateFormat;
+        _hoursDelimiter = layout.Hours.Delimiter;
+        _hoursFormat = layout.Hours.HoursFormat;
+        _includeHeader = layout.Hours.IncludeHeader;
+        _register = layout.Register;
+        _registerHeaders = Enum.GetValues<RegisterField>().ToDictionary(f => f, f => string.Join(", ", layout.Register.Columns.Where(c => c.Field == f).SelectMany(c => c.Headers)));
+        _registerDates = string.Join(", ", layout.Register.DateFormats);
+        _registerDelimiter = layout.Register.Delimiter;
+        _detail = layout.Register.CodeColumn is not null;
+        _codeColumn = layout.Register.CodeColumn;
+        _amountColumn = layout.Register.AmountColumn;
+        _codeMap = (layout.Register.CodeMap ?? []).Select(m => new CodeRow { Code = m.Code, Target = m.Target }).ToList();
+    }
+
+    private HoursLayoutDto Hours() => new(_hours!.Select(h => new HoursColumnDto(h.Header?.Trim() ?? "", h.Value, string.IsNullOrWhiteSpace(h.Constant) ? null : h.Constant)).ToList(),
+        _dateFormat.Trim(), _hoursDelimiter, _includeHeader, _hoursFormat.Trim());
+
+    private RegisterLayoutDto Register() => new(
+        _registerHeaders.Select(kv => new RegisterColumnDto(kv.Key, (kv.Value ?? "").Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList())).ToList(),
+        _registerDates.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList(),
+        _registerDelimiter,
+        _detail && !string.IsNullOrWhiteSpace(_codeColumn) ? _codeColumn.Trim() : null,
+        _detail && !string.IsNullOrWhiteSpace(_amountColumn) ? _amountColumn.Trim() : null,
+        _detail ? _codeMap.Where(c => c.Code.Trim().Length > 0).Select(c => new RegisterCodeMapDto(c.Code.Trim(), c.Target)).ToList() : null);
+
+    private void AddColumn() => _hours!.Add(new HoursRow { Header = "New column", Value = HoursColumnValue.Blank });
+
+    private void Move(int index, int by)
+    {
+        var row = _hours![index];
+        _hours.RemoveAt(index);
+        _hours.Insert(index + by, row);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Show(await Layouts.SaveAsync(Provider, new SavePayrollLayoutRequest(Hours(), Register())));
+            Snackbar.Add("Layouts saved. The next hours export and register import use them.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        _busy = true;
+        try
+        {
+            Show(await Layouts.ResetAsync(Provider));
+            _hoursTest = null;
+            _registerTest = null;
+            Snackbar.Add("Back to the built-in layouts.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static async Task<string> ReadAsync(InputFileChangeEventArgs e)
+    {
+        await using var stream = e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
+    }
+
+    private async Task TestHoursAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _hoursTest = await Layouts.TestHoursTemplateAsync(Provider, new TestHoursTemplateRequest(await ReadAsync(e), Hours()));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task TestRegisterAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _registerTest = await Layouts.TestRegisterAsync(Provider, new TestRegisterSampleRequest(await ReadAsync(e), Register()));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

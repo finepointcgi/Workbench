@@ -192,6 +192,13 @@
     [Parameter]
     public Guid? JobId { get; set; }
 
+    /// <summary>Source and kind to start at (names of <see cref="ImportSource"/> and <see cref="ImportKind"/>), from a deep link.</summary>
+    [Parameter]
+    public string? InitialSource { get; set; }
+
+    [Parameter]
+    public string? InitialKind { get; set; }
+
     /// <summary>Raised when the user wants to see the finished job in the history.</summary>
     [Parameter]
     public EventCallback<Guid> Done { get; set; }
@@ -215,6 +222,12 @@
         try
         {
             _kinds = await Imports.ListKindsAsync();
+            if (JobId is null && Enum.TryParse<ImportSource>(InitialSource, true, out var source) && Enum.TryParse<ImportKind>(InitialKind, true, out var kind)
+                && _kinds.FirstOrDefault(k => k.Source == source && k.Kind == kind) is { } initial)
+            {
+                _source = source;
+                ChooseKind(initial);
+            }
         }
         catch (Exception ex)
         {

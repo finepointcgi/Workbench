@@ -20,6 +20,7 @@
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" Icon="@Icons.Material.Filled.UploadFile" data-testid="checklist-import">
                 Moving from Costpoint or Smartsheet? <MudLink Href="setup/import" Typo="Typo.body2"><b>Import your data</b></MudLink>: organizations, people and rates,
                 contracts and CLINs, projects with their WBS, budgets and Smartsheet plans. Each import can be rolled back.
+                Going live? Follow the <MudLink Href="setup/migration" Typo="Typo.body2"><b>go-live checklist</b></MudLink> and reconcile a parallel month.
             </MudAlert>
             @if (_checklist is null)
             {
@@ -72,6 +73,7 @@
                 <MudNavLink Href="billing/contracts" Icon="@Icons.Material.Filled.RequestQuote">Contract billing details</MudNavLink>
                 <MudNavLink Href="setup/audit" Icon="@Icons.Material.Filled.History">Audit log</MudNavLink>
                 <MudNavLink Href="setup/import" Icon="@Icons.Material.Filled.UploadFile">Import from Costpoint or Smartsheet</MudNavLink>
+                <MudNavLink Href="setup/migration" Icon="@Icons.Material.Filled.Flag">Go-live migration and reconciliation</MudNavLink>
             </MudNavMenu>
         </MudPaper>
     </MudItem>

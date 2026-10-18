@@ -333,3 +333,18 @@ await notifications.PublishAsync(
   Refusals are `CeilingExceededException` / `ChargingClosedException` (both `ArgumentException`, so 400 over HTTP).
 - Billing applies rate and fee caps through `Application/Billing/IBillingLimits` (optional in `BillingCostSource` and
   `InvoiceGenerator`); cost reports keep the real rates.
+
+## Go-live migration and reconciliation
+
+- `/setup/migration` (`IMigrationService`) is the cut-over checklist; steps name imports by kind **string**, so an
+  importer another module adds (fixed assets: kind `FixedAssets`) lights up once its `ImportKind` exists. Status comes
+  from `ImportJob` history plus hand marks (`MigrationStepRecord`); prerequisites block a step. Plan:
+  `docs/migration/costpoint-cutover.md`.
+- New import kinds `Accounts`, `Vendors`, `OpeningBalances`, `OpenArInvoices`, `OpenApBills` (appended to both
+  `ImportKind` enums, which must stay equal by value). Open AR/AP are subledger detail written by
+  `Imports/Costpoint/OpenItemConversion` without journal entries: the balances come in with the opening trial balance.
+- `/setup/migration/reconcile` (`IReconciliationService`): `ReconciliationEngine` is pure (keys, mappings, tolerances);
+  `ReconciliationSources` reads Workbench's side through the trial balance, aging, burdened cost and rate services. A
+  new report is a `ReconciliationReports` entry plus a source; runs keep the uploaded file and are immutable once signed.
+- Paylocity file layouts (`IPayrollLayoutService`, `PayrollFileLayout`): `PayrollRunService` calls providers through
+  `PayrollLayoutDispatch` (`ExportHoursAsync`/`ParseRegisterAsync`); the defaults are exactly `PaylocityFormats`.
