@@ -78,5 +78,7 @@ public static class DatabaseInitializer
         }));
         db.Add(original);
         await db.SaveChangesAsync(cancellationToken);
+
+        await ProjectAccountingSeed.SeedAsync(db, schedule, cancellationToken);
     }
 }

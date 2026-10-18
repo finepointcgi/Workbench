@@ -23,6 +23,7 @@ public static class AutomationRegistration
         services.TryAddSingleton<IEmailSender, NullEmailSender>();
         services.AddSingleton<NotificationHub>();
         services.AddSingleton<Notifier>();
+        services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<Notifier>());
         services.AddSingleton<DigestSender>();
         services.AddSingleton<RuleEngine>();
         services.AddScoped<INotificationFeed, InProcessNotificationFeed>();
