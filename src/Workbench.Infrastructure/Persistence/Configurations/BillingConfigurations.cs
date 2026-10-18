@@ -50,6 +50,7 @@ internal sealed class InvoiceLineConfiguration : IEntityTypeConfiguration<Invoic
         b.Property(l => l.Quantity).Hours();
         b.Property(l => l.Rate).Rate();
         b.Property(l => l.Amount).Money();
+        b.Property(l => l.CostBasis).HasPrecision(18, 2);
         b.HasIndex(l => new { l.InvoiceId, l.LineNumber });
         b.HasOne<Clin>().WithMany().HasForeignKey(l => l.ClinId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Project>().WithMany().HasForeignKey(l => l.ProjectId).OnDelete(DeleteBehavior.Restrict);

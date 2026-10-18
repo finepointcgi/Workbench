@@ -52,6 +52,15 @@ else
             Waiting on @(r.Stage == RequisitionApprovalStage.Finance ? "Finance" : "the project manager")@(req.NeedsFinance && r.Stage == RequisitionApprovalStage.ProjectManager ? ", then Finance" : "").
         </MudAlert>
     }
+    @if (req.CeilingWarnings is { Count: > 0 } ceilingWarnings)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="req-ceiling-warnings">
+            @foreach (var w in ceilingWarnings)
+            {
+                <div>@w</div>
+            }
+        </MudAlert>
+    }
 
     <MudGrid Spacing="2" Class="mb-3">
         @foreach (var (label, value) in new[] { ("Requester", r.RequesterName ?? r.RequesterEmail), ("Total", PurchasingFormat.Amount(r.Total)), ("Organization", req.OrgUnitCode ?? "—"),

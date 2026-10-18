@@ -109,6 +109,10 @@ internal static class CeilingEngine
         return states.Where(s => s.Ceiling.ProjectId == project.Id || s.Wbs.Overlaps(wbs)).ToList();
     }
 
+    /// <summary>Active ceilings on a project without a contract (an indirect project), for the scheduled alert check.</summary>
+    public static async Task<List<CeilingState>> ForProjectWithoutContractAsync(IWorkbenchDbContext db, Guid projectId, DateTime utcNow, CancellationToken ct) =>
+        await LoadAsync(db, c => c.ContractId == null && c.ProjectId == projectId, utcNow, ct);
+
     public static async Task<List<CeilingState>> ForIdsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> ceilingIds, DateTime utcNow, CancellationToken ct) =>
         await LoadAsync(db, c => ceilingIds.Contains(c.Id), utcNow, ct, includeInactive: true);
 
@@ -197,19 +201,28 @@ internal static class CeilingEngine
     /// <summary>
     /// Checks charges against the ceilings. Increases past a blocking ceiling (and its overrides) throw
     /// <see cref="CeilingExceededException"/>; past a warning ceiling they come back as warnings. Decreases always pass.
+    /// <paramref name="blocks"/> narrows which blocking ceilings refuse (the rest warn); by default every blocking one does.
     /// </summary>
-    public static List<string> CheckCharges(IEnumerable<CeilingState> states, IReadOnlyCollection<ChargeDelta> deltas, string what)
+    public static List<string> CheckCharges(IEnumerable<CeilingState> states, IReadOnlyCollection<ChargeDelta> deltas, string what, Func<Ceiling, bool>? blocks = null)
     {
         var warnings = new List<string>();
         foreach (var s in states.Where(s => s.Ceiling.IsActive))
         {
             var covered = deltas.Where(d => s.Covers(d.WbsElementId, d.LaborCategoryId)).ToList();
-            Check(s, CeilingMeasure.Hours, covered.Sum(d => d.Hours), what, warnings);
-            Check(s, CeilingMeasure.Cost, covered.Sum(d => d.Cost), what, warnings);
+            var block = s.Ceiling.Enforcement == CeilingEnforcement.Block && (blocks?.Invoke(s.Ceiling) ?? true);
+            Check(s, CeilingMeasure.Hours, covered.Sum(d => d.Hours), what, warnings, block);
+            Check(s, CeilingMeasure.Cost, covered.Sum(d => d.Cost), what, warnings, block);
         }
 
         return warnings;
     }
+
+    /// <summary>
+    /// A requisition isn't a commitment yet (the purchase order is), so it only warns, unless the ceiling blocks and is set to
+    /// check at requisition.
+    /// </summary>
+    public static List<string> CheckRequisition(IEnumerable<CeilingState> states, IReadOnlyCollection<ChargeDelta> deltas, string what) =>
+        CheckCharges(states, deltas, what, c => c.CheckAtRequisition);
 
     /// <summary>
     /// For something already on record being submitted: blocking ceilings it touches that are already past their limit (and
@@ -248,13 +261,13 @@ internal static class CeilingEngine
         foreach (var s in states.Where(s => s.Ceiling.IsActive && s.Ceiling.BillingCeiling != null))
         {
             var amount = deltas.Where(d => s.Ceiling.Level == CeilingLevel.Contract || (d.ClinId is { } c && s.Clins.Contains(c))).Sum(d => d.Amount);
-            Check(s, CeilingMeasure.Billing, amount, what, warnings);
+            Check(s, CeilingMeasure.Billing, amount, what, warnings, s.Ceiling.Enforcement == CeilingEnforcement.Block);
         }
 
         return warnings;
     }
 
-    private static void Check(CeilingState s, CeilingMeasure m, decimal delta, string what, List<string> warnings)
+    private static void Check(CeilingState s, CeilingMeasure m, decimal delta, string what, List<string> warnings, bool block)
     {
         if (delta <= 0 || s.Limit(m) is not { } limit)
         {
@@ -275,7 +288,7 @@ internal static class CeilingEngine
             return;
         }
 
-        if (s.Ceiling.Enforcement == CeilingEnforcement.Block)
+        if (block)
         {
             throw new CeilingExceededException(message + (effective != limit ? $" and its override ({Format(m, effective.Value)})" : "")
                 + ". The ceiling blocks it: ask Finance for an override or a higher ceiling.");

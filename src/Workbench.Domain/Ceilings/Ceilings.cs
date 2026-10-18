@@ -46,6 +46,12 @@ public sealed class Ceiling : Entity
     /// <summary>When true, the manager of the ceiling's project (or of a project on its contract) may grant overrides too.</summary>
     public bool ProjectManagerMayOverride { get; set; }
 
+    /// <summary>
+    /// When true (and the ceiling blocks), submitting or approving a requisition that would take cost past the ceiling is
+    /// refused. Otherwise requisitions only warn: the purchase order is the commitment.
+    /// </summary>
+    public bool CheckAtRequisition { get; set; }
+
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
     public required string CreatedBy { get; set; }
@@ -123,7 +129,10 @@ public sealed class RateCeiling : Entity
 
     public RateCeilingKind Kind { get; set; }
 
-    /// <summary>Applies to one fiscal year, or every year when null.</summary>
+    /// <summary>
+    /// Applies to one fiscal year, or every year when null. Indirect rate caps apply to the cost dated in that year; fee caps
+    /// to the fee billed on the cost dated in that year.
+    /// </summary>
     public int? FiscalYear { get; set; }
 
     /// <summary>The cap for rate kinds, as a fraction (0.45 = 45%).</summary>

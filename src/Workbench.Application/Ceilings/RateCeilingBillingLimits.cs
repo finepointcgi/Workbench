@@ -78,13 +78,14 @@ public sealed class RateCeilingBillingLimits : IBillingLimits
             sets.Values.OrderBy(s => s.FiscalYear).Select(s => s.ToContract()).ToList());
     }
 
+    public async Task<IReadOnlySet<int>> FeeCapYearsAsync(IWorkbenchDbContext db, Guid contractId, Guid clinId, CancellationToken ct) =>
+        (await FeeCaps(db, contractId, clinId).Where(r => r.FiscalYear != null).Select(r => r.FiscalYear!.Value).Distinct().ToListAsync(ct)).ToHashSet();
+
     public async Task<FeeLimit> FeeLimitAsync(
-        IWorkbenchDbContext db, Guid contractId, Guid clinId, decimal feeRate, IReadOnlyDictionary<Guid, decimal> priorFeeByClin, CancellationToken ct)
+        IWorkbenchDbContext db, Guid contractId, Guid clinId, int? fiscalYear, decimal feeRate, FeeToDate prior, CancellationToken ct)
     {
-        var caps = await db.Set<RateCeiling>().AsNoTracking()
-            .Where(r => r.ContractId == contractId && r.IsActive && (r.ClinId == null || r.ClinId == clinId)
-                && (r.Kind == RateCeilingKind.FeeRate || r.Kind == RateCeilingKind.FeeAmount))
-            .ToListAsync(ct);
+        // Caps for every year, plus the ones for the fiscal year of the cost.
+        var caps = await FeeCaps(db, contractId, clinId).Where(r => r.FiscalYear == null || r.FiscalYear == fiscalYear).ToListAsync(ct);
         if (caps.Count == 0)
         {
             return new FeeLimit(feeRate, null, null);
@@ -92,28 +93,44 @@ public sealed class RateCeilingBillingLimits : IBillingLimits
 
         var notes = new List<string>();
         var rate = feeRate;
-        foreach (var cap in caps.Where(c => c.Kind == RateCeilingKind.FeeRate && c.MaxRate < rate))
+        foreach (var cap in caps.Where(c => c.Kind == RateCeilingKind.FeeRate).OrderBy(c => c.MaxRate))
         {
-            rate = cap.MaxRate!.Value;
-            notes.Add($"fee rate capped at {rate:P2}");
+            if (cap.MaxRate < rate)
+            {
+                rate = cap.MaxRate!.Value;
+                notes.Add($"fee rate capped at {rate:P2}{Year(cap)}");
+            }
         }
 
         decimal? max = null;
         foreach (var cap in caps.Where(c => c.Kind == RateCeilingKind.FeeAmount && c.MaxAmount != null))
         {
-            var billed = cap.ClinId is null ? priorFeeByClin.Values.Sum() : priorFeeByClin.GetValueOrDefault(clinId);
+            var billed = (cap.ClinId, cap.FiscalYear) switch
+            {
+                (null, null) => prior.Total,
+                (null, { } y) => prior.OfYear(y),
+                (_, null) => prior.Of(clinId),
+                (_, { } y) => prior.OfYear(clinId, y),
+            };
             var left = Math.Max(0, cap.MaxAmount!.Value - billed);
             if (max is null || left < max)
             {
                 max = left;
             }
 
-            notes.Add($"fee ceiling of {cap.MaxAmount:C}{(cap.ClinId is null ? " on the contract" : "")} ({billed:C} billed before, {left:C} left)");
+            notes.Add($"fee ceiling of {cap.MaxAmount:C}{(cap.ClinId is null ? " on the contract" : "")}{Year(cap)} ({billed:C} billed before, {left:C} left)");
         }
 
         var number = await db.Set<Clin>().AsNoTracking().Where(c => c.Id == clinId).Select(c => c.Number).FirstOrDefaultAsync(ct);
-        return new FeeLimit(rate, max, $"CLIN {number} fee limited by the contract's rate ceilings: {string.Join("; ", notes)}.");
+        return new FeeLimit(rate, max, $"CLIN {number} fee{(fiscalYear is { } fy ? $" on FY{fy} cost" : "")} limited by the contract's rate ceilings: {string.Join("; ", notes)}.");
     }
+
+    private static IQueryable<RateCeiling> FeeCaps(IWorkbenchDbContext db, Guid contractId, Guid clinId) =>
+        db.Set<RateCeiling>().AsNoTracking()
+            .Where(r => r.ContractId == contractId && r.IsActive && (r.ClinId == null || r.ClinId == clinId)
+                && (r.Kind == RateCeilingKind.FeeRate || r.Kind == RateCeilingKind.FeeAmount));
+
+    private static string Year(RateCeiling cap) => cap.FiscalYear is { } y ? $" for FY{y}" : "";
 
     private static bool Exceeds(AppliedRates r, IReadOnlyList<RateCeiling> caps) =>
         Capped(IndirectPool.Fringe, r.FiscalYear, r.Fringe, caps) < r.Fringe

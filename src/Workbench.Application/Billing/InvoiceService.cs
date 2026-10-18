@@ -234,8 +234,9 @@ public sealed partial class InvoiceService(
             Amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero),
             IsGenerated = false,
         };
-        db.Set<InvoiceLine>().Add(line);
+        // Into the list first: adding to the context first lets fix-up add it to the list too, and the total counts it twice.
         invoice.Lines.Add(line);
+        db.Set<InvoiceLine>().Add(line);
         invoice.Recalculate();
         invoice.UpdatedAtUtc = UtcNow;
         audit.Record(db, AuditEntityType, invoice.Id, "LineAdded", after: new { line.Description, line.Amount, line.ClinId });
@@ -715,6 +716,8 @@ public sealed partial class InvoiceService(
                 Rate = d.Rate,
                 Amount = d.Amount,
                 IsGenerated = true,
+                FiscalYear = d.FiscalYear,
+                CostBasis = d.CostBasis,
             };
             foreach (var s in d.Sources)
             {
