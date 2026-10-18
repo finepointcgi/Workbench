@@ -480,7 +480,9 @@ public sealed class BudgetImporter : CostpointImporter
 
         var current = await budgets.GetVersionAsync(version.Id, cancellationToken);
         static string Signature(Guid wbs, BudgetCostKind cost, Guid? category, BudgetOdcType? odc, DateOnly? period, decimal hours, decimal amount) =>
-            $"{wbs}|{cost}|{category}|{odc}|{period}|{decimal.Round(hours, 2)}|{(cost == BudgetCostKind.Odc ? decimal.Round(amount, 2) : 0)}";
+            // Fixed two decimals: a database can hand back 8 where the file said 8.0 (decimal keeps its scale in ToString).
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{wbs}|{cost}|{category}|{odc}|{period:yyyy-MM-dd}|{decimal.Round(hours, 2):0.00}|{(cost == BudgetCostKind.Odc ? decimal.Round(amount, 2) : 0m):0.00}");
         var existing = current?.Lines.Select(l => Signature(l.WbsElementId, l.CostType, l.LaborCategoryId, l.OdcType, l.PeriodStart, l.Hours, l.Amount)).Order().ToList() ?? [];
         var incoming = requests.Select(r => Signature(r.WbsElementId, r.CostType, r.LaborCategoryId, r.OdcType, r.PeriodStart, r.Hours, r.Amount)).Order().ToList();
         if (existing.SequenceEqual(incoming))
