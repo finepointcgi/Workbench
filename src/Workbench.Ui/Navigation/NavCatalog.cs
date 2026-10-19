@@ -131,6 +131,7 @@ public static class NavCatalog
         new(Reports, null, "Report writer", "reports/writer", Icons.Material.Filled.Build, Everyone, Detail: "Report", Keywords: "custom report builder"),
         new(Reports, "Project reports", "Project status", "reports/standard/project-status", Icons.Material.Filled.Assessment, PmNotFinance, Keywords: "eac etc budget variance pm"),
         new(Reports, "Project reports", "Contract funding", "reports/standard/funding-status", Icons.Material.Filled.Assessment, PmNotFinance, Keywords: "ceiling funded clin"),
+        new(Reports, null, "Timesheet flags", "time/flags", Icons.Material.Filled.Flag, a => a.ShowTeamTime || a.IsFinance, Keywords: "anomalies odd timesheets dcaa review weekend late revisions"),
         new(Reports, null, "Financial statements", "accounting/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "balance sheet income statement trial balance p&l"),
         new(Reports, null, "AP reports", "purchasing/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "payables aging 1099"),
         new(Reports, null, "Asset reports", "assets/reports", Icons.Material.Filled.Assessment, FinanceOnly),
@@ -141,6 +142,7 @@ public static class NavCatalog
         // Admin (administrators; Finance sees the setup parts, titled Setup).
         new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, FinanceOnly, Keywords: "employees cost rates supervisors"),
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
+        new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, AdminOnly, Keywords: "ai claude assistant usage audit bedrock govcloud"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, FinanceOnly, Keywords: "history security"),
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, FinanceOnly, MatchAll: true),

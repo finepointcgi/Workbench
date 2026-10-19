@@ -1,0 +1,15 @@
+.wb-audit {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 16px;
+    margin: 0 0 12px;
+}
+
+.wb-audit dt {
+    font-weight: 500;
+}
+
+.wb-audit dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}

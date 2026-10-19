@@ -1,0 +1,216 @@
+@* The project's "Monthly narrative" tab: draft the PM narrative from earned value, financials, the plan, ceilings and
+   funding, edit it, and save it. Saving can copy the control-account explanations into the earned value VARs; the
+   saved narrative is the IPMDAR Format 5 analysis summary. Nothing is saved until the PM saves. *@
+@inject IProjectNarrativeService Narratives
+@inject ISnackbar Snackbar
+
+<div data-testid="narrative-tab">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3" Spacing="2">
+        <MudText Typo="Typo.h5" HtmlTag="h2">Monthly narrative</MudText>
+        <MudSpacer />
+        @if (_periods.Count > 0)
+        {
+            <MudSelect T="Guid?" Value="_periodId" ValueChanged="PeriodChangedAsync" Label="Period" Dense="true" Style="min-width:180px" data-testid="narrative-period">
+                @foreach (var p in _periods)
+                {
+                    <MudSelectItem T="Guid?" Value="p.FiscalPeriodId">@p.Name@(p.IsCurrent ? " (current)" : "")@(p.HasNarrative ? " ✓" : "")</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="DraftAsync" Disabled="_busy" data-testid="narrative-draft">
+            @(_narrative is null ? "Draft from the data" : "Redraft from the data")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy || _narrative is null" data-testid="narrative-save">Save</MudButton>
+    </MudStack>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+    }
+
+    @if (_busy)
+    {
+        <MudProgressLinear aria-label="Working" Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+    }
+
+    <span class="wb-sr-only" role="status">@_announcement</span>
+
+    @if (_narrative is null && !_busy && _error is null)
+    {
+        <MudText Class="mud-text-secondary" data-testid="narrative-empty">
+            No narrative saved for this period. “Draft from the data” writes one from earned value, financials, completed plan tasks,
+            upcoming milestones, ceilings and funding; you edit it and save.
+        </MudText>
+    }
+    else if (_narrative is { } n)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            @(n.IsSaved ? $"Saved by {n.UpdatedBy} on {n.UpdatedAtUtc?.ToLocalTime():MMM d, yyyy h:mm tt}." : "Draft — not saved yet.")
+            @(n.DraftSource switch { "assistant" => " Drafted by the assistant from the numbers below; check it before saving.", "template" => " Drafted from the numbers by a template.", _ => "" })
+        </MudText>
+        @foreach (var note in n.Notes)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+        }
+
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_summary" Label="Summary" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" data-testid="narrative-summary" />
+                <MudTextField @bind-Value="_cost" Label="Cost variance" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_schedule" Label="Schedule variance" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_eac" Label="Changes in the estimate at completion (EAC)" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_accomplishments" Label="Accomplishments this period" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_milestones" Label="Upcoming milestones" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_risks" Label="Risks (ceilings and funding)" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+
+                @if (_variances.Count > 0)
+                {
+                    <MudText Typo="Typo.h6" HtmlTag="h3" Class="mt-2 mb-1">Variance analysis (VAR) by control account</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                        Ticked control accounts get these explanations in their earned value VAR when you save.
+                    </MudText>
+                    @foreach (var v in _variances)
+                    {
+                        <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="narrative-variance">
+                            <MudText Typo="Typo.subtitle1" HtmlTag="h4">@v.Code @v.Name</MudText>
+                            <MudTextField @bind-Value="v.Cause" Label="@($"Cause, {v.Code}")" Lines="2" Sizing="InputSizing.Auto" MaxLength="4000" Variant="Variant.Outlined" Class="mb-2" />
+                            <MudTextField @bind-Value="v.Impact" Label="@($"Impact, {v.Code}")" Lines="2" Sizing="InputSizing.Auto" MaxLength="4000" Variant="Variant.Outlined" Class="mb-2" />
+                            <MudTextField @bind-Value="v.CorrectiveAction" Label="@($"Corrective action, {v.Code}")" Lines="2" Sizing="InputSizing.Auto" MaxLength="4000" Variant="Variant.Outlined" Class="mb-2" />
+                            @if (n.CanApplyToVariances)
+                            {
+                                <MudCheckBox T="bool" @bind-Value="v.Apply" Label="@($"Copy into the VAR for {v.Code} when saving")" data-testid="narrative-apply-var" />
+                            }
+                        </MudPaper>
+                    }
+                }
+            </MudItem>
+            <MudItem xs="12" md="4">
+                @if (n.Facts.Count > 0)
+                {
+                    <MudPaper Outlined="true" Class="pa-3">
+                        <MudText Typo="Typo.h6" HtmlTag="h3" Class="mb-2">Drafted from</MudText>
+                        <MudSimpleTable Dense="true" Elevation="0" aria-label="Facts the draft used">
+                            <tbody>
+                                @foreach (var f in n.Facts)
+                                {
+                                    <tr>
+                                        <th scope="row" style="font-weight:500">@f.Label</th>
+                                        <td style="text-align:right">
+                                            @if (f.Href is not null)
+                                            {
+                                                <MudLink Href="@f.Href" aria-label="@($"{f.Label}: {f.Value}, open the page")">@f.Value</MudLink>
+                                            }
+                                            else
+                                            {
+                                                @f.Value
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudPaper>
+                }
+            </MudItem>
+        </MudGrid>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<NarrativePeriodDto> _periods = [];
+    private Guid? _periodId;
+    private ProjectNarrativeDto? _narrative;
+    private string? _summary, _cost, _schedule, _eac, _accomplishments, _milestones, _risks;
+    private List<VarianceEdit> _variances = [];
+    private bool _busy;
+    private string? _error;
+    private string? _announcement;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _periods = await Narratives.ListPeriodsAsync(ProjectId);
+            _periodId = _periods.FirstOrDefault(p => p.IsCurrent)?.FiscalPeriodId ?? _periods.FirstOrDefault()?.FiscalPeriodId;
+            Show(await Narratives.GetAsync(ProjectId, _periodId));
+        });
+    }
+
+    private async Task PeriodChangedAsync(Guid? periodId)
+    {
+        _periodId = periodId;
+        await RunAsync(async () => Show(await Narratives.GetAsync(ProjectId, _periodId)));
+    }
+
+    private Task DraftAsync() => RunAsync(async () =>
+    {
+        _announcement = "Drafting the narrative";
+        Show(await Narratives.DraftAsync(ProjectId, _periodId));
+        _announcement = "Draft ready. Review and edit it, then save.";
+    });
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var request = new SaveProjectNarrativeRequest(
+            _narrative!.FiscalPeriodId,
+            new NarrativeSectionsDto(_summary, _cost, _schedule, _eac, _accomplishments, _milestones, _risks),
+            _narrative.IsSaved ? "manual" : _narrative.DraftSource,
+            _narrative.CanApplyToVariances ? _variances.Where(v => v.Apply).Select(v => new ApplyNarrativeVarianceRequest(v.Id, v.Cause, v.Impact, v.CorrectiveAction)).ToList() : null);
+        var applied = request.ApplyToVariances?.Count ?? 0;
+        Show(await Narratives.SaveAsync(ProjectId, request));
+        _periods = await Narratives.ListPeriodsAsync(ProjectId);
+        var message = applied > 0 ? $"Narrative saved; {applied} VAR{(applied == 1 ? "" : "s")} updated." : "Narrative saved.";
+        Snackbar.Add(message, Severity.Success);
+        _announcement = message;
+    });
+
+    private void Show(ProjectNarrativeDto? narrative)
+    {
+        _narrative = narrative;
+        var s = narrative?.Sections ?? NarrativeSectionsDto.Empty;
+        (_summary, _cost, _schedule, _eac, _accomplishments, _milestones, _risks) =
+            (s.Summary, s.CostVariance, s.ScheduleVariance, s.EacChanges, s.Accomplishments, s.UpcomingMilestones, s.Risks);
+        _variances = narrative?.Variances.Select(v => new VarianceEdit(v.ControlAccountWbsId, v.Code, v.Name)
+        {
+            Cause = v.Cause, Impact = v.Impact, CorrectiveAction = v.CorrectiveAction, Apply = !narrative.IsSaved && !v.VarAlreadyWritten,
+        }).ToList() ?? [];
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException or InvalidOperationException)
+        {
+            _error = ex is UnauthorizedAccessException ? "Narratives are for Finance, administrators and the project's manager." : ex.Message;
+            _announcement = _error;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class VarianceEdit(Guid id, string code, string name)
+    {
+        public Guid Id { get; } = id;
+
+        public string Code { get; } = code;
+
+        public string Name { get; } = name;
+
+        public string? Cause { get; set; }
+
+        public string? Impact { get; set; }
+
+        public string? CorrectiveAction { get; set; }
+
+        public bool Apply { get; set; }
+    }
+}

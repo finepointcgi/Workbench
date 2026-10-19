@@ -1,0 +1,293 @@
+@* The assistant side panel: ask in plain English, watch the answer stream in, follow the sources to the pages that show
+   the numbers, copy an answer. Answers are plain text (never HTML) and links come only from Workbench's own tools. *@
+@implements IAsyncDisposable
+@inject IAssistantService Assistant
+@inject IJSRuntime JS
+
+<MudDialog Style="height:100dvh;max-height:100dvh;margin:0;border-radius:0" data-testid="assistant-panel">
+    <TitleContent>
+        <MudText Typo="Typo.h6" HtmlTag="h2">Assistant</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="wb-assistant">
+            <div class="wb-assistant-log" role="log" aria-label="Conversation with the assistant" @ref="_log" data-testid="assistant-log">
+                @if (Conversation.Turns.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Ask about your projects, budgets, earned value, funding, ceilings, timesheets and approvals. Answers use only what
+                        you can open in Workbench and list the pages they came from.
+                    </MudText>
+                }
+
+                @for (var i = 0; i < Conversation.Turns.Count; i++)
+                {
+                    var turn = Conversation.Turns[i];
+                    var number = i + 1;
+                    <section class="mb-4" aria-label="@($"Question {number}")" data-testid="assistant-turn">
+                        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mud-text-secondary">You</MudText>
+                        <div class="wb-assistant-text mb-2" data-testid="assistant-question">@turn.Question</div>
+                        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mud-text-secondary">Assistant</MudText>
+                        <div class="wb-assistant-text" aria-busy="@(turn.Streaming ? "true" : "false")" data-testid="assistant-answer">@turn.Answer.ToString()</div>
+                        @if (turn.Streaming)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-flex align-center gap-1 mt-1" aria-hidden="true">
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" aria-label="Working" />
+                                @(turn.Activity ?? "Thinking")…
+                            </MudText>
+                        }
+
+                        @if (turn.Error is not null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2" data-testid="assistant-error">@turn.Error</MudAlert>
+                        }
+
+                        @if (turn.Citations.Count > 0)
+                        {
+                            <nav aria-label="@($"Sources for answer {number}")" class="mt-2" data-testid="assistant-sources">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Check the numbers:</MudText>
+                                <ul class="wb-assistant-sources">
+                                    @foreach (var c in turn.Citations)
+                                    {
+                                        <li><MudLink Href="@c.Href" OnClick="Close" Typo="Typo.body2" data-testid="assistant-source">@c.Label</MudLink></li>
+                                    }
+                                </ul>
+                            </nav>
+                        }
+
+                        @if (!turn.Streaming && turn.Answer.Length > 0)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="() => CopyAsync(turn)"
+                                       aria-label="@($"Copy answer {number}")" data-testid="assistant-copy">Copy</MudButton>
+                        }
+                    </section>
+                }
+            </div>
+
+            <span class="wb-sr-only" role="status" aria-live="polite">@_announcement</span>
+
+            @if (!_busy)
+            {
+                <div class="d-flex flex-wrap gap-1 my-2" role="group" aria-label="Suggested questions" data-testid="assistant-suggestions">
+                    @foreach (var s in AssistantSuggestions.For(PagePath))
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Style="max-width:100%;height:auto;white-space:normal" OnClick="() => AskAsync(s)">@s</MudChip>
+                    }
+                </div>
+            }
+
+            <div class="d-flex align-end gap-2">
+                <MudTextField T="string" @bind-Value="_question" Label="Ask a question" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                              MaxLength="2000" OnKeyDown="OnKeyDown" Disabled="_busy" AutoFocus="true" Class="flex-grow-1" autocomplete="off" data-testid="assistant-input" />
+                @if (_busy)
+                {
+                    <MudButton Variant="Variant.Outlined" OnClick="Stop" data-testid="assistant-stop">Stop</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => AskAsync(_question)" Disabled="string.IsNullOrWhiteSpace(_question)" data-testid="assistant-send">Ask</MudButton>
+                }
+            </div>
+            <div class="d-flex align-center mt-2">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary flex-grow-1">
+                    Reads only what you can see; can't change anything. Questions, sources and answers are logged.
+                    @(Status.ProviderLabel is { } provider ? $" Provider: {provider}." : "")
+                </MudText>
+                @if (Conversation.Turns.Count > 0 && !_busy)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="NewConversation" Class="ml-2" Style="white-space:nowrap;flex-shrink:0" data-testid="assistant-new">New conversation</MudButton>
+                }
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public AssistantConversation Conversation { get; set; } = default!;
+
+    [Parameter] public string? PagePath { get; set; }
+
+    [Parameter] public string? InitialQuestion { get; set; }
+
+    [Parameter, EditorRequired] public AssistantStatusDto Status { get; set; } = default!;
+
+    private string? _question;
+    private string? _announcement;
+    private bool _busy;
+    private ElementReference _log;
+    private IJSObjectReference? _module;
+    private CancellationTokenSource? _cts;
+    private bool _scroll;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/assistant.js");
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+            {
+            }
+
+            if (!string.IsNullOrWhiteSpace(InitialQuestion))
+            {
+                await AskAsync(InitialQuestion);
+            }
+        }
+
+        if (_scroll && _module is not null)
+        {
+            _scroll = false;
+            try
+            {
+                await _module.InvokeVoidAsync("scrollToEnd", _log);
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+            {
+            }
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !_busy && !string.IsNullOrWhiteSpace(_question))
+        {
+            await AskAsync(_question);
+        }
+    }
+
+    private async Task AskAsync(string? question)
+    {
+        question = question?.Trim();
+        if (string.IsNullOrEmpty(question) || _busy)
+        {
+            return;
+        }
+
+        if (!Status.CanAsk)
+        {
+            var refused = new AssistantTurn(question) { Streaming = false, Error = Status.Reason ?? "The assistant can't answer right now." };
+            Conversation.Turns.Add(refused);
+            _question = null;
+            _announcement = refused.Error;
+            StateHasChanged();
+            return;
+        }
+
+        var turn = new AssistantTurn(question);
+        Conversation.Turns.Add(turn);
+        _question = null;
+        _busy = true;
+        _announcement = "Working on your question";
+        _cts = new CancellationTokenSource();
+        var lastRender = DateTime.UtcNow;
+        try
+        {
+            await foreach (var e in Assistant.AskAsync(new AskAssistantRequest(question, Conversation.Id, PagePath), _cts.Token))
+            {
+                switch (e.Kind)
+                {
+                    case AssistantEventKind.Started:
+                        Conversation.Id = e.ConversationId;
+                        break;
+                    case AssistantEventKind.Text:
+                        turn.Answer.Append(e.Text);
+                        break;
+                    case AssistantEventKind.Tool:
+                        turn.Activity = e.Text;
+                        _announcement = e.Text;
+                        break;
+                    case AssistantEventKind.Completed when e.Answer is { } answer:
+                        turn.Answer.Clear().Append(answer.Answer);
+                        turn.Citations = answer.Citations;
+                        Conversation.Id = answer.ConversationId;
+                        break;
+                    case AssistantEventKind.Failed:
+                        turn.Error = e.Text;
+                        Conversation.Id ??= e.ConversationId;
+                        break;
+                }
+
+                if (DateTime.UtcNow - lastRender > TimeSpan.FromMilliseconds(60) || e.Kind != AssistantEventKind.Text)
+                {
+                    lastRender = DateTime.UtcNow;
+                    _scroll = true;
+                    StateHasChanged();
+                }
+            }
+
+            _announcement = turn.Error is null ? $"Answer ready{(turn.Citations.Count > 0 ? $", with {turn.Citations.Count} source{(turn.Citations.Count == 1 ? "" : "s")}" : "")}" : turn.Error;
+        }
+        catch (OperationCanceledException)
+        {
+            turn.Error = "Stopped.";
+            _announcement = "Stopped";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            turn.Error = ex.Message;
+            _announcement = ex.Message;
+        }
+        finally
+        {
+            turn.Streaming = false;
+            turn.Activity = null;
+            _busy = false;
+            _cts?.Dispose();
+            _cts = null;
+            _scroll = true;
+            StateHasChanged();
+        }
+    }
+
+    private void Stop() => _cts?.Cancel();
+
+    private void NewConversation()
+    {
+        Conversation.Clear();
+        _announcement = "Started a new conversation";
+    }
+
+    private async Task CopyAsync(AssistantTurn turn)
+    {
+        var text = turn.Answer.ToString();
+        if (turn.Citations.Count > 0)
+        {
+            text += "\n\nSources:\n" + string.Join("\n", turn.Citations.Select(c => $"- {c.Label}: {c.Href}"));
+        }
+
+        var copied = false;
+        if (_module is not null)
+        {
+            try
+            {
+                copied = await _module.InvokeAsync<bool>("copyText", text);
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+            {
+            }
+        }
+
+        _announcement = copied ? "Answer copied" : "Couldn't copy the answer";
+    }
+
+    private void Close() => MudDialog.Close();
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+            {
+            }
+        }
+    }
+}

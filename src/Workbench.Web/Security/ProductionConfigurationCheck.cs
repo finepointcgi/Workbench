@@ -86,7 +86,24 @@ public static class ProductionConfigurationCheck
             }
         }
 
+        problems.AddRange(AssistantProblems(configuration));
         return problems;
+    }
+
+    /// <summary>The AI assistant: no fake provider outside Development, and every configured connection complete (key or region).</summary>
+    public static IEnumerable<string> AssistantProblems(IConfiguration configuration)
+    {
+        var assistant = configuration.GetSection(Workbench.Application.Assistant.AssistantOptions.Section).Get<Workbench.Application.Assistant.AssistantOptions>()
+            ?? new Workbench.Application.Assistant.AssistantOptions();
+        if (assistant.EnableFakeProvider)
+        {
+            yield return "Assistant:EnableFakeProvider is true. The fake provider is for development and tests only; configure an Anthropic or Bedrock connection instead.";
+        }
+
+        foreach (var problem in Workbench.Application.Assistant.AssistantConnections.Validate(assistant))
+        {
+            yield return problem;
+        }
     }
 
     /// <summary>

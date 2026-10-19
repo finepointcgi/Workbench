@@ -10,6 +10,7 @@ public enum PaletteKind
     Sheet,
     Dashboard,
     Help,
+    Ask,
 }
 
 /// <summary>One result in the command palette.</summary>
@@ -109,6 +110,7 @@ public static class PaletteSearch
         PaletteKind.Sheet => Icons.Material.Filled.TableChart,
         PaletteKind.Dashboard => Icons.Material.Filled.Dashboard,
         PaletteKind.Help => Icons.Material.Filled.HelpOutline,
+        PaletteKind.Ask => Icons.Material.Filled.AutoAwesome,
         _ => Icons.Material.Filled.Article,
     };
 }

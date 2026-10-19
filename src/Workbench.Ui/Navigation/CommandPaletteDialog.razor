@@ -1,6 +1,7 @@
 @* The Ctrl+K / Cmd+K palette: type to find a page you may open, a project, a sheet, a dashboard or something you
    opened recently. Arrow keys move, Enter opens, Escape closes. *@
 @using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Assistant
 @using Workbench.Contracts.Dashboards
 @using Workbench.Contracts.ProjectAccounting
 @inject IServiceProvider Services
@@ -72,6 +73,17 @@
         }
 
         // Records come from the same services the pages use, so they hold only what the user may see.
+        if (Services.GetService<IAssistantService>() is { } assistant)
+        {
+            try
+            {
+                _canAsk = (await assistant.GetStatusAsync()).IsEnabled;
+            }
+            catch (Exception ex) when (NavAccess.IsExpected(ex))
+            {
+            }
+        }
+
         var projects = await TryAsync(Services.GetService<IProjectService>(), async s =>
             (await s.ListProjectsAsync()).Select(p => new PaletteItem(PaletteKind.Project, p.Name, $"projects/{p.Id}", PaletteSearch.IconFor(PaletteKind.Project), p.Code, p.ContractNumber)));
         var sheets = await TryAsync(Services.GetService<ISheetService>(), async s =>
@@ -102,8 +114,18 @@
     private void Refresh()
     {
         _results = PaletteSearch.Search(_query, _items);
+        if (_canAsk && !string.IsNullOrWhiteSpace(_query) && _query.Trim().Length >= 3)
+        {
+            // "Ask" comes first once the query looks like a question; otherwise after the best matches.
+            var ask = new PaletteItem(PaletteKind.Ask, $"Ask the assistant: “{_query.Trim()}”", "", PaletteSearch.IconFor(PaletteKind.Ask), "Answers from the Workbench data you can see", _query.Trim());
+            var looksLikeQuestion = _query.TrimEnd().EndsWith('?') || _query.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 4;
+            _results = looksLikeQuestion || _results.Count == 0 ? [ask, .. _results] : [.. _results.Take(3), ask, .. _results.Skip(3)];
+        }
+
         _selected = 0;
     }
+
+    private bool _canAsk;
 
     private void Select(int index) => _selected = index;
 
@@ -129,7 +151,10 @@
     private void Open(PaletteItem item)
     {
         MudDialog.Close(DialogResult.Ok(item));
-        Navigation.NavigateTo(item.Href);
+        if (item.Kind != PaletteKind.Ask)
+        {
+            Navigation.NavigateTo(item.Href);
+        }
     }
 
     private static string KindLabel(PaletteKind kind) => kind switch
@@ -139,6 +164,7 @@
         PaletteKind.Sheet => "Sheet",
         PaletteKind.Dashboard => "Dashboard",
         PaletteKind.Help => "Help",
+        PaletteKind.Ask => "Ask",
         _ => "Page",
     };
 }
