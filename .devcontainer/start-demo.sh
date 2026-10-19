@@ -18,8 +18,9 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ASPNETCORE_URLS=http://0.0.0.0:5104
 export Email__Mode=Pickup
 export Email__PickupFolder=/tmp/workbench-mail
+# Why a form or sign-in is refused (antiforgery) and which keys protect cookies, in /tmp/workbench-demo.log.
 
-setsid nohup dotnet run --project src/Workbench.Web -c Release --no-launch-profile > /tmp/workbench-demo.log 2>&1 < /dev/null &
+setsid nohup env "Logging__LogLevel__Microsoft.AspNetCore.Antiforgery=Debug" "Logging__LogLevel__Microsoft.AspNetCore.DataProtection=Debug" dotnet run --project src/Workbench.Web -c Release --no-launch-profile > /tmp/workbench-demo.log 2>&1 < /dev/null &
 
 for _ in $(seq 1 120); do
   if curl -s -o /dev/null -w "%{http_code}" http://localhost:5104/account/dev-signin | grep -q 200; then
