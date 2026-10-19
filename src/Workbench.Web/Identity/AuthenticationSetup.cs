@@ -31,11 +31,11 @@ public static class AuthenticationSetup
     {
         var services = builder.Services;
         var oidc = builder.Configuration.GetSection(OidcSettings.SectionName).Get<OidcSettings>() ?? new OidcSettings();
-        var devSignIn = DevSignIn.IsEnabled(builder.Environment, oidc);
+        var devSignIn = DevSignIn.IsEnabled(builder.Environment, oidc, builder.Configuration);
         if (!devSignIn && !oidc.IsConfigured)
         {
             throw new InvalidOperationException(
-                $"Set {OidcSettings.SectionName}:Authority and :ClientId. The dev sign-in page is only available in Development.");
+                $"Set {OidcSettings.SectionName}:Authority and :ClientId. The dev sign-in page is only available in Development and the public demo (Demo:Enabled).");
         }
 
         var tenancy = builder.Configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new TenancyOptions();

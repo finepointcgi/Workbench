@@ -8,7 +8,8 @@ namespace Workbench.Web.Security;
 /// Refuses to start outside Development with a known-weak configuration (ISO 27001 A.8.9, A.8.24): the dev sign-in
 /// page, plain HTTP without a TLS-terminating proxy, SCIM without a strong token, SQLite in Production without an
 /// explicit opt-in, and in Production an unencrypted Data Protection key ring or SMTP without TLS. Development is never
-/// checked.
+/// checked. The public demo (<see cref="DemoMode"/>) may use the dev sign-in page and the fake assistant without an
+/// identity provider, but only in the Demo environment, single-tenant, and without sending email.
 /// </summary>
 public static class ProductionConfigurationCheck
 {
@@ -20,13 +21,19 @@ public static class ProductionConfigurationCheck
         }
 
         var problems = new List<string>();
+        var demo = DemoMode.IsActive(configuration, environment);
+        if (configuration.GetValue(DemoMode.EnabledKey, false) && !demo)
+        {
+            problems.Add($"{DemoMode.EnabledKey} is true in {environment.EnvironmentName}. Demo mode lets anyone sign in as any user; it only runs with ASPNETCORE_ENVIRONMENT={DemoMode.EnvironmentName} on a demo database.");
+        }
+
         var oidc = configuration.GetSection(OidcSettings.SectionName).Get<OidcSettings>() ?? new OidcSettings();
-        if (!oidc.IsConfigured)
+        if (!oidc.IsConfigured && !demo)
         {
             problems.Add($"Set {OidcSettings.SectionName}:Authority and :ClientId (single sign-on is required outside Development).");
         }
 
-        if (DevSignIn.IsEnabled(environment, oidc))
+        if (DevSignIn.IsEnabled(environment, oidc, configuration) && !demo)
         {
             problems.Add("The dev sign-in page is enabled. Configure Authentication:Oidc:Authority and :ClientId.");
         }
@@ -86,18 +93,43 @@ public static class ProductionConfigurationCheck
             }
         }
 
-        problems.AddRange(AssistantProblems(configuration));
+        if (demo)
+        {
+            problems.AddRange(DemoProblems(tenancy, emailMode));
+        }
+
+        problems.AddRange(AssistantProblems(configuration, allowFakeProvider: demo));
         return problems;
     }
 
-    /// <summary>The AI assistant: no fake provider outside Development, and every configured connection complete (key or region).</summary>
-    public static IEnumerable<string> AssistantProblems(IConfiguration configuration)
+    /// <summary>
+    /// The public demo: one sample company (no tenants to cross), and no real email, since its users are made up and
+    /// anyone with the link can trigger notifications.
+    /// </summary>
+    private static IEnumerable<string> DemoProblems(TenancyOptions tenancy, string emailMode)
+    {
+        if (tenancy.IsMultiTenant)
+        {
+            yield return "Demo mode is SingleTenant only. Set Tenancy:Mode=SingleTenant.";
+        }
+
+        if (!emailMode.Equals("Pickup", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return $"Email:Mode is {emailMode} in demo mode. The demo must not send email; set Email:Mode=Pickup.";
+        }
+    }
+
+    /// <summary>
+    /// The AI assistant: no fake provider outside Development and the public demo, and every configured connection
+    /// complete (key or region).
+    /// </summary>
+    public static IEnumerable<string> AssistantProblems(IConfiguration configuration, bool allowFakeProvider = false)
     {
         var assistant = configuration.GetSection(Workbench.Application.Assistant.AssistantOptions.Section).Get<Workbench.Application.Assistant.AssistantOptions>()
             ?? new Workbench.Application.Assistant.AssistantOptions();
-        if (assistant.EnableFakeProvider)
+        if (assistant.EnableFakeProvider && !allowFakeProvider)
         {
-            yield return "Assistant:EnableFakeProvider is true. The fake provider is for development and tests only; configure an Anthropic or Bedrock connection instead.";
+            yield return "Assistant:EnableFakeProvider is true. The fake provider is for development, tests and the public demo (Demo:Enabled) only; configure an Anthropic or Bedrock connection instead.";
         }
 
         foreach (var problem in Workbench.Application.Assistant.AssistantConnections.Validate(assistant))

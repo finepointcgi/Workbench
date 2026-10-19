@@ -1,0 +1,50 @@
+# The public Workbench demo on Fly.io (docs/demo-hosting.md). One always-on machine, SQLite on a 1 GB volume, reset
+# every night at 08:00 UTC. Deploy from the repository root:
+#   fly deploy --config deploy/demo/fly.toml --dockerfile Dockerfile
+# Change "app" (and the URL below) if workbench-demo is taken; app names are global on Fly.io.
+app = "workbench-demo"
+primary_region = "iad"
+
+[build]
+  build-target = "demo"
+
+[env]
+  # Fly's edge proxy reaches the machine from these private ranges; trusting them gives the real client IP to the
+  # sign-in rate limiter and https to the request scheme.
+  ForwardedHeaders__KnownNetworks__0 = "172.16.0.0/12"
+  ForwardedHeaders__KnownNetworks__1 = "fdaa::/16"
+  Notifications__PublicBaseUrl = "https://workbench-demo.fly.dev"
+
+[mounts]
+  source = "workbench_demo_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Always on: a stopped machine would make the first tester wait for a cold start.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "120s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health/live"
+
+# The nightly reset deletes the demo data and stops the process; this brings it straight back with fresh data.
+[[restart]]
+  policy = "always"
+  retries = 10
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

@@ -9,30 +9,33 @@ using Workbench.Application;
 using Workbench.Application.Identity;
 using Workbench.Domain.Identity;
 using Workbench.Domain.Security;
+using Workbench.Infrastructure.Persistence;
 
 namespace Workbench.Web.Identity;
 
 /// <summary>
 /// Development-only sign-in: pick a seeded user and get the auth cookie, no identity provider needed. The
-/// endpoints are only mapped when <see cref="IsEnabled"/> is true, so they don't exist in any other environment.
+/// endpoints are only mapped when <see cref="IsEnabled"/> is true, so they don't exist in any other environment
+/// except the public demo (<see cref="DemoMode"/>), whose users are all sample people.
 /// </summary>
 public static class DevSignIn
 {
     public const string Path = "/account/dev-signin";
 
-    public static bool IsEnabled(IHostEnvironment environment, OidcSettings oidc) =>
-        environment.IsDevelopment() && !oidc.IsConfigured;
+    public static bool IsEnabled(IHostEnvironment environment, OidcSettings oidc, IConfiguration? configuration = null) =>
+        (environment.IsDevelopment() || (configuration is not null && DemoMode.IsActive(configuration, environment))) && !oidc.IsConfigured;
 
     internal static void Map(IEndpointRouteBuilder app)
     {
         app.MapGet(Path, async (HttpContext http, IAntiforgery antiforgery, IWorkbenchDbContextFactory dbFactory, TimeProvider clock, Application.Tenancy.ITenantContext tenants,
-            Application.Tenancy.TenancyOptions tenancy, SignInSettingsStore signInSettings, string? returnUrl, string? reauth) =>
+            Application.Tenancy.TenancyOptions tenancy, SignInSettingsStore signInSettings, IConfiguration configuration, IHostEnvironment environment, string? returnUrl, string? reauth) =>
         {
+            var demo = DemoMode.IsActive(configuration, environment);
             if (tenants.IsHost)
             {
                 // The host admin site has no user table: offer the configured host admins.
                 var hostAdmins = tenancy.HostAdmins.Select(e => new AppUser { Email = e.Trim().ToLowerInvariant(), DisplayName = e.Trim(), CreatedAtUtc = DateTime.UtcNow }).ToList();
-                return Results.Content(RenderPage(hostAdmins, [], antiforgery.GetAndStoreTokens(http), AccountEndpoints.SafeReturnUrl(returnUrl), host: true), "text/html; charset=utf-8");
+                return Results.Content(RenderPage(hostAdmins, [], antiforgery.GetAndStoreTokens(http), AccountEndpoints.SafeReturnUrl(returnUrl), host: true, demo: demo), "text/html; charset=utf-8");
             }
 
             await using var db = await dbFactory.CreateAsync(http.RequestAborted);
@@ -49,7 +52,7 @@ public static class DevSignIn
             var policy = await signInSettings.GetAsync(http.RequestAborted);
             var organizationIdp = policy.OrganizationIdpReady ? policy.Settings.DisplayName ?? "your organization's identity provider" : null;
             return Results.Content(RenderPage(users, invites.Where(i => !known.Contains(i.Email)).ToList(), tokens, AccountEndpoints.SafeReturnUrl(returnUrl),
-                organizationIdp: organizationIdp, reauth: reauth == "1"), "text/html; charset=utf-8");
+                organizationIdp: organizationIdp, reauth: reauth == "1", demo: demo), "text/html; charset=utf-8");
         }).AllowAnonymous().ExcludeFromDescription();
 
         app.MapPost(Path, async (HttpContext http, SignInGate gate, TimeProvider clock, [Microsoft.AspNetCore.Mvc.FromForm] string email, [Microsoft.AspNetCore.Mvc.FromForm] string? returnUrl) =>
@@ -91,13 +94,13 @@ public static class DevSignIn
     }
 
     private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false,
-        string? organizationIdp = null, bool reauth = false)
+        string? organizationIdp = null, bool reauth = false, bool demo = false)
     {
         static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
         var html = new StringBuilder("""
             <!DOCTYPE html>
             <html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>Dev sign-in · Workbench</title>
+            <title>{{TITLE}} · Workbench</title>
             <style>
               body { font-family: system-ui, sans-serif; background: #f5f6f8; margin: 0; padding: 48px 16px; color: #1f2937; }
               main { max-width: 420px; margin: 0 auto; background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
@@ -106,9 +109,14 @@ public static class DevSignIn
               button:hover { border-color: #2563eb; background: #eff6ff; } small { display: block; color: #6b7280; }
               .admin { font-size: .75rem; color: #2563eb; margin-left: 6px; } .note { color: #92400e; background: #fffbeb; padding: 8px; border-radius: 6px; }
             </style></head><body><main>
-            <h1>Sign in (development)</h1>
-            <p>No identity provider is configured, so pick a seeded user. This page doesn't exist outside Development.</p>
+            <h1>{{HEADING}}</h1>
+            <p>{{INTRO}}</p>
             """);
+        html.Replace("{{TITLE}}", demo ? "Demo sign-in" : "Dev sign-in")
+            .Replace("{{HEADING}}", demo ? "Workbench demo" : "Sign in (development)")
+            .Replace("{{INTRO}}", demo
+                ? "Pick a sample user to try Workbench. Everything here is made-up demo data that anyone with the link can see and change, and it's reset every night. Don't enter real information."
+                : "No identity provider is configured, so pick a seeded user. This page doesn't exist outside Development.");
         if (reauth)
         {
             html.Append("<p class=\"note\"><strong>Confirm it's you.</strong> A sensitive action needs a recent sign-in: pick your user again.</p>");

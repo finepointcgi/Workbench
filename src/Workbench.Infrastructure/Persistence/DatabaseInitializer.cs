@@ -11,22 +11,35 @@ public static class DatabaseInitializer
 {
     /// <summary>
     /// Startup: applies pending migrations when <c>Database:MigrateOnStartup</c> is true (the default in Development
-    /// only), then, in Development, seeds the sample data (every tenant's database in MultiTenant mode). Production
-    /// deploys run <c>Workbench.Web --migrate</c> first instead.
+    /// and the public demo only), then, in Development or the demo, seeds the sample data (every tenant's database in
+    /// MultiTenant mode). Production deploys run <c>Workbench.Web --migrate</c> first instead.
     /// </summary>
     public static async Task InitializeWorkbenchDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
     {
         var configuration = services.GetRequiredService<IConfiguration>();
         var environment = services.GetService<IHostEnvironment>();
-        var development = environment?.IsDevelopment() ?? true;
+        var demo = DemoMode.IsActive(configuration, environment);
+        var development = (environment?.IsDevelopment() ?? true) || demo;
         if (configuration.GetValue("Database:MigrateOnStartup", development))
         {
             await services.GetRequiredService<DatabaseMigrator>().MigrateAsync(cancellationToken);
         }
 
+        if (demo)
+        {
+            await using var existing = await services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync(cancellationToken);
+            await DemoMode.EnsureDemoDatabaseAsync(existing, cancellationToken);
+        }
+
         if (development)
         {
             await services.GetRequiredService<DatabaseMigrator>().SeedDevelopmentAsync(cancellationToken);
+        }
+
+        if (demo)
+        {
+            await using var db = await services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync(cancellationToken);
+            await DemoMode.SeedDemoSettingsAsync(db, cancellationToken);
         }
     }
 

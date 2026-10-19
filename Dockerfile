@@ -3,6 +3,7 @@
 #
 #   docker build -t workbench:local .
 #   docker run --rm workbench:local --migrate          # the one-shot migration job (same image)
+#   docker build --target demo -t workbench:demo .     # the public demo (docs/demo-hosting.md)
 #
 # See docs/operations/deployment.md. The runtime image is Ubuntu "chiseled": no shell, no package manager, runs as
 # the non-root "app" user (UID 1654). The "extra" flavour adds ICU and tzdata (time zones for digests and reports).
@@ -61,3 +62,30 @@ USER app
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD ["dotnet", "/app/Workbench.Web.dll", "--health-check"]
 ENTRYPOINT ["dotnet", "/app/Workbench.Web.dll"]
+
+# The public demo (docs/demo-hosting.md): sample data on a SQLite database in the /data volume, the demo sign-in page
+# and the fake assistant, reset nightly. Built on the regular (non-chiseled) image because hosted volumes are mounted
+# owned by root: the entrypoint hands /data to the "app" user and drops to it before starting Workbench. Never point
+# this image at a real database; it refuses one that has users but no demo administrator.
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-noble AS demo
+ARG VERSION=0.0.0
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="Workbench demo" \
+      org.opencontainers.image.description="Workbench GovCon ERP public demo (sample data only)" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$REVISION"
+WORKDIR /app
+COPY --from=build --chown=0:0 --chmod=0755 /app ./
+COPY --chown=0:0 --chmod=0644 samples/costpoint/ /app/samples/costpoint/
+COPY --chown=0:0 --chmod=0755 deploy/demo/entrypoint.sh /usr/local/bin/workbench-demo
+# Demo mode takes both: the Demo environment (appsettings.Demo.json) and Demo:Enabled.
+ENV ASPNETCORE_ENVIRONMENT=Demo \
+    Demo__Enabled=true \
+    ASPNETCORE_HTTP_PORTS=8080 \
+    DOTNET_gcServer=0 \
+    DOTNET_NOLOGO=1
+EXPOSE 8080
+VOLUME /data
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD ["dotnet", "/app/Workbench.Web.dll", "--health-check"]
+ENTRYPOINT ["/usr/local/bin/workbench-demo"]

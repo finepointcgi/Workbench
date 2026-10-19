@@ -170,7 +170,7 @@ Server-wide connections; each organization turns the assistant on and picks a co
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `Assistant:EnableFakeProvider` | `false` (`true` in Development) | Offers the built-in "fake" connection (canned answers, no network). Refused outside Development. |
+| `Assistant:EnableFakeProvider` | `false` (`true` in Development) | Offers the built-in "fake" connection (canned answers, no network). Refused outside Development and the public demo (`Demo:Enabled`). |
 | `Assistant:Connections:<name>:Provider` | `Anthropic` | `Anthropic` or `Bedrock`. `<name>` is what administrators pick (letters, digits, `-`, `_`; not `fake`). |
 | `Assistant:Connections:<name>:ApiKey` | — | **Secret.** Anthropic connections only. |
 | `Assistant:Connections:<name>:BaseUrl` | — | Optional https base URL (an egress proxy) for Anthropic connections. |
@@ -183,6 +183,16 @@ Server-wide connections; each organization turns the assistant on and picks a co
 | `Assistant:MaxOutputTokens` / `:Effort` | `16000` / `medium` | Per model call (`low`, `medium`, `high`, `max`). |
 | `Assistant:MaxQuestionLength` / `:ConversationTurns` / `:MaxToolResultChars` | `2000` / `6` / `24000` | |
 | `Assistant:RequestTimeout` | `00:03:00` | |
+
+## Public demo
+
+Only for the hosted demo with sample data (`docs/demo-hosting.md`); the `demo` image target sets these.
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Demo:Enabled` | `false` | With `ASPNETCORE_ENVIRONMENT=Demo` only: seeds the sample data, offers the demo sign-in page without an identity provider and turns the assistant on with the fake provider. Refused in any other environment; refuses a database that has users but no `dev@workbench.local`. |
+| `Demo:NightlyReset` | `true` | Deletes the demo data once a day and stops the host, which the platform restarts with fresh data. |
+| `Demo:ResetHourUtc` | `8` | Hour (UTC) of the nightly reset. |
 
 ## Backup job (environment of `scripts/backup-all.sh`)
 

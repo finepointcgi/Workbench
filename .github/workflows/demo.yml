@@ -1,0 +1,58 @@
+# Redeploys the public demo (docs/demo-hosting.md) to Fly.io on every push to master, and on demand, optionally
+# starting it over with fresh demo data. Does nothing until it's set up (Settings → Secrets and variables → Actions):
+#   variable FLY_DEMO_APP     the Fly.io app name (workbench-demo)
+#   secret   FLY_API_TOKEN    a deploy token for that app: fly tokens create deploy -a workbench-demo
+name: Demo
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: Start over with fresh demo data after deploying
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy the demo to Fly.io
+    if: vars.FLY_DEMO_APP != ''
+    runs-on: ubuntu-latest
+    environment:
+      name: demo
+      url: https://${{ vars.FLY_DEMO_APP }}.fly.dev
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP: ${{ vars.FLY_DEMO_APP }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+      - name: Deploy (built on Fly's remote builder)
+        run: >
+          flyctl deploy . --config deploy/demo/fly.toml --dockerfile Dockerfile --app "$APP" --remote-only
+          --build-arg REVISION=${{ github.sha }}
+          --env Notifications__PublicBaseUrl=https://$APP.fly.dev
+      - name: Start over with fresh demo data
+        if: inputs.reset
+        run: |
+          flyctl ssh console --app "$APP" --command "workbench-demo --reset-demo"
+          flyctl machine list --app "$APP" --json | jq -r '.[].id' | xargs -n1 flyctl machine restart --app "$APP"
+      - name: Smoke test
+        run: |
+          for _ in $(seq 1 40); do
+            if curl -fsS "https://$APP.fly.dev/account/dev-signin" | grep -q "Workbench demo"; then
+              echo "The demo is up: https://$APP.fly.dev/"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "The demo sign-in page didn't come up." >&2
+          exit 1

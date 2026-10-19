@@ -12,6 +12,7 @@ tests/
 docs/
 secrets/
 deploy/
+!deploy/demo/
 src/Workbench.Desktop/
 **/*.pfx
 **/*.env
