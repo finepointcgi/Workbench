@@ -1,0 +1,43 @@
+@* An item's assignees: initials avatars (names for screen readers and in the tooltip), or "—". *@
+
+@if (Assignees.Count == 0)
+{
+    <span class="mud-text-secondary">@Empty</span>
+}
+else
+{
+    <MudTooltip Text="@TaskView.Names(Assignees)">
+        <span class="wb-assignees d-inline-flex align-center" style="gap:2px" data-testid="assignees">
+            @foreach (var person in Assignees.Take(Max))
+            {
+                <MudAvatar Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" aria-hidden="true" Style="width:24px;height:24px;font-size:.7rem">@TaskView.Initials(person)</MudAvatar>
+            }
+            @if (Assignees.Count > Max)
+            {
+                <span class="mud-text-secondary" aria-hidden="true" style="font-size:.75rem">+@(Assignees.Count - Max)</span>
+            }
+            @if (ShowNames)
+            {
+                <span class="ml-1" style="font-size:.8rem">@TaskView.Names(Assignees)</span>
+            }
+            else
+            {
+                <span class="wb-sr-only">Assigned to @TaskView.Names(Assignees)</span>
+            }
+        </span>
+    </MudTooltip>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<TaskAssigneeDto> Assignees { get; set; } = [];
+
+    [Parameter]
+    public int Max { get; set; } = 3;
+
+    [Parameter]
+    public bool ShowNames { get; set; }
+
+    [Parameter]
+    public string Empty { get; set; } = "—";
+}

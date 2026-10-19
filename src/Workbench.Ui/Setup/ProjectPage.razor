@@ -5,6 +5,9 @@
 @inject IPeopleService People
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject ICurrentUserContext CurrentUser
+@* Not SetupLayout: project managers (the org role) set up the projects they manage here too. The server checks the same rules. *@
+@layout Workbench.Ui.Layout.MainLayout
 
 <PageTitle>@(_project?.Code ?? "New project") · Setup · Workbench</PageTitle>
 
@@ -13,15 +16,30 @@
     {
         <MudButton Variant="Variant.Outlined" Href="@($"sheets/{sheetId}")" StartIcon="@Icons.Material.Filled.ViewTimeline">Open plan sheet</MudButton>
     }
-    <MudButton Variant="Variant.Outlined" Href="setup/projects" StartIcon="@Icons.Material.Filled.ArrowBack">All projects</MudButton>
+    <MudButton Variant="Variant.Outlined" Href="@(_isFinance ? "setup/projects" : "projects")" StartIcon="@Icons.Material.Filled.ArrowBack">All projects</MudButton>
 </SetupHeader>
 
 @if (_loading)
 {
     <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
+else if (!_allowed)
+{
+    <ForbiddenNotice Title="You can't set up this project"
+                     Message="Project setup is for Finance, administrators and the project's manager (with the Project manager role). Ask Finance if you need it." />
+}
 else
 {
+    @if (!_isFinance && _project is null)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="pm-request-note">
+            You'll be the project's manager. A project on a contract is a request: it stays in Planning until Finance activates it.
+        </MudAlert>
+    }
+    else if (!_isFinance && _project is { ContractId: not null, Status: ProjectState.Planning })
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Waiting for Finance to activate this project. You can build its WBS and plan meanwhile.</MudAlert>
+    }
     <MudTabs Elevation="0" Outlined="true" Rounded="true" @bind-ActivePanelIndex="_tab" TabPanelsClass="pa-4" Class="mt-2">
         <MudTabPanel Text="Details">
             <MudForm @ref="_form">
@@ -34,7 +52,7 @@ else
                         <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" data-testid="project-name" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects.">
+                        <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)">
                             @foreach (var c in _contracts)
                             {
                                 <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
@@ -42,7 +60,7 @@ else
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" sm="6">
-                        <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true">
+                        <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true" Disabled="!_isFinance">
                             @foreach (var e in _employees)
                             {
                                 <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
@@ -50,7 +68,7 @@ else
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" sm="4">
-                        <MudSelect T="ProjectState" @bind-Value="_status" Label="Status">
+                        <MudSelect T="ProjectState" @bind-Value="_status" Label="Status" Disabled="@(!_isFinance && _contractId is not null && (_project is null || _project.Status == ProjectState.Planning))">
                             @foreach (var state in Enum.GetValues<ProjectState>())
                             {
                                 <MudSelectItem T="ProjectState" Value="state">@SetupFormat.Label(state)</MudSelectItem>
@@ -114,10 +132,14 @@ else
     private ProjectState _status = ProjectState.Active;
     private DateTime? _start;
     private DateTime? _finish;
+    private bool _isFinance;
+    private bool _allowed;
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        var me = await CurrentUser.GetAsync();
+        _isFinance = me.IsFinance;
         _contracts = await Contracts.ListContractsAsync();
         _employees = await People.ListEmployeesAsync();
         _project = ProjectId is { } id ? await Projects.GetProjectAsync(id) : null;
@@ -129,8 +151,11 @@ else
         else
         {
             _tab = 0;
+            _pmId = _isFinance ? _pmId : me.EmployeeId;
         }
 
+        // Finance and admins: any project. The Project manager role: a new project, or one they manage.
+        _allowed = _isFinance || (me.Roles.HasFlag(OrgRoles.ProjectManager) && (_project is null ? ProjectId is null : _project.ProjectManagerId == me.EmployeeId));
         _loading = false;
     }
 
@@ -145,7 +170,8 @@ else
         _saving = true;
         try
         {
-            var request = new SaveProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, _pmId, _status, SetupFormat.ToDateOnly(_start), SetupFormat.ToDateOnly(_finish));
+            var status = !_isFinance && _project is null && _contractId is not null ? ProjectState.Planning : _status;
+            var request = new SaveProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, _pmId, status, SetupFormat.ToDateOnly(_start), SetupFormat.ToDateOnly(_finish));
             if (_project is null)
             {
                 // Default the dates to the contract's period of performance.
@@ -155,7 +181,9 @@ else
                 }
 
                 var created = await Projects.CreateProjectAsync(request);
-                Snackbar.Add($"Created {created.Code}. Build its WBS next.", Severity.Success);
+                Snackbar.Add(created.Status == ProjectState.Planning && !_isFinance && created.ContractId is not null
+                    ? $"Requested {created.Code}. Finance will activate it; build its WBS meanwhile."
+                    : $"Created {created.Code}. Build its WBS next.", Severity.Success);
                 Navigation.NavigateTo($"setup/projects/{created.Id}");
                 _tab = 1;
             }

@@ -47,8 +47,12 @@ public sealed class PermissionCheckingSheetService(ISheetService inner, AccessCo
     }
 }
 
-/// <summary>Restricted columns' values never reach, and can't be written by, people who can't see them.</summary>
-public sealed class PermissionCheckingItemService(IItemService inner, AccessControl access, RestrictedColumnAccess restricted) : IItemService
+/// <summary>
+/// Restricted columns' values never reach, and can't be written by, people who can't see them. Changes need Editor, except
+/// that an assignee of the item (Assignees or a Person column) with any role may change only its status and % complete.
+/// </summary>
+public sealed class PermissionCheckingItemService(
+    IItemService inner, AccessControl access, RestrictedColumnAccess restricted, AssigneeStatusPermission? assignees = null) : IItemService
 {
     public async Task<IReadOnlyList<ItemDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
@@ -72,7 +76,12 @@ public sealed class PermissionCheckingItemService(IItemService inner, AccessCont
 
     public async Task<ItemDto> UpdateAsync(Guid sheetId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        var role = await access.GetSheetRoleAsync(sheetId, cancellationToken);
+        if (role is null || role < WorkspaceRole.Editor && (assignees is null || !await assignees.AllowsAsync(sheetId, itemId, request, cancellationToken)))
+        {
+            await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken); // not found, or forbidden (recorded)
+        }
+
         var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
         if (hidden.Count > 0)
         {
