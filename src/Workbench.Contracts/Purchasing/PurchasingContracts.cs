@@ -265,7 +265,13 @@ public sealed record BillSummaryDto(
     decimal RetainageAmount,
     decimal PaidAmount,
     string EnteredBy,
-    string? PostingProblem)
+    string? PostingProblem,
+
+    // Added by multicurrency: a bill in the vendor's currency (null: the functional currency). Amounts above stay functional.
+    string? CurrencyCode = null,
+    decimal ExchangeRate = 1m,
+    decimal TransactionAmount = 0m,
+    decimal TransactionBalance = 0m)
 {
     /// <summary>What's owed now: the amount less retainage.</summary>
     public decimal Payable => Amount - RetainageAmount;
@@ -273,6 +279,8 @@ public sealed record BillSummaryDto(
     public decimal Balance => Payable - PaidAmount;
 
     public bool IsPaid => Status == BillState.Posted && Balance == 0;
+
+    public bool IsForeignCurrency => CurrencyCode is not null;
 }
 
 public sealed record BillLineDto(
@@ -309,11 +317,20 @@ public sealed record BillLineDto(
     decimal? UnitPrice = null,
     string? MatchProblem = null,
     string? MatchOverrideBy = null,
-    string? MatchOverrideReason = null);
+    string? MatchOverrideReason = null,
+
+    // Added by multicurrency: the line in the bill's currency (null on functional-currency bills).
+    decimal? TransactionAmount = null);
 
 public sealed record BillDuplicateDto(Guid BillId, string Number, string InvoiceNumber, DateOnly InvoiceDate, decimal Amount, BillState Status, string Reason);
 
-public sealed record BillPaymentDto(Guid PaymentId, Guid RunId, string RunNumber, DateOnly? PaidOn, decimal Amount, PaymentKind Method, string? Reference, PaymentState Status);
+public sealed record BillPaymentDto(
+    Guid PaymentId, Guid RunId, string RunNumber, DateOnly? PaidOn, decimal Amount, PaymentKind Method, string? Reference, PaymentState Status,
+
+    // Added by multicurrency.
+    decimal TransactionAmount = 0m,
+    decimal ExchangeRate = 1m,
+    decimal RealizedGainLoss = 0m);
 
 public sealed record BillDto(
     BillSummaryDto Bill,
@@ -360,7 +377,15 @@ public sealed record SaveBillRequest(
     DateOnly InvoiceDate,
     IReadOnlyList<SaveBillLineRequest> Lines,
     DateOnly? DueDate = null,
-    string? Description = null);
+    string? Description = null,
+
+    /// <summary>
+    /// Added by multicurrency: the invoice's currency (null: the vendor's currency, else the functional currency). Line
+    /// amounts are in this currency and convert at <see cref="ExchangeRate"/> or the spot rate on the invoice date.
+    /// Foreign-currency bills can't bill purchase order lines or link existing ODCs, which are in the functional currency.
+    /// </summary>
+    string? CurrencyCode = null,
+    decimal? ExchangeRate = null);
 
 /// <summary>
 /// Submits a bill for approval. A possible duplicate (same vendor, amount and date) needs <see cref="ConfirmPossibleDuplicate"/>;
@@ -432,10 +457,13 @@ public interface IApBillService
 
 // ---- Payments ----
 
-public sealed record DueBillDto(BillSummaryDto Bill, decimal ScheduledAmount)
+public sealed record DueBillDto(BillSummaryDto Bill, decimal ScheduledAmount, decimal TransactionScheduled = 0m)
 {
     /// <summary>The balance not yet in an open payment run.</summary>
     public decimal Available => Bill.Balance - ScheduledAmount;
+
+    /// <summary>Added by multicurrency: what's left to schedule in the bill's currency (foreign bills are paid in it).</summary>
+    public decimal TransactionAvailable => Bill.TransactionBalance - TransactionScheduled;
 }
 
 public sealed record DueBillQuery(DateOnly? DueOnOrBefore = null, Guid? VendorId = null);
@@ -456,7 +484,14 @@ public sealed record PaymentDto(
     string? Reference,
     DateOnly? PaidOn,
     Guid? JournalEntryId,
-    string? VoidReason);
+    string? VoidReason,
+
+    // Added by multicurrency: for a foreign bill, Amount is the liability relieved; the vendor is paid TransactionAmount.
+    string? CurrencyCode = null,
+    decimal TransactionAmount = 0m,
+    decimal ExchangeRate = 1m,
+    decimal? CashAmount = null,
+    decimal RealizedGainLoss = 0m);
 
 public sealed record PaymentRunDto(
     Guid Id,
@@ -472,7 +507,10 @@ public sealed record PaymentRunDto(
     public decimal Total => Payments.Where(p => p.Status != PaymentState.Void).Sum(p => p.Amount);
 }
 
-/// <summary>Pay <see cref="Amount"/> of a bill (up to its available balance; partial payments are fine).</summary>
+/// <summary>
+/// Pay <see cref="Amount"/> of a bill (up to its available balance; partial payments are fine). For a foreign currency
+/// bill the amount is in the bill's currency.
+/// </summary>
 public sealed record PaymentRunItemRequest(Guid BillId, decimal Amount);
 
 public sealed record CreatePaymentRunRequest(DateOnly PaymentDate, PaymentKind Method, IReadOnlyList<PaymentRunItemRequest> Items);
@@ -480,7 +518,12 @@ public sealed record CreatePaymentRunRequest(DateOnly PaymentDate, PaymentKind M
 public sealed record PaymentReferenceRequest(Guid PaymentId, string Reference);
 
 /// <summary>Records an approved run as paid on <see cref="PaidOn"/>, with each payment's check number or ACH reference.</summary>
-public sealed record RecordPaymentsRequest(DateOnly PaidOn, IReadOnlyList<PaymentReferenceRequest> References);
+public sealed record RecordPaymentsRequest(
+    DateOnly PaidOn,
+    IReadOnlyList<PaymentReferenceRequest> References,
+
+    /// <summary>Added by multicurrency: the rate per currency for foreign bills (default: the spot rate on the paid-on date).</summary>
+    IReadOnlyDictionary<string, decimal>? ExchangeRates = null);
 
 public sealed record VoidPaymentRequest(string Reason);
 

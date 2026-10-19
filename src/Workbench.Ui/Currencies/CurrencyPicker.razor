@@ -1,0 +1,99 @@
+@* Chooses a document's currency (multicurrency). Null is DefaultLabel (the functional currency, or a party's default);
+   with Date, it shows the spot rate that will apply. *@
+@using Workbench.Contracts.Currencies
+@inject ICurrencyService Currencies
+
+<MudSelect T="string" Value="@(Value ?? NullKey)" ValueChanged="OnChangedAsync" Label="@Label" Dense="Dense" Disabled="Disabled"
+           HelperText="@_hint" data-testid="@TestId" Style="@Style">
+    <MudSelectItem T="string" Value="@NullKey">@DefaultLabel</MudSelectItem>
+    @foreach (var c in _currencies.Where(c => !c.IsFunctional || ShowFunctional))
+    {
+        <MudSelectItem T="string" Value="@c.Code">@c.Code · @c.Name</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    private const string NullKey = "";
+    private IReadOnlyList<CurrencyDto> _currencies = [];
+    private string? _hint;
+    private string? _hintFor;
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter] public string Label { get; set; } = "Currency";
+
+    /// <summary>What no choice means, for example "US dollar (USD)" or "Vendor's currency (EUR)".</summary>
+    [Parameter] public string? DefaultLabel { get; set; }
+
+    /// <summary>Also list the functional currency (to override a party's foreign default).</summary>
+    [Parameter] public bool ShowFunctional { get; set; }
+
+    /// <summary>When set, the helper text shows the spot rate in effect on this date for the chosen currency.</summary>
+    [Parameter] public DateOnly? Date { get; set; }
+
+    /// <summary>The currency to describe when <see cref="Value"/> is null (a party's default).</summary>
+    [Parameter] public string? DefaultCode { get; set; }
+
+    [Parameter] public bool Dense { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public string? Style { get; set; }
+
+    [Parameter] public string TestId { get; set; } = "currency-picker";
+
+    /// <summary>The functional currency code, once loaded.</summary>
+    public string Functional => _currencies.FirstOrDefault(c => c.IsFunctional)?.Code ?? "USD";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _currencies = await Currencies.ListCurrenciesAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _currencies = [];
+        }
+
+        DefaultLabel ??= _currencies.FirstOrDefault(c => c.IsFunctional) is { } f ? $"{f.Name} ({f.Code})" : "Functional currency";
+    }
+
+    protected override async Task OnParametersSetAsync() => await UpdateHintAsync();
+
+    private async Task OnChangedAsync(string? value)
+    {
+        Value = string.IsNullOrEmpty(value) ? null : value;
+        await ValueChanged.InvokeAsync(Value);
+        await UpdateHintAsync();
+    }
+
+    private async Task UpdateHintAsync()
+    {
+        var code = Value ?? DefaultCode;
+        var key = $"{code}|{Date}";
+        if (key == _hintFor)
+        {
+            return;
+        }
+
+        _hintFor = key;
+        _hint = null;
+        if (Date is not { } date || code is null || _currencies.Count == 0 || code == Functional)
+        {
+            return;
+        }
+
+        try
+        {
+            var rate = await Currencies.GetRateAsync(code, Functional, date);
+            _hint = $"1 {code} = {rate.Rate:0.######} {Functional} ({CurrencyFormat.Kind(rate.RateType)} rate of {rate.EffectiveDate:yyyy-MM-dd})";
+        }
+        catch (Exception ex) when (ex is Workbench.Contracts.WorkbenchNotFoundException or HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            _hint = $"No {code} rate on or before {date:yyyy-MM-dd} yet; enter one under Setup › Currencies and rates.";
+        }
+    }
+}

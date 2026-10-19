@@ -1,0 +1,365 @@
+@page "/setup/currencies"
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Accounting
+@using Workbench.Contracts.Currencies
+@using Workbench.Ui.Currencies
+@inject ICurrencyService Currencies
+@inject IChartOfAccountsService Chart
+@inject ISnackbar Snackbar
+
+<PageTitle>Currencies and rates · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Currencies and rates"
+             Subtitle="The books are kept in the functional currency. Vendor bills, customer invoices, expenses and bank accounts can be in other currencies: each keeps its own amount and the rate it used, and payments at a different rate post a realized gain or loss." />
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" Class="mb-4" data-testid="load-error">@(_forbidden ? "Currencies and exchange rates are set up by Finance and administrators." : _error)</MudAlert>
+}
+else if (_settings is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="currency-settings">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Functional currency and accounts</MudText>
+                <MudSelect T="string" @bind-Value="_functional" Label="Functional currency" Disabled="@(!_settings.CanChangeFunctionalCurrency)"
+                           HelperText="@(_settings.CanChangeFunctionalCurrency ? "The currency every journal line is kept in." : "Documents have posted in other currencies, so it can't change.")">
+                    @foreach (var c in _currencies.Where(c => c.IsActive))
+                    {
+                        <MudSelectItem T="string" Value="@c.Code">@c.Code · @c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_realized" Label="Realized gain or loss account" Clearable="true" Class="mt-2"
+                           HelperText="@($"Payments at another rate than the document's. Default: {_settings.RealizedGainLossAccount}")">
+                    @foreach (var a in _accounts)
+                    {
+                        <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_unrealized" Label="Unrealized gain or loss account" Clearable="true" Class="mt-2"
+                           HelperText="@($"The period-end revaluation. Default: {_settings.UnrealizedGainLossAccount}")">
+                    @foreach (var a in _accounts)
+                    {
+                        <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettingsAsync" Disabled="_busy" data-testid="save-currency-settings">Save</MudButton>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="currencies">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Currencies</MudText>
+                <MudSimpleTable Dense="true" Elevation="0" aria-label="Currencies">
+                    <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Decimals</th><th scope="col">Status</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _currencies)
+                        {
+                            <tr>
+                                <th scope="row">@c.Code</th>
+                                <td>@c.Name</td>
+                                <td>@c.Decimals</td>
+                                <td>@(c.IsFunctional ? "Functional" : c.IsActive ? "Active" : "Inactive")</td>
+                                <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(c)" aria-label="@($"Edit {c.Code}")">Edit</MudButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudGrid Spacing="2" Class="mt-2">
+                    <MudItem xs="4" sm="3"><MudTextField T="string" @bind-Value="_code" Label="Code" MaxLength="3" HelperText="ISO, e.g. EUR" data-testid="currency-code" /></MudItem>
+                    <MudItem xs="8" sm="5"><MudTextField T="string" @bind-Value="_name" Label="Name" data-testid="currency-name" /></MudItem>
+                    <MudItem xs="4" sm="2"><MudNumericField T="int" @bind-Value="_decimals" Label="Decimals" Min="0" Max="4" /></MudItem>
+                    <MudItem xs="8" sm="2" Class="d-flex align-center"><MudCheckBox T="bool" @bind-Value="_active" Label="Active" Dense="true" /></MudItem>
+                </MudGrid>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Save" Class="mt-2" OnClick="SaveCurrencyAsync"
+                           Disabled="@(_busy || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))" data-testid="save-currency">Save currency</MudButton>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="party-currencies">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Vendors and customers in other currencies</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">New bills from these vendors, and new invoices to these customers, are in their currency. Project costs and billing are still worked out in @_settings.FunctionalCurrency.</MudText>
+                <MudSimpleTable Dense="true" Elevation="0" aria-label="Vendor and customer currencies">
+                    <thead><tr><th scope="col">Vendor or customer</th><th scope="col" style="width:190px">Currency</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _parties)
+                        {
+                            <tr>
+                                <th scope="row" style="font-weight:normal">@(p.Kind == CurrencyPartyKind.Vendor ? "Vendor" : "Customer") @p.Code · @p.Name</th>
+                                <td>
+                                    <MudSelect T="string" Value="@(p.CurrencyCode ?? "")" ValueChanged="@(v => SetPartyAsync(p, v))" Dense="true" Margin="Margin.Dense"
+                                               aria-label="@($"Currency for {p.Name}")">
+                                        <MudSelectItem T="string" Value="@("")">@_settings.FunctionalCurrency (functional)</MudSelectItem>
+                                        @foreach (var c in _currencies.Where(c => c.IsActive && !c.IsFunctional))
+                                        {
+                                            <MudSelectItem T="string" Value="@c.Code">@c.Code</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="add-rate">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Enter a rate</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">How many @_settings.FunctionalCurrency one unit buys, from the date on. Documents use the spot rate on their date; the period-end revaluation uses the month-end rate. Entering the same currency, type and date again replaces that rate.</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="6" sm="3">
+                        <MudSelect T="string" @bind-Value="_rateFrom" Label="Currency" data-testid="rate-currency">
+                            @foreach (var c in _currencies.Where(c => !c.IsFunctional))
+                            {
+                                <MudSelectItem T="string" Value="@c.Code">@c.Code</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudSelect T="RateKind" @bind-Value="_rateType" Label="Type">
+                            @foreach (var k in Enum.GetValues<RateKind>())
+                            {
+                                <MudSelectItem T="RateKind" Value="k">@CurrencyFormat.Label(k)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_rateDate" Label="Effective" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                    <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_rate" Label="@($"{_settings.FunctionalCurrency} per {_rateFrom}")" Min="0" Format="0.######" data-testid="rate-value" /></MudItem>
+                </MudGrid>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="SaveRateAsync" Disabled="@(_busy || _rateFrom is null || _rate <= 0 || _rateDate is null)" data-testid="save-rate">Save rate</MudButton>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="import-rates">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Import rates from a CSV file</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">A header row and one rate per line: <code>From,To,Type,EffectiveDate,Rate</code>, for example <code>EUR,USD,MonthEnd,2026-10-31,1.0874</code>. Type is Spot, Average or MonthEnd; dates are yyyy-MM-dd.</MudText>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".csv,.txt">
+                        <CustomContent>
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="@context.OpenFilePickerAsync">Choose file</MudButton>
+                        </CustomContent>
+                        <SelectedTemplate />
+                    </MudFileUpload>
+                    @if (_fileName is not null)
+                    {
+                        <MudText Typo="Typo.body2">@_fileName</MudText>
+                    }
+                </MudStack>
+                <MudTextField T="string" @bind-Value="_csv" Label="Or paste the rates here" Lines="4" Variant="Variant.Outlined" Immediate="true" Style="font-family:monospace; font-size:12px" data-testid="rates-csv" />
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="() => ImportAsync(true)" Disabled="@(_busy || string.IsNullOrWhiteSpace(_csv))" data-testid="check-rates">Check</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => ImportAsync(false)" Disabled="@(_busy || string.IsNullOrWhiteSpace(_csv))" data-testid="import-rates-button">Import</MudButton>
+                </MudStack>
+                @if (_import is { } r)
+                {
+                    <MudAlert Severity="@(r.Errors.Count == 0 ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2" data-testid="import-result">
+                        @(r.DryRun ? "Check only, nothing saved: " : "")@r.Added new, @r.Replaced replaced, @r.Unchanged unchanged@(r.Errors.Count > 0 ? $", {r.Errors.Count} problem(s):" : ".")
+                        @if (r.Errors.Count > 0)
+                        {
+                            <ul class="mb-0">@foreach (var e in r.Errors.Take(20)) { <li>@e</li> }</ul>
+                        }
+                    </MudAlert>
+                }
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="rate-providers">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Rate providers</MudText>
+                @if (_providers.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No rate provider is set up, so Workbench never calls out for rates. Enter them by hand or import a file from your bank. A provider (a bank feed or market data service) can be added by your administrator.</MudText>
+                }
+                else
+                {
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                        <MudSelect T="string" @bind-Value="_provider" Label="Provider" Style="min-width:200px">
+                            @foreach (var p in _providers)
+                            {
+                                <MudSelectItem T="string" Value="@p.Name">@p.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudDatePicker @bind-Date="_fetchDate" Label="Date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                        <MudButton Variant="Variant.Outlined" OnClick="FetchAsync" Disabled="@(_busy || _provider is null || _fetchDate is null)">Get rates</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4" data-testid="rates">
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-2" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">Rates</MudText>
+                    <MudSpacer />
+                    <MudSelect T="string" Value="@(_filterCurrency ?? "")" ValueChanged="@(async v => { _filterCurrency = string.IsNullOrEmpty(v) ? null : v; await LoadRatesAsync(); })" Label="Currency" Dense="true" Style="max-width:150px">
+                        <MudSelectItem T="string" Value="@("")">All</MudSelectItem>
+                        @foreach (var c in _currencies.Where(c => !c.IsFunctional))
+                        {
+                            <MudSelectItem T="string" Value="@c.Code">@c.Code</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                @if (_rates.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No rates yet. Enter one above or import a file.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" aria-label="Exchange rates">
+                        <thead><tr><th scope="col">Effective</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Type</th><th scope="col" style="text-align:right">Rate</th><th scope="col">Source</th><th scope="col">Entered by</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _rates)
+                            {
+                                <tr>
+                                    <td>@r.EffectiveDate.ToString("yyyy-MM-dd")</td><td>@r.FromCurrency</td><td>@r.ToCurrency</td><td>@CurrencyFormat.Label(r.RateType)</td>
+                                    <td style="text-align:right">@CurrencyFormat.Rate(r.Rate)</td><td>@r.Source</td><td>@r.CreatedBy</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private CurrencySettingsDto? _settings;
+    private IReadOnlyList<CurrencyDto> _currencies = [];
+    private IReadOnlyList<ExchangeRateDto> _rates = [];
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private IReadOnlyList<PartyCurrencyDto> _parties = [];
+    private IReadOnlyList<RateProviderDto> _providers = [];
+    private string? _functional;
+    private Guid? _realized;
+    private Guid? _unrealized;
+    private string? _code;
+    private string? _name;
+    private int _decimals = 2;
+    private bool _active = true;
+    private string? _rateFrom;
+    private RateKind _rateType = RateKind.Spot;
+    private DateTime? _rateDate = DateTime.Today;
+    private decimal _rate;
+    private string? _csv;
+    private string? _fileName;
+    private RateImportResultDto? _import;
+    private string? _provider;
+    private DateTime? _fetchDate = DateTime.Today;
+    private string? _filterCurrency;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await Currencies.GetSettingsAsync();
+            (_functional, _realized, _unrealized) = (_settings.FunctionalCurrency, _settings.RealizedGainLossAccountId, _settings.UnrealizedGainLossAccountId);
+            _accounts = (await Chart.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren && a.Type is AccountKind.Revenue or AccountKind.Expense).ToList();
+            _providers = await Currencies.ListRateProvidersAsync();
+            _provider = _providers.FirstOrDefault()?.Name;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            (_error, _forbidden) = (ex.Message, ex is UnauthorizedAccessException);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _currencies = await Currencies.ListCurrenciesAsync(includeInactive: true);
+        _rateFrom ??= _currencies.FirstOrDefault(c => !c.IsFunctional && c.IsActive)?.Code;
+        _parties = await Currencies.ListPartyCurrenciesAsync();
+        await LoadRatesAsync();
+    }
+
+    private async Task LoadRatesAsync() => _rates = await Currencies.ListRatesAsync(new ExchangeRateQuery(_filterCurrency, Take: 300));
+
+    private void Edit(CurrencyDto c) => (_code, _name, _decimals, _active) = (c.Code, c.Name, c.Decimals, c.IsActive);
+
+    private Task SaveSettingsAsync() => RunAsync(async () =>
+    {
+        _settings = await Currencies.SaveSettingsAsync(new SaveCurrencySettingsRequest(_functional!, _realized, _unrealized));
+        await LoadAsync();
+    }, "Currency setup saved.");
+
+    private Task SaveCurrencyAsync() => RunAsync(async () =>
+    {
+        var saved = await Currencies.SaveCurrencyAsync(new SaveCurrencyRequest(_code!, _name!, _decimals, _active));
+        (_code, _name, _decimals, _active) = (null, null, 2, true);
+        await LoadAsync();
+        Snackbar.Add($"{saved.Code} saved.", Severity.Success);
+    });
+
+    private Task SaveRateAsync() => RunAsync(async () =>
+    {
+        var saved = await Currencies.SaveRateAsync(new SaveExchangeRateRequest(_rateFrom!, _settings!.FunctionalCurrency, _rateType, DateOnly.FromDateTime(_rateDate!.Value), _rate));
+        _rate = 0;
+        await LoadRatesAsync();
+        Snackbar.Add($"{saved.FromCurrency} {CurrencyFormat.Kind(saved.RateType)} rate of {saved.EffectiveDate:yyyy-MM-dd} saved.", Severity.Success);
+    });
+
+    private Task SetPartyAsync(PartyCurrencyDto party, string? code) => RunAsync(async () =>
+    {
+        var saved = await Currencies.SetPartyCurrencyAsync(new SetPartyCurrencyRequest(party.Kind, party.Id, string.IsNullOrEmpty(code) ? null : code));
+        _parties = await Currencies.ListPartyCurrenciesAsync();
+        Snackbar.Add($"{saved.Name}: {(saved.CurrencyCode ?? _settings!.FunctionalCurrency)}.", Severity.Success);
+    });
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(2 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _csv = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+            _import = null;
+        }
+        catch (IOException ex)
+        {
+            Snackbar.Add($"Couldn't read the file: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Task ImportAsync(bool dryRun) => RunAsync(async () =>
+    {
+        _import = await Currencies.ImportRatesAsync(new ImportExchangeRatesRequest(_csv!, dryRun));
+        if (!dryRun)
+        {
+            await LoadRatesAsync();
+        }
+    });
+
+    private Task FetchAsync() => RunAsync(async () =>
+    {
+        _import = await Currencies.FetchRatesAsync(new FetchExchangeRatesRequest(_provider!, DateOnly.FromDateTime(_fetchDate!.Value)));
+        await LoadRatesAsync();
+    });
+
+    private async Task RunAsync(Func<Task> action, string? done = null)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            if (done is not null)
+            {
+                Snackbar.Add(done, Severity.Success);
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

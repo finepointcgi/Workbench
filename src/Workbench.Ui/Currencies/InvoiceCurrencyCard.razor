@@ -1,0 +1,63 @@
+@* An invoice's currency (multicurrency): on a draft, the currency it will be issued in (the rate is fixed when it's
+   approved); once approved, what the customer owes in that currency. *@
+@using Workbench.Contracts.Billing
+@using Workbench.Contracts.Currencies
+@inject ICurrencyService Currencies
+@inject ISnackbar Snackbar
+
+@if (CanEdit && Summary.Status == InvoiceState.Draft && Summary.Type != InvoiceKind.CreditMemo)
+{
+    <div class="mt-3" data-testid="invoice-currency">
+        <CurrencyPicker Value="@Summary.CurrencyCode" ValueChanged="ChangeAsync" Label="Issue the invoice in" Dense="true" TestId="invoice-currency-picker"
+                        Date="@Summary.InvoiceDate" Disabled="_busy" />
+        @if (Summary.CurrencyCode is { } cur)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                Billed in dollars and issued in @cur at the spot rate on the invoice date, fixed when it's approved.
+            </MudText>
+        }
+    </div>
+}
+else if (Summary.CurrencyCode is { } cur && Summary.Status != InvoiceState.Draft)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3" data-testid="invoice-currency">
+        Issued in @cur: <b>@CurrencyFormat.Amount(Summary.TransactionTotal, cur)</b> at @CurrencyFormat.Rate(Summary.ExchangeRate).
+        @if (Summary.TransactionBalance != 0)
+        {
+            <span>Open: <b>@CurrencyFormat.Amount(Summary.TransactionBalance, cur)</b>; record the payment in @cur.</span>
+        }
+    </MudAlert>
+}
+else if (Summary.CurrencyCode is { } draftCode)
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3" data-testid="invoice-currency">Will be issued in @draftCode (rate fixed on approval).</MudText>
+}
+
+@code {
+    private bool _busy;
+
+    [Parameter, EditorRequired] public InvoiceSummaryDto Summary { get; set; } = default!;
+
+    [Parameter] public bool CanEdit { get; set; }
+
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task ChangeAsync(string? code)
+    {
+        _busy = true;
+        try
+        {
+            await Currencies.SetInvoiceCurrencyAsync(Summary.Id, new SetInvoiceCurrencyRequest(code));
+            Snackbar.Add(code is null ? "The invoice will be issued in dollars." : $"The invoice will be issued in {code}.", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

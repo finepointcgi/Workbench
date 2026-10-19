@@ -31,6 +31,8 @@ public enum JournalSource
 
     /// <summary>Recurring journals (source id = the template; the revision is the occurrence number).</summary>
     Recurring,
+    /// <summary>Period-end foreign currency revaluation (source id = the revaluation run); reversed on the next period's first day.</summary>
+    Revaluation,
 }
 
 public enum JournalStatus
@@ -173,6 +175,9 @@ public sealed class JournalEntry : Entity
                 Debit = line.Credit,
                 Credit = line.Debit,
                 Memo = line.Memo,
+                TransactionCurrency = line.TransactionCurrency,
+                TransactionAmount = line.TransactionAmount,
+                ExchangeRate = line.ExchangeRate,
             });
         }
 
@@ -211,6 +216,17 @@ public sealed class JournalLine : Entity
     public decimal Credit { get; set; }
     public string? Memo { get; set; }
 
+    // ---- Added by multicurrency (additive). Null on lines in the functional currency, which is every line posted before. ----
+
+    /// <summary>The document's currency when it isn't the functional currency (ISO code).</summary>
+    public string? TransactionCurrency { get; set; }
+
+    /// <summary>The line's amount in <see cref="TransactionCurrency"/>, on the same side as the debit or credit (never negative).</summary>
+    public decimal? TransactionAmount { get; set; }
+
+    /// <summary>Functional units per transaction unit used for this line (debit or credit ≈ transaction amount × rate).</summary>
+    public decimal? ExchangeRate { get; set; }
+
     public void EnsureValid()
     {
         if (Debit < 0 || Credit < 0)
@@ -226,6 +242,11 @@ public sealed class JournalLine : Entity
         if (decimal.Round(Debit, 2) != Debit || decimal.Round(Credit, 2) != Credit)
         {
             throw new ArgumentException($"Line {LineNumber}: amounts are in whole cents.");
+        }
+
+        if (TransactionCurrency is not null && (TransactionAmount is not { } t || t < 0 || ExchangeRate is not { } r || r <= 0))
+        {
+            throw new ArgumentException($"Line {LineNumber}: a foreign currency line needs its amount in {TransactionCurrency} and a positive exchange rate.");
         }
     }
 }

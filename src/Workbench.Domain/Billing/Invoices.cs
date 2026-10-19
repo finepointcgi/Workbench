@@ -122,6 +122,25 @@ public sealed class Invoice : Entity
 
     public List<InvoiceLine> Lines { get; } = [];
 
+    // ---- Added by multicurrency (additive). Total, AmountPaid and AmountCredited stay in the functional currency. ----
+
+    /// <summary>The currency the invoice is issued in when it isn't the functional currency (the customer's billing currency).</summary>
+    public string? CurrencyCode { get; set; }
+
+    /// <summary>Functional units per unit of <see cref="CurrencyCode"/>, fixed when the invoice is approved (1 otherwise).</summary>
+    public decimal ExchangeRate { get; set; } = 1m;
+
+    /// <summary>The total in <see cref="CurrencyCode"/> (0 for functional-currency invoices and unapproved drafts).</summary>
+    public decimal TransactionTotal { get; set; }
+
+    public decimal TransactionPaid { get; set; }
+    public decimal TransactionCredited { get; set; }
+
+    public bool IsForeignCurrency => CurrencyCode is not null;
+
+    /// <summary>What the customer still owes in the invoice's currency.</summary>
+    public decimal TransactionBalance => IsOpenReceivable ? TransactionTotal - TransactionPaid - TransactionCredited : 0m;
+
     /// <summary>What the customer still owes.</summary>
     public decimal Balance => IsOpenReceivable ? Total - AmountPaid - AmountCredited : 0m;
 
@@ -182,6 +201,9 @@ public sealed class InvoiceLine : Entity
 
     /// <summary>For fee lines split by fiscal year: the cost of that year the fee was billed on.</summary>
     public decimal? CostBasis { get; set; }
+
+    /// <summary>Added by multicurrency: the line in the invoice's currency (set when a foreign-currency invoice is approved).</summary>
+    public decimal? TransactionAmount { get; set; }
 
     public List<BilledSource> Sources { get; } = [];
 }
@@ -271,6 +293,9 @@ public sealed class CustomerBillingProfile : Entity
     public int PaymentTermsDays { get; set; } = 30;
     public string? BillingAddress { get; set; }
     public string? StatementEmail { get; set; }
+
+    /// <summary>Added by multicurrency: the currency the customer is invoiced in, when it isn't the functional currency.</summary>
+    public string? CurrencyCode { get; set; }
     public string? UpdatedBy { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }
@@ -300,13 +325,31 @@ public sealed class Payment : Entity
     public string? VoidedBy { get; set; }
     public DateTime? VoidedAtUtc { get; set; }
     public List<PaymentApplication> Applications { get; } = [];
+
+    // ---- Added by multicurrency (additive). Amount is the cash received in the functional currency. ----
+
+    public string? CurrencyCode { get; set; }
+
+    /// <summary>The receipt in <see cref="CurrencyCode"/> (0 for functional-currency receipts).</summary>
+    public decimal TransactionAmount { get; set; }
+
+    /// <summary>The rate on the receipt date (1 for functional-currency receipts).</summary>
+    public decimal ExchangeRate { get; set; } = 1m;
+
+    /// <summary>Gain (positive) or loss (negative): the cash received less the receivable relieved.</summary>
+    public decimal RealizedGainLoss { get; set; }
 }
 
 public sealed class PaymentApplication : Entity
 {
     public Guid PaymentId { get; set; }
     public Guid InvoiceId { get; set; }
+
+    /// <summary>The receivable relieved in the functional currency (at the invoice's rate for a foreign invoice).</summary>
     public decimal Amount { get; set; }
+
+    /// <summary>Added by multicurrency: the amount applied in the invoice's currency (null for functional-currency invoices).</summary>
+    public decimal? TransactionAmount { get; set; }
 }
 
 /// <summary>

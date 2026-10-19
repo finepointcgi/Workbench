@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Currencies;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
@@ -57,6 +58,15 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
 
     public async Task<PaymentDto> RecordAsync(RecordPaymentRequest request, CancellationToken cancellationToken = default)
     {
+        if (CurrencySupport.NormalizeCode(request.CurrencyCode) is not null)
+        {
+            await using var check = await dbFactory.CreateAsync(cancellationToken);
+            if (CurrencySupport.NormalizeCode(request.CurrencyCode) != await CurrencySupport.FunctionalAsync(check, cancellationToken))
+            {
+                return await RecordForeignAsync(request, cancellationToken);
+            }
+        }
+
         if (request.Amount <= 0)
         {
             throw new ArgumentException("The amount received must be positive.");
@@ -101,6 +111,11 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
                 throw new ArgumentException("Every invoice must belong to this customer.");
             }
 
+            if (invoice.IsForeignCurrency)
+            {
+                throw new ArgumentException($"Invoice {invoice.Number} is in {invoice.CurrencyCode}; record the receipt in {invoice.CurrencyCode}.");
+            }
+
             if (!invoice.IsOpenReceivable || a.Amount > invoice.Balance)
             {
                 throw new ArgumentException($"Invoice {invoice.Number} has {invoice.Balance:C} open; {a.Amount:C} can't be applied.");
@@ -139,6 +154,7 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
         {
             var invoice = invoices[a.InvoiceId];
             invoice.AmountPaid -= a.Amount;
+            invoice.TransactionPaid -= a.TransactionAmount ?? 0;
             invoice.UpdatePaymentStatus();
         }
 
@@ -147,6 +163,91 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
         payment.VoidedBy = audit.Actor;
         payment.VoidedAtUtc = clock.GetUtcNow().UtcDateTime;
         audit.Record(db, nameof(Payment), payment.Id, "Voided", after: new { Reversal = reversal?.Number }, reason: reason);
+        await db.SaveChangesAsync(cancellationToken);
+        return (await DtosAsync(db, [payment], cancellationToken))[0];
+    }
+
+    /// <summary>
+    /// A receipt in a foreign currency (multicurrency): applied in that currency to invoices issued in it. Each application
+    /// relieves what the invoice carries at its own rate; the cash is the receipt at today's rate; the difference is the
+    /// realized gain or loss.
+    /// </summary>
+    private async Task<PaymentDto> RecordForeignAsync(RecordPaymentRequest request, CancellationToken cancellationToken)
+    {
+        var applications = (request.Applications ?? []).Where(a => a.Amount != 0).ToList();
+        if (request.Amount <= 0 || applications.Any(a => a.Amount < 0))
+        {
+            throw new ArgumentException("The amount received and the applied amounts must be positive.");
+        }
+
+        if (applications.GroupBy(a => a.InvoiceId).Any(g => g.Count() > 1))
+        {
+            throw new ArgumentException("Apply to each invoice once.");
+        }
+
+        if (applications.Sum(a => a.Amount) != request.Amount)
+        {
+            throw new ArgumentException($"Apply the whole receipt: {applications.Sum(a => a.Amount):N2} of {request.Amount:N2} is applied.");
+        }
+
+        await CurrencySupport.EnsureGainLossAccountsAsync(dbFactory, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var currency = await CurrencySupport.ResolveAsync(db, request.CurrencyCode, request.ReceivedOn, request.ExchangeRate, cancellationToken);
+        if (currency.RoundTransaction(request.Amount) != request.Amount || applications.Any(a => currency.RoundTransaction(a.Amount) != a.Amount))
+        {
+            throw new ArgumentException($"{currency.Code} amounts have {currency.Decimals} decimal places.");
+        }
+
+        var customer = await db.Set<Customer>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Customer", request.CustomerId);
+        var ids = applications.Select(a => a.InvoiceId).ToList();
+        var invoices = await db.Set<Invoice>().Where(i => ids.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
+        var payment = new Payment
+        {
+            CustomerId = customer.Id,
+            ReceivedOn = request.ReceivedOn,
+            CurrencyCode = currency.Code,
+            TransactionAmount = request.Amount,
+            ExchangeRate = currency.Rate,
+            Amount = currency.ToFunctional(request.Amount),
+            Method = request.Method.ToDomain(),
+            Reference = InvoiceService.Clean(request.Reference, 100),
+            Notes = InvoiceService.Clean(request.Notes, 1000),
+            CreatedBy = audit.Actor,
+            CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
+        };
+        foreach (var a in applications)
+        {
+            if (!invoices.TryGetValue(a.InvoiceId, out var invoice) || invoice.CustomerId != customer.Id)
+            {
+                throw new ArgumentException("Every invoice must belong to this customer.");
+            }
+
+            if (invoice.CurrencyCode != currency.Code)
+            {
+                throw new ArgumentException($"Invoice {invoice.Number} is in {invoice.CurrencyCode ?? "the functional currency"}, not {currency.Code}; record a separate receipt for it.");
+            }
+
+            if (!invoice.IsOpenReceivable || a.Amount > invoice.TransactionBalance)
+            {
+                throw new ArgumentException($"Invoice {invoice.Number} has {invoice.TransactionBalance:N2} {currency.Code} open; {a.Amount:N2} can't be applied.");
+            }
+
+            var relieved = CurrencyMath.Relieved(a.Amount, invoice.TransactionBalance, invoice.Balance, invoice.ExchangeRate);
+            invoice.AmountPaid += relieved;
+            invoice.TransactionPaid += a.Amount;
+            invoice.UpdatePaymentStatus();
+            invoice.UpdatedAtUtc = payment.CreatedAtUtc;
+            payment.Applications.Add(new PaymentApplication { PaymentId = payment.Id, InvoiceId = invoice.Id, Amount = relieved, TransactionAmount = a.Amount });
+        }
+
+        payment.RealizedGainLoss = payment.Amount - payment.Applications.Sum(a => a.Amount);
+        db.Set<Payment>().Add(payment);
+        var (realized, _) = await CurrencySupport.GainLossAccountsAsync(db, payment.CreatedAtUtc, cancellationToken);
+        var entry = await ledger.PostForeignPaymentAsync(db, payment, customer.Name, invoices, realized.Id, cancellationToken);
+        payment.JournalEntryId = entry.Id;
+        audit.Record(db, nameof(Payment), payment.Id, "Recorded",
+            after: new { payment.Amount, payment.CurrencyCode, payment.TransactionAmount, payment.ExchangeRate, payment.RealizedGainLoss, payment.ReceivedOn, Method = payment.Method.ToString(), Applied = applications.Count, Journal = entry.Number });
         await db.SaveChangesAsync(cancellationToken);
         return (await DtosAsync(db, [payment], cancellationToken))[0];
     }
@@ -165,8 +266,9 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
                 {
                     var invoice = invoices.GetValueOrDefault(a.InvoiceId);
                     return new PaymentApplicationDto(a.InvoiceId, invoice?.Number ?? "?",
-                        invoice is null ? "" : lookups.Contracts.GetValueOrDefault(invoice.ContractId)?.ContractNumber ?? "", a.Amount);
-                }).ToList()))
+                        invoice is null ? "" : lookups.Contracts.GetValueOrDefault(invoice.ContractId)?.ContractNumber ?? "", a.Amount, a.TransactionAmount);
+                }).ToList(),
+                p.CurrencyCode, p.TransactionAmount, p.CurrencyCode is null ? 1m : p.ExchangeRate, p.RealizedGainLoss))
             .ToList();
     }
 }

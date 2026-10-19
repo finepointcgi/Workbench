@@ -135,6 +135,7 @@ public sealed partial class InvoiceService(
                 InvoiceDate = date,
                 PaymentTermsDays = ctx.PaymentTermsDays,
                 DueDate = date.AddDays(ctx.PaymentTermsDays),
+                CurrencyCode = ctx.Profile?.CurrencyCode, // Multicurrency: issued in the customer's currency; the rate is fixed at approval.
                 CreatedBy = audit.Actor,
                 CreatedAtUtc = UtcNow,
             };
@@ -335,6 +336,7 @@ public sealed partial class InvoiceService(
             }
         }
 
+        await Currencies.InvoiceCurrency.ApplyAsync(db, invoice, original, cancellationToken);
         var entry = await ledger.PostInvoiceAsync(db, invoice, ctx.Contract, ctx.Clins, cancellationToken);
         invoice.JournalEntryId = entry.Id;
         invoice.Status = InvoiceStatus.Approved;
@@ -345,6 +347,7 @@ public sealed partial class InvoiceService(
         if (original is not null)
         {
             original.AmountCredited += -invoice.Total;
+            original.TransactionCredited += original.IsForeignCurrency ? -invoice.TransactionTotal : 0;
             original.UpdatePaymentStatus();
         }
 
@@ -406,6 +409,7 @@ public sealed partial class InvoiceService(
             && await db.Set<Invoice>().FirstOrDefaultAsync(i => i.Id == invoice.CreditOfInvoiceId, cancellationToken) is { } original)
         {
             original.AmountCredited -= -invoice.Total;
+            original.TransactionCredited -= original.IsForeignCurrency ? -invoice.TransactionTotal : 0;
             original.UpdatePaymentStatus();
         }
 
@@ -462,6 +466,7 @@ public sealed partial class InvoiceService(
             DueDate = date,
             PaymentTermsDays = 0,
             CreditOfInvoiceId = original.Id,
+            CurrencyCode = original.CurrencyCode, // Multicurrency: shown in the credited invoice's currency; converted at its rate on approval.
             Notes = $"Credit against invoice {original.Number}: {reason}",
             CreatedBy = audit.Actor,
             CreatedAtUtc = UtcNow,

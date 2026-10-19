@@ -1,0 +1,206 @@
+@page "/accounting/revaluation"
+@using Workbench.Contracts.Currencies
+@using Workbench.Ui.Currencies
+@inject IRevaluationService Revaluation
+@inject IFiscalCalendarService Calendar
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Currency revaluation · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Currency revaluation"
+                  Subtitle="At month end, open foreign currency invoices, bills and bank balances are revalued at the month-end rate. The gain or loss posts on the period's last day to the unrealized gain/loss account and reverses on the next period's first day, so each document keeps its own rate.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CurrencyExchange" Href="setup/currencies">Rates</MudButton>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Assessment" Href="accounting/foreign-currency">Foreign currency report</MudButton>
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_periods.Count == 0)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudSelect T="Guid?" Value="_periodId" ValueChanged="SelectAsync" Label="Fiscal period" Dense="true" Style="max-width:220px" data-testid="revaluation-period">
+            @foreach (var p in _periods.OrderByDescending(p => p.Start))
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_preview is { } pv)
+        {
+            <MudChip T="string" Variant="Variant.Outlined" Color="@(pv.IsPosted ? Color.Success : Color.Default)"
+                     Icon="@(pv.IsPosted ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Preview)">@(pv.IsPosted ? "Posted" : "Preview")</MudChip>
+            <MudSpacer />
+            @if (!pv.IsPosted)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PostAdd" OnClick="PostAsync" Disabled="@(_busy || !pv.CanPost)"
+                           data-testid="post-revaluation">Post revaluation</MudButton>
+            }
+        }
+    </MudStack>
+
+    @if (_preview is { } p)
+    {
+        @foreach (var w in p.Warnings)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="revaluation-warning">@w</MudAlert>
+        }
+
+        <MudGrid Spacing="2" Class="mb-3">
+            @foreach (var (label, value) in new[]
+            {
+                ("Rate date", p.RateDate.ToString("yyyy-MM-dd")),
+                ("Reverses on", p.ReverseOn.ToString("yyyy-MM-dd")),
+                ("Gains", p.TotalGain.ToString("N2")),
+                ("Losses", Math.Abs(p.TotalLoss).ToString("N2")),
+                ("Net", CurrencyFormat.GainLoss(p.NetGainLoss)),
+            })
+            {
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Outlined="true" Class="pa-3">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                        <MudText Typo="Typo.h6" data-testid="@($"revaluation-{label.ToLowerInvariant().Replace(' ', '-')}")">@value</MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+
+        @if (p.IsPosted)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                Posted by @p.PostedBy @(p.PostedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")):
+                <MudLink Href="@($"accounting/journal/{p.JournalEntryId}")">@p.JournalEntryNumber</MudLink>, reversed by
+                <MudLink Href="@($"accounting/journal/{p.ReversalEntryId}")">@p.ReversalEntryNumber</MudLink>.
+            </MudAlert>
+        }
+
+        @if (p.Lines.Count == 0)
+        {
+            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No open foreign currency balances at @p.RateDate.ToString("yyyy-MM-dd"); there's nothing to revalue.</MudText></MudPaper>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Hover="true" aria-label="Balances revalued" data-testid="revaluation-lines">
+                    <thead>
+                        <tr>
+                            <th scope="col">Kind</th><th scope="col">Document</th><th scope="col">Customer, vendor or bank</th><th scope="col">Currency</th>
+                            <th scope="col" style="text-align:right">Open in currency</th><th scope="col" style="text-align:right">Carried at (@p.FunctionalCurrency)</th>
+                            <th scope="col" style="text-align:right">Rate</th><th scope="col" style="text-align:right">Revalued</th><th scope="col" style="text-align:right">Gain or loss</th><th scope="col">Account</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in p.Lines)
+                        {
+                            <tr>
+                                <td>@CurrencyFormat.Label(l.Kind)</td>
+                                <td>@DocumentLink(l)</td>
+                                <td>@l.Party</td>
+                                <td>@l.CurrencyCode</td>
+                                <td style="text-align:right">@l.TransactionBalance.ToString("N2")</td>
+                                <td style="text-align:right">@l.CarryingAmount.ToString("N2")</td>
+                                <td style="text-align:right">@(l.Rate == 0 ? "No rate" : CurrencyFormat.Rate(l.Rate))</td>
+                                <td style="text-align:right">@l.RevaluedAmount.ToString("N2")</td>
+                                <td style="text-align:right">@CurrencyFormat.GainLoss(l.GainLoss)</td>
+                                <td>@l.AccountNumber</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        }
+    }
+
+    @if (_history.Count > 0)
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Earlier revaluations</MudText>
+        <MudPaper Outlined="true" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" aria-label="Earlier revaluations">
+                <thead><tr><th scope="col">Period</th><th scope="col">Rate date</th><th scope="col" style="text-align:right">Net</th><th scope="col">Entry</th><th scope="col">Reversal</th><th scope="col">Posted by</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _history)
+                    {
+                        <tr>
+                            <td>@r.FiscalPeriodName</td><td>@r.RateDate.ToString("yyyy-MM-dd")</td><td style="text-align:right">@CurrencyFormat.GainLoss(r.NetGainLoss)</td>
+                            <td>@r.JournalEntryNumber</td><td>@r.ReversalEntryNumber</td><td>@r.PostedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<RevaluationSummaryDto> _history = [];
+    private RevaluationPreviewDto? _preview;
+    private Guid? _periodId;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _history = await Revaluation.ListAsync();
+            _periods = await Calendar.ListPeriodsAsync();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var current = _periods.FirstOrDefault(p => p.Start <= today && p.End >= today) ?? _periods.OrderByDescending(p => p.Start).FirstOrDefault();
+            if (current is not null)
+            {
+                await SelectAsync(current.Id);
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SelectAsync(Guid? periodId)
+    {
+        _periodId = periodId;
+        _preview = periodId is { } id ? await Revaluation.PreviewAsync(id) : null;
+    }
+
+    private async Task PostAsync()
+    {
+        var p = _preview!;
+        var confirm = await DialogService.ShowMessageBoxAsync("Post revaluation",
+            $"Post a net {CurrencyFormat.GainLoss(p.NetGainLoss).ToLowerInvariant()} on {p.RateDate:yyyy-MM-dd} and reverse it on {p.ReverseOn:yyyy-MM-dd}?", yesText: "Post", cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _preview = await Revaluation.PostAsync(p.FiscalPeriodId);
+            _history = await Revaluation.ListAsync();
+            Snackbar.Add($"Revaluation posted ({_preview.JournalEntryNumber}, reversed by {_preview.ReversalEntryNumber}).", Severity.Success);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static RenderFragment DocumentLink(RevaluationLineDto l) => l.Kind switch
+    {
+        RevaluationKind.Receivable => @<MudLink Href="@($"billing/invoices/{l.DocumentId}")">@l.DocumentNumber</MudLink>,
+        RevaluationKind.Payable => @<MudLink Href="@($"purchasing/bills/{l.DocumentId}")">@l.DocumentNumber</MudLink>,
+        _ => @<span>@l.DocumentNumber</span>,
+    };
+}

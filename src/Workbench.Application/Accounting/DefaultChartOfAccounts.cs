@@ -47,6 +47,8 @@ public static class DefaultChartOfAccounts
         new("4040", "Revenue - firm fixed price", AccountType.Revenue, "4000"),
         new("4900", "Gain (loss) on disposal of assets", AccountType.Revenue, Description: "Fixed asset disposals: proceeds less net book value"),
         new("4910", "Interest income", AccountType.Revenue, "4000", Description: "Bank interest booked from bank reconciliation"),
+        new("4920", "Realized foreign exchange gain (loss)", AccountType.Revenue, "4000", Description: "Rate differences settled when foreign currency bills and invoices are paid"),
+        new("4930", "Unrealized foreign exchange gain (loss)", AccountType.Revenue, "4000", Description: "Period-end revaluation of open foreign currency balances, reversed the next period"),
 
         new("5000", "Direct costs", AccountType.Expense),
         new("5010", "Direct labor", AccountType.Expense, "5000", CostClassification.DirectLabor),

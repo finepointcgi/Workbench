@@ -192,6 +192,7 @@ public static class DatabaseInitializer
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
         await PlanningSeed.SeedAsync(db, services, cancellationToken); // Planning: this year's adopted budget, next year's cycle (ENG submitted, OPS drafting), rent and accrual recurring journals.
         await TotalTimeSeed.SeedAsync(db, cancellationToken); // Total time accounting: Robin Hale (E1050, exempt) with a 50-hour week on 1001 and 1002; the Hybrid labor cost method.
+        await CurrencySeed.SeedAsync(db, services, cancellationToken); // Multicurrency: EUR and GBP with rates, a posted EUR vendor bill (BTG) and an approved GBP invoice (UKMOD).
     }
 
     /// <summary>

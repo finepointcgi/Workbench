@@ -47,6 +47,9 @@ public sealed class Vendor : Workbench.Domain.Entity
     public Guid? W9FileId { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
+
+    /// <summary>Added by multicurrency: the currency the vendor invoices in, when it isn't the functional currency (new bills default to it).</summary>
+    public string? CurrencyCode { get; set; }
 }
 
 public enum SubcontractStatus
