@@ -1,0 +1,287 @@
+@page "/admin/assistant"
+@layout Workbench.Ui.Layout.AdminLayout
+@* Administrators turn the assistant on (after accepting the data-handling notice), pick the provider connection and
+   model, set limits, and read usage and the assistant audit log. *@
+@inject IAssistantAdminService Admin
+@inject ISnackbar Snackbar
+
+<PageTitle>Assistant · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Assistant</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    An AI assistant that answers questions from your Workbench data, drafts PM narratives and explains timesheet flags.
+    It reads only what each person can already see, through read-only tools, and can't change anything. It's off until you turn it on.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+}
+
+<MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" ActivePanelIndexChanged="TabChangedAsync">
+    <MudTabPanel Text="Settings">
+        @if (_settings is null)
+        {
+            <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4" data-testid="assistant-notice">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Data-handling notice</MudText>
+                <MudText Typo="Typo.body2">@AssistantNotice.Text</MudText>
+                @if (_settings.NoticeIsCurrent)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block mt-1">Accepted by @_settings.NoticeAcceptedBy on @_settings.NoticeAcceptedAtUtc?.ToLocalTime().ToString("MMM d, yyyy").</MudText>
+                }
+            </MudAlert>
+
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="Turn on the assistant for this organization" data-testid="assistant-enabled" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" Value="_connection" ValueChanged="ConnectionChanged" Label="Provider connection" Clearable="true" data-testid="assistant-connection"
+                               HelperText="Connections are configured on the server (keys and AWS roles stay in its secrets).">
+                        @foreach (var c in _settings.Connections)
+                        {
+                            <MudSelectItem Value="c.Name">@c.Label@(c.IsGovCloud ? " — GovCloud" : "")</MudSelectItem>
+                        }
+                    </MudSelect>
+                    @if (Selected is { } selected)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2" data-testid="assistant-data-handling">@selected.DataHandling</MudText>
+                    }
+                    else if (_settings.Connections.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2 mud-text-secondary">No connection is configured on this server. See docs/security/ai-assistant.md.</MudText>
+                    }
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_model" Label="Model" Clearable="true" Disabled="Selected is null" HelperText="Empty uses the connection's default (the latest, most capable model)." data-testid="assistant-model">
+                        @foreach (var m in Selected?.Models ?? [])
+                        {
+                            <MudSelectItem Value="m">@m</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="long?" @bind-Value="_monthly" Label="Organization tokens per month" Min="1" HelperText="Empty: no limit" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="long?" @bind-Value="_perUser" Label="Tokens per person per month" Min="1" HelperText="Empty: no limit" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int?" @bind-Value="_daily" Label="Questions per person per day" Min="1" HelperText="Empty: no limit" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_explainFlags" Label="Let supervisors and Finance ask for plain-language explanations of timesheet flags" />
+                </MudItem>
+                @if (!_settings.NoticeIsCurrent)
+                {
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool" @bind-Value="_accept" Label="I have read the data-handling notice and accept it for our organization" data-testid="assistant-accept" />
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy || (_enabled && !_settings.NoticeIsCurrent && !_accept)" data-testid="assistant-save">Save</MudButton>
+                    @if (_settings.UpdatedBy is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary ml-3">Last changed by @_settings.UpdatedBy on @_settings.UpdatedAtUtc?.ToLocalTime().ToString("MMM d, yyyy h:mm tt").</MudText>
+                    }
+                </MudItem>
+            </MudGrid>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Usage">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" aria-label="Previous month" OnClick="() => MoveMonthAsync(-1)" />
+            <MudText Typo="Typo.h6" HtmlTag="h2">@(_usage is null ? "" : new DateTime(_usage.Year, _usage.Month, 1).ToString("MMMM yyyy"))</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" aria-label="Next month" OnClick="() => MoveMonthAsync(1)" />
+        </MudStack>
+        @if (_usage is { } usage)
+        {
+            <MudText Class="mb-2">
+                @usage.TotalTokens.ToString("N0") tokens used@(usage.MonthlyTokenLimit is { } limit ? $" of {limit:N0} ({(double)usage.TotalTokens / limit:P0})" : " (no organization limit)").
+            </MudText>
+            @if (usage.MonthlyTokenLimit is { } l && l > 0)
+            {
+                <MudProgressLinear Value="@Math.Min(100, usage.TotalTokens * 100.0 / l)" Color="Color.Primary" Class="mb-3" aria-label="Share of the organization's monthly token limit used" />
+            }
+
+            <MudTable Items="usage.Users" Dense="true" Elevation="0" aria-label="Assistant usage by person" data-testid="assistant-usage">
+                <HeaderContent>
+                    <MudTh>Person</MudTh>
+                    <MudTh Style="text-align:right">Questions</MudTh>
+                    <MudTh Style="text-align:right">Input</MudTh>
+                    <MudTh Style="text-align:right">Output</MudTh>
+                    <MudTh Style="text-align:right">Cache reads</MudTh>
+                    <MudTh Style="text-align:right">Total tokens</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Person">@context.UserEmail</MudTd>
+                    <MudTd DataLabel="Questions" Style="text-align:right">@context.Questions</MudTd>
+                    <MudTd DataLabel="Input" Style="text-align:right">@context.InputTokens.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Output" Style="text-align:right">@context.OutputTokens.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Cache reads" Style="text-align:right">@context.CacheReadTokens.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Total tokens" Style="text-align:right">@context.Total.ToString("N0")@(usage.MonthlyTokenLimitPerUser is { } u ? $" / {u:N0}" : "")</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="mud-text-secondary">Nobody used the assistant this month.</MudText></NoRecordsContent>
+            </MudTable>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Audit log">
+        <MudText Class="mud-text-secondary mb-3">Every question, the tools it called, the records they read and the answer. Rows are never changed or deleted.</MudText>
+        <MudGrid Class="mb-2">
+            <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_auditFrom" Label="From" /></MudItem>
+            <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_auditTo" Label="To" /></MudItem>
+            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_auditUser" Label="Person's email" autocomplete="off" /></MudItem>
+            <MudItem xs="12" sm="2" Class="d-flex align-end"><MudButton Variant="Variant.Outlined" OnClick="LoadAuditAsync">Show</MudButton></MudItem>
+        </MudGrid>
+        @if (_audit is { Count: 0 })
+        {
+            <MudText Class="mud-text-secondary">No assistant activity matches.</MudText>
+        }
+        else if (_audit is not null)
+        {
+            <MudExpansionPanels MultiExpansion="true" Elevation="0" data-testid="assistant-audit">
+                @foreach (var i in _audit)
+                {
+                    <MudExpansionPanel Text="@($"{i.StartedAtUtc.ToLocalTime():MMM d h:mm tt} · {i.UserEmail} · {i.Kind} · {i.Outcome} · {Clip(i.Prompt, 80)}")">
+                        <dl class="wb-audit">
+                            <dt>Question</dt><dd>@i.Prompt</dd>
+                            <dt>Page</dt><dd>@(i.PagePath ?? "—")</dd>
+                            <dt>Provider</dt><dd>@i.Provider @i.Model</dd>
+                            <dt>Outcome</dt><dd>@i.Outcome@(i.OutcomeDetail is { } d ? $" ({d})" : "")</dd>
+                            <dt>Tokens</dt><dd>@i.Usage.InputTokens.ToString("N0") in, @i.Usage.OutputTokens.ToString("N0") out, @i.Usage.CacheReadTokens.ToString("N0") cache reads</dd>
+                            <dt>Answer</dt><dd style="white-space:pre-wrap">@(i.Answer ?? "—")</dd>
+                        </dl>
+                        @if (i.ToolCalls.Count > 0)
+                        {
+                            <MudSimpleTable Dense="true" Elevation="0" aria-label="@($"Tools called for the question at {i.StartedAtUtc.ToLocalTime():h:mm tt}")">
+                                <thead><tr><th scope="col">#</th><th scope="col">Tool</th><th scope="col">Arguments</th><th scope="col">Outcome</th><th scope="col">Records read</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in i.ToolCalls)
+                                    {
+                                        <tr>
+                                            <td>@c.Sequence</td>
+                                            <td>@c.ToolName</td>
+                                            <td><code>@c.Arguments</code></td>
+                                            <td>@c.Outcome</td>
+                                            <td style="max-width:360px;overflow-wrap:anywhere">@c.RecordsRead</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+        }
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private AssistantSettingsDto? _settings;
+    private bool _enabled, _explainFlags = true, _accept, _busy;
+    private string? _connection, _model, _error;
+    private long? _monthly, _perUser;
+    private int? _daily;
+    private AssistantUsageDto? _usage;
+    private (int Year, int Month) _month = (DateTime.UtcNow.Year, DateTime.UtcNow.Month);
+    private IReadOnlyList<AssistantInteractionDto>? _audit;
+    private DateTime? _auditFrom = DateTime.Today.AddDays(-30), _auditTo = DateTime.Today;
+    private string? _auditUser;
+
+    private AssistantConnectionDto? Selected => _settings?.Connections.FirstOrDefault(c => c.Name == _connection);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Show(await Admin.GetSettingsAsync());
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Show(AssistantSettingsDto s)
+    {
+        _settings = s;
+        (_enabled, _connection, _model, _monthly, _perUser, _daily, _explainFlags, _accept) =
+            (s.IsEnabled, s.Connection, s.Model, s.MonthlyTokenLimit, s.MonthlyTokenLimitPerUser, s.DailyQuestionLimitPerUser, s.ExplainTimesheetFlags, false);
+    }
+
+    private void ConnectionChanged(string? name)
+    {
+        _connection = name;
+        _model = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Show(await Admin.SaveSettingsAsync(new SaveAssistantSettingsRequest(_enabled, _connection, _model, _monthly, _perUser, _daily, _explainFlags, _accept)));
+            Snackbar.Add(_enabled ? "The assistant is on." : "Assistant settings saved. The assistant is off.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TabChangedAsync(int index)
+    {
+        if (index == 1 && _usage is null)
+        {
+            await LoadUsageAsync();
+        }
+        else if (index == 2 && _audit is null)
+        {
+            await LoadAuditAsync();
+        }
+    }
+
+    private async Task MoveMonthAsync(int delta)
+    {
+        var d = new DateTime(_month.Year, _month.Month, 1).AddMonths(delta);
+        _month = (d.Year, d.Month);
+        await LoadUsageAsync();
+    }
+
+    private async Task LoadUsageAsync()
+    {
+        try
+        {
+            _usage = await Admin.GetUsageAsync(_month.Year, _month.Month);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task LoadAuditAsync()
+    {
+        try
+        {
+            _audit = await Admin.ListAuditAsync(new AssistantAuditQuery(
+                _auditFrom is { } f ? DateOnly.FromDateTime(f) : null, _auditTo is { } t ? DateOnly.FromDateTime(t) : null, _auditUser, 200));
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static string Clip(string text, int max) => text.Length <= max ? text : text[..max] + "…";
+}

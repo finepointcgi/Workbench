@@ -523,3 +523,16 @@ Checks:
 - Won handoff (`PricingHandoff`, one unit of work): contract CLINs per CLIN × period (0001 → 1001 for option 1, options
   unexercised, funded CLINs untouched), T&M bill rates effective at each period's start, project WBS `{project}.{code}`, and a
   budget version phased evenly over the fiscal periods each period covers (unphased past the calendar).
+
+## AI assistant
+
+- `Application/Assistant` (off per tenant until an Admin turns it on; `docs/security/ai-assistant.md`). The model answers only
+  through `AssistantToolbox`: fixed, read-only tools that resolve **contract interfaces** from the caller's scope, so the
+  permission decorators apply as for the pages. A new tool is a `Spec` (name `list_`/`get_`/`read_`, strict schema) plus a
+  case; it returns a one-line `summary` with the key numbers, app-relative citations and the `Type:id` records it read.
+  Never add a tool that writes, sends or runs a query; never read entities directly in a tool.
+- Narratives (`ProjectNarrativeService`) and flag explanations go through `AssistantRunner.CompleteTextAsync`, which audits
+  them; both fall back to deterministic text when the assistant is off. Timesheet flags are `TimesheetFlagEngine` (pure);
+  a new rule is a key in `TimesheetFlagRules` and never blocks anything.
+- Providers live in Infrastructure (`Assistant/AnthropicModelClient`, the official Anthropic SDK; Bedrock via
+  `Anthropic.Bedrock`); tests and Development use `FakeAssistantModel` (`Assistant:EnableFakeProvider`).

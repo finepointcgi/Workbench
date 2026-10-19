@@ -63,7 +63,7 @@ public sealed class ProjectHubPageTests
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
 
         page.WaitForAssertion(() => Assert.Equal(
-            ["Overview", "Financials", "Budgets", "Revenue", "Earned value", "Ceilings & closeout", "Team"], TabLabels(page)));
+            ["Overview", "Financials", "Budgets", "Revenue", "Earned value", "Monthly narrative", "Ceilings & closeout", "Team"], TabLabels(page)));
         foreach (var label in new[] { "Spent so far", "Budget", "Forecast at completion", "Funding left" })
         {
             Assert.Contains(label, page.Find("[data-testid=key-numbers]").TextContent);

@@ -50,6 +50,7 @@
                 <MudButton Variant="Variant.Text" Href="@($"time/history/{_detail.Timesheet.Id}")" StartIcon="@Icons.Material.Filled.History">History</MudButton>
             </MudStack>
             <TimesheetStatusBanner Timesheet="_detail.Timesheet" />
+            <Workbench.Ui.Assistant.TimesheetFlagsPanel TimesheetId="_detail.Timesheet.Id" />
             @if (_detail.Timesheet.TotalHours < _detail.Timesheet.StandardHours)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">

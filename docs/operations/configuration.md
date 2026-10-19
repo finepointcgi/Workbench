@@ -163,6 +163,27 @@ Details: [monitoring.md](monitoring.md).
 | `SamGov:ApiKey` | — | **Secret.** api.data.gov key for SAM.gov's Opportunities API (business development saved searches, run daily). Without it a built-in sample stands in. |
 | `SamGov:BaseUrl` / `:UseSample` | `https://api.sam.gov/opportunities/v2/search` / `false` | `UseSample=true` ignores the key. |
 
+## AI assistant
+
+Server-wide connections; each organization turns the assistant on and picks a connection and model in **Admin › Assistant**
+(off by default). Details: `docs/security/ai-assistant.md`.
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Assistant:EnableFakeProvider` | `false` (`true` in Development) | Offers the built-in "fake" connection (canned answers, no network). Refused outside Development. |
+| `Assistant:Connections:<name>:Provider` | `Anthropic` | `Anthropic` or `Bedrock`. `<name>` is what administrators pick (letters, digits, `-`, `_`; not `fake`). |
+| `Assistant:Connections:<name>:ApiKey` | — | **Secret.** Anthropic connections only. |
+| `Assistant:Connections:<name>:BaseUrl` | — | Optional https base URL (an egress proxy) for Anthropic connections. |
+| `Assistant:Connections:<name>:Region` | — | Bedrock: AWS region, e.g. `us-gov-west-1` for GovCloud (CUI). |
+| `Assistant:Connections:<name>:AwsProfile` | — | Bedrock (Messages API endpoint): optional shared-config profile; otherwise the default AWS credential chain (instance/task/pod role). |
+| `Assistant:Connections:<name>:BedrockApi` | `runtime` in GovCloud, else `mantle` | `runtime` (InvokeModel) needs `AWS_REGION` set to the connection's region. |
+| `Assistant:Connections:<name>:DefaultModel` / `:Models` | `claude-opus-5-5` (Bedrock: `anthropic.claude-opus-5-5`) / `[]` | Models administrators may choose; the default is always offered. |
+| `Assistant:Connections:<name>:Label` | provider name | Shown to administrators. |
+| `Assistant:MaxToolCallsPerQuestion` / `:MaxRoundTrips` | `12` / `6` | Per question. |
+| `Assistant:MaxOutputTokens` / `:Effort` | `16000` / `medium` | Per model call (`low`, `medium`, `high`, `max`). |
+| `Assistant:MaxQuestionLength` / `:ConversationTurns` / `:MaxToolResultChars` | `2000` / `6` / `24000` | |
+| `Assistant:RequestTimeout` | `00:03:00` | |
+
 ## Backup job (environment of `scripts/backup-all.sh`)
 
 | Variable | Default | Notes |

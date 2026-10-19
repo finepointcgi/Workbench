@@ -1,0 +1,97 @@
+@* The app bar's assistant button (shown only when an administrator has turned the assistant on). It owns the
+   conversation, so closing and reopening the panel keeps it; the command palette's "Ask" goes through AskAsync. *@
+@using Microsoft.Extensions.DependencyInjection
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+@inject IServiceProvider Services
+
+@if (_status is { IsEnabled: true })
+{
+    <MudTooltip Text="Ask the assistant">
+        <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome" Color="Color.Inherit" OnClick="() => OpenAsync(null)"
+                       aria-label="Ask the assistant" aria-haspopup="dialog" data-testid="assistant-button" />
+    </MudTooltip>
+}
+
+@code {
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    private readonly AssistantConversation _conversation = new();
+    private AssistantStatusDto? _status;
+    private bool _loaded;
+    private bool _open;
+
+    public bool IsEnabled => _status?.IsEnabled == true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded || !Access.IsSignedIn)
+        {
+            return;
+        }
+
+        _loaded = true;
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (Services.GetService<IAssistantService>() is not { } assistant)
+        {
+            return;
+        }
+
+        try
+        {
+            _status = await assistant.GetStatusAsync();
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+            _status = null;
+        }
+    }
+
+    /// <summary>Opens the panel and asks <paramref name="question"/> (from the command palette).</summary>
+    public Task AskAsync(string question) => InvokeAsync(() => OpenAsync(question));
+
+    private async Task OpenAsync(string? question)
+    {
+        if (_open)
+        {
+            return;
+        }
+
+        _open = true;
+        try
+        {
+            await RefreshAsync();
+            if (_status is not { IsEnabled: true } status)
+            {
+                return;
+            }
+
+            var parameters = new DialogParameters<AssistantPanel>
+            {
+                { p => p.Conversation, _conversation },
+                { p => p.PagePath, Navigation.ToBaseRelativePath(Navigation.Uri) },
+                { p => p.InitialQuestion, question },
+                { p => p.Status, status },
+            };
+            var options = new DialogOptions
+            {
+                Position = DialogPosition.CenterRight,
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                CloseButton = true,
+                CloseOnEscapeKey = true,
+                BackdropClick = true,
+            };
+            var dialog = await Dialogs.ShowAsync<AssistantPanel>("Assistant", parameters, options);
+            await dialog.Result;
+        }
+        finally
+        {
+            _open = false;
+        }
+    }
+}

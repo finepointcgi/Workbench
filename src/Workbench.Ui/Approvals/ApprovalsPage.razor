@@ -3,6 +3,7 @@
 @inject IApprovalDelegationService Delegations
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>Approvals · Workbench</PageTitle>
 
@@ -45,6 +46,10 @@
                     <MudTd DataLabel="What" data-testid="inbox-item">
                         <MudChip T="string" Size="Size.Small" Class="ml-0">@context.DocumentLabel</MudChip>
                         <MudLink Href="@context.Link">@context.Title</MudLink>
+                        @if (context.DocumentType == ApprovalDocumentTypes.Timesheet)
+                        {
+                            <Workbench.Ui.Assistant.TimesheetFlagsButton Flags="@_flags.GetValueOrDefault(context.DocumentId)" />
+                        }
                         @if (context.Summary is not null)
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.Summary</MudText>
@@ -126,6 +131,7 @@
 @code {
     private IReadOnlyList<ApprovalInboxItemDto>? _items;
     private IReadOnlyList<ApprovalDelegationDto>? _delegations;
+    private IReadOnlyDictionary<Guid, Workbench.Contracts.Assistant.TimesheetFlagsDto> _flags = new Dictionary<Guid, Workbench.Contracts.Assistant.TimesheetFlagsDto>();
     private bool _busy;
     private string? _delegate;
     private DateTime? _from = DateTime.Today;
@@ -142,6 +148,7 @@
     {
         _items = await Inbox.ListMineAsync();
         _delegations = await Delegations.ListAsync();
+        _flags = await Workbench.Ui.Assistant.TimesheetFlagLoader.LoadAsync(Services, _items.Where(i => i.DocumentType == ApprovalDocumentTypes.Timesheet).Select(i => i.DocumentId));
     }
 
     private Task ApproveAsync(ApprovalInboxItemDto item) => RunAsync(item, new ApprovalDecisionRequest(ApprovalDecisionKind.Approve), "Approved");

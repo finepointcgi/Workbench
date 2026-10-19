@@ -1,0 +1,15 @@
+.wb-flag-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 2px 12px;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.wb-flag-facts dt {
+    font-weight: 500;
+}
+
+.wb-flag-facts dd {
+    margin: 0;
+}

@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<Contracts.Tenancy.IHostAdminService, HostAdminService>();
         services.AddCollaborationInfrastructure(configuration);
         services.AddNotificationInfrastructure(configuration);
+        Assistant.AssistantInfrastructure.AddAssistantInfrastructure(services, configuration); // AI assistant providers: Anthropic API and Amazon Bedrock (incl. GovCloud).
         return services;
     }
 }
