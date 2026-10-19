@@ -22,6 +22,42 @@ public sealed partial class WebSecurityTests
     private const string Admin = "dev@workbench.local";
 
     [Fact]
+    public async Task Only_page_loads_are_sent_to_sign_in_so_a_first_visit_gets_one_antiforgery_cookie()
+    {
+        await using var factory = new WorkbenchWebFactory("Development");
+        using var client = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
+
+        async Task<HttpResponseMessage> GetAsync(string path, string? dest, string accept)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.TryAddWithoutValidation("Accept", accept);
+            if (dest is not null)
+            {
+                request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", dest);
+            }
+
+            return await client.SendAsync(request);
+        }
+
+        // The browser's own favicon request: served, not redirected to the sign-in page.
+        using var favicon = await GetAsync("/favicon.ico", "image", "image/avif,image/webp,*/*");
+        Assert.Equal(HttpStatusCode.MovedPermanently, favicon.StatusCode);
+        Assert.EndsWith("/favicon.png", favicon.Headers.Location!.ToString());
+
+        // A subresource of a protected page while signed out: a plain 401, no sign-in page and no antiforgery cookie.
+        using var image = await GetAsync("/projects", "image", "image/*");
+        Assert.Equal(HttpStatusCode.Unauthorized, image.StatusCode);
+        Assert.False(image.Headers.Contains("Set-Cookie"));
+
+        // A real page load still goes to sign-in, with or without Fetch Metadata.
+        using var page = await GetAsync("/projects", "document", "text/html");
+        Assert.Equal(HttpStatusCode.Redirect, page.StatusCode);
+        Assert.Contains(DevSignIn.Path, page.Headers.Location!.ToString());
+        using var oldBrowser = await GetAsync("/projects", null, "text/html,application/xhtml+xml");
+        Assert.Equal(HttpStatusCode.Redirect, oldBrowser.StatusCode);
+    }
+
+    [Fact]
     public async Task Responses_carry_the_security_headers_and_a_strict_csp()
     {
         await using var factory = new WorkbenchWebFactory("Development");

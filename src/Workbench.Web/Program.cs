@@ -82,6 +82,8 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets().AllowAnonymous();
+// Browsers ask for /favicon.ico on their own; without this it would fall through to a sign-in redirect.
+app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.png", permanent: true)).AllowAnonymous().ExcludeFromDescription();
 app.MapWorkbenchAccountEndpoints();
 app.MapWorkbenchHealthChecks();
 app.MapWorkbenchScim();

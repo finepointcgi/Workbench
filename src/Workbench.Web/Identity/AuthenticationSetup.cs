@@ -219,9 +219,27 @@ public static class AuthenticationSetup
         request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
         || (request.Path.StartsWithSegments("/hubs") && request.Query.ContainsKey("access_token"));
 
+    /// <summary>
+    /// Whether the browser is loading a page (a top-level navigation, a frame, or Blazor's enhanced navigation), as
+    /// opposed to an image, script or other subresource. Only page loads are redirected to sign-in: a subresource that
+    /// lands on the sign-in page renders it in parallel with the real one, minting a second antiforgery cookie that
+    /// replaces the first and makes the sign-in form fail ("cookie token and request token do not match").
+    /// </summary>
+    internal static bool IsPageNavigation(HttpRequest request)
+    {
+        if (request.Headers.ContainsKey("blazor-enhanced-nav"))
+        {
+            return true;
+        }
+
+        // Browsers say what they're loading (Fetch Metadata). Clients that don't are treated as page loads, as before.
+        var dest = request.Headers["Sec-Fetch-Dest"].ToString();
+        return dest.Length == 0 || dest is "document" or "iframe" or "frame";
+    }
+
     private static Task RespondOrRedirect(RedirectContext<CookieAuthenticationOptions> context, int apiStatus)
     {
-        if (IsApiRequest(context.Request))
+        if (IsApiRequest(context.Request) || !IsPageNavigation(context.Request))
         {
             context.Response.StatusCode = apiStatus;
         }
