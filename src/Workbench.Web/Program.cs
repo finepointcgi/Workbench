@@ -22,9 +22,12 @@ if (args.Contains("--health-check", StringComparer.OrdinalIgnoreCase))
 // the production deploy step. Normal startup only migrates when Database:MigrateOnStartup is true (Development default).
 // `--rewrap-data-protection-keys` re-encrypts the stored key ring with the configured key encryption and exits (after
 // rotating the certificate or vault key; docs/operations/data-protection-keys.md).
+// `--reset-demo` deletes the public demo's data and exits; the next start seeds it afresh (docs/demo-hosting.md).
 var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
 var rewrapKeys = args.Contains("--rewrap-data-protection-keys", StringComparer.OrdinalIgnoreCase);
-args = args.Where(a => !a.Equals("--migrate", StringComparison.OrdinalIgnoreCase) && !a.Equals("--rewrap-data-protection-keys", StringComparison.OrdinalIgnoreCase)).ToArray();
+var resetDemo = args.Contains("--reset-demo", StringComparer.OrdinalIgnoreCase);
+string[] commands = ["--migrate", "--rewrap-data-protection-keys", "--reset-demo"];
+args = args.Where(a => !commands.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddWorkbenchHosting();
@@ -40,6 +43,7 @@ builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 // Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
 builder.AddWorkbenchAuthentication();
 builder.AddWorkbenchSecurity();
+builder.AddWorkbenchDemoReset();
 builder.AddWorkbenchTenancyHosting();
 builder.Services.AddWorkbenchLiveUpdatesHub();
 builder.Services.AddWorkbenchNotificationsHub();
@@ -56,6 +60,13 @@ if (rewrapKeys)
 {
     var count = await DataProtectionKeyRewrap.RunAsync(app.Services);
     app.Logger.LogInformation("Re-encrypted {Count} Data Protection keys. Restart every web host.", count);
+    return 0;
+}
+
+if (resetDemo)
+{
+    await DemoReset.DeleteDemoDataAsync(app.Services);
+    app.Logger.LogInformation("Deleted the demo data. Restart the web host to seed it again.");
     return 0;
 }
 

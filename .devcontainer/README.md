@@ -2,6 +2,8 @@
 
 This codespace runs Workbench with its demo data so you can share a link for testing.
 
+For a link that stays up without anyone restarting it, use the hosted demo instead: [docs/demo-hosting.md](../docs/demo-hosting.md).
+
 ## Share a test link
 
 1. On GitHub: **Code → Codespaces → Create codespace on master** (4-core machine). The first start builds the app,
