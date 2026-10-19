@@ -303,14 +303,16 @@ public sealed class PermissionCheckingProjectService(
         }
 
         List<string> finance;
+        string name;
+        var me = access.Email;
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
             finance = await db.Set<Domain.Identity.AppUser>().AsNoTracking().Where(u => u.IsActive && u.IsFinance).Select(u => u.Email).ToListAsync(cancellationToken);
+            name = await db.Set<Domain.Identity.AppUser>().AsNoTracking().Where(u => u.Email == me).Select(u => u.DisplayName).FirstOrDefaultAsync(cancellationToken) ?? me;
         }
 
-        var me = access.Email;
         await notifications.PublishAsync(finance.Where(e => !string.Equals(e, me, StringComparison.OrdinalIgnoreCase)), ProjectRequestKind,
-            $"{me} requested project {project.Code} {project.Name}",
+            $"{name} requested project {project.Code} {project.Name}",
             $"It's on contract {project.ContractNumber} and stays in Planning until you activate it.",
             link: $"setup/projects/{project.Id}");
     }

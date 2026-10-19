@@ -5,7 +5,8 @@
 
 <MudDialog>
     <DialogContent>
-        <MudAutocomplete T="UserDto" Value="_pick" ValueChanged="AddAsync" SearchFunc="SearchAsync" ToStringFunc="@(u => u is null ? "" : $"{u.DisplayName} ({u.Email})")"
+        @* No list until something is typed: the Enter that opened this dialog must not pick the first person. *@
+        <MudAutocomplete @ref="_search" T="UserDto" Value="_pick" OpenOnFocus="false" MinCharacters="1" ValueChanged="AddAsync" SearchFunc="SearchAsync" ToStringFunc="@(u => u is null ? "" : $"{u.DisplayName} ({u.Email})")"
                          Label="Add people" Placeholder="Search by name or email" ResetValueOnEmptyText="true" DebounceInterval="200"
                          Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="assign-search" />
         <div class="d-flex flex-wrap gap-1 mt-3" role="list" aria-label="Assignees">
@@ -47,6 +48,7 @@
 
     private List<Person> _people = [];
     private UserDto? _pick;
+    private MudAutocomplete<UserDto>? _search;
     private DateTime? _due;
     private bool _busy;
 
@@ -69,7 +71,7 @@
         }
     }
 
-    private Task AddAsync(UserDto? user)
+    private async Task AddAsync(UserDto? user)
     {
         if (user is not null && _people.All(p => !string.Equals(p.Email, user.Email, StringComparison.OrdinalIgnoreCase)))
         {
@@ -77,7 +79,10 @@
         }
 
         _pick = null;
-        return Task.CompletedTask;
+        if (user is not null && _search is not null)
+        {
+            await _search.ClearAsync(); // ready for the next name
+        }
     }
 
     private void Remove(string email) => _people.RemoveAll(p => p.Email == email);
