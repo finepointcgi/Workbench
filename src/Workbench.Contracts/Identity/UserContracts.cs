@@ -71,6 +71,12 @@ public static class OrgRoleChecks
     /// <summary>Materials, Finance or Admin: may see parts, inventory, work orders, MRP and inventory reports.</summary>
     public static bool CanViewMaterials(this OrgRoles roles) => (roles & (OrgRoles.Materials | OrgRoles.Finance | OrgRoles.Admin)) != 0;
 
+    /// <summary>Business development or Admin: the org role (capture and proposal managers of an opportunity edit it without it).</summary>
+    public static bool IsBusinessDevelopment(this OrgRoles roles) => (roles & (OrgRoles.BusinessDevelopment | OrgRoles.Admin)) != 0;
+
+    /// <summary>Business development, Finance or Admin: sees the whole pipeline.</summary>
+    public static bool CanViewPipeline(this OrgRoles roles) => (roles & (OrgRoles.BusinessDevelopment | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
     /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
     public static IReadOnlyList<OrgRoles> All { get; } =
         [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr, OrgRoles.Materials, OrgRoles.BusinessDevelopment];
