@@ -1,0 +1,253 @@
+@page "/pricing/{Id:guid}"
+@inject IProposalPricingService Pricing
+@inject ICurrentUserContext CurrentUser
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_proposal is null ? "Proposal" : $"{_proposal.Number} · Pricing") · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" data-testid="load-error">@_error</MudAlert>
+}
+else if (_proposal is null || _model is null || _options is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_proposal.Number · @_proposal.Title</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditDetailsAsync" Disabled="_busy">Details</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyAsync" Disabled="_busy" data-testid="copy-scenario">Copy to scenario</MudButton>
+        @if (!_model.Ref.IsLocked)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Lock" OnClick="LockAsync" Disabled="_busy" data-testid="lock-version">Lock as version</MudButton>
+        }
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="export-cost-volume">Cost volume (.xlsx)</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"pricing/{Id}/prices/{_model.Id}/print")" data-testid="print-summary">Printable summary</MudButton>
+    </MudStack>
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="PricingFormat.Color(_proposal.Status)">@_proposal.Status</MudChip>
+        <MudText Typo="Typo.body2">@PricingFormat.Label(_proposal.ContractType)</MudText>
+        @if (_proposal.Customer is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">· @_proposal.Customer</MudText>
+        }
+        @if (_proposal.OpportunityName is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">· Opportunity: @_proposal.OpportunityName</MudText>
+        }
+        @if (_proposal.DueDate is { } due)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">· Due @due.ToString("MMM d, yyyy", PricingFormat.Culture)</MudText>
+        }
+    </MudStack>
+
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+        <MudSelect T="Guid" Value="_model.Id" ValueChanged="SelectAsync" Label="Price" Dense="true" Style="min-width: 320px; max-width: 520px" Variant="Variant.Outlined" data-testid="price-select">
+            @foreach (var m in _proposal.Models)
+            {
+                <MudSelectItem T="Guid" Value="m.Id">@PricingFormat.ModelLabel(m)</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_model.Ref.IsLocked)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Lock" data-testid="locked-banner">
+                Version @_model.Ref.Version was locked by @_model.Ref.LockedBy on @_model.Ref.LockedAtUtc?.ToLocalTime().ToString("MMM d, yyyy h:mm tt", PricingFormat.Culture).
+                It's read-only and keeps the rates it was priced at. Copy it to a scenario to change it.
+                @if (_model.Ref.LockNote is { } note)
+                {
+                    <span>Note: @note</span>
+                }
+            </MudAlert>
+        }
+        else if (!_model.Ref.IsBase && _model.Ref.Description is { } description)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@description</MudText>
+        }
+    </MudStack>
+
+    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" data-testid="pricing-tabs">
+        <MudTabPanel Text="Summary">
+            @if (_result is not null)
+            {
+                <PriceSummaryTab Result="_result" ContractType="_proposal.ContractType" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Structure">
+            <StructureTab Model="_model" ReadOnly="_model.Ref.IsLocked" Changed="ChangedAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Labor">
+            <LaborTab Model="_model" Options="_options" Result="_result" ReadOnly="_model.Ref.IsLocked" Changed="ChangedAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Other costs">
+            <OtherCostsTab Model="_model" Result="_result" ReadOnly="_model.Ref.IsLocked" Changed="ChangedAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Rates and fee">
+            <RatesTab Model="_model" Options="_options" Result="_result" ContractType="_proposal.ContractType" ReadOnly="_model.Ref.IsLocked" Changed="ChangedAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Scenarios and versions">
+            <ScenariosTab Proposal="_proposal" CurrentModelId="_model.Id" Version="_version" Open="SelectAsync" Deleted="DeletedAsync" />
+        </MudTabPanel>
+        <MudTabPanel Text="Won handoff">
+            <HandoffTab Proposal="_proposal" Options="_options" CanHandOff="_canHandOff" HandedOff="ReloadProposalAsync" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "price")]
+    public Guid? PriceId { get; set; }
+
+    private ProposalDto? _proposal;
+    private PriceModelDto? _model;
+    private PriceResultDto? _result;
+    private PricingOptionsDto? _options;
+    private string? _error;
+    private bool _busy;
+    private bool _canHandOff;
+    private int _tab;
+
+    // Bumped after each change so the scenarios tab reloads its comparison.
+    private int _version;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _proposal = await Pricing.GetProposalAsync(Id);
+            var modelId = PriceId is { } p && _proposal.Models.Any(m => m.Id == p) ? p : _proposal.Models.First(m => m.IsBase).Id;
+            _model = await Pricing.GetModelAsync(modelId);
+            _options ??= await Pricing.GetOptionsAsync(_model.Settings.RatesAsOf);
+            _result = await Pricing.CalculateAsync(modelId);
+            _canHandOff = (await CurrentUser.GetAsync()).IsFinance;
+            _error = null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException || ex.GetType().Name.Contains("NotFound"))
+        {
+            _error = PricingFormat.Error(ex);
+        }
+    }
+
+    private Task SelectAsync(Guid modelId)
+    {
+        Nav.NavigateTo($"pricing/{Id}?price={modelId}");
+        return Task.CompletedTask;
+    }
+
+    private async Task ChangedAsync(PriceModelDto model)
+    {
+        _model = model;
+        if (_options is null || _options.AsOf != model.Settings.RatesAsOf)
+        {
+            _options = await Pricing.GetOptionsAsync(model.Settings.RatesAsOf);
+        }
+
+        _result = await Pricing.CalculateAsync(model.Id);
+        _version++;
+    }
+
+    private async Task ReloadProposalAsync()
+    {
+        _proposal = await Pricing.GetProposalAsync(Id);
+        _version++;
+    }
+
+    private async Task DeletedAsync(Guid modelId)
+    {
+        _proposal = await Pricing.GetProposalAsync(Id);
+        if (modelId == _model?.Id)
+        {
+            await SelectAsync(_proposal.Models.First(m => m.IsBase).Id);
+        }
+
+        _version++;
+    }
+
+    private async Task EditDetailsAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<ProposalDialog>("Proposal details", new DialogParameters<ProposalDialog> { { d => d.Existing, _proposal } });
+        if (await dialog.Result is not { Canceled: false, Data: SaveProposalRequest request })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            _proposal = await Pricing.UpdateProposalAsync(Id, request);
+            _result = await Pricing.CalculateAsync(_model!.Id);
+            _version++;
+            Snackbar.Add("Proposal saved.", Severity.Success);
+        });
+    }
+
+    private async Task CopyAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<PricingTextDialog>("Copy to a scenario", new DialogParameters<PricingTextDialog>
+        {
+            { d => d.Label, "Scenario name" },
+            { d => d.Text, $"{(_model!.Ref.IsLocked ? _model.Ref.Name : "What-if")} copy" },
+            { d => d.NoteLabel, "What changes (optional)" },
+            { d => d.Action, "Copy" },
+        });
+        if (await dialog.Result is not { Canceled: false, Data: PricingTextResult typed })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var copy = await Pricing.CopyModelAsync(_model!.Id, new CopyPriceModelRequest(typed.Text, typed.Note));
+            Snackbar.Add($"Copied to scenario \"{copy.Ref.Name}\".", Severity.Success);
+            await SelectAsync(copy.Id);
+        });
+    }
+
+    private async Task LockAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<PricingTextDialog>("Lock as a version", new DialogParameters<PricingTextDialog>
+        {
+            { d => d.Message, $"This saves \"{_model!.Ref.Name}\" as the next read-only version, priced at today's rates ({PricingFormat.Money(_result?.Totals.Price ?? 0)}). The working price stays editable." },
+            { d => d.NoteLabel, "Note (for example: submitted with the initial proposal)" },
+            { d => d.Action, "Lock" },
+            { d => d.ShowSubmitted, _proposal!.Status == ProposalState.Draft },
+        });
+        if (await dialog.Result is not { Canceled: false, Data: PricingTextResult typed })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var locked = await Pricing.LockModelAsync(_model!.Id, new LockPriceModelRequest(typed.Note, typed.Flag));
+            Snackbar.Add($"Locked as {locked.Ref.Name}.", Severity.Success);
+            await SelectAsync(locked.Id);
+        });
+    }
+
+    private Task ExportAsync() => RunAsync(async () => await PricingFormat.DownloadAsync(JS, await Pricing.ExportCostVolumeAsync(_model!.Id)));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or JSException || ex.GetType().Name.Contains("NotFound"))
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

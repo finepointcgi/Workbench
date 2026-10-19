@@ -1,0 +1,35 @@
+@* Pages under /pricing: Finance, administrators and the Pricing role (cost and indirect rates). Others get a friendly 403; the server refuses their calls too.
+   Kept in Ui/Layout so the Pricing folder's _Imports layout doesn't nest it in itself. *@
+@inherits LayoutComponentBase
+@layout MainLayout
+@inject ICurrentUserContext CurrentUser
+
+@if (_allowed is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_allowed.Value)
+{
+    @Body
+}
+else
+{
+    <ForbiddenNotice Title="You don't have access to proposal pricing"
+                     Message="Prices show employee cost rates, indirect rates and fee, so they're for Finance, administrators and the Pricing role. Ask an administrator if you need them." />
+}
+
+@code {
+    private bool? _allowed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _allowed = (await CurrentUser.GetAsync()).Roles.CanPrice();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _allowed = false;
+        }
+    }
+}

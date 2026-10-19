@@ -1,0 +1,176 @@
+@page "/pricing/{Id:guid}/prices/{PriceId:guid}/print"
+@layout Workbench.Ui.Layout.PricingPrintLayout
+@inject IProposalPricingService Pricing
+@inject IJSRuntime JS
+
+<PageTitle>@(_proposal is null ? "Price" : $"{_proposal.Number} price summary") · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"pricing/{Id}?price={PriceId}")">← Back to the proposal</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="() => PricingFormat.PrintAsync(JS)" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_proposal is null || _result is null || _model is null)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var r = _result;
+    <section class="page">
+        @if (!r.IsLocked)
+        {
+            <div class="watermark">DRAFT</div>
+        }
+        <div class="head">
+            <div><b>@_proposal.Number</b> · @_proposal.Title</div>
+            <div>@(r.IsLocked ? $"Version {r.Version}, locked {_model.Ref.LockedAtUtc?.ToLocalTime():MMMM d, yyyy}" : $"{_model.Ref.Name} · not locked")</div>
+        </div>
+        <h1>Price summary</h1>
+        <p class="sub">
+            @PricingFormat.Label(_proposal.ContractType)@(_proposal.Customer is null ? "" : $" for {_proposal.Customer}")@(_proposal.OpportunityName is null ? "" : $" · {_proposal.OpportunityName}").
+            @PricingFormat.Label(r.RateBasis) indirect rates; @r.FeeExplanation.
+        </p>
+        <table class="facts">
+            <tr><th>Total cost</th><td class="num">@PricingFormat.Cents(r.Totals.TotalCost)</td><th>Wrap rate</th><td class="num">@PricingFormat.Multiplier(r.WrapRate)</td></tr>
+            <tr><th>@PricingFormat.FeeWord(_proposal.ContractType) (@PricingFormat.Percent(r.FeeRate))</th><td class="num">@PricingFormat.Cents(r.Totals.Fee)</td><th>Margin</th><td class="num">@PricingFormat.Percent(r.Margin)</td></tr>
+            <tr class="total"><th>Total price</th><td class="num">@PricingFormat.Cents(r.Totals.Price)</td>
+                <th>Target price</th><td class="num">@(r.PriceToWin is { } ptw ? $"{PricingFormat.Cents(ptw.TargetPrice)} ({(ptw.UnderTarget ? "under" : "over")} by {PricingFormat.Cents(Math.Abs(ptw.Difference))})" : "—")</td></tr>
+        </table>
+
+        <h2>Price by CLIN and period</h2>
+        <table class="items">
+            <thead><tr><th>CLIN</th>@foreach (var p in r.Periods) { <th class="num">@p.PeriodName</th> }<th class="num">Total</th></tr></thead>
+            <tbody>
+                @foreach (var clin in r.Cells.GroupBy(c => (c.ClinId, c.ClinNumber, c.ClinDescription)))
+                {
+                    <tr>
+                        <td>@clin.Key.ClinNumber · @clin.Key.ClinDescription</td>
+                        @foreach (var p in r.Periods)
+                        {
+                            <td class="num">@PricingFormat.Cents(clin.Where(c => c.PeriodId == p.PeriodId).Sum(c => c.Figures.Price))</td>
+                        }
+                        <td class="num">@PricingFormat.Cents(clin.Sum(c => c.Figures.Price))</td>
+                    </tr>
+                }
+                <tr class="total"><td>Total</td>@foreach (var p in r.Periods) { <td class="num">@PricingFormat.Cents(p.Figures.Price)</td> }<td class="num">@PricingFormat.Cents(r.Totals.Price)</td></tr>
+            </tbody>
+        </table>
+
+        <h2>Cost build-up</h2>
+        <table class="items">
+            <thead><tr><th>Element</th>@foreach (var p in r.Periods) { <th class="num">@p.PeriodName</th> }<th class="num">Total</th></tr></thead>
+            <tbody>
+                @foreach (var (label, pick) in Elements)
+                {
+                    <tr class="@(label is "Total cost" or "Price" ? "subtotal" : "")">
+                        <td>@(label == "Fee" ? PricingFormat.FeeWord(_proposal.ContractType) : label)</td>
+                        @foreach (var p in r.Periods)
+                        {
+                            <td class="num">@(label == "Hours" ? PricingFormat.Hours(pick(p.Figures)) : PricingFormat.Cents(pick(p.Figures)))</td>
+                        }
+                        <td class="num">@(label == "Hours" ? PricingFormat.Hours(pick(r.Totals)) : PricingFormat.Cents(pick(r.Totals)))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <h2>Indirect rates</h2>
+        <table class="items">
+            <thead><tr><th>Period</th><th>Rates</th><th class="num">Fringe</th><th class="num">Overhead</th><th class="num">G&amp;A</th><th class="num">Multiplier</th></tr></thead>
+            <tbody>
+                @foreach (var p in r.PeriodRates)
+                {
+                    <tr><td>@p.PeriodName</td><td>FY@(p.RatesFiscalYear) @PricingFormat.Label(p.Basis).ToLowerInvariant()@(p.Overridden ? " + what-if" : "")</td>
+                        <td class="num">@PricingFormat.Percent(p.Fringe)</td><td class="num">@PricingFormat.Percent(p.Overhead)</td><td class="num">@PricingFormat.Percent(p.GeneralAndAdministrative)</td>
+                        <td class="num">@PricingFormat.Multiplier(p.LaborMultiplier)</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <section class="page">
+        <h1>Labor and hourly rates</h1>
+        <table class="items">
+            <thead><tr><th>Labor category</th><th>Period</th><th class="num">Hours</th><th class="num">Direct rate</th><th class="num">Hourly rate (burdened, with @PricingFormat.FeeWord(_proposal.ContractType).ToLowerInvariant())</th></tr></thead>
+            <tbody>
+                @foreach (var b in r.BillRates)
+                {
+                    <tr><td>@b.LaborCategoryCode · @b.LaborCategoryName</td><td>@b.PeriodName</td><td class="num">@PricingFormat.Hours(b.Hours)</td>
+                        <td class="num">@PricingFormat.Rate(b.DirectRate)</td><td class="num">@PricingFormat.Rate(b.BillRate)</td></tr>
+                }
+            </tbody>
+        </table>
+
+        <h2>Basis of estimate</h2>
+        @foreach (var w in r.Wbs)
+        {
+            <div class="boe" style="margin-left:@(w.Depth * 16)px">
+                <b>@w.Code @w.Name</b> — @PricingFormat.Hours(w.Figures.Hours) hours, @PricingFormat.Cents(w.Figures.Price)
+                @if (!string.IsNullOrWhiteSpace(w.BasisOfEstimate))
+                {
+                    <p class="pre">@w.BasisOfEstimate</p>
+                }
+            </div>
+        }
+
+        @if (r.OtherCosts.Count > 0)
+        {
+            <h2>Other direct costs</h2>
+            <table class="items">
+                <thead><tr><th>Period</th><th>Type</th><th>Description</th><th>Basis</th><th class="num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var c in r.OtherCosts)
+                    {
+                        <tr><td>@c.PeriodName</td><td>@PricingFormat.Label(c.Kind)</td><td>@c.Description</td><td>@c.Detail</td>
+                            <td class="num">@(c.IsUnallowable ? "Excluded (unallowable)" : PricingFormat.Cents(c.Amount))</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @foreach (var note in r.Notes)
+        {
+            <p class="note">@note</p>
+        }
+    </section>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [Parameter]
+    public Guid PriceId { get; set; }
+
+    private ProposalDto? _proposal;
+    private PriceModelDto? _model;
+    private PriceResultDto? _result;
+    private string? _error;
+
+    private static readonly (string Label, Func<PriceFiguresDto, decimal> Pick)[] Elements =
+    [
+        ("Hours", f => f.Hours), ("Direct labor", f => f.DirectLabor), ("Fringe", f => f.Fringe), ("Overhead", f => f.Overhead), ("ODCs", f => f.Odc),
+        ("Travel", f => f.Travel), ("Materials", f => f.Materials), ("Subcontracts", f => f.Subcontracts), ("G&A", f => f.GeneralAndAdministrative),
+        ("Total cost", f => f.TotalCost), ("Fee", f => f.Fee), ("Price", f => f.Price),
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _proposal = await Pricing.GetProposalAsync(Id);
+            _model = await Pricing.GetModelAsync(PriceId);
+            _result = await Pricing.CalculateAsync(PriceId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException || ex.GetType().Name.Contains("NotFound"))
+        {
+            _error = PricingFormat.Error(ex);
+        }
+    }
+}

@@ -1,0 +1,168 @@
+@* Every price of the proposal side by side against the target price, and the proposal's audit history. *@
+@inject IProposalPricingService Pricing
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_compare is null)
+{
+    <MudProgressLinear aria-label="Loading scenarios" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        The working price is what you edit; scenarios are copies for what-ifs (rates, fee, hours, staffing); locked versions are what was submitted.
+        @(_compare.TargetPrice is { } t ? $"Target price: {PricingFormat.Money(t)}." : "Set a target price in Details to see price-to-win.")
+    </MudText>
+    <div style="overflow-x:auto" class="mb-6">
+        <MudSimpleTable Dense="true" Outlined="true" data-testid="scenario-compare">
+            <caption class="wb-sr-only">Scenarios compared</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Price</th><th scope="col">Kind</th><th scope="col" style="text-align:right">Hours</th><th scope="col" style="text-align:right">Total cost</th>
+                    <th scope="col" style="text-align:right">Fee</th><th scope="col" style="text-align:right">Fee %</th><th scope="col" style="text-align:right">Price</th>
+                    <th scope="col" style="text-align:right">Wrap</th><th scope="col" style="text-align:right">Margin</th><th scope="col" style="text-align:right">vs target</th>
+                    <th scope="col"><span class="wb-sr-only">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _compare.Rows)
+                {
+                    <tr style="@(r.Model.Id == CurrentModelId ? "font-weight:600" : "")">
+                        <th scope="row" style="font-weight:inherit">
+                            <MudLink OnClick="() => Open.InvokeAsync(r.Model.Id)" Typo="Typo.body2">@r.Model.Name</MudLink>
+                            @if (r.Model.Id == CurrentModelId)
+                            {
+                                <span class="mud-text-secondary"> (open)</span>
+                            }
+                        </th>
+                        <td>@(r.Model.IsBase ? "Working price" : r.Model.IsLocked ? $"Locked {r.Model.LockedAtUtc?.ToLocalTime():MMM d} · {r.Model.LockedBy}" : "Scenario")</td>
+                        <td style="text-align:right">@PricingFormat.Hours(r.Hours)</td>
+                        <td style="text-align:right">@PricingFormat.Money(r.TotalCost)</td>
+                        <td style="text-align:right">@PricingFormat.Money(r.Fee)</td>
+                        <td style="text-align:right">@PricingFormat.Percent(r.FeeRate)</td>
+                        <td style="text-align:right">@PricingFormat.Money(r.Price)</td>
+                        <td style="text-align:right">@PricingFormat.Multiplier(r.WrapRate)</td>
+                        <td style="text-align:right">@PricingFormat.Percent(r.Margin)</td>
+                        <td style="text-align:right">
+                            @if (r.PriceToWin is { } p)
+                            {
+                                <span class="@(p.UnderTarget ? "mud-success-text" : "mud-error-text")">@(p.UnderTarget ? "▼" : "▲") @PricingFormat.Money(Math.Abs(p.Difference)) (@PricingFormat.Percent(Math.Abs(p.DifferencePercent)))</span>
+                            }
+                            else
+                            {
+                                <span>—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!r.Model.IsBase && !r.Model.IsLocked)
+                            {
+                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => DeleteAsync(r.Model)" aria-label="@($"Delete scenario {r.Model.Name}")" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">History</MudText>
+    <MudSimpleTable Dense="true" Outlined="true" data-testid="pricing-history">
+        <caption class="wb-sr-only">Proposal history</caption>
+        <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Note</th></tr></thead>
+        <tbody>
+            @foreach (var h in _history ?? [])
+            {
+                <tr>
+                    <td>@h.OccurredAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt", PricingFormat.Culture)</td>
+                    <td>@h.Actor</td>
+                    <td>@Describe(h)</td>
+                    <td>@h.Reason</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ProposalDto Proposal { get; set; } = default!;
+
+    [Parameter]
+    public Guid CurrentModelId { get; set; }
+
+    /// <summary>Changes when anything was saved, so the comparison reloads.</summary>
+    [Parameter]
+    public int Version { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> Open { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> Deleted { get; set; }
+
+    private ScenarioComparisonDto? _compare;
+    private IReadOnlyList<PricingHistoryDto>? _history;
+    private string? _error;
+    private int? _loadedVersion;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedVersion == Version && _compare?.ProposalId == Proposal.Id)
+        {
+            return;
+        }
+
+        _loadedVersion = Version;
+        try
+        {
+            _compare = await Pricing.CompareAsync(Proposal.Id);
+            _history = await Pricing.ListHistoryAsync(Proposal.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            _error = PricingFormat.Error(ex);
+        }
+    }
+
+    private string Describe(PricingHistoryDto h)
+    {
+        var model = Proposal.Models.FirstOrDefault(m => m.Id == h.EntityId);
+        var what = h.Action switch
+        {
+            "SettingsSaved" => "Rates and fee changed",
+            "PeriodsSaved" => "Periods changed",
+            "ClinsSaved" => "CLINs changed",
+            "WbsSaved" => "WBS changed",
+            "EscalationSaved" => "Escalation changed",
+            "LaborSaved" => "Labor changed",
+            "CostsSaved" => "Other costs changed",
+            "HandedOff" => "Handed off to the contract (won)",
+            _ => h.Action,
+        };
+        return h.EntityType == "Proposal" ? $"Proposal: {what}" : $"{model?.Name ?? "Deleted scenario"}: {what}";
+    }
+
+    private async Task DeleteAsync(PriceModelRefDto model)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Delete scenario", $"Delete the scenario \"{model.Name}\"? This can't be undone.", yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Pricing.DeleteModelAsync(model.Id);
+            Snackbar.Add($"Deleted \"{model.Name}\".", Severity.Success);
+            await Deleted.InvokeAsync(model.Id);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

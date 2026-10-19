@@ -1,0 +1,263 @@
+@* Where rates come from (the indirect rate set, what-if overrides, the rate date, escalation) and how fee is set; the
+   rates applied to each period and the fully burdened (T&M) hourly rates. *@
+@inject IProposalPricingService Pricing
+@inject ISnackbar Snackbar
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Rates</MudText>
+            <MudStack Spacing="2">
+                <MudSelect T="RateBasis" @bind-Value="_basis" Label="Indirect rate set" ReadOnly="ReadOnly" HelperText="From Indirect rates; a year without them uses the latest earlier year." data-testid="rate-basis">
+                    @foreach (var b in new[] { RateBasis.ForwardPricing, RateBasis.Provisional, RateBasis.Target, RateBasis.Actual })
+                    {
+                        <MudSelectItem T="RateBasis" Value="b">@PricingFormat.Label(b)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">What-if overrides (blank = the books), for every year:</MudText>
+                <MudStack Row="true" Spacing="2">
+                    <MudNumericField T="decimal?" @bind-Value="_fringe" Label="Fringe %" ReadOnly="ReadOnly" Min="0" Max="500" HideSpinButtons="true" Format="0.####" Culture="PricingFormat.Culture" />
+                    <MudNumericField T="decimal?" @bind-Value="_overhead" Label="Overhead %" ReadOnly="ReadOnly" Min="0" Max="500" HideSpinButtons="true" Format="0.####" Culture="PricingFormat.Culture" />
+                    <MudNumericField T="decimal?" @bind-Value="_ga" Label="G&A %" ReadOnly="ReadOnly" Min="0" Max="500" HideSpinButtons="true" Format="0.####" Culture="PricingFormat.Culture" />
+                </MudStack>
+                <MudDatePicker @bind-Date="_asOf" Label="Cost rates as of" ReadOnly="ReadOnly" Editable="true" DateFormat="yyyy-MM-dd" HelperText="Employee cost rates in effect on this date; escalation runs from it." />
+                <MudSelect T="LaborRateSource" @bind-Value="_method" Label="Default rate method for new lines" ReadOnly="ReadOnly">
+                    @foreach (var m in new[] { LaborRateSource.CategoryAverage, LaborRateSource.CategoryMedian, LaborRateSource.Manual })
+                    {
+                        <MudSelectItem T="LaborRateSource" Value="m">@PricingFormat.Label(m)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="decimal" @bind-Value="_escalation" Label="Annual escalation %" ReadOnly="ReadOnly" Min="0" Max="50" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture"
+                                 HelperText="Applied once per full year from the rate date to each period's start." data-testid="escalation" />
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@PricingFormat.FeeWord(ContractType)</MudText>
+            <MudStack Spacing="2">
+                <MudRadioGroup T="FeeMethodKind" @bind-Value="_feeMethod" ReadOnly="ReadOnly" aria-label="Fee method">
+                    <MudRadio T="FeeMethodKind" Value="FeeMethodKind.FlatPercent" Color="Color.Primary">Flat percentage</MudRadio>
+                    <MudRadio T="FeeMethodKind" Value="FeeMethodKind.WeightedGuidelines" Color="Color.Primary">Weighted guidelines (DFARS 215.404-71)</MudRadio>
+                </MudRadioGroup>
+                @if (_feeMethod == FeeMethodKind.FlatPercent)
+                {
+                    <MudNumericField T="decimal" @bind-Value="_fee" Label="@($"{PricingFormat.FeeWord(ContractType)} % of total cost")" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true"
+                                     Format="0.###" Culture="PricingFormat.Culture" data-testid="fee-rate" />
+                }
+                else
+                {
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                        <MudNumericField T="decimal" @bind-Value="_technical" Label="Technical risk % (×60%)" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" HelperText="Normal 5%, range 3–7%" />
+                        <MudNumericField T="decimal" @bind-Value="_management" Label="Management risk % (×40%)" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" HelperText="Normal 5%, range 3–7%" />
+                        <MudNumericField T="decimal" @bind-Value="_contractTypeRisk" Label="Contract type risk %" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture"
+                                         HelperText="FFP 5%, CPIF 1%, CPFF/T&M/LH 0.5%" />
+                        <MudNumericField T="decimal" @bind-Value="_efficiency" Label="Cost efficiency %" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" HelperText="0–4%" />
+                    </MudStack>
+                    <MudText Typo="Typo.body2">Profit objective: <b>@PricingFormat.Percent(Math.Round(0.6m * _technical / 100 + 0.4m * _management / 100 + _contractTypeRisk / 100 + _efficiency / 100, 6))</b> of total cost.</MudText>
+                }
+                @if (Result is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Now: @Result.FeeExplanation.</MudText>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+@if (!ReadOnly)
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3 mb-6" OnClick="SaveAsync" Disabled="_busy" data-testid="save-settings">Save rates and fee</MudButton>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-1">Escalation by labor category</MudText>
+<MudSimpleTable Dense="true" Outlined="true" Class="mb-2" Style="max-width:560px">
+    <caption class="wb-sr-only">Escalation by labor category</caption>
+    <thead><tr><th scope="col">Labor category</th><th scope="col">Annual escalation %</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+    <tbody>
+        @foreach (var row in _escalations)
+        {
+            <tr>
+                <td>
+                    <MudSelect T="Guid" @bind-Value="row.CategoryId" Margin="Margin.Dense" ReadOnly="ReadOnly" aria-label="Labor category">
+                        @foreach (var c in Options.LaborCategories)
+                        {
+                            <MudSelectItem T="Guid" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </td>
+                <td><MudNumericField T="decimal" @bind-Value="row.Percent" Margin="Margin.Dense" ReadOnly="ReadOnly" Min="0" Max="50" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" aria-label="Annual escalation %" /></td>
+                <td>
+                    @if (!ReadOnly)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _escalations.Remove(row)" aria-label="Remove escalation" />
+                    }
+                </td>
+            </tr>
+        }
+        @if (_escalations.Count == 0)
+        {
+            <tr><td colspan="3" class="mud-text-secondary">Every category escalates at @PricingFormat.Percent(Model.Settings.DefaultEscalation).</td></tr>
+        }
+    </tbody>
+</MudSimpleTable>
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2" Class="mb-6">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddEscalation" Disabled="Options.LaborCategories.Count == 0">Add category</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="SaveEscalationsAsync" Disabled="_busy">Save escalation</MudButton>
+    </MudStack>
+}
+
+@if (Result is not null)
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-1">Indirect rates applied</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        The company's cascade, as the books apply it: @string.Join(" → ", Result.Cascade.Select(s => $"{s.Pool} on {s.Base.ToLowerInvariant()}")).
+    </MudText>
+    <MudSimpleTable Dense="true" Outlined="true" Class="mb-4" data-testid="period-rates">
+        <caption class="wb-sr-only">Indirect rates by period</caption>
+        <thead>
+            <tr>
+                <th scope="col">Period</th><th scope="col">Fiscal year</th><th scope="col">Rates from</th><th scope="col" style="text-align:right">Fringe</th>
+                <th scope="col" style="text-align:right">Overhead</th><th scope="col" style="text-align:right">G&amp;A</th><th scope="col" style="text-align:right">Labor multiplier</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Result.PeriodRates)
+            {
+                <tr>
+                    <th scope="row" style="font-weight:normal">@r.PeriodName</th>
+                    <td>FY@(r.FiscalYear)</td>
+                    <td>FY@(r.RatesFiscalYear) @PricingFormat.Label(r.Basis).ToLowerInvariant()@(r.Overridden ? " + what-if" : "")</td>
+                    <td style="text-align:right">@PricingFormat.Percent(r.Fringe)</td>
+                    <td style="text-align:right">@PricingFormat.Percent(r.Overhead)</td>
+                    <td style="text-align:right">@PricingFormat.Percent(r.GeneralAndAdministrative)</td>
+                    <td style="text-align:right">@PricingFormat.Multiplier(r.LaborMultiplier)</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@(PricingFormat.IsTimeAndMaterials(ContractType) ? "T&M hourly rates" : "Fully burdened hourly rates")</MudText>
+    @if (!PricingFormat.IsTimeAndMaterials(ContractType))
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">For reference: what each labor category costs per hour with burden and @PricingFormat.FeeWord(ContractType).ToLowerInvariant().</MudText>
+    }
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Outlined="true" data-testid="bill-rates">
+            <caption class="wb-sr-only">Hourly rates by labor category and period</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Labor category</th><th scope="col">Period</th><th scope="col" style="text-align:right">Hours</th><th scope="col" style="text-align:right">Direct</th>
+                    <th scope="col" style="text-align:right">Fringe</th><th scope="col" style="text-align:right">Overhead</th><th scope="col" style="text-align:right">G&amp;A</th>
+                    <th scope="col" style="text-align:right">@PricingFormat.FeeWord(ContractType)</th><th scope="col" style="text-align:right">Hourly rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Result.BillRates)
+                {
+                    <tr>
+                        <th scope="row" style="font-weight:normal">@b.LaborCategoryCode · @b.LaborCategoryName</th>
+                        <td>@b.PeriodName</td>
+                        <td style="text-align:right">@PricingFormat.Hours(b.Hours)</td>
+                        <td style="text-align:right">@PricingFormat.Rate(b.DirectRate)</td>
+                        <td style="text-align:right">@PricingFormat.Rate(b.Fringe)</td>
+                        <td style="text-align:right">@PricingFormat.Rate(b.Overhead)</td>
+                        <td style="text-align:right">@PricingFormat.Rate(b.GeneralAndAdministrative)</td>
+                        <td style="text-align:right">@PricingFormat.Rate(b.Fee)</td>
+                        <td style="text-align:right"><b>@PricingFormat.Rate(b.BillRate)</b></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public PriceModelDto Model { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public PricingOptionsDto Options { get; set; } = default!;
+
+    [Parameter]
+    public PriceResultDto? Result { get; set; }
+
+    [Parameter]
+    public PricingContractKind ContractType { get; set; }
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    [Parameter]
+    public EventCallback<PriceModelDto> Changed { get; set; }
+
+    private sealed class EscalationRow
+    {
+        public Guid CategoryId { get; set; }
+        public decimal Percent { get; set; }
+    }
+
+    private PriceModelDto? _loaded;
+    private RateBasis _basis;
+    private decimal? _fringe, _overhead, _ga;
+    private DateTime? _asOf;
+    private LaborRateSource _method;
+    private decimal _escalation, _fee, _technical, _management, _contractTypeRisk, _efficiency;
+    private FeeMethodKind _feeMethod;
+    private List<EscalationRow> _escalations = [];
+    private bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_loaded, Model))
+        {
+            return;
+        }
+
+        _loaded = Model;
+        var s = Model.Settings;
+        _basis = s.RateBasis;
+        (_fringe, _overhead, _ga) = (PricingFormat.ToPercent(s.FringeOverride), PricingFormat.ToPercent(s.OverheadOverride), PricingFormat.ToPercent(s.GaOverride));
+        _asOf = s.RatesAsOf.ToDateTime(TimeOnly.MinValue);
+        _method = s.DefaultRateMethod;
+        _escalation = PricingFormat.ToPercent(s.DefaultEscalation)!.Value;
+        _feeMethod = s.FeeMethod;
+        _fee = PricingFormat.ToPercent(s.FeeRate)!.Value;
+        _technical = PricingFormat.ToPercent(s.WgTechnicalRisk)!.Value;
+        _management = PricingFormat.ToPercent(s.WgManagementRisk)!.Value;
+        _contractTypeRisk = PricingFormat.ToPercent(s.WgContractTypeRisk)!.Value;
+        _efficiency = PricingFormat.ToPercent(s.WgCostEfficiency)!.Value;
+        _escalations = Model.Escalations.Select(e => new EscalationRow { CategoryId = e.LaborCategoryId, Percent = PricingFormat.ToPercent(e.Rate)!.Value }).ToList();
+    }
+
+    private void AddEscalation() =>
+        _escalations.Add(new EscalationRow { CategoryId = Options.LaborCategories.FirstOrDefault(c => _escalations.All(e => e.CategoryId != c.Id))?.Id ?? Options.LaborCategories[0].Id, Percent = _escalation });
+
+    private Task SaveAsync() => RunAsync(() => Pricing.SaveSettingsAsync(Model.Id, new SavePriceSettingsRequest(new PriceSettingsDto(
+        _basis, PricingFormat.FromPercent(_fringe), PricingFormat.FromPercent(_overhead), PricingFormat.FromPercent(_ga),
+        _asOf is { } d ? DateOnly.FromDateTime(d) : Model.Settings.RatesAsOf, _method, PricingFormat.FromPercent(_escalation)!.Value, _feeMethod,
+        PricingFormat.FromPercent(_fee)!.Value, PricingFormat.FromPercent(_technical)!.Value, PricingFormat.FromPercent(_management)!.Value,
+        PricingFormat.FromPercent(_contractTypeRisk)!.Value, PricingFormat.FromPercent(_efficiency)!.Value))), "Rates and fee saved; the price is updated.");
+
+    private Task SaveEscalationsAsync() => RunAsync(() => Pricing.SaveEscalationsAsync(Model.Id,
+        _escalations.Select(e => new PriceEscalationDto(e.CategoryId, PricingFormat.FromPercent(e.Percent)!.Value)).ToList()), "Escalation saved.");
+
+    private async Task RunAsync(Func<Task<PriceModelDto>> save, string done)
+    {
+        _busy = true;
+        try
+        {
+            await Changed.InvokeAsync(await save());
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException || ex.GetType().Name.Contains("NotFound"))
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

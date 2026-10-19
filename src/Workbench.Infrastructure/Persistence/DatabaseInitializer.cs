@@ -172,6 +172,7 @@ public static class DatabaseInitializer
         await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
         await CeilingsSeed.SeedAsync(db, cancellationToken);
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
+        await PricingSeed.SeedAsync(db, services, cancellationToken); // Proposal pricing: Riley Quinn (Pricing role), forward pricing rates, PRP-2027-014 with a scenario and version 1.
     }
 
     /// <summary>

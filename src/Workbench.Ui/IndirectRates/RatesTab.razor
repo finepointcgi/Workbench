@@ -24,7 +24,7 @@ else
     <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
         <MudSimpleTable Dense="true" data-testid="rates-table">
             <thead>
-                <tr><th>Pool</th>@foreach (var b in IndirectRatesFormat.Bases) { <th style="text-align:right">@b</th> }</tr>
+                <tr><th>Pool</th>@foreach (var b in IndirectRatesFormat.Bases) { <th style="text-align:right">@IndirectRatesFormat.Label(b)</th> }</tr>
             </thead>
             <tbody>
                 @foreach (var pool in IndirectRatesFormat.Pools)

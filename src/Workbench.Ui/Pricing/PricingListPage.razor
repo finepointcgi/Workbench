@@ -1,0 +1,110 @@
+@page "/pricing"
+@inject IProposalPricingService Pricing
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Proposal pricing · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Proposal pricing</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_busy" data-testid="new-proposal">New proposal</MudButton>
+</MudStack>
+<MudText Class="mud-text-secondary mb-4">
+    Price bids from your own books: labor at employee cost rates, your indirect rate cascade, escalation and fee. Compare scenarios against the
+    price-to-win, lock what you submit, and hand a won price off to the contract and budget.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" data-testid="load-error">@_error</MudAlert>
+}
+else if (_proposals is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_proposals.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-6">
+        <MudText>No proposals yet. Start one with <b>New proposal</b>.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="proposals">
+            <caption class="wb-sr-only">Proposals</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Proposal</th>
+                    <th scope="col">Opportunity</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" style="text-align:right">Submitted price</th>
+                    <th scope="col" style="text-align:right">Target</th>
+                    <th scope="col">Due</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _proposals)
+                {
+                    <tr>
+                        <td>
+                            <MudLink Href="@($"pricing/{p.Id}")" data-testid="proposal-link">@p.Number</MudLink>
+                            <div class="mud-text-secondary" style="font-size:0.85em">@p.Title@(p.Customer is null ? "" : $" · {p.Customer}")</div>
+                        </td>
+                        <td>@(p.OpportunityName ?? "—")</td>
+                        <td>@PricingFormat.Short(p.ContractType)</td>
+                        <td><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="PricingFormat.Color(p.Status)">@p.Status</MudChip></td>
+                        <td style="text-align:right">@(p.Price is { } price ? PricingFormat.Money(price) : "—")@(p.LockedVersions > 1 ? $" (v{p.LockedVersions})" : "")</td>
+                        <td style="text-align:right">@(p.TargetPrice is { } t ? PricingFormat.Money(t) : "—")</td>
+                        <td>@(p.DueDate?.ToString("MMM d, yyyy", PricingFormat.Culture) ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<ProposalSummaryDto>? _proposals;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _proposals = await Pricing.ListProposalsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            _error = PricingFormat.Error(ex);
+        }
+    }
+
+    private async Task NewAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<ProposalDialog>("New proposal");
+        if (await dialog.Result is not { Canceled: false, Data: SaveProposalRequest request })
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var proposal = await Pricing.CreateProposalAsync(request);
+            Nav.NavigateTo($"pricing/{proposal.Id}");
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

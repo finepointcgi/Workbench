@@ -23,6 +23,9 @@ public sealed class AppUser : Entity
     /// <summary>Organization role ProjectManager: sets up, staffs and approves for the projects they manage; assigns tasks.</summary>
     public bool IsProjectManager { get; set; }
 
+    /// <summary>Organization role Pricing: builds and locks proposal prices (sees cost and indirect rates there).</summary>
+    public bool IsPricing { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }
 

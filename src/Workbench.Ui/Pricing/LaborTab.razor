@@ -1,0 +1,271 @@
+@* Labor lines: a labor category on a WBS element and CLIN, hours by period, who does it (a named person or TBD) and where
+   the direct rate comes from (category average or median, selected people, the named person, or a typed rate). *@
+@inject IProposalPricingService Pricing
+@inject ISnackbar Snackbar
+
+<style>
+    .labor-grid th, .labor-grid td { white-space: nowrap; vertical-align: middle; }
+    .labor-grid .num { text-align: right; }
+    .labor-grid .hours-input { width: 84px; }
+    .labor-grid .hours-input input { text-align: right; }
+</style>
+
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+    Direct rates are employee cost rates as of @Model.Settings.RatesAsOf.ToString("MMM d, yyyy", PricingFormat.Culture), escalated each full year to the period's start
+    (Rates and fee). Hours are per period.
+</MudText>
+<div style="overflow-x:auto" class="mb-2">
+    <MudSimpleTable Dense="true" Outlined="true" Class="labor-grid" data-testid="labor-lines">
+        <caption class="wb-sr-only">Labor lines</caption>
+        <thead>
+            <tr>
+                <th scope="col">WBS</th>
+                <th scope="col">CLIN</th>
+                <th scope="col">Labor category</th>
+                <th scope="col">Staff</th>
+                <th scope="col">Rate from</th>
+                <th scope="col" class="num">Base rate</th>
+                @foreach (var p in Model.Periods)
+                {
+                    <th scope="col" class="num">@p.Name hrs</th>
+                }
+                <th scope="col" class="num">Total hrs</th>
+                <th scope="col" class="num">Direct labor</th>
+                <th scope="col"><span class="wb-sr-only">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _rows)
+            {
+                var label = $"{WbsCode(row.WbsId)} {CategoryCode(row.CategoryId)}";
+                var built = Built(row);
+                <tr>
+                    <td>
+                        <MudSelect T="Guid" @bind-Value="row.WbsId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:110px" aria-label="@($"WBS, {label}")">
+                            @foreach (var w in Model.Wbs)
+                            {
+                                <MudSelectItem T="Guid" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td>
+                        <MudSelect T="Guid?" @bind-Value="row.ClinId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:90px" aria-label="@($"CLIN, {label}")">
+                            <MudSelectItem T="Guid?" Value="null">None</MudSelectItem>
+                            @foreach (var c in Model.Clins)
+                            {
+                                <MudSelectItem T="Guid?" Value="c.Id">@c.Number</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td>
+                        <MudSelect T="Guid" @bind-Value="row.CategoryId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:120px" aria-label="@($"Labor category, {label}")">
+                            @foreach (var c in Options.LaborCategories)
+                            {
+                                <MudSelectItem T="Guid" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td>
+                        <MudStack Row="true" Spacing="1">
+                            <MudSelect T="Guid?" @bind-Value="row.EmployeeId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:140px" aria-label="@($"Staff, {label}")">
+                                <MudSelectItem T="Guid?" Value="null">TBD</MudSelectItem>
+                                @foreach (var e in Options.Employees)
+                                {
+                                    <MudSelectItem T="Guid?" Value="e.Id">@e.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @if (row.EmployeeId is null)
+                            {
+                                <MudTextField T="string" @bind-Value="row.StaffName" Margin="Margin.Dense" ReadOnly="ReadOnly" MaxLength="100" Placeholder="TBD" Style="min-width:140px"
+                                              aria-label="@($"TBD staff description, {label}")" />
+                            }
+                        </MudStack>
+                    </td>
+                    <td>
+                        <MudStack Row="true" Spacing="1">
+                            <MudSelect T="LaborRateSource" @bind-Value="row.Method" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:150px" aria-label="@($"Rate method, {label}")">
+                                @foreach (var m in Enum.GetValues<LaborRateSource>())
+                                {
+                                    <MudSelectItem T="LaborRateSource" Value="m">@PricingFormat.Label(m)</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @if (row.Method == LaborRateSource.SelectedPeople)
+                            {
+                                <MudSelect T="Guid" MultiSelection="true" @bind-SelectedValues="row.Selected" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:180px"
+                                           ToStringFunc="EmployeeName" aria-label="@($"People averaged, {label}")">
+                                    @foreach (var e in Options.Employees.Where(e => e.CostRate is not null))
+                                    {
+                                        <MudSelectItem T="Guid" Value="e.Id">@e.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            @if (row.Method == LaborRateSource.Manual || (row.Method is LaborRateSource.CategoryAverage or LaborRateSource.CategoryMedian && PeopleIn(row.CategoryId) == 0))
+                            {
+                                <MudNumericField T="decimal?" @bind-Value="row.ManualRate" Margin="Margin.Dense" ReadOnly="ReadOnly" HideSpinButtons="true" Format="0.00##"
+                                                 Culture="PricingFormat.Culture" Class="hours-input" Adornment="Adornment.Start" AdornmentText="$" aria-label="@($"Hourly rate, {label}")" />
+                            }
+                        </MudStack>
+                    </td>
+                    <td class="num">
+                        @if (built is not null)
+                        {
+                            <MudTooltip Text="@built.RateSource">
+                                <span>@PricingFormat.Rate(built.BaseRate)</span>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <span class="mud-text-secondary">on save</span>
+                        }
+                    </td>
+                    @foreach (var p in Model.Periods)
+                    {
+                        var periodId = p.Id;
+                        <td class="num">
+                            @if (ReadOnly)
+                            {
+                                @PricingFormat.Hours(row.Hours.GetValueOrDefault(periodId))
+                            }
+                            else
+                            {
+                                <MudNumericField T="decimal" Value="row.Hours.GetValueOrDefault(periodId)" ValueChanged="v => row.Hours[periodId] = Math.Max(0, v)" HideSpinButtons="true"
+                                                 Margin="Margin.Dense" Variant="Variant.Text" Class="hours-input" Format="0.##" Culture="PricingFormat.Culture"
+                                                 aria-label="@($"{p.Name} hours, {label}")" />
+                            }
+                        </td>
+                    }
+                    <td class="num">@PricingFormat.Hours(row.Hours.Values.Sum())</td>
+                    <td class="num">@(row.Id is { } id && Result is not null ? PricingFormat.Money(Result.Labor.Where(l => l.LineId == id).Sum(l => l.DirectLabor)) : "—")</td>
+                    <td>
+                        @if (!ReadOnly)
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _rows.Remove(row)" aria-label="@($"Remove labor line {label}")" />
+                        }
+                    </td>
+                </tr>
+            }
+            @if (_rows.Count == 0)
+            {
+                <tr><td colspan="30" class="mud-text-secondary">No labor yet.</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</div>
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="Add" Disabled="Model.Wbs.Count == 0 || Options.LaborCategories.Count == 0" data-testid="add-labor">Add labor line</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="save-labor">Save labor</MudButton>
+    </MudStack>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-1">Labor categories in the books</MudText>
+<MudSimpleTable Dense="true" Outlined="true" Style="max-width: 720px">
+    <caption class="wb-sr-only">Labor category cost rates</caption>
+    <thead><tr><th scope="col">Category</th><th scope="col" class="num">People with a rate</th><th scope="col" class="num">Average</th><th scope="col" class="num">Median</th></tr></thead>
+    <tbody>
+        @foreach (var c in Options.LaborCategories)
+        {
+            <tr>
+                <th scope="row" style="font-weight:normal">@c.Code · @c.Name</th>
+                <td class="num">@c.People</td>
+                <td class="num">@(c.AverageRate is { } a ? PricingFormat.Rate(a) : "—")</td>
+                <td class="num">@(c.MedianRate is { } m ? PricingFormat.Rate(m) : "—")</td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired]
+    public PriceModelDto Model { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public PricingOptionsDto Options { get; set; } = default!;
+
+    [Parameter]
+    public PriceResultDto? Result { get; set; }
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    [Parameter]
+    public EventCallback<PriceModelDto> Changed { get; set; }
+
+    private sealed class Row
+    {
+        public Guid? Id { get; set; }
+        public Guid WbsId { get; set; }
+        public Guid? ClinId { get; set; }
+        public Guid CategoryId { get; set; }
+        public Guid? EmployeeId { get; set; }
+        public string? StaffName { get; set; }
+        public LaborRateSource Method { get; set; }
+        public IReadOnlyCollection<Guid> Selected { get; set; } = [];
+        public decimal? ManualRate { get; set; }
+        public string? Note { get; set; }
+        public Dictionary<Guid, decimal> Hours { get; set; } = [];
+    }
+
+    private PriceModelDto? _loaded;
+    private List<Row> _rows = [];
+    private bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_loaded, Model))
+        {
+            return;
+        }
+
+        _loaded = Model;
+        _rows = Model.LaborLines.Select(l => new Row
+        {
+            Id = l.Id, WbsId = l.WbsId, ClinId = l.ClinId, CategoryId = l.LaborCategoryId, EmployeeId = l.EmployeeId, StaffName = l.StaffName, Method = l.RateMethod,
+            Selected = l.SelectedEmployeeIds.ToHashSet(), ManualRate = l.ManualRate, Note = l.Note, Hours = l.HoursByPeriod.ToDictionary(h => h.Key, h => h.Value),
+        }).ToList();
+    }
+
+    private LaborBuildUpDto? Built(Row row) => row.Id is { } id ? Result?.Labor.FirstOrDefault(l => l.LineId == id) : null;
+
+    private string WbsCode(Guid id) => Model.Wbs.FirstOrDefault(w => w.Id == id)?.Code ?? "?";
+
+    private string CategoryCode(Guid id) => Options.LaborCategories.FirstOrDefault(c => c.Id == id)?.Code ?? "?";
+
+    private int PeopleIn(Guid categoryId) => Options.LaborCategories.FirstOrDefault(c => c.Id == categoryId)?.People ?? 0;
+
+    private string EmployeeName(Guid id) => Options.Employees.FirstOrDefault(e => e.Id == id)?.Name ?? "?";
+
+    private void Add()
+    {
+        var parents = Model.Wbs.Where(w => w.ParentId is not null).Select(w => w.ParentId!.Value).ToHashSet();
+        var last = _rows.LastOrDefault();
+        _rows.Add(new Row
+        {
+            WbsId = last?.WbsId ?? Model.Wbs.FirstOrDefault(w => !parents.Contains(w.Id))?.Id ?? Model.Wbs[0].Id,
+            ClinId = last?.ClinId ?? Model.Clins.FirstOrDefault()?.Id,
+            CategoryId = Options.LaborCategories[0].Id,
+            Method = Model.Settings.DefaultRateMethod is LaborRateSource.NamedEmployee or LaborRateSource.SelectedPeople ? LaborRateSource.CategoryAverage : Model.Settings.DefaultRateMethod,
+        });
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var model = await Pricing.SaveLaborLinesAsync(Model.Id, _rows.Select(r => new SavePriceLaborLineRequest(r.Id, r.WbsId, r.ClinId, r.CategoryId, r.Method,
+                r.Hours.Where(h => h.Value != 0).ToDictionary(h => h.Key, h => h.Value), r.EmployeeId, r.StaffName, r.Selected.ToList(), r.ManualRate, r.Note)).ToList());
+            await Changed.InvokeAsync(model);
+            Snackbar.Add("Labor saved and repriced.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException || ex.GetType().Name.Contains("NotFound"))
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

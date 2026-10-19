@@ -1,0 +1,223 @@
+@* ODCs, travel (priced from the GSA per diem tables), materials and subcontractor quotes, one row per period. *@
+@inject IProposalPricingService Pricing
+@inject ISnackbar Snackbar
+
+<style>
+    .cost-grid th, .cost-grid td { white-space: nowrap; vertical-align: middle; }
+    .cost-grid .num { text-align: right; }
+    .cost-grid .small-input { width: 80px; }
+    .cost-grid .money-input { width: 110px; }
+    .cost-grid input { text-align: right; }
+    .cost-grid .text-input input { text-align: left; }
+</style>
+
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+    Travel is trips × travelers × (airfare + other + nights × lodging + M&amp;IE) at the destination's GSA per diem in the middle of the period (first and last
+    days at 75%). Subcontracts are the subcontractor's priced quote. Unallowable costs are listed but never priced.
+</MudText>
+<div style="overflow-x:auto" class="mb-2">
+    <MudSimpleTable Dense="true" Outlined="true" Class="cost-grid" data-testid="cost-lines">
+        <caption class="wb-sr-only">Other direct costs</caption>
+        <thead>
+            <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Description</th>
+                <th scope="col">WBS</th>
+                <th scope="col">CLIN</th>
+                <th scope="col">Period</th>
+                <th scope="col">Basis</th>
+                <th scope="col">Unallowable</th>
+                <th scope="col" class="num">Amount</th>
+                <th scope="col"><span class="wb-sr-only">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _rows)
+            {
+                var label = string.IsNullOrWhiteSpace(row.Description) ? PricingFormat.Label(row.Kind) : row.Description;
+                var built = row.Id is { } id ? Result?.OtherCosts.FirstOrDefault(c => c.LineId == id) : null;
+                <tr>
+                    <td>
+                        <MudSelect T="PriceCostType" @bind-Value="row.Kind" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:120px" aria-label="@($"Type, {label}")">
+                            @foreach (var k in Enum.GetValues<PriceCostType>())
+                            {
+                                <MudSelectItem T="PriceCostType" Value="k">@PricingFormat.Label(k)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td><MudTextField T="string" @bind-Value="row.Description" Margin="Margin.Dense" ReadOnly="ReadOnly" MaxLength="200" Class="text-input" Style="min-width:200px" aria-label="Description" /></td>
+                    <td>
+                        <MudSelect T="Guid" @bind-Value="row.WbsId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:90px" aria-label="@($"WBS, {label}")">
+                            @foreach (var w in Model.Wbs)
+                            {
+                                <MudSelectItem T="Guid" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td>
+                        <MudSelect T="Guid?" @bind-Value="row.ClinId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:80px" aria-label="@($"CLIN, {label}")">
+                            <MudSelectItem T="Guid?" Value="null">None</MudSelectItem>
+                            @foreach (var c in Model.Clins)
+                            {
+                                <MudSelectItem T="Guid?" Value="c.Id">@c.Number</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td>
+                        <MudSelect T="Guid" @bind-Value="row.PeriodId" Margin="Margin.Dense" ReadOnly="ReadOnly" Style="min-width:110px" aria-label="@($"Period, {label}")">
+                            @foreach (var p in Model.Periods)
+                            {
+                                <MudSelectItem T="Guid" Value="p.Id">@p.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    <td>
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                            @if (row.Kind == PriceCostType.Travel)
+                            {
+                                <MudTextField T="string" @bind-Value="row.Destination" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Destination" MaxLength="120" Class="text-input" Style="min-width:150px" />
+                                <MudTextField T="string" @bind-Value="row.State" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="State" MaxLength="60" Class="text-input small-input" />
+                                <MudNumericField T="int" @bind-Value="row.Trips" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Trips" Min="0" HideSpinButtons="true" Class="small-input" />
+                                <MudNumericField T="int" @bind-Value="row.Travelers" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Travelers" Min="0" HideSpinButtons="true" Class="small-input" />
+                                <MudNumericField T="int" @bind-Value="row.Nights" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Nights" Min="0" HideSpinButtons="true" Class="small-input" />
+                                <MudNumericField T="decimal" @bind-Value="row.Airfare" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Airfare/trip" Min="0" HideSpinButtons="true" Format="0.00" Culture="PricingFormat.Culture" Class="money-input" />
+                                <MudNumericField T="decimal" @bind-Value="row.Other" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Other/trip" Min="0" HideSpinButtons="true" Format="0.00" Culture="PricingFormat.Culture" Class="money-input" />
+                            }
+                            else
+                            {
+                                <MudNumericField T="decimal" @bind-Value="row.Quantity" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Qty" Min="0" HideSpinButtons="true" Format="0.####" Culture="PricingFormat.Culture" Class="small-input" />
+                                <MudNumericField T="decimal" @bind-Value="row.UnitCost" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Unit cost" Min="0" HideSpinButtons="true" Format="0.00##" Culture="PricingFormat.Culture" Class="money-input" />
+                                <MudTextField T="string" @bind-Value="row.Vendor" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="@(row.Kind == PriceCostType.Subcontract ? "Subcontractor" : "Vendor")" MaxLength="200" Class="text-input" Style="min-width:150px" />
+                                <MudTextField T="string" @bind-Value="row.Quote" Margin="Margin.Dense" ReadOnly="ReadOnly" Label="Quote" MaxLength="100" Class="text-input small-input" />
+                            }
+                        </MudStack>
+                        @if (built is not null)
+                        {
+                            <div class="mud-text-secondary" style="font-size:0.8em; white-space:normal; max-width:520px">@built.Detail</div>
+                        }
+                    </td>
+                    <td><MudCheckBox T="bool" @bind-Value="row.IsUnallowable" ReadOnly="ReadOnly" Color="Color.Primary" aria-label="@($"Unallowable, {label}")" /></td>
+                    <td class="num">
+                        @if (built is null)
+                        {
+                            <span class="mud-text-secondary">on save</span>
+                        }
+                        else if (built.IsUnallowable)
+                        {
+                            <span><s>@PricingFormat.Cents(built.Amount)</s> excluded</span>
+                        }
+                        else
+                        {
+                            @PricingFormat.Cents(built.Amount)
+                        }
+                    </td>
+                    <td>
+                        @if (!ReadOnly)
+                        {
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _rows.Remove(row)" aria-label="@($"Remove {label}")" />
+                        }
+                    </td>
+                </tr>
+            }
+            @if (_rows.Count == 0)
+            {
+                <tr><td colspan="9" class="mud-text-secondary">No other costs yet.</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</div>
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => Add(PriceCostType.Odc)" Disabled="Model.Wbs.Count == 0">Add ODC</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Flight" OnClick="() => Add(PriceCostType.Travel)" Disabled="Model.Wbs.Count == 0" data-testid="add-travel">Add travel</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="() => Add(PriceCostType.Materials)" Disabled="Model.Wbs.Count == 0">Add materials</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Handshake" OnClick="() => Add(PriceCostType.Subcontract)" Disabled="Model.Wbs.Count == 0">Add subcontract quote</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="save-costs">Save other costs</MudButton>
+    </MudStack>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public PriceModelDto Model { get; set; } = default!;
+
+    [Parameter]
+    public PriceResultDto? Result { get; set; }
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    [Parameter]
+    public EventCallback<PriceModelDto> Changed { get; set; }
+
+    private sealed class Row
+    {
+        public Guid? Id { get; set; }
+        public PriceCostType Kind { get; set; }
+        public string Description { get; set; } = "";
+        public Guid WbsId { get; set; }
+        public Guid? ClinId { get; set; }
+        public Guid PeriodId { get; set; }
+        public decimal Quantity { get; set; } = 1;
+        public decimal UnitCost { get; set; }
+        public bool IsUnallowable { get; set; }
+        public string? Vendor { get; set; }
+        public string? Quote { get; set; }
+        public string? Destination { get; set; }
+        public string? State { get; set; }
+        public int Trips { get; set; } = 1;
+        public int Travelers { get; set; } = 1;
+        public int Nights { get; set; } = 2;
+        public decimal Airfare { get; set; }
+        public decimal Other { get; set; }
+    }
+
+    private PriceModelDto? _loaded;
+    private List<Row> _rows = [];
+    private bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_loaded, Model))
+        {
+            return;
+        }
+
+        _loaded = Model;
+        _rows = Model.CostLines.Select(c => new Row
+        {
+            Id = c.Id, Kind = c.Kind, Description = c.Description, WbsId = c.WbsId, ClinId = c.ClinId, PeriodId = c.PeriodId, Quantity = c.Quantity, UnitCost = c.UnitCost,
+            IsUnallowable = c.IsUnallowable, Vendor = c.Vendor, Quote = c.QuoteReference, Destination = c.Destination, State = c.State, Trips = c.Trips,
+            Travelers = c.Travelers, Nights = c.Nights, Airfare = c.AirfarePerTrip, Other = c.OtherPerTrip,
+        }).ToList();
+    }
+
+    private void Add(PriceCostType kind) => _rows.Add(new Row
+    {
+        Kind = kind,
+        Description = kind == PriceCostType.Travel ? "Trip" : "",
+        WbsId = _rows.LastOrDefault()?.WbsId ?? Model.Wbs[0].Id,
+        ClinId = _rows.LastOrDefault()?.ClinId ?? Model.Clins.LastOrDefault()?.Id,
+        PeriodId = _rows.LastOrDefault()?.PeriodId ?? Model.Periods[0].Id,
+    });
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var model = await Pricing.SaveCostLinesAsync(Model.Id, _rows.Select(r => new SavePriceCostLineRequest(r.Id, r.WbsId, r.ClinId, r.PeriodId, r.Kind, r.Description,
+                r.Quantity, r.UnitCost, r.IsUnallowable, r.Vendor, r.Quote, r.Destination, r.State, r.Trips, r.Travelers, r.Nights, r.Airfare, r.Other)).ToList());
+            await Changed.InvokeAsync(model);
+            Snackbar.Add("Other costs saved and repriced.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException || ex.GetType().Name.Contains("NotFound"))
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

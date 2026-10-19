@@ -11,7 +11,7 @@
             <MudSelect T="RateBasis" @bind-Value="Basis" Label="Basis" Dense="true">
                 @foreach (var b in IndirectRatesFormat.Bases)
                 {
-                    <MudSelectItem T="RateBasis" Value="b">@b</MudSelectItem>
+                    <MudSelectItem T="RateBasis" Value="b">@IndirectRatesFormat.Label(b)</MudSelectItem>
                 }
             </MudSelect>
             <MudNumericField T="decimal?" @bind-Value="_percent" Label="Rate (%)" Format="0.####" Min="0" Max="500" Immediate="true" AutoFocus="true" data-testid="rate-percent" />
