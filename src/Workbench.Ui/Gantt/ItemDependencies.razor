@@ -1,0 +1,176 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Scheduling
+@inject IDependencyService DependencyService
+@inject ISnackbar Snackbar
+
+@* "Depends on" in the item details panel: the keyboard way to add and remove the Gantt's dependency links (on the chart
+   they are drawn by dragging between bars and removed by clicking an arrow). *@
+<section aria-labelledby="@HeadingId" class="mb-4" data-testid="depends-on">
+    <h3 id="@HeadingId" tabindex="-1" class="mud-typography mud-typography-subtitle2 mb-1" @ref="_heading">Depends on</h3>
+    @if (_dependencies is null)
+    {
+        <MudProgressLinear aria-label="Loading dependencies" Indeterminate="true" />
+    }
+    else
+    {
+        var mine = _dependencies.Where(d => d.SuccessorId == Item.Id).ToList();
+        @if (mine.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing. This item can start on its own.</MudText>
+        }
+        else
+        {
+            <ul class="wb-dependency-list">
+                @foreach (var dependency in mine)
+                {
+                    var title = TitleOf(dependency.PredecessorId);
+                    <li>
+                        <span style="flex:1; overflow-wrap:anywhere">@title<span class="mud-text-secondary">@Describe(dependency)</span></span>
+                        @if (CanEdit)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.LinkOff" Size="Size.Small" OnClick="() => RemoveAsync(dependency)"
+                                           aria-label="@($"Remove dependency on {title}")" />
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (CanEdit)
+        {
+            // In sheet order, as in the grid.
+            var candidates = GanttLayout.BuildRows(Items, new HashSet<Guid>()).Select(r => r.Item)
+                .Where(i => i.Id != Item.Id && mine.All(d => d.PredecessorId != i.Id)).ToList();
+            @if (candidates.Count > 0)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                    <MudSelect T="Guid?" @bind-Value="_selected" ToStringFunc="SelectedTitle" Label="Add a dependency" Dense="true" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" Style="flex:1" data-testid="add-dependency">
+                        @foreach (var candidate in candidates)
+                        {
+                            <MudSelectItem T="Guid?" Value="candidate.Id">@candidate.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddAsync" data-testid="add-dependency-button">Add</MudButton>
+                </MudStack>
+            }
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter, EditorRequired]
+    public ItemDto Item { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ItemDto> Items { get; set; } = [];
+
+    [Parameter]
+    public int Version { get; set; }
+
+    [CascadingParameter]
+    public SheetAccess? Access { get; set; }
+
+    private bool CanEdit => Access?.CanEdit ?? true;
+
+    private string HeadingId => $"depends-on-{Item.Id:N}";
+
+    private IReadOnlyList<DependencyDto>? _dependencies;
+    private Guid? _selected;
+    private ElementReference _heading;
+    private bool _busy;
+    private (Guid Item, int Version)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == (Item.Id, Version))
+        {
+            return;
+        }
+
+        _loaded = (Item.Id, Version);
+        _selected = null;
+        await RunAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync() => _dependencies = await DependencyService.ListAsync(SheetId);
+
+    private string SelectedTitle(Guid? itemId) => itemId is { } id ? TitleOf(id) : "";
+
+    private string TitleOf(Guid itemId) => Items.FirstOrDefault(i => i.Id == itemId)?.Title ?? "(hidden)";
+
+    private static string Describe(DependencyDto dependency) =>
+        (dependency.Type == DependencyKind.FinishToStart ? "" : $" ({KindName(dependency.Type)})")
+        + (dependency.LagDays != 0 ? $" {dependency.LagDays:+0;-0} working days" : "");
+
+    private static string KindName(DependencyKind kind) => kind switch
+    {
+        DependencyKind.StartToStart => "start to start",
+        DependencyKind.FinishToFinish => "finish to finish",
+        DependencyKind.StartToFinish => "start to finish",
+        _ => "finish to start",
+    };
+
+    private async Task AddAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        if (_selected is not { } predecessorId)
+        {
+            Snackbar.Add("Choose the item this one depends on.", Severity.Info);
+            return;
+        }
+
+        var title = TitleOf(predecessorId);
+        await RunAsync(async () =>
+        {
+            await DependencyService.AddAsync(SheetId, new CreateDependencyRequest(predecessorId, Item.Id));
+            _selected = null;
+            await LoadAsync();
+            Snackbar.Add($"\"{Item.Title}\" now depends on \"{title}\".", Severity.Success);
+        });
+    }
+
+    private async Task RemoveAsync(DependencyDto dependency)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        var title = TitleOf(dependency.PredecessorId);
+        await RunAsync(async () =>
+        {
+            await DependencyService.RemoveAsync(SheetId, dependency.Id);
+            await LoadAsync();
+            Snackbar.Add($"Removed the dependency on \"{title}\".", Severity.Success);
+        });
+
+        // The button that had focus is gone; put focus back at the top of the section.
+        await _heading.FocusAsync();
+    }
+
+    /// <summary>Runs a service call and reports expected failures (validation, missing rows, network) in a snackbar.</summary>
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchNotFoundException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,5 +1,6 @@
 @* Sends the browser to sign in when the circuit's session ends (deactivated, signed out everywhere, idle or past its
-   lifetime; see RevalidatingAuthenticationStateProvider). Renders nothing. *@
+   lifetime; see RevalidatingAuthenticationStateProvider). Renders nothing. The idle warning itself is plain script
+   (js/session.js), because anything the circuit renders counts as activity and would reset the idle clock. *@
 @using Microsoft.AspNetCore.Components.Authorization
 @implements IDisposable
 @inject AuthenticationStateProvider AuthenticationState
@@ -9,6 +10,15 @@
     protected override void OnInitialized() => AuthenticationState.AuthenticationStateChanged += OnChanged;
 
     public void Dispose() => AuthenticationState.AuthenticationStateChanged -= OnChanged;
+
+    /// <summary>
+    /// Called by js/session.js when the user chooses "Stay signed in" (or is active in another tab). Does nothing: the call
+    /// itself is inbound circuit activity, which resets the circuit's idle clock (SessionCircuitHandler).
+    /// </summary>
+    [JSInvokable]
+    public static void KeepSessionAlive()
+    {
+    }
 
     private async void OnChanged(Task<AuthenticationState> task)
     {

@@ -67,6 +67,7 @@
                                     <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
                                     <MudDivider />
                                 }
+                                <MudMenuItem Icon="@Icons.Material.Filled.SwapHoriz" OnClick="() => ResizeColumnAsync(column)">Column width</MudMenuItem>
                                 @if (CanEdit)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.ViewColumn" OnClick="AddColumnAsync">Add column</MudMenuItem>
@@ -889,6 +890,17 @@
         catch (Exception ex) when (IsExpected(ex))
         {
             Snackbar.Add($"Couldn't add the column: {ex.Message}", Severity.Error);
+        }
+    }
+
+    /// <summary>The keyboard way to resize a column; the drag handle on the header edge does the same with a mouse.</summary>
+    private async Task ResizeColumnAsync(GridColumn column)
+    {
+        var parameters = new DialogParameters<ColumnWidthDialog> { { d => d.Width, WidthOf(column) }, { d => d.DefaultWidth, column.DefaultWidth } };
+        var dialog = await DialogService.ShowAsync<ColumnWidthDialog>($"{column.Name} column width", parameters);
+        if (await dialog.Result is { Canceled: false, Data: int width })
+        {
+            SetColumnWidth(column.Key, width);
         }
     }
 
