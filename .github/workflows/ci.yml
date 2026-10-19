@@ -1,4 +1,4 @@
-# Build, test and supply-chain checks (ISO 27001 A.8.25–A.8.29, A.8.8). Every pull request and every push to main
+# Build, test and supply-chain checks (ISO 27001 A.8.25–A.8.29, A.8.8). Every pull request and every push to master/main
 # must pass before merge; make the three "build-test" legs, "supply-chain" and "container" required checks in the
 # branch protection rules. Deployment is .github/workflows/deploy.yml.
 name: CI
@@ -6,7 +6,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:

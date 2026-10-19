@@ -1,0 +1,22 @@
+// A GitHub Codespace that runs Workbench with its demo data, for sharing a test link.
+// Create a codespace on master, then make port 5104 Public (Ports tab, or `gh codespace ports visibility 5104:public`)
+// and send the forwarded https://…-5104.app.github.dev address. See .devcontainer/README.md.
+{
+  "name": "Workbench demo",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "10.0" },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "hostRequirements": { "cpus": 4, "memory": "8gb" },
+  "forwardPorts": [5104],
+  "portsAttributes": {
+    "5104": { "label": "Workbench", "onAutoForward": "openBrowser" }
+  },
+  "postCreateCommand": "dotnet build src/Workbench.Web -c Release -nologo -v q",
+  "postStartCommand": "bash .devcontainer/start-demo.sh",
+  "customizations": {
+    "codespaces": { "openFiles": [".devcontainer/README.md"] },
+    "vscode": { "extensions": ["ms-dotnettools.csdevkit"] }
+  }
+}
