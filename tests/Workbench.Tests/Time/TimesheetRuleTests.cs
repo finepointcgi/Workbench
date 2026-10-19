@@ -378,9 +378,9 @@ public sealed class TimesheetRuleTests
         var csv = await host.Reports.ExportLaborDistributionCsvAsync(Monday, Monday.AddDays(6));
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
 
-        Assert.Equal("EmployeeNumber,Employee,WorkDate,Project,Wbs,LaborCategory,Hours,HourlyCost,Cost", lines[0]);
-        Assert.Equal("E2,Dana Lee,2026-10-19,1001,1001.01,SE2,8.00,50.0000,400.00", lines[1]);
-        Assert.Equal("E2,Dana Lee,2026-10-20,1001,1001.01,SE2,8.00,60.0000,480.00", lines[2]);
+        Assert.Equal("EmployeeNumber,Employee,WorkDate,Project,Wbs,LaborCategory,Hours,HourlyCost,Cost,UncompensatedHours", lines[0]);
+        Assert.Equal("E2,Dana Lee,2026-10-19,1001,1001.01,SE2,8.00,50.0000,400.00,0.00", lines[1]);
+        Assert.Equal("E2,Dana Lee,2026-10-20,1001,1001.01,SE2,8.00,60.0000,480.00,0.00", lines[2]);
 
         // Unapproved time is excluded.
         await host.Timesheets.ReopenAsync((await host.Timesheets.ListMyTimesheetsAsync())[0].Id, "Correction");

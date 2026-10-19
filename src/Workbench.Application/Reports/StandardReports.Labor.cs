@@ -11,7 +11,7 @@ public sealed partial class StandardReportService
 {
     // Labor distribution: hours by employee × project × period, limited to the employees whose time the user may see
     // (Timekeeper/Finance/Admin everyone, supervisors their direct reports, otherwise themselves). Labor cost (hours × the
-    // cost rate on the work date) is a Finance/Admin column, as on the labor distribution export.
+    // cost rate on the work date, by the labor cost method for exempt staff's uncompensated hours) is a Finance/Admin column, as on the labor distribution export.
 
     private async Task LaborDistributionAsync(ReportBuilder b, ReportAccessContext context, ReportParameters p, CancellationToken ct)
     {
@@ -26,13 +26,13 @@ public sealed partial class StandardReportService
 
         await using var db = await dbFactory.CreateAsync(ct);
         var entries = await LoadTimeAsync(db, context, from, to, p.EmployeeId, p.ProjectId, approvedOnly: !p.IncludeUnapproved, ct);
-        var lookups = await TimeLookups.LoadAsync(db, entries.Select(e => e.EmployeeId), entries.Select(e => e.WbsElementId), context.IsFinance, ct);
+        var lookups = await TimeLookups.LoadAsync(db, entries.Select(e => e.EmployeeId), entries.Select(e => e.WbsElementId), context.IsFinance, ct, entries.Select(e => e.TimesheetId));
         var rows = entries
             .Select(e =>
             {
                 var wbs = lookups.Wbs[e.WbsElementId];
-                var rate = context.IsFinance ? lookups.CostRates.Find(e.EmployeeId, e.WorkDate) : null;
-                return new { e.EmployeeId, wbs.ProjectId, Period = PeriodLabel(e.WorkDate, p.Grouping, lookups, from, to), e.Hours, Cost = rate is { } r ? ReportValues.Cents(r * e.Hours) : 0m, Missing = context.IsFinance && rate is null };
+                var cost = context.IsFinance ? lookups.CostOf(e.EntryId, e.EmployeeId, e.WorkDate, e.Hours) : null;
+                return new { e.EmployeeId, wbs.ProjectId, Period = PeriodLabel(e.WorkDate, p.Grouping, lookups, from, to), e.Hours, Cost = cost ?? 0m, Missing = context.IsFinance && cost is null };
             })
             .ToList();
         if (rows.Any(r => r.Missing))
@@ -130,7 +130,8 @@ public sealed partial class StandardReportService
         var to = key.Date("to") ?? rangeTo;
         await using var db = await dbFactory.CreateAsync(ct);
         var entries = await LoadTimeAsync(db, context, from, to, key.RequireId("employee"), key.Id("project"), approvedOnly: !p.IncludeUnapproved, ct);
-        var lookups = await TimeLookups.LoadAsync(db, entries.Select(e => e.EmployeeId).Append(key.RequireId("employee")), entries.Select(e => e.WbsElementId), context.IsFinance, ct);
+        var lookups = await TimeLookups.LoadAsync(db, entries.Select(e => e.EmployeeId).Append(key.RequireId("employee")), entries.Select(e => e.WbsElementId), context.IsFinance, ct,
+            entries.Select(e => e.TimesheetId));
         b.Subtitle = $"{lookups.Employees.GetValueOrDefault(key.RequireId("employee"))?.DisplayName} · {ReportDates.Describe(from, to)}";
         b.Column("date", "Work date", ReportColumnType.Date).Column("wbs", "WBS").Column("wbs_name", "WBS name").Column("labor_category", "Labor category")
             .Column("status", "Timesheet status").Column("comment", "Comment").Column("hours", "Hours", ReportColumnType.Hours);
@@ -145,8 +146,7 @@ public sealed partial class StandardReportService
             object?[] values = [e.WorkDate, w.Code, w.Name, lookups.Categories.GetValueOrDefault(e.LaborCategoryId), e.Status, e.Comment, e.Hours];
             if (context.IsFinance)
             {
-                var rate = lookups.CostRates.Find(e.EmployeeId, e.WorkDate);
-                values = [.. values, rate, rate is { } r ? ReportValues.Cents(r * e.Hours) : null];
+                values = [.. values, lookups.RateOf(e.EntryId, e.EmployeeId, e.WorkDate), lookups.CostOf(e.EntryId, e.EmployeeId, e.WorkDate, e.Hours)];
             }
 
             b.Add(ReportRowKind.Detail, 0, null, $"time/history/{e.TimesheetId}", values);

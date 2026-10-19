@@ -8,7 +8,8 @@ public sealed record WbsNode(Guid Id, Guid? ParentId, string Code, string Name, 
 public sealed record BudgetAmount(Guid WbsElementId, DateOnly? PeriodStart, decimal Hours, decimal Amount);
 
 /// <summary>Approved hours on one work date (only approved time is passed in).</summary>
-public sealed record LaborActual(Guid WbsElementId, Guid EmployeeId, Guid LaborCategoryId, DateOnly WorkDate, decimal Hours);
+/// <remarks><paramref name="EntryId"/>, when set, lets <see cref="LaborCosting"/> take the entry's cost from a <see cref="TotalTime.LaborCostBook"/>.</remarks>
+public sealed record LaborActual(Guid WbsElementId, Guid EmployeeId, Guid LaborCategoryId, DateOnly WorkDate, decimal Hours, Guid? EntryId = null);
 
 /// <summary>Labor actual priced at cost and at bill rate.</summary>
 public sealed record CostedLabor(Guid WbsElementId, DateOnly WorkDate, decimal Hours, decimal Cost, decimal BillableValue);
@@ -40,21 +41,46 @@ public static class LaborCosting
         IEnumerable<LaborActual> labor,
         EffectiveRateTable<Guid> costRates,
         EffectiveRateTable<Guid>? billRates,
+        out decimal missingCostRateHours) =>
+        Cost(labor, null, costRates, billRates, out missingCostRateHours);
+
+    /// <summary>
+    /// As above, but an entry found in <paramref name="book"/> (by <see cref="LaborActual.EntryId"/>) costs what the
+    /// labor cost method says (total time accounting for exempt staff). Bill rates still apply to every hour.
+    /// </summary>
+    public static IReadOnlyList<CostedLabor> Cost(
+        IEnumerable<LaborActual> labor,
+        TotalTime.LaborCostBook? book,
+        EffectiveRateTable<Guid> costRates,
+        EffectiveRateTable<Guid>? billRates,
         out decimal missingCostRateHours)
     {
         missingCostRateHours = 0;
         var result = new List<CostedLabor>();
         foreach (var entry in labor)
         {
-            var cost = costRates.Find(entry.EmployeeId, entry.WorkDate);
-            if (cost is null)
+            decimal cost;
+            if (book is not null && entry.EntryId is { } id && book.Contains(id))
             {
-                missingCostRateHours += entry.Hours;
+                cost = book.Cost(id);
+                if (book.MissingRate(id))
+                {
+                    missingCostRateHours += entry.Hours;
+                }
+            }
+            else
+            {
+                var rate = costRates.Find(entry.EmployeeId, entry.WorkDate);
+                if (rate is null)
+                {
+                    missingCostRateHours += entry.Hours;
+                }
+
+                cost = Money.Round(entry.Hours * (rate ?? 0m));
             }
 
             var bill = billRates?.Find(entry.LaborCategoryId, entry.WorkDate) ?? 0m;
-            result.Add(new CostedLabor(entry.WbsElementId, entry.WorkDate, entry.Hours,
-                Money.Round(entry.Hours * (cost ?? 0m)), Money.Round(entry.Hours * bill)));
+            result.Add(new CostedLabor(entry.WbsElementId, entry.WorkDate, entry.Hours, cost, Money.Round(entry.Hours * bill)));
         }
 
         return result;

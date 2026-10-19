@@ -61,6 +61,7 @@ public static class WorkbenchApi
         v1.MapPricingEndpoints();
         v1.MapAssistantEndpoints();
         v1.MapPlanningEndpoints();
+        v1.MapTotalTimeEndpoints();
 
         return app;
     }
