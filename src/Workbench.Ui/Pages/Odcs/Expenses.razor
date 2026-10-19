@@ -14,35 +14,46 @@
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">New report</MudButton>
 </MudStack>
 
-<MudTable T="ExpenseReportDto" Items="_reports" Loading="_loading" Hover="true" Dense="true" OnRowClick="@(e => { if (e.Item is { } r) Open(r); })" Style="cursor:pointer">
-    <HeaderContent>
-        <MudTh>Title</MudTh>
-        <MudTh>Trip</MudTh>
-        <MudTh Style="text-align:right">Lines</MudTh>
-        <MudTh Style="text-align:right">Total</MudTh>
-        <MudTh Style="text-align:right"><Term Key="allowable">Allowable</Term></MudTh>
-        <MudTh>Status</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="Title"><MudLink Href="@($"expenses/{context.Id}")">@context.Title</MudLink></MudTd>
-        <MudTd DataLabel="Trip">@TripText(context)</MudTd>
-        <MudTd DataLabel="Lines" Style="text-align:right">@context.LineCount</MudTd>
-        <MudTd DataLabel="Total" Style="text-align:right">@OdcFormat.Money(context.Total)</MudTd>
-        <MudTd DataLabel="Allowable" Style="text-align:right">@OdcFormat.Money(context.AllowableTotal)</MudTd>
-        <MudTd DataLabel="Status"><OdcStatusChip Status="context.Status" /></MudTd>
-    </RowTemplate>
-    <NoRecordsContent>
-        <MudText data-testid="expenses-empty">No expense reports yet. Start one for your next trip, or for anything you bought for a project.</MudText>
-        <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">Start an expense report</MudButton>
-    </NoRecordsContent>
-</MudTable>
+<MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
+    <MudTabPanel Text="Reports">
+        <MudTable T="ExpenseReportDto" Items="_reports" Loading="_loading" Hover="true" Dense="true" OnRowClick="@(e => { if (e.Item is { } r) Open(r); })" Style="cursor:pointer">
+            <HeaderContent>
+                <MudTh>Title</MudTh>
+                <MudTh>Trip</MudTh>
+                <MudTh Style="text-align:right">Lines</MudTh>
+                <MudTh Style="text-align:right">Total</MudTh>
+                <MudTh Style="text-align:right"><Term Key="allowable">Allowable</Term></MudTh>
+                <MudTh>Status</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Title"><MudLink Href="@($"expenses/{context.Id}")">@context.Title</MudLink></MudTd>
+                <MudTd DataLabel="Trip">@TripText(context)</MudTd>
+                <MudTd DataLabel="Lines" Style="text-align:right">@context.LineCount</MudTd>
+                <MudTd DataLabel="Total" Style="text-align:right">@OdcFormat.Money(context.Total)</MudTd>
+                <MudTd DataLabel="Allowable" Style="text-align:right">@OdcFormat.Money(context.AllowableTotal)</MudTd>
+                <MudTd DataLabel="Status"><OdcStatusChip Status="context.Status" /></MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText data-testid="expenses-empty">No expense reports yet. Start one for your next trip, or for anything you bought for a project.</MudText>
+                <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">Start an expense report</MudButton>
+            </NoRecordsContent>
+        </MudTable>
+    </MudTabPanel>
+    <MudTabPanel Text="Card charges" data-testid="tab-card-charges">
+        <Workbench.Ui.Travel.CardChargesTab />
+    </MudTabPanel>
+</MudTabs>
 
 @code {
     private IReadOnlyList<ExpenseReportDto> _reports = [];
     private bool _loading = true;
+    private int _tab;
+
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        _tab = Tab == "cards" ? 1 : 0;
         try
         {
             _reports = await Reports.ListMyReportsAsync();

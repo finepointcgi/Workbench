@@ -1,0 +1,128 @@
+@* Phone: the cardholder's unassigned corporate card charges, each added to a draft report in two taps (then the receipt). *@
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_charges.Count > 0)
+{
+    <div class="wb-m-title" style="margin-top:16px"><h2 style="font-size:1.1rem;margin:0">Card charges to claim</h2></div>
+    @foreach (var charge in _charges)
+    {
+        <div class="wb-m-card" data-testid="m-card-charge">
+            <div class="wb-m-row" style="align-items:center">
+                <span style="flex:1 1 auto;min-width:0">
+                    <b class="wb-m-wrap">@charge.Merchant</b><br />
+                    <span class="wb-m-muted">@charge.TransactionDate.ToString("MMM d", CultureInfo.InvariantCulture) · ••@charge.CardLast4</span>
+                    @if (charge.IsOverdue)
+                    {
+                        <br /><span style="color:var(--mud-palette-error)">@charge.AgeDays days old</span>
+                    }
+                </span>
+                <b>@TravelFormat.Money(charge.Amount)</b>
+            </div>
+            @if (_open == charge.Id)
+            {
+                <label class="wb-m-field">
+                    <span>Expense report</span>
+                    <select class="wb-m-input" @bind="_reportId" data-testid="m-card-report">
+                        @foreach (var report in _reports)
+                        {
+                            <option value="@report.Id">@report.Title</option>
+                        }
+                    </select>
+                </label>
+                <label class="wb-m-field">
+                    <span>Charge code</span>
+                    <select class="wb-m-input" @bind="_wbsId">
+                        @foreach (var chargeCode in _codes)
+                        {
+                            <option value="@chargeCode.WbsElementId">@chargeCode.Code · @chargeCode.Name</option>
+                        }
+                    </select>
+                </label>
+                <div class="wb-m-actions">
+                    <MudButton Variant="Variant.Text" OnClick="() => _open = null">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _reportId == Guid.Empty || _wbsId == Guid.Empty)"
+                               OnClick="() => AttachAsync(charge)" data-testid="m-card-attach">Add</MudButton>
+                </div>
+            }
+            else if (charge.Amount > 0)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="mt-2" Disabled="@(_reports.Count == 0)"
+                           OnClick="() => OpenAsync(charge)">@(_reports.Count == 0 ? "Start a report to add it" : "Add to a report")</MudButton>
+            }
+        </div>
+    }
+}
+
+@code {
+    private ICardChargeService? _cards;
+    private IReadOnlyList<CardTransactionDto> _charges = [];
+    private IReadOnlyList<ExpenseReportDto> _reports = [];
+    private IReadOnlyList<ChargeCodeDto> _codes = [];
+    private Guid? _open;
+    private Guid _reportId;
+    private Guid _wbsId;
+    private bool _busy;
+
+    [Parameter] public IReadOnlyList<ExpenseReportDto> Reports { get; set; } = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _cards = Services.GetService<ICardChargeService>();
+        _reports = Reports.Where(r => r.IsEditable).ToList();
+        if (_cards is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _charges = await _cards.ListMyChargesAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            _charges = [];
+        }
+    }
+
+    private async Task OpenAsync(CardTransactionDto charge)
+    {
+        _open = charge.Id;
+        _reportId = (_reports.FirstOrDefault(r => r.TripStart <= charge.TransactionDate && charge.TransactionDate <= (r.TripEnd ?? r.TripStart)) ?? _reports.FirstOrDefault())?.Id ?? Guid.Empty;
+        try
+        {
+            if (Services.GetService<Workbench.Contracts.Identity.ICurrentUserContext>() is { } user && (await user.GetAsync()).EmployeeId is { } me
+                && Services.GetService<IProjectService>() is { } projects)
+            {
+                _codes = (await projects.ListChargeCodesAsync(me, charge.TransactionDate)).Where(c => c.Kind != ChargeCodeKind.Leave).ToList();
+            }
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            _codes = [];
+        }
+
+        _wbsId = (_codes.FirstOrDefault(c => c.Kind == ChargeCodeKind.Direct) ?? _codes.FirstOrDefault())?.WbsElementId ?? Guid.Empty;
+    }
+
+    private async Task AttachAsync(CardTransactionDto charge)
+    {
+        _busy = true;
+        try
+        {
+            await _cards!.AttachToReportAsync(charge.Id, new AttachCardChargeRequest(_reportId, _wbsId,
+                charge.SuggestedCategory == TravelCategory.Other ? OdcCostType.Other : OdcCostType.Travel));
+            Navigation.NavigateTo($"m/expenses/{_reportId}");
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

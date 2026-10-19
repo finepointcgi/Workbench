@@ -73,6 +73,7 @@ public static class NavCatalog
         new(MyWork, null, "Time", "time", Icons.Material.Filled.AccessTime, Everyone, MatchAll: true, Detail: "Timesheet", Keywords: "timesheet hours"),
         new(MyWork, null, "Team time", "time/team", Icons.Material.Filled.Groups, a => a.ShowTeamTime, Keywords: "supervisor timesheets"),
         new(MyWork, null, "Expenses", "expenses", Icons.Material.Filled.Receipt, Everyone, Detail: "Expense report", Keywords: "expense report travel receipts"),
+        new(MyWork, null, "Travel", "travel", Icons.Material.Filled.FlightTakeoff, Everyone, Detail: "Trip", Keywords: "travel authorization trip request per diem advance"),
         new(MyWork, null, "Leave", "leave", Icons.Material.Filled.BeachAccess, Everyone, Keywords: "vacation pto time off"),
         new(MyWork, null, "My requisitions", "purchasing/requisitions", Icons.Material.Filled.PostAdd, Everyone, Detail: "Requisition", Keywords: "purchase request buy"),
         new(MyWork, null, "Receiving", "purchasing/receiving", Icons.Material.Filled.Inventory, a => a.IsReceiver && !a.IsFinance, Keywords: "receive goods purchase order"),
@@ -143,6 +144,7 @@ public static class NavCatalog
         new(Finance, "Assets", "Asset categories", "assets/categories", Icons.Material.Filled.Category, FinanceOnly, Keywords: "fixed asset classes useful life depreciation method"),
 
         new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, FinanceOnly, Detail: "Payroll run", Keywords: "paylocity pay runs"),
+        new(Finance, null, "Corporate cards", "cards", Icons.Material.Filled.CreditCard, FinanceOnly, Keywords: "card statement import reconciliation aging p-card travel card"),
 
         new(Finance, "Revenue & compliance", "Revenue", "accounting/revenue", Icons.Material.Filled.TrendingUp, FinanceOnly, MatchAll: true, Keywords: "revenue recognition run"),
         new(Finance, "Revenue & compliance", "Revenue estimates", "accounting/revenue/estimates", Icons.Material.Filled.Calculate, FinanceOnly, Keywords: "eac etc", InMenu: false),
@@ -193,6 +195,7 @@ public static class NavCatalog
         new(Admin, "Setup", "Projects and WBS", "setup/projects", Icons.Material.Filled.Work, FinanceOnly, Detail: "Project", Keywords: "charge codes"),
         new(Admin, "Setup", "Fiscal calendar", "setup/fiscal-calendar", Icons.Material.Filled.CalendarMonth, FinanceOnly, Keywords: "periods year"),
         new(Admin, "Setup", "Per diem rates", "setup/per-diem", Icons.Material.Filled.Hotel, FinanceOnly, Keywords: "gsa travel"),
+        new(Admin, "Setup", "Card programs", "setup/card-programs", Icons.Material.Filled.CreditCard, FinanceOnly, Keywords: "corporate card issuer cardholder"),
         new(Admin, null, "Approval workflows", "setup/approval-workflows", Icons.Material.Filled.AltRoute, FinanceOnly, Detail: "Workflow", Keywords: "routing approvers delegation"),
         new(Admin, null, "Import", "setup/import", Icons.Material.Filled.UploadFile, FinanceOnly, Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
         new(Admin, null, "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, FinanceOnly, Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),

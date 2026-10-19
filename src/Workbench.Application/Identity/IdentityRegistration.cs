@@ -94,6 +94,7 @@ public static class IdentityRegistration
         services.AddWorkbenchCrmPermissions(); // Business development: pipeline for BD/Finance/Admin; capture and proposal managers edit theirs; everyone else nothing.
         services.AddWorkbenchPricingPermissions(); // Proposal pricing: Finance, Admin or the Pricing role; the won handoff Finance/Admin.
         services.AddWorkbenchAssistantPermissions(); // Assistant: ask signed in (tools check the user's access); settings/usage/audit Admin; narratives Finance/Admin/PM; flags filtered to reviewees.
+        services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         return services;
     }
 

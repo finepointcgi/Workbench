@@ -65,6 +65,11 @@ else
     }
 }
 
+@if (_reports is not null)
+{
+    <Workbench.Ui.Travel.MobileCardCharges Reports="_reports" />
+}
+
 @code {
     private IReadOnlyList<ExpenseReportDto>? _reports;
     private string? _error;
