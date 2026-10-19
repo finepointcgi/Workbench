@@ -79,7 +79,7 @@
                     </MudStack>
                     @if (s.HasStatusColumn)
                     {
-                        <MudProgressLinear Value="@(s.TotalTasks == 0 ? 0 : 100.0 * s.DoneTasks / s.TotalTasks)" Color="Color.Success" Rounded="true" Size="Size.Medium" />
+                        <MudProgressLinear Value="@(s.TotalTasks == 0 ? 0 : 100.0 * s.DoneTasks / s.TotalTasks)" Color="Color.Success" Rounded="true" Size="Size.Medium" aria-label="Tasks done" />
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@s.DoneTasks of @s.TotalTasks tasks done</MudText>
                     }
                     else

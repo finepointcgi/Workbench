@@ -17,12 +17,12 @@
 }
 @if (_uploading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" Class="mb-2" />
 }
 
 @if (_attachments is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else if (_attachments.Count == 0)
 {

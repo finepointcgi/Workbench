@@ -1,8 +1,24 @@
-@* One item on the board. Click opens the item's details panel. *@
+@* One item on the board. Click opens the item's details panel. For the keyboard, the title is a link to the details and
+   "Move to" moves the card to another lane, the same as dragging it (WCAG 2.1.1). *@
 
-<MudPaper Class="board-card pa-3 mb-2" Elevation="1" @onclick="() => OnOpen.InvokeAsync(Item)"
-          data-item-id="@Item.Id" role="button" tabindex="0" aria-label="@($"Open {Item.Title}")">
-    <MudText Typo="Typo.body2" Class="board-card-title">@Item.Title</MudText>
+<MudPaper Class="board-card pa-3 mb-2" Elevation="1" @onclick="() => OnOpen.InvokeAsync(Item)" data-item-id="@Item.Id">
+    <div class="d-flex align-start gap-1">
+        <a href="@Href" class="board-card-title mud-typography mud-typography-body2" @ref="_link" @onclick:preventDefault @onclick:stopPropagation
+           @onclick="() => OnOpen.InvokeAsync(Item)">@Item.Title</a>
+        <MudSpacer />
+        @if (Lanes.Count > 1)
+        {
+            <div @onclick:stopPropagation>
+                <MudMenu Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Dense="true" AriaLabel="@($"Move {Item.Title} to another lane")"
+                         Class="board-card-move" data-testid="board-card-move">
+                    @foreach (var lane in Lanes.Where(l => l.Value != CurrentLane))
+                    {
+                        <MudMenuItem OnClick="() => OnMove.InvokeAsync((Item, lane.Value))">Move to @lane.Label</MudMenuItem>
+                    }
+                </MudMenu>
+            </div>
+        }
+    </div>
     @if (Item.Finish is not null || !string.IsNullOrEmpty(Item.CostpointWbsId) || !string.IsNullOrEmpty(Initials))
     {
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
@@ -42,6 +58,42 @@
 
     [Parameter]
     public EventCallback<ItemDto> OnOpen { get; set; }
+
+    /// <summary>The item's details link (the same place a click goes).</summary>
+    [Parameter]
+    public string? Href { get; set; }
+
+    /// <summary>The lanes the card can move to; empty when the user can't edit.</summary>
+    [Parameter]
+    public IReadOnlyList<BoardLane> Lanes { get; set; } = [];
+
+    /// <summary>The lane value the card is in now.</summary>
+    [Parameter]
+    public string? CurrentLane { get; set; }
+
+    [Parameter]
+    public EventCallback<(ItemDto Item, string LaneValue)> OnMove { get; set; }
+
+    /// <summary>Set after a keyboard move so focus follows the card into its new lane.</summary>
+    [Parameter]
+    public bool TakeFocus { get; set; }
+
+    private ElementReference _link;
+    private bool _focused;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Once per hand-off, so later renders don't pull focus back.
+        if (TakeFocus && !_focused)
+        {
+            _focused = true;
+            await _link.FocusAsync();
+        }
+        else if (!TakeFocus)
+        {
+            _focused = false;
+        }
+    }
 
     private string Initials => BoardLanes.Initials(Person);
 

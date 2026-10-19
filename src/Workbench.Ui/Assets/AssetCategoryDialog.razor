@@ -1,0 +1,112 @@
+@* Add or change an asset category: code, name, default method, convention and life, MACRS period, GL accounts and capitalization threshold. *@
+@inject IChartOfAccountsService Chart
+
+<MudDialog>
+    <DialogContent>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+        }
+        <MudGrid Spacing="2">
+            <MudItem xs="4"><MudTextField T="string" @bind-Value="_code" Label="Code" Required="true" MaxLength="32" Margin="Margin.Dense" data-testid="category-code" /></MudItem>
+            <MudItem xs="8"><MudTextField T="string" @bind-Value="_name" Label="Name" Required="true" MaxLength="200" Margin="Margin.Dense" data-testid="category-name" /></MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="AssetDepreciationMethod" @bind-Value="_method" Label="Depreciation method" Dense="true">
+                    @foreach (var m in Enum.GetValues<AssetDepreciationMethod>())
+                    {
+                        <MudSelectItem Value="m">@AssetFormat.Label(m)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="AssetDepreciationConvention" @bind-Value="_convention" Label="First month" Dense="true" HelperText="@AssetFormat.Help(_convention)">
+                    @foreach (var c in Enum.GetValues<AssetDepreciationConvention>())
+                    {
+                        <MudSelectItem Value="c">@AssetFormat.Label(c)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="4"><MudNumericField T="int" @bind-Value="_life" Label="Useful life (years)" Min="1" Max="50" Margin="Margin.Dense" data-testid="category-life" /></MudItem>
+            <MudItem xs="6" md="4">
+                <MudSelect T="int?" @bind-Value="_macrs" Label="MACRS (tax)" Dense="true" Clearable="true">
+                    @foreach (var y in MacrsPeriods)
+                    {
+                        <MudSelectItem T="int?" Value="y">@y-year</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudNumericField T="decimal?" @bind-Value="_threshold" Label="Capitalization threshold" Format="N2" Min="0" Margin="Margin.Dense" Clearable="true"
+                                 HelperText="@($"Blank: the organization's {AssetFormat.Amount(DefaultThreshold)}")" data-testid="category-threshold" />
+            </MudItem>
+            <MudItem xs="12"><MudText Typo="Typo.subtitle2">General ledger accounts</MudText></MudItem>
+            <MudItem xs="12" md="4">@AccountSelect("Asset (cost)", AccountKind.Asset, _assetAccount, v => _assetAccount = v)</MudItem>
+            <MudItem xs="12" md="4">@AccountSelect("Accumulated depreciation", AccountKind.Asset, _accumulatedAccount, v => _accumulatedAccount = v)</MudItem>
+            <MudItem xs="12" md="4">@AccountSelect("Depreciation expense", AccountKind.Expense, _expenseAccount, v => _expenseAccount = v)</MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">These are defaults for new assets. Changing them doesn't change assets already in the category.</MudText>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanSave)" OnClick="Save" data-testid="category-save">Save category</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly int[] MacrsPeriods = [3, 5, 7, 10, 15, 20];
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The category to change; null adds one.</summary>
+    [Parameter] public AssetCategoryDto? Category { get; set; }
+
+    [Parameter] public decimal DefaultThreshold { get; set; }
+
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private string? _code;
+    private string? _name;
+    private AssetDepreciationMethod _method;
+    private AssetDepreciationConvention _convention;
+    private int _life = 5;
+    private int? _macrs;
+    private decimal? _threshold;
+    private Guid? _assetAccount;
+    private Guid? _accumulatedAccount;
+    private Guid? _expenseAccount;
+    private string? _error;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_code) && !string.IsNullOrWhiteSpace(_name) && _life is >= 1 and <= 50 && _threshold is null or >= 0
+        && _assetAccount is not null && _accumulatedAccount is not null && _expenseAccount is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Category is { } c)
+        {
+            (_code, _name, _method, _convention, _life, _macrs, _threshold) = (c.Code, c.Name, c.DefaultMethod, c.Convention, c.DefaultLifeYears, c.MacrsRecoveryYears, c.CapitalizationThreshold);
+            (_assetAccount, _accumulatedAccount, _expenseAccount) = (c.AssetAccountId, c.AccumulatedDepreciationAccountId, c.ExpenseAccountId);
+        }
+
+        try
+        {
+            _accounts = (await Chart.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren).ToList();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private RenderFragment AccountSelect(string label, AccountKind kind, Guid? value, Action<Guid?> set) =>
+        @<MudSelect T="Guid?" Value="value" ValueChanged="v => set(v)" Label="@label" Dense="true" Required="true">
+            @foreach (var a in _accounts.Where(a => a.Type == kind))
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@a.Number · @a.Name</MudSelectItem>
+            }
+        </MudSelect>;
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveAssetCategoryRequest(
+        _code!.Trim(), _name!.Trim(), _method, _life, _assetAccount!.Value, _accumulatedAccount!.Value, _expenseAccount!.Value,
+        _macrs, Category?.IsActive ?? true, _convention, _threshold)));
+}

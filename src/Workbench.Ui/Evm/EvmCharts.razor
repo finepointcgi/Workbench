@@ -10,7 +10,9 @@
             }
             else
             {
-                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_curve" ChartLabels="_labels" ChartOptions="_curveOptions" Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+                <AccessibleChart Title="Performance (cumulative)" Labels="_labels" Series="_curve" Format="@(v => FinancialFormat.Money((decimal)v))">
+                    <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_curve" ChartLabels="_labels" ChartOptions="_curveOptions" Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+                </AccessibleChart>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">
                     BCWP and ACWP are shown for closed periods and the reporting period. Close each month to build the history.
                 </MudText>
@@ -26,7 +28,9 @@
             }
             else
             {
-                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_indices" ChartLabels="_indexLabels" ChartOptions="_indexOptions" Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+                <AccessibleChart Title="CPI and SPI trend (× 100)" Labels="_indexLabels" Series="_indices" Format="IndexText">
+                    <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_indices" ChartLabels="_indexLabels" ChartOptions="_indexOptions" Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+                </AccessibleChart>
             }
         </MudPaper>
     </MudItem>
@@ -93,4 +97,6 @@
 
         return list;
     }
+
+    private static string IndexText(double v) => v.ToString("0.#", System.Globalization.CultureInfo.CurrentCulture);
 }

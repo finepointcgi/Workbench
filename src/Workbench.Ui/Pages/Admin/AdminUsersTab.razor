@@ -12,7 +12,7 @@
 
 <MudTable T="UserAdminDto" Items="_users" Loading="_loading" Dense="true" Hover="true" Filter="Matches" Breakpoint="Breakpoint.Sm" data-testid="users-table">
     <ToolBarContent>
-        <MudTextField @bind-Value="_search" Placeholder="Search name or email" Adornment="Adornment.Start"
+        <MudTextField aria-label="Search users" @bind-Value="_search" Placeholder="Search name or email" Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" Style="max-width:320px" />
         <MudSpacer />
         <MudSwitch T="bool" @bind-Value="_showInactive" Color="Color.Primary" Label="Show deactivated" />

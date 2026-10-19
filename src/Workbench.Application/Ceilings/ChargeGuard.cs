@@ -78,6 +78,21 @@ public sealed class ChargeGuard(
         return CeilingEngine.CheckCharges(states, deltas, what);
     }
 
+    /// <summary>Requisitions: the closed check, then the ceilings as warnings (blocking only where the ceiling checks at requisition).</summary>
+    internal async Task<List<string>> CheckRequisitionAsync(IReadOnlyCollection<ChargeDelta> deltas, string what, CancellationToken ct)
+    {
+        var increases = deltas.Where(d => d.Cost > 0).ToList();
+        if (increases.Count == 0)
+        {
+            return [];
+        }
+
+        await using var db = await dbFactory.CreateAsync(ct);
+        await EnsureOpenAsync(db, increases.Select(d => d.WbsElementId), what, ct);
+        var states = await CeilingEngine.ForWbsAsync(db, increases.Select(d => d.WbsElementId).Distinct().ToList(), UtcNow, ct);
+        return CeilingEngine.CheckRequisition(states, increases, what);
+    }
+
     internal async Task<List<string>> CheckStandingAsync(IReadOnlyCollection<ChargeDelta> own, string what, CancellationToken ct)
     {
         var mine = own.Where(d => d.Hours > 0 || d.Cost > 0).ToList();
@@ -130,6 +145,41 @@ public sealed class ChargeGuard(
         {
             logger.LogWarning(ex, "Ceiling alert check failed");
         }
+    }
+
+    /// <summary>
+    /// The scheduled check: every active ceiling, contract by contract (and indirect project by project), so alerts also go out
+    /// after approvals, imports and postings that don't pass an enforcement point. Returns how many alerts were sent.
+    /// </summary>
+    internal async Task<int> AlertAllAsync(CancellationToken ct)
+    {
+        List<(Guid? ContractId, Guid? ProjectId)> groups;
+        await using (var db = await dbFactory.CreateAsync(ct))
+        {
+            groups = (await db.Set<Ceiling>().AsNoTracking().Where(c => c.IsActive).Select(c => new { c.ContractId, c.ProjectId }).Distinct().ToListAsync(ct))
+                .Select(g => g.ContractId is not null ? (g.ContractId, (Guid?)null) : ((Guid?)null, g.ProjectId))
+                .Distinct().ToList();
+        }
+
+        var sent = 0;
+        foreach (var (contractId, projectId) in groups)
+        {
+            try
+            {
+                await using var db = await dbFactory.CreateAsync(ct);
+                var states = contractId is { } c
+                    ? await CeilingEngine.ForContractAsync(db, c, false, UtcNow, ct)
+                    : await CeilingEngine.ForProjectWithoutContractAsync(db, projectId!.Value, UtcNow, ct);
+                sent += await AlertAsync(db, states, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One contract's failure (or a charge-time check recording the same alert first) doesn't stop the rest.
+                logger.LogWarning(ex, "Scheduled ceiling alert check failed for contract {ContractId} / project {ProjectId}", contractId, projectId);
+            }
+        }
+
+        return sent;
     }
 
     /// <summary>

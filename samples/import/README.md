@@ -27,7 +27,8 @@ importing a file again updates changed records and skips unchanged ones. Finance
 ## Costpoint order
 
 Import in dependency order: `organizations.csv`, `labor-categories.csv`, `employees.csv`, `cost-rates.csv`,
-`customers.csv`, `contracts.csv`, `clins.csv`, `projects.csv`, `bill-rates.csv`, `budgets.csv`. Dates may be
+`customers.csv`, `contracts.csv`, `clins.csv`, `projects.csv`, `bill-rates.csv`, `budgets.csv`, then `fixed-assets.csv`
+(after the GL balances; see below). Dates may be
 `MM/DD/YYYY` (Costpoint's default), `YYYY-MM-DD` or `DD-MON-YYYY`; amounts may contain `$` and thousands separators.
 
 Notes:
@@ -47,6 +48,17 @@ Notes:
   `FY_CD` + `PD_NO` (or a `yyyy-MM` period) phase a row into a fiscal period; `TOTAL` or blank is unphased. Lines go
   into the version named in the options (default "Costpoint budget", a Current version) and replace its lines.
   The sample uses fiscal year 2027 (Oct 2026 – Sep 2027); adjust `FY_CD` if your fiscal calendar doesn't have it.
+- **Fixed assets (opening balances)**: each asset comes over with its cost, in-service date and accumulated
+  depreciation (or net book value; with both, cost − accumulated must equal it) as of the cut-over date, which is a
+  month end. **Nothing is posted**: the cost and accumulated depreciation are already in the asset and accumulated
+  depreciation accounts through the GL balance import. Workbench depreciates from the month after the cut-over and
+  spreads what's left (cost − salvage − accumulated) over the rest of the life in the asset's method, so the first
+  depreciation run catches up any months since the cut-over once and never repeats months Costpoint already took. An
+  asset whose life ended with value left above salvage is an error (fix its life, salvage or accumulated
+  depreciation). The category must exist in Workbench (Fixed assets › Asset categories); life, method and convention
+  default from it. Life may be in months (whole years only). Re-importing updates an asset until depreciation has been
+  posted on it; a job rolls back until then too. Government property (GFP/CAP) isn't imported here; enter it on the
+  register. The sample is as of 2026-09-30, so the October 2026 run depreciates 1,566.67.
 - **Smartsheet**: TEXT_NUMBER becomes Text or Number/Currency, DATE Date, CHECKBOX Checkbox, PICKLIST Dropdown with its
   options, CONTACT_LIST Person (email). Duration fills a missing finish date (working days). Predecessors (`3FS +2d`,
   `4SS -1d`, `9FF +1w`) become Gantt dependencies with lag in working days. In an `.xlsx` export the row hierarchy comes
@@ -219,6 +231,33 @@ Sample: [`budgets.csv`](costpoint/budgets.csv)
 | Period |  | `Period`, `PD_NO`, `Fiscal Period`, `Month` | Period number (1–12) with the fiscal year, or a month as yyyy-MM. Blank or TOTAL = unphased. |
 | ODC type |  | `OdcType`, `ODC type`, `ODC_TYPE`, `Cost Element`, `ACCT_DESC`, `Expense Type`, `ODC Type` | Travel, Materials, Equipment, Subcontract, Consultant or Other (ODC rows). |
 
+### Fixed assets (opening balances)
+
+Assets with cost, in-service date and accumulated depreciation (or net book value) as of the cut-over month end. Nothing is posted; depreciation continues from the month after.
+
+Sample: [`fixed-assets.csv`](costpoint/fixed-assets.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Asset number | yes | `AssetId`, `Asset number`, `ASSET_ID`, `ASSET_NO`, `Asset No`, `Asset ID`, `Tag`, `Tag Number`, `ASSET_ID_ITEM` | Becomes the asset tag; re-importing the same number updates the asset. |
+| Description | yes | `Description`, `ASSET_DESC`, `ASSET_S_DESC`, `Asset Description`, `Name` | |
+| Category | yes | `Category`, `ASSET_CLASS_CD`, `PROP_TYPE_CD`, `Asset Class`, `Property Type`, `Category Code`, `Class` | Workbench asset category code (COMP, FURN, LHI or your own). |
+| In-service date | yes | `InServiceDate`, `In-service date`, `PL_IN_SERV_DT`, `IN_SERV_DT`, `Placed in Service`, `Service Date`, `Depreciation Start` | Date placed in service; depreciation started that month. |
+| Acquisition date |  | `AcquisitionDate`, `Acquisition date`, `ACQ_DT`, `ACQUIRED_DT`, `Acquired`, `Purchase Date` | Defaults to the in-service date. |
+| Acquisition cost | yes | `Cost`, `Acquisition cost`, `ACQ_COST_AMT`, `TOT_COST_AMT`, `COST_AMT`, `Original Cost`, `Book Cost` | Capitalized cost. |
+| Accumulated depreciation |  | `AccumulatedDepreciation`, `Accumulated depreciation`, `ACCUM_DEPR_AMT`, `TOT_ACCUM_DEPR`, `Accum Depr`, `Accum Depreciation`, `Depreciation to Date` | Through the cut-over date. Give this or the net book value (or both, which must agree). |
+| Net book value |  | `NetBookValue`, `Net book value`, `NET_BOOK_VAL`, `NBV`, `Book Value` | Cost less accumulated depreciation at the cut-over. |
+| Cut-over date | yes | `CutoverDate`, `Cut-over date`, `AS_OF_DT`, `BAL_DT`, `As Of`, `As Of Date`, `Cut-over`, `Balance Date`, `Through Date` | The month end the balances are as of, e.g. 2026-09-30. |
+| Useful life (years) |  | `UsefulLifeYears`, `Useful life (years)`, `LIFE_YRS`, `USEFUL_LIFE`, `Useful Life`, `Life` | Defaults to the category's. |
+| Useful life (months) |  | `UsefulLifeMonths`, `Useful life (months)`, `LIFE_MOS`, `USEFUL_LIFE_MOS`, `Life (Months)`, `Months` | Alternative to years; must be whole years (36, 60...). |
+| Depreciation method |  | `Method`, `Depreciation method`, `DEPR_METHOD_CD`, `DEPR_MTHD` | SL (straight line), DDB/DB (declining balance) or SYD. Defaults to the category's. |
+| Convention |  | `Convention`, `AVG_CONV_CD`, `CONVENTION_CD`, `Averaging Convention` | Full month, half month (mid-month) or following month. Defaults to the category's. |
+| Salvage value |  | `SalvageValue`, `Salvage value`, `SALVAGE_AMT`, `SALV_VAL`, `Salvage`, `Residual Value` | Defaults to 0. |
+| Serial number |  | `SerialNumber`, `Serial number`, `SERIAL_NO`, `SERIAL_NUM`, `Serial` | |
+| Location |  | `Location`, `LOCATION_CD`, `LOC_DESC` | |
+| Org |  | `OrgId`, `Org`, `ORG_ID`, `Organization` | Org id of an existing org unit (depreciation expense segment). |
+| Project |  | `ProjectId`, `Project`, `PROJ_ID`, `Project ID` | Code of an existing project (depreciation expense segment). |
+
 ### Smartsheet sheets (API and .xlsx)
 
 Sample: [`project-plan.xlsx`](smartsheet/project-plan.xlsx)
@@ -232,3 +271,122 @@ Sample: [`project-plan.xlsx`](smartsheet/project-plan.xlsx)
 | Predecessors |  | `Predecessors`, `Predecessor`, `Depends On` | Smartsheet predecessors (FS/SS/FF/SF with lag) become Gantt dependencies. |
 | WBS code |  | `WbsCode`, `WBS code`, `WBS`, `WBS Code`, `WBS ID`, `WBS Element`, `Charge Code`, `Costpoint WBS`, `PROJ_ID`, `Project ID` | Links rows to the chosen project's WBS elements by code. |
 | Row ID |  | `RowId`, `Row ID`, `Smartsheet Row ID` | .xlsx only: a column with the Smartsheet row id, for matching on re-import. Without it rows match on their title path. |
+
+## Go-live path (cut-over from Costpoint)
+
+The go-live checklist (**Setup → Go-live migration**, `/setup/migration`) runs these imports in order around the
+cut-over date, after the master data above: `accounts.csv` (first of all), `vendors.csv`, `open-ap.csv`,
+`open-ar.csv` and `opening-trial-balance.csv`. The samples describe a cut-over on 2026-11-01: opening balances
+dated 2026-10-31 (fiscal year 2027, period 1), open AR of 186,420.55 on contract N66001-27-C-2001 and open AP of
+38,617.42 plus 2,500.00 retainage, which tie exactly to accounts 1110, 2010 and 2020 in the opening trial balance.
+The step-by-step plan is [`docs/migration/costpoint-cutover.md`](../../docs/migration/costpoint-cutover.md).
+
+- **Chart of accounts**: summary accounts are the ones other rows name as their parent (created first). A blank type
+  is taken from the first digit (1 asset … 4 revenue, 5+ expense) with a warning. Cost classes drive indirect rates.
+- **Open AP and AR** are carried for their open balance and **not posted**: the receivable and payable come into the
+  GL with the opening balances. Fully paid rows are skipped; credit balances and overpayments are refused. Several
+  rows with one voucher (AP) or invoice number (AR) are its lines. Costpoint voucher numbers are kept (16 characters);
+  without a voucher column bills are numbered `CV-000001`…
+- **GL opening balances** post one balanced journal entry dated the as-of date (the option, a date column, or the day
+  before the checklist's cut-over date). The file must balance to the penny. Dotted project ids post to that WBS
+  element. Files over 500 lines are split into parts balanced through the offset (clearing) account you choose; the
+  parts net to zero on it. Only one opening balance import can stand: roll it back before importing again.
+  Rolling back deletes the entry and its lines.
+- Fixed assets have their own opening-balance importer (fixed assets module).
+
+Reconciling the parallel month against Costpoint reports: see [`samples/reconcile/README.md`](../reconcile/README.md).
+
+### Chart of accounts
+
+GL accounts with their type, parent (summary) account and cost class. Import before opening balances.
+
+Sample: [`accounts.csv`](costpoint/accounts.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Account | yes | `AccountNumber`, `Account`, `ACCT_ID`, `Account ID`, `Account Number`, `Acct`, `Acct ID`, `Account No` | Natural key: the Costpoint account id. |
+| Account name | yes | `Name`, `Account name`, `ACCT_NAME`, `ACCT_DESC`, `Description` |  |
+| Type |  | `Type`, `ACCT_TYPE_CD`, `Account Type`, `Acct Type` | Asset, Liability, Equity (Capital), Revenue or Expense, or A/L/C/R/E. Blank: from the first digit (1–5). |
+| Parent account |  | `Parent`, `Parent account`, `PARENT_ACCT_ID`, `S_ACCT_ID`, `Summary Account` | The summary account it rolls up into (in the file or in Workbench). |
+| Cost class |  | `CostClass`, `Cost class`, `COST_CLASS`, `Cost Type`, `Pool`, `Function` | Expense accounts: Direct Labor, Direct ODC, Indirect Labor, Fringe, Overhead, G&A, Unallowable or Other. |
+| Normal balance |  | `NormalBalance`, `Normal balance`, `NORMAL_BAL`, `Balance Side` | Debit or Credit. Defaults from the type. |
+| Active |  | `Active`, `ACTIVE_FL`, `Active Flag`, `Status` | Y/N. Defaults to Y. |
+
+### Vendors
+
+Vendors with payment terms, 1099 flag, UEI and contact. Needed before open AP bills.
+
+Sample: [`vendors.csv`](costpoint/vendors.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Vendor ID | yes | `Code`, `Vendor ID`, `VEND_ID`, `Vendor Code`, `Vendor` | Natural key: the Costpoint vendor id. |
+| Vendor name | yes | `Name`, `Vendor name`, `VEND_NAME` |  |
+| Active |  | `Active`, `ACTIVE_FL`, `Status` | Y/N or Active/Inactive/Hold. Defaults to active. |
+| 1099 |  | `Is1099`, `1099`, `PRINT_1099_FL`, `1099 Flag`, `Is 1099` | Y/N. |
+| Payment terms (days) |  | `Terms`, `Payment terms (days)`, `TERMS_DC`, `Payment Terms`, `Net Days` | Days, or terms like Net 30. Defaults to 30. |
+| UEI |  | `Uei`, `Unique Entity ID`, `SAM UEI` | SAM.gov unique entity id. |
+| Business size |  | `BusinessSize`, `Business size`, `BUS_SIZE`, `Size` | Small or Large. |
+| Contact |  | `ContactName`, `Contact`, `CNTACT_NAME`, `Contact Name` |  |
+| Contact email |  | `ContactEmail`, `Contact email`, `EMAIL_ID`, `Email` |  |
+| Contact phone |  | `ContactPhone`, `Contact phone`, `PHONE_ID`, `Phone` |  |
+| Remit-to address |  | `RemitTo`, `Remit-to address`, `REMIT_ADDR`, `Remit To`, `Address` |  |
+
+### Open AP bills
+
+Unpaid vendor invoices at cut-over, for their open balance. Not posted: the AP balance comes in with the opening balances.
+
+Sample: [`open-ap.csv`](costpoint/open-ap.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Vendor ID | yes | `Vendor`, `Vendor ID`, `VEND_ID` | Vendor id (import vendors first). |
+| Vendor invoice | yes | `InvoiceNumber`, `Vendor invoice`, `INVC_ID`, `Invoice ID`, `Invoice Number`, `Invoice` | The vendor's invoice number. |
+| Voucher |  | `Voucher`, `VCHR_NO`, `Voucher Number`, `Voucher No` | Costpoint voucher number (kept as Workbench's voucher number; 16 characters). |
+| Invoice date | yes | `InvoiceDate`, `Invoice date`, `INVC_DT`, `Inv Date` |  |
+| Due date |  | `DueDate`, `Due date`, `DUE_DT` | Defaults to the invoice date plus the vendor's terms. |
+| Invoice amount |  | `Amount`, `Invoice amount`, `INVC_AMT`, `Gross Amount` | Original amount. With a balance column, only the balance is carried over. |
+| Open balance |  | `Balance`, `Open balance`, `OPEN_AMT`, `Open Amount`, `Balance Due`, `Unpaid Amount` | What's still owed. Defaults to the amount less any paid amount. |
+| Paid |  | `Paid`, `PAID_AMT`, `Paid Amount`, `Amount Paid` | Paid so far (used when there's no balance column). |
+| Retainage |  | `Retainage`, `RETAINAGE_AMT`, `Retention` | Held back; owed later. |
+| Account |  | `Account`, `ACCT_ID`, `Account ID` | Expense or asset account of the line (for reference; nothing posts). |
+| Org |  | `Org`, `ORG_ID`, `Org ID` |  |
+| Description |  | `Description`, `VCHR_LN_DESC`, `Memo`, `Line Description` |  |
+
+### Open AR invoices
+
+Unpaid customer invoices at cut-over, with what's been paid. Not posted: the AR balance comes in with the opening balances.
+
+Sample: [`open-ar.csv`](costpoint/open-ar.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Invoice | yes | `InvoiceNumber`, `Invoice`, `INVC_ID`, `Invoice ID`, `Invoice Number`, `Invoice No` | Costpoint invoice number (32 characters); kept as Workbench's invoice number. |
+| Contract |  | `Contract`, `PRIME_CONTR_ID`, `CONTRACT_ID`, `Contract Number`, `Contract ID` | Contract number. Or map the project. |
+| Project |  | `Project`, `PROJ_ID`, `Project ID` | Project id; its contract is used when there's no contract column. |
+| Customer |  | `Customer`, `CUST_ID`, `Customer ID` | Customer id; checked against the contract's customer. |
+| Invoice date | yes | `InvoiceDate`, `Invoice date`, `INVC_DT`, `Inv Date` |  |
+| Due date |  | `DueDate`, `Due date`, `DUE_DT` | Defaults to the invoice date plus 30 days. |
+| Invoice amount |  | `Amount`, `Invoice amount`, `INVC_AMT`, `Billed Amount` | Invoiced amount. |
+| Open balance |  | `Balance`, `Open balance`, `OPEN_AMT`, `Open Amount`, `Balance Due`, `Unpaid Amount` | Still owed. With the amount, paid = amount − balance. |
+| Paid |  | `Paid`, `RCV_AMT`, `Paid Amount`, `Amount Paid`, `Received` | Received so far (used when there's no balance column). |
+| CLIN |  | `Clin`, `CLIN_ID`, `CLIN Number` | CLIN number on the contract. |
+| Invoice type |  | `Type`, `Invoice type`, `INVC_TYPE`, `Bill Type`, `Billing Type` | T&M, Cost plus or Fixed price. Defaults from the contract type. |
+| Description |  | `Description`, `Memo` |  |
+
+### GL opening balances
+
+The trial balance at cut-over by account, org and project, posted as opening balance journal entries. Must balance.
+
+Sample: [`opening-trial-balance.csv`](costpoint/opening-trial-balance.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Account | yes | `Account`, `ACCT_ID`, `Account ID`, `Account Number`, `Acct` | Account number (detail account). |
+| Org |  | `Org`, `ORG_ID`, `Org ID`, `Organization` | Org id of an existing org unit. |
+| Project / WBS |  | `Project`, `Project / WBS`, `PROJ_ID`, `Project ID`, `WBS`, `Project Code` | Project id; a dotted id (2001.02.01) posts to that WBS element. |
+| Balance |  | `Balance`, `END_BAL`, `Ending Balance`, `Net Balance`, `YTD Balance`, `Amount`, `CUR_BAL` | Ending balance, debit positive. Or map debit and credit. |
+| Debit |  | `Debit`, `DR_AMT`, `Debit Amount`, `Debits`, `Ending Debit` | Debit balance (positive). |
+| Credit |  | `Credit`, `CR_AMT`, `Credit Amount`, `Credits`, `Ending Credit` | Credit balance (positive). |
+| As-of date |  | `Date`, `As-of date`, `FY_END_DT`, `As Of Date`, `Period End` | Used when no as-of date is chosen; every row must have the same date. |
+| Memo |  | `Memo`, `DESCRIPTION`, `ACCT_NAME`, `Account Name` | Line memo. |

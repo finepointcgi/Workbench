@@ -126,10 +126,28 @@ internal static class AssetSupport
             return 0;
         }
 
-        var schedule = DepreciationCalculator.MonthlySchedule(asset.Cost, asset.SalvageValue, asset.UsefulLifeYears, asset.Method);
-        var expected = DepreciationCalculator.CumulativeThrough(schedule, DepreciationCalculator.MonthIndex(asset.InServiceDate, period.Start));
-        return Math.Max(0, expected - asset.AccumulatedDepreciation);
+        return Math.Max(0, ExpectedThrough(asset, period.Start) - asset.AccumulatedDepreciation);
     }
+
+    /// <summary>Scheduled accumulated depreciation through <paramref name="month"/>'s month (opening balance included).</summary>
+    public static decimal ExpectedThrough(FixedAsset asset, DateOnly month) =>
+        DepreciationCalculator.CumulativeThrough(Schedule(asset), DepreciationCalculator.MonthIndex(asset.InServiceDate, month));
+
+    /// <summary>
+    /// The asset's monthly book schedule from its in-service month, with its convention; for assets with an opening
+    /// balance, the opening amount in the cut-over month and the rest spread over the remaining life.
+    /// </summary>
+    public static IReadOnlyList<decimal> Schedule(FixedAsset asset)
+    {
+        var schedule = DepreciationCalculator.MonthlySchedule(asset.Cost, asset.SalvageValue, asset.UsefulLifeYears, asset.Method, asset.Convention);
+        return asset.OpeningBalanceDate is { } cutover
+            ? DepreciationCalculator.OpeningBalanceSchedule(schedule, DepreciationCalculator.MonthIndex(asset.InServiceDate, cutover) + 1,
+                asset.OpeningAccumulatedDepreciation, Math.Max(0, asset.Cost - asset.SalvageValue))
+            : schedule;
+    }
+
+    public static DepreciationConvention ToDomain(this AssetDepreciationConvention c) => (DepreciationConvention)(int)c;
+    public static AssetDepreciationConvention ToContract(this DepreciationConvention c) => (AssetDepreciationConvention)(int)c;
 
     public static string Truncate(string text, int max) => text.Length > max ? text[..max] : text;
 }

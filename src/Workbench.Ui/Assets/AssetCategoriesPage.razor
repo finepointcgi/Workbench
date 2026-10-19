@@ -1,0 +1,132 @@
+@page "/assets/categories"
+@inject IAssetService AssetService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Asset categories · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Asset categories"
+             Subtitle="Each category gives new assets their depreciation method, first-month convention, useful life, GL accounts and capitalization threshold.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" Disabled="_error is not null" data-testid="new-category">New category</MudButton>
+</AssetHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Class="mb-2" AlignItems="AlignItems.Center">
+        <MudSwitch T="bool" @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="categories">
+            <thead>
+                <tr>
+                    <th>Code</th><th>Name</th><th>Method</th><th>First month</th><th>Life</th><th>MACRS</th>
+                    <th>Asset</th><th>Accum. depr.</th><th>Expense</th><th style="text-align:right">Threshold</th><th style="text-align:right">Assets</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in _categories.Where(c => _showInactive || c.IsActive))
+                {
+                    <tr data-testid="@($"category-{c.Code}")" style="@(c.IsActive ? "" : "opacity:.6")">
+                        <td>@c.Code</td>
+                        <td>@c.Name @if (!c.IsActive) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Inactive</MudChip> }</td>
+                        <td>@AssetFormat.Label(c.DefaultMethod)</td>
+                        <td>@AssetFormat.Label(c.Convention)</td>
+                        <td>@c.DefaultLifeYears yrs</td>
+                        <td>@(c.MacrsRecoveryYears is { } m ? $"{m}-year" : "")</td>
+                        <td>@c.AssetAccountNumber</td>
+                        <td>@c.AccumulatedDepreciationAccountNumber</td>
+                        <td>@c.ExpenseAccountNumber</td>
+                        <td style="text-align:right">@(c.CapitalizationThreshold is { } t ? AssetFormat.Amount(t) : $"{AssetFormat.Amount(_settings?.CapitalizationThreshold ?? 0)} (default)")</td>
+                        <td style="text-align:right">@c.AssetCount</td>
+                        <td style="white-space:nowrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {c.Code}")" OnClick="() => EditAsync(c)" />
+                            @if (c.IsActive)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" aria-label="@($"Deactivate {c.Code}")" title="Deactivate: new assets can't use it" OnClick="() => SetActiveAsync(c, false)" />
+                            }
+                            else
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" aria-label="@($"Reactivate {c.Code}")" title="Reactivate" OnClick="() => SetActiveAsync(c, true)" />
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Delete {c.Code}")" Disabled="c.AssetCount > 0"
+                                           title="@(c.AssetCount > 0 ? "In use: deactivate it instead" : "Delete")" OnClick="() => DeleteAsync(c)" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">A category that has assets can't be deleted; deactivate it so new assets can't use it. Existing assets keep their own method, life and accounts.</MudText>
+}
+
+@code {
+    private IReadOnlyList<AssetCategoryDto> _categories = [];
+    private AssetSettingsDto? _settings;
+    private bool _showInactive = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await AssetService.GetSettingsAsync();
+            _categories = await AssetService.ListCategoriesAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task EditAsync(AssetCategoryDto? category)
+    {
+        var dialog = await DialogService.ShowAsync<AssetCategoryDialog>(category is null ? "New asset category" : $"Edit {category.Code}",
+            new DialogParameters<AssetCategoryDialog> { { d => d.Category, category }, { d => d.DefaultThreshold, _settings?.CapitalizationThreshold ?? 0 } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveAssetCategoryRequest request })
+        {
+            await RunAsync(async () =>
+            {
+                var saved = await AssetService.SaveCategoryAsync(category?.Id, request);
+                Snackbar.Add($"Saved {saved.Code}.", Severity.Success);
+            });
+        }
+    }
+
+    private Task SetActiveAsync(AssetCategoryDto c, bool active) => RunAsync(async () =>
+    {
+        await AssetService.SaveCategoryAsync(c.Id, new SaveAssetCategoryRequest(c.Code, c.Name, c.DefaultMethod, c.DefaultLifeYears, c.AssetAccountId,
+            c.AccumulatedDepreciationAccountId, c.ExpenseAccountId, c.MacrsRecoveryYears, active, c.Convention, c.CapitalizationThreshold));
+        Snackbar.Add(active ? $"{c.Code} is active again." : $"{c.Code} is deactivated: new assets can't use it.", Severity.Success);
+    });
+
+    private async Task DeleteAsync(AssetCategoryDto c)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete category", $"Delete {c.Code} · {c.Name}?", yesText: "Delete", cancelText: "Cancel") == true)
+        {
+            await RunAsync(async () =>
+            {
+                await AssetService.DeleteCategoryAsync(c.Id);
+                Snackbar.Add($"Deleted {c.Code}.", Severity.Success);
+            });
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            _categories = await AssetService.ListCategoriesAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

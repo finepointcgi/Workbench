@@ -111,6 +111,7 @@ public static class NavCatalog
         new(Finance, "Assets", "Asset register", "assets", Icons.Material.Filled.ListAlt, FinanceOnly, MatchAll: true, Detail: "Asset", Keywords: "fixed assets"),
         new(Finance, "Assets", "Capitalize", "assets/capitalize", Icons.Material.Filled.AddBox, FinanceOnly, InMenu: false),
         new(Finance, "Assets", "Depreciation", "assets/depreciation", Icons.Material.Filled.TrendingDown, FinanceOnly),
+        new(Finance, "Assets", "Asset categories", "assets/categories", Icons.Material.Filled.Category, FinanceOnly, Keywords: "fixed asset classes useful life depreciation method"),
 
         new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, FinanceOnly, Detail: "Payroll run", Keywords: "paylocity pay runs"),
 
@@ -134,6 +135,7 @@ public static class NavCatalog
         // Admin (administrators; Finance sees the setup parts, titled Setup).
         new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, FinanceOnly, Keywords: "employees cost rates supervisors"),
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
+        new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, FinanceOnly, Keywords: "history security"),
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, FinanceOnly, MatchAll: true),
         new(Admin, "Setup", "Org units", "setup/org-units", Icons.Material.Filled.AccountTree, FinanceOnly, Keywords: "departments"),
@@ -145,6 +147,7 @@ public static class NavCatalog
         new(Admin, "Setup", "Per diem rates", "setup/per-diem", Icons.Material.Filled.Hotel, FinanceOnly, Keywords: "gsa travel"),
         new(Admin, null, "Approval workflows", "setup/approval-workflows", Icons.Material.Filled.AltRoute, FinanceOnly, Detail: "Workflow", Keywords: "routing approvers delegation"),
         new(Admin, null, "Import", "setup/import", Icons.Material.Filled.UploadFile, FinanceOnly, Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
+        new(Admin, null, "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, FinanceOnly, Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
         new(Admin, null, "Organization", "setup/organization", Icons.Material.Filled.Tune, FinanceOnly, Keywords: "settings timesheet cadence company"),
 
         // Findable with Ctrl+K only.
@@ -153,6 +156,11 @@ public static class NavCatalog
         new(Approvals, null, "Timesheet approvals", "time/approvals", Icons.Material.Filled.FactCheck, a => a.ShowTeamTime, InMenu: false),
         new(Approvals, null, "ODC approvals", "odcs/approvals", Icons.Material.Filled.FactCheck, a => a.ShowApprovals, InMenu: false),
         new(Approvals, null, "Bill approvals", "purchasing/approvals", Icons.Material.Filled.FactCheck, a => a.ShowApprovals, InMenu: false),
+        new(Home, null, "Help center", "help", Icons.Material.Filled.MenuBook, _ => true, Detail: "Article", Keywords: "how to guide support faq", InMenu: false),
+        new(Home, null, "Glossary", "help/glossary", Icons.Material.Filled.Translate, _ => true, Keywords: "terms definitions acronyms", InMenu: false),
+        new(Home, null, "What's new", "help/whats-new", Icons.Material.Filled.NewReleases, _ => true, Keywords: "changes release notes changelog", InMenu: false),
+        new(Home, null, "My support requests", "support", Icons.Material.Filled.SupportAgent, Everyone, Keywords: "report problem feedback bug help", InMenu: false),
+        new(Admin, null, "Support requests", "admin/support", Icons.Material.Filled.SupportAgent, AdminOnly, Keywords: "help desk problems feedback bug reports", InMenu: false),
         new(MyWork, null, "My allocations", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsSignedIn && !a.IsResourceManager && !a.IsProjectManager, Keywords: "resourcing staffing", InMenu: false),
     ];
 

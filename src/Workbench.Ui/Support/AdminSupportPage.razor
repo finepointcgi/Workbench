@@ -1,0 +1,202 @@
+@page "/admin/support"
+@layout AdminLayout
+@* Administrators: every support request in the organization. Open one to read it, change its status and reply;
+   the reporter is notified when the status changes. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Support
+@inject ISupportService Support
+@inject ISnackbar Snackbar
+
+<PageTitle>Support requests · Admin · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1">Support requests</MudText>
+<MudText Class="mud-text-secondary mb-4">Problems and feedback people sent from inside Workbench. Open one to reply and change its status; the person who sent it is notified.</MudText>
+
+<MudChipSet T="string" SelectedValue="_filter" SelectedValueChanged="FilterAsync" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
+            Class="mb-3" aria-label="Filter by status" data-testid="support-filter">
+    <MudChip T="string" Value="@("open")" Variant="Variant.Outlined">Open</MudChip>
+    <MudChip T="string" Value="@("all")" Variant="Variant.Outlined">All</MudChip>
+    @foreach (var status in Enum.GetValues<SupportStatus>())
+    {
+        <MudChip T="string" Value="@status.ToString()" Variant="Variant.Outlined">@SupportStatusChip.Text(status)</MudChip>
+    }
+</MudChipSet>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" role="alert">@_error</MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Loading" />
+}
+else
+{
+    var shown = Shown().ToList();
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" aria-live="polite">@shown.Count @(shown.Count == 1 ? "request" : "requests")</MudText>
+    <MudTable Items="shown" Dense="true" Hover="true" Outlined="true" Breakpoint="Breakpoint.Sm" data-testid="support-table">
+        <HeaderContent>
+            <MudTh>Reference</MudTh>
+            <MudTh>What happened</MudTh>
+            <MudTh>From</MudTh>
+            <MudTh>Page</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Sent</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Reference">
+                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick="() => Toggle(context)" Class="px-1" Style="white-space:nowrap"
+                           aria-expanded="@((_selected?.Id == context.Id).ToString().ToLowerInvariant())" aria-controls="@($"support-detail-{context.Id}")"
+                           data-testid="support-open">@context.Reference</MudButton>
+            </MudTd>
+            <MudTd DataLabel="What happened">
+                @if (context.Kind == SupportKind.Feedback)
+                {
+                    <MudChip T="string" Size="Size.Small" Class="my-0 mr-1">Feedback</MudChip>
+                }
+                @if (context.FromError)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="my-0 mr-1">Error</MudChip>
+                }
+                @context.Summary
+            </MudTd>
+            <MudTd DataLabel="From">@(context.ReporterName ?? context.ReporterEmail)</MudTd>
+            <MudTd DataLabel="Page"><code>@(context.PagePath ?? "—")</code></MudTd>
+            <MudTd DataLabel="Status"><SupportStatusChip Status="context.Status" /></MudTd>
+            <MudTd DataLabel="Sent">@context.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+        </RowTemplate>
+        <ChildRowContent>
+            @if (_selected?.Id == context.Id)
+            {
+                <MudTr>
+                    <td colspan="6">
+                        <div id="@($"support-detail-{context.Id}")" class="pa-4" role="region" aria-label="@($"{context.Reference} details")" data-testid="support-detail">
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12" md="7">
+                                    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Style="font-weight:500">@context.Summary</MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        @(context.ReporterName is null ? context.ReporterEmail : $"{context.ReporterName} ({context.ReporterEmail})")
+                                        · version @(context.AppVersion ?? "unknown")
+                                    </MudText>
+                                    @if (context.Details is not null)
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mt-2" Style="white-space:pre-wrap">@context.Details</MudText>
+                                    }
+                                    @if (context.HasScreenshot)
+                                    {
+                                        <MudButton Href="@Support.GetScreenshotUrl(context.Id)" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Image" Class="mt-3">
+                                            Download screenshot (@context.ScreenshotFileName)
+                                        </MudButton>
+                                    }
+                                    @if (context.HandledBy is not null)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3">Last updated by @context.HandledBy, @context.UpdatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                                    }
+                                </MudItem>
+                                <MudItem xs="12" md="5">
+                                    <MudSelect T="SupportStatus" @bind-Value="_status" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="support-status-select">
+                                        @foreach (var status in Enum.GetValues<SupportStatus>())
+                                        {
+                                            <MudSelectItem T="SupportStatus" Value="status">@SupportStatusChip.Text(status)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudTextField T="string" @bind-Value="_reply" Lines="4" Label="Reply to the person who sent it" Variant="Variant.Outlined" Class="mt-3"
+                                                  HelperText="They see this under My support requests." MaxLength="SupportRules.ResolutionMaxLength" data-testid="support-reply" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="_busy" OnClick="() => SaveAsync(context)" data-testid="support-save">Save</MudButton>
+                                </MudItem>
+                            </MudGrid>
+                        </div>
+                    </td>
+                </MudTr>
+            }
+        </ChildRowContent>
+        <NoRecordsContent>
+            <MudText Class="pa-4">No support requests @(_filter == "all" ? "yet" : "here").</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    [Parameter, SupplyParameterFromQuery(Name = "id")] public Guid? Id { get; set; }
+
+    private IReadOnlyList<SupportRequestDto>? _items;
+    private SupportRequestDto? _selected;
+    private SupportStatus _status;
+    private string? _reply;
+    private string _filter = "open";
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (Id is { } id && _items?.FirstOrDefault(i => i.Id == id) is { } item)
+        {
+            _filter = "all";
+            Toggle(item);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await Support.ListAllAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _error = ex is WorkbenchForbiddenException or UnauthorizedAccessException ? "Only administrators can see support requests." : "Support requests couldn't be loaded.";
+        }
+    }
+
+    private IEnumerable<SupportRequestDto> Shown() => _filter switch
+    {
+        "all" => _items ?? [],
+        "open" => (_items ?? []).Where(i => i.Status is SupportStatus.New or SupportStatus.InProgress),
+        var s when Enum.TryParse<SupportStatus>(s, out var status) => (_items ?? []).Where(i => i.Status == status),
+        _ => _items ?? [],
+    };
+
+    private Task FilterAsync(string? value)
+    {
+        _filter = value ?? "open";
+        return Task.CompletedTask;
+    }
+
+    private void Toggle(SupportRequestDto item)
+    {
+        if (_selected?.Id == item.Id)
+        {
+            _selected = null;
+            return;
+        }
+
+        _selected = item;
+        _status = item.Status == SupportStatus.New ? SupportStatus.InProgress : item.Status;
+        _reply = item.Resolution;
+    }
+
+    private async Task SaveAsync(SupportRequestDto item)
+    {
+        _busy = true;
+        try
+        {
+            var updated = await Support.UpdateAsync(item.Id, new UpdateSupportRequest(_status, _reply));
+            _items = _items!.Select(i => i.Id == updated.Id ? updated : i).ToList();
+            _selected = updated;
+            Snackbar.Add($"{updated.Reference} saved.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add("It couldn't be saved. Try again.", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

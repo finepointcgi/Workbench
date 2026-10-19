@@ -1,0 +1,16 @@
+@* A list of pass/fail data checks. *@
+<MudStack Spacing="0" Class="mt-1">
+    @foreach (var check in Items)
+    {
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Start" data-check="@check.Title" data-passed="@(check.Passed ? "true" : "false")">
+            <MudIcon Icon="@(check.Passed ? Icons.Material.Filled.CheckCircle : check.Blocking ? Icons.Material.Filled.Block : Icons.Material.Filled.Warning)"
+                     Color="@(check.Passed ? Color.Success : check.Blocking ? Color.Error : Color.Warning)" Size="Size.Small" Class="mt-1" />
+            <MudText Typo="Typo.body2"><b>@check.Title</b> · <span class="mud-text-secondary">@check.Detail</span></MudText>
+        </MudStack>
+    }
+</MudStack>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<MigrationCheckDto> Items { get; set; } = [];
+}

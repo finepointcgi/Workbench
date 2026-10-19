@@ -53,7 +53,7 @@
 
 @if (_requests is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else if (_requests.Count == 0)
 {

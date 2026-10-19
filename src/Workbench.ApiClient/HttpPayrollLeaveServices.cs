@@ -107,6 +107,9 @@ public sealed class HttpLeavePolicyService(HttpClient http) : ILeavePolicyServic
     public async Task<IReadOnlyList<LeaveChargeCodeDto>> ListLeaveChargeCodesAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Base}/charge-codes", cancellationToken)).ReadAsync<List<LeaveChargeCodeDto>>(cancellationToken);
 
+    public async Task<IReadOnlyList<LeavePolicyDto>> ListMineAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/mine", cancellationToken)).ReadAsync<List<LeavePolicyDto>>(cancellationToken);
+
     public async Task<LeavePolicyDto> CreateAsync(SaveLeavePolicyRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync(Base, request, cancellationToken)).ReadAsync<LeavePolicyDto>(cancellationToken);
 

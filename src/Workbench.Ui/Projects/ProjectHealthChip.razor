@@ -2,8 +2,9 @@
 
 <MudTooltip Arrow="true" Placement="Placement.Top">
     <ChildContent>
+        @* Text and an icon carry the status, not just the color (1.4.1); focusable so the reasons show on keyboard focus too. *@
         <MudChip T="string" Size="Size.Small" Color="ProjectsFormat.HealthColor(Money.Health)" Variant="@(Money.Health == ProjectHealth.NoBudget ? Variant.Outlined : Variant.Filled)"
-                 data-testid="health-chip">@ProjectHealthRules.Label(Money.Health)</MudChip>
+                 Icon="@HealthIcon" tabindex="0" data-testid="health-chip">@ProjectHealthRules.Label(Money.Health)</MudChip>
     </ChildContent>
     <TooltipContent>
         <div style="max-width: 340px; text-align: left">
@@ -23,4 +24,12 @@
 @code {
     [Parameter, EditorRequired]
     public ProjectMoneyDto Money { get; set; } = default!;
+
+    private string HealthIcon => Money.Health switch
+    {
+        ProjectHealth.OnTrack => Icons.Material.Filled.CheckCircle,
+        ProjectHealth.AtRisk => Icons.Material.Filled.Warning,
+        ProjectHealth.Over => Icons.Material.Filled.Error,
+        _ => Icons.Material.Outlined.HelpOutline,
+    };
 }

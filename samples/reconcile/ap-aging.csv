@@ -1,0 +1,7 @@
+Accounts Payable Aging - As of 10/31/2026,,,,,,,,
+VEND_ID,VEND_NAME,CURRENT,1-30,31-60,61-90,OVER_90,TOTAL,RETAINAGE
+DELTA,Delta Cloud Services Inc,"12,400.00",0.00,0.00,0.00,0.00,"12,400.00",0.00
+KESTREL,Kestrel Analytics LLC,"22,500.00",0.00,0.00,0.00,0.00,"22,500.00","2,500.00"
+NORTHSTAR,Northstar Travel Management,"3,412.88",0.00,0.00,0.00,0.00,"3,412.88",0.00
+OFFICEPRO,OfficePro Supply,0.00,304.54,0.00,0.00,0.00,304.54,0.00
+Report Total,,"38,312.88",304.54,0.00,0.00,0.00,"38,617.42","2,500.00"

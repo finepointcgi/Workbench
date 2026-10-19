@@ -27,7 +27,7 @@ else if (_error is not null)
 }
 else if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else
 {
@@ -180,6 +180,7 @@ else
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="SaveSettingsAsync" Disabled="_busy">Save earning codes</MudButton>
                 </MudPaper>
             }
+            <PaylocityLayoutEditor />
         </MudTabPanel>
     </MudTabs>
 }
@@ -316,7 +317,7 @@ else
 
     private async Task EditProfileAsync(PayProfileDto profile)
     {
-        var parameters = new DialogParameters<PayProfileDialog> { { x => x.Profile, profile }, { x => x.Groups, _groups } };
+        var parameters = new DialogParameters<PayProfileDialog> { { x => x.Profile, _revealed.GetValueOrDefault(profile.EmployeeId) ?? profile }, { x => x.Groups, _groups } };
         var dialog = await DialogService.ShowAsync<PayProfileDialog>($"Payroll profile · {profile.EmployeeName}", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false })
         {

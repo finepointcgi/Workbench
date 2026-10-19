@@ -6,7 +6,7 @@
 
 <PageTitle>Payroll run · Workbench</PageTitle>
 
-<MudBreadcrumbs Items="_crumbs" Class="px-0" />
+<AccessibleBreadcrumbs Items="_crumbs" Class="px-0" />
 
 @if (_forbidden)
 {
@@ -18,7 +18,7 @@ else if (_error is not null)
 }
 else if (_run is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else
 {

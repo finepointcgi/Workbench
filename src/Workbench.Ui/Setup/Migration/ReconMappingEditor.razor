@@ -1,0 +1,128 @@
+@* Maps a Costpoint report's columns to a reconciliation report's keys and amounts, with tolerances and key options. *@
+<MudStack Spacing="2" data-testid="recon-mapping">
+    <MudSimpleTable Dense="true" Elevation="0" Bordered="true">
+        <thead>
+            <tr><th>Field</th><th>Costpoint column</th><th>Minus column</th><th>Negate</th><th>Scale</th><th>Tolerance ±</th><th>or %</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var field in Report.Fields)
+            {
+                var map = Column(field.Name);
+                var tolerance = Tolerance(field);
+                <tr data-field="@field.Name">
+                    <td>
+                        <MudText Typo="Typo.body2">@field.Label@(field.Required ? " *" : "")</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@(field.Role switch { ReconFieldRole.Key => "Key", ReconFieldRole.Label => "Label", _ => field.Format.ToString() })</MudText>
+                    </td>
+                    <td style="min-width:200px">
+                        <MudSelect T="string" Value="map.Column" ValueChanged="v => SetColumn(field.Name, map with { Column = v })" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                   Placeholder="Not mapped" aria-label="@($"Column for {field.Label}")">
+                            @foreach (var header in Headers)
+                            {
+                                <MudSelectItem T="string" Value="header">@header</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </td>
+                    @if (field.Role == ReconFieldRole.Measure)
+                    {
+                        <td style="min-width:160px">
+                            <MudSelect T="string" Value="map.MinusColumn" ValueChanged="v => SetColumn(field.Name, map with { MinusColumn = v })" Clearable="true" Dense="true" Margin="Margin.Dense"
+                                       Placeholder="—" Disabled="map.Column is null" aria-label="@($"Minus column for {field.Label}")">
+                                @foreach (var header in Headers)
+                                {
+                                    <MudSelectItem T="string" Value="header">@header</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </td>
+                        <td><MudCheckBox T="bool" Value="map.Negate" ValueChanged="v => SetColumn(field.Name, map with { Negate = v })" Dense="true" Disabled="map.Column is null" aria-label="@($"Negate {field.Label}")" /></td>
+                        <td style="width:90px"><MudNumericField T="decimal" Value="map.Scale" ValueChanged="v => SetColumn(field.Name, map with { Scale = v })" Margin="Margin.Dense" HideSpinButtons="true" Disabled="map.Column is null" aria-label="@($"Scale for {field.Label}")" /></td>
+                        <td style="width:100px"><MudNumericField T="decimal" Value="tolerance.Absolute" ValueChanged="v => SetTolerance(tolerance with { Absolute = v })" Margin="Margin.Dense" HideSpinButtons="true" Min="0" aria-label="@($"Tolerance for {field.Label}")" /></td>
+                        <td style="width:80px"><MudNumericField T="decimal" Value="tolerance.Percent" ValueChanged="v => SetTolerance(tolerance with { Percent = v })" Margin="Margin.Dense" HideSpinButtons="true" Min="0" aria-label="@($"Percent tolerance for {field.Label}")" /></td>
+                    }
+                    else
+                    {
+                        <td colspan="5"><MudText Typo="Typo.caption" Class="mud-text-secondary">@field.Description</MudText></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    <MudGrid Spacing="2">
+        @if (Report.UsesRange)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="ReconRange" Label="Amounts" Value="Mapping.Options.Range ?? Report.DefaultRange" ValueChanged="v => SetOptions(Mapping.Options with { Range = v })" Dense="true">
+                    <MudSelectItem T="ReconRange" Value="ReconRange.Period">The period</MudSelectItem>
+                    <MudSelectItem T="ReconRange" Value="ReconRange.YearToDate">Year to date</MudSelectItem>
+                    <MudSelectItem T="ReconRange" Value="ReconRange.InceptionToDate">Inception to date</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        }
+        @if (Report.Fields.Any(f => f.Name == "Project"))
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudSwitch T="bool" Value="Mapping.Options.ProjectLevel" ValueChanged="v => SetOptions(Mapping.Options with { ProjectLevel = v })" Color="Color.Primary"
+                           Label="@(Mapping.Options.ProjectLevel ? "Compare projects (2001)" : "Compare WBS elements (2001.02.01)")" />
+            </MudItem>
+        }
+        <MudItem xs="12" sm="6" md="3">
+            <MudSwitch T="bool" Value="Mapping.Options.IgnorePunctuation" ValueChanged="v => SetOptions(Mapping.Options with { IgnorePunctuation = v })" Color="Color.Primary" Label="Keys: ignore punctuation" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSwitch T="bool" Value="Mapping.Options.TrimLeadingZeros" ValueChanged="v => SetOptions(Mapping.Options with { TrimLeadingZeros = v })" Color="Color.Primary" Label="Keys: ignore leading zeros" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField T="string" Label="Skip rows whose key starts with" Value="@string.Join(", ", Mapping.Options.SkipKeyPrefixes ?? [])" Margin="Margin.Dense"
+                          ValueChanged="v => SetOptions(Mapping.Options with { SkipKeyPrefixes = v.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList() })"
+                          HelperText="Comma-separated, e.g. Total, Grand Total." />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField T="string" Label="Key rewrites (Costpoint => Workbench, one per line)" Lines="3" Value="Rewrites" ValueChanged="SetRewrites"
+                          HelperText="For example FRINGE BENEFITS => Fringe." />
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired]
+    public ReconReportDto Report { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public ReconMappingDto Mapping { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<string> Headers { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<ReconMappingDto> MappingChanged { get; set; }
+
+    private ReconColumnMapDto Column(string field) => Mapping.Columns.FirstOrDefault(c => c.Field == field) ?? new ReconColumnMapDto(field, null);
+
+    private ReconToleranceDto Tolerance(ReconFieldDto field) => Mapping.Tolerances.FirstOrDefault(t => t.Field == field.Name) ?? new ReconToleranceDto(field.Name, field.DefaultTolerance);
+
+    private string Rewrites => string.Join("\n", (Mapping.Options.KeyRewrites ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key} => {kv.Value}"));
+
+    private Task SetColumn(string field, ReconColumnMapDto map) =>
+        MappingChanged.InvokeAsync(Mapping with { Columns = [.. Mapping.Columns.Where(c => c.Field != field), map] });
+
+    private Task SetTolerance(ReconToleranceDto tolerance) =>
+        MappingChanged.InvokeAsync(Mapping with { Tolerances = [.. Mapping.Tolerances.Where(t => t.Field != tolerance.Field), tolerance] });
+
+    private Task SetOptions(ReconOptionsDto options) => MappingChanged.InvokeAsync(Mapping with { Options = options });
+
+    private Task SetRewrites(string text)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in (text ?? "").Split('\n'))
+        {
+            var parts = line.Split("=>", 2);
+            if (parts.Length == 2 && parts[0].Trim().Length > 0 && parts[1].Trim().Length > 0)
+            {
+                map[parts[0].Trim()] = parts[1].Trim();
+            }
+        }
+
+        return SetOptions(Mapping.Options with { KeyRewrites = map });
+    }
+}

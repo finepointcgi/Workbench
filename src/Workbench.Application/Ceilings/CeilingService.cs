@@ -236,11 +236,6 @@ public sealed class CeilingService(
             throw new ArgumentException("A rate cap is a fraction between 0 and 5 (0.45 = 45%).");
         }
 
-        if (isFee && request.FiscalYear is not null)
-        {
-            throw new ArgumentException("Fee caps apply to every year of the contract; only indirect rate caps take a fiscal year.");
-        }
-
         if (request.FiscalYear is < 2000 or > 2200)
         {
             throw new ArgumentException("That fiscal year isn't valid.");
@@ -374,13 +369,14 @@ public sealed class CeilingService(
         c.Enforcement = (CeilingEnforcement)(int)r.Mode;
         c.AlertThresholds = string.Join(",", thresholds);
         c.ProjectManagerMayOverride = r.ProjectManagerMayOverride;
+        c.CheckAtRequisition = r.CheckAtRequisition;
         c.Notes = Optional(r.Notes, 1000);
     }
 
     private static object Snapshot(Ceiling c) => new
     {
         Level = c.Level.ToString(), c.ContractId, c.ClinId, c.ProjectId, c.WbsElementId, c.LaborCategoryId,
-        c.HoursCeiling, c.CostCeiling, c.BillingCeiling, Enforcement = c.Enforcement.ToString(), c.AlertThresholds, c.ProjectManagerMayOverride, c.IsActive,
+        c.HoursCeiling, c.CostCeiling, c.BillingCeiling, Enforcement = c.Enforcement.ToString(), c.AlertThresholds, c.ProjectManagerMayOverride, c.CheckAtRequisition, c.IsActive,
     };
 
     private async Task<CeilingDto> DtoAsync(IWorkbenchDbContext db, Guid ceilingId, CancellationToken ct)
@@ -418,7 +414,8 @@ public sealed class CeilingService(
                 var thresholds = CeilingEngine.Thresholds(c.AlertThresholds);
                 var dto = new CeilingDto(c.Id, (CeilingScope)(int)c.Level, c.ContractId, Of(contracts, c.ContractId), c.ClinId, Of(clins, c.ClinId),
                     c.ProjectId, Of(projects, c.ProjectId), c.WbsElementId, Of(wbs, c.WbsElementId), c.LaborCategoryId, Of(categories, c.LaborCategoryId),
-                    c.HoursCeiling, c.CostCeiling, c.BillingCeiling, (CeilingMode)(int)c.Enforcement, thresholds, c.ProjectManagerMayOverride, c.Notes, c.IsActive, s.Label);
+                    c.HoursCeiling, c.CostCeiling, c.BillingCeiling, (CeilingMode)(int)c.Enforcement, thresholds, c.ProjectManagerMayOverride, c.Notes, c.IsActive, s.Label,
+                    c.CheckAtRequisition);
                 var measures = CeilingEngine.Measures.Where(m => s.Limit(m) is not null).Select(m => Measure(s, m, thresholds)).ToList();
                 var level = measures.Count == 0 ? CeilingAlertLevel.Ok : measures.Max(m => m.Level);
                 var canOverride = c.IsActive && (finance || (c.ProjectManagerMayOverride && s.Projects.Overlaps(managed)));

@@ -43,7 +43,7 @@ else
 
     @if (_loading)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
     }
     else if (_entries.Count == 0)
     {

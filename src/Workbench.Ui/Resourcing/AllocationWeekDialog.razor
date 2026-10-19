@@ -26,7 +26,7 @@
                         <td>
                             @if (editable)
                             {
-                                <MudNumericField T="decimal" Value="row.Hours" ValueChanged="v => UpdateAsync(row, v)" Min="0" Max="168" Variant="Variant.Text" DebounceInterval="600"
+                                <MudNumericField T="decimal" Value="row.Hours" aria-label="@($"Hours, {row.ProjectCode} {row.WbsCode}")" ValueChanged="v => UpdateAsync(row, v)" Min="0" Max="168" Variant="Variant.Text" DebounceInterval="600"
                                                  data-testid="@($"hours-{row.ProjectCode}-{row.WbsCode}")" />
                             }
                             else

@@ -134,7 +134,8 @@ public sealed class GeneralLedger(AuditRecorder audit, TimeProvider clock)
     /// <summary>The next entry number, counting entries posted earlier in this unit of work.</summary>
     private static async Task<int> NextSequenceAsync(IWorkbenchDbContext db, CancellationToken ct)
     {
-        var saved = await db.Set<JournalEntry>().MaxAsync(e => (int?)e.Sequence, ct) ?? 0;
+        // "Sequence > 0" matches the unique index's filter, so the maximum is read from the index instead of a table scan.
+        var saved = await db.Set<JournalEntry>().Where(e => e.Sequence > 0).MaxAsync(e => (int?)e.Sequence, ct) ?? 0;
         var local = db.Set<JournalEntry>().Local.Select(e => e.Sequence).DefaultIfEmpty(0).Max();
         return Math.Max(saved, local) + 1;
     }

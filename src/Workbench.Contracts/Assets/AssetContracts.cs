@@ -6,6 +6,9 @@ namespace Workbench.Contracts.Assets;
 
 public enum AssetDepreciationMethod { StraightLine, DecliningBalance, SumOfYearsDigits }
 
+/// <summary>The in-service month: a whole month, half a month, or nothing (depreciation starts the month after).</summary>
+public enum AssetDepreciationConvention { FullMonth, MidMonth, FollowingMonth }
+
 public enum AssetState { InService, Disposed, Transferred }
 
 /// <summary>Book: what's posted. Tax: MACRS (half-year convention), for tax reporting only.</summary>
@@ -24,7 +27,14 @@ public sealed record AssetCategoryDto(
     string AccumulatedDepreciationAccountNumber,
     Guid ExpenseAccountId,
     string ExpenseAccountNumber,
-    bool IsActive);
+    bool IsActive,
+    AssetDepreciationConvention Convention = AssetDepreciationConvention.FullMonth,
+
+    /// <summary>Null: the organization's threshold (<see cref="AssetSettingsDto.CapitalizationThreshold"/>).</summary>
+    decimal? CapitalizationThreshold = null,
+
+    /// <summary>Assets in the category (any status); a category with assets can be deactivated but not deleted.</summary>
+    int AssetCount = 0);
 
 public sealed record SaveAssetCategoryRequest(
     string Code,
@@ -35,7 +45,9 @@ public sealed record SaveAssetCategoryRequest(
     Guid AccumulatedDepreciationAccountId,
     Guid ExpenseAccountId,
     int? MacrsRecoveryYears = null,
-    bool IsActive = true);
+    bool IsActive = true,
+    AssetDepreciationConvention Convention = AssetDepreciationConvention.FullMonth,
+    decimal? CapitalizationThreshold = null);
 
 public sealed record AssetSummaryDto(
     Guid Id,
@@ -104,11 +116,17 @@ public sealed record AssetDto(
     IReadOnlyList<AssetDepreciationDto> Depreciation,
     IReadOnlyList<AssetTransferDto> Transfers,
     string CreatedBy,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    AssetDepreciationConvention Convention = AssetDepreciationConvention.FullMonth,
+    DateOnly? OpeningBalanceDate = null,
+    decimal OpeningAccumulatedDepreciation = 0);
 
 /// <summary>
 /// An asset. Accounts default from the category; method and life too when omitted. Government-furnished and
 /// contractor-acquired property isn't depreciated (the government owns it) but needs a contract.
+/// <para>Assets brought over from another system (the Costpoint fixed asset import) give <see cref="OpeningBalanceDate"/>,
+/// a month end, and the accumulated depreciation through it. Nothing is posted (the balances arrive with the GL import);
+/// depreciation resumes the month after, spreading cost − salvage − accumulated over the rest of the life.</para>
 /// </summary>
 public sealed record SaveAssetRequest(
     string Description,
@@ -134,7 +152,10 @@ public sealed record SaveAssetRequest(
     Guid? AssetAccountId = null,
     Guid? AccumulatedDepreciationAccountId = null,
     Guid? ExpenseAccountId = null,
-    Guid? VendorId = null);
+    Guid? VendorId = null,
+    AssetDepreciationConvention? Convention = null,
+    DateOnly? OpeningBalanceDate = null,
+    decimal OpeningAccumulatedDepreciation = 0);
 
 /// <summary>Capitalizes an AP bill's GL-account line (at or above the capitalization threshold) as a new asset.</summary>
 public sealed record CapitalizeBillLineRequest(
@@ -213,7 +234,11 @@ public interface IAssetService
 
     Task<IReadOnlyList<AssetCategoryDto>> ListCategoriesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Adds (null id) or changes a category. Deactivate one with <see cref="SaveAssetCategoryRequest.IsActive"/> = false: new assets can't use it.</summary>
     Task<AssetCategoryDto> SaveCategoryAsync(Guid? categoryId, SaveAssetCategoryRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes a category no asset uses; one in use is refused (deactivate it instead).</summary>
+    Task DeleteCategoryAsync(Guid categoryId, CancellationToken cancellationToken = default);
 }
 
 // ---- Depreciation ----

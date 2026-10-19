@@ -19,6 +19,20 @@ public static class AssetFormat
         _ => "Sum-of-years digits",
     };
 
+    public static string Label(AssetDepreciationConvention c) => c switch
+    {
+        AssetDepreciationConvention.MidMonth => "Half month (mid-month)",
+        AssetDepreciationConvention.FollowingMonth => "Following month",
+        _ => "Full month",
+    };
+
+    public static string Help(AssetDepreciationConvention c) => c switch
+    {
+        AssetDepreciationConvention.MidMonth => "Half a month in the in-service month, the other half at the end of the life.",
+        AssetDepreciationConvention.FollowingMonth => "Depreciation starts the month after the asset goes into service.",
+        _ => "A whole month of depreciation in the in-service month.",
+    };
+
     public static MudBlazor.Color Color(AssetState s) => s switch
     {
         AssetState.InService => MudBlazor.Color.Success,

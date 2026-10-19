@@ -30,10 +30,8 @@
                     }
                 </MudSelect>
             }
-            else
-            {
-                <MudNumericField T="int?" @bind-Value="_fiscalYear" Label="Fiscal year" Clearable="true" HelperText="Empty: every year." />
-            }
+            <MudNumericField T="int?" @bind-Value="_fiscalYear" Label="Fiscal year" Clearable="true"
+                             HelperText="@(_kind is RateCapKind.FeeRate or RateCapKind.FeeAmount ? "Empty: every year. A year applies to the fee on cost dated in that year." : "Empty: every year.")" data-testid="rate-cap-year" />
             <MudTextField @bind-Value="_notes" Label="Notes" />
         </MudStack>
     </DialogContent>
@@ -68,7 +66,7 @@
             var isFee = _kind is RateCapKind.FeeRate or RateCapKind.FeeAmount;
             await Ceilings.CreateRateCeilingAsync(ContractId, new SaveRateCeilingRequest(_kind,
                 _kind == RateCapKind.FeeAmount ? null : _percent / 100m, _kind == RateCapKind.FeeAmount ? _amount : null,
-                isFee ? _clinId : null, isFee ? null : _fiscalYear, _notes));
+                isFee ? _clinId : null, _fiscalYear, _notes));
             Snackbar.Add("Cap saved.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
         }

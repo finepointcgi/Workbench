@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Billing;
 using Workbench.Application.Financials;
 using Workbench.Application.Identity;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Time;
+using Workbench.Domain.Billing;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -346,8 +348,11 @@ public sealed class CeilingCheckingPurchaseOrderService(IPurchaseOrderService in
         (lines ?? []).Where(l => l.WbsElementId != null).Select(l => l.WbsElementId!.Value);
 }
 
-/// <summary>Invoices: generating or approving an invoice that would bill past a blocking contract or CLIN billing ceiling is refused.</summary>
-public sealed class CeilingCheckingInvoiceService(IInvoiceService inner, ChargeGuard guard) : IInvoiceService
+/// <summary>
+/// Invoices: generating, regenerating, adding or removing lines on, or approving a draft that would bill past a blocking contract
+/// or CLIN billing ceiling is refused. Drafts don't count as billed, so each check takes the whole draft as it would stand.
+/// </summary>
+public sealed class CeilingCheckingInvoiceService(IInvoiceService inner, IWorkbenchDbContextFactory dbFactory, ChargeGuard guard) : IInvoiceService
 {
     public Task<IReadOnlyList<InvoiceSummaryDto>> ListAsync(InvoiceQuery query, CancellationToken cancellationToken = default) => inner.ListAsync(query, cancellationToken);
 
@@ -377,13 +382,54 @@ public sealed class CeilingCheckingInvoiceService(IInvoiceService inner, ChargeG
         return await inner.GenerateDraftAsync(request, cancellationToken);
     }
 
-    public Task<InvoiceDto> RegenerateDraftAsync(Guid invoiceId, CancellationToken cancellationToken = default) => inner.RegenerateDraftAsync(invoiceId, cancellationToken);
+    public async Task<InvoiceDto> RegenerateDraftAsync(Guid invoiceId, CancellationToken cancellationToken = default)
+    {
+        Invoice? draft;
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            draft = await db.Set<Invoice>().AsNoTracking().FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
+        }
+
+        if (draft is { Status: InvoiceStatus.Draft } && draft.Type != InvoiceType.CreditMemo)
+        {
+            // The preview finds this draft (same contract, type and period) and keeps its manual lines, as regenerating does.
+            var preview = await inner.PreviewAsync(new GenerateInvoiceRequest(draft.ContractId, draft.Type.ToContract(), draft.PeriodFrom, draft.PeriodTo,
+                ReleaseWithhold: draft.ReleasesWithhold), cancellationToken);
+            await guard.CheckBillingAsync(draft.ContractId, Deltas(preview.Lines), "this invoice", cancellationToken);
+        }
+
+        return await inner.RegenerateDraftAsync(invoiceId, cancellationToken);
+    }
 
     public Task<InvoiceDto> UpdateDraftAsync(Guid invoiceId, UpdateInvoiceDraftRequest request, CancellationToken cancellationToken = default) => inner.UpdateDraftAsync(invoiceId, request, cancellationToken);
 
-    public Task<InvoiceDto> AddLineAsync(Guid invoiceId, AddInvoiceLineRequest request, CancellationToken cancellationToken = default) => inner.AddLineAsync(invoiceId, request, cancellationToken);
+    public async Task<InvoiceDto> AddLineAsync(Guid invoiceId, AddInvoiceLineRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Amount > 0)
+        {
+            var invoice = await inner.GetAsync(invoiceId, cancellationToken);
+            if (invoice.Summary.Status == InvoiceState.Draft)
+            {
+                await guard.CheckBillingAsync(invoice.Summary.ContractId,
+                    [.. Deltas(invoice.Lines), new BillingDelta(request.ClinId, Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero))], "this line", cancellationToken);
+            }
+        }
 
-    public Task<InvoiceDto> RemoveLineAsync(Guid invoiceId, Guid lineId, CancellationToken cancellationToken = default) => inner.RemoveLineAsync(invoiceId, lineId, cancellationToken);
+        return await inner.AddLineAsync(invoiceId, request, cancellationToken);
+    }
+
+    /// <summary>Removing a credit (negative) line raises what the draft bills, so it's checked too.</summary>
+    public async Task<InvoiceDto> RemoveLineAsync(Guid invoiceId, Guid lineId, CancellationToken cancellationToken = default)
+    {
+        var invoice = await inner.GetAsync(invoiceId, cancellationToken);
+        if (invoice.Summary.Status == InvoiceState.Draft && invoice.Lines.FirstOrDefault(l => l.Id == lineId) is { Amount: < 0 })
+        {
+            await guard.CheckBillingAsync(invoice.Summary.ContractId, Deltas(invoice.Lines.Where(l => l.Id != lineId)), "removing this line", cancellationToken);
+        }
+
+        return await inner.RemoveLineAsync(invoiceId, lineId, cancellationToken);
+    }
 
     public Task DeleteDraftAsync(Guid invoiceId, CancellationToken cancellationToken = default) => inner.DeleteDraftAsync(invoiceId, cancellationToken);
 
@@ -422,4 +468,78 @@ public sealed class CeilingCheckingInvoiceService(IInvoiceService inner, ChargeG
     public Task<UnbilledAccrualDto> PostUnbilledAccrualAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default) => inner.PostUnbilledAccrualAsync(fiscalPeriodId, cancellationToken);
 
     private static List<BillingDelta> Deltas(IEnumerable<InvoiceLineDto> lines) => lines.Select(l => new BillingDelta(l.ClinId, l.Amount)).ToList();
+}
+
+/// <summary>
+/// Requisitions: submitting and approving are checked against cost ceilings as if the requisition were ordered. They warn by
+/// default (the purchase order is the commitment, checked when issued); a blocking ceiling set to check at requisition refuses
+/// them. Closed contracts and projects refuse them too. Open requisitions carry the warnings for their approvers.
+/// </summary>
+public sealed class CeilingCheckingRequisitionService(IRequisitionService inner, IWorkbenchDbContextFactory dbFactory, ChargeGuard guard) : IRequisitionService
+{
+    private const string What = "this requisition";
+
+    public Task<IReadOnlyList<RequisitionSummaryDto>> ListAsync(RequisitionQuery query, CancellationToken cancellationToken = default) => inner.ListAsync(query, cancellationToken);
+
+    public async Task<RequisitionDto> GetAsync(Guid requisitionId, CancellationToken cancellationToken = default)
+    {
+        var result = await inner.GetAsync(requisitionId, cancellationToken);
+        if (result.Requisition.Status is not (RequisitionState.Draft or RequisitionState.Rejected or RequisitionState.PendingApproval))
+        {
+            return result;
+        }
+
+        List<string> warnings;
+        try
+        {
+            warnings = await guard.CheckRequisitionAsync(await DeltasAsync(requisitionId, cancellationToken), What, cancellationToken);
+        }
+        catch (Exception ex) when (ex is Workbench.Contracts.Ceilings.CeilingExceededException or Workbench.Contracts.Ceilings.ChargingClosedException)
+        {
+            warnings = [ex.Message];
+        }
+
+        return WithWarnings(result, warnings);
+    }
+
+    public Task<RequisitionOptionsDto> GetOptionsAsync(CancellationToken cancellationToken = default) => inner.GetOptionsAsync(cancellationToken);
+
+    public Task<RequisitionDto> CreateAsync(SaveRequisitionRequest request, CancellationToken cancellationToken = default) => inner.CreateAsync(request, cancellationToken);
+
+    public Task<RequisitionDto> UpdateAsync(Guid requisitionId, SaveRequisitionRequest request, CancellationToken cancellationToken = default) => inner.UpdateAsync(requisitionId, request, cancellationToken);
+
+    public async Task<RequisitionDto> SubmitAsync(Guid requisitionId, CancellationToken cancellationToken = default)
+    {
+        var warnings = await guard.CheckRequisitionAsync(await DeltasAsync(requisitionId, cancellationToken, RequisitionStatus.Draft, RequisitionStatus.Rejected), What, cancellationToken);
+        return WithWarnings(await inner.SubmitAsync(requisitionId, cancellationToken), warnings);
+    }
+
+    public Task<IReadOnlyList<RequisitionSummaryDto>> ListApprovalQueueAsync(CancellationToken cancellationToken = default) => inner.ListApprovalQueueAsync(cancellationToken);
+
+    public async Task<RequisitionDto> ApproveAsync(Guid requisitionId, RequisitionDecisionRequest request, CancellationToken cancellationToken = default)
+    {
+        var warnings = await guard.CheckRequisitionAsync(await DeltasAsync(requisitionId, cancellationToken, RequisitionStatus.PendingApproval), What, cancellationToken);
+        return WithWarnings(await inner.ApproveAsync(requisitionId, request, cancellationToken), warnings);
+    }
+
+    public Task<RequisitionDto> RejectAsync(Guid requisitionId, RequisitionDecisionRequest request, CancellationToken cancellationToken = default) => inner.RejectAsync(requisitionId, request, cancellationToken);
+
+    public Task<RequisitionDto> CancelAsync(Guid requisitionId, RequisitionDecisionRequest request, CancellationToken cancellationToken = default) => inner.CancelAsync(requisitionId, request, cancellationToken);
+
+    /// <summary>The cost the requisition's project lines would commit, by WBS element (lines already on a purchase order count there).</summary>
+    private async Task<List<ChargeDelta>> DeltasAsync(Guid requisitionId, CancellationToken ct, params RequisitionStatus[] statuses)
+    {
+        await using var db = await dbFactory.CreateAsync(ct);
+        var req = await db.Set<PurchaseRequisition>().AsNoTracking().Include(r => r.Lines).FirstOrDefaultAsync(r => r.Id == requisitionId, ct);
+        if (req is null || (statuses.Length > 0 && !statuses.Contains(req.Status)))
+        {
+            return [];
+        }
+
+        return req.Lines.Where(l => l.WbsElementId != null && l.PurchaseOrderLineId == null).GroupBy(l => l.WbsElementId!.Value)
+            .Select(g => new ChargeDelta(g.Key, null, 0, g.Sum(l => l.Amount))).ToList();
+    }
+
+    private static RequisitionDto WithWarnings(RequisitionDto dto, List<string> warnings) =>
+        warnings.Count == 0 ? dto : dto with { CeilingWarnings = [.. dto.CeilingWarnings ?? [], .. warnings] };
 }

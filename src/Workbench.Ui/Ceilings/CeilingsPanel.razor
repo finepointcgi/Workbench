@@ -5,7 +5,7 @@
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else if (_error is not null)
 {
@@ -50,6 +50,10 @@ else
                 </MudTd>
                 <MudTd>
                     <MudChip T="string" Size="Size.Small" Color="@(context.Ceiling.Mode == CeilingMode.Block ? Color.Error : Color.Default)">@context.Ceiling.Mode</MudChip>
+                    @if (context.Ceiling.CheckAtRequisition)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Checks requisitions</MudText>
+                    }
                 </MudTd>
                 <MudTd Style="min-width:260px">
                     @foreach (var m in context.Measures)
@@ -66,7 +70,7 @@ else
                                     <span> · with override @CeilingFormat.Amount(m.Metric, m.EffectiveLimit.Value)</span>
                                 }
                             </MudText>
-                            <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" />
+                            <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" aria-label="@($"{CeilingFormat.Metric(m.Metric)} ceiling used")" />
                         </div>
                     }
                 </MudTd>

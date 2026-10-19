@@ -1,0 +1,13 @@
+{
+  "name": "workbench-a11y",
+  "private": true,
+  "description": "axe-core accessibility scan of every Workbench page, per seeded role, theme and width.",
+  "type": "module",
+  "scripts": {
+    "scan": "node scan.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "playwright": "1.55.0"
+  }
+}

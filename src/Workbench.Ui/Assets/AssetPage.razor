@@ -14,7 +14,7 @@
 }
 else if (_asset is not { } asset)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -57,6 +57,10 @@ else
                 <tr><th>Organization</th><td>@a.OrgUnitCode</td><th>Project / WBS</th><td>@a.ProjectCode @asset.WbsCode</td></tr>
                 <tr><th>Accounts</th><td>Asset @asset.AssetAccountNumber · accumulated @asset.AccumulatedDepreciationAccountNumber · expense @asset.ExpenseAccountNumber</td><th>In service</th><td>@AssetFormat.Date(asset.InServiceDate)</td></tr>
                 <tr><th>Vendor</th><td>@asset.VendorName</td><th>Source</th><td>@(asset.SourceBillNumber is { } sb ? $"Capitalized from {sb}" : $"Entered by {asset.CreatedBy}")</td></tr>
+                @if (asset.OpeningBalanceDate is { } ob)
+                {
+                    <tr data-testid="opening-balance"><th>Opening balance</th><td colspan="3">Brought over with @AssetFormat.Amount(asset.OpeningAccumulatedDepreciation) accumulated depreciation as of @AssetFormat.Date(ob) (nothing posted); Workbench depreciates from the month after.</td></tr>
+                }
                 @if (asset.CapitalizationEntryId is { } ce)
                 {
                     <tr><th>Capitalization entry</th><td colspan="3"><MudLink Href="@($"accounting/journal/{ce}")">Reclass journal entry</MudLink></td></tr>

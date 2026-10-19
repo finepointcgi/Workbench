@@ -17,6 +17,11 @@ internal static class AssetEndpoints
         a.MapGet("/categories", (IAssetService s, CancellationToken ct) => s.ListCategoriesAsync(ct));
         a.MapPost("/categories", (SaveAssetCategoryRequest r, IAssetService s, CancellationToken ct) => s.SaveCategoryAsync(null, r, ct));
         a.MapPut("/categories/{id:guid}", (Guid id, SaveAssetCategoryRequest r, IAssetService s, CancellationToken ct) => s.SaveCategoryAsync(id, r, ct));
+        a.MapDelete("/categories/{id:guid}", async (Guid id, IAssetService s, CancellationToken ct) =>
+        {
+            await s.DeleteCategoryAsync(id, ct);
+            return Results.NoContent();
+        });
         a.MapGet("/capitalizable", (IAssetService s, CancellationToken ct) => s.ListCapitalizableBillLinesAsync(ct));
         a.MapPost("/capitalize", (CapitalizeBillLineRequest r, IAssetService s, CancellationToken ct) => s.CapitalizeAsync(r, ct));
         a.MapGet("/{id:guid}", (Guid id, IAssetService s, CancellationToken ct) => s.GetAsync(id, ct));

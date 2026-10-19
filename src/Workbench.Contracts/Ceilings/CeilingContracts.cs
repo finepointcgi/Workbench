@@ -71,7 +71,8 @@ public sealed record CeilingDto(
     bool ProjectManagerMayOverride,
     string? Notes,
     bool IsActive,
-    string Label);
+    string Label,
+    bool CheckAtRequisition = false);
 
 public sealed record CeilingOverrideDto(
     Guid Id,
@@ -135,6 +136,7 @@ public sealed record ProjectCeilingStatusDto(Guid ProjectId, string ProjectCode,
 /// Creates a ceiling. Set the id matching <see cref="Scope"/> (a labor-category ceiling needs the WBS element and the labor
 /// category). At least one of the amounts is required; <see cref="BillingCeiling"/> only on contract and CLIN ceilings.
 /// <see cref="AlertThresholds"/> are percents, comma separated (default 80,95,100). On update the scope and target are ignored.
+/// <see cref="CheckAtRequisition"/>: a blocking cost ceiling also refuses requisitions that would go past it (otherwise they warn).
 /// </summary>
 public sealed record SaveCeilingRequest(
     CeilingScope Scope,
@@ -149,7 +151,8 @@ public sealed record SaveCeilingRequest(
     CeilingMode Mode = CeilingMode.Warn,
     string? AlertThresholds = null,
     bool ProjectManagerMayOverride = false,
-    string? Notes = null);
+    string? Notes = null,
+    bool CheckAtRequisition = false);
 
 /// <summary>
 /// A temporary override, in force through the end of <see cref="ExpiresOn"/> (UTC). Without extra amounts the ceiling stops
@@ -159,7 +162,10 @@ public sealed record GrantCeilingOverrideRequest(string Reason, DateOnly Expires
 
 public sealed record CeilingReasonRequest(string Reason);
 
-/// <summary>Indirect rate caps (Fringe, Overhead, G&amp;A) and fee rate caps take <see cref="MaxRate"/> as a fraction; a fee amount cap takes <see cref="MaxAmount"/>.</summary>
+/// <summary>
+/// Indirect rate caps (Fringe, Overhead, G&amp;A) and fee rate caps take <see cref="MaxRate"/> as a fraction; a fee amount cap takes
+/// <see cref="MaxAmount"/>. <see cref="FiscalYear"/> limits any cap to the cost dated in that fiscal year (null: every year).
+/// </summary>
 public sealed record SaveRateCeilingRequest(RateCapKind Kind, decimal? MaxRate = null, decimal? MaxAmount = null, Guid? ClinId = null, int? FiscalYear = null, string? Notes = null);
 
 /// <summary>

@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using System.Diagnostics;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,16 +29,18 @@ public sealed class SheetGridTests
             .Add(v => v.Changed, () => changed++));
 
         grid.WaitForAssertion(() => Assert.Equal(2, grid.FindAll("tr.wb-row").Count));
+        A11yAssert.Check(grid);
         grid.FindAll("tr.wb-row")[1].QuerySelector("td[data-col='1']")!.DoubleClick();
         grid.Find("input.wb-editor").Input("$1,234.50");
         grid.Find(".wb-grid").KeyDown("Enter");
 
+        grid.WaitForAssertion(() => Assert.Single(items.Updates)); // saved asynchronously
         var update = Assert.Single(items.Updates);
         Assert.Equal(task.Id, update.ItemId);
         Assert.Equal("1234.5", update.Request.Values[Hours.Id.ToString()]);
         Assert.Equal("1200", update.Request.Values[Budget.Id.ToString()]);
         Assert.Equal("Kickoff", update.Request.Title);
-        Assert.Equal(1, changed);
+        grid.WaitForAssertion(() => Assert.Equal(1, changed));
         Assert.Empty(grid.FindAll("input.wb-editor"));
     }
 
@@ -93,6 +96,8 @@ public sealed class SheetGridTests
         grid.FindAll("tr.wb-row")[1].QuerySelector("td[data-col='0']")!.Click();
         grid.Find(".wb-grid").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "ArrowRight", AltKey = true, ShiftKey = true });
 
+        // The move is saved asynchronously: wait for it rather than racing it (this failed under parallel load).
+        grid.WaitForAssertion(() => Assert.Single(items.Moves));
         var move = Assert.Single(items.Moves);
         Assert.Equal(second.Id, move.ItemId);
         Assert.Equal(new MoveItemRequest(first.Id, 0), move.Request);

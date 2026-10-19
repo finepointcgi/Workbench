@@ -763,9 +763,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("AssetAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("CapitalizationThreshold")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Convention")
+                        .IsRequired()
+                        .HasMaxLength(24)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("DefaultLifeYears")
@@ -959,6 +968,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Convention")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("Cost")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
@@ -1019,6 +1033,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<string>("Method")
                         .IsRequired()
                         .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("OpeningAccumulatedDepreciation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("OpeningBalanceDate")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("OrgUnitId")
@@ -1536,10 +1557,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("ClinId")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("CostBasis")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("FiscalYear")
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("TEXT");
@@ -2160,6 +2188,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<decimal?>("BillingCeiling")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("CheckAtRequisition")
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("ClinId")
                         .HasColumnType("TEXT");
@@ -3577,6 +3608,128 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("AppUser");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Identity.SignInSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AcceptedAcrValues")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AcceptedAmrValues")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AllowedEmailDomains")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Authority")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClientSecretSetAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GroupsClaim")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("JitDefaultRoles")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("JitMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MfaRequirement")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedClientSecret")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ReauthenticationMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestedAcrValues")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("RequireOrganizationIdp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Scopes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SessionMaxHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SsoEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SyncRolesFromGroups")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SignInSettings");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.SsoGroupMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GroupValue")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Roles")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupValue")
+                        .IsUnique();
+
+                    b.ToTable("SsoGroupMapping");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Identity.WorkspaceMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4106,6 +4259,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("EligibleEmploymentTypes")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("EligibleExempt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EligibleOrgUnitIds")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EligiblePayGroupIds")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
@@ -4224,6 +4392,219 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("LeaveRequestDay");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Migration.MigrationSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("CutoverDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ParallelPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParallelPeriodId");
+
+                    b.ToTable("MigrationSettings");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Migration.MigrationStepRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StepKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StepKey")
+                        .IsUnique();
+
+                    b.ToTable("MigrationStepRecord");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Migration.ReconciliationMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MappingJson")
+                        .IsRequired()
+                        .HasMaxLength(32000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Report")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Report", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ReconciliationMapping");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Migration.ReconciliationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CostpointTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DifferentCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("FileContent")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("KeyCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("MappingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MappingJson")
+                        .IsRequired()
+                        .HasMaxLength(32000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MappingName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MatchedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OnlyCostpointCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OnlyWorkbenchCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PeriodName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrimaryField")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProblemCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Report")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasMaxLength(10000000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RunAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SignOffNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SignedOffAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SignedOffBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("WorkbenchTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId", "Report", "RunAtUtc");
+
+                    b.ToTable("ReconciliationRun");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Notifications.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4321,6 +4702,13 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("FullTime");
+
                     b.Property<decimal?>("HourlyRate")
                         .HasPrecision(18, 4)
                         .HasColumnType("TEXT");
@@ -4352,6 +4740,50 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("PayGroupId");
 
                     b.ToTable("EmployeePayProfile");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("AnnualSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("HourlyRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "EffectiveFrom");
+
+                    b.ToTable("EmployeePayRate");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayGroup", b =>
@@ -4470,6 +4902,41 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("RunId");
 
                     b.ToTable("PayrollExportLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollFileLayout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HoursLayoutJson")
+                        .HasMaxLength(16000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegisterLayoutJson")
+                        .HasMaxLength(16000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique();
+
+                    b.ToTable("PayrollFileLayout");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollProviderSetting", b =>
@@ -6041,6 +6508,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("LaborCategoryId");
 
                     b.HasIndex("TimesheetId");
+
+                    b.HasIndex("WorkDate");
 
                     b.HasIndex("WbsElementId", "WorkDate");
 
@@ -8036,6 +8505,46 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("AccessReviewItem");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Security.ComplianceChecklistEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChecklistKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReviewedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChecklistKey", "ItemKey", "ReviewedAtUtc");
+
+                    b.ToTable("ComplianceChecklistEntry");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Security.DataProtectionKeyRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8275,6 +8784,126 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("WorkspaceId");
 
                     b.ToTable("Sheets");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Support.SupportRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FromError")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HandledBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PagePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReporterEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReporterName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ScreenshotBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScreenshotContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScreenshotFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScreenshotKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("ReporterEmail");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("SupportRequest");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Support.UserHelpState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletedTours")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WhatsNewSeen")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail")
+                        .IsUnique();
+
+                    b.ToTable("UserHelpState");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Workspace", b =>
@@ -9165,6 +9794,23 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Migration.MigrationSettings", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("ParallelPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Migration.ReconciliationRun", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayProfile", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
@@ -9177,6 +9823,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("PayGroupId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayRate", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayPeriod", b =>

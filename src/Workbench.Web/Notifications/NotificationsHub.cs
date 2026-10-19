@@ -71,6 +71,7 @@ public static class NotificationsHosting
         Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);
         Workbench.Application.Reports.ReportsRegistration.AddWorkbenchReportsHosting(services); // Scheduled reports run as their owner.
         Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
+        Workbench.Application.Ceilings.CeilingsRegistration.AddWorkbenchCeilingsHosting(services); // Hourly ceiling threshold alerts.
         return services;
     }
 

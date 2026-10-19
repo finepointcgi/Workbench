@@ -26,9 +26,9 @@ public sealed class RevenueRunService(IWorkbenchDbContextFactory dbFactory, Reve
             .ToDictionary(r => r.ProjectId);
         var names = await RevenueSupport.Names.LoadAsync(db, [], cancellationToken);
         var rows = new List<RevenuePreviewRowDto>();
-        foreach (var projectId in await ProjectIdsAsync(db, cancellationToken))
+        foreach (var (projectId, result) in await engine.ComputeManyAsync(dbFactory, await ProjectIdsAsync(db, cancellationToken), period, cancellationToken))
         {
-            if (await engine.ComputeAsync(db, projectId, period, cancellationToken) is not { } computed)
+            if (result is not { } computed)
             {
                 continue;
             }
@@ -269,7 +269,7 @@ public sealed class RevenueRunService(IWorkbenchDbContextFactory dbFactory, Reve
 /// Period close: revenue is recognized for every project on a contract. A project passes when its run for the period is
 /// posted, or when there's nothing to post (the ledger already matches its revenue method).
 /// </summary>
-public sealed class RevenueCloseCheck(RevenueEngine engine) : IPeriodCloseCheck
+public sealed class RevenueCloseCheck(RevenueEngine engine, IWorkbenchDbContextFactory? dbFactory = null) : IPeriodCloseCheck
 {
     public const string Title = "Revenue recognized";
 
@@ -279,14 +279,29 @@ public sealed class RevenueCloseCheck(RevenueEngine engine) : IPeriodCloseCheck
             .Select(r => r.ProjectId).ToListAsync(cancellationToken)).ToHashSet();
         var missing = new List<string>();
         var stale = new List<string>();
-        foreach (var projectId in await RevenueRunService.ProjectIdsAsync(db, cancellationToken))
+        var projectIds = await RevenueRunService.ProjectIdsAsync(db, cancellationToken);
+        var computed = dbFactory is not null
+            ? await engine.ComputeManyAsync(dbFactory, projectIds, period, cancellationToken)
+            : await SequentialAsync();
+        foreach (var (projectId, result) in computed)
         {
-            if (await engine.ComputeAsync(db, projectId, period, cancellationToken) is not { HasEntry: true } c)
+            if (result is not { HasEntry: true } c)
             {
                 continue;
             }
 
             (posted.Contains(projectId) ? stale : missing).Add($"{c.Project.Code} {c.Project.Name}: {c.RevenueAdjustment:N2} revenue to post");
+        }
+
+        async Task<IReadOnlyList<(Guid, ProjectComputation?)>> SequentialAsync()
+        {
+            var list = new List<(Guid, ProjectComputation?)>();
+            foreach (var id in projectIds)
+            {
+                list.Add((id, await engine.ComputeAsync(db, id, period, cancellationToken)));
+            }
+
+            return list;
         }
 
         if (missing.Count == 0)

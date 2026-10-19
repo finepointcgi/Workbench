@@ -1,0 +1,42 @@
+@* Wraps the page body: if a page fails while rendering or handling a click, this friendly message replaces just the page
+   (menus keep working) with Try again, Home and "Report this". Moving to another page clears it. *@
+@inherits ErrorBoundary
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject IDialogService Dialogs
+
+@if (CurrentException is null)
+{
+    @ChildContent
+}
+else
+{
+    <div role="alert" class="py-4" style="max-width:640px" data-testid="error-boundary">
+        <MudText Typo="Typo.h4" HtmlTag="h1">Something went wrong</MudText>
+        <MudText Class="mt-2">
+            This page ran into a problem and couldn't finish. Anything you saved before is safe. Try again, or tell us what
+            you were doing so we can fix it.
+        </MudText>
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Recover" data-testid="error-retry">Try again</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.BugReport" OnClick="ReportAsync" data-testid="error-report">Report this</MudButton>
+            <MudButton Variant="Variant.Text" Href="">Go to Home</MudButton>
+        </MudStack>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (CurrentException is not null)
+        {
+            _ = InvokeAsync(Recover);
+        }
+    }
+
+    private Task ReportAsync() => SupportDialogs.ReportAsync(Dialogs, Navigation, fromError: true);
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

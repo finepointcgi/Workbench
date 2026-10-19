@@ -72,4 +72,42 @@ public sealed class DepreciationCalculatorTests
         Assert.Equal(0m, DepreciationCalculator.CumulativeThrough(schedule, -1));
         Assert.Equal(12_000m, DepreciationCalculator.CumulativeThrough(schedule, 500));
     }
+
+    [Fact]
+    public void Mid_month_takes_half_a_month_first_and_last_and_following_month_starts_a_month_later()
+    {
+        var full = DepreciationCalculator.MonthlySchedule(3_600m, 0, 3, DepreciationMethod.StraightLine);
+        var mid = DepreciationCalculator.MonthlySchedule(3_600m, 0, 3, DepreciationMethod.StraightLine, DepreciationConvention.MidMonth);
+        Assert.Equal(37, mid.Count);
+        Assert.Equal((50m, 100m, 50m, 3_600m), (mid[0], mid[1], mid[^1], mid.Sum()));
+
+        var uneven = DepreciationCalculator.MonthlySchedule(1_000m, 0, 3, DepreciationMethod.SumOfYearsDigits, DepreciationConvention.MidMonth);
+        Assert.Equal(1_000m, uneven.Sum());
+        Assert.All(uneven, m => Assert.True(m >= 0));
+
+        var following = DepreciationCalculator.MonthlySchedule(3_600m, 0, 3, DepreciationMethod.StraightLine, DepreciationConvention.FollowingMonth);
+        Assert.Equal((0m, 100m, 37, 3_600m), (following[0], following[1], following.Count, following.Sum()));
+        Assert.Equal(full, DepreciationCalculator.MonthlySchedule(3_600m, 0, 3, DepreciationMethod.StraightLine, DepreciationConvention.FullMonth));
+    }
+
+    [Fact]
+    public void An_opening_balance_keeps_the_original_schedule_when_it_matches_and_spreads_any_difference()
+    {
+        var original = DepreciationCalculator.MonthlySchedule(10_000m, 1_000m, 5, DepreciationMethod.DecliningBalance);
+        var taken = DepreciationCalculator.CumulativeThrough(original, 17); // 18 months already depreciated elsewhere
+
+        var matching = DepreciationCalculator.OpeningBalanceSchedule(original, 18, taken, 9_000m);
+        Assert.Equal(original.Skip(18), matching.Skip(18));
+        Assert.Equal(taken, DepreciationCalculator.CumulativeThrough(matching, 17));
+        Assert.Equal(0m, DepreciationCalculator.CumulativeThrough(matching, 16)); // nothing before the cut-over month
+
+        var lower = DepreciationCalculator.OpeningBalanceSchedule(original, 18, taken - 500m, 9_000m);
+        Assert.Equal(9_000m, lower.Sum());
+        Assert.True(lower[18] > original[18]);
+
+        Assert.Throws<ArgumentException>(() => DepreciationCalculator.OpeningBalanceSchedule(original, 18, 9_500m, 9_000m));
+        Assert.Throws<ArgumentException>(() => DepreciationCalculator.OpeningBalanceSchedule(original, 70, 8_000m, 9_000m));
+        Assert.Throws<ArgumentException>(() => DepreciationCalculator.OpeningBalanceSchedule(original, 0, 100m, 9_000m));
+        Assert.Equal(9_000m, DepreciationCalculator.OpeningBalanceSchedule(original, 70, 9_000m, 9_000m).Sum()); // fully depreciated
+    }
 }

@@ -15,7 +15,7 @@
 <MudDataGrid T="SheetSummary" Items="_sheets" Loading="_loading" Hover="true" Dense="true"
              SortMode="SortMode.Multiple" Filterable="true" QuickFilter="QuickFilter">
     <ToolBarContent>
-        <MudTextField @bind-Value="_search" Placeholder="Search sheets" Adornment="Adornment.Start"
+        <MudTextField aria-label="Search sheets" @bind-Value="_search" Placeholder="Search sheets" Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
     </ToolBarContent>
     <Columns>

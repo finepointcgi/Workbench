@@ -9,6 +9,7 @@ public enum PaletteKind
     Project,
     Sheet,
     Dashboard,
+    Help,
 }
 
 /// <summary>One result in the command palette.</summary>
@@ -107,6 +108,7 @@ public static class PaletteSearch
         PaletteKind.Project => Icons.Material.Filled.Work,
         PaletteKind.Sheet => Icons.Material.Filled.TableChart,
         PaletteKind.Dashboard => Icons.Material.Filled.Dashboard,
+        PaletteKind.Help => Icons.Material.Filled.HelpOutline,
         _ => Icons.Material.Filled.Article,
     };
 }

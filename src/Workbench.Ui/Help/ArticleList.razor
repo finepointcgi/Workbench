@@ -1,0 +1,20 @@
+@* A list of help articles: title link and summary. *@
+<ul class="wb-help-list" data-testid="help-article-list">
+    @foreach (var article in Articles)
+    {
+        <li data-testid="help-article-link">
+            <MudLink Href="@article.Href" OnClick="() => Opened.InvokeAsync(article)">@article.Title</MudLink>
+            @if (article.Summary.Length > 0)
+            {
+                <div class="mud-text-secondary" style="font-size:0.875rem">@article.Summary</div>
+            }
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<HelpArticle> Articles { get; set; } = [];
+
+    /// <summary>Raised when a link is followed (the help panel closes itself).</summary>
+    [Parameter] public EventCallback<HelpArticle> Opened { get; set; }
+}

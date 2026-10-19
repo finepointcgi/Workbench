@@ -13,6 +13,8 @@ namespace Workbench.Application.Assets;
 /// over its 12 months.</item>
 /// <item>Sum-of-years digits: (cost − salvage) × (remaining life ÷ sum of the years' digits) per year, spread evenly.</item>
 /// </list>
+/// Other conventions (<see cref="WithConvention"/>): mid-month takes half a month in the in-service month and the other
+/// half after the last month of life; following-month starts the month after the in-service month.
 /// MACRS (tax book) uses the IRS half-year convention tables and is never posted.
 /// </summary>
 public static class DepreciationCalculator
@@ -48,6 +50,89 @@ public static class DepreciationCalculator
             }
 
             schedule.Add(annual - monthly * 11);
+        }
+
+        return schedule;
+    }
+
+    /// <summary>The monthly schedule with <paramref name="convention"/> applied (month 0 is the in-service month).</summary>
+    public static IReadOnlyList<decimal> MonthlySchedule(decimal cost, decimal salvage, int lifeYears, DepreciationMethod method, DepreciationConvention convention) =>
+        WithConvention(MonthlySchedule(cost, salvage, lifeYears, method), convention);
+
+    /// <summary>
+    /// Shifts a full-month schedule for <paramref name="convention"/>. Following month: a zero month first. Mid-month: each
+    /// month's cumulative total is the average of the full-month cumulative totals either side, so the first month gets
+    /// half, one extra month at the end gets the last half, and the total is unchanged.
+    /// </summary>
+    public static IReadOnlyList<decimal> WithConvention(IReadOnlyList<decimal> fullMonth, DepreciationConvention convention)
+    {
+        switch (convention)
+        {
+            case DepreciationConvention.FollowingMonth:
+                return [0m, .. fullMonth];
+            case DepreciationConvention.MidMonth:
+                var result = new List<decimal>(fullMonth.Count + 1);
+                decimal previous = 0, cumulative = 0, taken = 0;
+                for (var i = 0; i <= fullMonth.Count; i++)
+                {
+                    var next = i < fullMonth.Count ? cumulative + fullMonth[i] : cumulative;
+                    var target = i < fullMonth.Count ? Round((previous + next) / 2m) : next;
+                    result.Add(target - taken);
+                    taken = target;
+                    previous = cumulative = next;
+                }
+
+                return result;
+            default:
+                return fullMonth;
+        }
+    }
+
+    /// <summary>
+    /// The schedule of an asset brought over with an opening balance: nothing before <paramref name="firstMonth"/> except
+    /// the opening accumulated depreciation as one amount in the month before it (so cumulative totals through any month
+    /// from then on include it), then the original schedule's remaining months scaled so they add up to exactly what's
+    /// left (cost − salvage − opening). When the opening balance matches the original schedule, that's the original schedule.
+    /// Throws when something is left to depreciate but the life has run out.
+    /// </summary>
+    public static IReadOnlyList<decimal> OpeningBalanceSchedule(IReadOnlyList<decimal> original, int firstMonth, decimal opening, decimal depreciable)
+    {
+        if (opening < 0 || opening > depreciable)
+        {
+            throw new ArgumentException($"The accumulated depreciation ({opening:N2}) must be between zero and cost less salvage ({depreciable:N2}).");
+        }
+
+        if (firstMonth <= 0)
+        {
+            return opening == 0 ? original : throw new ArgumentException("There's accumulated depreciation, but the asset wasn't in service before the cut-over.");
+        }
+
+        var schedule = new List<decimal>(Math.Max(original.Count, firstMonth + 1));
+        for (var m = 0; m < firstMonth; m++)
+        {
+            schedule.Add(m == firstMonth - 1 ? opening : 0);
+        }
+
+        var remaining = depreciable - opening;
+        var tail = original.Skip(firstMonth).ToList();
+        var tailTotal = tail.Sum();
+        if (remaining == 0)
+        {
+            return schedule;
+        }
+
+        if (tailTotal <= 0)
+        {
+            throw new ArgumentException($"The useful life ended before the cut-over, but {remaining:N2} is still to depreciate; correct the life, salvage value or accumulated depreciation.");
+        }
+
+        decimal running = 0, taken = 0;
+        foreach (var amount in tail)
+        {
+            running += amount;
+            var target = running == tailTotal ? remaining : Round(remaining * running / tailTotal);
+            schedule.Add(target - taken);
+            taken = target;
         }
 
         return schedule;

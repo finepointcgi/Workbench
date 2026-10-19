@@ -14,7 +14,7 @@
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else
 {
@@ -144,7 +144,7 @@ else
             var me = await UserContext.GetAsync();
             (_finance, _admin) = (me.IsFinance, me.IsAdmin);
             _isApprover = await Requests.IsApproverAsync();
-            _policies = await Policies.ListAsync();
+            _policies = await Policies.ListMineAsync(); // Only the policies that apply to me.
             _form.PolicyId = _policies.FirstOrDefault(p => p.Type == LeaveTypeKind.Pto)?.Id;
             await ReloadAsync();
             _tab = Tab switch
