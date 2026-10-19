@@ -1,6 +1,6 @@
 @page "/billing/invoices/{InvoiceId:guid}/print"
 @layout Workbench.Ui.Layout.BillingPrintLayout
-@inject IInvoiceService Invoices
+@inject IGovernmentBillingService Government
 @inject IJSRuntime JS
 
 <PageTitle>@(_print?.Invoice.Summary.Number ?? "Invoice") · Print · Workbench</PageTitle>
@@ -8,8 +8,12 @@
 <div class="toolbar no-print">
     <a href="@($"billing/invoices/{InvoiceId}")">← Back to the invoice</a>
     <span class="spacer"></span>
-    <a href="@($"billing/invoices/{InvoiceId}/print?form=sf1034")" class="@(IsSf1034 ? "active" : "")">SF 1034 voucher</a>
-    <a href="@($"billing/invoices/{InvoiceId}/print?form=commercial")" class="@(IsSf1034 ? "" : "active")">Commercial invoice</a>
+    <a href="@($"billing/invoices/{InvoiceId}/print?form=sf1034")" class="@(IsSf1034 ? "active" : "")" data-testid="form-sf1034">SF 1034 / SF 1035</a>
+    <a href="@($"billing/invoices/{InvoiceId}/print?form=commercial")" class="@(IsSf1034 ? "" : "active")" data-testid="form-custom">Our invoice layout</a>
+    @if (_voucher?.ProgressPaymentRequestId is { } request)
+    {
+        <a href="@($"billing/progress-payments/{request}/sf1443")">SF 1443</a>
+    }
     <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
 </div>
 
@@ -33,39 +37,7 @@ else
 
         @if (IsSf1034)
         {
-            <div class="form-head">
-                <div>
-                    <div class="small">Standard Form 1034 (style)</div>
-                    <h1>Public Voucher for Purchases and Services Other Than Personal</h1>
-                </div>
-                <table class="boxes narrow">
-                    <tr><th>Voucher no.</th><td data-testid="voucher-number">@s.Number</td></tr>
-                    <tr><th>Date prepared</th><td>@BillingFormat.Date(s.InvoiceDate)</td></tr>
-                    <tr><th>Contract number</th><td>@_print.ContractNumber</td></tr>
-                </table>
-            </div>
-            <table class="boxes">
-                <tr>
-                    <th>U.S. department, bureau or establishment</th>
-                    <th>Payee's name and address</th>
-                    <th>Paying office</th>
-                </tr>
-                <tr>
-                    <td><Party Value="_print.Payer" /></td>
-                    <td><Party Value="_print.Payee" /></td>
-                    <td>@(_print.PayingOffice ?? "—")<div class="small">Admin office: @(_print.AdminOffice ?? "—")</div></td>
-                </tr>
-                <tr>
-                    <th>Contract</th>
-                    <th>Period of service</th>
-                    <th>Discount terms</th>
-                </tr>
-                <tr>
-                    <td>@_print.ContractName<div class="small">@_print.ContractType</div></td>
-                    <td>@BillingFormat.Date(s.PeriodFrom) through @BillingFormat.Date(s.PeriodTo)</td>
-                    <td>Net @inv.PaymentTermsDays days · due @BillingFormat.Date(s.DueDate)</td>
-                </tr>
-            </table>
+            <Sf1034Voucher Voucher="_voucher!" />
         }
         else
         {
@@ -90,43 +62,43 @@ else
                     <td>@BillingFormat.Date(s.PeriodFrom) – @BillingFormat.Date(s.PeriodTo)</td>
                 </tr>
             </table>
-        }
 
-        <h2>@(IsSf1034 ? "Articles or services" : "Charges")</h2>
-        <table class="lines">
-            <thead>
-                <tr><th>CLIN</th><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var group in inv.Lines.GroupBy(l => l.ClinNumber))
-                {
-                    @foreach (var l in group)
+            <h2>Charges</h2>
+            <table class="lines">
+                <thead>
+                    <tr><th>CLIN</th><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var group in inv.Lines.GroupBy(l => l.ClinNumber))
                     {
-                        <tr>
-                            <td>@l.ClinNumber</td>
-                            <td>@l.Description</td>
-                            <td class="num">@BillingFormat.LineQuantity(l)</td>
-                            <td class="num">@BillingFormat.LineRate(l)</td>
-                            <td class="num">@BillingFormat.Amount(l.Amount)</td>
+                        @foreach (var l in group)
+                        {
+                            <tr>
+                                <td>@l.ClinNumber</td>
+                                <td>@l.Description</td>
+                                <td class="num">@BillingFormat.LineQuantity(l)</td>
+                                <td class="num">@BillingFormat.LineRate(l)</td>
+                                <td class="num">@BillingFormat.Amount(l.Amount)</td>
+                            </tr>
+                        }
+                        <tr class="subtotal">
+                            <td></td><td>CLIN @group.Key total</td><td></td><td></td><td class="num">@BillingFormat.Amount(group.Sum(l => l.Amount))</td>
                         </tr>
                     }
-                    <tr class="subtotal">
-                        <td></td><td>CLIN @group.Key total</td><td></td><td></td><td class="num">@BillingFormat.Amount(group.Sum(l => l.Amount))</td>
-                    </tr>
-                }
-            </tbody>
-            <tfoot>
-                <tr><td></td><td>Total amount @(s.Type == InvoiceKind.CreditMemo ? "credited" : "claimed")</td><td></td><td></td><td class="num" data-testid="print-total">@BillingFormat.Money(s.Total)</td></tr>
-                @if (inv.Withheld > 0)
-                {
-                    <tr class="small"><td></td><td colspan="4">Includes fee withheld until the final invoice: @BillingFormat.Money(inv.Withheld)</td></tr>
-                }
-            </tfoot>
-        </table>
+                </tbody>
+                <tfoot>
+                    <tr><td></td><td>Total amount @(s.Type == InvoiceKind.CreditMemo ? "credited" : "claimed")</td><td></td><td></td><td class="num" data-testid="print-total">@BillingFormat.Money(s.Total)</td></tr>
+                    @if (inv.Withheld > 0)
+                    {
+                        <tr class="small"><td></td><td colspan="4">Includes fee withheld until the final invoice: @BillingFormat.Money(inv.Withheld)</td></tr>
+                    }
+                </tfoot>
+            </table>
 
-        @if (inv.RateNote is not null)
-        {
-            <p class="small">Indirect rates: @inv.RateNote</p>
+            @if (inv.RateNote is not null)
+            {
+                <p class="small">Indirect rates: @inv.RateNote</p>
+            }
         }
         @if (inv.Notes is not null)
         {
@@ -145,14 +117,7 @@ else
             <tfoot><tr><td></td><td>Contract billed to date</td><td></td><td class="num">@BillingFormat.Amount(_print.BilledToDate)</td><td></td></tr></tfoot>
         </table>
 
-        @if (IsSf1034)
-        {
-            <div class="certify">
-                <p>I certify that the above bill is correct and just, and that payment has not been received.</p>
-                <div class="sign"><span>Signature and title</span><span>Date</span></div>
-            </div>
-        }
-        else
+        @if (!IsSf1034)
         {
             <p class="small">Please remit to @_print.Payee.Name@(_print.Payee.Address is null ? "" : ", " + _print.Payee.Address.Replace("\n", ", ")). Reference invoice @s.Number with your payment.</p>
         }
@@ -217,16 +182,24 @@ else
     [SupplyParameterFromQuery(Name = "form")]
     public string? Form { get; set; }
 
+    private VoucherDto? _voucher;
     private InvoicePrintDto? _print;
     private string? _error;
 
-    private bool IsSf1034 => !string.Equals(Form, "commercial", StringComparison.OrdinalIgnoreCase);
+    /// <summary>The form asked for, else the contract's chosen format.</summary>
+    private bool IsSf1034 => Form?.ToLowerInvariant() switch
+    {
+        "sf1034" => true,
+        "commercial" => false,
+        _ => _voucher?.ContractFormat == VoucherFormat.Sf1034,
+    };
 
     protected override async Task OnParametersSetAsync()
     {
         try
         {
-            _print ??= await Invoices.GetPrintAsync(InvoiceId);
+            _voucher ??= await Government.GetVoucherAsync(InvoiceId);
+            _print = _voucher.Print;
         }
         catch (Exception ex)
         {

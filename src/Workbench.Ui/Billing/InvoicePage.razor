@@ -22,8 +22,7 @@ else
     var isDraft = s.Status == InvoiceState.Draft;
     <BillingHeader Title="@($"{(s.Type == InvoiceKind.CreditMemo ? "Credit memo" : "Invoice")} {s.Number}")">
         <InvoiceStatusChip Status="s.Status" />
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print?form=sf1034")" data-testid="print-sf1034">SF 1034</MudButton>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print?form=commercial")">Commercial</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print")" data-testid="print-invoice">Print</MudButton>
         @if (_isFinance)
         {
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="export-wawf">WAWF CSV</MudButton>
@@ -132,6 +131,11 @@ else
         </MudItem>
     </MudGrid>
 
+    @if (_isFinance && s.Type != InvoiceKind.CreditMemo)
+    {
+        <PieePanel InvoiceId="s.Id" InvoiceStatus="s.Status" @key="@($"{s.Id}-{s.Status}")" Changed="ReloadAsync" />
+    }
+
     @foreach (var w in _invoice.Warnings)
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@w</MudAlert>
@@ -192,6 +196,8 @@ else
         }
     }
 
+    private async Task ReloadAsync() => _invoice = await Invoices.GetAsync(InvoiceId);
+
     private async Task RunAsync(Func<Task<InvoiceDto>> action, string? done = null)
     {
         _busy = true;
@@ -238,7 +244,7 @@ else
         {
             { d => d.Message, needsOverride
                 ? "This invoice takes a CLIN past its funded value. Finance may approve it with a reason; it's recorded with the invoice and in the audit log."
-                : $"Approving posts {BillingFormat.Money(_invoice.Summary.Total)} to the general ledger (debit AR billed, credit revenue) dated {BillingFormat.Date(_invoice.Summary.InvoiceDate)}. Approved invoices can't be edited, only voided." },
+                : $"Approving posts {BillingFormat.Money(_invoice.Summary.Total)} to the general ledger (debit AR billed, credit {(BillingFormat.IsFinancing(_invoice.Summary.Type) ? "unliquidated contract financing" : "revenue")}) dated {BillingFormat.Date(_invoice.Summary.InvoiceDate)}. Approved invoices can't be edited, only voided." },
             { d => d.Warnings, needsOverride ? _invoice.Warnings : [] },
             { d => d.AskText, needsOverride },
             { d => d.Label, "Funding override reason" },

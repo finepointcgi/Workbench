@@ -14,6 +14,8 @@ namespace Workbench.Application.Billing;
 /// <item>Invoice: debit AR billed (1110) for the total; credit revenue by CLIN pricing (4010 cost-plus, 4020 T&amp;M,
 /// 4030 labor hour, 4040 FFP) by project/WBS; withheld fee is earned but not billable, so it debits AR unbilled (1120)
 /// and its release credits it.</item>
+/// <item>Contract financing: progress and performance-based payment lines credit unliquidated contract financing (2320),
+/// a liability, not revenue; liquidation lines on delivery invoices (negative) debit it back.</item>
 /// <item>Payment: debit cash (1010), credit AR billed.</item>
 /// <item>Unbilled accrual: debit AR unbilled, credit revenue; reversed on the first day of the next period.</item>
 /// </list>
@@ -23,6 +25,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
     public const string Cash = "1010";
     public const string ArBilled = "1110";
     public const string ArUnbilled = "1120";
+    public const string ContractFinancing = "2320";
 
     public string Actor => ledger.Actor;
 
@@ -54,11 +57,13 @@ public sealed class BillingLedger(GeneralLedger ledger)
         var credits = invoice.Lines.Select(l => (
             Account: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease
                 ? ArUnbilled
-                : RevenueAccount(clins.FirstOrDefault(c => c.Id == l.ClinId)?.Pricing, contract.Type),
+                : IsFinancing(l.Kind)
+                    ? ContractFinancing
+                    : RevenueAccount(clins.FirstOrDefault(c => c.Id == l.ClinId)?.Pricing, contract.Type),
             l.ProjectId,
             l.WbsElementId,
             Credit: l.Amount,
-            Memo: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease ? l.Description : null));
+            Memo: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease || IsFinancing(l.Kind) ? l.Description : null));
         var label = invoice.Type == InvoiceType.CreditMemo ? "Credit memo" : "Invoice";
         return await PostAsync(db, invoice.Id, invoice.InvoiceDate, $"{label} {invoice.Number} · {contract.ContractNumber}",
             (ArBilled, null, null, invoice.Total, $"{label} {invoice.Number}"), credits, ct);
@@ -97,6 +102,34 @@ public sealed class BillingLedger(GeneralLedger ledger)
 
         var entry = await db.Set<JournalEntry>().Include(e => e.Lines).FirstOrDefaultAsync(e => e.Id == entryId, ct);
         return entry is { Status: JournalStatus.Posted } ? await ledger.ReverseAsync(db, entry, date, reason, ct) : null;
+    }
+
+    public static bool IsFinancing(InvoiceLineKind kind) =>
+        kind is InvoiceLineKind.ProgressPayment or InvoiceLineKind.PerformanceBasedPayment or InvoiceLineKind.Liquidation;
+
+    /// <summary>
+    /// Adds 2320 to a chart installed before government billing. Saves, so call it on its own context before the posting
+    /// unit of work (posting validates accounts against the database). No-op without a chart.
+    /// </summary>
+    public static async Task EnsureFinancingAccountAsync(IWorkbenchDbContext db, DateTime utcNow, CancellationToken ct)
+    {
+        if (await db.Set<Account>().AnyAsync(a => a.Number == ContractFinancing, ct) || !await db.Set<Account>().AnyAsync(ct))
+        {
+            return;
+        }
+
+        var parent = await db.Set<Account>().AsNoTracking().Where(a => a.Number == "2000").Select(a => (Guid?)a.Id).FirstOrDefaultAsync(ct);
+        db.Set<Account>().Add(new Account
+        {
+            Number = ContractFinancing,
+            Name = "Unliquidated contract financing",
+            Type = AccountType.Liability,
+            NormalBalance = Account.DefaultNormalBalance(AccountType.Liability),
+            ParentId = parent,
+            Description = "Progress payments (FAR 52.232-16) and performance-based payments billed, less liquidations on deliveries",
+            CreatedAtUtc = utcNow,
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task<JournalEntry?> ExistingAsync(IWorkbenchDbContext db, Guid sourceId, CancellationToken ct) =>

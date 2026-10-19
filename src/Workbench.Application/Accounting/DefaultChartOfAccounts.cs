@@ -95,6 +95,9 @@ public static class DefaultChartOfAccounts
         new("2300", "Billings in excess of revenue", AccountType.Liability, "2000", Description: "Contract liabilities: billed ahead of revenue recognized (revenue runs)"),
         new("2310", "Provision for contract losses", AccountType.Liability, "2000", Description: "Expected losses on loss contracts not yet incurred (revenue runs)"),
         new("7030", "Unallowable - provision for contract losses", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-23: losses on other contracts are unallowable"),
+
+        // Government billing: progress and performance-based payments received ahead of delivery, until liquidated.
+        new("2320", "Unliquidated contract financing", AccountType.Liability, "2000", Description: "Progress payments (FAR 52.232-16) and performance-based payments billed, less liquidations on deliveries"),
     ];
 
     private static readonly (PostingRuleKind Kind, string Key, string Account)[] Rules =

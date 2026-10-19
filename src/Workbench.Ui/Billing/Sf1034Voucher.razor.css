@@ -1,0 +1,30 @@
+.voucher { color: #000; }
+
+.sheet { margin-bottom: 18px; }
+.sheet.continuation { break-before: page; page-break-before: always; margin-top: 24px; }
+
+.form-id { display: flex; justify-content: space-between; font-size: 10px; text-transform: uppercase; }
+.title { font-size: 15px; font-weight: bold; text-transform: uppercase; text-align: center; margin: 4px 0 8px; }
+.small { font-size: 10.5px; color: #333; }
+
+table { border-collapse: collapse; width: 100%; }
+table.boxes th, table.boxes td { border: 1px solid #000; padding: 3px 6px; text-align: left; vertical-align: top; }
+table.boxes th { font-size: 9.5px; text-transform: uppercase; font-weight: normal; background: #f2f2f2; }
+table.boxes th.wide { width: 50%; }
+
+table.articles { margin-top: 8px; border: 1px solid #000; }
+table.articles th { font-size: 9.5px; text-transform: uppercase; font-weight: normal; border: 1px solid #000; padding: 3px 4px; text-align: left; background: #f2f2f2; }
+table.articles td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top; }
+table.articles th.order { width: 1.3in; }
+table.articles th.date { width: 1.1in; }
+table.articles .num { text-align: right; white-space: nowrap; }
+table.articles tr.carry td { font-style: italic; border-top: 1px solid #000; }
+table.articles tr.total td { font-weight: bold; border-top: 2px solid #000; }
+
+.payment { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.check { white-space: nowrap; }
+.certify { margin-top: 18px; }
+.sign { display: flex; gap: 48px; margin-top: 30px; }
+.sign span { flex: 1; border-top: 1px solid #000; padding-top: 2px; font-size: 10.5px; }
+.sign span:last-child { flex: 0 0 1.5in; }
+.government { margin-top: 14px; border-top: 2px solid #000; padding-top: 4px; font-size: 10px; color: #333; }

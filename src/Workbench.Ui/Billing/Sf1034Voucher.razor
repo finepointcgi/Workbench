@@ -1,0 +1,147 @@
+@* SF 1034 public voucher (page 1) and SF 1035 continuation sheets, laid out like the forms. *@
+@{
+    var print = Voucher.Print;
+    var s = print.Invoice.Summary;
+}
+<div class="voucher" data-testid="sf1034">
+    @foreach (var sheet in Voucher.Pages)
+    {
+        <section class="sheet @(sheet.IsContinuation ? "continuation" : "")" data-testid="@(sheet.IsContinuation ? "sf1035-page" : "sf1034-page")">
+            <div class="form-id">
+                <span>@(sheet.IsContinuation ? "Standard Form 1035" : "Standard Form 1034")</span>
+                <span>Sheet @sheet.PageNumber of @sheet.PageCount</span>
+            </div>
+            <div class="title">
+                Public voucher for purchases and services other than personal@(sheet.IsContinuation ? " — continuation sheet" : "")
+            </div>
+
+            @if (!sheet.IsContinuation)
+            {
+                <table class="boxes">
+                    <tr>
+                        <th rowspan="2" class="wide">U.S. department, bureau, or establishment and location</th>
+                        <th>Date voucher prepared</th>
+                        <th>Voucher no.</th>
+                    </tr>
+                    <tr><td>@BillingFormat.Date(s.InvoiceDate)</td><td data-testid="voucher-number">@s.Number</td></tr>
+                    <tr>
+                        <td rowspan="3"><Party Value="print.Payer" /></td>
+                        <th>Contract number and date</th>
+                        <th>Schedule no.</th>
+                    </tr>
+                    <tr><td>@print.ContractNumber</td><td></td></tr>
+                    <tr>
+                        <td><span class="small">Requisition number and date</span></td>
+                        <td><span class="small">Paid by</span><br />@(print.PayingOffice ?? "")</td>
+                    </tr>
+                    <tr>
+                        <th class="wide">Payee's name and address</th>
+                        <th colspan="2">Contract administration office</th>
+                    </tr>
+                    <tr>
+                        <td>
+                            <Party Value="print.Payee" />
+                        </td>
+                        <td colspan="2">@(print.AdminOffice ?? "")</td>
+                    </tr>
+                    <tr><th>Shipped from</th><th>To</th><th>Weight / Government B/L number</th></tr>
+                    <tr><td>&nbsp;</td><td></td><td></td></tr>
+                </table>
+            }
+            else
+            {
+                <table class="boxes">
+                    <tr><th class="wide">U.S. department, bureau, or establishment</th><th>Voucher no.</th><th>Schedule no.</th></tr>
+                    <tr><td>@print.Payer.Name</td><td>@s.Number</td><td></td></tr>
+                </table>
+            }
+
+            <table class="articles">
+                <thead>
+                    <tr>
+                        <th class="order">Number and date of order</th>
+                        <th class="date">Date of delivery or service</th>
+                        <th>Articles or services</th>
+                        <th class="num">Quantity</th>
+                        <th class="num">Unit price</th>
+                        <th class="num">Amount</th>
+                        @if (Voucher.IsCostType)
+                        {
+                            <th class="num">Cumulative</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (sheet.IsContinuation)
+                    {
+                        <tr class="carry"><td></td><td></td><td>Total brought forward from sheet @(sheet.PageNumber - 1)</td><td></td><td></td><td class="num">@BillingFormat.Amount(sheet.BroughtForward)</td>@if (Voucher.IsCostType){<td></td>}</tr>
+                    }
+                    @foreach (var line in sheet.Lines)
+                    {
+                        <tr>
+                            <td>@print.ContractNumber</td>
+                            <td>@BillingFormat.Date(s.PeriodFrom)–@BillingFormat.Date(s.PeriodTo)</td>
+                            <td>@(line.ClinNumber is null ? "" : $"CLIN {line.ClinNumber}: ")@line.Description</td>
+                            <td class="num">@(line.Quantity is { } q ? $"{BillingFormat.Hours(q)} {line.Unit}" : "")</td>
+                            <td class="num">@(line.UnitPrice is { } p ? BillingFormat.Money(p) : "")</td>
+                            <td class="num">@BillingFormat.Amount(line.Amount)</td>
+                            @if (Voucher.IsCostType)
+                            {
+                                <td class="num">@(line.CumulativeAmount is { } c ? BillingFormat.Amount(c) : "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    @if (sheet.PageNumber < sheet.PageCount)
+                    {
+                        <tr class="carry"><td></td><td></td><td>Total carried forward to sheet @(sheet.PageNumber + 1)</td><td></td><td></td><td class="num">@BillingFormat.Amount(sheet.CarriedForward)</td>@if (Voucher.IsCostType){<td></td>}</tr>
+                    }
+                    else
+                    {
+                        @if (Voucher.LiquidationAmount > 0)
+                        {
+                            <tr class="carry"><td></td><td></td><td>Gross amount of deliveries</td><td></td><td></td><td class="num">@BillingFormat.Amount(Voucher.GrossAmount)</td>@if (Voucher.IsCostType){<td></td>}</tr>
+                        }
+                        <tr class="total"><td></td><td></td><td>Total@(sheet.PageCount > 1 ? " (all sheets)" : "")</td><td></td><td></td><td class="num" data-testid="voucher-total">@BillingFormat.Money(sheet.CarriedForward)</td>@if (Voucher.IsCostType){<td></td>}</tr>
+                    }
+                </tfoot>
+            </table>
+
+            @if (sheet.PageNumber == sheet.PageCount)
+            {
+                <div class="payment">
+                    <span class="small">Payment:</span>
+                    @foreach (var kind in Kinds)
+                    {
+                        <span class="check">@(string.Equals(kind, Voucher.PaymentKind, StringComparison.Ordinal) ? "☒" : "☐") @kind</span>
+                    }
+                </div>
+                @if (Voucher.PaymentKind == "Performance-based")
+                {
+                    <p class="small">Performance-based payment (FAR 32.10) for the events listed, completed and evidenced.</p>
+                }
+                @if (print.Invoice.RateNote is { } rates)
+                {
+                    <p class="small">Indirect rates: @rates</p>
+                }
+                @if (print.Invoice.Withheld > 0)
+                {
+                    <p class="small">Includes fee withheld until the final invoice: @BillingFormat.Money(print.Invoice.Withheld)</p>
+                }
+                <div class="certify">
+                    <p>I certify that the above bill is correct and just, and that payment has not been received.</p>
+                    <div class="sign"><span>Signature and title of payee</span><span>Date</span></div>
+                </div>
+                <div class="government">(Payee must not use the space below.) Approved for payment, account verified, and certifying officer blocks are completed by the government.</div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly string[] Kinds = ["Provisional", "Complete", "Partial", "Final", "Progress", "Advance"];
+
+    [Parameter, EditorRequired]
+    public VoucherDto Voucher { get; set; } = default!;
+}

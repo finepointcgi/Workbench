@@ -26,6 +26,10 @@ public static class BillingRegistration
         services.AddScoped<IBillingMilestoneService, BillingMilestoneService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IArReportService, ArReportService>();
+        services.AddScoped<IProgressPaymentService, ProgressPaymentService>();
+        services.AddScoped<IPerformanceBasedPaymentService, PerformanceBasedPaymentService>();
+        services.AddScoped<IPieeSubmitter, ManualPieeSubmitter>(); // Register a transmitting submitter after this one to replace it.
+        services.AddScoped<IGovernmentBillingService, GovernmentBillingService>();
         services.AddHostedService<OverdueInvoiceBackgroundService>();
         return services;
     }
