@@ -36,8 +36,8 @@ else
             <MudGrid>
                 <MudItem xs="12" sm="4"><MudTextField @bind-Value="_slug" Label="Tenant id (subdomain)" HelperText="@($"{(_slug ?? "acme")}.{_access.BaseDomain}")" /></MudItem>
                 <MudItem xs="12" sm="8"><MudTextField @bind-Value="_name" Label="Organization name" /></MudItem>
-                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_adminEmail" Label="First Admin's email" InputType="InputType.Email" /></MudItem>
-                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_adminName" Label="First Admin's name" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_adminEmail" Label="First Admin's email" InputType="InputType.Email" autocomplete="off" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_adminName" Label="First Admin's name" autocomplete="off" /></MudItem>
                 <MudItem xs="12" sm="4"><MudTextField @bind-Value="_plan" Label="Plan" /></MudItem>
                 <MudItem xs="12" sm="8"><MudTextField @bind-Value="_notes" Label="Notes" /></MudItem>
             </MudGrid>

@@ -58,8 +58,8 @@
             <MudTextField T="string" @bind-Value="_remitTo" Label="Remit-to address" Lines="3" />
             <MudStack Row="true" Spacing="3">
                 <MudTextField T="string" @bind-Value="_contactName" Label="Contact" />
-                <MudTextField T="string" @bind-Value="_contactEmail" Label="Email" InputType="InputType.Email" />
-                <MudTextField T="string" @bind-Value="_contactPhone" Label="Phone" Style="max-width:170px" />
+                <MudTextField T="string" @bind-Value="_contactEmail" Label="Email" InputType="InputType.Email" autocomplete="off" />
+                <MudTextField T="string" @bind-Value="_contactPhone" Label="Phone" InputType="InputType.Telephone" autocomplete="off" Style="max-width:170px" />
             </MudStack>
             @if (_error is not null)
             {

@@ -1,0 +1,46 @@
+@* The keyboard way to resize a grid column (dragging the header edge is mouse or touch only). Returns the width in pixels. *@
+<MudDialog>
+    <DialogContent>
+        <MudNumericField T="int" @bind-Value="_width" Label="Width in pixels" Min="MinWidth" Max="MaxWidth" Step="20"
+                         AutoFocus="true" Immediate="true" OnKeyDown="OnKeyDown" data-testid="column-width"
+                         HelperText="@($"Between {MinWidth} and {MaxWidth}. The arrow keys change it by 20.")" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Reset">Default width</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public const int MinWidth = 60;
+    public const int MaxWidth = 1200;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public int Width { get; set; }
+
+    [Parameter]
+    public int DefaultWidth { get; set; }
+
+    private int _width;
+
+    protected override void OnInitialized() => _width = Width;
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            Submit();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Reset() => MudDialog.Close(DialogResult.Ok(DefaultWidth));
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(Math.Clamp(_width, MinWidth, MaxWidth)));
+}
