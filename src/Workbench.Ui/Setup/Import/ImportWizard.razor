@@ -416,6 +416,9 @@
             case ImportKind.Contracts or ImportKind.Clins or ImportKind.BillRates:
                 yield return ("Contracts", "setup/contracts");
                 break;
+            case ImportKind.FixedAssets:
+                yield return ("Fixed assets", "assets");
+                break;
             default:
                 yield return ("Projects", "setup/projects");
                 break;

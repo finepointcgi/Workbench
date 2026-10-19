@@ -71,7 +71,7 @@ public sealed class AssetService(
     public async Task<IReadOnlyList<CapitalizableBillLineDto>> ListCapitalizableBillLinesAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var threshold = options.Value.CapitalizationThreshold;
+        var threshold = await LowestThresholdAsync(db, cancellationToken);
         var capitalized = (await db.Set<FixedAsset>().AsNoTracking().Where(a => a.SourceBillLineId != null).Select(a => a.SourceBillLineId!.Value).ToListAsync(cancellationToken)).ToHashSet();
         var rows = await db.Set<ApBillLine>().AsNoTracking()
             .Where(l => l.Kind == ApBillLineKind.Account)
@@ -106,9 +106,12 @@ public sealed class AssetService(
             throw new ArgumentException($"Bill {bill.Number} is {bill.Status}; capitalize lines once the bill is posted.");
         }
 
-        if (line.Amount < options.Value.CapitalizationThreshold)
+        var category = await db.Set<AssetCategory>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.CategoryId, cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Asset category", request.CategoryId);
+        var threshold = category.CapitalizationThreshold ?? options.Value.CapitalizationThreshold;
+        if (line.Amount < threshold)
         {
-            throw new ArgumentException($"Line {line.LineNumber} is {line.Amount:N2}, under the {options.Value.CapitalizationThreshold:N2} capitalization threshold.");
+            throw new ArgumentException($"Line {line.LineNumber} is {line.Amount:N2}, under the {threshold:N2} capitalization threshold for {category.Code}.");
         }
 
         if (await db.Set<FixedAsset>().AnyAsync(a => a.SourceBillLineId == line.Id, cancellationToken))
@@ -224,8 +227,7 @@ public sealed class AssetService(
         if (!asset.IsGovernmentProperty)
         {
             // Depreciation must be current through the month before disposal, so the gain or loss is right.
-            var schedule = DepreciationCalculator.MonthlySchedule(asset.Cost, asset.SalvageValue, asset.UsefulLifeYears, asset.Method);
-            var expected = DepreciationCalculator.CumulativeThrough(schedule, DepreciationCalculator.MonthIndex(asset.InServiceDate, request.DisposedOn) - 1);
+            var expected = AssetSupport.ExpectedThrough(asset, request.DisposedOn.AddMonths(-1));
             if (asset.AccumulatedDepreciation < expected)
             {
                 throw new ArgumentException($"Run depreciation through the month before {request.DisposedOn:yyyy-MM-dd} first: {asset.AccumulatedDepreciation:N2} posted of {expected:N2} scheduled.");
@@ -283,11 +285,13 @@ public sealed class AssetService(
 
     public async Task<AssetCategoryDto> SaveCategoryAsync(Guid? categoryId, SaveAssetCategoryRequest request, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var category = categoryId is { } id
             ? await db.Set<AssetCategory>().FirstOrDefaultAsync(c => c.Id == id, cancellationToken) ?? throw WorkbenchNotFoundException.For("Asset category", id)
             : new AssetCategory { Code = "", Name = "" };
-        var before = categoryId is null ? null : new { category.Code, category.Name, category.DefaultMethod, category.DefaultLifeYears };
+        var before = categoryId is null ? null : CategorySnapshot(category);
+        var wasActive = category.IsActive;
         category.Code = PurchasingSupport.Required(request.Code, "Code", 32).ToUpperInvariant();
         category.Name = PurchasingSupport.Required(request.Name, "Name", 200);
         if (await db.Set<AssetCategory>().AnyAsync(c => c.Code == category.Code && c.Id != category.Id, cancellationToken))
@@ -295,9 +299,21 @@ public sealed class AssetService(
             throw new ArgumentException($"There's already a category {category.Code}.");
         }
 
+        if (request.CapitalizationThreshold is < 0)
+        {
+            throw new ArgumentException("The capitalization threshold can't be negative.");
+        }
+
+        if (request.AssetAccountId == request.AccumulatedDepreciationAccountId)
+        {
+            throw new ArgumentException("The asset and accumulated depreciation accounts must be different.");
+        }
+
         category.DefaultMethod = request.DefaultMethod.ToDomain();
+        category.Convention = Enum.IsDefined(request.Convention) ? request.Convention.ToDomain() : throw new ArgumentException("Unknown depreciation convention.");
         category.DefaultLifeYears = Life(request.DefaultLifeYears);
         category.MacrsRecoveryYears = Macrs(request.MacrsRecoveryYears);
+        category.CapitalizationThreshold = request.CapitalizationThreshold is { } t ? decimal.Round(t, 2) : null;
         category.AssetAccountId = (await AccountAsync(db, request.AssetAccountId, AccountType.Asset, "asset", cancellationToken)).Id;
         category.AccumulatedDepreciationAccountId = (await AccountAsync(db, request.AccumulatedDepreciationAccountId, AccountType.Asset, "accumulated depreciation", cancellationToken)).Id;
         category.ExpenseAccountId = (await AccountAsync(db, request.ExpenseAccountId, AccountType.Expense, "depreciation expense", cancellationToken)).Id;
@@ -307,10 +323,48 @@ public sealed class AssetService(
             db.Set<AssetCategory>().Add(category);
         }
 
-        audit.Record(db, AssetSupport.CategoryEntity, category.Id, categoryId is null ? "Created" : "Updated", before,
-            new { category.Code, category.Name, category.DefaultMethod, category.DefaultLifeYears });
+        var action = categoryId is null ? "Created" : wasActive == category.IsActive ? "Updated" : category.IsActive ? "Reactivated" : "Deactivated";
+        audit.Record(db, AssetSupport.CategoryEntity, category.Id, action, before, CategorySnapshot(category));
         await db.SaveChangesAsync(cancellationToken);
         return (await AssetQueries.CategoriesAsync(db, cancellationToken)).First(c => c.Id == category.Id);
+    }
+
+    public async Task DeleteCategoryAsync(Guid categoryId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var category = await db.Set<AssetCategory>().FirstOrDefaultAsync(c => c.Id == categoryId, cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Asset category", categoryId);
+        var used = await db.Set<FixedAsset>().CountAsync(a => a.CategoryId == categoryId, cancellationToken);
+        if (used > 0)
+        {
+            throw new InvalidOperationException($"{category.Code} is used by {used} asset{(used == 1 ? "" : "s")}; deactivate it instead.");
+        }
+
+        audit.Record(db, AssetSupport.CategoryEntity, category.Id, "Deleted", CategorySnapshot(category));
+        db.Set<AssetCategory>().Remove(category);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static object CategorySnapshot(AssetCategory c) => new
+    {
+        c.Code,
+        c.Name,
+        DefaultMethod = c.DefaultMethod.ToString(),
+        Convention = c.Convention.ToString(),
+        c.DefaultLifeYears,
+        c.MacrsRecoveryYears,
+        c.CapitalizationThreshold,
+        c.AssetAccountId,
+        c.AccumulatedDepreciationAccountId,
+        c.ExpenseAccountId,
+        c.IsActive,
+    };
+
+    /// <summary>The lowest threshold any active category capitalizes at (bill lines below it can't be capitalized anywhere).</summary>
+    private async Task<decimal> LowestThresholdAsync(IWorkbenchDbContext db, CancellationToken ct)
+    {
+        var thresholds = await db.Set<AssetCategory>().AsNoTracking().Where(c => c.IsActive).Select(c => c.CapitalizationThreshold).ToListAsync(ct);
+        return thresholds.Select(t => t ?? options.Value.CapitalizationThreshold).DefaultIfEmpty(options.Value.CapitalizationThreshold).Min();
     }
 
     // ---- Helpers ----
@@ -318,6 +372,11 @@ public sealed class AssetService(
     private async Task ApplyAsync(IWorkbenchDbContext db, FixedAsset asset, SaveAssetRequest r, bool isNew, CancellationToken ct)
     {
         var category = await db.Set<AssetCategory>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == r.CategoryId, ct) ?? throw WorkbenchNotFoundException.For("Asset category", r.CategoryId);
+        if (!category.IsActive && (isNew || category.Id != asset.CategoryId))
+        {
+            throw new ArgumentException($"Category {category.Code} is inactive.");
+        }
+
         var depreciated = !isNew && await db.Set<AssetDepreciation>().AnyAsync(d => d.AssetId == asset.Id, ct);
         asset.Description = PurchasingSupport.Required(r.Description, "Description", 500);
         asset.SerialNumber = PurchasingSupport.Optional(r.SerialNumber, "Serial number", 100);
@@ -389,15 +448,25 @@ public sealed class AssetService(
         var salvage = PurchasingSupport.Money(r.SalvageValue, "Salvage value", allowZero: true);
         var life = Life(r.UsefulLifeYears ?? category.DefaultLifeYears);
         var method = r.Method?.ToDomain() ?? category.DefaultMethod;
+        var convention = r.Convention?.ToDomain() ?? (isNew ? category.Convention : asset.Convention);
+        if (!Enum.IsDefined(convention))
+        {
+            throw new ArgumentException("Unknown depreciation convention.");
+        }
+
+        // Opening balances (assets brought over from another system). On an update, no date keeps what's there.
+        var openingDate = r.OpeningBalanceDate ?? (isNew ? null : asset.OpeningBalanceDate);
+        var opening = r.OpeningBalanceDate is null && !isNew ? asset.OpeningAccumulatedDepreciation : PurchasingSupport.Money(r.OpeningAccumulatedDepreciation, "Accumulated depreciation", allowZero: true);
         var inService = r.InServiceDate ?? r.AcquisitionDate;
         var assetAccount = r.AssetAccountId ?? category.AssetAccountId;
         var accumulated = r.AccumulatedDepreciationAccountId ?? category.AccumulatedDepreciationAccountId;
         var expense = r.ExpenseAccountId ?? category.ExpenseAccountId;
-        if (depreciated && (cost != asset.Cost || salvage != asset.SalvageValue || life != asset.UsefulLifeYears || method != asset.Method || inService != asset.InServiceDate
+        if (depreciated && (cost != asset.Cost || salvage != asset.SalvageValue || life != asset.UsefulLifeYears || method != asset.Method || convention != asset.Convention || inService != asset.InServiceDate
+            || openingDate != asset.OpeningBalanceDate || opening != asset.OpeningAccumulatedDepreciation
             || assetAccount != asset.AssetAccountId || accumulated != asset.AccumulatedDepreciationAccountId || expense != asset.ExpenseAccountId
             || category.Id != asset.CategoryId || r.AcquisitionDate != asset.AcquisitionDate))
         {
-            throw new ArgumentException($"{asset.TagNumber} has posted depreciation: its cost, life, method, dates, category and accounts can't change.");
+            throw new ArgumentException($"{asset.TagNumber} has posted depreciation: its cost, life, method, dates, category, accounts and opening balance can't change.");
         }
 
         if (salvage >= cost)
@@ -415,6 +484,23 @@ public sealed class AssetService(
             throw new ArgumentException("A capitalized asset's cost comes from its bill line.");
         }
 
+        if (openingDate is { } cutover)
+        {
+            if (cutover.AddDays(1).Day != 1)
+            {
+                throw new ArgumentException($"Opening balances are as of a month end (for example {new DateOnly(cutover.Year, cutover.Month, 1).AddMonths(1).AddDays(-1):yyyy-MM-dd}), not {cutover:yyyy-MM-dd}.");
+            }
+
+            if (opening > 0 && (r.IsGovernmentFurnished || r.IsContractorAcquired))
+            {
+                throw new ArgumentException("Government property isn't depreciated, so it has no accumulated depreciation.");
+            }
+        }
+        else if (opening != 0)
+        {
+            throw new ArgumentException("Accumulated depreciation needs the cut-over date it's as of.");
+        }
+
         asset.CategoryId = category.Id;
         asset.AcquisitionDate = r.AcquisitionDate;
         asset.InServiceDate = inService;
@@ -422,6 +508,16 @@ public sealed class AssetService(
         asset.SalvageValue = salvage;
         asset.UsefulLifeYears = life;
         asset.Method = method;
+        asset.Convention = convention;
+        asset.OpeningBalanceDate = openingDate;
+        asset.OpeningAccumulatedDepreciation = opening;
+        if (!depreciated)
+        {
+            asset.AccumulatedDepreciation = opening;
+        }
+
+        // Validates the opening balance against the life (throws when the life ran out with something left).
+        _ = AssetSupport.Schedule(asset);
         asset.MacrsRecoveryYears = Macrs(r.MacrsRecoveryYears ?? category.MacrsRecoveryYears);
         asset.AssetAccountId = (await AccountAsync(db, assetAccount, AccountType.Asset, "asset", ct)).Id;
         asset.AccumulatedDepreciationAccountId = (await AccountAsync(db, accumulated, AccountType.Asset, "accumulated depreciation", ct)).Id;
@@ -500,6 +596,9 @@ public sealed class AssetService(
         a.SalvageValue,
         a.UsefulLifeYears,
         Method = a.Method.ToString(),
+        Convention = a.Convention.ToString(),
+        a.OpeningBalanceDate,
+        a.OpeningAccumulatedDepreciation,
         a.Location,
         a.CustodianEmployeeId,
         a.OrgUnitId,

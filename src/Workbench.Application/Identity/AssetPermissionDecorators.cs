@@ -85,6 +85,12 @@ public sealed class PermissionCheckingAssetService(IAssetService inner, AccessCo
         await RequireAsync(cancellationToken);
         return await inner.SaveCategoryAsync(categoryId, request, cancellationToken);
     }
+
+    public async Task DeleteCategoryAsync(Guid categoryId, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        await inner.DeleteCategoryAsync(categoryId, cancellationToken);
+    }
 }
 
 public sealed class PermissionCheckingDepreciationService(IDepreciationService inner, AccessControl access) : IDepreciationService

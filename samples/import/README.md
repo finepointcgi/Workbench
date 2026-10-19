@@ -27,7 +27,8 @@ importing a file again updates changed records and skips unchanged ones. Finance
 ## Costpoint order
 
 Import in dependency order: `organizations.csv`, `labor-categories.csv`, `employees.csv`, `cost-rates.csv`,
-`customers.csv`, `contracts.csv`, `clins.csv`, `projects.csv`, `bill-rates.csv`, `budgets.csv`. Dates may be
+`customers.csv`, `contracts.csv`, `clins.csv`, `projects.csv`, `bill-rates.csv`, `budgets.csv`, then `fixed-assets.csv`
+(after the GL balances; see below). Dates may be
 `MM/DD/YYYY` (Costpoint's default), `YYYY-MM-DD` or `DD-MON-YYYY`; amounts may contain `$` and thousands separators.
 
 Notes:
@@ -47,6 +48,17 @@ Notes:
   `FY_CD` + `PD_NO` (or a `yyyy-MM` period) phase a row into a fiscal period; `TOTAL` or blank is unphased. Lines go
   into the version named in the options (default "Costpoint budget", a Current version) and replace its lines.
   The sample uses fiscal year 2027 (Oct 2026 – Sep 2027); adjust `FY_CD` if your fiscal calendar doesn't have it.
+- **Fixed assets (opening balances)**: each asset comes over with its cost, in-service date and accumulated
+  depreciation (or net book value; with both, cost − accumulated must equal it) as of the cut-over date, which is a
+  month end. **Nothing is posted**: the cost and accumulated depreciation are already in the asset and accumulated
+  depreciation accounts through the GL balance import. Workbench depreciates from the month after the cut-over and
+  spreads what's left (cost − salvage − accumulated) over the rest of the life in the asset's method, so the first
+  depreciation run catches up any months since the cut-over once and never repeats months Costpoint already took. An
+  asset whose life ended with value left above salvage is an error (fix its life, salvage or accumulated
+  depreciation). The category must exist in Workbench (Fixed assets › Asset categories); life, method and convention
+  default from it. Life may be in months (whole years only). Re-importing updates an asset until depreciation has been
+  posted on it; a job rolls back until then too. Government property (GFP/CAP) isn't imported here; enter it on the
+  register. The sample is as of 2026-09-30, so the October 2026 run depreciates 1,566.67.
 - **Smartsheet**: TEXT_NUMBER becomes Text or Number/Currency, DATE Date, CHECKBOX Checkbox, PICKLIST Dropdown with its
   options, CONTACT_LIST Person (email). Duration fills a missing finish date (working days). Predecessors (`3FS +2d`,
   `4SS -1d`, `9FF +1w`) become Gantt dependencies with lag in working days. In an `.xlsx` export the row hierarchy comes
@@ -218,6 +230,33 @@ Sample: [`budgets.csv`](costpoint/budgets.csv)
 | Fiscal year |  | `FiscalYear`, `Fiscal year`, `FY_CD`, `Fiscal Year`, `FY` | With the period number, phases the amount into a fiscal period. |
 | Period |  | `Period`, `PD_NO`, `Fiscal Period`, `Month` | Period number (1–12) with the fiscal year, or a month as yyyy-MM. Blank or TOTAL = unphased. |
 | ODC type |  | `OdcType`, `ODC type`, `ODC_TYPE`, `Cost Element`, `ACCT_DESC`, `Expense Type`, `ODC Type` | Travel, Materials, Equipment, Subcontract, Consultant or Other (ODC rows). |
+
+### Fixed assets (opening balances)
+
+Assets with cost, in-service date and accumulated depreciation (or net book value) as of the cut-over month end. Nothing is posted; depreciation continues from the month after.
+
+Sample: [`fixed-assets.csv`](costpoint/fixed-assets.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Asset number | yes | `AssetId`, `Asset number`, `ASSET_ID`, `ASSET_NO`, `Asset No`, `Asset ID`, `Tag`, `Tag Number`, `ASSET_ID_ITEM` | Becomes the asset tag; re-importing the same number updates the asset. |
+| Description | yes | `Description`, `ASSET_DESC`, `ASSET_S_DESC`, `Asset Description`, `Name` | |
+| Category | yes | `Category`, `ASSET_CLASS_CD`, `PROP_TYPE_CD`, `Asset Class`, `Property Type`, `Category Code`, `Class` | Workbench asset category code (COMP, FURN, LHI or your own). |
+| In-service date | yes | `InServiceDate`, `In-service date`, `PL_IN_SERV_DT`, `IN_SERV_DT`, `Placed in Service`, `Service Date`, `Depreciation Start` | Date placed in service; depreciation started that month. |
+| Acquisition date |  | `AcquisitionDate`, `Acquisition date`, `ACQ_DT`, `ACQUIRED_DT`, `Acquired`, `Purchase Date` | Defaults to the in-service date. |
+| Acquisition cost | yes | `Cost`, `Acquisition cost`, `ACQ_COST_AMT`, `TOT_COST_AMT`, `COST_AMT`, `Original Cost`, `Book Cost` | Capitalized cost. |
+| Accumulated depreciation |  | `AccumulatedDepreciation`, `Accumulated depreciation`, `ACCUM_DEPR_AMT`, `TOT_ACCUM_DEPR`, `Accum Depr`, `Accum Depreciation`, `Depreciation to Date` | Through the cut-over date. Give this or the net book value (or both, which must agree). |
+| Net book value |  | `NetBookValue`, `Net book value`, `NET_BOOK_VAL`, `NBV`, `Book Value` | Cost less accumulated depreciation at the cut-over. |
+| Cut-over date | yes | `CutoverDate`, `Cut-over date`, `AS_OF_DT`, `BAL_DT`, `As Of`, `As Of Date`, `Cut-over`, `Balance Date`, `Through Date` | The month end the balances are as of, e.g. 2026-09-30. |
+| Useful life (years) |  | `UsefulLifeYears`, `Useful life (years)`, `LIFE_YRS`, `USEFUL_LIFE`, `Useful Life`, `Life` | Defaults to the category's. |
+| Useful life (months) |  | `UsefulLifeMonths`, `Useful life (months)`, `LIFE_MOS`, `USEFUL_LIFE_MOS`, `Life (Months)`, `Months` | Alternative to years; must be whole years (36, 60...). |
+| Depreciation method |  | `Method`, `Depreciation method`, `DEPR_METHOD_CD`, `DEPR_MTHD` | SL (straight line), DDB/DB (declining balance) or SYD. Defaults to the category's. |
+| Convention |  | `Convention`, `AVG_CONV_CD`, `CONVENTION_CD`, `Averaging Convention` | Full month, half month (mid-month) or following month. Defaults to the category's. |
+| Salvage value |  | `SalvageValue`, `Salvage value`, `SALVAGE_AMT`, `SALV_VAL`, `Salvage`, `Residual Value` | Defaults to 0. |
+| Serial number |  | `SerialNumber`, `Serial number`, `SERIAL_NO`, `SERIAL_NUM`, `Serial` | |
+| Location |  | `Location`, `LOCATION_CD`, `LOC_DESC` | |
+| Org |  | `OrgId`, `Org`, `ORG_ID`, `Organization` | Org id of an existing org unit (depreciation expense segment). |
+| Project |  | `ProjectId`, `Project`, `PROJ_ID`, `Project ID` | Code of an existing project (depreciation expense segment). |
 
 ### Smartsheet sheets (API and .xlsx)
 

@@ -10,6 +10,19 @@ public enum DepreciationMethod
     SumOfYearsDigits,
 }
 
+/// <summary>How much depreciation the in-service month gets.</summary>
+public enum DepreciationConvention
+{
+    /// <summary>A whole month in the in-service month.</summary>
+    FullMonth,
+
+    /// <summary>Half a month in the in-service month; the other half after the last full month of life.</summary>
+    MidMonth,
+
+    /// <summary>Nothing in the in-service month; depreciation starts the month after.</summary>
+    FollowingMonth,
+}
+
 public enum AssetStatus
 {
     InService,
@@ -26,6 +39,10 @@ public sealed class AssetCategory : Entity
     public required string Name { get; set; }
     public DepreciationMethod DefaultMethod { get; set; }
     public int DefaultLifeYears { get; set; } = 5;
+    public DepreciationConvention Convention { get; set; }
+
+    /// <summary>Bill lines in this category are capitalized at or above this amount; null uses the organization's threshold.</summary>
+    public decimal? CapitalizationThreshold { get; set; }
 
     /// <summary>MACRS recovery period for tax reporting (3, 5, 7, 10, 15 or 20 years).</summary>
     public int? MacrsRecoveryYears { get; set; }
@@ -56,7 +73,17 @@ public sealed class FixedAsset : Entity
     public decimal SalvageValue { get; set; }
     public int UsefulLifeYears { get; set; }
     public DepreciationMethod Method { get; set; }
+    public DepreciationConvention Convention { get; set; }
     public int? MacrsRecoveryYears { get; set; }
+
+    /// <summary>
+    /// For assets brought over from another system: the date their opening balances are as of (a month end). Workbench
+    /// depreciates from the month after it, spreading what's left over the rest of the life.
+    /// </summary>
+    public DateOnly? OpeningBalanceDate { get; set; }
+
+    /// <summary>Accumulated depreciation through <see cref="OpeningBalanceDate"/>, already on the books (never posted by Workbench).</summary>
+    public decimal OpeningAccumulatedDepreciation { get; set; }
 
     public string? Location { get; set; }
     public Guid? CustodianEmployeeId { get; set; }
@@ -80,7 +107,7 @@ public sealed class FixedAsset : Entity
     /// <summary>The government's property (tag) number.</summary>
     public string? GovernmentPropertyNumber { get; set; }
 
-    /// <summary>Depreciation posted to date (a running total maintained with the depreciation runs).</summary>
+    /// <summary>Depreciation to date: the opening balance plus what the depreciation runs posted (a running total).</summary>
     public decimal AccumulatedDepreciation { get; set; }
 
     public Guid? VendorId { get; set; }

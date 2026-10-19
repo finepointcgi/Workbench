@@ -45,6 +45,9 @@ public sealed class HttpAssetService(HttpClient http) : IAssetService
                 ? await http.PutAsJsonAsync($"{Base}/categories/{id}", request, cancellationToken)
                 : await http.PostAsJsonAsync($"{Base}/categories", request, cancellationToken))
             .ReadLedgerAsync<AssetCategoryDto>(cancellationToken);
+
+    public async Task DeleteCategoryAsync(Guid categoryId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Base}/categories/{categoryId}", cancellationToken)).EnsureLedgerOkAsync(cancellationToken);
 }
 
 public sealed class HttpDepreciationService(HttpClient http) : IDepreciationService
