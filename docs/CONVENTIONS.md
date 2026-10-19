@@ -381,3 +381,4 @@ await notifications.PublishAsync(
   with low-cardinality tags (never people, tenants' data or amounts).
 - Health: a dependency the app can't serve without is a `ready` health check returning Unhealthy; an optional one
   (like email) returns Degraded.
+- Threshold alerts also go out hourly from `CeilingAlertBackgroundService` (Workbench System, every tenant); requisitions warn against cost ceilings unless the ceiling blocks and has `CheckAtRequisition`; fee caps may name a fiscal year, and billing then splits the CLIN's fee by the fiscal year of the cost (`InvoiceLine.FiscalYear`/`CostBasis`).
