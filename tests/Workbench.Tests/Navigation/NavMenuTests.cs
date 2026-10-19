@@ -71,6 +71,39 @@ public sealed class NavMenuTests
     }
 
     [Fact]
+    public async Task Project_manager_role_gets_projects_approvals_resourcing_and_pm_reports_even_before_managing_a_project()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.ProjectManager));
+        await using var _ = ctx;
+
+        var links = Links(nav);
+        Assert.Contains("setup/projects/new", links);
+        Assert.Contains("approvals", links);
+        Assert.Contains("resourcing", links);
+        Assert.Contains("odcs", links);
+        Assert.Contains("reports/standard/project-status", links);
+        Assert.Contains("reports/standard/funding-status", links);
+        Assert.DoesNotContain(links, l => l.StartsWith("accounting") || l.StartsWith("billing") || l == "setup/projects" || l == "setup/people");
+        Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "reports"], Sections(nav));
+        A11yAssert.Check(nav);
+    }
+
+    [Theory]
+    [InlineData(OrgRoles.Finance)]
+    [InlineData(OrgRoles.Admin)]
+    [InlineData(OrgRoles.Employee)]
+    public async Task Only_project_managers_get_the_pm_shortcuts(OrgRoles roles)
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(roles));
+        await using var _ = ctx;
+
+        var links = Links(nav);
+        Assert.DoesNotContain("setup/projects/new", links);
+        Assert.DoesNotContain("reports/standard/project-status", links);
+        Assert.Equal(roles != OrgRoles.Employee, links.Contains("setup/projects")); // Finance and Admin: under Setup
+    }
+
+    [Fact]
     public async Task Supervisor_sees_team_time_and_the_approvals_inbox()
     {
         var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Employee, TimesheetApprover: true));

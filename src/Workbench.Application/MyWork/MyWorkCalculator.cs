@@ -75,17 +75,21 @@ public static class MyWorkCalculator
             : MyWorkBucket.Later;
     }
 
-    /// <summary>The current user's items on one sheet.</summary>
-    public static IEnumerable<MyWorkItem> ItemsFor(SheetDetail sheet, IEnumerable<ItemDto> items, string email, DateOnly today)
+    /// <summary>
+    /// The current user's items on one sheet: a Person column holds their email, or <paramref name="assignedItemIds"/>
+    /// (the item's Assignees field) lists the item.
+    /// </summary>
+    public static IEnumerable<MyWorkItem> ItemsFor(SheetDetail sheet, IEnumerable<ItemDto> items, string email, DateOnly today,
+        IReadOnlySet<Guid>? assignedItemIds = null)
     {
         var people = sheet.Columns.Where(c => c.Type == ColumnKind.Person).ToList();
-        if (people.Count == 0 || string.IsNullOrWhiteSpace(email))
+        if ((people.Count == 0 && assignedItemIds is not { Count: > 0 }) || string.IsNullOrWhiteSpace(email))
         {
             yield break;
         }
 
         var statusColumn = StatusColumn(sheet);
-        foreach (var item in items.Where(i => IsAssignedTo(i, people, email)))
+        foreach (var item in items.Where(i => assignedItemIds?.Contains(i.Id) == true || IsAssignedTo(i, people, email)))
         {
             var status = statusColumn is null ? null : ValueOf(item, statusColumn);
             var due = DueDate(sheet, item);

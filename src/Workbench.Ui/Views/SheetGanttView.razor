@@ -46,7 +46,8 @@
 else
 {
     <div class="gantt">
-        <GanttTaskList Rows="_rows" SheetId="SheetId" Collapsed="_collapsed" Critical="_critical" OnToggle="ToggleAsync" />
+        <GanttTaskList Rows="_rows" SheetId="SheetId" Collapsed="_collapsed" Critical="_critical" OnToggle="ToggleAsync"
+                       Assignees="@(Tasks is { } tasks ? tasks.For : null)" CanAssign="CanAssign" OnAssign="AssignAsync" />
         <GanttTimeline Rows="_rows" Scale="_scale" Dependencies="_dependencies" Analysis="_analysis" Baseline="_baseline"
                        Today="_today" OnBarDropped="MoveBarAsync" OnLinkDropped="LinkAsync" OnDependencyClick="UnlinkAsync" />
     </div>
@@ -293,6 +294,14 @@ else
         catch (Exception ex) when (ex is ArgumentException or WorkbenchNotFoundException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
         {
             Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+    }
+
+    private async Task AssignAsync(ItemDto item)
+    {
+        if (await TaskView.AssignAsync(DialogService, SheetId, item, Tasks?.For(item.Id) ?? []))
+        {
+            await Changed.InvokeAsync();
         }
     }
 }

@@ -23,7 +23,14 @@ public abstract class SheetViewBase : ComponentBase
     [CascadingParameter]
     public SheetAccess? Access { get; set; }
 
+    /// <summary>Task assignment on this sheet, from the sheet page. Null (no cascade) hides assignees and "My tasks".</summary>
+    [CascadingParameter]
+    public Contracts.Tasks.SheetTasksDto? Tasks { get; set; }
+
     protected bool CanEdit => Access?.CanEdit ?? true;
+
+    /// <summary>Editors assign; without the cascade nobody does.</summary>
+    protected bool CanAssign => Tasks?.CanAssign == true && CanEdit;
 
     protected Guid SheetId => Sheet.Summary.Id;
 

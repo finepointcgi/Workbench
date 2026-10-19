@@ -9,6 +9,9 @@ public enum GridColumnKind
     Finish,
     Wbs,
     Custom,
+
+    /// <summary>The item's Assignees (task assignment), edited in a people-search dialog.</summary>
+    Assignees,
 }
 
 /// <summary>A column as the grid shows it: one of the built-in item fields or a sheet column.</summary>
@@ -26,13 +29,20 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
 
     public bool IsRestricted => Column?.IsEffectivelyRestricted == true;
 
+    public const string AssigneesKey = "assignees";
+
     /// <summary>Formula columns are computed server-side and can't be edited in the grid.</summary>
     public bool ReadOnly => IsFormula;
 
-    /// <summary>Title, then Start/Finish when scheduling is on, then the sheet's columns, then WBS.</summary>
-    public static IReadOnlyList<GridColumn> For(SheetDetail sheet)
+    /// <summary>Title, then Assignees (when shown), then Start/Finish when scheduling is on, then the sheet's columns, then WBS.</summary>
+    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false)
     {
         var columns = new List<GridColumn> { new("title", "Title", GridColumnKind.Title, null, 320) };
+        if (assignees)
+        {
+            columns.Add(new(AssigneesKey, "Assignees", GridColumnKind.Assignees, null, 170));
+        }
+
         if (sheet.Summary.SchedulingEnabled)
         {
             columns.Add(new("start", "Start", GridColumnKind.Start, null, 130));

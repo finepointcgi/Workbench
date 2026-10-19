@@ -1,5 +1,6 @@
 @using Workbench.Contracts.Collaboration
 @inject NavigationManager Navigation
+@inject IDialogService DialogService
 
 @* Opens when the sheet page URL has ?item={id}. Views open it by navigating to sheets/{sheetId}?item={itemId}. *@
 <MudDrawer Open="@(_item is not null)" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Variant="@DrawerVariant.Temporary"
@@ -14,6 +15,24 @@
             @if (Parent(item) is { } parent)
             {
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">In @parent.Title</MudText>
+            }
+
+            @if (Tasks is { } tasks)
+            {
+                @* Task assignment: who it's assigned to; Editors assign; assignees (any role) update status and % complete. *@
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-3" Wrap="Wrap.Wrap" data-testid="drawer-assignees">
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3">Assigned to</MudText>
+                    <AssigneeChips Assignees="tasks.For(item.Id)" ShowNames="true" Max="5" Empty="Nobody" />
+                    @if (tasks.CanAssign)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => AssignAsync(item)"
+                                   data-testid="drawer-assign">@(tasks.For(item.Id).Count == 0 ? "Assign" : "Change")</MudButton>
+                    }
+                </MudStack>
+                @if (tasks.CanAssign || TaskView.IsMine(tasks, Sheet, item))
+                {
+                    <div class="mt-2"><TaskStatusEditor Item="item" Changed="Changed" /></div>
+                }
             }
 
             <MudSimpleTable Dense="true" Elevation="0" Class="mt-3 mb-4 item-details-fields">
@@ -60,6 +79,14 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<ItemDto> Items { get; set; } = [];
 
+    /// <summary>Task assignment for this sheet, from the sheet page (null: not shown).</summary>
+    [CascadingParameter]
+    public SheetTasksDto? Tasks { get; set; }
+
+    /// <summary>Reloads the sheet after an assignment or status change made here.</summary>
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
     /// <summary>Bumped by the sheet page after a live reload so the open panel refreshes.</summary>
     [Parameter]
     public int Version { get; set; }
@@ -75,6 +102,14 @@
     {
         _item = Guid.TryParse(ItemQuery, out var id) ? Items.FirstOrDefault(i => i.Id == id) : null;
         _people = CollaborationFormat.People(Sheet, Items);
+    }
+
+    private async Task AssignAsync(ItemDto item)
+    {
+        if (await TaskView.AssignAsync(DialogService, Sheet.Summary.Id, item, Tasks?.For(item.Id) ?? []))
+        {
+            await Changed.InvokeAsync();
+        }
     }
 
     private ItemDto? Parent(ItemDto item) => item.ParentId is { } p ? Items.FirstOrDefault(i => i.Id == p) : null;

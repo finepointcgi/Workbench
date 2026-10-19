@@ -12,6 +12,7 @@ public sealed class UserInvite : Entity
     public bool IsFinance { get; set; }
     public bool IsTimekeeper { get; set; }
     public bool IsResourceManager { get; set; }
+    public bool IsProjectManager { get; set; }
     public required string InvitedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }

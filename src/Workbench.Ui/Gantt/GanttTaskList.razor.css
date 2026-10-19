@@ -87,3 +87,33 @@
     font-size: 14px;
     color: var(--mud-palette-tertiary);
 }
+
+.gantt-task-list.with-assignees {
+    flex-basis: 456px;
+    width: 456px;
+}
+
+.gantt-col-assignee {
+    flex: 0 0 72px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.gantt-assign {
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--mud-palette-text-primary);
+    padding: 0 6px;
+    font: inherit;
+    cursor: pointer;
+    max-width: 68px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gantt-assign:hover {
+    border-color: var(--mud-palette-primary);
+}

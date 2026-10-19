@@ -20,6 +20,9 @@ public sealed class AppUser : Entity
     /// <summary>Organization role ResourceManager: manages every project's allocations (resource planning).</summary>
     public bool IsResourceManager { get; set; }
 
+    /// <summary>Organization role ProjectManager: sets up, staffs and approves for the projects they manage; assigns tasks.</summary>
+    public bool IsProjectManager { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }
 
