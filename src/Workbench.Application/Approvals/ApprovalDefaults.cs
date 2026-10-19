@@ -53,6 +53,12 @@ public static class ApprovalDefaults
             new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Allow),
         ]),
 
+        // A go/no-go gate: another member of Business development (else the submitter's supervisor); administrators may decide.
+        ApprovalDocumentTypes.OpportunityGate => new([
+            new("Business development", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.BusinessDevelopment),
+                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 

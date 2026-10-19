@@ -72,6 +72,7 @@ public static class NotificationsHosting
         Workbench.Application.Reports.ReportsRegistration.AddWorkbenchReportsHosting(services); // Scheduled reports run as their owner.
         Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
         Workbench.Application.Ceilings.CeilingsRegistration.AddWorkbenchCeilingsHosting(services); // Hourly ceiling threshold alerts.
+        Workbench.Application.Crm.CrmRegistration.AddWorkbenchCrmHosting(services); // Daily saved SAM.gov searches (only with SamGov:ApiKey).
         return services;
     }
 

@@ -158,6 +158,8 @@ Details: [monitoring.md](monitoring.md).
 | `Payroll:Paylocity:BaseUrl` / `:TokenUrl` / `:Scope` | Paylocity production | Sandbox: `https://apisandbox.paylocity.com`. |
 | `Payroll:Paylocity:ClientId` / `:ClientSecret` | — | Secret is a **secret**. |
 | `Costpoint:Source` / `:Csv:Folder` / `:SyncInterval` | `None` / — / `24:00:00` | Legacy import path; hidden in the UI. |
+| `SamGov:ApiKey` | — | **Secret.** api.data.gov key for SAM.gov's Opportunities API (business development saved searches, run daily). Without it a built-in sample stands in. |
+| `SamGov:BaseUrl` / `:UseSample` | `https://api.sam.gov/opportunities/v2/search` / `false` | `UseSample=true` ignores the key. |
 
 ## Backup job (environment of `scripts/backup-all.sh`)
 
