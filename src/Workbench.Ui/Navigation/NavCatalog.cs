@@ -75,6 +75,8 @@ public static class NavCatalog
         new(MyWork, null, "Expenses", "expenses", Icons.Material.Filled.Receipt, Everyone, Detail: "Expense report", Keywords: "expense report travel receipts"),
         new(MyWork, null, "Leave", "leave", Icons.Material.Filled.BeachAccess, Everyone, Keywords: "vacation pto time off"),
         new(MyWork, null, "My requisitions", "purchasing/requisitions", Icons.Material.Filled.PostAdd, Everyone, Detail: "Requisition", Keywords: "purchase request buy"),
+        new(MyWork, null, "My budgets", "planning/my-budget", Icons.Material.Filled.TableChart, a => a.OwnsBudget, Keywords: "org unit budget planning submit"),
+        new(MyWork, null, "Org unit budget", "planning/submissions", Icons.Material.Filled.TableChart, Everyone, Detail: "Budget", InMenu: false),
         new(MyWork, null, "Receiving", "purchasing/receiving", Icons.Material.Filled.Inventory, a => a.IsReceiver && !a.IsFinance, Keywords: "receive goods purchase order"),
 
         // One inbox for every approval; the old approval pages keep their routes and are reached from it.
@@ -113,6 +115,11 @@ public static class NavCatalog
         new(Finance, "Accounting", "Chart of accounts", "accounting/accounts", Icons.Material.Filled.AccountTree, FinanceOnly, Keywords: "gl accounts"),
         new(Finance, "Accounting", "Posting rules", "accounting/posting-rules", Icons.Material.Filled.Rule, FinanceOnly),
         new(Finance, "Accounting", "Period close", "accounting/close", Icons.Material.Filled.EventAvailable, FinanceOnly, Keywords: "fiscal month end"),
+        new(Finance, "Accounting", "Recurring journals", "accounting/recurring", Icons.Material.Filled.EventRepeat, FinanceOnly, Keywords: "recurring journal entries rent accrual amortization auto reverse"),
+
+        new(Finance, "Planning", "Budgets", "planning/budgets", Icons.Material.Filled.TableChart, FinanceOnly, Detail: "Budget version", Keywords: "corporate gl budget versions original revised forecast spread"),
+        new(Finance, "Planning", "Budget vs actual", "planning/budget-vs-actual", Icons.Material.Filled.CompareArrows, FinanceOnly, Keywords: "variance budget actual income statement org unit pool"),
+        new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, FinanceOnly, Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
 
         new(Finance, "Billing & AR", "Invoices", "billing", Icons.Material.Filled.Receipt, FinanceOnly, MatchAll: true, Keywords: "billing receivables"),
         new(Finance, "Billing & AR", "New invoice", "billing/new", Icons.Material.Filled.NoteAdd, FinanceOnly, InMenu: false),

@@ -65,7 +65,7 @@ public abstract class ReportSource
         where TKey : struct => key is { } k && names.TryGetValue(k, out var n) ? n : null;
 
     public static IReadOnlyList<ReportSource> All { get; } =
-        [new GlLineSource(), new TimeEntrySource(), new OdcSource(), new InvoiceSource(), new ApBillSource(), new ProjectWbsSource(), new EmployeeSource()];
+        [new GlLineSource(), new TimeEntrySource(), new OdcSource(), new InvoiceSource(), new ApBillSource(), new ProjectWbsSource(), new EmployeeSource(), new Planning.GlBudgetReportSource()];
 
     public static ReportSource? Find(string key) => All.FirstOrDefault(s => s.Key == key);
 }

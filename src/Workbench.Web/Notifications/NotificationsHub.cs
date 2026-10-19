@@ -73,6 +73,7 @@ public static class NotificationsHosting
         Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
         Workbench.Application.Ceilings.CeilingsRegistration.AddWorkbenchCeilingsHosting(services); // Hourly ceiling threshold alerts.
         Workbench.Application.Crm.CrmRegistration.AddWorkbenchCrmHosting(services); // Daily saved SAM.gov searches (only with SamGov:ApiKey).
+        Workbench.Application.Planning.PlanningRegistration.AddWorkbenchPlanningHosting(services); // Recurring journal entries every six hours, when turned on.
         return services;
     }
 

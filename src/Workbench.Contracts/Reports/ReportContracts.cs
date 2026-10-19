@@ -133,6 +133,7 @@ public static class ReportSourceKeys
     public const string ApBills = "ap-bills";
     public const string ProjectsWbs = "projects-wbs";
     public const string Employees = "employees";
+    public const string GlBudgets = "gl-budgets";
 }
 
 /// <summary>A field of a data source. <see cref="Restricted"/> fields are listed only to users who may see them.</summary>

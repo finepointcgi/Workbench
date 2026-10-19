@@ -28,6 +28,9 @@ public enum JournalSource
 
     /// <summary>Manufacturing: work-order issues to WIP, labor applied, scrap, completions and variances (source id = the transaction or labor report).</summary>
     Manufacturing,
+
+    /// <summary>Recurring journals (source id = the template; the revision is the occurrence number).</summary>
+    Recurring,
 }
 
 public enum JournalStatus

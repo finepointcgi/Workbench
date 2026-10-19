@@ -71,6 +71,12 @@ public static class ApprovalDefaults
                 WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
         ]),
 
+        // An org unit's budget in a planning cycle: Finance approves (a Finance owner's own unit goes to their supervisor).
+        ApprovalDocumentTypes.BudgetSubmission => new([
+            new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
+                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 
