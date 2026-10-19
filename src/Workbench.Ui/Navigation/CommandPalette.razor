@@ -15,6 +15,9 @@
 @code {
     [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
 
+    /// <summary>Raised with the question when the user picks "Ask the assistant" in the palette.</summary>
+    [Parameter] public EventCallback<string> Ask { get; set; }
+
     private IJSObjectReference? _module;
     private DotNetObjectReference<CommandPalette>? _self;
     private string _shortcut = "Ctrl K";
@@ -67,7 +70,12 @@
             };
             var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, NoHeader = true, CloseOnEscapeKey = true, Position = DialogPosition.TopCenter };
             var dialog = await Dialogs.ShowAsync<CommandPaletteDialog>("Search", parameters, options);
-            await dialog.Result;
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: PaletteItem { Kind: PaletteKind.Ask, Keywords: { } question } })
+            {
+                _open = false;
+                await Ask.InvokeAsync(question);
+            }
         }
         finally
         {

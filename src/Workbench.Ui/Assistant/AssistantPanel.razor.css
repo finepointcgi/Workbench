@@ -1,0 +1,21 @@
+.wb-assistant {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 128px);
+}
+
+.wb-assistant-log {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.wb-assistant-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.wb-assistant-sources {
+    margin: 0;
+    padding-left: 1.25rem;
+}

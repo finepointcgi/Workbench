@@ -1,0 +1,125 @@
+@page "/time/flags"
+@* Finance's (and supervisors') report of flagged timesheets. Rules and each person's own history decide the flags;
+   nothing here blocks or changes a timesheet. *@
+@inject ITimesheetFlagService FlagService
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+
+<PageTitle>Timesheet flags · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Timesheet flags</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Timesheets that differ from the person's usual charging or allocations, have weekend or holiday hours, round-number
+    padding, late entries or revisions, or charges to closed or ceiling-limited codes. Flags are prompts for review: they
+    never block submitting or approving. You see the timesheets of the people you supervise (Timekeepers and Finance see everyone's).
+</MudText>
+
+<MudGrid Class="mb-2">
+    <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_from" Label="From" data-testid="flags-from" /></MudItem>
+    <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_to" Label="To" data-testid="flags-to" /></MudItem>
+    <MudItem xs="12" sm="4">
+        <MudSelect T="string" @bind-Value="_rule" Label="Flag" Clearable="true" Placeholder="All flags">
+            @foreach (var rule in TimesheetFlagRules.All)
+            {
+                <MudSelectItem Value="rule">@TimesheetFlagRules.Label(rule)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="2" Class="d-flex align-end">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" Disabled="_loading || _from is null || _to is null" data-testid="flags-run">Show</MudButton>
+    </MudItem>
+</MudGrid>
+
+<span class="wb-sr-only" role="status">@(_rows is null ? "" : $"{_rows.Count} flagged timesheet{(_rows.Count == 1 ? "" : "s")}")</span>
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_rows is { Count: 0 })
+{
+    <MudText Class="mud-text-secondary" data-testid="flags-empty">No flagged timesheets in this range.</MudText>
+}
+else if (_rows is not null)
+{
+    <MudTable Items="_rows" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" aria-label="Flagged timesheets" data-testid="flags-table">
+        <HeaderContent>
+            <MudTh>Employee</MudTh>
+            <MudTh>Period</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh Style="text-align:right">Hours</MudTh>
+            <MudTh Style="min-width:200px">Flags</MudTh>
+            <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Employee">@context.EmployeeName</MudTd>
+            <MudTd DataLabel="Period" Style="white-space:nowrap">@context.PeriodStart.ToString("MMM d") – @context.PeriodEnd.ToString("MMM d, yyyy")</MudTd>
+            <MudTd DataLabel="Status">@context.Status</MudTd>
+            <MudTd DataLabel="Hours" Style="text-align:right">@context.TotalHours.ToString("0.##")</MudTd>
+            <MudTd DataLabel="Flags">
+                @foreach (var f in context.Flags)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(f.Severity == TimesheetFlagSeverity.Warning ? Color.Warning : Color.Default)"
+                             Icon="@(f.Severity == TimesheetFlagSeverity.Warning ? Icons.Material.Filled.Warning : Icons.Material.Filled.Info)">@f.Title</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <TimesheetFlagsButton Flags="context" Label="Details" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "from")] public string? FromQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "to")] public string? ToQuery { get; set; }
+
+    private DateTime? _from = DateTime.Today.AddDays(-30);
+    private DateTime? _to = DateTime.Today;
+    private string? _rule;
+    private bool _loading;
+    private string? _error;
+    private IReadOnlyList<TimesheetFlagsDto>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DateTime.TryParse(FromQuery, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var from))
+        {
+            _from = from;
+        }
+
+        if (DateTime.TryParse(ToQuery, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var to))
+        {
+            _to = to;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_from is null || _to is null)
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            _rows = await FlagService.ReportAsync(new TimesheetFlagReportQuery(DateOnly.FromDateTime(_from.Value), DateOnly.FromDateTime(_to.Value), _rule));
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
