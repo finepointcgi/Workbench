@@ -33,6 +33,10 @@ public enum OrgRoles
     /// onboarding/offboarding. Administrators can do all of it too.
     /// </summary>
     Hr = 32,
+    /// Runs materials: the part master, warehouses, inventory transactions, BOMs and routings, work orders and MRP planning
+    /// (firming planned buys into requisitions). Sees inventory values but not labor cost rates.
+    /// </summary>
+    Materials = 64,
 }
 
 public static class OrgRoleChecks
@@ -57,12 +61,18 @@ public static class OrgRoleChecks
     /// <summary>ProjectManager, Finance or Admin: may create projects and set up the ones they manage (Finance/Admin: every one).</summary>
     public static bool CanManageProjects(this OrgRoles roles) => (roles & (OrgRoles.ProjectManager | OrgRoles.Finance | OrgRoles.Admin)) != 0;
 
+    /// <summary>Materials or Admin: the materials org role (Finance reads materials and costs through <see cref="CanViewMaterials"/>).</summary>
+    public static bool IsMaterials(this OrgRoles roles) => (roles & (OrgRoles.Materials | OrgRoles.Admin)) != 0;
+
+    /// <summary>Materials, Finance or Admin: may see parts, inventory, work orders, MRP and inventory reports.</summary>
+    public static bool CanViewMaterials(this OrgRoles roles) => (roles & (OrgRoles.Materials | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
     /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
     public static IReadOnlyList<OrgRoles> All { get; } =
-        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr];
+        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr, OrgRoles.Materials];
 
     /// <summary>Every role flag combined (what the system user has).</summary>
-    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.Hr;
+    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.Hr | OrgRoles.Materials;
 
     /// <summary>A role's name for people: "Project manager", "Resource manager", or the enum name.</summary>
     public static string Label(OrgRoles role) => role switch

@@ -135,6 +135,8 @@ internal static class DirectCosts
             .ToListAsync(ct);
         result.AddRange(odcs.Select(o => new DirectCost(o.ProjectId, o.WbsElementId, o.IncurredOn, 0,
             0, o.IsUnallowable ? 0 : Money.Round(o.Amount), o.IsUnallowable ? Money.Round(o.Amount) : 0)));
+        result.AddRange((await Materials.MaterialCostActuals.LoadAsync(db, projectId is { } pid ? [pid] : null, start, end, ct))
+            .Select(m => new DirectCost(m.ProjectId, m.WbsElementId, m.Date, 0, 0, m.Amount, 0))); // Material issued from inventory: a direct ODC (G&A on total cost input).
         return result;
     }
 }

@@ -155,6 +155,7 @@ Details: [monitoring.md](monitoring.md).
 | `Purchasing:RequisitionFinanceThreshold` | `10000` | |
 | `Purchasing:MatchPriceTolerancePercent` | `5` | |
 | `Assets:CapitalizationThreshold` / `:GainLossAccountNumber` / `:CashAccountNumber` | `5000` / `4900` / `1010` | |
+| `Materials:InventoryAccountNumber` / `:FinishedGoodsAccountNumber` / `:WipAccountNumber` / `:ReceivedNotInvoicedAccountNumber` / `:DirectMaterialAccountNumber` / `:PurchasePriceVarianceAccountNumber` / `:ManufacturingVarianceAccountNumber` / `:InventoryAdjustmentAccountNumber` / `:LaborAppliedAccountNumber` | `1410` / `1420` / `1450` / `1405` / `5120` / `6150` / `6151` / `6152` / `6195` | GL accounts materials posts to; created on first use when the chart lacks them |
 | `Payroll:Paylocity:BaseUrl` / `:TokenUrl` / `:Scope` | Paylocity production | Sandbox: `https://apisandbox.paylocity.com`. |
 | `Payroll:Paylocity:ClientId` / `:ClientSecret` | — | Secret is a **secret**. |
 | `Hr:CompensationFinanceThreshold` | `10000` | A pay change whose annualized increase is over this also needs Finance's approval (after HR). |
