@@ -1,0 +1,40 @@
+@* The personal details form. Autocomplete="off": HR fills it in for someone else; the self-service page passes Self. *@
+<MudGrid Spacing="2" Style="max-width:960px">
+    <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.PreferredName" Label="Preferred name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "nickname" : "off")" /></MudItem>
+    <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.PersonalEmail" Label="Personal email" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "email" : "off")" /></MudItem>
+    <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.PersonalPhone" Label="Phone" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "tel" : "off")" /></MudItem>
+    <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="Value.BirthDate" Editable="true" Label="Birth date" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "bday" : "off")" /></MudItem>
+    <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.AddressLine1" Label="Address" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "address-line1" : "off")" /></MudItem>
+    <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.AddressLine2" Label="Address line 2" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "address-line2" : "off")" /></MudItem>
+    <MudItem xs="12" sm="5"><MudTextField @bind-Value="Value.City" Label="City" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "address-level2" : "off")" /></MudItem>
+    <MudItem xs="6" sm="3"><MudTextField @bind-Value="Value.State" Label="State" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="2" autocomplete="@(Self ? "address-level1" : "off")" /></MudItem>
+    <MudItem xs="6" sm="4"><MudTextField @bind-Value="Value.PostalCode" Label="ZIP code" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "postal-code" : "off")" /></MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public Model Value { get; set; } = new();
+
+    [Parameter] public bool Self { get; set; }
+
+    public sealed class Model
+    {
+        public string? PreferredName { get; set; }
+        public string? PersonalEmail { get; set; }
+        public string? PersonalPhone { get; set; }
+        public string? AddressLine1 { get; set; }
+        public string? AddressLine2 { get; set; }
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? PostalCode { get; set; }
+        public DateTime? BirthDate { get; set; }
+
+        public static Model From(PersonalInfoDto p) => new()
+        {
+            PreferredName = p.PreferredName, PersonalEmail = p.PersonalEmail, PersonalPhone = p.PersonalPhone, AddressLine1 = p.AddressLine1, AddressLine2 = p.AddressLine2,
+            City = p.City, State = p.State, PostalCode = p.PostalCode, BirthDate = HrFormat.ToDateTime(p.BirthDate),
+        };
+
+        public SavePersonalInfoRequest ToRequest() =>
+            new(PreferredName, PersonalEmail, PersonalPhone, AddressLine1, AddressLine2, City, State, PostalCode, HrFormat.ToDate(BirthDate));
+    }
+}

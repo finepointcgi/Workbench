@@ -1,0 +1,90 @@
+@page "/hr/requests"
+@inject IHrPersonnelService Personnel
+@inject IHrAccessService HrAccess
+
+<PageTitle>Personnel requests · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Personnel requests</MudText>
+<MudText Class="mud-text-secondary mb-4">@(_isHr ? "Employees' changes to their own records, waiting for HR. Approving applies them." : "Your requests to change your record.")</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudSwitch T="bool" Value="_pendingOnly" ValueChanged="PendingChangedAsync" Color="Color.Primary" Label="Waiting only" Class="mb-2" />
+    @if (_requests.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">Nothing here.</MudText>
+    }
+    @foreach (var r in _requests)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" Style="max-width:1000px" data-testid="hr-request">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.h6" HtmlTag="h2"><MudLink Href="@($"hr/employees/{r.EmployeeId}")">@r.EmployeeName</MudLink>: @r.Summary</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@r.Status</MudChip>
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Asked @r.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)@(r.Comment is null ? "" : $" · \"{r.Comment}\"")@(r.DecidedBy is null ? "" : $" · decided by {r.DecidedBy}{(r.DecisionComment is null ? "" : $": {r.DecisionComment}")}")</MudText>
+            @if (r.Changes?.Personal is { } p)
+            {
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">Proposed personal details</MudText>
+                <PersonalSummary Personal="@(new PersonalInfoDto(p.PreferredName, p.PersonalEmail, p.PersonalPhone, p.AddressLine1, p.AddressLine2, p.City, p.State, p.PostalCode, p.BirthDate))" />
+            }
+            @if (r.Changes?.EmergencyContacts is { } contacts)
+            {
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">Proposed emergency contacts</MudText>
+                <MudText>@(contacts.Count == 0 ? "None" : string.Join("; ", contacts.Select(c => $"{c.Name} ({c.Relationship}) {c.Phone}{(c.IsPrimary ? ", primary" : "")}")))</MudText>
+            }
+            @if (_isHr && r.Status == HrRequestStatus.Pending && r.EmployeeId != _me)
+            {
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-3" Wrap="Wrap.Wrap">
+                    <MudTextField @bind-Value="_comments[r.Id]" Label="Comment (needed to reject)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:320px" autocomplete="off" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="Busy" OnClick="() => DecideAsync(r, true)" data-testid="approve-request">Approve and apply</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="Busy" OnClick="() => DecideAsync(r, false)">Reject</MudButton>
+                </MudStack>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<HrChangeRequestDto> _requests = [];
+    private readonly Dictionary<Guid, string?> _comments = [];
+    private bool _isHr;
+    private Guid? _me;
+    private bool _pendingOnly = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        var access = await HrAccess.GetAsync();
+        (_isHr, _me) = (access.IsHr, access.EmployeeId);
+        await ReloadAsync();
+    });
+
+    private async Task ReloadAsync()
+    {
+        _requests = await Personnel.ListChangeRequestsAsync(_pendingOnly);
+        foreach (var r in _requests)
+        {
+            _comments.TryAdd(r.Id, null);
+        }
+    }
+
+    private async Task PendingChangedAsync(bool value)
+    {
+        _pendingOnly = value;
+        await RunAsync(ReloadAsync);
+    }
+
+    private Task DecideAsync(HrChangeRequestDto r, bool approve) => RunAsync(async () =>
+    {
+        var request = new HrDecisionRequest(_comments.GetValueOrDefault(r.Id));
+        _ = approve ? await Personnel.ApproveChangeAsync(r.Id, request) : await Personnel.RejectChangeAsync(r.Id, request);
+        await ReloadAsync();
+    }, approve ? "Approved and applied" : "Rejected");
+}

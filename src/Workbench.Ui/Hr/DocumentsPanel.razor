@@ -1,0 +1,56 @@
+@inject IHrPersonnelService Personnel
+
+<MudTable T="EmployeeDocumentDto" Items="Documents" Dense="true" aria-label="Documents" Class="mb-3">
+    <HeaderContent><MudTh>Title</MudTh><MudTh>Category</MudTh><MudTh>File</MudTh><MudTh>Employee can see</MudTh><MudTh>Added</MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Title"><a href="@($"api/v1/hr/documents/{context.Id}")" download>@context.Title</a></MudTd>
+        <MudTd DataLabel="Category">@context.Category</MudTd>
+        <MudTd DataLabel="File">@context.FileName (@(context.SizeBytes / 1024 + 1) KB)</MudTd>
+        <MudTd DataLabel="Employee can see">@(context.EmployeeVisible ? "Yes" : "No")</MudTd>
+        <MudTd DataLabel="Added">@context.UploadedAtUtc.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture) by @context.UploadedBy</MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText Class="mud-text-secondary">No documents.</MudText></NoRecordsContent>
+</MudTable>
+
+@if (CanUpload)
+{
+    <MudPaper Outlined="true" Class="pa-4" Style="max-width:760px">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Add a document</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_title" Label="Title" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_category" Label="Category (I-9, offer, review...)" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_visible" Label="The employee can see and download it" Color="Color.Primary" /></MudItem>
+        </MudGrid>
+        <MudFileUpload T="IBrowserFile" FilesChanged="UploadAsync" Accept="@Workbench.Contracts.Collaboration.AttachmentRules.Accept" Disabled="Busy">
+            <CustomContent>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync" Disabled="Busy">Choose a file and upload</MudButton>
+            </CustomContent>
+            <SelectedTemplate />
+        </MudFileUpload>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<EmployeeDocumentDto> Documents { get; set; } = [];
+
+    [Parameter] public bool CanUpload { get; set; }
+
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string? _title;
+    private string? _category;
+    private bool _visible;
+
+    private Task UploadAsync(IBrowserFile? file) => file is null ? Task.CompletedTask : RunAsync(async () =>
+    {
+        await using var stream = file.OpenReadStream(Workbench.Contracts.Collaboration.AttachmentRules.MaxSizeBytes);
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        buffer.Position = 0;
+        await Personnel.UploadDocumentAsync(EmployeeId, _title ?? file.Name, _category, _visible, file.Name, buffer);
+        (_title, _category, _visible) = (null, null, false);
+        await Changed.InvokeAsync();
+    }, "Document added");
+}

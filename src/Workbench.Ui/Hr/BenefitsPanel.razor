@@ -1,0 +1,31 @@
+@inject IBenefitService Benefits
+
+@if (_benefits is null)
+{
+    @if (_error is not null) { <MudAlert Severity="Severity.Warning">@_error</MudAlert> } else { <MudProgressLinear aria-label="Loading benefits" Indeterminate="true" /> }
+}
+else
+{
+    <ElectionTable Elections="_benefits.Elections" Dependents="_benefits.Dependents" />
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-1">Dependents</MudText>
+    <MudText>@(_benefits.Dependents.Count == 0 ? "None." : string.Join(", ", _benefits.Dependents.Select(d => $"{d.Name} ({d.Relationship})")))</MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    private EmployeeBenefitsDto? _benefits;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _benefits = await Benefits.GetForEmployeeAsync(EmployeeId);
+        }
+        catch (Exception ex) when (HrFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+}

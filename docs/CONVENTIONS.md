@@ -463,3 +463,25 @@ Checks:
 - **Browser behaviour** axe can't see (the idle warning, busy-button focus): `node keyboard.mjs` against the same server.
 - **Keyboard**: before merging new UI, do the task with the keyboard alone (Tab, Shift+Tab, Enter, Space, Escape, arrows) and
   check the focus ring is always visible.
+
+## HR (people)
+
+- Org role **HR** (`OrgRoles.Hr`, `AppUser.IsHr`, `ApprovalOrgRole.Hr`); `IsHr()` is HR or Admin. Pages are under `/hr` (menu section
+  People). Domain `Domain/Hr`, contracts `Contracts/Hr`, services `Application/Hr`, gates `Identity/HrPermissionDecorators.cs`.
+- A personnel record is the existing `Employee` (supervisor, org unit, FLSA `IsExempt`, hire/termination dates) plus one
+  `EmployeeHrProfile` (job title, position, employment type and status, work location, personal contact). `HrAccess.LevelAsync` decides
+  what a caller sees: HR/Admin everything, the employee their own, supervisors (up the chain) and Finance the job fields and
+  credentials, everyone else the directory. Employees change their own personal fields only by an `HrChangeRequest` (approval
+  document type `hr-change`).
+- EEO/veteran data (`EmployeeEeoRecord`) is HR, Admin and the employee only. Reading someone else's is a security event
+  (`hr.eeo_viewed`); audit rows for EEO and personal fields name the fields, never the values (Finance reads the audit log).
+- Compensation never keeps its own rates: an approved `CompensationChange` (document type `compensation`: HR, then Finance over
+  `Hr:CompensationFinanceThreshold`) appends an `EmployeePayRate` and mirrors the payroll profile, so payroll and the Paylocity sync
+  read it. Changes can't start inside a posted payroll period.
+- Benefits: plan costs are monthly (`BenefitRules.PerPeriod` for payroll); enrollment rules live in `BenefitRules` and
+  `BenefitService.ElectAsync`. Deductions go to payroll through `IPayrollProvider.ExportDeductions` (a default interface method;
+  Paylocity implements it, `PaylocityFormats.WriteDeductions`). The payroll journal splits employer benefits by each plan's GL
+  account (`BenefitFringe.SplitAsync`), so map plans to fringe accounts.
+- Onboarding/offboarding tasks belong to HR, IT (administrators), Finance, the manager or the employee and appear as home to-dos
+  (`ChecklistTodoProvider`). Offboarding deactivates the sign-in through `UserLifecycle`, recovers custodian assets through
+  `IAssetService.TransferAsync`, checks the final timesheet, records the leave payout and ends benefits at month end.

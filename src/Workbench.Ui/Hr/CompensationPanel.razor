@@ -1,0 +1,106 @@
+@inject ICompensationService Compensation
+
+@if (_history is null)
+{
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+    }
+    else
+    {
+        <MudProgressLinear aria-label="Loading compensation" Indeterminate="true" />
+    }
+}
+else
+{
+    @if (_history.Position is { } p && p.SalaryMin is not null)
+    {
+        <MudText Class="mud-text-secondary mb-2">Position @p.Code · @p.Title: range @HrFormat.Whole(p.SalaryMin) – @HrFormat.Whole(p.SalaryMax)</MudText>
+    }
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Pay rate history</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">What payroll pays from each date; the Paylocity sync reads it too.</MudText>
+    <MudTable T="PayRateDto" Items="_history.Rates" Dense="true" aria-label="Pay rate history" Class="mb-4" data-testid="rates">
+        <HeaderContent><MudTh>From</MudTh><MudTh>Type</MudTh><MudTh Style="text-align:right">Annual salary</MudTh><MudTh Style="text-align:right">Hourly</MudTh><MudTh>Reason</MudTh><MudTh>By</MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="From">@HrFormat.Date(context.EffectiveFrom)@(context.IsCurrent ? " (current)" : "")</MudTd>
+            <MudTd DataLabel="Type">@context.PayType</MudTd>
+            <MudTd DataLabel="Annual salary" Style="text-align:right">@HrFormat.Money(context.AnnualSalary)</MudTd>
+            <MudTd DataLabel="Hourly" Style="text-align:right">@HrFormat.Money(context.HourlyRate)</MudTd>
+            <MudTd DataLabel="Reason">@context.Reason</MudTd>
+            <MudTd DataLabel="By">@context.CreatedBy</MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No pay rate on file.</MudText></NoRecordsContent>
+    </MudTable>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Changes</MudText>
+    <ChangeTable Changes="_history.Changes" />
+
+    @if (CanPropose)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mt-4" Style="max-width:900px">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Propose a change</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_effective" Editable="true" Label="Effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="comp-effective" /></MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="PayTypeKind" @bind-Value="_payType" Label="Pay type" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem T="PayTypeKind" Value="PayTypeKind.Salaried">Salaried</MudSelectItem>
+                        <MudSelectItem T="PayTypeKind" Value="PayTypeKind.Hourly">Hourly</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="decimal?" @bind-Value="_amount" Label="@(_payType == PayTypeKind.Salaried ? "Annual salary" : "Hourly rate")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" data-testid="comp-amount" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="CompensationReason" @bind-Value="_reason" Label="Reason" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var r in Enum.GetValues<CompensationReason>())
+                        {
+                            <MudSelectItem T="CompensationReason" Value="r">@r</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="8"><MudTextField @bind-Value="_note" Label="Note" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            </MudGrid>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">It goes to HR for approval, then to Finance when the yearly increase is over the threshold. Payroll uses it from the effective date once approved.</MudText>
+            <MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="ProposeAsync" data-testid="propose-comp">Send for approval</MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    [Parameter] public bool CanPropose { get; set; }
+
+    private CompensationHistoryDto? _history;
+    private string? _error;
+    private DateTime? _effective = DateTime.Today.AddDays(14);
+    private PayTypeKind _payType = PayTypeKind.Salaried;
+    private decimal? _amount;
+    private CompensationReason _reason = CompensationReason.Merit;
+    private string? _note;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _history = await Compensation.GetHistoryAsync(EmployeeId);
+            if (_history.Rates.FirstOrDefault(r => r.IsCurrent) is { } current)
+            {
+                _payType = current.PayType;
+            }
+        }
+        catch (Exception ex) when (HrFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private Task ProposeAsync() => RunAsync(async () =>
+    {
+        await Compensation.ProposeAsync(EmployeeId, new ProposeCompensationRequest(HrFormat.ToDate(_effective) ?? DateOnly.FromDateTime(DateTime.Today), _payType,
+            _payType == PayTypeKind.Salaried ? _amount : null, _payType == PayTypeKind.Hourly ? _amount : null, _reason, _note));
+        _amount = null;
+        _note = null;
+        _history = await Compensation.GetHistoryAsync(EmployeeId);
+    }, "Sent for approval");
+}

@@ -28,6 +28,9 @@ public sealed class PaylocityPayrollProvider(IPaylocityApiClient api, IOptions<P
 
     public ParsedPayrollRegister ParseRegister(string content) => PaylocityFormats.ParseRegister(content);
 
+    public PayrollExportFile ExportDeductions(PayrollDeductionExport export) =>
+        new($"paylocity-deductions-{export.PayGroupCode}-{export.PeriodEnd:yyyyMMdd}.csv".ToLowerInvariant(), "text/csv", PaylocityFormats.WriteDeductions(export));
+
     public async Task<IReadOnlyList<PayrollSyncOutcome>> SyncEmployeesAsync(
         string companyCode, IReadOnlyList<(PayrollEmployeeRecord Employee, PayrollSyncAction Action)> changes, CancellationToken cancellationToken)
     {
@@ -87,6 +90,13 @@ public sealed class PaylocityPayrollProvider(IPaylocityApiClient api, IOptions<P
 /// Deductions, EE Deductions), <c>ER Benefits</c> (Employer Benefits, ER Contributions, Employer Contributions).
 /// Several rows for one employee and check date are added together; a trailing totals row (no employee id) is skipped.
 /// </para>
+/// <para>
+/// <b>Benefit deductions</b> (Paylocity "Deduction import", one row per employee and deduction): <c>Company Code, Employee Id,
+/// Employee Name, Check Date, Det, Det Code, Amount, Rate, Calc Code, ER Amount, Pre Tax</c>. <c>Det</c> is always
+/// <c>D</c>; <c>Det Code</c> is the plan's deduction code; a flat deduction has <c>Amount</c> with <c>Calc Code</c>
+/// <c>$</c>, a percent-of-pay one (401(k)) has <c>Rate</c> with <c>Calc Code</c> <c>%</c>; <c>ER Amount</c> is the employer's
+/// contribution per period (blank when Paylocity calculates it, as for a 401(k) match); <c>Pre Tax</c> is Y or N.
+/// </para>
 /// </summary>
 public static class PaylocityFormats
 {
@@ -115,6 +125,36 @@ public static class PaylocityFormats
                 "",
                 "",
                 line.CostCenter ?? "",
+            ]);
+        }
+
+        return sb.ToString();
+    }
+
+    public static readonly string[] DeductionsHeader =
+        ["Company Code", "Employee Id", "Employee Name", "Check Date", "Det", "Det Code", "Amount", "Rate", "Calc Code", "ER Amount", "Pre Tax"];
+
+    public static string WriteDeductions(PayrollDeductionExport export)
+    {
+        var sb = new StringBuilder();
+        AppendRow(sb, DeductionsHeader);
+        string Money(decimal? value) => value is { } v ? v.ToString("0.00", CultureInfo.InvariantCulture) : "";
+        foreach (var line in export.Lines.OrderBy(l => l.ProviderEmployeeId, StringComparer.Ordinal).ThenBy(l => l.DeductionCode, StringComparer.Ordinal))
+        {
+            var percent = line.Percent is not null;
+            AppendRow(sb,
+            [
+                export.CompanyCode,
+                line.ProviderEmployeeId,
+                line.EmployeeName,
+                export.CheckDate.ToString(DateFormat, CultureInfo.InvariantCulture),
+                "D",
+                line.DeductionCode,
+                percent ? "" : Money(line.Amount),
+                percent ? line.Percent!.Value.ToString("0.####", CultureInfo.InvariantCulture) : "",
+                percent ? "%" : "$",
+                Money(line.EmployerAmount is 0 ? null : line.EmployerAmount),
+                line.IsPreTax ? "Y" : "N",
             ]);
         }
 

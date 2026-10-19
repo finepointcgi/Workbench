@@ -64,9 +64,9 @@ public sealed class AccessControl(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await db.Set<AppUser>().AsNoTracking()
             .Where(u => u.Email == email && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager })
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr })
             .FirstOrDefaultAsync(cancellationToken);
-        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager);
+        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr);
     }
 
     /// <summary>The employee record with the signed-in user's email, if any.</summary>
@@ -91,9 +91,9 @@ public sealed class AccessControl(
         }
     }
 
-    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper, bool resourceManager = false, bool projectManager = false) =>
+    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper, bool resourceManager = false, bool projectManager = false, bool hr = false) =>
         (admin ? OrgRoles.Admin : 0) | (finance ? OrgRoles.Finance : 0) | (timekeeper ? OrgRoles.Timekeeper : 0)
-        | (resourceManager ? OrgRoles.ResourceManager : 0) | (projectManager ? OrgRoles.ProjectManager : 0);
+        | (resourceManager ? OrgRoles.ResourceManager : 0) | (projectManager ? OrgRoles.ProjectManager : 0) | (hr ? OrgRoles.Hr : 0);
 
     /// <summary>The user's role on a sheet (Owner for admins), or null when they can't see it or it doesn't exist.</summary>
     public async Task<WorkspaceRole?> GetSheetRoleAsync(Guid sheetId, CancellationToken cancellationToken = default)
@@ -187,6 +187,19 @@ public sealed class AccessControl(
             throw await DeniedAsync("Only administrators can do that.", cancellationToken);
         }
     }
+
+    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless the user is in HR or an Admin.</summary>
+    public async Task RequireHrAsync(string what, CancellationToken cancellationToken = default)
+    {
+        RequireSignedIn();
+        if (!(await GetOrgRolesAsync(cancellationToken)).IsHr())
+        {
+            throw await DeniedAsync($"Only HR and administrators can {what}.", cancellationToken);
+        }
+    }
+
+    /// <summary>A denial with <paramref name="message"/>, recorded like the role checks above (for rules decided elsewhere).</summary>
+    public Task<WorkbenchForbiddenException> DenyAsync(string message, CancellationToken cancellationToken = default) => DeniedAsync(message, cancellationToken);
 
     /// <summary>Records the denial in the security event log (A.8.15) and returns the exception to throw.</summary>
     private async Task<WorkbenchForbiddenException> DeniedAsync(string message, CancellationToken cancellationToken, string? target = null)

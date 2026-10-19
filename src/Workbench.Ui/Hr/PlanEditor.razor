@@ -1,0 +1,137 @@
+@inject IBenefitService Benefits
+
+<MudPaper Outlined="true" Class="pa-4" Style="max-width:1100px" data-testid="plan-editor">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(Plan is null ? "New plan" : $"Edit {Plan.Code}")</MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="2"><MudTextField @bind-Value="_f.Code" Label="Code" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+        <MudItem xs="12" sm="4"><MudTextField @bind-Value="_f.Name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="BenefitPlanType" Value="_f.Type" ValueChanged="TypeChanged" Label="Type" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var t in Enum.GetValues<BenefitPlanType>()) { <MudSelectItem T="BenefitPlanType" Value="t">@BenefitLabels.Label(t)</MudSelectItem> }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3"><MudTextField @bind-Value="_f.Carrier" Label="Carrier" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_f.Starts" Editable="true" Label="Plan year starts" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_f.Ends" Editable="true" Label="Plan year ends" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" sm="2"><MudTextField @bind-Value="_f.Deduction" Label="Deduction code" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+        <MudItem xs="6" sm="4">
+            <MudSelect T="Guid?" @bind-Value="_f.Account" Label="GL expense account" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                @foreach (var a in Accounts) { <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem> }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" Class="d-flex flex-wrap gap-4">
+            <MudCheckBox T="bool" @bind-Value="_f.PreTax" Label="Pre-tax" Color="Color.Primary" />
+            <MudCheckBox T="bool" @bind-Value="_f.FullTimeOnly" Label="Full-time employees only" Color="Color.Primary" />
+            @if (_f.Type == BenefitPlanType.Medical) { <MudCheckBox T="bool" @bind-Value="_f.Hdhp" Label="High-deductible (HSA eligible)" Color="Color.Primary" /> }
+            <MudCheckBox T="bool" @bind-Value="_f.Active" Label="Offered" Color="Color.Primary" />
+        </MudItem>
+        @if (BenefitLabels.IsContribution(_f.Type))
+        {
+            <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_f.Limit" Label="@(_f.Type == BenefitPlanType.Retirement401k ? "Most % of pay" : "Most per year")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" /></MudItem>
+            @if (_f.Type == BenefitPlanType.Retirement401k)
+            {
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_f.MatchRate" Label="Match rate (1 = 100%)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_f.MatchCap" Label="Match up to (0.04 = 4% of pay)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" /></MudItem>
+            }
+            else
+            {
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_f.EmployerMonthly" Label="Company contribution / month" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" /></MudItem>
+            }
+        }
+        else
+        {
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3">Coverage tiers (monthly cost)</MudText>
+                @foreach (var tier in _f.Tiers)
+                {
+                    var t = tier;
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-1" Wrap="Wrap.Wrap">
+                        <MudCheckBox T="bool" @bind-Value="t.Offered" Label="@BenefitLabels.Label(t.Coverage)" Color="Color.Primary" Style="min-width:240px" />
+                        <MudNumericField T="decimal" @bind-Value="t.Employee" Label="Employee pays" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Disabled="!t.Offered" Style="max-width:160px" />
+                        <MudNumericField T="decimal" @bind-Value="t.Employer" Label="Company pays" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Disabled="!t.Offered" Style="max-width:160px" />
+                    </MudStack>
+                }
+            </MudItem>
+        }
+    </MudGrid>
+    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveAsync" data-testid="save-plan">@(Plan is null ? "Add plan" : "Save plan")</MudButton>
+</MudPaper>
+
+@code {
+    [Parameter] public BenefitPlanDto? Plan { get; set; }
+
+    [Parameter] public IReadOnlyList<BenefitAccountOptionDto> Accounts { get; set; } = [];
+
+    [Parameter] public EventCallback Saved { get; set; }
+
+    private Form _f = new();
+
+    private sealed class TierRow
+    {
+        public CoverageLevel Coverage { get; init; }
+        public bool Offered { get; set; }
+        public decimal Employee { get; set; }
+        public decimal Employer { get; set; }
+    }
+
+    private sealed class Form
+    {
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public BenefitPlanType Type { get; set; } = BenefitPlanType.Medical;
+        public string? Carrier { get; set; }
+        public DateTime? Starts { get; set; } = new DateTime(DateTime.Today.Year + 1, 1, 1);
+        public DateTime? Ends { get; set; } = new DateTime(DateTime.Today.Year + 1, 12, 31);
+        public string? Deduction { get; set; }
+        public Guid? Account { get; set; }
+        public bool PreTax { get; set; } = true;
+        public bool FullTimeOnly { get; set; } = true;
+        public bool Hdhp { get; set; }
+        public bool Active { get; set; } = true;
+        public decimal? Limit { get; set; }
+        public decimal? MatchRate { get; set; }
+        public decimal? MatchCap { get; set; }
+        public decimal? EmployerMonthly { get; set; }
+        public List<TierRow> Tiers { get; set; } = Enum.GetValues<CoverageLevel>().Select(c => new TierRow { Coverage = c, Offered = true }).ToList();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Plan is not { } p)
+        {
+            _f = new Form { Account = Accounts.FirstOrDefault(a => a.Number == "6030")?.Id };
+            return;
+        }
+
+        _f = new Form
+        {
+            Code = p.Code, Name = p.Name, Type = p.Type, Carrier = p.Carrier, Starts = HrFormat.ToDateTime(p.StartsOn), Ends = HrFormat.ToDateTime(p.EndsOn), Deduction = p.DeductionCode,
+            Account = p.ExpenseAccountId, PreTax = p.IsPreTax, FullTimeOnly = p.FullTimeOnly, Hdhp = p.IsHighDeductible, Active = p.IsActive, Limit = p.AnnualElectionLimit,
+            MatchRate = p.EmployerMatchRate, MatchCap = p.EmployerMatchCapPercent, EmployerMonthly = p.EmployerMonthlyContribution,
+            Tiers = Enum.GetValues<CoverageLevel>().Select(c => p.Tiers.FirstOrDefault(t => t.Coverage == c) is { } t
+                ? new TierRow { Coverage = c, Offered = true, Employee = t.EmployeeMonthlyCost, Employer = t.EmployerMonthlyCost }
+                : new TierRow { Coverage = c }).ToList(),
+        };
+    }
+
+    private void TypeChanged(BenefitPlanType type)
+    {
+        _f.Type = type;
+        if (type == BenefitPlanType.Life)
+        {
+            foreach (var t in _f.Tiers.Where(t => t.Coverage != CoverageLevel.EmployeeOnly))
+            {
+                t.Offered = false;
+            }
+        }
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var contribution = BenefitLabels.IsContribution(_f.Type);
+        await Benefits.SavePlanAsync(Plan?.Id, new SaveBenefitPlanRequest(_f.Code ?? "", _f.Name ?? "", _f.Type, _f.Carrier, HrFormat.ToDate(_f.Starts) ?? default,
+            HrFormat.ToDate(_f.Ends) ?? default, _f.Deduction ?? "", _f.PreTax, _f.Account, _f.Hdhp, _f.FullTimeOnly, _f.Limit, _f.MatchRate, _f.MatchCap, _f.EmployerMonthly,
+            null, _f.Active, contribution ? [] : _f.Tiers.Where(t => t.Offered).Select(t => new SaveBenefitTier(t.Coverage, t.Employee, t.Employer)).ToList()));
+        await Saved.InvokeAsync();
+    }, "Plan saved");
+}

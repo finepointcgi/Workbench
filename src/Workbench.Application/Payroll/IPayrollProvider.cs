@@ -40,6 +40,15 @@ public sealed record PayrollEmployeeRecord(
 
 public enum PayrollSyncAction { Create, Update, Terminate }
 
+/// <summary>
+/// One benefit deduction for a pay period: a flat <see cref="Amount"/> per period, or a <see cref="Percent"/> of pay
+/// (401(k)), with the employer's contribution when there is one.
+/// </summary>
+public sealed record PayrollDeductionLine(string ProviderEmployeeId, string EmployeeName, string DeductionCode, decimal? Amount, decimal? Percent, decimal? EmployerAmount, bool IsPreTax);
+
+/// <summary>Benefit deductions for a pay period, ready for a provider to format (from HR's benefit elections).</summary>
+public sealed record PayrollDeductionExport(string CompanyCode, string PayGroupCode, DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly CheckDate, IReadOnlyList<PayrollDeductionLine> Lines);
+
 public sealed record PayrollSyncOutcome(Guid EmployeeId, PayrollSyncAction Action, bool Succeeded, string? ProviderEmployeeId, string Message);
 
 /// <summary>
@@ -68,6 +77,10 @@ public interface IPayrollProvider
     /// <summary>Reads the provider's payroll register export.</summary>
     ParsedPayrollRegister ParseRegister(string content);
 
+    /// <summary>Formats benefit deductions as the provider's deduction import file. Adapters without one say so.</summary>
+    PayrollExportFile ExportDeductions(PayrollDeductionExport export) =>
+        throw new NotSupportedException($"{Name} doesn't take a benefit deduction import yet. Enter the deductions in {Name} by hand.");
+
     /// <summary>Creates, updates or terminates employees in the provider. Live API calls; never used in tests.</summary>
     Task<IReadOnlyList<PayrollSyncOutcome>> SyncEmployeesAsync(string companyCode, IReadOnlyList<(PayrollEmployeeRecord Employee, PayrollSyncAction Action)> changes, CancellationToken cancellationToken);
 }
@@ -88,6 +101,8 @@ public abstract class ComingSoonPayrollProvider : IPayrollProvider
     public PayrollExportFile ExportHours(PayrollHoursExport export) => throw NotYet("hours export");
 
     public ParsedPayrollRegister ParseRegister(string content) => throw NotYet("payroll register import");
+
+    public PayrollExportFile ExportDeductions(PayrollDeductionExport export) => throw NotYet("benefit deduction export");
 
     public Task<IReadOnlyList<PayrollSyncOutcome>> SyncEmployeesAsync(string companyCode, IReadOnlyList<(PayrollEmployeeRecord Employee, PayrollSyncAction Action)> changes, CancellationToken cancellationToken) =>
         throw NotYet("employee sync");

@@ -1,0 +1,160 @@
+@page "/hr/positions"
+@inject IPositionService Positions
+@inject IHrAccessService HrAccess
+@inject Workbench.Contracts.ProjectAccounting.IPeopleService People
+
+<PageTitle>Positions · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Positions</MudText>
+<MudText Class="mud-text-secondary mb-4">The approved positions: what's budgeted, who fills each one and what's open.</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Spacing="4" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudText><strong>@_positions.Sum(p => p.Headcount)</strong> budgeted</MudText>
+        <MudText><strong>@_positions.Sum(p => p.Filled)</strong> filled</MudText>
+        <MudText><strong>@_positions.Sum(p => p.Open)</strong> open</MudText>
+        <MudSpacer />
+        <MudSwitch T="bool" Value="_includeClosed" ValueChanged="ClosedChangedAsync" Color="Color.Primary" Label="Show closed positions" />
+    </MudStack>
+    <MudTable T="PositionDto" Items="_positions" Dense="true" Hover="true" aria-label="Positions" data-testid="positions" Class="mb-4">
+        <HeaderContent>
+            <MudTh>Code</MudTh><MudTh>Title</MudTh><MudTh>Labor category</MudTh><MudTh>Org unit</MudTh><MudTh>Reports to</MudTh>
+            @if (_showSalary) { <MudTh Style="text-align:right">Salary range</MudTh> }
+            <MudTh>Filled</MudTh><MudTh>Open</MudTh><MudTh>Status</MudTh><MudTh>People</MudTh>
+            @if (_isHr) { <MudTh><span class="wb-sr-only">Actions</span></MudTh> }
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Labor category">@context.LaborCategoryName</MudTd>
+            <MudTd DataLabel="Org unit">@context.OrgUnitName</MudTd>
+            <MudTd DataLabel="Reports to">@context.ReportsToCode</MudTd>
+            @if (_showSalary) { <MudTd DataLabel="Salary range" Style="text-align:right">@HrFormat.Whole(context.SalaryMin) – @HrFormat.Whole(context.SalaryMax)</MudTd> }
+            <MudTd DataLabel="Filled">@context.Filled / @context.Headcount</MudTd>
+            <MudTd DataLabel="Open">@(context.Open > 0 ? $"{context.Open} open" : "—")</MudTd>
+            <MudTd DataLabel="Status">@context.Status</MudTd>
+            <MudTd DataLabel="People">@string.Join(", ", context.Incumbents)</MudTd>
+            @if (_isHr) { <MudTd><MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {context.Code}")" OnClick="() => Edit(context)" /></MudTd> }
+        </RowTemplate>
+    </MudTable>
+
+    @if (_isHr)
+    {
+        <MudPaper Outlined="true" Class="pa-4" Style="max-width:1000px">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_editingId is null ? "New position" : $"Edit {_form.Code}")</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="3"><MudTextField @bind-Value="_form.Code" Label="Code" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" data-testid="position-code" /></MudItem>
+                <MudItem xs="12" sm="5"><MudTextField @bind-Value="_form.Title" Label="Title" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" data-testid="position-title" /></MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" @bind-Value="_form.LaborCategoryId" Label="Labor category" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var c in _categories) { <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" @bind-Value="_form.OrgUnitId" Label="Org unit" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var u in _units) { <MudSelectItem T="Guid?" Value="u.Id">@u.Code · @u.Name</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" @bind-Value="_form.ReportsTo" Label="Reports to" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var p in _positions.Where(p => p.Id != _editingId)) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Title</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="EeoJobCategory?" @bind-Value="_form.Eeo" Label="EEO-1 job category" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var c in Enum.GetValues<EeoJobCategory>()) { <MudSelectItem T="EeoJobCategory?" Value="c">@HrLabels.Label(c)</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_form.Min" Label="Salary from" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal?" @bind-Value="_form.Max" Label="Salary to" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" /></MudItem>
+                <MudItem xs="6" sm="2"><MudNumericField T="int" @bind-Value="_form.Headcount" Label="Headcount" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" /></MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudSelect T="PositionStatus" @bind-Value="_form.Status" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var s in Enum.GetValues<PositionStatus>()) { <MudSelectItem T="PositionStatus" Value="s">@s</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="2" Class="d-flex align-center"><MudCheckBox T="bool" @bind-Value="_form.Exempt" Label="Exempt" Color="Color.Primary" /></MudItem>
+            </MudGrid>
+            <MudStack Row="true" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveAsync" data-testid="save-position">@(_editingId is null ? "Add position" : "Save")</MudButton>
+                @if (_editingId is not null) { <MudButton Variant="Variant.Text" OnClick="() => { _editingId = null; _form = new(); }">Cancel</MudButton> }
+            </MudStack>
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<PositionDto> _positions = [];
+    private IReadOnlyList<Workbench.Contracts.ProjectAccounting.OrgUnitDto> _units = [];
+    private IReadOnlyList<Workbench.Contracts.ProjectAccounting.LaborCategoryDto> _categories = [];
+    private bool _isHr;
+    private bool _showSalary;
+    private bool _includeClosed;
+    private Guid? _editingId;
+    private Form _form = new();
+
+    private sealed class Form
+    {
+        public string? Code { get; set; }
+        public string? Title { get; set; }
+        public Guid? LaborCategoryId { get; set; }
+        public Guid? OrgUnitId { get; set; }
+        public Guid? ReportsTo { get; set; }
+        public EeoJobCategory? Eeo { get; set; }
+        public decimal? Min { get; set; }
+        public decimal? Max { get; set; }
+        public int Headcount { get; set; } = 1;
+        public PositionStatus Status { get; set; } = PositionStatus.Approved;
+        public bool Exempt { get; set; } = true;
+        public EmploymentTypeKind Type { get; set; } = EmploymentTypeKind.FullTime;
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        var access = await HrAccess.GetAsync();
+        (_isHr, _showSalary) = (access.IsHr, access.IsHr || access.IsFinance);
+        await ReloadAsync();
+        if (_isHr)
+        {
+            _units = await People.ListOrgUnitsAsync();
+            _categories = await People.ListLaborCategoriesAsync();
+        }
+    });
+
+    private async Task ReloadAsync() => _positions = await Positions.ListAsync(_includeClosed);
+
+    private async Task ClosedChangedAsync(bool value)
+    {
+        _includeClosed = value;
+        await RunAsync(ReloadAsync);
+    }
+
+    private void Edit(PositionDto p)
+    {
+        _editingId = p.Id;
+        _form = new Form
+        {
+            Code = p.Code, Title = p.Title, LaborCategoryId = p.LaborCategoryId, OrgUnitId = p.OrgUnitId, ReportsTo = p.ReportsToPositionId, Eeo = p.EeoJobCategory,
+            Min = p.SalaryMin, Max = p.SalaryMax, Headcount = p.Headcount, Status = p.Status, Exempt = p.IsExempt, Type = p.EmploymentType,
+        };
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var request = new SavePositionRequest(_form.Code ?? "", _form.Title ?? "", _form.LaborCategoryId, _form.OrgUnitId, _form.ReportsTo, _form.Eeo, _form.Exempt, _form.Type,
+            _form.Min, _form.Max, _form.Headcount, _form.Status);
+        _ = _editingId is { } id ? await Positions.UpdateAsync(id, request) : await Positions.CreateAsync(request);
+        _editingId = null;
+        _form = new();
+        await ReloadAsync();
+    }, "Position saved");
+}

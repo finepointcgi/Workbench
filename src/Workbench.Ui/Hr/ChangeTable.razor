@@ -1,0 +1,26 @@
+@* Compensation changes (amounts: HR, Finance and administrators only reach this). *@
+<MudTable T="CompensationChangeDto" Items="Changes" Dense="true" aria-label="Compensation changes" data-testid="comp-changes">
+    <HeaderContent>
+        @if (ShowEmployee) { <MudTh>Employee</MudTh> }
+        <MudTh>From</MudTh><MudTh Style="text-align:right">New annual pay</MudTh><MudTh Style="text-align:right">Increase</MudTh><MudTh>Reason</MudTh><MudTh>Status</MudTh>
+        @if (Actions is not null) { <MudTh><span class="wb-sr-only">Actions</span></MudTh> }
+    </HeaderContent>
+    <RowTemplate>
+        @if (ShowEmployee) { <MudTd DataLabel="Employee"><MudLink Href="@($"hr/employees/{context.EmployeeId}")">@context.EmployeeName</MudLink></MudTd> }
+        <MudTd DataLabel="From">@HrFormat.Date(context.EffectiveFrom)</MudTd>
+        <MudTd DataLabel="New annual pay" Style="text-align:right">@HrFormat.Whole(context.Annualized)@(context.PayType == PayTypeKind.Hourly ? $" ({HrFormat.Money(context.HourlyRate)}/h)" : "")</MudTd>
+        <MudTd DataLabel="Increase" Style="text-align:right">@HrFormat.Whole(context.Increase)@(context.IncreasePercent is { } pct ? $" ({HrFormat.Percent(pct)})" : "")</MudTd>
+        <MudTd DataLabel="Reason">@context.Reason@(context.Note is null ? "" : $" · {context.Note}")</MudTd>
+        <MudTd DataLabel="Status">@context.Status@(context.WaitingOn is null ? "" : $" · {context.WaitingOn}")</MudTd>
+        @if (Actions is not null) { <MudTd>@Actions(context)</MudTd> }
+    </RowTemplate>
+    <NoRecordsContent><MudText Class="mud-text-secondary">No changes.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CompensationChangeDto> Changes { get; set; } = [];
+
+    [Parameter] public bool ShowEmployee { get; set; }
+
+    [Parameter] public RenderFragment<CompensationChangeDto>? Actions { get; set; }
+}

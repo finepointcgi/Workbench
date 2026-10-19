@@ -91,7 +91,9 @@ internal static class PayrollLedger
             CreatedAtUtc = utcNow,
         };
 
-        void Line(string account, decimal amount, string memo, Guid? org = null, bool credit = false)
+        void Line(string account, decimal amount, string memo, Guid? org = null, bool credit = false) => LineTo(accounts[account].Id, amount, memo, org, credit);
+
+        void LineTo(Guid accountId, decimal amount, string memo, Guid? org = null, bool credit = false)
         {
             if (amount == 0)
             {
@@ -105,7 +107,7 @@ internal static class PayrollLedger
             {
                 JournalEntryId = entry.Id,
                 LineNumber = entry.Lines.Count + 1,
-                AccountId = accounts[account].Id,
+                AccountId = accountId,
                 OrgUnitId = org,
                 Debit = isCredit ? 0 : value,
                 Credit = isCredit ? value : 0,
@@ -118,7 +120,19 @@ internal static class PayrollLedger
             Line(AccruedPayroll, org.Sum(e => e.Accrued), "Clear accrued labor", org.Key);
             Line(LaborVariance, org.Sum(e => e.Gross - e.Accrued), "Gross pay less labor accrued at cost rates", org.Key);
             Line(EmployerTaxes, org.Sum(e => e.EmployerTaxes), "Employer payroll taxes", org.Key);
-            Line(EmployerBenefits, org.Sum(e => e.EmployerBenefits), "Employer benefits", org.Key);
+
+            // Employer benefits go to each benefit plan's expense account (HR maps plans to fringe accounts), else 6030.
+            foreach (var (accountId, amount) in await Hr.BenefitFringe.SplitAsync(db, org.Select(e => (e.EmployeeId, e.EmployerBenefits)).ToList(), period.End, ct))
+            {
+                if (accountId is { } planAccount)
+                {
+                    LineTo(planAccount, amount, "Employer benefits (benefit plan)", org.Key);
+                }
+                else
+                {
+                    Line(EmployerBenefits, amount, "Employer benefits", org.Key);
+                }
+            }
         }
 
         Line(NetPayClearing, lines.Sum(l => l.NetPay), $"Net pay, {lines.Count} check(s)", credit: true);

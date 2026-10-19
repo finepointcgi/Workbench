@@ -1,0 +1,92 @@
+@page "/hr"
+@inject IHrPersonnelService Personnel
+@inject IHrAccessService HrAccess
+@inject NavigationManager Navigation
+
+<PageTitle>People · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">People</MudText>
+    <MudSpacer />
+    <MudButton Href="hr/org-chart" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AccountTree">Org chart</MudButton>
+    <MudButton Href="hr/me" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Badge">My profile</MudButton>
+</MudStack>
+<MudText Class="mud-text-secondary mb-4">
+    @(_access?.IsHr == true ? "Everyone's personnel record. Open a person to change their job, personal details, credentials and documents."
+        : "The company directory. You see the job details of the people who report to you.")
+</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Immediate="true" DebounceInterval="300" Label="Search name, number, title or email"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:360px"
+                      autocomplete="off" data-testid="people-search" />
+        @if (_access?.IsHr == true)
+        {
+            <MudSwitch T="bool" Value="_includeTerminated" ValueChanged="TerminatedChangedAsync" Color="Color.Primary" Label="Include former employees" />
+        }
+    </MudStack>
+    <div class="mud-table mud-simple-table mud-table-dense mud-table-hover mud-table-outlined mud-elevation-0" data-testid="people">
+        <div class="mud-table-container">
+            <table aria-label="People">
+                <thead>
+                    <tr><th scope="col">Name</th><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Org unit</th><th scope="col">Supervisor</th><th scope="col">Status</th><th scope="col">Hired</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _people)
+                    {
+                        <tr>
+                            <th scope="row"><a href="@($"hr/employees/{p.EmployeeId}")">@p.DisplayName</a></th>
+                            <td>@p.EmployeeNumber</td>
+                            <td>@p.JobTitle</td>
+                            <td>@p.OrgUnitName</td>
+                            <td>@p.SupervisorName</td>
+                            <td><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HrFormat.Color(p.Status)" Class="ma-0">@HrLabels.Label(p.Status)</MudChip></td>
+                            <td>@HrFormat.Date(p.HireDate)</td>
+                        </tr>
+                    }
+                    @if (_people.Count == 0)
+                    {
+                        <tr><td colspan="7" class="mud-text-secondary">No one matches.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<EmployeeSummaryDto> _people = [];
+    private HrAccessDto? _access;
+    private string _search = "";
+    private bool _includeTerminated;
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        _access = await HrAccess.GetAsync();
+        await ReloadAsync();
+    });
+
+    private async Task ReloadAsync() => _people = await Personnel.ListAsync(new EmployeeQuery(_search, _includeTerminated));
+
+    private async Task SearchAsync(string value)
+    {
+        _search = value;
+        await RunAsync(ReloadAsync);
+    }
+
+    private async Task TerminatedChangedAsync(bool value)
+    {
+        _includeTerminated = value;
+        await RunAsync(ReloadAsync);
+    }
+}

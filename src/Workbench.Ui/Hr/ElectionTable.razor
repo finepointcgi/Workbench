@@ -1,0 +1,21 @@
+<MudTable T="ElectionDto" Items="Elections" Dense="true" aria-label="Benefit elections" data-testid="elections">
+    <HeaderContent>
+        <MudTh>Plan</MudTh><MudTh>Coverage</MudTh><MudTh>From</MudTh><MudTh>To</MudTh><MudTh Style="text-align:right">You pay / month</MudTh><MudTh Style="text-align:right">Company pays / month</MudTh><MudTh>Covers</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Plan">@BenefitLabels.Label(context.PlanType): @context.PlanName</MudTd>
+        <MudTd DataLabel="Coverage">@(context.IsWaived ? "Waived" : context.Coverage is { } c ? BenefitLabels.Label(c) : context.PlanType == BenefitPlanType.Retirement401k ? $"{context.ContributionAmount:0.##}% of pay" : $"{HrFormat.Money(context.ContributionAmount)} a year")</MudTd>
+        <MudTd DataLabel="From">@HrFormat.Date(context.CoverageStart)</MudTd>
+        <MudTd DataLabel="To">@HrFormat.Date(context.CoverageEnd)</MudTd>
+        <MudTd DataLabel="You pay / month" Style="text-align:right">@HrFormat.Money(context.EmployeeMonthlyCost)</MudTd>
+        <MudTd DataLabel="Company pays / month" Style="text-align:right">@HrFormat.Money(context.EmployerMonthlyCost)</MudTd>
+        <MudTd DataLabel="Covers">@string.Join(", ", Dependents.Where(d => context.DependentIds.Contains(d.Id)).Select(d => d.FirstName))</MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText Class="mud-text-secondary">No benefit elections.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ElectionDto> Elections { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<DependentDto> Dependents { get; set; } = [];
+}

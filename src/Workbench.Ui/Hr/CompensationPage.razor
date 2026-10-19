@@ -1,0 +1,133 @@
+@page "/hr/compensation"
+@inject ICompensationService Compensation
+@inject IHrPersonnelService Personnel
+@inject IHrAccessService HrAccess
+
+<PageTitle>Compensation · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Compensation</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Pay changes wait for HR, then for Finance when the yearly increase is over the threshold. Approved changes become the pay rate
+    payroll uses from their effective date. Propose one from a person's Compensation tab, or plan a merit cycle below.
+</MudText>
+
+@if (Forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="Compensation is for HR, Finance and administrators" Message="@Error" />
+}
+else if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
+        <MudTabPanel Text="@($"Waiting for approval ({_pending.Count})")" data-testid="tab-pending">
+            <ChangeTable Changes="_pending" ShowEmployee="true">
+                <Actions>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success" Disabled="Busy" OnClick="() => DecideAsync(context, true)" aria-label="@($"Approve {context.EmployeeName}'s change")">Approve</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="() => DecideAsync(context, false)" aria-label="@($"Reject {context.EmployeeName}'s change")">Reject</MudButton>
+                </Actions>
+            </ChangeTable>
+            <MudTextField @bind-Value="_decisionComment" Label="Comment for the decision (needed to reject)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Style="max-width:640px" autocomplete="off" />
+        </MudTabPanel>
+
+        <MudTabPanel Text="Merit cycles" data-testid="tab-cycles">
+            @foreach (var cycle in _cycles)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mb-4">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudText Typo="Typo.h6" HtmlTag="h2">@cycle.Name</MudText>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@cycle.Status</MudChip>
+                        <MudText Class="mud-text-secondary">effective @HrFormat.Date(cycle.EffectiveFrom) · budget @HrFormat.Percent(cycle.BudgetPercent) = @HrFormat.Whole(cycle.Budget) · proposed @HrFormat.Whole(cycle.Proposed) · @(cycle.Remaining >= 0 ? $"{HrFormat.Whole(cycle.Remaining)} left" : $"{HrFormat.Whole(-cycle.Remaining)} over budget")</MudText>
+                    </MudStack>
+                    <ChangeTable Changes="cycle.Proposals" ShowEmployee="true" />
+                    @if (_isHr && cycle.Status == MeritCycleStatus.Planning)
+                    {
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-3" Wrap="Wrap.Wrap">
+                            <MudSelect T="Guid" @bind-SelectedValues="_selected" MultiSelection="true" Label="People" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:320px">
+                                @foreach (var p in _people) { <MudSelectItem T="Guid" Value="p.EmployeeId">@p.DisplayName</MudSelectItem> }
+                            </MudSelect>
+                            <MudNumericField T="decimal" @bind-Value="_percent" Label="Increase %" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="50" Style="max-width:140px" />
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="() => AddAsync(cycle)">Add proposals</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || cycle.Proposals.Count == 0)" OnClick="() => SubmitAsync(cycle)">Submit for approval</MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+            }
+            @if (_isHr)
+            {
+                <MudPaper Outlined="true" Class="pa-4" Style="max-width:900px">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">New merit cycle</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="5"><MudTextField @bind-Value="_cycleName" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                        <MudItem xs="6" sm="4"><MudDatePicker @bind-Date="_cycleDate" Editable="true" Label="Effective from" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_cycleBudget" Label="Budget %" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="50" /></MudItem>
+                    </MudGrid>
+                    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="CreateCycleAsync">Create cycle</MudButton>
+                </MudPaper>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<CompensationChangeDto> _pending = [];
+    private IReadOnlyList<MeritCycleDto> _cycles = [];
+    private IReadOnlyList<EmployeeSummaryDto> _people = [];
+    private IReadOnlyCollection<Guid> _selected = [];
+    private decimal _percent = 3;
+    private bool _isHr;
+    private string? _decisionComment;
+    private string? _cycleName;
+    private DateTime? _cycleDate = new DateTime(DateTime.Today.Year + 1, 1, 1);
+    private decimal _cycleBudget = 3;
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        _isHr = (await HrAccess.GetAsync()).IsHr;
+        await ReloadAsync();
+        if (_isHr)
+        {
+            _people = await Personnel.ListAsync(new EmployeeQuery());
+        }
+    });
+
+    private async Task ReloadAsync()
+    {
+        _pending = await Compensation.ListPendingAsync();
+        _cycles = await Compensation.ListCyclesAsync();
+    }
+
+    private Task DecideAsync(CompensationChangeDto change, bool approve) => RunAsync(async () =>
+    {
+        var request = new CompensationDecisionRequest(_decisionComment);
+        _ = approve ? await Compensation.ApproveAsync(change.Id, request) : await Compensation.RejectAsync(change.Id, request);
+        _decisionComment = null;
+        await ReloadAsync();
+    }, approve ? "Approved" : "Rejected");
+
+    private Task CreateCycleAsync() => RunAsync(async () =>
+    {
+        await Compensation.CreateCycleAsync(new SaveMeritCycleRequest(_cycleName ?? "", HrFormat.ToDate(_cycleDate) ?? DateOnly.FromDateTime(DateTime.Today), _cycleBudget / 100m));
+        _cycleName = null;
+        await ReloadAsync();
+    }, "Cycle created");
+
+    private Task AddAsync(MeritCycleDto cycle) => RunAsync(async () =>
+    {
+        await Compensation.AddProposalsAsync(cycle.Id, new AddMeritProposalsRequest(_selected.ToList(), _percent / 100m));
+        _selected = [];
+        await ReloadAsync();
+    }, "Proposals added");
+
+    private Task SubmitAsync(MeritCycleDto cycle) => RunAsync(async () =>
+    {
+        await Compensation.SubmitCycleAsync(cycle.Id);
+        await ReloadAsync();
+    }, "Submitted for approval");
+}

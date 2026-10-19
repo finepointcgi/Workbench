@@ -1,0 +1,111 @@
+@inject IHrPersonnelService Personnel
+
+@* EEO and veteran self-identification. Restricted: HR, administrators and the employee. HR opens it on purpose (each
+   view is recorded in the security log); the employee self-identifies voluntarily. *@
+@if (_eeo is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-3" Style="max-width:760px">
+        @(IsHr ? "EEO and veteran information is restricted. Viewing it is recorded in the security log." : "Answering is voluntary. Only HR sees your answers; they are used for government reports (EEO-1, VETS-4212) in totals only.")
+    </MudAlert>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" Disabled="Busy" OnClick="ShowAsync" data-testid="show-eeo">
+        @(IsHr ? "Show EEO and veteran information" : "Open my self-identification")
+    </MudButton>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4" Style="max-width:880px" data-testid="eeo-form">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="EeoGender" @bind-Value="_form.Gender" Label="Sex" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var g in Enum.GetValues<EeoGender>())
+                    {
+                        <MudSelectItem T="EeoGender" Value="g">@(g == EeoGender.NotDisclosed ? "I don't wish to answer" : g.ToString())</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="EeoRace" @bind-Value="_form.Race" Label="Race/ethnicity" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var r in Enum.GetValues<EeoRace>())
+                    {
+                        <MudSelectItem T="EeoRace" Value="r">@HrLabels.Label(r)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="DisabilityStatus" @bind-Value="_form.Disability" Label="Disability" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="DisabilityStatus" Value="DisabilityStatus.NotDisclosed">I don't wish to answer</MudSelectItem>
+                    <MudSelectItem T="DisabilityStatus" Value="DisabilityStatus.Yes">Yes, I have a disability</MudSelectItem>
+                    <MudSelectItem T="DisabilityStatus" Value="DisabilityStatus.No">No</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            @if (IsHr)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="EeoJobCategory?" @bind-Value="_form.JobCategory" Label="EEO-1 job category (blank: the position's)" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var c in Enum.GetValues<EeoJobCategory>())
+                        {
+                            <MudSelectItem T="EeoJobCategory?" Value="c">@HrLabels.Label(c)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_form.IsVeteran" Label="I am a veteran" Color="Color.Primary" /></MudItem>
+            @if (_form.IsVeteran)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h2">Protected veteran categories (check any that apply)</MudText>
+                    <MudCheckBox T="bool" @bind-Value="_form.DisabledVeteran" Label="Disabled veteran" Color="Color.Primary" />
+                    <MudCheckBox T="bool" @bind-Value="_form.RecentlySeparatedVeteran" Label="Recently separated veteran (within 3 years of discharge)" Color="Color.Primary" />
+                    <MudCheckBox T="bool" @bind-Value="_form.ActiveDutyWartimeVeteran" Label="Active duty wartime or campaign badge veteran" Color="Color.Primary" />
+                    <MudCheckBox T="bool" @bind-Value="_form.ArmedForcesServiceMedalVeteran" Label="Armed Forces service medal veteran" Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="_form.DischargeDate" Editable="true" Label="Discharge date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+            }
+        </MudGrid>
+        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveAsync" data-testid="save-eeo">Save</MudButton>
+        @if (_eeo.UpdatedAtUtc is { } at)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary ml-3">Last updated @at.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</MudText>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    [Parameter] public bool IsHr { get; set; }
+
+    private EeoRecordDto? _eeo;
+    private Form _form = new();
+
+    private sealed class Form
+    {
+        public EeoGender Gender { get; set; }
+        public EeoRace Race { get; set; }
+        public DisabilityStatus Disability { get; set; }
+        public EeoJobCategory? JobCategory { get; set; }
+        public bool IsVeteran { get; set; }
+        public bool DisabledVeteran { get; set; }
+        public bool RecentlySeparatedVeteran { get; set; }
+        public bool ActiveDutyWartimeVeteran { get; set; }
+        public bool ArmedForcesServiceMedalVeteran { get; set; }
+        public DateTime? DischargeDate { get; set; }
+    }
+
+    private Task ShowAsync() => RunAsync(async () => Set(await Personnel.GetEeoAsync(EmployeeId)));
+
+    private Task SaveAsync() => RunAsync(async () => Set(await Personnel.SaveEeoAsync(EmployeeId, new SaveEeoRequest(_form.Gender, _form.Race, _form.Disability, _form.IsVeteran,
+        _form.IsVeteran && _form.DisabledVeteran, _form.IsVeteran && _form.RecentlySeparatedVeteran, _form.IsVeteran && _form.ActiveDutyWartimeVeteran,
+        _form.IsVeteran && _form.ArmedForcesServiceMedalVeteran, _form.IsVeteran ? HrFormat.ToDate(_form.DischargeDate) : null, _form.JobCategory))), "Saved");
+
+    private void Set(EeoRecordDto e)
+    {
+        _eeo = e;
+        _form = new Form
+        {
+            Gender = e.Gender, Race = e.Race, Disability = e.Disability, JobCategory = e.JobCategory, IsVeteran = e.IsVeteran, DisabledVeteran = e.DisabledVeteran,
+            RecentlySeparatedVeteran = e.RecentlySeparatedVeteran, ActiveDutyWartimeVeteran = e.ActiveDutyWartimeVeteran, ArmedForcesServiceMedalVeteran = e.ArmedForcesServiceMedalVeteran,
+            DischargeDate = HrFormat.ToDateTime(e.DischargeDate),
+        };
+    }
+}
