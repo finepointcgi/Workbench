@@ -75,6 +75,22 @@ public sealed class RevenueEngine(BillingCostSource costs)
 
     private static readonly DateOnly Beginning = new(2000, 1, 1);
 
+    /// <summary>
+    /// <see cref="ComputeAsync"/> for many projects, read-only, a few at a time, each on its own context: a project's
+    /// computation is a couple of dozen small queries, so one after another the round trips add up.
+    /// </summary>
+    internal async Task<IReadOnlyList<(Guid ProjectId, ProjectComputation? Computed)>> ComputeManyAsync(
+        IWorkbenchDbContextFactory dbFactory, IReadOnlyList<Guid> projectIds, FiscalPeriod period, CancellationToken ct)
+    {
+        var results = new ProjectComputation?[projectIds.Count];
+        await Parallel.ForEachAsync(Enumerable.Range(0, projectIds.Count), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (i, token) =>
+        {
+            await using var db = await dbFactory.CreateAsync(token);
+            results[i] = await ComputeAsync(db, projectIds[i], period, token);
+        });
+        return projectIds.Select((id, i) => (id, results[i])).ToList();
+    }
+
     internal async Task<ProjectComputation?> ComputeAsync(IWorkbenchDbContext db, Guid projectId, FiscalPeriod period, CancellationToken ct)
     {
         var project = await db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, ct);
@@ -101,8 +117,10 @@ public sealed class RevenueEngine(BillingCostSource costs)
         Guid? ClinOf(Guid wbsId) => wbs.TryGetValue(wbsId, out var w) ? w.ClinId : null;
 
         // What the ledger already holds for the project.
-        var ledger = await LedgerAsync(db, projectId, end, ct);
-        var priorRevenue = await RevenueThroughAsync(db, projectId, period.Start.AddDays(-1), ct);
+        // One read of the project's tracked ledger lines gives both the position and the revenue booked before the period.
+        var ledgerLines = await ProjectLinesAsync(db, projectId, end, ct);
+        var ledger = Position(ledgerLines);
+        var priorRevenue = ledgerLines.Where(l => RevenueAccounts.Contains(l.Account) && l.Date < period.Start).Sum(l => l.Credit - l.Debit);
         var billedByClin = await BilledByClinAsync(db, contractId, projectId, clinUnits, end, ct);
 
         // Allowable burdened cost to date: everything through the period end (cost can predate the contract's start).
@@ -257,10 +275,18 @@ public sealed class RevenueEngine(BillingCostSource costs)
         decimal BillingsInExcess,
         decimal LossProvision);
 
-    internal static async Task<LedgerPosition> LedgerAsync(IWorkbenchDbContext db, Guid projectId, DateOnly end, CancellationToken ct)
+    internal static async Task<LedgerPosition> LedgerAsync(IWorkbenchDbContext db, Guid projectId, DateOnly end, CancellationToken ct) =>
+        Position(await ProjectLinesAsync(db, projectId, end, ct));
+
+    /// <summary>The project's lines on the revenue, unbilled, billings-in-excess and loss-provision accounts through <paramref name="end"/>.</summary>
+    private static async Task<List<LedgerLine>> ProjectLinesAsync(IWorkbenchDbContext db, Guid projectId, DateOnly end, CancellationToken ct)
     {
         var tracked = RevenueAccounts.Concat([ArUnbilled, BillingsInExcess, LossProvisionLiability]).ToList();
-        var lines = (await LinesAsync(db, null, end, tracked, ct)).Where(l => l.ProjectId == projectId).ToList();
+        return (await LinesAsync(db, null, end, tracked, ct, projectId)).Where(l => l.ProjectId == projectId).ToList();
+    }
+
+    private static LedgerPosition Position(List<LedgerLine> lines)
+    {
         var other = lines.Where(l => RevenueAccounts.Contains(l.Account) && !l.IsRun)
             .GroupBy(l => l.Account).ToDictionary(g => g.Key, g => g.Sum(l => l.Credit - l.Debit), StringComparer.Ordinal);
         var runs = lines.Where(l => l.IsRun).ToList();
@@ -288,7 +314,12 @@ public sealed class RevenueEngine(BillingCostSource costs)
         decimal Debit,
         decimal Credit);
 
-    internal static async Task<List<LedgerLine>> LinesAsync(IWorkbenchDbContext db, DateOnly? since, DateOnly end, IReadOnlyCollection<string> accounts, CancellationToken ct)
+    /// <param name="forProject">
+    /// When set, only that project's lines and the project-less lines (which may belong to it through their invoice) are
+    /// read; callers still filter the result by project. Per-project callers pass it so they don't read every project's lines.
+    /// </param>
+    internal static async Task<List<LedgerLine>> LinesAsync(IWorkbenchDbContext db, DateOnly? since, DateOnly end, IReadOnlyCollection<string> accounts, CancellationToken ct,
+        Guid? forProject = null)
     {
         var numbers = accounts.ToList();
         var raw = await (
@@ -296,6 +327,7 @@ public sealed class RevenueEngine(BillingCostSource costs)
                 join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
                 join a in db.Set<Account>().AsNoTracking() on l.AccountId equals a.Id
                 where e.Status != JournalStatus.Draft && e.Date <= end && (since == null || e.Date >= since) && numbers.Contains(a.Number)
+                      && (forProject == null || l.ProjectId == forProject || l.ProjectId == null)
                 select new { l.ProjectId, a.Number, e.Date, e.Source, e.SourceId, e.ReversalOfId, l.Debit, l.Credit })
             .ToListAsync(ct);
 
@@ -338,7 +370,7 @@ public sealed class RevenueEngine(BillingCostSource costs)
 
     /// <summary>Revenue booked for a project (every source) through <paramref name="end"/>.</summary>
     internal static async Task<decimal> RevenueThroughAsync(IWorkbenchDbContext db, Guid projectId, DateOnly end, CancellationToken ct) =>
-        (await RevenueByProjectAsync(db, end, ct)).GetValueOrDefault(projectId);
+        (await LinesAsync(db, null, end, RevenueAccounts.ToList(), ct, projectId)).Where(l => l.ProjectId == projectId).Sum(l => l.Credit - l.Debit);
 
     internal static async Task<Dictionary<Guid, decimal>> RevenueByProjectAsync(IWorkbenchDbContext db, DateOnly end, CancellationToken ct) =>
         (await LinesAsync(db, null, end, RevenueAccounts.ToList(), ct)).Where(l => l.ProjectId != null)

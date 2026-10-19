@@ -118,10 +118,21 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
     /// <summary>Live invoices of the contract with their lines and sources (not void, not the excluded draft).</summary>
     internal static async Task<List<Invoice>> PriorInvoicesAsync(IWorkbenchDbContext db, Guid contractId, Guid? excludeInvoiceId, bool approvedOnly, CancellationToken ct)
     {
-        var invoices = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).ThenInclude(l => l.Sources)
-            .Where(i => i.ContractId == contractId && i.Status != InvoiceStatus.Void && i.Id != excludeInvoiceId)
-            .ToListAsync(ct);
-        return invoices.Where(i => !approvedOnly || i.IsBilled).ToList();
+        // Invoices, then their lines with sources: one query joining all three repeats every invoice's columns for each of
+        // its (often thousands of) billed sources.
+        var invoices = (await db.Set<Invoice>().AsNoTracking()
+                .Where(i => i.ContractId == contractId && i.Status != InvoiceStatus.Void && i.Id != excludeInvoiceId)
+                .ToListAsync(ct))
+            .Where(i => !approvedOnly || i.IsBilled).ToList();
+        var ids = invoices.Select(i => i.Id).ToList();
+        var lines = (await db.Set<InvoiceLine>().AsNoTracking().Include(l => l.Sources).Where(l => ids.Contains(l.InvoiceId)).ToListAsync(ct))
+            .ToLookup(l => l.InvoiceId);
+        foreach (var invoice in invoices)
+        {
+            invoice.Lines.AddRange(lines[invoice.Id]);
+        }
+
+        return invoices;
     }
 
     private static async Task<Generation> TimeAndMaterialsAsync(
