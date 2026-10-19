@@ -1,0 +1,92 @@
+@page "/support"
+@* The signed-in user's own problem reports and feedback, with their status and any reply. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Support
+@inject ISupportService Support
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+
+<PageTitle>My support requests · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.h4" HtmlTag="h1">My support requests</MudText>
+        <MudText Class="mud-text-secondary">Problems you've reported and feedback you've sent, newest first.</MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.BugReport" OnClick="NewAsync" data-testid="support-new">Report a problem</MudButton>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" role="alert">@_error</MudAlert>
+}
+else if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Loading" />
+}
+else if (_items.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-6 text-center" data-testid="support-empty">
+        <MudText>You haven't sent any reports. If something isn't working, or you have an idea, use <strong>Report a problem</strong>.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudStack Spacing="2" data-testid="support-mine">
+        @foreach (var item in _items)
+        {
+            <MudPaper Outlined="true" Class="pa-4" data-testid="support-item">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Style="font-weight:500">@item.Summary</MudText>
+                    <MudSpacer />
+                    <SupportStatusChip Status="item.Status" />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    @item.Reference · @(item.Kind == SupportKind.Feedback ? "Feedback" : "Problem") · sent @item.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt")@(item.PagePath is null ? "" : $" · on {item.PagePath}")
+                </MudText>
+                @if (item.Details is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-2" Style="white-space:pre-wrap">@item.Details</MudText>
+                }
+                @if (item.HasScreenshot)
+                {
+                    <MudLink Href="@Support.GetScreenshotUrl(item.Id)" Typo="Typo.body2" Class="d-inline-block mt-1">Download your screenshot (@item.ScreenshotFileName)</MudLink>
+                }
+                @if (item.Resolution is not null)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Text" Dense="true" Class="mt-2">
+                        <strong>Reply:</strong> <span style="white-space:pre-wrap">@item.Resolution</span>
+                    </MudAlert>
+                }
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    private IReadOnlyList<SupportRequestDto>? _items;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await Support.ListMineAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _error = "Your requests couldn't be loaded. Try again in a moment.";
+        }
+    }
+
+    private async Task NewAsync()
+    {
+        if (await SupportDialogs.ReportAsync(Dialogs, Navigation) is not null)
+        {
+            await LoadAsync();
+        }
+    }
+}

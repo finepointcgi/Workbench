@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Projects.IProjectHubService, HttpProjectHubService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.MyTodo.IMyTodoService, HttpMyTodoService>(client => client.BaseAddress = serverBaseAddress);
         services.AddSignInSettingsClients(serverBaseAddress);
+        services.AddHttpClient<Contracts.Support.ISupportService, HttpSupportService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHelpStateService, HttpHelpStateService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHostSupportService, HttpHostSupportService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

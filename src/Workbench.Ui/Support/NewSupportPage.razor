@@ -1,0 +1,36 @@
+@page "/support/new"
+@* A full-page report form. The error screen links here (?from=error&page=/the/page) because after a crash the old page
+   can't open a dialog any more. *@
+@using Workbench.Contracts.Support
+@inject NavigationManager Navigation
+
+<PageTitle>Report a problem · Workbench</PageTitle>
+
+<div style="max-width:640px">
+    <MudText Typo="Typo.h4" HtmlTag="h1">@(FromError ? "Report the problem" : "Report a problem or send feedback")</MudText>
+    @if (FromError)
+    {
+        <MudText Class="mud-text-secondary mb-4">Sorry about that. Tell us what you were doing when it went wrong, and we'll look into it.</MudText>
+    }
+    else
+    {
+        <MudText Class="mud-text-secondary mb-4">Tell us what happened, or what would make Workbench better for you.</MudText>
+    }
+    <MudPaper Outlined="true" Class="pa-4">
+        <SupportForm PagePath="@(Page ?? "")" FromError="FromError" ShowCancel="false" Done="_ => Navigation.NavigateTo(Back)" />
+    </MudPaper>
+</div>
+
+@code {
+    [Parameter, SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+
+    /// <summary>The page the problem happened on (cleaned to a path before it's sent).</summary>
+    [Parameter, SupplyParameterFromQuery(Name = "page")] public string? Page { get; set; }
+
+    private bool FromError => string.Equals(From, "error", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Back to the page it happened on (app-relative only), else My support requests.</summary>
+    private string Back => SupportRules.CleanPagePath(Page) is { Length: > 1 } path && !path.StartsWith("/support", StringComparison.OrdinalIgnoreCase)
+        ? path.TrimStart('/')
+        : "support";
+}

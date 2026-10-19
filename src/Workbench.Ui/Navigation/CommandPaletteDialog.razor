@@ -60,7 +60,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _items = [.. Recent, .. PaletteSearch.Pages(Access)];
+        _items = [.. Recent, .. PaletteSearch.Pages(Access), .. HelpPalette.Items()];
         Refresh();
         if (!Access.IsSignedIn)
         {
@@ -134,6 +134,7 @@
         PaletteKind.Project => "Project",
         PaletteKind.Sheet => "Sheet",
         PaletteKind.Dashboard => "Dashboard",
+        PaletteKind.Help => "Help",
         _ => "Page",
     };
 }

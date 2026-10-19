@@ -13,6 +13,7 @@
         <MudText Typo="Typo.h6" Class="ml-2">Workbench</MudText>
         <MudSpacer />
         <CommandPalette Access="_access" />
+        <HelpButton Access="_access" />
         <NotificationBell />
         <UserMenu />
         <MudIconButton Icon="@(_darkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
@@ -24,7 +25,7 @@
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
             <PageBreadcrumbs Access="_access" />
-            @Body
+            <Workbench.Ui.Support.FriendlyErrorBoundary>@Body</Workbench.Ui.Support.FriendlyErrorBoundary>
         </MudContainer>
     </MudMainContent>
 </MudLayout>

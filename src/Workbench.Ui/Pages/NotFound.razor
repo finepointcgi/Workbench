@@ -1,7 +1,17 @@
 @page "/not-found"
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
 
 <PageTitle>Not found · Workbench</PageTitle>
 
-<MudText Typo="Typo.h4" HtmlTag="h1">Page not found</MudText>
-<MudText Class="mt-2">The page you asked for doesn't exist.</MudText>
-<MudButton Href="" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">Back to My Work</MudButton>
+<MudText Typo="Typo.h4" HtmlTag="h1">We can't find that page</MudText>
+<MudText Class="mt-2">The link may be old or mistyped, or the page may have moved. You might also not have access to it; if you think you should, ask your administrator.</MudText>
+<MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-4">
+    <MudButton Href="" Variant="Variant.Filled" Color="Color.Primary">Go to Home</MudButton>
+    <MudButton Href="help" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.MenuBook">Help center</MudButton>
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.BugReport" OnClick="ReportAsync" data-testid="not-found-report">Report this</MudButton>
+</MudStack>
+
+@code {
+    private Task ReportAsync() => Support.SupportDialogs.ReportAsync(Dialogs, Navigation, fromError: true);
+}
