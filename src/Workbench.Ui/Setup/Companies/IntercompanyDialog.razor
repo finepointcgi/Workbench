@@ -1,0 +1,46 @@
+@* Picks the due from (asset) and due to (liability) accounts one company uses with another. *@
+@using Workbench.Contracts.Accounting
+@using Workbench.Contracts.Companies
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText>In <b>@Pair.CompanyCode</b>'s books, for amounts between it and <b>@Pair.CounterpartyCode</b>:</MudText>
+            <MudSelect T="Guid?" @bind-Value="_dueFrom" Label="Due from account (what it is owed)" Required="true" data-testid="ic-due-from">
+                @foreach (var a in Accounts.Where(a => a.Type == AccountKind.Asset))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_dueTo" Label="Due to account (what it owes)" Required="true" data-testid="ic-due-to">
+                @foreach (var a in Accounts.Where(a => a.Type == AccountKind.Liability))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_dueFrom is null || _dueTo is null" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IntercompanyAccountDto Pair { get; set; } = default!;
+
+    /// <summary>Active detail accounts.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AccountDto> Accounts { get; set; } = [];
+
+    private Guid? _dueFrom;
+    private Guid? _dueTo;
+
+    protected override void OnInitialized() => (_dueFrom, _dueTo) = (Pair.DueFromAccountId, Pair.DueToAccountId);
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveIntercompanyAccountRequest(Pair.CompanyId, Pair.CounterpartyCompanyId, _dueFrom!.Value, _dueTo!.Value)));
+}

@@ -12,8 +12,11 @@ public enum ProjectStatus
 /// A project under a contract (or an indirect/overhead project with no contract).
 /// Its plan lives in <see cref="SheetId"/>; WBS elements map to that sheet's items.
 /// </summary>
-public sealed class Project : Entity
+public sealed class Project : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The legal company whose ledger the project's cost posts to (the contract's company when it has one).</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public required string Code { get; set; }
     public required string Name { get; set; }
     public Guid? ContractId { get; set; }

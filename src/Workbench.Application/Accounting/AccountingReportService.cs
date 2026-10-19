@@ -14,16 +14,16 @@ namespace Workbench.Application.Accounting;
 /// Balance-sheet accounts accumulate since inception; income-statement accounts reset each fiscal year, with prior
 /// years' net income shown in retained earnings.
 /// </summary>
-public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory) : IAccountingReportService
+public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory, Companies.CompanyScope? companies = null) : IAccountingReportService
 {
-    private sealed record PostedLine(
+    internal sealed record PostedLine(
         Guid EntryId, string Number, int Sequence, DateOnly Date, Guid PeriodId, JournalSource Source, string Description,
         int LineNumber, Guid AccountId, Guid? OrgUnitId, Guid? ProjectId, Guid? WbsElementId, decimal Debit, decimal Credit, string? Memo)
     {
         public decimal Net => Debit - Credit;
     }
 
-    private sealed record Ledger(LedgerLookups Lookups, List<PostedLine> Lines, Dictionary<Guid, FiscalYear> Years)
+    internal sealed record Ledger(LedgerLookups Lookups, List<PostedLine> Lines, Dictionary<Guid, FiscalYear> Years)
     {
         public FiscalPeriod Period(Guid id) => Lookups.Periods[id];
 
@@ -32,10 +32,29 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
         public static bool IsIncomeStatement(Account a) => a.Type is AccountType.Revenue or AccountType.Expense;
     }
 
-    private static async Task<Ledger> LoadAsync(IWorkbenchDbContext db, CancellationToken ct)
+    /// <summary>
+    /// Multicompany: the companies the user is working in (the switcher, within their company access). Null means every
+    /// company, which is also what a single-company tenant always gets.
+    /// </summary>
+    private async Task<IReadOnlySet<Guid>?> CompanyFilterAsync(CancellationToken ct) =>
+        companies is null ? null : await companies.VisibleCompanyIdsAsync(ct);
+
+    private static IQueryable<JournalLine> Lines(IWorkbenchDbContext db, IReadOnlySet<Guid>? companyIds)
+    {
+        var lines = db.Set<JournalLine>().AsNoTracking();
+        if (companyIds is not null)
+        {
+            var ids = companyIds.ToList();
+            lines = lines.Where(l => ids.Contains(l.CompanyId));
+        }
+
+        return lines;
+    }
+
+    private static async Task<Ledger> LoadAsync(IWorkbenchDbContext db, IReadOnlySet<Guid>? companyIds, CancellationToken ct)
     {
         var lines = await (
-                from l in db.Set<JournalLine>().AsNoTracking()
+                from l in Lines(db, companyIds)
                 join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
                 where e.Status != JournalStatus.Draft
                 select new PostedLine(e.Id, e.Number, e.Sequence, e.Date, e.FiscalPeriodId, e.Source, e.Description,
@@ -49,10 +68,10 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     /// period and amounts. Enough for the trial balance, income statement and balance sheet, which only add amounts up;
     /// the detail reports read every line through <see cref="LoadAsync"/>.
     /// </summary>
-    private static async Task<Ledger> LoadBalancesAsync(IWorkbenchDbContext db, CancellationToken ct)
+    private static async Task<Ledger> LoadBalancesAsync(IWorkbenchDbContext db, IReadOnlySet<Guid>? companyIds, CancellationToken ct)
     {
         var sums = await (
-                from l in db.Set<JournalLine>().AsNoTracking()
+                from l in Lines(db, companyIds)
                 join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
                 where e.Status != JournalStatus.Draft
                 group l by new { l.AccountId, e.FiscalPeriodId } into g
@@ -70,10 +89,10 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<TrialBalanceDto> GetTrialBalanceAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return TrialBalance(await LoadBalancesAsync(db, cancellationToken), fiscalPeriodId);
+        return TrialBalance(await LoadBalancesAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken), fiscalPeriodId);
     }
 
-    private static TrialBalanceDto TrialBalance(Ledger ledger, Guid periodId)
+    internal static TrialBalanceDto TrialBalance(Ledger ledger, Guid periodId)
     {
         var period = RequirePeriod(ledger, periodId);
         var yearStart = ledger.YearStart(period);
@@ -141,7 +160,7 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<LedgerDetailDto> GetLedgerDetailAsync(LedgerQuery query, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return LedgerDetail(await LoadAsync(db, cancellationToken), query);
+        return LedgerDetail(await LoadAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken), query);
     }
 
     private static LedgerDetailDto LedgerDetail(Ledger ledger, LedgerQuery query)
@@ -199,7 +218,7 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<FinancialStatementDto> GetIncomeStatementAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return IncomeStatement(await LoadBalancesAsync(db, cancellationToken), fiscalPeriodId);
+        return IncomeStatement(await LoadBalancesAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken), fiscalPeriodId);
     }
 
     private static (Dictionary<Guid, decimal> Period, Dictionary<Guid, decimal> Ytd) PeriodAndYtd(Ledger ledger, FiscalPeriod period)
@@ -223,7 +242,7 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
         return (inPeriod, ytd);
     }
 
-    private static FinancialStatementDto IncomeStatement(Ledger ledger, Guid periodId)
+    internal static FinancialStatementDto IncomeStatement(Ledger ledger, Guid periodId)
     {
         var period = RequirePeriod(ledger, periodId);
         var (inPeriod, ytd) = PeriodAndYtd(ledger, period);
@@ -267,10 +286,10 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<FinancialStatementDto> GetBalanceSheetAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return BalanceSheet(await LoadBalancesAsync(db, cancellationToken), fiscalPeriodId);
+        return BalanceSheet(await LoadBalancesAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken), fiscalPeriodId);
     }
 
-    private static FinancialStatementDto BalanceSheet(Ledger ledger, Guid periodId)
+    internal static FinancialStatementDto BalanceSheet(Ledger ledger, Guid periodId)
     {
         var period = RequirePeriod(ledger, periodId);
         var trial = TrialBalance(ledger, periodId);
@@ -322,7 +341,7 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<IReadOnlyList<ProjectCostRowDto>> GetProjectCostLedgerAsync(Guid? projectId = null, Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return ProjectCost(await LoadAsync(db, cancellationToken), projectId, fiscalPeriodId);
+        return ProjectCost(await LoadAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken), projectId, fiscalPeriodId);
     }
 
     private static IReadOnlyList<ProjectCostRowDto> ProjectCost(Ledger ledger, Guid? projectId, Guid? periodId)
@@ -357,7 +376,7 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<ReconciliationDto> GetReconciliationAsync(Guid? projectId = null, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var ledger = await LoadAsync(db, cancellationToken);
+        var ledger = await LoadAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken);
         var projectIds = projectId is { } only ? [only] : ledger.Lookups.Projects.Keys.ToList();
         var notes = new List<string>();
         var (labor, odcs) = await FinancialsLoader.LoadActualsAsync(db, projectIds, null, notes, cancellationToken);
@@ -403,7 +422,7 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     public async Task<AccountingExportFile> ExportCsvAsync(AccountingExportRequest request, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var ledger = await LoadAsync(db, cancellationToken);
+        var ledger = await LoadAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken);
         var csv = new Csv();
         string PeriodSuffix() => request.FiscalPeriodId is { } p ? "-" + RequirePeriod(ledger, p).Name : "";
         Guid RequirePeriodId() => request.FiscalPeriodId ?? throw new ArgumentException("Choose a fiscal period.");

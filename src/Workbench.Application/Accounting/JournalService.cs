@@ -70,6 +70,11 @@ public sealed class JournalService(
         entry.Date = request.Date;
         entry.FiscalPeriodId = period.Id;
         entry.Description = RequireDescription(request.Description);
+        if (request.CompanyId is { } companyId)
+        {
+            entry.CompanyId = companyId;
+        }
+
         db.Set<JournalLine>().RemoveRange(entry.Lines);
         entry.Lines.Clear();
         AddLines(entry, request.Lines);
@@ -168,6 +173,7 @@ public sealed class JournalService(
             : 0;
         var entry = new JournalEntry
         {
+            CompanyId = request.CompanyId ?? Guid.Empty,
             Date = request.Date,
             FiscalPeriodId = period.Id,
             Source = source,

@@ -79,8 +79,11 @@ public enum ApLineStatus
 }
 
 /// <summary>A vendor invoice (voucher) in accounts payable.</summary>
-public sealed class ApBill : Entity
+public sealed class ApBill : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The company that owes the bill and posts it.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public Guid VendorId { get; set; }
 
     /// <summary>Our voucher number, for example "V-000042".</summary>
@@ -197,8 +200,11 @@ public enum PaymentRunStatus
     Cancelled,
 }
 
-public sealed class ApPaymentRun : Entity
+public sealed class ApPaymentRun : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The company paying; a run pays one company's bills.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     /// <summary>For example "PR-000003".</summary>
     public required string Number { get; set; }
 

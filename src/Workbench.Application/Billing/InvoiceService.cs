@@ -125,6 +125,7 @@ public sealed partial class InvoiceService(
             var (sequence, number) = await NextNumberAsync(db, ctx, cancellationToken);
             invoice = new Invoice
             {
+                CompanyId = ctx.Contract.CompanyId,
                 ContractId = ctx.Contract.Id,
                 CustomerId = ctx.Contract.CustomerId,
                 Sequence = sequence,
@@ -451,6 +452,7 @@ public sealed partial class InvoiceService(
         var (sequence, number) = await NextNumberAsync(db, ctx, cancellationToken);
         var memo = new Invoice
         {
+            CompanyId = original.CompanyId,
             ContractId = original.ContractId,
             CustomerId = original.CustomerId,
             Sequence = sequence,

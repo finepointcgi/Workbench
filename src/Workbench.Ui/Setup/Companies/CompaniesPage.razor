@@ -1,0 +1,419 @@
+@page "/setup/companies"
+@using Workbench.Contracts.Accounting
+@using Workbench.Contracts.Companies
+@using Workbench.Contracts.Identity
+@inject ICompanyService Companies
+@inject IIntercompanyService Intercompany
+@inject IChartOfAccountsService Chart
+@inject IFiscalCalendarService Calendar
+@inject ICurrentUserContext CurrentUser
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Companies · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Companies"
+             Subtitle="The legal companies in your organization. Each keeps its own ledger, projects, contracts, invoices, bills, bank accounts and assets; they share the chart of accounts, fiscal calendar, vendors, customers and labor categories.">
+    <MudButton Variant="Variant.Outlined" Href="accounting/consolidated" StartIcon="@Icons.Material.Filled.Assessment">Consolidated statements</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="company-add">Add company</MudButton>
+</SetupHeader>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_companies is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_companies.Count < 2)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="single-company-note">
+            You have one company, so nobody sees a company switcher and everything belongs to @_companies.FirstOrDefault()?.Code.
+            Add a second company to keep separate books, charge time across companies and consolidate.
+        </MudAlert>
+    }
+
+    <MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Companies">
+            <MudSimpleTable Dense="true" Hover="true" aria-label="Companies" data-testid="companies-table">
+                <thead><tr><th scope="col">Code</th><th scope="col">Legal name</th><th scope="col">EIN</th><th scope="col">Fiscal year starts</th><th scope="col">Currency</th><th scope="col">Status</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _companies)
+                    {
+                        <tr data-testid="company-row">
+                            <td>@c.Code</td>
+                            <td>@c.LegalName @(c.IsDefault ? "(default)" : "")</td>
+                            <td>@(c.Ein ?? "—")</td>
+                            <td>@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(c.FiscalYearStartMonth)</td>
+                            <td>@c.HomeCurrencyCode</td>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(c.IsActive ? Color.Success : Color.Default)"
+                                         Icon="@(c.IsActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.PauseCircle)">@(c.IsActive ? "Active" : "Inactive")</MudChip>
+                            </td>
+                            <td style="text-align:right">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {c.Code}")" OnClick="() => EditAsync(c)" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Intercompany accounts">
+            <MudText Class="mud-text-secondary mb-3">
+                When one entry touches two companies (for example, an employee of one company charging time to another company's project), Workbench posts the
+                cost in the project's company and adds a <b>due to</b> line there and a matching <b>due from</b> line in the employee's company, so both ledgers balance.
+                Consolidation eliminates these balances.
+            </MudText>
+            @if (_pairs.Count == 0)
+            {
+                <MudText>Add a second company to set up intercompany accounts.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" aria-label="Intercompany accounts" data-testid="intercompany-table">
+                    <thead><tr><th scope="col">In the books of</th><th scope="col">With</th><th scope="col">Due from account</th><th scope="col">Due to account</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _pairs)
+                        {
+                            <tr>
+                                <td>@p.CompanyCode</td>
+                                <td>@p.CounterpartyCode</td>
+                                <td>@(p.DueFromAccount ?? "Not set")</td>
+                                <td>@(p.DueToAccount ?? "Not set")</td>
+                                <td style="text-align:right">
+                                    @if (!p.IsConfigured)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Warning">Needed before charging across</MudChip>
+                                    }
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {p.CompanyCode} accounts with {p.CounterpartyCode}")"
+                                                   OnClick="() => EditPairAsync(p)" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                @if (_period is not null)
+                {
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-2">Balances at the end of @_period.Name</MudText>
+                    @if (_balances.Count == 0)
+                    {
+                        <MudText Class="mud-text-secondary">No intercompany balances yet.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" aria-label="Intercompany balances" data-testid="intercompany-balances">
+                            <thead><tr><th scope="col">Companies</th><th scope="col" style="text-align:right">First company's books</th><th scope="col" style="text-align:right">Second company's books</th><th scope="col">Agree?</th></tr></thead>
+                            <tbody>
+                                @foreach (var b in _balances)
+                                {
+                                    <tr>
+                                        <td>@b.CompanyCode and @b.CounterpartyCode</td>
+                                        <td style="text-align:right">@Money(b.Balance)</td>
+                                        <td style="text-align:right">@Money(b.CounterpartyBalance)</td>
+                                        <td>@(b.Difference == 0 ? "Yes" : $"No, off by {Money(b.Difference)}")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Positive: the company is owed. The two sides agree when they add up to zero.</MudText>
+                    }
+                }
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Move records">
+            <MudText Class="mud-text-secondary mb-3">
+                New records go to the company you're working in (the switcher in the top bar). Move records made in the wrong company here.
+                Anything with posted ledger activity stays where it is.
+            </MudText>
+            <MudSelect T="CompanyRecordKind" Value="_kind" ValueChanged="KindChangedAsync" Label="Show" Dense="true" Style="max-width:260px" Class="mb-3">
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Contract">Contracts (with their projects)</MudSelectItem>
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Project">Projects without a contract</MudSelectItem>
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Employee">Employees (home company)</MudSelectItem>
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.BankAccount">Bank accounts</MudSelectItem>
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.FixedAsset">Fixed assets</MudSelectItem>
+            </MudSelect>
+            <MudSimpleTable Dense="true" Hover="true" aria-label="Records and their companies" data-testid="company-records">
+                <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Company</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _records)
+                    {
+                        <tr>
+                            <td>@r.Code</td>
+                            <td>@r.Name</td>
+                            <td style="min-width:220px">
+                                @if (r.Locked is { } why)
+                                {
+                                    <MudText Typo="Typo.body2">@r.CompanyCode</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@why</MudText>
+                                }
+                                else
+                                {
+                                    <MudSelect T="Guid" Value="r.CompanyId" ValueChanged="id => AssignAsync(r, id)" Dense="true" aria-label="@($"Company of {r.Code}")">
+                                        @foreach (var c in _companies.Where(c => c.IsActive || c.Id == r.CompanyId))
+                                        {
+                                            <MudSelectItem T="Guid" Value="c.Id">@c.Code</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (_records.Count == 0)
+            {
+                <MudText Class="mud-text-secondary mt-2">Nothing to show.</MudText>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Period close">
+            <MudText Class="mud-text-secondary mb-3">
+                A company can close a period before the others (for example, a subsidiary that closes early). A period closed under Accounting › Period close is closed for every company.
+            </MudText>
+            <MudSelect T="Guid?" Value="_period?.Id" ValueChanged="PeriodChangedAsync" Label="Fiscal period" Dense="true" Style="max-width:260px" Class="mb-3">
+                @foreach (var p in _periods.OrderByDescending(p => p.Start))
+                {
+                    <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSimpleTable Dense="true" aria-label="Period status by company" data-testid="company-periods">
+                <thead><tr><th scope="col">Company</th><th scope="col">Status</th><th scope="col">Last change</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _companyPeriods)
+                    {
+                        <tr>
+                            <td>@p.CompanyCode · @p.CompanyName</td>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(p.IsClosed ? Color.Default : Color.Success)"
+                                         Icon="@(p.IsClosed ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)">@(p.ClosedForEveryone ? "Closed for every company" : p.IsClosed ? "Closed" : "Open")</MudChip>
+                            </td>
+                            <td>@(p.ChangedBy is null ? "—" : $"{p.ChangedBy}, {p.ChangedAtUtc?.ToLocalTime():MMM d, yyyy}: {p.Reason}")</td>
+                            <td style="text-align:right">
+                                @if (!p.ClosedForEveryone)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => SetClosedAsync(p, !p.IsClosed)"
+                                               aria-label="@($"{(p.IsClosed ? "Reopen" : "Close")} {p.FiscalPeriodName} for {p.CompanyCode}")">@(p.IsClosed ? "Reopen" : "Close")</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+
+        @if (_isAdmin)
+        {
+            <MudTabPanel Text="Who can use each company">
+                <MudText Class="mud-text-secondary mb-3">
+                    Limit people to some companies: they won't see the others' ledger, projects, contracts, invoices, bills, bank accounts or assets. People with no limit can use every company.
+                </MudText>
+                <MudSimpleTable Dense="true" Hover="true" aria-label="Company access by person" data-testid="company-access">
+                    <thead><tr><th scope="col">Person</th><th scope="col">Email</th><th scope="col">Companies</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var u in _access)
+                        {
+                            <tr>
+                                <td>@u.DisplayName</td>
+                                <td>@u.Email</td>
+                                <td>@(u.CompanyIds.Count == 0 ? "All companies" : string.Join(", ", _companies.Where(c => u.CompanyIds.Contains(c.Id)).Select(c => c.Code)))</td>
+                                <td style="text-align:right">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Change companies for {u.DisplayName}")" OnClick="() => EditAccessAsync(u)" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<CompanyDto>? _companies;
+    private IReadOnlyList<IntercompanyAccountDto> _pairs = [];
+    private IReadOnlyList<IntercompanyBalanceDto> _balances = [];
+    private IReadOnlyList<CompanyRecordDto> _records = [];
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<CompanyPeriodDto> _companyPeriods = [];
+    private IReadOnlyList<UserCompanyAccessDto> _access = [];
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private FiscalPeriodDto? _period;
+    private CompanyRecordKind _kind = CompanyRecordKind.Contract;
+    private bool _isAdmin;
+    private int _tab;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isAdmin = (await CurrentUser.GetAsync()).IsAdmin;
+            _periods = await Calendar.ListPeriodsAsync();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            _period = _periods.FirstOrDefault(p => p.Start <= today && today <= p.End) ?? _periods.MaxBy(p => p.Start);
+            _accounts = (await Chart.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren).ToList();
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _companies = await Companies.ListAsync();
+        _pairs = await Intercompany.ListAsync();
+        _records = await Companies.ListRecordsAsync(_kind);
+        if (_period is not null)
+        {
+            _balances = await Intercompany.ListBalancesAsync(_period.Id);
+            _companyPeriods = await Companies.ListPeriodsAsync(_period.Id);
+        }
+
+        if (_isAdmin)
+        {
+            _access = await Companies.ListUserAccessAsync();
+        }
+    }
+
+    private static string Money(decimal amount) => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US"));
+
+    private async Task EditAsync(CompanyDto? company)
+    {
+        var parameters = new DialogParameters<CompanyDialog>
+        {
+            { d => d.Company, company },
+            { d => d.DefaultMonth, _companies?.FirstOrDefault(c => c.IsDefault)?.FiscalYearStartMonth ?? 10 },
+        };
+        var dialog = await DialogService.ShowAsync<CompanyDialog>(company is null ? "Add company" : $"Edit {company.Code}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveCompanyRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            var saved = company is null ? await Companies.CreateAsync(request) : await Companies.UpdateAsync(company.Id, request);
+            await ReloadAsync();
+            Snackbar.Add(company is null ? $"Added {saved.Code}. Reload the page to see the company switcher." : $"Saved {saved.Code}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditPairAsync(IntercompanyAccountDto pair)
+    {
+        var parameters = new DialogParameters<IntercompanyDialog> { { d => d.Pair, pair }, { d => d.Accounts, _accounts } };
+        var dialog = await DialogService.ShowAsync<IntercompanyDialog>($"{pair.CompanyCode} with {pair.CounterpartyCode}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveIntercompanyAccountRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            await Intercompany.SaveAsync(request);
+            _pairs = await Intercompany.ListAsync();
+            Snackbar.Add("Saved the intercompany accounts.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task KindChangedAsync(CompanyRecordKind kind)
+    {
+        _kind = kind;
+        try
+        {
+            _records = await Companies.ListRecordsAsync(kind);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task AssignAsync(CompanyRecordDto record, Guid companyId)
+    {
+        try
+        {
+            var moved = await Companies.AssignAsync(new AssignCompanyRequest(record.Kind, record.Id, companyId));
+            _records = await Companies.ListRecordsAsync(_kind);
+            Snackbar.Add($"{record.Code} is now in {moved.CompanyCode}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+            _records = await Companies.ListRecordsAsync(_kind);
+        }
+    }
+
+    private async Task PeriodChangedAsync(Guid? periodId)
+    {
+        _period = _periods.FirstOrDefault(p => p.Id == periodId);
+        if (_period is not null)
+        {
+            _companyPeriods = await Companies.ListPeriodsAsync(_period.Id);
+            _balances = await Intercompany.ListBalancesAsync(_period.Id);
+        }
+    }
+
+    private async Task SetClosedAsync(CompanyPeriodDto period, bool close)
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog>
+        {
+            { d => d.Message, close ? $"Close {period.FiscalPeriodName} for {period.CompanyCode}? Postings into it will be refused." : $"Reopen {period.FiscalPeriodName} for {period.CompanyCode}?" },
+            { d => d.ConfirmText, close ? "Close period" : "Reopen period" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>(close ? "Close period" : "Reopen period", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        try
+        {
+            await Companies.SetPeriodClosedAsync(period.CompanyId, period.FiscalPeriodId, new SetCompanyPeriodRequest(close, reason));
+            _companyPeriods = await Companies.ListPeriodsAsync(period.FiscalPeriodId);
+            Snackbar.Add(close ? "Period closed." : "Period reopened.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAccessAsync(UserCompanyAccessDto user)
+    {
+        var parameters = new DialogParameters<UserCompaniesDialog> { { d => d.User, user }, { d => d.Companies, _companies ?? [] } };
+        var dialog = await DialogService.ShowAsync<UserCompaniesDialog>("Companies", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: List<Guid> ids })
+        {
+            return;
+        }
+
+        try
+        {
+            await Companies.SetUserAccessAsync(user.UserId, new SetUserCompanyAccessRequest(ids));
+            _access = await Companies.ListUserAccessAsync();
+            Snackbar.Add($"Saved {user.DisplayName}'s companies.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,64 @@
+@* App bar: the company the user is working in. Shown only once they can use two or more companies. *@
+@using Workbench.Contracts.Companies
+@inject ICompanyService Companies
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_context is { ShowSwitcher: true } ctx)
+{
+    <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true" aria-label="Company">
+        <ActivatorContent>
+            @* MudMenu's activator is already a button; this is a look-alike span so there's one tab stop. *@
+            <span class="mud-button-root mud-button mud-button-text mud-button-text-inherit mud-button-text-size-medium px-2"
+                  style="text-transform:none" data-testid="company-switcher" @onclick="e => context.ToggleAsync(e)">
+                <span class="mud-button-label">
+                    <MudIcon Icon="@Icons.Material.Filled.Domain" Size="Size.Small" Class="mr-1" aria-hidden="true" />
+                    <span class="wb-sr-only">Company: </span>
+                    <span data-testid="company-current">@(ctx.Selected?.Code ?? "All companies")</span>
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small" aria-hidden="true" />
+                </span>
+            </span>
+        </ActivatorContent>
+        <ChildContent>
+            <MudText Typo="Typo.caption" Class="px-4 pt-2 mud-text-secondary">Work in</MudText>
+            <MudMenuItem OnClick="() => SelectAsync(null)" Icon="@(ctx.SelectedCompanyId is null ? Icons.Material.Filled.Check : null)"
+                         data-testid="company-option-all">All companies</MudMenuItem>
+            @foreach (var company in ctx.Companies)
+            {
+                <MudMenuItem OnClick="() => SelectAsync(company.Id)" Icon="@(ctx.SelectedCompanyId == company.Id ? Icons.Material.Filled.Check : null)"
+                             data-testid="company-option">@company.Code · @company.LegalName</MudMenuItem>
+            }
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    private CompanyContextDto? _context;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _context = await Companies.GetContextAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException)
+        {
+            _context = null;
+        }
+    }
+
+    private async Task SelectAsync(Guid? companyId)
+    {
+        try
+        {
+            _context = await Companies.SelectAsync(new SelectCompanyRequest(companyId));
+
+            // Lists, ledger reports and new records follow the company: reload the page so it shows the new one.
+            Navigation.Refresh(forceReload: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

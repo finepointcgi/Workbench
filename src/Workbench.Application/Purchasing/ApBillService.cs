@@ -556,6 +556,7 @@ public sealed class ApBillService(
         var payables = await PurchasingSupport.PayablesAccountAsync(db, ct);
         var entry = new JournalEntry
         {
+            CompanyId = bill.CompanyId,
             Date = bill.InvoiceDate,
             Source = JournalSource.AP,
             SourceId = bill.Id,

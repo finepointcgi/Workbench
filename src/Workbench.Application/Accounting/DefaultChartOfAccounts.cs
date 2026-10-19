@@ -95,6 +95,10 @@ public static class DefaultChartOfAccounts
         new("2300", "Billings in excess of revenue", AccountType.Liability, "2000", Description: "Contract liabilities: billed ahead of revenue recognized (revenue runs)"),
         new("2310", "Provision for contract losses", AccountType.Liability, "2000", Description: "Expected losses on loss contracts not yet incurred (revenue runs)"),
         new("7030", "Unallowable - provision for contract losses", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-23: losses on other contracts are unallowable"),
+
+        // Multicompany: what affiliated companies owe each other, posted when an entry crosses companies (eliminated on consolidation).
+        new("1180", "Due from affiliated companies", AccountType.Asset, "1000", Description: "Intercompany receivable: charges this company carried for an affiliate"),
+        new("2180", "Due to affiliated companies", AccountType.Liability, "2000", Description: "Intercompany payable: charges an affiliate carried for this company"),
     ];
 
     private static readonly (PostingRuleKind Kind, string Key, string Account)[] Rules =
