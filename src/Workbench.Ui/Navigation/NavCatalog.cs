@@ -33,6 +33,7 @@ public static class NavCatalog
     public const string MyWork = "my-work";
     public const string Approvals = "approvals";
     public const string Projects = "projects";
+    public const string People = "people";
     public const string Sheets = "sheets";
     public const string Finance = "finance";
     public const string Reports = "reports";
@@ -44,6 +45,7 @@ public static class NavCatalog
         new(MyWork, "My work", Icons.Material.Filled.Inbox),
         new(Approvals, "Approvals", Icons.Material.Filled.Approval, "approvals"),
         new(Projects, "Projects", Icons.Material.Filled.Work, "projects"),
+        new(People, "People", Icons.Material.Filled.People),
         new(Sheets, "Sheets & dashboards", Icons.Material.Filled.TableChart),
         new(Finance, "Finance", Icons.Material.Filled.AccountBalance),
         new(Reports, "Reports", Icons.Material.Filled.Assessment),
@@ -79,6 +81,17 @@ public static class NavCatalog
         new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, a => a.HasProjectManagerRole && !a.IsFinance, MatchAll: true, Keywords: "create request project wbs plan"),
         new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsResourceManager || a.IsPm, Keywords: "allocations staffing capacity utilization"),
         new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, a => a.IsFinance || a.IsPm, MatchAll: true, Keywords: "other direct costs vendor"),
+
+        // People (HR): everyone's own profile, benefits and the directory; HR (and Finance, for pay and benefit costs) the rest.
+        new(People, null, "My profile", "hr/me", Icons.Material.Filled.Badge, Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
+        new(People, null, "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
+        new(People, null, "Directory", "hr", Icons.Material.Filled.People, Everyone, MatchAll: true, Detail: "Employee", Keywords: "employees personnel hr records"),
+        new(People, null, "Org chart", "hr/org-chart", Icons.Material.Filled.AccountTree, Everyone, Keywords: "reporting structure supervisors"),
+        new(People, null, "Positions", "hr/positions", Icons.Material.Filled.WorkOutline, a => a.IsHr || a.IsFinance, Keywords: "approved positions headcount open requisitions salary range"),
+        new(People, null, "Onboarding and offboarding", "hr/onboarding", Icons.Material.Filled.Checklist, a => a.IsHr, Detail: "Checklist", Keywords: "new hire checklist termination exit"),
+        new(People, null, "Personnel requests", "hr/requests", Icons.Material.Filled.MarkEmailUnread, a => a.IsHr, Keywords: "change requests employee updates"),
+        new(People, "HR administration", "Compensation", "hr/compensation", Icons.Material.Filled.Paid, a => a.IsHr || a.IsFinance, Keywords: "salary raise merit cycle pay change"),
+        new(People, "HR administration", "Benefits administration", "hr/benefits", Icons.Material.Filled.MedicalServices, a => a.IsHr || a.IsFinance, Keywords: "plans tiers open enrollment deductions paylocity fringe"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
@@ -131,6 +144,7 @@ public static class NavCatalog
         new(Reports, null, "Report writer", "reports/writer", Icons.Material.Filled.Build, Everyone, Detail: "Report", Keywords: "custom report builder"),
         new(Reports, "Project reports", "Project status", "reports/standard/project-status", Icons.Material.Filled.Assessment, PmNotFinance, Keywords: "eac etc budget variance pm"),
         new(Reports, "Project reports", "Contract funding", "reports/standard/funding-status", Icons.Material.Filled.Assessment, PmNotFinance, Keywords: "ceiling funded clin"),
+        new(Reports, null, "HR reports", "hr/reports", Icons.Material.Filled.Assessment, a => a.IsHr || a.IsFinance, Keywords: "headcount turnover eeo-1 vets-4212 clearances expirations benefits"),
         new(Reports, null, "Financial statements", "accounting/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "balance sheet income statement trial balance p&l"),
         new(Reports, null, "AP reports", "purchasing/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "payables aging 1099"),
         new(Reports, null, "Asset reports", "assets/reports", Icons.Material.Filled.Assessment, FinanceOnly),
