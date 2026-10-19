@@ -29,6 +29,8 @@ public sealed class AppUser : Entity
     public bool IsMaterials { get; set; }
     /// <summary>Organization role BusinessDevelopment: sees the capture pipeline; edits the opportunities they manage.</summary>
     public bool IsBusinessDevelopment { get; set; }
+    /// <summary>Organization role Pricing: builds and locks proposal prices (sees cost and indirect rates there).</summary>
+    public bool IsPricing { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }

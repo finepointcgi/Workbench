@@ -41,6 +41,10 @@ public enum OrgRoles
     /// opportunities; edits the opportunities they capture or manage the proposal for. Pipeline values are business-sensitive.
     /// </summary>
     BusinessDevelopment = 128,
+    /// Prices proposals: sees employee cost rates (as labor rate averages), indirect rates and fee in proposal pricing, and
+    /// builds, compares and locks prices. Nothing else in Finance. (256 leaves room for roles other branches add.)
+    /// </summary>
+    Pricing = 256,
 }
 
 public static class OrgRoleChecks
@@ -77,12 +81,15 @@ public static class OrgRoleChecks
     /// <summary>Business development, Finance or Admin: sees the whole pipeline.</summary>
     public static bool CanViewPipeline(this OrgRoles roles) => (roles & (OrgRoles.BusinessDevelopment | OrgRoles.Finance | OrgRoles.Admin)) != 0;
 
+    /// <summary>Pricing, Finance or Admin: may see and edit proposal prices (cost rates, indirect rates, fee).</summary>
+    public static bool CanPrice(this OrgRoles roles) => (roles & (OrgRoles.Pricing | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
     /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
     public static IReadOnlyList<OrgRoles> All { get; } =
-        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr, OrgRoles.Materials, OrgRoles.BusinessDevelopment];
+        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr, OrgRoles.Materials, OrgRoles.BusinessDevelopment, OrgRoles.Pricing];
 
     /// <summary>Every role flag combined (what the system user has).</summary>
-    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.Hr | OrgRoles.Materials | OrgRoles.BusinessDevelopment;
+    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.Hr | OrgRoles.Materials | OrgRoles.BusinessDevelopment | OrgRoles.Pricing;
 
     /// <summary>A role's name for people: "Project manager", "Resource manager", or the enum name.</summary>
     public static string Label(OrgRoles role) => role switch

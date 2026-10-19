@@ -57,6 +57,9 @@ public sealed record NavAccess(
     /// <summary>The pipeline, or the capture/proposal manager of an opportunity (who sees just theirs).</summary>
     public bool ShowBusinessDevelopment => SeesPipeline || ManagesOpportunities;
 
+    /// <summary>Prices proposals: the Pricing role, Finance or Admin.</summary>
+    public bool CanPrice => User?.Roles.CanPrice() == true;
+
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
 

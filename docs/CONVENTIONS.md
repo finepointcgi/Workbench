@@ -502,3 +502,24 @@ Checks:
   cost as direct ODC through `MaterialCostActuals` (called from `FinancialsLoader` and `DirectCosts`). Stock work orders collect material and shop
   labor (hours × the employee's cost rate, Dr WIP / Cr 6195 applied labor) in 1450, relieve it at completion and post the rest as the variance at close.
   Shop floor hours also go on the timesheet (the DCAA record) against the work order's charge code; the work order page compares them.
+
+## Proposal pricing
+
+- `Domain/Pricing` (`Proposal`, `PriceModel` and its periods, CLINs, WBS, escalations, labor lines/hours and cost lines),
+  `Contracts/Pricing` (`IProposalPricingService`, `IPricingOpportunityLookup`), `Application/Pricing`. Pages under `/pricing`
+  (`PricingLayout`). Finance, Admin and the org role `Pricing` (`OrgRoles.Pricing`, `CanPrice()`) see and edit prices; the
+  won handoff is Finance/Admin. Cost volume exports record `export.pricing`.
+- A proposal has one working price (`IsBase`), scenarios (copies) and locked versions. Locking copies the price into the next
+  version and stores the computed `PriceResultDto` in `LockedSnapshot`, so a submitted price never moves with the books.
+- Rates come from the books, never retyped: direct rates from `EmployeeCostRate` as of `RatesAsOf` (category average/median of
+  people whose default category it is, selected people, a named person, or a typed rate), escalated once per full year to each
+  period's start; indirect rates from `RateBook` for the period's fiscal year on the model's basis (`IndirectRateBasis.ForwardPricing`
+  was added for this), falling back to the latest earlier year and then provisional. Burden is `BurdenCascade.Apply` per CLIN ×
+  period × WBS, the same cascade and rounding as `IBurdenedCostService`. Unallowable cost lines are listed, never priced.
+- `PriceCalculator` is pure: test the math there. T&M/labor-hour labor is priced at bill rates (direct × labor multiplier × (1 + fee));
+  their ODCs at cost with G&A and no fee.
+- `Proposal.OpportunityId` has no foreign key (the CRM owns opportunities). `IPricingOpportunityLookup` finds nothing until the CRM
+  registers an adapter over `Contracts.Crm.IOpportunityService` (a later `AddScoped` replaces the `TryAdd` default).
+- Won handoff (`PricingHandoff`, one unit of work): contract CLINs per CLIN × period (0001 → 1001 for option 1, options
+  unexercised, funded CLINs untouched), T&M bill rates effective at each period's start, project WBS `{project}.{code}`, and a
+  budget version phased evenly over the fiscal periods each period covers (unphased past the calendar).

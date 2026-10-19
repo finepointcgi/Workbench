@@ -52,6 +52,7 @@ public enum ApproverRuleKind
 
     /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, HR).</summary>
     /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, BusinessDevelopment).</summary>
+    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Pricing).</summary>
     OrgRole,
 
     /// <summary>Each listed person: every one of them must approve.</summary>
@@ -61,7 +62,7 @@ public enum ApproverRuleKind
     AnyOf,
 }
 
-public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Hr, Materials, BusinessDevelopment }
+public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Hr, Materials, BusinessDevelopment, Pricing }
 
 /// <summary>What happens when the step's approver is the submitter (DCAA: nobody approves their own document).</summary>
 public enum SelfApprovalPolicy
