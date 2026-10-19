@@ -53,6 +53,7 @@ public static class WorkbenchApi
         v1.MapMyTodoEndpoints();
         v1.MapSignInSettingsEndpoints();
         v1.MapSupportEndpoints();
+        v1.MapMigrationEndpoints();
 
         return app;
     }

@@ -1,0 +1,30 @@
+@* A plain table of string rows (drill-down detail). *@
+@if (Rows.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">@Empty</MudText>
+}
+else
+{
+    <div style="max-height:320px;overflow:auto">
+        <MudSimpleTable Dense="true" Elevation="0" FixedHeader="true">
+            <thead><tr>@foreach (var column in Columns) { <th>@column</th> }</tr></thead>
+            <tbody>
+                @foreach (var row in Rows)
+                {
+                    <tr>@foreach (var cell in row) { <td>@cell</td> }</tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> Columns { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; } = [];
+
+    [Parameter]
+    public string Empty { get; set; } = "Nothing to show.";
+}

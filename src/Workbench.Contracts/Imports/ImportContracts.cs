@@ -7,7 +7,8 @@ namespace Workbench.Contracts.Imports;
 
 public enum ImportSource { Costpoint, SmartsheetApi, SmartsheetExcel }
 
-public enum ImportKind { OrgUnits, LaborCategories, Employees, CostRates, Customers, Contracts, Clins, Projects, BillRates, Budgets, Sheets, FixedAssets }
+public enum ImportKind { OrgUnits, LaborCategories, Employees, CostRates, Customers, Contracts, Clins, Projects, BillRates, Budgets, Sheets, FixedAssets,
+    Accounts, Vendors, OpeningBalances, OpenArInvoices, OpenApBills }
 
 public enum ImportJobStatus { Uploaded, Mapped, Validated, DryRunDone, Imported, Failed, RolledBack }
 
@@ -43,6 +44,9 @@ public sealed record ImportMappingDto(IReadOnlyDictionary<string, string?> Field
 /// <summary>
 /// Job options. <see cref="ProjectId"/>: the project budgets go to, or whose WBS Smartsheet rows link to.
 /// <see cref="LinkPlanSheet"/>: make the imported sheet that project's plan sheet.
+/// <see cref="AsOfDate"/>: the date GL opening balances are posted on (the day before cut-over).
+/// <see cref="OffsetAccount"/>: the clearing account that balances each part of an opening trial balance too long for
+/// one journal entry (the parts net to zero on it).
 /// </summary>
 public sealed record ImportOptionsDto(
     Guid? ProjectId = null,
@@ -51,7 +55,9 @@ public sealed record ImportOptionsDto(
     bool LinkPlanSheet = true,
     bool IncludeComments = false,
     bool IncludeAttachments = false,
-    IReadOnlyList<string>? SheetIds = null);
+    IReadOnlyList<string>? SheetIds = null,
+    DateOnly? AsOfDate = null,
+    string? OffsetAccount = null);
 
 public sealed record ImportFileDto(string FileName, long Length);
 

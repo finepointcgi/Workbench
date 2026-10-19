@@ -75,6 +75,19 @@
         </MudItem>
     }
 
+    @if (Definition.Kind == ImportKind.OpeningBalances)
+    {
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Options</MudText>
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" AlignItems="AlignItems.Center">
+                <MudDatePicker DateFormat="yyyy-MM-dd" Label="As-of date (the day before cut-over)" Date="Options.AsOfDate?.ToDateTime(TimeOnly.MinValue)" Editable="true" Clearable="true"
+                               DateChanged="d => SetOptions(Options with { AsOfDate = d is { } v ? DateOnly.FromDateTime(v) : null })" Style="max-width:260px"
+                               HelperText="Blank: the date column, else the cut-over checklist's date." data-testid="option-asof" />
+                <MudTextField T="string" Label="Offset (clearing) account" Value="Options.OffsetAccount" ValueChanged="v => SetOptions(Options with { OffsetAccount = v })"
+                              Style="max-width:260px" HelperText="Only for files over 500 lines: the parts net to zero on it." />
+            </MudStack>
+        </MudItem>
+    }
     @if (NeedsProject || IsSheets)
     {
         <MudItem xs="12">

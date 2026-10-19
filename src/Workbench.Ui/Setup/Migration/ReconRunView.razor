@@ -1,0 +1,198 @@
+@* One reconciliation run: summary, differences down to the row with drill-down, export and sign-off. *@
+@inject IReconciliationService Reconciliation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudPaper Outlined="true" Class="pa-4" data-testid="recon-run">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">@Report.Title · @Run.Run.PeriodName</MudText>
+        <MudChip T="string" Color="@(Run.Run.Outcome == ReconRunOutcome.Matched ? Color.Success : Color.Error)" Variant="Variant.Filled" Size="Size.Small" data-testid="run-outcome">
+            @(Run.Run.Outcome == ReconRunOutcome.Matched ? "Matched" : "Differences")
+        </MudChip>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="export-xlsx">Export .xlsx</MudButton>
+        @if (!Run.Run.IsSignedOff)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Verified" OnClick="SignOffAsync" Disabled="_busy" data-testid="sign-off">Sign off</MudButton>
+        }
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        @(Report.UsesAsOf ? $"As of {Run.Run.To:yyyy-MM-dd}" : $"{Run.Run.From:yyyy-MM-dd} to {Run.Run.To:yyyy-MM-dd}") · @Run.Run.FileName · mapping "@Run.Run.MappingName" ·
+        run by @Run.Run.RunBy @MigrationFormat.When(Run.Run.RunAtUtc)
+    </MudText>
+    @if (Run.Run.IsSignedOff)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mt-2" data-testid="signed-off">
+            Signed off by <b>@Run.Run.SignedOffBy</b> on @MigrationFormat.When(Run.Run.SignedOffAtUtc!.Value)@(Run.Run.SignOffNote is { } n ? $": {n}" : ".")
+        </MudAlert>
+    }
+
+    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="my-3" data-testid="run-counts">
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Run.Run.Keys keys</MudChip>
+        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@Run.Run.Matched matched</MudChip>
+        <MudChip T="string" Size="Size.Small" Color="@(Run.Run.Different > 0 ? Color.Error : Color.Default)" Variant="Variant.Outlined">@Run.Run.Different different</MudChip>
+        <MudChip T="string" Size="Size.Small" Color="@(Run.Run.OnlyInCostpoint > 0 ? Color.Warning : Color.Default)" Variant="Variant.Outlined">@Run.Run.OnlyInCostpoint only in Costpoint</MudChip>
+        <MudChip T="string" Size="Size.Small" Color="@(Run.Run.OnlyInWorkbench > 0 ? Color.Warning : Color.Default)" Variant="Variant.Outlined">@Run.Run.OnlyInWorkbench only in Workbench</MudChip>
+        @if (Run.Run.Problems > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">@Run.Run.Problems unreadable row(s)</MudChip>
+        }
+        <MudSpacer />
+        <MudText Typo="Typo.body2">
+            Total @(Run.Measures.FirstOrDefault(m => m.Name == Run.Run.PrimaryField)?.Label ?? Run.Run.PrimaryField):
+            Costpoint <b>@MigrationFormat.Amount(Run.Run.CostpointTotal, PrimaryFormat)</b> · Workbench <b>@MigrationFormat.Amount(Run.Run.WorkbenchTotal, PrimaryFormat)</b>
+            · difference <b class="@(Run.Run.WorkbenchTotal == Run.Run.CostpointTotal ? "" : "mud-error-text")">@MigrationFormat.Amount(Run.Run.WorkbenchTotal - Run.Run.CostpointTotal, PrimaryFormat)</b>
+        </MudText>
+    </MudStack>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+        <MudSwitch T="bool" @bind-Value="_differencesOnly" Color="Color.Primary" Label="Differences only" data-testid="differences-only" />
+        <MudTextField T="string" @bind-Value="_search" Placeholder="Find a key" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Margin="Margin.Dense" Style="max-width:280px" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Click a row to see the detail behind it on both sides.</MudText>
+    </MudStack>
+
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="recon-rows">
+            <thead>
+                <tr>
+                    @foreach (var label in Run.KeyLabels)
+                    {
+                        <th>@label</th>
+                    }
+                    <th>Name</th>
+                    <th>Status</th>
+                    @foreach (var measure in Run.Measures)
+                    {
+                        <th style="text-align:right">@measure.Label<br /><span class="mud-text-secondary" style="font-weight:normal">Costpoint · Workbench · diff</span></th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Visible.Take(_shown))
+                {
+                    var (text, color) = MigrationFormat.Row(row.Status);
+                    <tr style="cursor:pointer" @onclick="() => DrillAsync(row)" data-key="@row.Key" data-status="@row.Status">
+                        @foreach (var part in row.KeyParts)
+                        {
+                            <td>@part</td>
+                        }
+                        <td><MudText Typo="Typo.caption">@row.Label</MudText></td>
+                        <td><MudChip T="string" Size="Size.Small" Color="color" Variant="Variant.Text">@text</MudChip></td>
+                        @foreach (var measure in Run.Measures)
+                        {
+                            var value = row.Values.FirstOrDefault(v => v.Field == measure.Name);
+                            <td style="text-align:right;white-space:nowrap">
+                                @if (value is not null)
+                                {
+                                    <span>@MigrationFormat.Amount(value.Costpoint, measure.Format)</span><br />
+                                    <span class="mud-text-secondary">@MigrationFormat.Amount(value.Workbench, measure.Format)</span><br />
+                                    <b class="@(value.WithinTolerance ? "mud-text-secondary" : "mud-error-text")">@MigrationFormat.Amount(value.Difference, measure.Format)</b>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+    @if (Visible.Count() > _shown)
+    {
+        <MudButton Variant="Variant.Text" OnClick="() => _shown += 200">Show more (@(Visible.Count() - _shown) left)</MudButton>
+    }
+    @if (!Visible.Any())
+    {
+        <MudText Class="mud-text-secondary pa-2">@(_differencesOnly ? "No differences: every key matched within tolerance." : "No rows.")</MudText>
+    }
+
+    @if (Run.ProblemRows.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle2" Class="mt-3">Costpoint rows that couldn't be read</MudText>
+        @foreach (var problem in Run.ProblemRows.Take(50))
+        {
+            <MudText Typo="Typo.body2">Row @problem.Row: @problem.Message</MudText>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ReconRunDetailDto Run { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public ReconReportDto Report { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private bool _differencesOnly = true;
+    private string? _search;
+    private int _shown = 200;
+    private bool _busy;
+
+    private ReconValueFormat PrimaryFormat => Run.Measures.FirstOrDefault(m => m.Name == Run.Run.PrimaryField)?.Format ?? ReconValueFormat.Money;
+
+    private IEnumerable<ReconRowDto> Visible => Run.Rows
+        .Where(r => !_differencesOnly || r.Status != ReconRowStatus.Matched)
+        .Where(r => string.IsNullOrWhiteSpace(_search) || r.Key.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) || (r.Label?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private async Task DrillAsync(ReconRowDto row) =>
+        await DialogService.ShowAsync<ReconDrillDialog>(row.Key, new DialogParameters<ReconDrillDialog>
+        {
+            { d => d.RunId, Run.Run.Id },
+            { d => d.Key, row.Key },
+            { d => d.Row, row },
+            { d => d.Measures, Run.Measures },
+        }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true });
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        try
+        {
+            await MigrationFormat.DownloadAsync(JS, await Reconciliation.ExportAsync(Run.Run.Id));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SignOffAsync()
+    {
+        var differences = Run.Run.Outcome == ReconRunOutcome.Differences;
+        var dialog = await DialogService.ShowAsync<NoteDialog>($"Sign off {Report.Title}", new DialogParameters<NoteDialog>
+        {
+            { d => d.Message, differences
+                ? "This run has differences. Explain them (timing items, known Costpoint adjustments) to sign it off; your name, the time and the note are kept as evidence."
+                : "Records that you reviewed this comparison: your name and the time are kept as go-live evidence." },
+            { d => d.Required, differences },
+            { d => d.ConfirmText, "Sign off" },
+        });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Reconciliation.SignOffAsync(Run.Run.Id, new SignOffReconciliationRequest(result.Data as string));
+            Snackbar.Add("Signed off.", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

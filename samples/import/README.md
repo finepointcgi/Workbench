@@ -271,3 +271,122 @@ Sample: [`project-plan.xlsx`](smartsheet/project-plan.xlsx)
 | Predecessors |  | `Predecessors`, `Predecessor`, `Depends On` | Smartsheet predecessors (FS/SS/FF/SF with lag) become Gantt dependencies. |
 | WBS code |  | `WbsCode`, `WBS code`, `WBS`, `WBS Code`, `WBS ID`, `WBS Element`, `Charge Code`, `Costpoint WBS`, `PROJ_ID`, `Project ID` | Links rows to the chosen project's WBS elements by code. |
 | Row ID |  | `RowId`, `Row ID`, `Smartsheet Row ID` | .xlsx only: a column with the Smartsheet row id, for matching on re-import. Without it rows match on their title path. |
+
+## Go-live path (cut-over from Costpoint)
+
+The go-live checklist (**Setup → Go-live migration**, `/setup/migration`) runs these imports in order around the
+cut-over date, after the master data above: `accounts.csv` (first of all), `vendors.csv`, `open-ap.csv`,
+`open-ar.csv` and `opening-trial-balance.csv`. The samples describe a cut-over on 2026-11-01: opening balances
+dated 2026-10-31 (fiscal year 2027, period 1), open AR of 186,420.55 on contract N66001-27-C-2001 and open AP of
+38,617.42 plus 2,500.00 retainage, which tie exactly to accounts 1110, 2010 and 2020 in the opening trial balance.
+The step-by-step plan is [`docs/migration/costpoint-cutover.md`](../../docs/migration/costpoint-cutover.md).
+
+- **Chart of accounts**: summary accounts are the ones other rows name as their parent (created first). A blank type
+  is taken from the first digit (1 asset … 4 revenue, 5+ expense) with a warning. Cost classes drive indirect rates.
+- **Open AP and AR** are carried for their open balance and **not posted**: the receivable and payable come into the
+  GL with the opening balances. Fully paid rows are skipped; credit balances and overpayments are refused. Several
+  rows with one voucher (AP) or invoice number (AR) are its lines. Costpoint voucher numbers are kept (16 characters);
+  without a voucher column bills are numbered `CV-000001`…
+- **GL opening balances** post one balanced journal entry dated the as-of date (the option, a date column, or the day
+  before the checklist's cut-over date). The file must balance to the penny. Dotted project ids post to that WBS
+  element. Files over 500 lines are split into parts balanced through the offset (clearing) account you choose; the
+  parts net to zero on it. Only one opening balance import can stand: roll it back before importing again.
+  Rolling back deletes the entry and its lines.
+- Fixed assets have their own opening-balance importer (fixed assets module).
+
+Reconciling the parallel month against Costpoint reports: see [`samples/reconcile/README.md`](../reconcile/README.md).
+
+### Chart of accounts
+
+GL accounts with their type, parent (summary) account and cost class. Import before opening balances.
+
+Sample: [`accounts.csv`](costpoint/accounts.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Account | yes | `AccountNumber`, `Account`, `ACCT_ID`, `Account ID`, `Account Number`, `Acct`, `Acct ID`, `Account No` | Natural key: the Costpoint account id. |
+| Account name | yes | `Name`, `Account name`, `ACCT_NAME`, `ACCT_DESC`, `Description` |  |
+| Type |  | `Type`, `ACCT_TYPE_CD`, `Account Type`, `Acct Type` | Asset, Liability, Equity (Capital), Revenue or Expense, or A/L/C/R/E. Blank: from the first digit (1–5). |
+| Parent account |  | `Parent`, `Parent account`, `PARENT_ACCT_ID`, `S_ACCT_ID`, `Summary Account` | The summary account it rolls up into (in the file or in Workbench). |
+| Cost class |  | `CostClass`, `Cost class`, `COST_CLASS`, `Cost Type`, `Pool`, `Function` | Expense accounts: Direct Labor, Direct ODC, Indirect Labor, Fringe, Overhead, G&A, Unallowable or Other. |
+| Normal balance |  | `NormalBalance`, `Normal balance`, `NORMAL_BAL`, `Balance Side` | Debit or Credit. Defaults from the type. |
+| Active |  | `Active`, `ACTIVE_FL`, `Active Flag`, `Status` | Y/N. Defaults to Y. |
+
+### Vendors
+
+Vendors with payment terms, 1099 flag, UEI and contact. Needed before open AP bills.
+
+Sample: [`vendors.csv`](costpoint/vendors.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Vendor ID | yes | `Code`, `Vendor ID`, `VEND_ID`, `Vendor Code`, `Vendor` | Natural key: the Costpoint vendor id. |
+| Vendor name | yes | `Name`, `Vendor name`, `VEND_NAME` |  |
+| Active |  | `Active`, `ACTIVE_FL`, `Status` | Y/N or Active/Inactive/Hold. Defaults to active. |
+| 1099 |  | `Is1099`, `1099`, `PRINT_1099_FL`, `1099 Flag`, `Is 1099` | Y/N. |
+| Payment terms (days) |  | `Terms`, `Payment terms (days)`, `TERMS_DC`, `Payment Terms`, `Net Days` | Days, or terms like Net 30. Defaults to 30. |
+| UEI |  | `Uei`, `Unique Entity ID`, `SAM UEI` | SAM.gov unique entity id. |
+| Business size |  | `BusinessSize`, `Business size`, `BUS_SIZE`, `Size` | Small or Large. |
+| Contact |  | `ContactName`, `Contact`, `CNTACT_NAME`, `Contact Name` |  |
+| Contact email |  | `ContactEmail`, `Contact email`, `EMAIL_ID`, `Email` |  |
+| Contact phone |  | `ContactPhone`, `Contact phone`, `PHONE_ID`, `Phone` |  |
+| Remit-to address |  | `RemitTo`, `Remit-to address`, `REMIT_ADDR`, `Remit To`, `Address` |  |
+
+### Open AP bills
+
+Unpaid vendor invoices at cut-over, for their open balance. Not posted: the AP balance comes in with the opening balances.
+
+Sample: [`open-ap.csv`](costpoint/open-ap.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Vendor ID | yes | `Vendor`, `Vendor ID`, `VEND_ID` | Vendor id (import vendors first). |
+| Vendor invoice | yes | `InvoiceNumber`, `Vendor invoice`, `INVC_ID`, `Invoice ID`, `Invoice Number`, `Invoice` | The vendor's invoice number. |
+| Voucher |  | `Voucher`, `VCHR_NO`, `Voucher Number`, `Voucher No` | Costpoint voucher number (kept as Workbench's voucher number; 16 characters). |
+| Invoice date | yes | `InvoiceDate`, `Invoice date`, `INVC_DT`, `Inv Date` |  |
+| Due date |  | `DueDate`, `Due date`, `DUE_DT` | Defaults to the invoice date plus the vendor's terms. |
+| Invoice amount |  | `Amount`, `Invoice amount`, `INVC_AMT`, `Gross Amount` | Original amount. With a balance column, only the balance is carried over. |
+| Open balance |  | `Balance`, `Open balance`, `OPEN_AMT`, `Open Amount`, `Balance Due`, `Unpaid Amount` | What's still owed. Defaults to the amount less any paid amount. |
+| Paid |  | `Paid`, `PAID_AMT`, `Paid Amount`, `Amount Paid` | Paid so far (used when there's no balance column). |
+| Retainage |  | `Retainage`, `RETAINAGE_AMT`, `Retention` | Held back; owed later. |
+| Account |  | `Account`, `ACCT_ID`, `Account ID` | Expense or asset account of the line (for reference; nothing posts). |
+| Org |  | `Org`, `ORG_ID`, `Org ID` |  |
+| Description |  | `Description`, `VCHR_LN_DESC`, `Memo`, `Line Description` |  |
+
+### Open AR invoices
+
+Unpaid customer invoices at cut-over, with what's been paid. Not posted: the AR balance comes in with the opening balances.
+
+Sample: [`open-ar.csv`](costpoint/open-ar.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Invoice | yes | `InvoiceNumber`, `Invoice`, `INVC_ID`, `Invoice ID`, `Invoice Number`, `Invoice No` | Costpoint invoice number (32 characters); kept as Workbench's invoice number. |
+| Contract |  | `Contract`, `PRIME_CONTR_ID`, `CONTRACT_ID`, `Contract Number`, `Contract ID` | Contract number. Or map the project. |
+| Project |  | `Project`, `PROJ_ID`, `Project ID` | Project id; its contract is used when there's no contract column. |
+| Customer |  | `Customer`, `CUST_ID`, `Customer ID` | Customer id; checked against the contract's customer. |
+| Invoice date | yes | `InvoiceDate`, `Invoice date`, `INVC_DT`, `Inv Date` |  |
+| Due date |  | `DueDate`, `Due date`, `DUE_DT` | Defaults to the invoice date plus 30 days. |
+| Invoice amount |  | `Amount`, `Invoice amount`, `INVC_AMT`, `Billed Amount` | Invoiced amount. |
+| Open balance |  | `Balance`, `Open balance`, `OPEN_AMT`, `Open Amount`, `Balance Due`, `Unpaid Amount` | Still owed. With the amount, paid = amount − balance. |
+| Paid |  | `Paid`, `RCV_AMT`, `Paid Amount`, `Amount Paid`, `Received` | Received so far (used when there's no balance column). |
+| CLIN |  | `Clin`, `CLIN_ID`, `CLIN Number` | CLIN number on the contract. |
+| Invoice type |  | `Type`, `Invoice type`, `INVC_TYPE`, `Bill Type`, `Billing Type` | T&M, Cost plus or Fixed price. Defaults from the contract type. |
+| Description |  | `Description`, `Memo` |  |
+
+### GL opening balances
+
+The trial balance at cut-over by account, org and project, posted as opening balance journal entries. Must balance.
+
+Sample: [`opening-trial-balance.csv`](costpoint/opening-trial-balance.csv)
+
+| Field | Required | Accepted headers (case-, space- and punctuation-insensitive) | Notes |
+|---|---|---|---|
+| Account | yes | `Account`, `ACCT_ID`, `Account ID`, `Account Number`, `Acct` | Account number (detail account). |
+| Org |  | `Org`, `ORG_ID`, `Org ID`, `Organization` | Org id of an existing org unit. |
+| Project / WBS |  | `Project`, `Project / WBS`, `PROJ_ID`, `Project ID`, `WBS`, `Project Code` | Project id; a dotted id (2001.02.01) posts to that WBS element. |
+| Balance |  | `Balance`, `END_BAL`, `Ending Balance`, `Net Balance`, `YTD Balance`, `Amount`, `CUR_BAL` | Ending balance, debit positive. Or map debit and credit. |
+| Debit |  | `Debit`, `DR_AMT`, `Debit Amount`, `Debits`, `Ending Debit` | Debit balance (positive). |
+| Credit |  | `Credit`, `CR_AMT`, `Credit Amount`, `Credits`, `Ending Credit` | Credit balance (positive). |
+| As-of date |  | `Date`, `As-of date`, `FY_END_DT`, `As Of Date`, `Period End` | Used when no as-of date is chosen; every row must have the same date. |
+| Memo |  | `Memo`, `DESCRIPTION`, `ACCT_NAME`, `Account Name` | Line memo. |

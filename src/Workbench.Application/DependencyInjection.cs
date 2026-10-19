@@ -78,6 +78,8 @@ public static class DependencyInjection
         services.AddWorkbenchMyTodo(); // Home page to-dos: providers read through the permission-checked services above.
         services.AddWorkbenchReauthentication(); // SSO/MFA sign-in settings, re-authentication for sensitive actions (decorators), compliance checklists; above AddWorkbenchIdentity.
         services.AddWorkbenchSupport(); // In-app support requests (Support:Email), the host's cross-tenant view and per-user help state; above AddWorkbenchIdentity.
+        Payroll.PayrollLayoutRegistration.AddWorkbenchPayrollLayouts(services); // Configurable Paylocity hours export and register layouts; above AddWorkbenchIdentity.
+        Migration.MigrationRegistration.AddWorkbenchMigration(services); // Go-live checklist and Costpoint reconciliation; reads imports and reports; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

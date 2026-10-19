@@ -390,3 +390,18 @@ await notifications.PublishAsync(
 - Health: a dependency the app can't serve without is a `ready` health check returning Unhealthy; an optional one
   (like email) returns Degraded.
 - Threshold alerts also go out hourly from `CeilingAlertBackgroundService` (Workbench System, every tenant); requisitions warn against cost ceilings unless the ceiling blocks and has `CheckAtRequisition`; fee caps may name a fiscal year, and billing then splits the CLIN's fee by the fiscal year of the cost (`InvoiceLine.FiscalYear`/`CostBasis`).
+
+## Go-live migration and reconciliation
+
+- `/setup/migration` (`IMigrationService`) is the cut-over checklist; steps name imports by kind **string**, so an
+  importer another module adds (fixed assets: kind `FixedAssets`) lights up once its `ImportKind` exists. Status comes
+  from `ImportJob` history plus hand marks (`MigrationStepRecord`); prerequisites block a step. Plan:
+  `docs/migration/costpoint-cutover.md`.
+- New import kinds `Accounts`, `Vendors`, `OpeningBalances`, `OpenArInvoices`, `OpenApBills` (appended to both
+  `ImportKind` enums, which must stay equal by value). Open AR/AP are subledger detail written by
+  `Imports/Costpoint/OpenItemConversion` without journal entries: the balances come in with the opening trial balance.
+- `/setup/migration/reconcile` (`IReconciliationService`): `ReconciliationEngine` is pure (keys, mappings, tolerances);
+  `ReconciliationSources` reads Workbench's side through the trial balance, aging, burdened cost and rate services. A
+  new report is a `ReconciliationReports` entry plus a source; runs keep the uploaded file and are immutable once signed.
+- Paylocity file layouts (`IPayrollLayoutService`, `PayrollFileLayout`): `PayrollRunService` calls providers through
+  `PayrollLayoutDispatch` (`ExportHoursAsync`/`ParseRegisterAsync`); the defaults are exactly `PaylocityFormats`.
