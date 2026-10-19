@@ -65,6 +65,12 @@ public static class ApprovalDefaults
                 Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
         ]),
 
+        // A go/no-go gate: another member of Business development (else the submitter's supervisor); administrators may decide.
+        ApprovalDocumentTypes.OpportunityGate => new([
+            new("Business development", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.BusinessDevelopment),
+                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 

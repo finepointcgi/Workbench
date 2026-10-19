@@ -14,7 +14,9 @@ public static class ApprovalDocumentTypes
     public const string HrChange = "hr-change";
     public const string Compensation = "compensation";
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation];
+    public const string OpportunityGate = "opportunity-gate";
+
+    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate];
 
     public static string Label(string documentType) => documentType switch
     {
@@ -28,6 +30,7 @@ public static class ApprovalDocumentTypes
         LeaveRequest => "Leave request",
         HrChange => "Personnel change",
         Compensation => "Compensation change",
+        OpportunityGate => "Opportunity gate (go/no-go)",
         _ => documentType,
     };
 
@@ -48,6 +51,7 @@ public enum ApproverRuleKind
     OrgUnitManager,
 
     /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, HR).</summary>
+    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, BusinessDevelopment).</summary>
     OrgRole,
 
     /// <summary>Each listed person: every one of them must approve.</summary>
@@ -57,7 +61,7 @@ public enum ApproverRuleKind
     AnyOf,
 }
 
-public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Hr, Materials }
+public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Hr, Materials, BusinessDevelopment }
 
 /// <summary>What happens when the step's approver is the submitter (DCAA: nobody approves their own document).</summary>
 public enum SelfApprovalPolicy

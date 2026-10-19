@@ -46,5 +46,5 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
     }
 
     internal static UserDto ToDto(AppUser u) =>
-        new(u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials), u.CreatedAtUtc, u.LastSeenAtUtc);
+        new(u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment), u.CreatedAtUtc, u.LastSeenAtUtc);
 }

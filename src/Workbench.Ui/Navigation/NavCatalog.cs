@@ -34,6 +34,7 @@ public static class NavCatalog
     public const string Approvals = "approvals";
     public const string Projects = "projects";
     public const string People = "people";
+    public const string Growth = "growth";
     public const string Sheets = "sheets";
     public const string Finance = "finance";
     public const string Reports = "reports";
@@ -47,6 +48,7 @@ public static class NavCatalog
         new(Approvals, "Approvals", Icons.Material.Filled.Approval, "approvals"),
         new(Projects, "Projects", Icons.Material.Filled.Work, "projects"),
         new(People, "People", Icons.Material.Filled.People),
+        new(Growth, "Business development", Icons.Material.Filled.TrendingUp),
         new(Sheets, "Sheets & dashboards", Icons.Material.Filled.TableChart),
         new(Finance, "Finance", Icons.Material.Filled.AccountBalance),
         new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing),
@@ -94,6 +96,13 @@ public static class NavCatalog
         new(People, null, "Personnel requests", "hr/requests", Icons.Material.Filled.MarkEmailUnread, a => a.IsHr, Keywords: "change requests employee updates"),
         new(People, "HR administration", "Compensation", "hr/compensation", Icons.Material.Filled.Paid, a => a.IsHr || a.IsFinance, Keywords: "salary raise merit cycle pay change"),
         new(People, "HR administration", "Benefits administration", "hr/benefits", Icons.Material.Filled.MedicalServices, a => a.IsHr || a.IsFinance, Keywords: "plans tiers open enrollment deductions paylocity fringe"),
+        // Business development: the capture pipeline (BD, Finance, Admin); capture and proposal managers see their own.
+        new(Growth, null, "Pipeline", "bd", Icons.Material.Filled.ViewKanban, a => a.ShowBusinessDevelopment, MatchAll: true, Keywords: "capture board opportunities crm"),
+        new(Growth, null, "Opportunities", "bd/opportunities", Icons.Material.Filled.Flag, a => a.ShowBusinessDevelopment, Detail: "Opportunity", Keywords: "pursuits rfp solicitation capture"),
+        new(Growth, null, "Accounts and contacts", "bd/accounts", Icons.Material.Filled.Contacts, a => a.SeesPipeline, Detail: "Account", Keywords: "agencies offices primes partners competitors crm"),
+        new(Growth, null, "Leads", "bd/leads", Icons.Material.Filled.TravelExplore, a => a.SeesPipeline, Keywords: "sam.gov saved searches import notices"),
+        new(Growth, null, "Forecast and win/loss", "bd/forecast", Icons.Material.Filled.Insights, a => a.SeesPipeline, Keywords: "pwin pgo weighted pipeline b&p spend"),
+        new(Growth, null, "Gates and settings", "bd/settings", Icons.Material.Filled.Rule, a => a.SeesPipeline, Keywords: "go no-go bid decision checklist b&p charge code"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, Everyone, Detail: "Dashboard", Keywords: "charts widgets"),

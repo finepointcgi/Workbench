@@ -27,6 +27,8 @@ public sealed class AppUser : Entity
     public bool IsHr { get; set; }
     /// <summary>Organization role Materials: parts, inventory, BOMs, work orders and MRP planning.</summary>
     public bool IsMaterials { get; set; }
+    /// <summary>Organization role BusinessDevelopment: sees the capture pipeline; edits the opportunities they manage.</summary>
+    public bool IsBusinessDevelopment { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }
