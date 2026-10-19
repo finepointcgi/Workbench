@@ -1,0 +1,187 @@
+@page "/bd"
+@* The capture pipeline as a board: one lane per stage. Drag a card or use its "Move to" menu (the keyboard way); moving
+   into a gated stage opens the opportunity's gates instead. *@
+@inject IPipelineService Pipeline
+@inject IOpportunityService Opportunities
+@inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Pipeline · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Pipeline</MudText>
+    <MudSpacer />
+    <MudSwitch T="bool" Value="_outcomes" ValueChanged="SetOutcomesAsync" Color="Color.Primary" Label="Show won, lost and no-bid" data-testid="show-outcomes" />
+    @if (_canCreate)
+    {
+        <MudButton Href="bd/opportunities/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" data-testid="new-opportunity">New opportunity</MudButton>
+    }
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_board is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var open = _board.Lanes.Where(l => l.Stage.IsOpen()).ToList();
+    <MudText Class="mud-text-secondary mb-3" data-testid="pipeline-totals">
+        @open.Sum(l => l.Cards.Count) open opportunities · @CrmFormat.Money(open.Sum(l => l.TotalValue)) total ·
+        @CrmFormat.Money(open.Sum(l => l.WeightedValue)) weighted (value × Pwin × Pgo)
+    </MudText>
+    <div class="pipeline-board">
+        <MudDropContainer @ref="_container" T="PipelineCardDto" Items="_cards" ItemsSelector="@((card, lane) => LaneId(card.Stage) == lane)"
+                          ItemDropped="DroppedAsync" CanDrop="@((card, lane) => card.CanEdit && LaneStage(lane) is { } s && s.IsOpen())" Class="board-lanes">
+            <ChildContent>
+                @foreach (var lane in _board.Lanes)
+                {
+                    <MudPaper Class="board-lane pa-2" Elevation="0" data-lane="@lane.Stage">
+                        <div class="px-1 pb-2">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@CrmFormat.StageIcon(lane.Stage)" Size="Size.Small" Color="@CrmFormat.StageColor(lane.Stage)" />
+                                <MudText Typo="Typo.subtitle2" HtmlTag="h2">@CrmFormat.Stage(lane.Stage)</MudText>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">@lane.Cards.Count</MudChip>
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                                @CrmFormat.Compact(lane.TotalValue) · @CrmFormat.Compact(lane.WeightedValue) weighted
+                            </MudText>
+                            @if (lane.GateName is { } gate)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block"><span aria-hidden="true">⛩ </span>Gate: @gate</MudText>
+                            }
+                        </div>
+                        <MudDropZone T="PipelineCardDto" Identifier="@LaneId(lane.Stage)" Class="board-lane-zone" AllowReorder="false" />
+                    </MudPaper>
+                }
+            </ChildContent>
+            <ItemRenderer>
+                <MudPaper Class="board-card pa-3 mb-2" Elevation="1" data-testid="pipeline-card">
+                    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1">
+                        <a href="@($"bd/opportunities/{context.Id}")" class="board-card-title mud-typography mud-typography-body2">
+                            <span class="mud-text-secondary">@context.Number</span> @context.Name
+                        </a>
+                        <MudSpacer />
+                        @if (context.CanEdit)
+                        {
+                            <MudMenu Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Dense="true" AriaLabel="@($"Move {context.Number} {context.Name} to another stage")">
+                                @foreach (var stage in OpportunityStages.Open.Where(s => s != context.Stage))
+                                {
+                                    <MudMenuItem OnClick="() => MoveAsync(context, stage)">Move to @CrmFormat.Stage(stage)</MudMenuItem>
+                                }
+                            </MudMenu>
+                        }
+                    </MudStack>
+                    @if (context.AgencyName is { } agency)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@agency</MudText>
+                    }
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" title="Estimated value">@CrmFormat.Compact(context.EstimatedValue)</MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" title="Probability of win × probability of go">Pwin @context.Pwin% · Pgo @context.Pgo%</MudChip>
+                        @if (context.Kind == OpportunityKind.Recompete)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">Recompete</MudChip>
+                        }
+                        @if (context.ProposalDueOn is { } due && context.Stage.IsOpen())
+                        {
+                            var late = due < _today;
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" Color="@(late ? Color.Error : Color.Default)"
+                                     Icon="@(late ? Icons.Material.Filled.Warning : Icons.Material.Outlined.Event)">Due @due.ToString("MMM d")</MudChip>
+                        }
+                        @if (context.HasPendingGate)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassTop">Gate pending</MudChip>
+                        }
+                    </MudStack>
+                    @if (context.CaptureManagerName is { } manager)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Capture: @manager</MudText>
+                    }
+                </MudPaper>
+            </ItemRenderer>
+        </MudDropContainer>
+    </div>
+    <div class="wb-sr-only" role="status" aria-live="polite" data-testid="pipeline-status">@_announcement</div>
+}
+
+@code {
+    private PipelineBoardDto? _board;
+    private List<PipelineCardDto> _cards = [];
+    private MudDropContainer<PipelineCardDto>? _container;
+    private bool _outcomes;
+    private bool _canCreate;
+    private string? _error;
+    private string? _announcement;
+    private DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _canCreate = (await CurrentUser.GetAsync()).Roles.IsBusinessDevelopment();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _canCreate = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _error = null;
+            _board = await Pipeline.GetBoardAsync(_outcomes);
+            _cards = _board.Lanes.SelectMany(l => l.Cards).ToList();
+            _container?.Refresh();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SetOutcomesAsync(bool value)
+    {
+        _outcomes = value;
+        await LoadAsync();
+    }
+
+    private static string LaneId(OpportunityStage stage) => $"lane:{stage}";
+
+    private static OpportunityStage? LaneStage(string lane) =>
+        Enum.TryParse<OpportunityStage>(lane.Replace("lane:", ""), out var stage) ? stage : null;
+
+    private Task DroppedAsync(MudItemDropInfo<PipelineCardDto> drop) =>
+        drop.Item is { } card && LaneStage(drop.DropzoneIdentifier) is { } stage && stage != card.Stage ? MoveAsync(card, stage) : Task.CompletedTask;
+
+    private async Task MoveAsync(PipelineCardDto card, OpportunityStage stage)
+    {
+        try
+        {
+            await Opportunities.ChangeStageAsync(card.Id, new ChangeStageRequest(stage));
+            _announcement = $"{card.Number} moved to {CrmFormat.Stage(stage)}.";
+            Snackbar.Add(_announcement, Severity.Success);
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("gate", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add(ex.Message, Severity.Info);
+            Navigation.NavigateTo($"bd/opportunities/{card.Id}?tab=gates");
+            return;
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+}

@@ -27,6 +27,12 @@ public enum OrgRoles
     /// EACs, staffs them, approves what's charged to them and assigns tasks. Scoped to projects they manage; no cost rates.
     /// </summary>
     ProjectManager = 16,
+
+    /// <summary>
+    /// Business development: sees the capture pipeline (accounts, contacts, opportunities, forecast) and creates leads and
+    /// opportunities; edits the opportunities they capture or manage the proposal for. Pipeline values are business-sensitive.
+    /// </summary>
+    BusinessDevelopment = 128,
 }
 
 public static class OrgRoleChecks
@@ -48,18 +54,25 @@ public static class OrgRoleChecks
     /// <summary>ProjectManager, Finance or Admin: may create projects and set up the ones they manage (Finance/Admin: every one).</summary>
     public static bool CanManageProjects(this OrgRoles roles) => (roles & (OrgRoles.ProjectManager | OrgRoles.Finance | OrgRoles.Admin)) != 0;
 
+    /// <summary>Business development or Admin: the org role (capture and proposal managers of an opportunity edit it without it).</summary>
+    public static bool IsBusinessDevelopment(this OrgRoles roles) => (roles & (OrgRoles.BusinessDevelopment | OrgRoles.Admin)) != 0;
+
+    /// <summary>Business development, Finance or Admin: sees the whole pipeline.</summary>
+    public static bool CanViewPipeline(this OrgRoles roles) => (roles & (OrgRoles.BusinessDevelopment | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
     /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
     public static IReadOnlyList<OrgRoles> All { get; } =
-        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager];
+        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.BusinessDevelopment];
 
     /// <summary>Every role flag combined (what the system user has).</summary>
-    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager;
+    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.BusinessDevelopment;
 
     /// <summary>A role's name for people: "Project manager", "Resource manager", or the enum name.</summary>
     public static string Label(OrgRoles role) => role switch
     {
         OrgRoles.ProjectManager => "Project manager",
         OrgRoles.ResourceManager => "Resource manager",
+        OrgRoles.BusinessDevelopment => "Business development",
         _ => role.ToString(),
     };
 }

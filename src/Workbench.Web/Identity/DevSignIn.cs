@@ -86,7 +86,7 @@ public static class DevSignIn
             return "Deactivated";
         }
 
-        var roles = string.Join(", ", new[] { user.IsAdmin ? "Admin" : null, user.IsFinance ? "Finance" : null, user.IsTimekeeper ? "Timekeeper" : null, user.IsResourceManager ? "ResourceManager" : null, user.IsProjectManager ? "Project manager" : null }.OfType<string>());
+        var roles = string.Join(", ", new[] { user.IsAdmin ? "Admin" : null, user.IsFinance ? "Finance" : null, user.IsTimekeeper ? "Timekeeper" : null, user.IsResourceManager ? "ResourceManager" : null, user.IsProjectManager ? "Project manager" : null, user.IsBusinessDevelopment ? "Business development" : null }.OfType<string>());
         return roles.Length == 0 ? "Employee" : roles;
     }
 

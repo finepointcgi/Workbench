@@ -1,0 +1,214 @@
+@* The outcome (won, lost, no-bid, with the reason for win/loss analysis), reopening, and for a win the handoff to
+   Finance: customer, contract (pending) and project (planning) shells with CLIN placeholders, linked back here. *@
+@inject IOpportunityService Opportunities
+@inject IContractService Contracts
+@inject IPeopleService People
+@inject ISnackbar Snackbar
+
+@if (Opportunity.Stage.IsOpen())
+{
+    @if (!Opportunity.CanEdit)
+    {
+        <MudText Class="mud-text-secondary">No outcome yet.</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Record the outcome</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">A win or loss is recorded once the proposal is submitted; a no-bid at any stage.</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="4">
+                <MudSelect T="OpportunityStage" @bind-Value="_outcome" Label="Outcome" data-testid="outcome-kind">
+                    @foreach (var o in OpportunityStages.Outcomes)
+                    {
+                        <MudSelectItem T="OpportunityStage" Value="o">@CrmFormat.Stage(o)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="OutcomeReason" @bind-Value="_reason" Label="Main reason">
+                    @foreach (var r in Enum.GetValues<OutcomeReason>())
+                    {
+                        <MudSelectItem T="OutcomeReason" Value="r">@OpportunityStages.Label(r)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker Label="Decided on" @bind-Date="_decidedOn" DateFormat="yyyy-MM-dd" />
+            </MudItem>
+            @if (_outcome == OpportunityStage.Won)
+            {
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="decimal?" @bind-Value="_awarded" Label="Awarded value ($)" Min="0" Format="N0" HelperText="Blank: the estimated value" />
+                </MudItem>
+            }
+            @if (_outcome == OpportunityStage.Lost)
+            {
+                <MudItem xs="12" sm="4">
+                    <MudTextField T="string" @bind-Value="_awardedTo" Label="Awarded to" MaxLength="200" />
+                </MudItem>
+            }
+            <MudItem xs="12">
+                <MudTextField T="string" @bind-Value="_notes" Label="Notes (debrief)" Lines="2" MaxLength="2000" />
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="RecordAsync" Disabled="_busy" data-testid="outcome-record">Record outcome</MudButton>
+    }
+}
+else
+{
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2">@CrmFormat.Stage(Opportunity.Stage)</MudText>
+    <MudText Class="mb-3">
+        @(Opportunity.OutcomeReason is { } reason ? OpportunityStages.Label(reason) : "")
+        @(Opportunity.DecidedOn is { } d ? $" · {CrmFormat.Date(d)}" : "")
+        @(Opportunity.Stage == OpportunityStage.Won && Opportunity.AwardedValue is { } v ? $" · awarded {CrmFormat.Money(v)}" : "")
+        @(Opportunity.AwardedTo is { } to ? $" · awarded to {to}" : "")
+    </MudText>
+    @if (Opportunity.OutcomeNotes is { } n)
+    {
+        <MudText Typo="Typo.body2" Class="mb-3" Style="white-space: pre-wrap">@n</MudText>
+    }
+
+    @if (Opportunity.Stage == OpportunityStage.Won)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Handoff</MudText>
+        @if (Opportunity.ContractId is { } contract)
+        {
+            <MudText data-testid="handoff-done">
+                Handed off: <a href="@($"setup/contracts/{contract}")">contract</a>
+                @if (Opportunity.ProjectId is { } project)
+                {
+                    <span> and <a href="@($"projects/{project}")">project</a></span>
+                }
+                (with CLIN placeholders to finish in contract setup).
+            </MudText>
+        }
+        else if (!IsFinance)
+        {
+            <MudText Class="mud-text-secondary">Finance creates the customer, contract and project from a won opportunity.</MudText>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                Creates a pending contract and a planning project with CLIN placeholders (a base CLIN 0001 and an option CLIN per further year, the value split evenly).
+            </MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="Guid?" @bind-Value="_customerId" Label="Customer" Clearable="true" HelperText="Blank: the agency's linked customer, else a new one">
+                        @foreach (var c in _customers)
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                @if (_customerId is null)
+                {
+                    <MudItem xs="6" sm="2"><MudTextField T="string" @bind-Value="_customerCode" Label="New customer code" MaxLength="32" /></MudItem>
+                    <MudItem xs="6" sm="4"><MudTextField T="string" @bind-Value="_customerName" Label="New customer name" MaxLength="200" /></MudItem>
+                }
+                <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_contractNumber" Label="Contract number" MaxLength="64" data-testid="handoff-contract" /></MudItem>
+                <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_contractName" Label="Contract name" MaxLength="200" /></MudItem>
+                <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_projectCode" Label="Project code" MaxLength="64" data-testid="handoff-project" /></MudItem>
+                <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_projectName" Label="Project name" MaxLength="200" /></MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" @bind-Value="_pm" Label="Project manager" Clearable="true">
+                        @foreach (var e in _employees)
+                        {
+                            <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="HandoffAsync" Disabled="_busy" data-testid="handoff-submit">Create contract and project</MudButton>
+        }
+    }
+    else if (Opportunity.CanEdit)
+    {
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-2">
+            <MudSelect T="OpportunityStage" @bind-Value="_reopenTo" Label="Reopen to" Style="max-width: 200px">
+                @foreach (var s in OpportunityStages.Open)
+                {
+                    <MudSelectItem T="OpportunityStage" Value="s">@CrmFormat.Stage(s)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" OnClick="ReopenAsync" Disabled="_busy">Reopen</MudButton>
+        </MudStack>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    [Parameter] public bool IsFinance { get; set; }
+
+    [Parameter] public EventCallback<OpportunityDto> Changed { get; set; }
+
+    private OpportunityStage _outcome = OpportunityStage.Won;
+    private OutcomeReason _reason = OutcomeReason.Technical;
+    private DateTime? _decidedOn = DateTime.Today;
+    private decimal? _awarded;
+    private string? _awardedTo;
+    private string? _notes;
+    private OpportunityStage _reopenTo = OpportunityStage.Identified;
+    private IReadOnlyList<CustomerDto> _customers = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private Guid? _customerId;
+    private string? _customerCode;
+    private string? _customerName;
+    private string? _contractNumber;
+    private string? _contractName;
+    private string? _projectCode;
+    private string? _projectName;
+    private Guid? _pm;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Opportunity.Stage == OpportunityStage.Won && Opportunity.ContractId is null && IsFinance && _customers.Count == 0)
+        {
+            try
+            {
+                _customers = await Contracts.ListCustomersAsync();
+                _employees = await People.ListEmployeesAsync();
+                _contractName ??= Opportunity.Name;
+                _projectName ??= Opportunity.Name;
+                _contractNumber ??= Opportunity.SolicitationNumber;
+                _customerName ??= Opportunity.AgencyName;
+            }
+            catch (Exception ex) when (CrmFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private Task RecordAsync() => RunAsync(() => Opportunities.RecordOutcomeAsync(Opportunity.Id,
+        new RecordOutcomeRequest(_outcome, _reason, _notes, CrmFormat.ToDateOnly(_decidedOn), _awarded, _awardedTo)), "Outcome recorded.");
+
+    private Task ReopenAsync() => RunAsync(() => Opportunities.ReopenAsync(Opportunity.Id, new ChangeStageRequest(_reopenTo)), "Reopened.");
+
+    private Task HandoffAsync() => RunAsync(async () =>
+    {
+        await Opportunities.HandoffAsync(Opportunity.Id, new HandoffRequest(_contractNumber ?? "", _projectCode ?? "", _customerId, _customerCode, _customerName,
+            _contractName, _projectName, _pm));
+        return await Opportunities.GetAsync(Opportunity.Id);
+    }, "Contract and project created.");
+
+    private async Task RunAsync(Func<Task<OpportunityDto>> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            var updated = await action();
+            Snackbar.Add(done, Severity.Success);
+            await Changed.InvokeAsync(updated);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

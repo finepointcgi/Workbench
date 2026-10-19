@@ -1,0 +1,296 @@
+@page "/bd/opportunities/new"
+@page "/bd/opportunities/{Id:guid}"
+@* One opportunity: details, team and competition, go/no-go gates, activity, B&P effort, outcome (and the won handoff) and history. *@
+@inject IOpportunityService Opportunities
+@inject ICrmAccountService Accounts
+@inject IPipelineService Pipeline
+@inject IUserDirectory Users
+@inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_opportunity is { } o ? $"{o.Number} {o.Name}" : IsNew ? "New opportunity" : "Opportunity") · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Opportunity</MudText>
+    <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+    <MudButton Href="bd/opportunities" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">Back to Opportunities</MudButton>
+}
+else if (_model is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (IsNew)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudIconButton Href="bd/opportunities" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Opportunities" />
+        <MudText Typo="Typo.h4" HtmlTag="h1">New opportunity</MudText>
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-4">
+        <OpportunityDetailsForm Model="_model" Accounts="_accounts" People="_people" />
+        <MudStack Row="true" Class="mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="_busy" data-testid="opp-create">Add opportunity</MudButton>
+            <MudButton Href="bd/opportunities" Variant="Variant.Text">Cancel</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else if (_opportunity is { } o)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+        <MudIconButton Href="bd" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the pipeline" />
+        <MudText Typo="Typo.h4" HtmlTag="h1">@o.Number · @o.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@CrmFormat.StageColor(o.Stage)" Icon="@CrmFormat.StageIcon(o.Stage)" data-testid="opp-stage">@CrmFormat.Stage(o.Stage)</MudChip>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Style="padding-left: 52px">
+        @(o.AgencyName ?? "No agency") · @CrmFormat.Money(o.EstimatedValue) · Pwin @o.Pwin% × Pgo @o.Pgo% = @CrmFormat.Money(o.WeightedValue) weighted
+        @if (o.SolicitationNumber is { } sol)
+        {
+            <span> · @sol</span>
+        }
+        @if (o.SourceUrl is { } url)
+        {
+            <span> · <a href="@url" target="_blank" rel="noopener noreferrer">Notice<span class="wb-sr-only"> (opens in a new tab)</span></a></span>
+        }
+    </MudText>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" ActivePanelIndex="_tabs.IndexOf(_tab)" ActivePanelIndexChanged="TabChanged" data-testid="opp-tabs">
+        <MudTabPanel Text="Details">
+            @if (_tab == "details")
+            {
+                <OpportunityDetailsForm Model="_model" Accounts="_accounts" People="_people" ReadOnly="!o.CanEdit" />
+                @if (o.CanEdit)
+                {
+                    <MudStack Row="true" Class="mt-4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="opp-save">Save</MudButton>
+                        @if (o.Stage.IsOpen())
+                        {
+                            <MudSelect T="OpportunityStage" Value="o.Stage" ValueChanged="MoveAsync" Label="Stage" Dense="true" Style="max-width: 200px" data-testid="opp-move">
+                                @foreach (var s in OpportunityStages.Open)
+                                {
+                                    <MudSelectItem T="OpportunityStage" Value="s">@CrmFormat.Stage(s)</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Moving forward into a gated stage goes through the Gates tab.</MudText>
+                        }
+                    </MudStack>
+                }
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Team and competition">
+            @if (_tab == "team")
+            {
+                <OpportunityTeamTab Opportunity="o" Accounts="_accounts" Changed="ReplaceAsync" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Gates" data-testid="tab-gates">
+            @if (_tab == "gates")
+            {
+                <OpportunityGatesTab Opportunity="o" Changed="ReloadAsync" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Activity">
+            @if (_tab == "activity")
+            {
+                <ActivityPanel OpportunityId="o.Id" CanLog="o.CanEdit || _seesPipeline" People="_people" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="B&P">
+            @if (_tab == "bp")
+            {
+                <OpportunityBpTab Opportunity="o" Changed="ReplaceAsync" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Outcome">
+            @if (_tab == "outcome")
+            {
+                <OpportunityOutcomeTab Opportunity="o" IsFinance="_isFinance" Changed="ReplaceAsync" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="History">
+            @if (_tab == "history")
+            {
+                @if (_history is null)
+                {
+                    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_history.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No stage changes yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Outlined="true">
+                        <caption class="wb-sr-only">Stage history</caption>
+                        <thead><tr><th scope="col">When</th><th scope="col">From</th><th scope="col">To</th><th scope="col">By</th><th scope="col">Note</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in _history)
+                            {
+                                <tr><td>@h.ChangedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</td><td>@CrmFormat.Stage(h.From)</td><td>@CrmFormat.Stage(h.To)</td><td>@h.ChangedBy</td><td>@h.Note</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private static readonly List<string> _tabs = ["details", "team", "gates", "activity", "bp", "outcome", "history"];
+
+    private OpportunityDto? _opportunity;
+    private OpportunityModel? _model;
+    private IReadOnlyList<CrmAccountDto> _accounts = [];
+    private IReadOnlyList<UserDto> _people = [];
+    private IReadOnlyList<StageChangeDto>? _history;
+    private string _tab = "details";
+    private bool _busy;
+    private bool _isFinance;
+    private bool _seesPipeline;
+    private string? _error;
+    private Guid? _loaded;
+
+    private bool IsNew => Id is null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _tab = _tabs.Contains(Tab ?? "") ? Tab! : "details";
+        if (_model is not null && _loaded == Id)
+        {
+            await LoadTabAsync();
+            return;
+        }
+
+        try
+        {
+            _error = null;
+            var me = await CurrentUser.GetAsync();
+            _isFinance = me.IsFinance;
+            _seesPipeline = me.Roles.CanViewPipeline();
+            _people = await Users.SearchAsync(null, 500);
+            try
+            {
+                _accounts = await Accounts.ListAccountsAsync();
+            }
+            catch (WorkbenchForbiddenException)
+            {
+                _accounts = [];
+            }
+
+            if (IsNew)
+            {
+                if (!me.Roles.IsBusinessDevelopment())
+                {
+                    _error = "Only business development and administrators can add opportunities.";
+                    return;
+                }
+
+                _model = new OpportunityModel { CaptureManagerEmail = me.Email.ToLowerInvariant() };
+            }
+            else
+            {
+                _opportunity = await Opportunities.GetAsync(Id!.Value);
+                _model = OpportunityModel.From(_opportunity);
+            }
+
+            _loaded = Id;
+            await LoadTabAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadTabAsync()
+    {
+        if (_tab == "history" && _opportunity is { } o)
+        {
+            _history = await Opportunities.GetHistoryAsync(o.Id);
+        }
+    }
+
+    private void TabChanged(int index) =>
+        Navigation.NavigateTo($"bd/opportunities/{Id}{(index == 0 ? "" : $"?tab={_tabs[index]}")}", replace: true);
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var created = await Opportunities.CreateAsync(_model!.ToRequest());
+            Snackbar.Add($"Added {created.Number}.", Severity.Success);
+            Navigation.NavigateTo($"bd/opportunities/{created.Id}");
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Replace(await Opportunities.UpdateAsync(_opportunity!.Id, _model!.ToRequest()));
+            Snackbar.Add("Saved.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task MoveAsync(OpportunityStage stage)
+    {
+        try
+        {
+            Replace(await Opportunities.ChangeStageAsync(_opportunity!.Id, new ChangeStageRequest(stage)));
+            Snackbar.Add($"Moved to {CrmFormat.Stage(stage)}.", Severity.Success);
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("gate", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add(ex.Message, Severity.Info);
+            Navigation.NavigateTo($"bd/opportunities/{Id}?tab=gates", replace: true);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private Task ReplaceAsync(OpportunityDto updated)
+    {
+        Replace(updated);
+        return Task.CompletedTask;
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (_opportunity is { } o)
+        {
+            Replace(await Opportunities.GetAsync(o.Id));
+        }
+    }
+
+    private void Replace(OpportunityDto updated)
+    {
+        _opportunity = updated;
+        _model = OpportunityModel.From(updated);
+        _history = null;
+    }
+}

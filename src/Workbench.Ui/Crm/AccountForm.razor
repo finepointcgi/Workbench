@@ -1,0 +1,42 @@
+@* An account's details. Offices go under an agency; companies may sit under a parent company. *@
+
+<MudGrid Spacing="2">
+    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="Model.Name" Label="Name" Required="true" MaxLength="200" ReadOnly="ReadOnly" data-testid="account-name" /></MudItem>
+    <MudItem xs="6" sm="2"><MudTextField T="string" @bind-Value="Model.Acronym" Label="Acronym" MaxLength="32" ReadOnly="ReadOnly" /></MudItem>
+    <MudItem xs="6" sm="4">
+        <MudSelect T="CrmAccountKind" @bind-Value="Model.Kind" Label="Kind" ReadOnly="ReadOnly">
+            @foreach (var k in Enum.GetValues<CrmAccountKind>())
+            {
+                <MudSelectItem T="CrmAccountKind" Value="k">@CrmFormat.AccountKind(k)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudSelect T="Guid?" @bind-Value="Model.ParentId" Label="Part of" Clearable="true" ReadOnly="ReadOnly">
+            @foreach (var a in Accounts.Where(a => a.Id != Self && a.Kind.IsGovernment() == Model.Kind.IsGovernment()))
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@a.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    @if (!Model.Kind.IsGovernment())
+    {
+        <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="Model.Uei" Label="UEI" MaxLength="16" ReadOnly="ReadOnly" /></MudItem>
+        <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="Model.CageCode" Label="CAGE code" MaxLength="8" ReadOnly="ReadOnly" /></MudItem>
+    }
+    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="Model.Website" Label="Website" MaxLength="300" ReadOnly="ReadOnly" /></MudItem>
+    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="Model.Phone" Label="Phone" MaxLength="64" ReadOnly="ReadOnly" autocomplete="off" /></MudItem>
+    <MudItem xs="12"><MudTextField T="string" @bind-Value="Model.Address" Label="Address" MaxLength="500" ReadOnly="ReadOnly" /></MudItem>
+    <MudItem xs="12"><MudTextField T="string" @bind-Value="Model.Notes" Label="Notes" Lines="2" MaxLength="4000" ReadOnly="ReadOnly" /></MudItem>
+    <MudItem xs="12"><MudSwitch T="bool" @bind-Value="Model.IsActive" Label="Active" Color="Color.Primary" ReadOnly="ReadOnly" /></MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public AccountModel Model { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<CrmAccountDto> Accounts { get; set; } = [];
+
+    [Parameter] public Guid? Self { get; set; }
+
+    [Parameter] public bool ReadOnly { get; set; }
+}

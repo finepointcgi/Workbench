@@ -1,0 +1,183 @@
+@page "/bd/accounts"
+@* Government agencies and offices (as a hierarchy), primes, partners and competitors, and everyone's contacts. *@
+@inject ICrmAccountService Crm
+@inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Accounts and contacts · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Accounts and contacts</MudText>
+    <MudSpacer />
+    @if (_canEdit)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _adding = !_adding" data-testid="account-new">New account</MudButton>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_accounts is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_adding)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">New account</MudText>
+            <AccountForm Model="_new" Accounts="_accounts" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="CreateAsync" Disabled="_busy" data-testid="account-create">Add account</MudButton>
+        </MudPaper>
+    }
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-3">
+        <MudTabPanel Text="Accounts">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+                <MudTextField T="string" @bind-Value="_search" Label="Search accounts" Immediate="true" DebounceInterval="200" Clearable="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width: 260px" />
+                <MudSelect T="string" @bind-Value="_kind" Label="Kind" Dense="true" Style="max-width: 220px">
+                    <MudSelectItem T="string" Value="@("")">All</MudSelectItem>
+                    @foreach (var k in Enum.GetValues<CrmAccountKind>())
+                    {
+                        <MudSelectItem T="string" Value="@k.ToString()">@CrmFormat.AccountKind(k)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+            <MudSimpleTable Dense="true" Hover="true" Outlined="true" data-testid="account-table">
+                <caption class="wb-sr-only">Accounts</caption>
+                <thead><tr><th scope="col">Account</th><th scope="col">Kind</th><th scope="col">Customer</th><th scope="col" style="text-align:right">Contacts</th><th scope="col" style="text-align:right">Open opportunities</th></tr></thead>
+                <tbody>
+                    @foreach (var (account, depth) in Rows())
+                    {
+                        <tr>
+                            <th scope="row" style="font-weight: normal; padding-left: @(8 + depth * 20)px">
+                                <a href="@($"bd/accounts/{account.Id}")">@account.Name</a>@(account.Acronym is { } a ? $" ({a})" : "")
+                                @if (!account.IsActive)
+                                {
+                                    <span class="mud-text-secondary"> · inactive</span>
+                                }
+                            </th>
+                            <td>@CrmFormat.AccountKind(account.Kind)</td>
+                            <td>@account.CustomerName</td>
+                            <td style="text-align:right">@account.ContactCount</td>
+                            <td style="text-align:right">@account.OpenOpportunityCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+        <MudTabPanel Text="Contacts">
+            <MudTextField T="string" @bind-Value="_contactSearch" Label="Search contacts" Immediate="true" DebounceInterval="200" Clearable="true"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width: 360px" Class="mb-3" />
+            <MudSimpleTable Dense="true" Hover="true" Outlined="true">
+                <caption class="wb-sr-only">Contacts</caption>
+                <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Title</th><th scope="col">Account</th><th scope="col">Email</th><th scope="col">Phone</th></tr></thead>
+                <tbody>
+                    @foreach (var c in (_contacts ?? []).Where(MatchesContact))
+                    {
+                        <tr>
+                            <th scope="row" style="font-weight: normal">@c.FullName</th>
+                            <td>@CrmLabels.Label(c.Role)</td>
+                            <td>@c.Title</td>
+                            <td><a href="@($"bd/accounts/{c.AccountId}")">@c.AccountName</a></td>
+                            <td>@if (c.Email is { } e) { <a href="@($"mailto:{e}")">@e</a> }</td>
+                            <td>@c.Phone</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<CrmAccountDto>? _accounts;
+    private IReadOnlyList<CrmContactDto>? _contacts;
+    private string _search = "";
+    private string _contactSearch = "";
+    private string _kind = "";
+    private bool _canEdit;
+    private bool _adding;
+    private bool _busy;
+    private string? _error;
+    private AccountModel _new = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _canEdit = (await CurrentUser.GetAsync()).Roles.CanViewPipeline();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _accounts = await Crm.ListAccountsAsync();
+        _contacts = await Crm.ListContactsAsync();
+    }
+
+    /// <summary>The hierarchy, depth-first; a search or kind filter shows matches flat.</summary>
+    private IEnumerable<(CrmAccountDto Account, int Depth)> Rows()
+    {
+        var all = _accounts ?? [];
+        if (!string.IsNullOrWhiteSpace(_search) || _kind.Length > 0)
+        {
+            return all.Where(a => (_kind.Length == 0 || a.Kind.ToString() == _kind)
+                                  && (string.IsNullOrWhiteSpace(_search) || a.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+                                      || (a.Acronym?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)))
+                .Select(a => (a, 0));
+        }
+
+        var children = all.Where(a => a.ParentId is not null).ToLookup(a => a.ParentId!.Value);
+        var ids = all.Select(a => a.Id).ToHashSet();
+        var list = new List<(CrmAccountDto, int)>();
+        void Walk(CrmAccountDto a, int depth)
+        {
+            list.Add((a, depth));
+            foreach (var c in children[a.Id])
+            {
+                Walk(c, depth + 1);
+            }
+        }
+
+        foreach (var root in all.Where(a => a.ParentId is null || !ids.Contains(a.ParentId.Value)))
+        {
+            Walk(root, 0);
+        }
+
+        return list;
+    }
+
+    private bool MatchesContact(CrmContactDto c) =>
+        string.IsNullOrWhiteSpace(_contactSearch) || c.FullName.Contains(_contactSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+        || c.AccountName.Contains(_contactSearch.Trim(), StringComparison.OrdinalIgnoreCase) || (c.Email?.Contains(_contactSearch.Trim(), StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var created = await Crm.CreateAccountAsync(_new.ToRequest());
+            Snackbar.Add($"Added {created.Name}.", Severity.Success);
+            Navigation.NavigateTo($"bd/accounts/{created.Id}");
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

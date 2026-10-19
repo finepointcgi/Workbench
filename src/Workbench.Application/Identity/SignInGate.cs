@@ -120,7 +120,7 @@ public sealed class SignInGate(
             return await DenyAsync(email, method, "No pending invitation for this email.", cancellationToken);
         }
 
-        var newRoles = invite is not null ? AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager, invite.IsProjectManager)
+        var newRoles = invite is not null ? AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager, invite.IsProjectManager, invite.IsBusinessDevelopment)
             : justInTime ? SignInRules.RolesFromIdp(policy, claims?.Groups)
             : OrgRoles.Employee;
         if (isBootstrapAdmin)
@@ -202,9 +202,9 @@ public sealed class SignInGate(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var row = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == email)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager })
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsBusinessDevelopment })
             .FirstOrDefaultAsync(cancellationToken);
-        return row is null ? OrgRoles.Employee : AccessControl.ToRoles(row.IsAdmin, row.IsFinance, row.IsTimekeeper, row.IsResourceManager, row.IsProjectManager);
+        return row is null ? OrgRoles.Employee : AccessControl.ToRoles(row.IsAdmin, row.IsFinance, row.IsTimekeeper, row.IsResourceManager, row.IsProjectManager, row.IsBusinessDevelopment);
     }
 
     private async Task<AppUser?> SyncRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken)
@@ -236,6 +236,7 @@ public sealed class SignInGate(
         user.IsTimekeeper |= roles.HasFlag(OrgRoles.Timekeeper);
         user.IsResourceManager |= roles.HasFlag(OrgRoles.ResourceManager);
         user.IsProjectManager |= roles.HasFlag(OrgRoles.ProjectManager);
+        user.IsBusinessDevelopment |= roles.HasFlag(OrgRoles.BusinessDevelopment);
         await db.SaveChangesAsync(cancellationToken);
         return user;
     }
@@ -261,8 +262,9 @@ public sealed class SignInGate(
         user.IsTimekeeper |= invite.IsTimekeeper;
         user.IsResourceManager |= invite.IsResourceManager;
         user.IsProjectManager |= invite.IsProjectManager;
+        user.IsBusinessDevelopment |= invite.IsBusinessDevelopment;
         await db.SaveChangesAsync(cancellationToken);
-        var roles = AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager, invite.IsProjectManager);
+        var roles = AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager, invite.IsProjectManager, invite.IsBusinessDevelopment);
         await securityLog.RecordAsync(SecurityEventTypes.InviteAccepted, email, detail: $"Invited by {invite.InvitedBy}; roles: {UserLifecycle.RoleText(roles)}", actor: email, cancellationToken: cancellationToken);
     }
 

@@ -172,6 +172,7 @@ public static class DatabaseInitializer
         await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
         await CeilingsSeed.SeedAsync(db, cancellationToken);
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
+        await CrmSeed.SeedAsync(db, services, cancellationToken); // Business development: Blake Diaz (bd@), 10 opportunities across the stages, accounts, contacts, leads.
     }
 
     /// <summary>

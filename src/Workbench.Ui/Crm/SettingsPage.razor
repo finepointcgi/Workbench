@@ -1,0 +1,201 @@
+@page "/bd/settings"
+@* Go/no-go gates (business development and administrators change them) and the B&P element opportunity charge codes
+   go under (Finance and administrators). *@
+@inject IOpportunityGateService Gates
+@inject IPipelineService Pipeline
+@inject ICurrentUserContext CurrentUser
+@inject ISnackbar Snackbar
+
+<PageTitle>Gates and settings · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-3">Gates and settings</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_gates is null || _settings is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Go/no-go gates</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            To move an opportunity into a gated stage, its team scores the gate's checklist (0–5 per question, weighted) and recommends Go or No-go.
+            Gates needing approval go through the "Opportunity gate (go/no-go)" workflow under Setup › Approval workflows.
+        </MudText>
+        @foreach (var g in _gates)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="gate-definition">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3">@g.Name → @CrmFormat.Stage(g.ToStage)</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">Passing @g.PassingScore%</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@(g.RequiresApproval ? "Needs approval" : "No approval")</MudChip>
+                    @if (!g.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text">Inactive</MudChip>
+                    }
+                    <MudSpacer />
+                    @if (_canEditGates)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(g)" aria-label="@($"Edit {g.Name}")">Edit</MudButton>
+                    }
+                </MudStack>
+                <ol class="mb-0">
+                    @foreach (var c in g.Criteria)
+                    {
+                        <li>@c.Text <span class="mud-text-secondary">(×@c.Weight)</span></li>
+                    }
+                </ol>
+            </MudPaper>
+        }
+        @if (_canEditGates)
+        {
+            <MudPaper Outlined="true" Class="pa-4 mt-3">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3">@(_editing is null ? "New gate" : $"Edit {_editing.Name}")</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_name" Label="Name" MaxLength="200" data-testid="gate-name" /></MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudSelect T="OpportunityStage" @bind-Value="_toStage" Label="Into stage">
+                            @foreach (var s in OpportunityStages.Open.Skip(1))
+                            {
+                                <MudSelectItem T="OpportunityStage" Value="s">@CrmFormat.Stage(s)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="3"><MudNumericField T="int" @bind-Value="_passing" Label="Passing score (%)" Min="0" Max="100" /></MudItem>
+                    <MudItem xs="12"><MudTextField T="string" @bind-Value="_description" Label="Description" MaxLength="1000" /></MudItem>
+                    <MudItem xs="6"><MudSwitch T="bool" @bind-Value="_approval" Label="Needs approval" Color="Color.Primary" /></MudItem>
+                    <MudItem xs="6"><MudSwitch T="bool" @bind-Value="_active" Label="Active" Color="Color.Primary" /></MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_criteria" Label="Checklist" Lines="6" Variant="Variant.Outlined"
+                                      HelperText="One question per line. End a line with ×N (or xN) to weight it 1–10, e.g. &quot;Funding is identified ×3&quot;." data-testid="gate-criteria" />
+                    </MudItem>
+                </MudGrid>
+                <MudStack Row="true" Class="mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveGateAsync" Disabled="_busy" data-testid="gate-save">Save gate</MudButton>
+                    @if (_editing is not null)
+                    {
+                        <MudButton Variant="Variant.Text" OnClick="() => Edit(null)">Cancel</MudButton>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">B&amp;P charge codes</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2" data-testid="bp-parent">
+            @if (_settings.BpParentFound)
+            {
+                <span>Opportunity B&amp;P codes go under <strong>@_settings.BpParentCode @_settings.BpParentName</strong>@(_settings.BpParentWbsElementId is null ? " (found automatically)" : "").</span>
+            }
+            else
+            {
+                <span>No bid-and-proposal element was found: opportunities reaching Capture won't get a B&amp;P charge code until one is chosen.</span>
+            }
+        </MudText>
+        @if (_isFinance)
+        {
+            <MudSelect T="Guid?" Value="_settings.BpParentWbsElementId" ValueChanged="SetParentAsync" Label="B&P element" Clearable="true" Style="max-width: 420px"
+                       HelperText="Indirect elements of active projects. Blank: find the one coded *.BP or named Bid and proposal.">
+                @foreach (var o in _options)
+                {
+                    <MudSelectItem T="Guid?" Value="o.Id">@o.Code · @o.Name (@o.ProjectCode)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<GateDefinitionDto>? _gates;
+    private CrmSettingsDto? _settings;
+    private IReadOnlyList<BpParentOptionDto> _options = [];
+    private bool _canEditGates;
+    private bool _isFinance;
+    private bool _busy;
+    private string? _error;
+    private GateDefinitionDto? _editing;
+    private string? _name, _description, _criteria;
+    private OpportunityStage _toStage = OpportunityStage.Capture;
+    private int _passing = 60;
+    private bool _approval = true;
+    private bool _active = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var me = await CurrentUser.GetAsync();
+            _canEditGates = me.Roles.IsBusinessDevelopment();
+            _isFinance = me.IsFinance;
+            _gates = await Gates.ListGatesAsync(includeInactive: true);
+            _settings = await Pipeline.GetSettingsAsync();
+            if (_isFinance)
+            {
+                _options = await Pipeline.ListBpParentOptionsAsync();
+            }
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Edit(GateDefinitionDto? gate)
+    {
+        _editing = gate;
+        _name = gate?.Name;
+        _description = gate?.Description;
+        _toStage = gate?.ToStage ?? OpportunityStage.Capture;
+        _passing = gate?.PassingScore ?? 60;
+        _approval = gate?.RequiresApproval ?? true;
+        _active = gate?.IsActive ?? true;
+        _criteria = gate is null ? null : string.Join("\n", gate.Criteria.Select(c => c.Weight == 1 ? c.Text : $"{c.Text} ×{c.Weight}"));
+    }
+
+    /// <summary>"Question ×3" → (Question, 3).</summary>
+    internal static List<SaveGateCriterion> ParseCriteria(string? text) =>
+        (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(line =>
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(line, @"^(.*?)\s*[×xX]\s*(\d{1,2})$");
+            return m.Success ? new SaveGateCriterion(m.Groups[1].Value.Trim(), int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture)) : new SaveGateCriterion(line);
+        }).ToList();
+
+    private async Task SaveGateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = new SaveGateDefinitionRequest(_name ?? "", _toStage, _passing, _approval, ParseCriteria(_criteria), _description, _active);
+            _ = _editing is null ? await Gates.CreateGateAsync(request) : await Gates.UpdateGateAsync(_editing.Id, request);
+            Snackbar.Add("Gate saved.", Severity.Success);
+            Edit(null);
+            _gates = await Gates.ListGatesAsync(includeInactive: true);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SetParentAsync(Guid? id)
+    {
+        try
+        {
+            _settings = await Pipeline.SetBpParentAsync(id);
+            Snackbar.Add("Saved.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

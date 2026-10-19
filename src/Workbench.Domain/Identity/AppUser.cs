@@ -23,6 +23,9 @@ public sealed class AppUser : Entity
     /// <summary>Organization role ProjectManager: sets up, staffs and approves for the projects they manage; assigns tasks.</summary>
     public bool IsProjectManager { get; set; }
 
+    /// <summary>Organization role BusinessDevelopment: sees the capture pipeline; edits the opportunities they manage.</summary>
+    public bool IsBusinessDevelopment { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }
 

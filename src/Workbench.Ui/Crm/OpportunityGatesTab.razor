@@ -1,0 +1,258 @@
+@* Go/no-go gates: score a gate's checklist (0–5 per question, weighted) and recommend Go or No-go. With approval the
+   decision goes to the approvals inbox (and is decided here too); once approved a Go moves the opportunity on. *@
+@inject IOpportunityGateService Gates
+@inject ISnackbar Snackbar
+
+@if (_gates is null || _reviews is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var pending = _reviews.FirstOrDefault(r => r.Status == GateReviewStatus.Pending);
+    var ahead = _gates.Where(g => g.ToStage > Opportunity.Stage).ToList();
+    @if (pending is not null)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" data-testid="gate-pending">
+            "@pending.GateName" (@(pending.Recommendation == GateRecommendation.Go ? "Go" : "No-go"), @pending.ScorePercent.ToString("0.#")%) is waiting for approval.
+        </MudAlert>
+    }
+
+    @if (Opportunity.CanEdit && Opportunity.Stage.IsOpen() && pending is null)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Score a gate</MudText>
+        @if (ahead.Count == 0)
+        {
+            <MudText Class="mud-text-secondary mb-4">No gates ahead of @CrmFormat.Stage(Opportunity.Stage).</MudText>
+        }
+        else
+        {
+            <MudSelect T="Guid?" Value="_gateId" ValueChanged="ChooseGate" Label="Gate" Style="max-width: 420px" Class="mb-2" data-testid="gate-choose">
+                @foreach (var g in ahead)
+                {
+                    <MudSelectItem T="Guid?" Value="g.Id">@g.Name → @CrmFormat.Stage(g.ToStage)@(g.RequiresApproval ? " (needs approval)" : "")</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        @if (_gate is { } gate)
+        {
+            <MudPaper Outlined="true" Class="pa-4 mb-6">
+                @if (gate.Description is { } d)
+                {
+                    <MudText Class="mb-2">@d</MudText>
+                }
+                <MudSimpleTable Dense="true">
+                    <caption class="wb-sr-only">@gate.Name checklist</caption>
+                    <thead><tr><th scope="col">Question</th><th scope="col">Weight</th><th scope="col">Score (0–5)</th><th scope="col">Comment</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in gate.Criteria)
+                        {
+                            <tr>
+                                <td>@c.Text@if (c.Guidance is { } g) { <div class="mud-text-secondary" style="font-size:.8rem">@g</div> }</td>
+                                <td>×@c.Weight</td>
+                                <td style="min-width:120px">
+                                    <MudSelect T="int" Value="_scores[c.Id]" ValueChanged="v => _scores[c.Id] = v" Dense="true" aria-label="@($"Score: {c.Text}")">
+                                        @for (var i = 0; i <= 5; i++)
+                                        {
+                                            var score = i;
+                                            <MudSelectItem T="int" Value="score">@score@(score == 0 ? " (not at all)" : score == 5 ? " (fully)" : "")</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </td>
+                                <td><MudTextField T="string" Value="_comments[c.Id]" ValueChanged="v => _comments[c.Id] = v" Margin="Margin.Dense" aria-label="@($"Comment: {c.Text}")" MaxLength="500" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Class="mt-3" data-testid="gate-score">
+                    Score: <strong>@Score.ToString("0.#")%</strong> (passing @gate.PassingScore%)
+                    @if (Score < gate.PassingScore)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning" Class="ml-2">Below passing</MudChip>
+                    }
+                </MudText>
+                <MudRadioGroup T="GateRecommendation" @bind-Value="_recommendation" Class="mt-2">
+                    <MudRadio T="GateRecommendation" Value="GateRecommendation.Go" Color="Color.Primary">Go: move to @CrmFormat.Stage(gate.ToStage)</MudRadio>
+                    <MudRadio T="GateRecommendation" Value="GateRecommendation.NoGo" Color="Color.Primary">No-go: don't bid</MudRadio>
+                </MudRadioGroup>
+                <MudTextField T="string" @bind-Value="_notes" Label="Notes for the approvers" Lines="2" MaxLength="2000" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SubmitAsync" Disabled="_busy" data-testid="gate-submit">
+                    @(gate.RequiresApproval ? "Submit for approval" : "Record decision")
+                </MudButton>
+            </MudPaper>
+        }
+    }
+
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2">Gate decisions</MudText>
+    @if (_reviews.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">None yet.</MudText>
+    }
+    @foreach (var r in _reviews)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="gate-review">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3">@r.GateName → @CrmFormat.Stage(r.ToStage)</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0">@(r.Recommendation == GateRecommendation.Go ? "Go" : "No-go")</MudChip>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" Color="@StatusColor(r.Status)" Icon="@StatusIcon(r.Status)">@r.Status</MudChip>
+                <MudText Typo="Typo.body2">@r.ScorePercent.ToString("0.#")% (passing @r.PassingScore%)</MudText>
+                <MudSpacer />
+                @if (r.CanDecide)
+                {
+                    <MudTextField T="string" @bind-Value="_decision" Label="Comment" Margin="Margin.Dense" Style="max-width: 260px" MaxLength="1000" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => DecideAsync(r, true)" Disabled="_busy" data-testid="gate-approve">Approve</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small" OnClick="() => DecideAsync(r, false)" Disabled="_busy">Reject</MudButton>
+                }
+                @if (r.Status == GateReviewStatus.Pending && Opportunity.CanEdit)
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => WithdrawAsync(r)" Disabled="_busy">Withdraw</MudButton>
+                }
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                Submitted by @r.SubmittedBy on @r.SubmittedAtUtc.ToLocalTime().ToString("MMM d, yyyy")
+                @if (r.DecidedBy is { } by)
+                {
+                    <span> · @r.Status.ToString().ToLowerInvariant() by @by@(r.DecisionComment is { } c ? $": {c}" : "")</span>
+                }
+            </MudText>
+            @if (r.Notes is { } notes)
+            {
+                <MudText Typo="Typo.body2" Class="mt-1">@notes</MudText>
+            }
+            <details class="mt-1">
+                <summary>Scores<span class="wb-sr-only">: @r.GateName</span></summary>
+                <ul>
+                    @foreach (var s in r.Scores)
+                    {
+                        <li>@s.Text: @s.Score/5 ×@s.Weight@(s.Comment is { } c ? $" — {c}" : "")</li>
+                    }
+                </ul>
+            </details>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<GateDefinitionDto>? _gates;
+    private IReadOnlyList<GateReviewDto>? _reviews;
+    private Guid? _gateId;
+    private GateDefinitionDto? _gate;
+    private Dictionary<Guid, int> _scores = [];
+    private Dictionary<Guid, string?> _comments = [];
+    private GateRecommendation _recommendation;
+    private string? _notes;
+    private string? _decision;
+    private bool _busy;
+
+    private decimal Score => _gate is null || _gate.Criteria.Count == 0 ? 0
+        : Math.Round(100m * _gate.Criteria.Sum(c => (decimal)_scores[c.Id] * c.Weight) / _gate.Criteria.Sum(c => 5m * c.Weight), 1);
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _gates = await Gates.ListGatesAsync();
+            _reviews = await Gates.ListReviewsAsync(Opportunity.Id);
+            // Start on the next gate ahead; after a gate moves the opportunity on, the one just passed is behind it.
+            if (_gate is null || _gate.ToStage <= Opportunity.Stage)
+            {
+                ChooseGate(_gates.FirstOrDefault(g => g.ToStage > Opportunity.Stage)?.Id);
+            }
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            _gates ??= [];
+            _reviews ??= [];
+        }
+    }
+
+    private void ChooseGate(Guid? id)
+    {
+        _gateId = id;
+        _gate = _gates?.FirstOrDefault(g => g.Id == id);
+        _scores = _gate?.Criteria.ToDictionary(c => c.Id, _ => 3) ?? [];
+        _comments = _gate?.Criteria.ToDictionary(c => c.Id, _ => (string?)null) ?? [];
+        _recommendation = GateRecommendation.Go;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        try
+        {
+            var review = await Gates.SubmitAsync(Opportunity.Id, new SubmitGateReviewRequest(_gate!.Id, _recommendation,
+                _gate.Criteria.Select(c => new GateScoreInput(c.Id, _scores[c.Id], _comments[c.Id])).ToList(), _notes));
+            Snackbar.Add(review.Status == GateReviewStatus.Pending ? "Submitted for approval." : "Decision recorded.", Severity.Success);
+            (_gateId, _gate, _notes) = (null, null, null);
+            await Changed.InvokeAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DecideAsync(GateReviewDto review, bool approve)
+    {
+        _busy = true;
+        try
+        {
+            await (approve ? Gates.ApproveAsync(review.Id, new DecideGateRequest(_decision)) : Gates.RejectAsync(review.Id, new DecideGateRequest(_decision)));
+            Snackbar.Add(approve ? "Approved." : "Rejected.", Severity.Success);
+            _decision = null;
+            await Changed.InvokeAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task WithdrawAsync(GateReviewDto review)
+    {
+        try
+        {
+            await Gates.CancelAsync(review.Id);
+            Snackbar.Add("Withdrawn.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static Color StatusColor(GateReviewStatus s) => s switch
+    {
+        GateReviewStatus.Approved => Color.Success,
+        GateReviewStatus.Rejected => Color.Error,
+        GateReviewStatus.Pending => Color.Warning,
+        _ => Color.Default,
+    };
+
+    private static string StatusIcon(GateReviewStatus s) => s switch
+    {
+        GateReviewStatus.Approved => Icons.Material.Filled.CheckCircle,
+        GateReviewStatus.Rejected => Icons.Material.Filled.Cancel,
+        GateReviewStatus.Pending => Icons.Material.Filled.HourglassTop,
+        _ => Icons.Material.Filled.RemoveCircleOutline,
+    };
+}
