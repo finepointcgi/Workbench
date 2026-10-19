@@ -545,6 +545,11 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
             Debit = amount < 0 ? -amount : 0,
             Credit = amount > 0 ? amount : 0,
             Memo = isExpense ? $"Reimbursement: {context.EmployeeName(odc.EmployeeId)}" : $"{odc.Vendor} {odc.InvoiceNumber}".Trim(),
+
+            // A vendor ODC from a foreign currency bill owes the vendor in that currency (multicurrency); employees are reimbursed in the functional currency.
+            TransactionCurrency = isExpense || odc.TransactionAmount is null ? null : odc.CurrencyCode,
+            TransactionAmount = isExpense || odc.CurrencyCode is null ? null : Math.Abs(odc.TransactionAmount ?? 0),
+            ExchangeRate = isExpense || odc.CurrencyCode is null || odc.TransactionAmount is null ? null : odc.ExchangeRate,
         });
         return new Plan([entry], null, amount);
     }

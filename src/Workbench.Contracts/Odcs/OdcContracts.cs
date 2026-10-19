@@ -32,7 +32,12 @@ public sealed record OdcEntryDto(
     DateTime? SubmittedAtUtc,
     string? ApprovedBy,
     DateTime? ApprovedAtUtc,
-    string? RejectionReason)
+    string? RejectionReason,
+
+    // Added by multicurrency: an expense paid in another currency (Amount is what it costs in the functional currency).
+    string? CurrencyCode = null,
+    decimal? TransactionAmount = null,
+    decimal? ExchangeRate = null)
 {
     /// <summary>True when the entry can be changed: drafts and rejected entries.</summary>
     public bool IsEditable => Status is OdcApprovalState.Draft or OdcApprovalState.Rejected;
@@ -144,7 +149,15 @@ public sealed record SaveExpenseLineRequest(
     string Description,
     string? Vendor = null,
     bool IsUnallowable = false,
-    string? UnallowableReason = null);
+    string? UnallowableReason = null,
+
+    /// <summary>
+    /// Added by multicurrency: the currency the expense was paid in. <see cref="Amount"/> is then in that currency and is
+    /// reimbursed in the functional currency at <see cref="ExchangeRate"/> (the card or receipt rate) or the spot rate on
+    /// the date incurred.
+    /// </summary>
+    string? CurrencyCode = null,
+    decimal? ExchangeRate = null);
 
 /// <summary>The signed-in employee's expense reports.</summary>
 public interface IExpenseReportService

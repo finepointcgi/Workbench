@@ -10,7 +10,7 @@ public enum BalanceSide { Debit, Credit }
 
 public enum CostClass { None, DirectLabor, DirectOdc, IndirectLabor, Fringe, Overhead, GeneralAndAdministrative, Unallowable, Other, AppliedBurden }
 
-public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal, Asset, Depreciation, Bank, Revenue, Inventory, Manufacturing, Recurring }
+public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal, Asset, Depreciation, Bank, Revenue, Inventory, Manufacturing, Recurring, Revaluation }
 
 public enum JournalEntryState { Draft, Posted, Reversed }
 
@@ -80,7 +80,12 @@ public sealed record JournalLineDto(
     string? WbsCode,
     decimal Debit,
     decimal Credit,
-    string? Memo);
+    string? Memo,
+
+    // Added by multicurrency: set on lines of foreign currency documents (null means the functional currency).
+    string? TransactionCurrency = null,
+    decimal? TransactionAmount = null,
+    decimal? ExchangeRate = null);
 
 public sealed record JournalEntrySummaryDto(
     Guid Id,
@@ -109,7 +114,12 @@ public sealed record JournalLineInput(
     string? Memo = null,
     Guid? OrgUnitId = null,
     Guid? ProjectId = null,
-    Guid? WbsElementId = null);
+    Guid? WbsElementId = null,
+
+    // Added by multicurrency: a line in another currency (amount on the same side as the debit or credit, and the rate used).
+    string? TransactionCurrency = null,
+    decimal? TransactionAmount = null,
+    decimal? ExchangeRate = null);
 
 /// <summary>A manual entry (or a system entry from another accounting module, with its own source and source id).</summary>
 public sealed record SaveJournalEntryRequest(
@@ -210,7 +220,7 @@ public interface IPostingService
 
 // ---- Period close ----
 
-public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted, UnbilledAccrual, DepreciationPosted, BankReconciled, RevenueRecognized }
+public enum CloseCheckKind { TimesheetsApproved, OdcsDecided, NothingUnposted, TrialBalanceBalanced, AllocationPosted, UnbilledAccrual, DepreciationPosted, BankReconciled, RevenueRecognized, CurrencyRevalued }
 
 public sealed record CloseCheckDto(CloseCheckKind Kind, string Title, bool Passed, int Count, string Summary, IReadOnlyList<string> Details);
 

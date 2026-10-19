@@ -549,3 +549,28 @@ Checks:
 - Budgeted indirect rates reuse `PoolAccountMap` and `BurdenCascade.ActualRates` with budget amounts instead of GL balances.
 - Planning cycles route each org unit's `BudgetSubmission` through the `budget-submission` approval workflow (default: Finance);
   the final approval replaces that unit's lines in the cycle's version. Owners edit their own unit; Finance/Admin everything.
+
+## Multicurrency
+
+- Domain `Domain/Currencies` (`Currency`, `ExchangeRate`, `CurrencySettings`, `CurrencyRevaluation`/`Line`), contracts `Contracts/Currencies`
+  (`ICurrencyService`, `IRevaluationService`), services `Application/Currencies`. Pages: Setup › Currencies and rates (`/setup/currencies`),
+  Accounting › Currency revaluation (`/accounting/revaluation`, linked from Period close) and the foreign currency report (`/accounting/foreign-currency`).
+  Anyone signed in reads currencies and rates; changing them, the setup, revaluation and the report are Finance/Admin.
+- Every amount the ledger and reports already read stays in the **functional currency** (USD, a tenant setting in `CurrencySettings`; it
+  moves to the company once there are companies). A foreign document adds its `CurrencyCode` (null = functional, which is every
+  document before multicurrency), the rate used and its amounts in that currency (`TransactionAmount`/`TransactionTotal`/`TransactionPaid`…).
+  Journal lines carry `TransactionCurrency`, `TransactionAmount` (same side as the debit or credit) and `ExchangeRate`, null on functional lines;
+  reversals copy them. Get a document's currency with `CurrencySupport.ResolveAsync` (spot rate on the date unless one is given) and convert
+  with `DocumentCurrency`/`CurrencyMath` (half away from zero; transaction amounts to the currency's decimals, functional to the cent).
+- A rate is functional units per foreign unit (EUR → USD 1.085). `CurrencySupport.FindRateAsync` takes the latest rate of the type on or before
+  the date, the inverse pair works, and another type is a flagged fallback. Rates are typed in, imported from CSV, or fetched from an
+  `IExchangeRateProvider` (none registered: no outside calls unless a host adds one).
+- Payments relieve what a document carries at its own rate (`CurrencyMath.Relieved`: the last payment takes the rounding cent) and move cash at
+  the payment's rate; the difference posts to realized gain/loss (4920) in the same entry. A foreign payment uses the active bank account
+  kept in that currency (its GL account), else 1010. Project costs and billing stay functional: AP lines become functional ODCs, invoices are
+  worked out in dollars and issued in the customer's currency (`InvoiceCurrency.ApplyAsync` at approval; credit memos use the credited
+  invoice's rate). Foreign bills can't bill PO lines or link existing ODCs.
+- The period-end revaluation (`RevaluationEngine`) values open foreign AR, AP (net of retainage) and foreign bank balances as of the period end
+  at the month-end rate, posts one functional-only entry (source `Revaluation`) against unrealized gain/loss (4930) on the last day, and
+  reverses it on the next period's first day; once per period. `CurrencyRevaluationCloseCheck` blocks the close while a balance would move.
+  A foreign bank account must have its own GL cash account. 4920/4930 are in the default chart and added to older charts when first needed.

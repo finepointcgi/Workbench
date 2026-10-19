@@ -21,9 +21,18 @@
             </MudSelect>
             <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />
             <MudStack Row="true" Spacing="3">
-                <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Immediate="true"
-                                 HelperText="@(_amount >= ReceiptThreshold ? $"Receipt required ({OdcFormat.Money(ReceiptThreshold)} or more)" : null)" />
+                <MudNumericField T="decimal" @bind-Value="_amount" Label="@(_currency is null ? "Amount" : $"Amount in {_currency}")" Min="0" Format="N2"
+                                 Adornment="@(_currency is null ? Adornment.Start : Adornment.End)" AdornmentText="@(_currency ?? "$")" Immediate="true"
+                                 HelperText="@(_currency is null && _amount >= ReceiptThreshold ? $"Receipt required ({OdcFormat.Money(ReceiptThreshold)} or more)" : null)" />
                 <MudTextField @bind-Value="_vendor" Label="Merchant (optional)" />
+            </MudStack>
+            <MudStack Row="true" Spacing="3">
+                <Workbench.Ui.Currencies.CurrencyPicker @bind-Value="_currency" Label="Paid in" TestId="expense-currency" Date="@OdcFormat.ToDateOnly(_date)" />
+                @if (_currency is not null)
+                {
+                    <MudNumericField T="decimal?" @bind-Value="_rate" Label="Rate on your receipt (optional)" Min="0" Format="0.######" Immediate="true"
+                                     HelperText="@($"Dollars per {_currency}; leave blank to use the rate on the date")" />
+                }
             </MudStack>
             <MudCheckBox T="bool" @bind-Value="_unallowable" Label="Unallowable cost (FAR 31.205: alcohol, entertainment, …)" Color="Color.Warning" />
             @if (_unallowable)
@@ -55,6 +64,8 @@
     private string? _vendor;
     private bool _unallowable;
     private string? _unallowableReason;
+    private string? _currency;
+    private decimal? _rate;
     private IReadOnlyList<ChargeCodeDto> _codes = [];
     private bool _loadingCodes;
 
@@ -69,7 +80,8 @@
             _type = e.Type;
             _wbsId = e.WbsElementId;
             _description = e.Description;
-            _amount = e.Amount;
+            _amount = e.TransactionAmount ?? e.Amount;
+            _currency = e.CurrencyCode;
             _vendor = e.Vendor;
             _unallowable = e.IsUnallowable;
             _unallowableReason = e.UnallowableReason;
@@ -115,5 +127,5 @@
 
     private void Save() => MudDialog.Close(DialogResult.Ok(new SaveExpenseLineRequest(
         _wbsId!.Value, _type, OdcFormat.ToDateOnly(_date)!.Value, _amount, _description!.Trim(), _vendor,
-        _unallowable, _unallowable ? _unallowableReason : null)));
+        _unallowable, _unallowable ? _unallowableReason : null, _currency, _currency is null ? null : _rate)));
 }

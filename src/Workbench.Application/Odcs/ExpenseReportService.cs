@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Approvals;
+using Workbench.Application.Currencies;
 using Workbench.Contracts;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Odcs;
@@ -227,13 +228,24 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
             throw new ArgumentException("Expense lines are Travel or Other. Enter vendor invoices as vendor ODCs on the project.");
         }
 
-        var wbs = await workflow.ValidateLineAsync(db, request.WbsElementId, request.IncurredOn, request.Amount, request.Description,
+        // Multicurrency: a foreign expense is kept (and checked against policy) in the functional currency.
+        var currency = await CurrencySupport.ResolveAsync(db, request.CurrencyCode, request.IncurredOn, request.ExchangeRate, cancellationToken);
+        if (currency.IsForeign && currency.RoundTransaction(request.Amount) != request.Amount)
+        {
+            throw new ArgumentException($"{currency.Code} amounts have {currency.Decimals} decimal places.");
+        }
+
+        var amount = currency.IsForeign ? currency.ToFunctional(request.Amount) : request.Amount;
+        var wbs = await workflow.ValidateLineAsync(db, request.WbsElementId, request.IncurredOn, amount, request.Description,
             request.IsUnallowable, request.UnallowableReason, report.EmployeeId, cancellationToken);
         line.ProjectId = wbs.ProjectId;
         line.WbsElementId = wbs.Id;
         line.Type = (OdcType)(int)request.Type;
         line.IncurredOn = request.IncurredOn;
-        line.Amount = request.Amount;
+        line.Amount = amount;
+        line.CurrencyCode = currency.Code;
+        line.TransactionAmount = currency.IsForeign ? request.Amount : null;
+        line.ExchangeRate = currency.IsForeign ? currency.Rate : null;
         line.Description = request.Description.Trim();
         line.Vendor = string.IsNullOrWhiteSpace(request.Vendor) ? null : request.Vendor.Trim();
         line.IsUnallowable = request.IsUnallowable;

@@ -120,6 +120,8 @@ public static class NavCatalog
         new(Finance, "Planning", "Budgets", "planning/budgets", Icons.Material.Filled.TableChart, FinanceOnly, Detail: "Budget version", Keywords: "corporate gl budget versions original revised forecast spread"),
         new(Finance, "Planning", "Budget vs actual", "planning/budget-vs-actual", Icons.Material.Filled.CompareArrows, FinanceOnly, Keywords: "variance budget actual income statement org unit pool"),
         new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, FinanceOnly, Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
+        new(Finance, "Accounting", "Currency revaluation", "accounting/revaluation", Icons.Material.Filled.CurrencyExchange, FinanceOnly, Keywords: "foreign exchange fx unrealized gain loss month end period close multicurrency"),
+        new(Finance, "Accounting", "Foreign currency report", "accounting/foreign-currency", Icons.Material.Filled.Language, FinanceOnly, Keywords: "fx exposure realized unrealized gain loss multicurrency"),
 
         new(Finance, "Billing & AR", "Invoices", "billing", Icons.Material.Filled.Receipt, FinanceOnly, MatchAll: true, Keywords: "billing receivables"),
         new(Finance, "Billing & AR", "New invoice", "billing/new", Icons.Material.Filled.NoteAdd, FinanceOnly, InMenu: false),
@@ -201,6 +203,7 @@ public static class NavCatalog
         new(Admin, "Setup", "Projects and WBS", "setup/projects", Icons.Material.Filled.Work, FinanceOnly, Detail: "Project", Keywords: "charge codes"),
         new(Admin, "Setup", "Fiscal calendar", "setup/fiscal-calendar", Icons.Material.Filled.CalendarMonth, FinanceOnly, Keywords: "periods year"),
         new(Admin, "Setup", "Per diem rates", "setup/per-diem", Icons.Material.Filled.Hotel, FinanceOnly, Keywords: "gsa travel"),
+        new(Admin, "Setup", "Currencies and rates", "setup/currencies", Icons.Material.Filled.CurrencyExchange, FinanceOnly, Keywords: "exchange rates fx multicurrency euro pound functional currency"),
         new(Admin, null, "Approval workflows", "setup/approval-workflows", Icons.Material.Filled.AltRoute, FinanceOnly, Detail: "Workflow", Keywords: "routing approvers delegation"),
         new(Admin, null, "Import", "setup/import", Icons.Material.Filled.UploadFile, FinanceOnly, Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
         new(Admin, null, "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, FinanceOnly, Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),

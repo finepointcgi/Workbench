@@ -262,7 +262,8 @@ public sealed class OdcWorkflow(
                 (OdcCostType)(int)e.Type, e.IncurredOn, e.Amount, e.Description, e.Vendor, e.InvoiceNumber, e.EmployeeId, e.ExpenseReportId,
                 e.IsUnallowable, e.UnallowableReason, e.ReceiptAttachmentId,
                 e.ReceiptAttachmentId is { } f ? fileNames.GetValueOrDefault(f) : null,
-                (OdcApprovalState)(int)e.Status, e.SubmittedBy, e.CreatedAtUtc, e.SubmittedAtUtc, e.ApprovedBy, e.ApprovedAtUtc, e.RejectionReason);
+                (OdcApprovalState)(int)e.Status, e.SubmittedBy, e.CreatedAtUtc, e.SubmittedAtUtc, e.ApprovedBy, e.ApprovedAtUtc, e.RejectionReason,
+                e.CurrencyCode, e.TransactionAmount, e.ExchangeRate);
         }).ToList();
     }
 

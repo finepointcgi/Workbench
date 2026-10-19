@@ -68,6 +68,14 @@ else
         <MudAlert Severity="Severity.Info" Class="mb-3">Over the subcontract's funded value; overridden by @bill.FundingOverrideBy: @bill.FundingOverrideReason</MudAlert>
     }
 
+    @if (b.CurrencyCode is { } currency)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="bill-currency">
+            Invoiced in @currency: <b>@Workbench.Ui.Currencies.CurrencyFormat.Amount(b.TransactionAmount, currency)</b> at @Workbench.Ui.Currencies.CurrencyFormat.Rate(b.ExchangeRate)
+            (@PurchasingFormat.Amount(b.Amount) in dollars). @(b.Status == BillState.Posted ? $"Left to pay: {Workbench.Ui.Currencies.CurrencyFormat.Amount(b.TransactionBalance, currency)}." : "")
+            Amounts below are in dollars at the bill's rate; a payment at another rate posts a realized gain or loss.
+        </MudAlert>
+    }
     <MudGrid Spacing="2" Class="mb-3">
         @foreach (var (label, value) in new[] { ("Invoice date", PurchasingFormat.Date(b.InvoiceDate)), ("Due", PurchasingFormat.Date(b.DueDate)), ("Amount", PurchasingFormat.Amount(b.Amount)),
             ("Retainage held", PurchasingFormat.Amount(b.RetainageAmount)), ("Paid", PurchasingFormat.Amount(b.PaidAmount)), ("Balance", b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "—") })
@@ -109,7 +117,13 @@ else
                         <tr>
                             <td><MudLink Href="@($"purchasing/payments/{p.RunId}")">@p.RunNumber</MudLink></td>
                             <td>@PurchasingFormat.Date(p.PaidOn)</td><td>@p.Method</td><td>@p.Reference</td>
-                            <td style="text-align:right">@PurchasingFormat.Amount(p.Amount)</td><td>@p.Status</td>
+                            <td style="text-align:right">
+                                @PurchasingFormat.Amount(p.Amount)
+                                @if (b.CurrencyCode is { } pc && p.TransactionAmount != 0)
+                                {
+                                    <div class="mud-text-secondary" style="font-size:0.8rem">@Workbench.Ui.Currencies.CurrencyFormat.Amount(p.TransactionAmount, pc)@(p.PaidOn is null ? "" : $" at {Workbench.Ui.Currencies.CurrencyFormat.Rate(p.ExchangeRate)} · {Workbench.Ui.Currencies.CurrencyFormat.GainLoss(p.RealizedGainLoss)}")</div>
+                                }
+                            </td><td>@p.Status</td>
                         </tr>
                     }
                 </tbody>
