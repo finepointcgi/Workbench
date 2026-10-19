@@ -28,6 +28,7 @@ public static class WebSecuritySetup
         services.AddWorkbenchDataProtection(configuration, builder.Environment);
         services.AddWorkbenchHealthChecks();
         services.AddWorkbenchTelemetry(configuration);
+        services.AddWorkbenchJobInstrumentation();
         services.AddHostedService<RetentionBackgroundService>();
         return builder;
     }

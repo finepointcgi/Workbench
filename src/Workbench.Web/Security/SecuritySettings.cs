@@ -60,15 +60,92 @@ public sealed class DataProtectionSettings
 
     public string? KeysFolder { get; set; }
 
+    /// <summary>
+    /// How the key ring is encrypted at rest: <c>Certificate</c> (a PFX file or a certificate in the OS store),
+    /// <c>AzureKeyVault</c>, <c>AwsKms</c> or <c>None</c>. When empty it is <c>Certificate</c> if a certificate is
+    /// configured, else <c>None</c>. Production refuses <c>None</c>.
+    /// </summary>
+    public string? KeyEncryption { get; set; }
+
     /// <summary>A PFX file whose certificate encrypts the keys at rest. Its password comes from <see cref="CertificatePassword"/>.</summary>
     public string? CertificatePath { get; set; }
 
     public string? CertificatePassword { get; set; }
 
-    /// <summary>Alternatively, a certificate thumbprint in the current user's or local machine's store (Windows).</summary>
+    /// <summary>Alternatively, the thumbprint of a certificate (with its private key) in the <c>My</c> store of the current user or local machine.</summary>
     public string? CertificateThumbprint { get; set; }
 
+    /// <summary>
+    /// Certificates that encrypted older keys and may still be needed to decrypt them (certificate rotation). They are
+    /// never used to encrypt. Remove one only after <c>--rewrap-data-protection-keys</c> has re-encrypted every key.
+    /// </summary>
+    public List<CertificateReference> PreviousCertificates { get; set; } = [];
+
+    public AzureKeyVaultKeySettings AzureKeyVault { get; set; } = new();
+
+    public AwsKmsKeySettings AwsKms { get; set; } = new();
+
+    /// <summary>How long a new key is used to protect data before the next one is created (default 90 days).</summary>
+    public int KeyLifetimeDays { get; set; } = 90;
+
     public string ApplicationName { get; set; } = "Workbench";
+
+    public KeyEncryptionMode ResolveKeyEncryption()
+    {
+        if (string.IsNullOrWhiteSpace(KeyEncryption))
+        {
+            return string.IsNullOrWhiteSpace(CertificatePath) && string.IsNullOrWhiteSpace(CertificateThumbprint)
+                ? KeyEncryptionMode.None
+                : KeyEncryptionMode.Certificate;
+        }
+
+        return Enum.TryParse<KeyEncryptionMode>(KeyEncryption.Trim(), ignoreCase: true, out var mode) && Enum.IsDefined(mode)
+            ? mode
+            : throw new InvalidOperationException($"Unsupported DataProtection:KeyEncryption '{KeyEncryption}'. Use Certificate, AzureKeyVault, AwsKms or None.");
+    }
+}
+
+public enum KeyEncryptionMode
+{
+    None,
+    Certificate,
+    AzureKeyVault,
+    AwsKms,
+}
+
+/// <summary>A certificate from a PFX file (<see cref="Path"/> and <see cref="Password"/>) or the OS store (<see cref="Thumbprint"/>).</summary>
+public sealed class CertificateReference
+{
+    public string? Path { get; set; }
+    public string? Password { get; set; }
+    public string? Thumbprint { get; set; }
+}
+
+/// <summary>Config section <c>DataProtection:AzureKeyVault</c>: a key (RSA) in Azure Key Vault wraps the key ring.</summary>
+public sealed class AzureKeyVaultKeySettings
+{
+    /// <summary>The key identifier, e.g. <c>https://my-vault.vault.azure.net/keys/workbench-dp</c> (or a specific version).</summary>
+    public string? KeyId { get; set; }
+
+    /// <summary>
+    /// Optional. With <see cref="ClientSecret"/> and <see cref="TenantId"/>, a service principal; alone, the client id of a
+    /// user-assigned managed identity. Without any, <c>DefaultAzureCredential</c> (managed or workload identity).
+    /// </summary>
+    public string? ClientId { get; set; }
+
+    public string? TenantId { get; set; }
+
+    public string? ClientSecret { get; set; }
+}
+
+/// <summary>Config section <c>DataProtection:AwsKms</c>: a symmetric AWS KMS key wraps the key ring.</summary>
+public sealed class AwsKmsKeySettings
+{
+    /// <summary>The key's ARN or alias ARN, e.g. <c>arn:aws-us-gov:kms:us-gov-west-1:111122223333:alias/workbench-dp</c>.</summary>
+    public string? KeyId { get; set; }
+
+    /// <summary>Optional; otherwise the SDK's default (AWS_REGION). Credentials always come from the default chain (an IAM role).</summary>
+    public string? Region { get; set; }
 }
 
 /// <summary>Config section <c>Security</c>.</summary>

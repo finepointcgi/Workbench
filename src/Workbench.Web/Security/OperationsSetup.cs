@@ -1,4 +1,3 @@
-using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -7,9 +6,6 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using Workbench.Application;
 using Workbench.Application.Security;
 using Workbench.Application.Tenancy;
@@ -23,8 +19,8 @@ public static class OperationsSetup
 {
     /// <summary>
     /// ASP.NET Core Data Protection (A.8.24) protects auth cookies and antiforgery tokens. Keys are kept in the database
-    /// (so every server instance and restart shares them) or a folder, and encrypted at rest with a certificate when
-    /// one is configured.
+    /// (so every server instance and restart shares them) or a folder, and encrypted at rest with a certificate, Azure
+    /// Key Vault or AWS KMS (<see cref="DataProtectionKeyEncryption"/>; Production refuses to start without one).
     /// </summary>
     public static IServiceCollection AddWorkbenchDataProtection(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
@@ -53,68 +49,28 @@ public static class OperationsSetup
                 throw new InvalidOperationException($"Unsupported DataProtection:Store '{settings.Store}'. Use Database, FileSystem or Default.");
         }
 
-        if (!string.IsNullOrWhiteSpace(settings.CertificatePath))
-        {
-            builder.ProtectKeysWithCertificate(X509CertificateLoader.LoadPkcs12FromFile(settings.CertificatePath, settings.CertificatePassword));
-        }
-        else if (!string.IsNullOrWhiteSpace(settings.CertificateThumbprint))
-        {
-            builder.ProtectKeysWithCertificate(settings.CertificateThumbprint);
-        }
-
+        builder.SetDefaultKeyLifetime(TimeSpan.FromDays(Math.Max(7, settings.KeyLifetimeDays)));
+        DataProtectionKeyEncryption.Configure(builder, settings);
         return services;
     }
 
     /// <summary>
-    /// <c>/health/live</c> (the process is up) and <c>/health/ready</c> (the database answers), anonymous and without
-    /// detail, for load balancers and orchestrators (A.8.16).
+    /// <c>/health/live</c> (the process is up) and <c>/health/ready</c> (the database and, in MultiTenant mode, the
+    /// catalog answer; email works), anonymous and with each check's status only, for load balancers and orchestrators
+    /// (A.8.16). A degraded check (email) still answers 200.
     /// </summary>
     public static IServiceCollection AddWorkbenchHealthChecks(this IServiceCollection services)
     {
-        services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+        services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]).AddWorkbenchReadinessChecks();
         return services;
     }
 
     public static IEndpointRouteBuilder MapWorkbenchHealthChecks(this IEndpointRouteBuilder app)
     {
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous().DisableRateLimiting();
-        app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous().DisableRateLimiting();
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready"), ResponseWriter = Observability.WriteHealthJson }).AllowAnonymous().DisableRateLimiting();
         return app;
     }
-
-    /// <summary>
-    /// OpenTelemetry traces and metrics over OTLP when <c>OpenTelemetry:Endpoint</c> is set (off by default).
-    /// Request URLs are recorded without query strings, which can carry tokens.
-    /// </summary>
-    public static IServiceCollection AddWorkbenchTelemetry(this IServiceCollection services, IConfiguration configuration)
-    {
-        var endpoint = configuration["OpenTelemetry:Endpoint"];
-        if (string.IsNullOrWhiteSpace(endpoint))
-        {
-            return services;
-        }
-
-        var serviceName = configuration["OpenTelemetry:ServiceName"] ?? "workbench-web";
-        services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService(serviceName))
-            .WithTracing(t => t
-                .AddAspNetCoreInstrumentation(o =>
-                {
-                    o.Filter = http => !http.Request.Path.StartsWithSegments("/health") && !http.Request.Path.StartsWithSegments("/_framework");
-                    o.EnrichWithHttpRequest = (activity, request) => activity.SetTag("url.query", null);
-                })
-                .AddHttpClientInstrumentation()
-                .AddOtlpExporter(o => o.Endpoint = new Uri(endpoint)))
-            .WithMetrics(m => m
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentationIfAvailable()
-                .AddOtlpExporter(o => o.Endpoint = new Uri(endpoint)));
-        return services;
-    }
-
-    private static MeterProviderBuilder AddRuntimeInstrumentationIfAvailable(this MeterProviderBuilder builder) =>
-        builder.AddMeter("System.Runtime", "Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel", "Microsoft.AspNetCore.Components");
 
     /// <summary>Stores Data Protection keys as rows of <see cref="DataProtectionKeyRecord"/>.</summary>
     private sealed class DatabaseXmlRepository(IWorkbenchDbContextFactory dbFactory) : IXmlRepository

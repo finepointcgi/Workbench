@@ -488,3 +488,8 @@ $RECYCLE.BIN/
 
 # Local attachment storage (Storage:Root)
 App_Data/
+
+# Production compose secrets and local backups (scripts/prod/init-secrets.sh)
+/secrets/
+/backups/
+!/deploy/backup/
