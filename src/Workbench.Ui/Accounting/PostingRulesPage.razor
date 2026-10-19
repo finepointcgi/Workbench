@@ -13,7 +13,7 @@
 }
 else if (_setup is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -33,7 +33,7 @@ else
                             <tr>
                                 <td>@rule.Label</td>
                                 <td>
-                                    <MudSelect T="Guid?" Value="rule.AccountId" ValueChanged="v => SaveAsync(rule, v)" Dense="true" Margin="Margin.Dense"
+                                    <MudSelect T="Guid?" aria-label="@($"Account for {rule.Label}")" Value="rule.AccountId" ValueChanged="v => SaveAsync(rule, v)" Dense="true" Margin="Margin.Dense"
                                                Clearable="@IsOptional(rule)" Placeholder="@(IsOptional(rule) ? "Use the default" : "Choose an account")"
                                                Error="@(rule.AccountId is null && !IsOptional(rule))">
                                         @foreach (var a in Eligible(rule))
@@ -69,7 +69,7 @@ else
                                     <td><b>@w.WbsCode</b> @w.WbsName</td>
                                     <td>@w.Kind</td>
                                     <td>
-                                        <MudSelect T="CostPool?" Value="w.Pool" ValueChanged="v => SetPoolAsync(w, v)" Dense="true" Margin="Margin.Dense" Clearable="true"
+                                        <MudSelect T="CostPool?" aria-label="@($"Cost pool for {w.WbsCode}")" Value="w.Pool" ValueChanged="v => SetPoolAsync(w, v)" Dense="true" Margin="Margin.Dense" Clearable="true"
                                                    Placeholder="@($"{(w.Inherited ? "Inherited" : "Default")}: {AccountingFormat.Label(w.EffectivePool)}")">
                                             @foreach (var pool in Enum.GetValues<CostPool>())
                                             {

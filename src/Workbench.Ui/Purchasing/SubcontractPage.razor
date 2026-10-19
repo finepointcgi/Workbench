@@ -15,7 +15,7 @@
 }
 else if (_detail is not { } d)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -104,9 +104,9 @@ else
                             <tr>
                                 <td style="white-space:nowrap">@(f.ClauseNumber.StartsWith("252", StringComparison.Ordinal) ? "DFARS" : "FAR") @f.ClauseNumber</td>
                                 <td>@f.Title</td>
-                                <td><MudCheckBox T="bool" Value="f.IsIncluded" ValueChanged="@(v => SaveFlowDownAsync(f, v, f.Note))" Dense="true" /></td>
-                                <td><MudTextField T="string" Value="f.Note" ValueChanged="@(n => SaveFlowDownAsync(f, f.IsIncluded, n))" Placeholder="Note" Margin="Margin.Dense" /></td>
-                                <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" aria-label="Remove" OnClick="@(() => RunAsync(() => Subcontracts.RemoveFlowDownAsync(s.Id, f.Id), null))" /></td>
+                                <td><MudCheckBox T="bool" Value="f.IsIncluded" aria-label="@($"Include {f.ClauseNumber} {f.Title}")" ValueChanged="@(v => SaveFlowDownAsync(f, v, f.Note))" Dense="true" /></td>
+                                <td><MudTextField T="string" Value="f.Note" aria-label="@($"Note for {f.ClauseNumber}")" ValueChanged="@(n => SaveFlowDownAsync(f, f.IsIncluded, n))" Placeholder="Note" Margin="Margin.Dense" /></td>
+                                <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" aria-label="@($"Remove {f.ClauseNumber}")" OnClick="@(() => RunAsync(() => Subcontracts.RemoveFlowDownAsync(s.Id, f.Id), null))" /></td>
                             </tr>
                         }
                     </tbody>

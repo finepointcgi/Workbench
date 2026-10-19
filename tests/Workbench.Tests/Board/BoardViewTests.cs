@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using AngleSharp.Dom;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -127,6 +128,7 @@ public sealed class BoardViewTests
         Assert.Contains("JD", card.TextContent);
         Assert.Contains("1001.01.02", card.TextContent);
         Assert.Contains("mud-chip-color-error", card.QuerySelector(".board-card-finish")!.ClassName);
+        A11yAssert.Check(board);
 
         card.Click();
 

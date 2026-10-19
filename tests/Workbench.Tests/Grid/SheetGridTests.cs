@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using System.Diagnostics;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public sealed class SheetGridTests
             .Add(v => v.Changed, () => changed++));
 
         grid.WaitForAssertion(() => Assert.Equal(2, grid.FindAll("tr.wb-row").Count));
+        A11yAssert.Check(grid);
         grid.FindAll("tr.wb-row")[1].QuerySelector("td[data-col='1']")!.DoubleClick();
         grid.Find("input.wb-editor").Input("$1,234.50");
         grid.Find(".wb-grid").KeyDown("Enter");

@@ -13,7 +13,7 @@
 }
 else if (_run is not { } run)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -66,7 +66,7 @@ else
                         <td>
                             @if (run.Status == PaymentRunState.Approved && p.Status == PaymentState.Scheduled)
                             {
-                                <MudTextField T="string" Value="@_refs.GetValueOrDefault(p.Id)" ValueChanged="@(v => _refs[p.Id] = v)" Margin="Margin.Dense" Immediate="true" />
+                                <MudTextField T="string" Value="@_refs.GetValueOrDefault(p.Id)" aria-label="Payment reference" ValueChanged="@(v => _refs[p.Id] = v)" Margin="Margin.Dense" Immediate="true" />
                             }
                             else
                             {
