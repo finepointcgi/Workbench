@@ -1,0 +1,67 @@
+@using Workbench.Contracts.Travel
+@inject IPeopleService People
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="Guid?" @bind-Value="_programId" Label="Program" Required="true">
+                @foreach (var program in Programs.Where(p => p.IsActive || p.Id == Existing?.ProgramId))
+                {
+                    <MudSelectItem T="Guid?" Value="program.Id">@program.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudAutocomplete T="EmployeeDto" @bind-Value="_employee" Label="Cardholder" Required="true" SearchFunc="SearchAsync"
+                             ToStringFunc="@(e => e is null ? "" : $"{e.DisplayName} ({e.EmployeeNumber})")" ResetValueOnEmptyText="true" MaxItems="50" />
+            <MudTextField @bind-Value="_last4" Label="Last four digits" Required="true" MaxLength="4" Immediate="true" InputMode="InputMode.numeric"
+                          HelperText="Statements are matched to the card by these digits. The full number is never stored." />
+            <MudTextField @bind-Value="_nameOnCard" Label="Name on card (optional)" MaxLength="200" />
+            <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="Active" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsValid" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public CorporateCardDto? Existing { get; set; }
+    [Parameter] public IReadOnlyList<CardProgramDto> Programs { get; set; } = [];
+
+    private Guid? _programId;
+    private EmployeeDto? _employee;
+    private string? _last4;
+    private string? _nameOnCard;
+    private bool _active = true;
+    private IReadOnlyList<EmployeeDto> _people = [];
+
+    private bool IsValid => _programId is not null && _employee is not null && _last4 is { Length: 4 } d && d.All(char.IsAsciiDigit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _programId = Existing?.ProgramId ?? Programs.FirstOrDefault(p => p.IsActive)?.Id;
+        try
+        {
+            _people = await People.ListEmployeesAsync();
+        }
+        catch (Exception ex) when (Workbench.Ui.Travel.TravelFormat.IsExpected(ex))
+        {
+            _people = [];
+        }
+
+        if (Existing is { } c)
+        {
+            (_employee, _last4, _nameOnCard, _active) = (_people.FirstOrDefault(p => p.Id == c.EmployeeId), c.Last4, c.NameOnCard, c.IsActive);
+        }
+    }
+
+    private Task<IEnumerable<EmployeeDto>> SearchAsync(string? text, CancellationToken ct) =>
+        Task.FromResult(string.IsNullOrWhiteSpace(text)
+            ? _people.AsEnumerable()
+            : _people.Where(p => p.DisplayName.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase) || p.EmployeeNumber.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveCorporateCardRequest(_programId!.Value, _employee!.Id, _last4!, _nameOnCard, _active)));
+}

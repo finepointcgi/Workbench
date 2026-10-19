@@ -1,0 +1,126 @@
+@page "/setup/card-programs"
+@using Workbench.Contracts.Travel
+@using Workbench.Ui.Travel
+@inject ICardProgramService Cards
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Card programs · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Card programs"
+             Subtitle="Corporate card programs and the cards issued to employees. Company-paid charges post to the program's liability account instead of being reimbursed. Only the last four digits of a card are stored.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditProgramAsync(null)" data-testid="add-program">Add program</MudButton>
+</SetupHeader>
+
+<MudTable T="CardProgramDto" Items="_programs" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Class="mb-6" data-testid="card-programs">
+    <HeaderContent>
+        <MudTh>Program</MudTh>
+        <MudTh>Issuer</MudTh>
+        <MudTh>Who pays</MudTh>
+        <MudTh>Liability account</MudTh>
+        <MudTh Style="text-align:right">Overdue after</MudTh>
+        <MudTh Style="text-align:right">Active cards</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Program">@context.Name @if (!context.IsActive) { <MudChip T="string" Size="Size.Small" Class="my-0">Inactive</MudChip> }</MudTd>
+        <MudTd DataLabel="Issuer">@context.Issuer@(context.VendorName is { } v ? $" ({v})" : "")</MudTd>
+        <MudTd DataLabel="Who pays">@TravelFormat.Payment(context.PaymentResponsibility)</MudTd>
+        <MudTd DataLabel="Liability account">@(context.LiabilityAccount ?? "–")</MudTd>
+        <MudTd DataLabel="Overdue after" Style="text-align:right">@context.UnsubmittedAlertDays days</MudTd>
+        <MudTd DataLabel="Active cards" Style="text-align:right">@context.CardCount</MudTd>
+        <MudTd><MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" OnClick="() => EditProgramAsync(context)" aria-label="@($"Edit {context.Name}")" /></MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">No card programs yet. Add one for each corporate card your company uses.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Cards</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreditCard" OnClick="() => EditCardAsync(null)"
+               Disabled="@(_programs.Count == 0)" data-testid="add-card">Issue a card</MudButton>
+</MudStack>
+<MudTable T="CorporateCardDto" Items="_cards" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" data-testid="cards">
+    <HeaderContent>
+        <MudTh>Cardholder</MudTh>
+        <MudTh>Program</MudTh>
+        <MudTh>Card</MudTh>
+        <MudTh>Name on card</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Cardholder">@context.EmployeeName</MudTd>
+        <MudTd DataLabel="Program">@context.ProgramName</MudTd>
+        <MudTd DataLabel="Card">••@context.Last4</MudTd>
+        <MudTd DataLabel="Name on card">@context.NameOnCard</MudTd>
+        <MudTd DataLabel="Status">@(context.IsActive ? "Active" : "Inactive")</MudTd>
+        <MudTd><MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" OnClick="() => EditCardAsync(context)" aria-label="@($"Edit card {context.Last4}")" /></MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">No cards issued yet.</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<CardProgramDto> _programs = [];
+    private IReadOnlyList<CorporateCardDto> _cards = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _programs = await Cards.ListProgramsAsync();
+            _cards = await Cards.ListCardsAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load card programs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task EditProgramAsync(CardProgramDto? program)
+    {
+        var parameters = new DialogParameters<CardProgramDialog> { { d => d.Existing, program } };
+        var dialog = await DialogService.ShowAsync<CardProgramDialog>(program is null ? "Add a card program" : $"Edit {program.Name}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveCardProgramRequest request })
+        {
+            await RunAsync(() => program is null ? Cards.CreateProgramAsync(request) : Cards.UpdateProgramAsync(program.Id, request), "Card program saved.");
+        }
+    }
+
+    private async Task EditCardAsync(CorporateCardDto? card)
+    {
+        var parameters = new DialogParameters<CorporateCardDialog> { { d => d.Existing, card }, { d => d.Programs, _programs } };
+        var dialog = await DialogService.ShowAsync<CorporateCardDialog>(card is null ? "Issue a card" : $"Edit card ••{card.Last4}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveCorporateCardRequest request })
+        {
+            await RunAsync(() => card is null ? Cards.CreateCardAsync(request) : Cards.UpdateCardAsync(card.Id, request), "Card saved.");
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        try
+        {
+            await action();
+            Snackbar.Add(success, Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

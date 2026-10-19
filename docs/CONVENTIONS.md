@@ -536,3 +536,21 @@ Checks:
   a new rule is a key in `TimesheetFlagRules` and never blocks anything.
 - Providers live in Infrastructure (`Assistant/AnthropicModelClient`, the official Anthropic SDK; Bedrock via
   `Anthropic.Bedrock`); tests and Development use `FakeAssistantModel` (`Assistant:EnableFakeProvider`).
+
+## Travel authorizations and corporate cards
+
+- Entities (`Domain/Travel`): `TravelAuthorization` (+ `TravelAuthorizationDestination`), `TravelLineCategory`, `CardProgram`,
+  `CorporateCard`, `CardStatementImport`, `CardTransaction`. Contracts: `ITravelAuthorizationService`, `ICardProgramService`
+  (Finance/Admin), `ICardChargeService` (the cardholder's own) in `Contracts/Travel`. Decorators: `AddWorkbenchTravelPermissions`.
+- A trip is approved through the engine (document type `travel-authorization`; default: the supervisor and the charged
+  project's PM in parallel). Lodging and M&IE are never typed: `TravelEstimator` prices each night/day from the per diem
+  tables through `PerDiemCalculator`. The approved trip is the budget of one expense report (`TravelAuthorization.ExpenseReportId`);
+  `TravelComparison` categorizes its lines (chosen category, per diem kind, card MCC, then words) and flags categories over
+  `Travel:TolerancePercent`. Over-budget isn't unallowable: unallowable and over-per-diem amounts stay with the per diem lines
+  and the approver's unallowable flag. Advances are recorded (not posted) and deducted from what's reimbursed.
+- Card statements are read by `ICardFeed` implementations (CSV, OFX; no live bank calls) and de-duplicated per program by
+  `CardFeeds.DedupeKeys` (the bank's id, else a row hash plus its occurrence in the file). A charge becomes an ordinary expense
+  line (`CardTransaction.OdcEntryId`); `TravelCardExpenseReportGuard` locks its amount and releases the charge when the line or
+  report goes. Posting: a company-paid program's lines credit the program's liability account (default `2030 Corporate card
+  payable`) instead of accrued reimbursements (`PostingContext.CardLiability`). Charges older than the program's
+  `UnsubmittedAlertDays` and not on a submitted report are overdue (home to-do `cards:overdue`, Finance aging at `/cards`).

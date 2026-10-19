@@ -16,7 +16,9 @@ public static class ApprovalDocumentTypes
 
     public const string OpportunityGate = "opportunity-gate";
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate];
+    public const string TravelAuthorization = "travel-authorization";
+
+    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, TravelAuthorization];
 
     public static string Label(string documentType) => documentType switch
     {
@@ -31,6 +33,7 @@ public static class ApprovalDocumentTypes
         HrChange => "Personnel change",
         Compensation => "Compensation change",
         OpportunityGate => "Opportunity gate (go/no-go)",
+        TravelAuthorization => "Travel authorization",
         _ => documentType,
     };
 

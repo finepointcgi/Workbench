@@ -1,0 +1,162 @@
+@* On an expense report: the approved trip it belongs to (estimate vs actual, flags) and which lines are card charges. *@
+@inject ITravelAuthorizationService Travel
+@inject ICardChargeService Cards
+@inject ISnackbar Snackbar
+
+@if (_comparison is { } c)
+{
+    <MudPaper Outlined="true" Class="pa-3 mt-3" data-testid="trip-comparison">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Trip budget</MudText>
+            <MudLink Href="@($"travel/{c.AuthorizationId}")" Typo="Typo.body2">@c.Number</MudLink>
+            @if (c.AuthorizationStatus != TravelAuthorizationState.Approved)
+            {
+                <TravelStatusChip Status="c.AuthorizationStatus" />
+            }
+            <MudSpacer />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Flagged when more than @c.TolerancePercent.ToString("0.##", CultureInfo.InvariantCulture)% over what was authorized.</MudText>
+        </MudStack>
+
+        @foreach (var flag in c.Flags)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">@flag</MudAlert>
+        }
+
+        <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+            <thead>
+                <tr><th>Category</th><th style="text-align:right">Authorized</th><th style="text-align:right">Actual</th><th style="text-align:right">Difference</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in c.Categories)
+                {
+                    <tr>
+                        <td>@TravelLabels.Category(row.Category)</td>
+                        <td style="text-align:right">@TravelFormat.Money(row.Authorized)</td>
+                        <td style="text-align:right">@TravelFormat.Money(row.Actual)</td>
+                        <td style="text-align:right">@TravelFormat.Money(row.Difference)</td>
+                        <td>
+                            @if (row.IsOverTolerance)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="my-0">Over budget</MudChip>
+                            }
+                            else if (row.IsOverAuthorized)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="my-0">Within tolerance</MudChip>
+                            }
+                        </td>
+                    </tr>
+                }
+                <tr>
+                    <td><b>Total</b></td>
+                    <td style="text-align:right"><b>@TravelFormat.Money(c.AuthorizedTotal)</b></td>
+                    <td style="text-align:right"><b>@TravelFormat.Money(c.ActualTotal)</b></td>
+                    <td style="text-align:right"><b>@TravelFormat.Money(c.ActualTotal - c.AuthorizedTotal)</b></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3 mb-1">Lines by category</MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>Date</th><th>Line</th><th>Category</th><th style="text-align:right">Amount</th></tr></thead>
+            <tbody>
+                @foreach (var line in c.Lines)
+                {
+                    <tr>
+                        <td>@line.IncurredOn.ToString("MMM d", CultureInfo.InvariantCulture)</td>
+                        <td>
+                            @line.Description
+                            @if (line.CardLast4 is { } last4)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.CreditCard" Class="my-0"
+                                         title="@(line.IsCompanyPaid ? "Company-paid card: owed to the card issuer, not reimbursed to you. The amount is locked to the charge." : "Your card: reimbursed to you. The amount is locked to the charge.")">••@last4</MudChip>
+                            }
+                            @if (line.IsFlagged)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="my-0">@line.Flag</MudChip>
+                            }
+                        </td>
+                        <td>
+                            @if (Editable)
+                            {
+                                <MudSelect T="TravelCategory" Value="line.Category" ValueChanged="v => SetCategoryAsync(line, v)" Dense="true" Margin="Margin.Dense"
+                                           aria-label="@($"Category of {line.Description}")" Style="min-width:200px">
+                                    @foreach (var category in Enum.GetValues<TravelCategory>())
+                                    {
+                                        <MudSelectItem Value="category">@TravelLabels.Category(category)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                @TravelLabels.Category(line.Category)
+                            }
+                        </td>
+                        <td style="text-align:right">@TravelFormat.Money(line.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+
+        <MudStack Row="true" Spacing="6" Wrap="Wrap.Wrap" Class="mt-3 px-2" data-testid="trip-settlement">
+            <div><MudText Typo="Typo.caption" Class="mud-text-secondary">Paid by company card</MudText><MudText>@TravelFormat.Money(c.PaidByCompanyCard)</MudText></div>
+            <div><MudText Typo="Typo.caption" Class="mud-text-secondary">To reimburse</MudText><MudText>@TravelFormat.Money(c.Reimbursable)</MudText></div>
+            @if (c.AdvanceIssued > 0)
+            {
+                <div><MudText Typo="Typo.caption" Class="mud-text-secondary">Less advance</MudText><MudText>@TravelFormat.Money(c.AdvanceIssued)</MudText></div>
+                <div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@(c.DueToEmployee >= 0 ? "Due to you" : "You owe back")</MudText>
+                    <MudText><b>@TravelFormat.Money(Math.Abs(c.DueToEmployee))</b></MudText>
+                </div>
+            }
+        </MudStack>
+    </MudPaper>
+}
+else if (_cardLines.Count > 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+        @(_cardLines.Count == 1 ? "1 line is a corporate card charge" : $"{_cardLines.Count} lines are corporate card charges"): their amounts are locked to the charge.
+        @if (_cardLines.Any(l => l.IsCompanyPaid))
+        {
+            <text> Company-paid charges (@TravelFormat.Money(_cardLines.Where(l => l.IsCompanyPaid).Sum(l => l.Amount))) are owed to the card issuer, not reimbursed to you.</text>
+        }
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ReportId { get; set; }
+    [Parameter] public bool Editable { get; set; }
+
+    /// <summary>Bumped by the page after it reloads, so the panel reloads too.</summary>
+    [Parameter] public int Version { get; set; }
+
+    private TravelComparisonDto? _comparison;
+    private IReadOnlyList<CardLineDto> _cardLines = [];
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _comparison = await Travel.GetComparisonForReportAsync(ReportId);
+            _cardLines = _comparison is null ? await Cards.ListReportCardLinesAsync(ReportId) : [];
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            _comparison = null;
+        }
+    }
+
+    private async Task SetCategoryAsync(TravelComparisonLineDto line, TravelCategory category)
+    {
+        try
+        {
+            _comparison = await Travel.SetLineCategoryAsync(ReportId, line.OdcEntryId, new SetTravelLineCategoryRequest(category));
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

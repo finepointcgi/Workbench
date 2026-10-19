@@ -1,0 +1,574 @@
+@page "/travel/new"
+@page "/travel/{Id:guid}"
+@inject ITravelAuthorizationService Travel
+@inject IPerDiemRateService Rates
+@inject IProjectService Projects
+@inject Workbench.Contracts.Identity.ICurrentUserContext CurrentUser
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@(_detail?.Authorization.Title ?? "Request a trip") · Travel · Workbench</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    var ta = _detail?.Authorization;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@(ta?.Title ?? "Request a trip")</MudText>
+        @if (ta is not null)
+        {
+            <TravelStatusChip Status="ta.Status" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@ta.Number</MudText>
+        }
+        <MudSpacer />
+        @if (ta is not null)
+        {
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.History" OnClick="ShowHistoryAsync">Approval history</MudButton>
+        }
+        @if (_detail?.CanDecide == true)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Undo" OnClick="RejectAsync" Disabled="_busy" data-testid="reject-trip">Send back</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="ApproveAsync" Disabled="_busy" data-testid="approve-trip">Approve</MudButton>
+        }
+    </MudStack>
+
+    @if (ta is not null)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            @ta.EmployeeName · @ta.Destinations · @TravelFormat.Dates(ta.TripStart, ta.TripEnd) · @ChargeCodeText.Label(ta.WbsCode, ta.WbsName)
+        </MudText>
+        @if (ta.Status == TravelAuthorizationState.Rejected && ta.RejectionReason is { } reason)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">Sent back: @reason. Change the request and submit it again.</MudAlert>
+        }
+        else if (ta.Status == TravelAuthorizationState.Submitted)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-3">Waiting for approval by the traveler's supervisor and the project manager.</MudAlert>
+        }
+        else if (ta.Status == TravelAuthorizationState.Approved)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-3">
+                Approved by @ta.ApprovedBy. The authorized @TravelFormat.Money(ta.EstimatedTotal) is the budget for this trip's expense report.
+            </MudAlert>
+        }
+        else if (ta.Status == TravelAuthorizationState.Cancelled)
+        {
+            <MudAlert Severity="Severity.Normal" Class="mb-3">Cancelled: @ta.CancellationReason</MudAlert>
+        }
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            @if (Editable)
+            {
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">The trip</MudText>
+                    <MudStack Spacing="3">
+                        <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" MaxLength="200" data-testid="trip-title" />
+                        <MudTextField @bind-Value="_purpose" Label="Business purpose" Required="true" Lines="3" Immediate="true" MaxLength="2000"
+                                      HelperText="Why the trip is needed and who you'll meet." data-testid="trip-purpose" />
+
+                        <div>
+                            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mb-1">Destinations</MudText>
+                            @for (var i = 0; i < _stops.Count; i++)
+                            {
+                                var stop = _stops[i];
+                                var index = i;
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-1">
+                                    <MudAutocomplete T="PerDiemLocationDto" Label="Destination" Value="stop.Location" ValueChanged="v => OnLocationChangedAsync(stop, v)"
+                                                     SearchFunc="SearchLocationsAsync" ToStringFunc="@(l => l?.Label ?? "")" MaxItems="50" Dense="true" ResetValueOnEmptyText="true"
+                                                     Style="min-width:260px" HelperText="Pick a GSA location; anywhere else gets the standard rate."
+                                                     data-testid="@($"trip-destination-{index}")" />
+                                    <MudDatePicker Label="Arrive" Date="stop.Arrive" DateChanged="d => OnArriveChangedAsync(index, d)" DateFormat="yyyy-MM-dd" Style="max-width:150px"
+                                                   AutoClose="true" Editable="true" data-testid="@($"trip-arrive-{index}")" />
+                                    <MudDatePicker Label="Leave" Date="stop.Depart" DateChanged="d => OnDepartChangedAsync(index, d)" DateFormat="yyyy-MM-dd" Style="max-width:150px"
+                                                   AutoClose="true" Editable="true" data-testid="@($"trip-depart-{index}")" />
+                                    @if (_stops.Count > 1)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" OnClick="() => RemoveStopAsync(index)" aria-label="Remove destination" />
+                                    }
+                                </MudStack>
+                            }
+                            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.AddLocationAlt" OnClick="AddStop">Add a destination</MudButton>
+                        </div>
+
+                        <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge code" Required="true" Disabled="_loadingCodes" data-testid="trip-charge"
+                                   HelperText="@(_codes.Count == 0 && !_loadingCodes ? "You have no charge codes on the first day of the trip." : "The project the trip is for.")">
+                            @foreach (var code in _codes)
+                            {
+                                <MudSelectItem T="Guid?" Value="code.WbsElementId">@ChargeCodeText.Label(code)@(code.Kind == ChargeCodeKind.Direct ? $" · {code.ProjectName}" : "")</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudText Typo="Typo.subtitle2" HtmlTag="h3">Your estimates</MudText>
+                        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                            <MudNumericField T="decimal" Value="_airfare" ValueChanged="v => SetCostAsync(() => _airfare = v)" Label="Airfare" Min="0" Format="N2"
+                                             Adornment="Adornment.Start" AdornmentText="$" Style="max-width:180px" data-testid="trip-airfare" />
+                            <MudNumericField T="decimal" Value="_rental" ValueChanged="v => SetCostAsync(() => _rental = v)" Label="Rental car" Min="0" Format="N2"
+                                             Adornment="Adornment.Start" AdornmentText="$" Style="max-width:180px" />
+                            <MudNumericField T="decimal" Value="_other" ValueChanged="v => SetCostAsync(() => _other = v)" Label="Other costs" Min="0" Format="N2"
+                                             Adornment="Adornment.Start" AdornmentText="$" Style="max-width:180px" />
+                        </MudStack>
+                        @if (_other > 0)
+                        {
+                            <MudTextField @bind-Value="_otherDescription" Label="What the other costs are" MaxLength="500" HelperText="For example: taxis, parking, registration fees." />
+                        }
+                        <MudNumericField T="decimal" @bind-Value="_advance" Label="Cash advance (optional)" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$"
+                                         Style="max-width:220px" HelperText="Finance pays it before the trip; your expense report deducts it." />
+                    </MudStack>
+                    <MudStack Row="true" Spacing="2" Class="mt-4" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(!IsValid || _busy)" data-testid="save-trip">Save draft</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="@(!IsValid || _busy)"
+                                   data-testid="submit-trip">Submit for approval</MudButton>
+                        <MudSpacer />
+                        @if (ta is not null)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" Disabled="_busy">Delete</MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+            else if (ta is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">The trip</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3" Style="white-space:pre-wrap">@ta.Purpose</MudText>
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <thead><tr><th>Destination</th><th>Arrive</th><th>Leave</th></tr></thead>
+                        <tbody>
+                            @foreach (var stop in _detail!.Destinations)
+                            {
+                                <tr>
+                                    <td>@(new PerDiemLocationDto(stop.Kind, stop.Country, stop.State, stop.Destination).Label)</td>
+                                    <td>@stop.ArriveOn.ToString("ddd MMM d", CultureInfo.InvariantCulture)</td>
+                                    <td>@stop.DepartOn.ToString("ddd MMM d", CultureInfo.InvariantCulture)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    @if (ta.AdvanceRequested > 0 || ta.AdvanceIssuedAmount is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-3">
+                            Cash advance requested: @TravelFormat.Money(ta.AdvanceRequested).
+                            @if (ta.AdvanceIssuedAmount is { } issued)
+                            {
+                                <text> Issued @TravelFormat.Money(issued) on @ta.AdvanceIssuedOn?.ToString("MMM d", CultureInfo.InvariantCulture)@(ta.AdvanceReference is { } r ? $" ({r})" : "").</text>
+                            }
+                        </MudText>
+                    }
+                    <MudStack Row="true" Spacing="2" Class="mt-4" Wrap="Wrap.Wrap">
+                        @if (_detail.IsMine && ta.Status == TravelAuthorizationState.Approved)
+                        {
+                            @if (ta.ExpenseReportId is { } reportId)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Receipt" Href="@($"expenses/{reportId}")">Open the expense report</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Receipt" OnClick="StartReportAsync" Disabled="_busy"
+                                           data-testid="start-report">Start the expense report</MudButton>
+                            }
+                        }
+                        else if (ta.ExpenseReportId is { } linked)
+                        {
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Receipt" Href="@($"expenses/{linked}")">Expense report</MudButton>
+                        }
+                        @if (_isFinance && ta.Status == TravelAuthorizationState.Approved)
+                        {
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Payments" OnClick="RecordAdvanceAsync" Disabled="_busy">Record an advance</MudButton>
+                        }
+                        <MudSpacer />
+                        @if (_detail.IsMine && ta.Status != TravelAuthorizationState.Cancelled)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelTripAsync" Disabled="_busy">Cancel the trip</MudButton>
+                        }
+                        @if (_detail.IsMine && ta.Status == TravelAuthorizationState.Cancelled)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" Disabled="_busy">Delete</MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="trip-estimate">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Estimated cost</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Lodging and meals use the GSA per diem rates for each night and day.</MudText>
+                @if (_estimate is { } e)
+                {
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <tbody>
+                            <tr><td>Airfare</td><td style="text-align:right">@TravelFormat.Money(e.Airfare)</td></tr>
+                            <tr><td>Lodging (@e.Nights @(e.Nights == 1 ? "night" : "nights") at the GSA maximum)</td><td style="text-align:right">@TravelFormat.Money(e.Lodging)</td></tr>
+                            <tr><td>Meals and incidentals (M&amp;IE; 75% on travel days)</td><td style="text-align:right">@TravelFormat.Money(e.Mie)</td></tr>
+                            <tr><td>Rental car</td><td style="text-align:right">@TravelFormat.Money(e.RentalCar)</td></tr>
+                            <tr><td>Other</td><td style="text-align:right">@TravelFormat.Money(e.Other)</td></tr>
+                            <tr><td><b>Total</b></td><td style="text-align:right" data-testid="trip-total"><b>@TravelFormat.Money(e.Total)</b></td></tr>
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudExpansionPanels Elevation="0" Class="mt-2">
+                        <MudExpansionPanel Text="Per diem by day">
+                            <MudSimpleTable Dense="true" Elevation="0">
+                                <thead><tr><th>Date</th><th>Rate</th><th style="text-align:right">Lodging</th><th style="text-align:right">M&amp;IE</th></tr></thead>
+                                <tbody>
+                                    @foreach (var day in e.Days)
+                                    {
+                                        <tr>
+                                            <td>@day.Date.ToString("ddd MMM d", CultureInfo.InvariantCulture)</td>
+                                            <td>@day.RateDescription</td>
+                                            <td style="text-align:right">@(day.HasLodging ? TravelFormat.Money(day.LodgingMax) : "–")</td>
+                                            <td style="text-align:right">@TravelFormat.Money(day.MieAllowance)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                    @foreach (var note in e.Notes)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@note</MudAlert>
+                    }
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Add a destination and dates to see the estimate.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private sealed class StopModel
+    {
+        public PerDiemLocationDto? Location { get; set; }
+        public DateTime? Arrive { get; set; }
+        public DateTime? Depart { get; set; }
+    }
+
+    private TravelAuthorizationDetailDto? _detail;
+    private TravelEstimateDto? _estimate;
+    private IReadOnlyList<PerDiemLocationDto> _locations = [];
+    private int _locationsYear;
+    private IReadOnlyList<ChargeCodeDto> _codes = [];
+    private DateOnly? _codesDate;
+    private readonly List<StopModel> _stops = [];
+    private string? _title;
+    private string? _purpose;
+    private Guid? _wbsId;
+    private decimal _airfare;
+    private decimal _rental;
+    private decimal _other;
+    private string? _otherDescription;
+    private decimal _advance;
+    private Guid? _employeeId;
+    private bool _isFinance;
+    private bool _loading = true;
+    private bool _loadingCodes;
+    private bool _busy;
+
+    private bool Editable => _detail is null || (_detail.IsMine && _detail.Authorization.IsEditable);
+
+    private bool IsValid => !string.IsNullOrWhiteSpace(_title) && !string.IsNullOrWhiteSpace(_purpose) && _wbsId is not null && StopsValid();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            var me = await CurrentUser.GetAsync();
+            (_employeeId, _isFinance) = (me.EmployeeId, me.IsFinance);
+            if (Id is { } id)
+            {
+                Apply(await Travel.GetAsync(id));
+            }
+            else
+            {
+                _detail = null;
+                var monday = DateOnly.FromDateTime(DateTime.Today).AddDays(7 - ((int)DateTime.Today.DayOfWeek + 6) % 7);
+                _stops.Clear();
+                _stops.Add(new StopModel { Arrive = monday.ToDateTime(TimeOnly.MinValue), Depart = monday.AddDays(2).ToDateTime(TimeOnly.MinValue) });
+            }
+
+            if (Editable)
+            {
+                await LoadChoicesAsync();
+            }
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the trip: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Apply(TravelAuthorizationDetailDto detail)
+    {
+        _detail = detail;
+        _estimate = detail.Estimate;
+        var ta = detail.Authorization;
+        (_title, _purpose, _wbsId, _airfare, _rental, _other, _otherDescription, _advance) =
+            (ta.Title, ta.Purpose, ta.WbsElementId, ta.EstimatedAirfare, ta.EstimatedRentalCar, ta.EstimatedOther, ta.OtherDescription, ta.AdvanceRequested);
+        _stops.Clear();
+        _stops.AddRange(detail.Destinations.Select(d => new StopModel
+        {
+            Location = new PerDiemLocationDto(d.Kind, d.Country, d.State, d.Destination),
+            Arrive = d.ArriveOn.ToDateTime(TimeOnly.MinValue),
+            Depart = d.DepartOn.ToDateTime(TimeOnly.MinValue),
+        }));
+    }
+
+    private async Task LoadChoicesAsync()
+    {
+        var start = Start() ?? DateOnly.FromDateTime(DateTime.Today);
+        var year = PerDiemFiscalYear(start);
+        if (year != _locationsYear)
+        {
+            _locations = await Rates.ListLocationsAsync(year);
+            _locationsYear = year;
+        }
+
+        if (_employeeId is { } employee && _codesDate != start)
+        {
+            _loadingCodes = true;
+            try
+            {
+                _codes = (await Projects.ListChargeCodesAsync(employee, start)).Where(c => c.Kind != ChargeCodeKind.Leave).ToList();
+                _codesDate = start;
+            }
+            finally
+            {
+                _loadingCodes = false;
+            }
+
+            if (_wbsId is null || _codes.All(c => c.WbsElementId != _wbsId))
+            {
+                _wbsId = _codes.FirstOrDefault(c => c.Kind == ChargeCodeKind.Direct)?.WbsElementId;
+            }
+        }
+    }
+
+    private static int PerDiemFiscalYear(DateOnly date) => date.Month >= 10 ? date.Year + 1 : date.Year;
+
+    private Task<IEnumerable<PerDiemLocationDto>> SearchLocationsAsync(string? text, CancellationToken ct) =>
+        Task.FromResult(string.IsNullOrWhiteSpace(text)
+            ? _locations.AsEnumerable()
+            : _locations.Where(l => l.Label.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    private DateOnly? Start() => _stops.FirstOrDefault()?.Arrive is { } d ? DateOnly.FromDateTime(d) : null;
+
+    private bool StopsValid()
+    {
+        for (var i = 0; i < _stops.Count; i++)
+        {
+            var s = _stops[i];
+            if (s.Location is null || s.Arrive is null || s.Depart is null || s.Depart < s.Arrive || (i > 0 && s.Arrive != _stops[i - 1].Depart))
+            {
+                return false;
+            }
+        }
+
+        return _stops.Count > 0;
+    }
+
+    private IReadOnlyList<TravelDestinationDto> Stops() =>
+        _stops.Select(s => new TravelDestinationDto(s.Location!.Kind, s.Location.Country, s.Location.State, s.Location.Destination,
+            DateOnly.FromDateTime(s.Arrive!.Value), DateOnly.FromDateTime(s.Depart!.Value))).ToList();
+
+    private async Task RefreshEstimateAsync()
+    {
+        if (!StopsValid())
+        {
+            _estimate = null;
+            return;
+        }
+
+        try
+        {
+            _estimate = await Travel.EstimateAsync(new EstimateTravelRequest(Stops(), _airfare, _rental, _other));
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            _estimate = null;
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task OnLocationChangedAsync(StopModel stop, PerDiemLocationDto? location)
+    {
+        stop.Location = location;
+        await RefreshEstimateAsync();
+    }
+
+    private async Task OnArriveChangedAsync(int index, DateTime? date)
+    {
+        _stops[index].Arrive = date;
+        if (index > 0)
+        {
+            _stops[index - 1].Depart = date;
+        }
+
+        if (date is { } d && (_stops[index].Depart is null || _stops[index].Depart < d))
+        {
+            _stops[index].Depart = d;
+        }
+
+        await LoadChoicesAsync();
+        await RefreshEstimateAsync();
+    }
+
+    private async Task OnDepartChangedAsync(int index, DateTime? date)
+    {
+        _stops[index].Depart = date;
+        if (index + 1 < _stops.Count)
+        {
+            _stops[index + 1].Arrive = date;
+        }
+
+        await RefreshEstimateAsync();
+    }
+
+    private void AddStop()
+    {
+        var from = _stops.LastOrDefault()?.Depart ?? DateTime.Today;
+        _stops.Add(new StopModel { Arrive = from, Depart = from.AddDays(1) });
+    }
+
+    private async Task RemoveStopAsync(int index)
+    {
+        _stops.RemoveAt(index);
+        for (var i = 1; i < _stops.Count; i++)
+        {
+            _stops[i].Arrive = _stops[i - 1].Depart;
+        }
+
+        await RefreshEstimateAsync();
+    }
+
+    private async Task SetCostAsync(Action set)
+    {
+        set();
+        await RefreshEstimateAsync();
+    }
+
+    private SaveTravelAuthorizationRequest Request() =>
+        new(_title!.Trim(), _purpose!.Trim(), _wbsId!.Value, Stops(), _airfare, _rental, _other, _otherDescription, _advance);
+
+    private async Task<TravelAuthorizationDetailDto?> SaveCoreAsync()
+    {
+        var saved = _detail is null ? await Travel.CreateAsync(Request()) : await Travel.UpdateAsync(_detail.Authorization.Id, Request());
+        Apply(saved);
+        return saved;
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        var isNew = _detail is null;
+        var saved = await SaveCoreAsync();
+        Snackbar.Add("Draft saved.", Severity.Success);
+        if (isNew && saved is not null)
+        {
+            Navigation.NavigateTo($"travel/{saved.Authorization.Id}", replace: true);
+        }
+    });
+
+    private Task SubmitAsync() => RunAsync(async () =>
+    {
+        var saved = await SaveCoreAsync();
+        Apply(await Travel.SubmitAsync(saved!.Authorization.Id));
+        Snackbar.Add("Submitted for approval.", Severity.Success);
+        if (Id is null)
+        {
+            Navigation.NavigateTo($"travel/{saved.Authorization.Id}", replace: true);
+        }
+    });
+
+    private Task ApproveAsync() => RunAsync(async () =>
+    {
+        Apply(await Travel.ApproveAsync(_detail!.Authorization.Id, new TravelDecisionRequest()));
+        Snackbar.Add(_detail!.Authorization.Status == TravelAuthorizationState.Approved ? "Trip approved." : "Your approval is recorded; another approver is still needed.", Severity.Success);
+    });
+
+    private async Task RejectAsync()
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Send the trip request back", "Send back", "Say what the traveler should change.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(async () => Apply(await Travel.RejectAsync(_detail!.Authorization.Id, new TravelDecisionRequest(reason))));
+        }
+    }
+
+    private async Task CancelTripAsync()
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Cancel the trip", "Cancel the trip", "The trip won't happen. Approvers who haven't decided are told it's cancelled.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(async () => Apply(await Travel.CancelAsync(_detail!.Authorization.Id, new TravelDecisionRequest(reason))));
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_detail is null || await DialogService.ShowMessageBoxAsync("Delete trip request", $"Delete \"{_detail.Authorization.Title}\"?", yesText: "Delete", cancelText: "Keep it") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Travel.DeleteAsync(_detail.Authorization.Id);
+            Navigation.NavigateTo("travel");
+        });
+    }
+
+    private Task StartReportAsync() => RunAsync(async () =>
+    {
+        var report = await Travel.StartExpenseReportAsync(_detail!.Authorization.Id);
+        Navigation.NavigateTo($"expenses/{report.Id}");
+    });
+
+    private async Task RecordAdvanceAsync()
+    {
+        var parameters = new DialogParameters<TravelAdvanceDialog> { { d => d.Requested, _detail!.Authorization.AdvanceRequested } };
+        var dialog = await DialogService.ShowAsync<TravelAdvanceDialog>("Record a travel advance", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: RecordTravelAdvanceRequest request })
+        {
+            await RunAsync(async () => Apply(await Travel.RecordAdvanceAsync(_detail.Authorization.Id, request)));
+        }
+    }
+
+    private async Task ShowHistoryAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Approvals.ApprovalHistoryDialog>
+        {
+            { d => d.DocumentType, Workbench.Contracts.Approvals.ApprovalDocumentTypes.TravelAuthorization },
+            { d => d.DocumentId, _detail!.Authorization.Id },
+        };
+        await DialogService.ShowAsync<Workbench.Ui.Approvals.ApprovalHistoryDialog>($"Approval history: {_detail.Authorization.Title}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

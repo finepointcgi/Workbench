@@ -1,0 +1,305 @@
+@page "/cards"
+@layout Workbench.Ui.Layout.AccountingLayout
+@using Microsoft.AspNetCore.Components.Forms
+@inject ICardProgramService Cards
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Corporate cards · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Corporate cards</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Settings" Href="setup/card-programs">Card programs</MudButton>
+</MudStack>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Import each card statement, then follow the charges until they're on an approved expense report. Company-paid charges post to the program's liability account when approved.
+</MudText>
+
+<MudPaper Outlined="true" Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Import a statement</MudText>
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudSelect T="Guid?" @bind-Value="_importProgramId" Label="Program" Style="min-width:260px" Dense="true" data-testid="import-program">
+            @foreach (var program in _programs.Where(p => p.IsActive))
+            {
+                <MudSelectItem T="Guid?" Value="program.Id">@program.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudFileUpload T="IBrowserFile" FilesChanged="ImportAsync" Accept=".csv,.ofx,.qfx" Disabled="@(_importProgramId is null || _busy)">
+            <CustomContent>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" Disabled="@(_importProgramId is null || _busy)"
+                           OnClick="@context.OpenFilePickerAsync" data-testid="import-statement">Choose a CSV or OFX file</MudButton>
+            </CustomContent>
+            <SelectedTemplate />
+        </MudFileUpload>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Rows already imported are skipped, so importing an overlapping statement is safe.</MudText>
+    </MudStack>
+    @if (_lastImport is { } r)
+    {
+        <MudAlert Severity="@(r.Warnings.Count > 0 ? Severity.Warning : Severity.Success)" Class="mt-3" data-testid="import-result">
+            @r.Format: @r.Rows rows read, @r.Imported imported (@TravelFormat.Money(r.ImportedTotal)), @r.Duplicates already imported, @r.Unmatched without a matching card.
+            @foreach (var warning in r.Warnings)
+            {
+                <div>@warning</div>
+            }
+        </MudAlert>
+    }
+</MudPaper>
+
+<MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
+    <MudTabPanel Text="Reconciliation">
+        <MudTable T="CardReconciliationDto" Items="_reconciliation" Loading="_loading" Dense="true" Breakpoint="Breakpoint.Sm" data-testid="card-reconciliation">
+            <HeaderContent>
+                <MudTh>Program</MudTh>
+                <MudTh Style="text-align:right">Imported</MudTh>
+                <MudTh Style="text-align:right">Not on a report</MudTh>
+                <MudTh Style="text-align:right">On reports</MudTh>
+                <MudTh Style="text-align:right">Approved</MudTh>
+                <MudTh Style="text-align:right">Excluded</MudTh>
+                <MudTh Style="text-align:right">Unmatched</MudTh>
+                <MudTh Style="text-align:right">Overdue</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Program">@context.ProgramName <span class="mud-text-secondary">· @TravelFormat.Payment(context.PaymentResponsibility)</span></MudTd>
+                <MudTd DataLabel="Imported" Style="text-align:right">@TravelFormat.Money(context.Imported) <span class="mud-text-secondary">(@context.Count)</span></MudTd>
+                <MudTd DataLabel="Not on a report" Style="text-align:right">@TravelFormat.Money(context.Unassigned)</MudTd>
+                <MudTd DataLabel="On reports" Style="text-align:right">@TravelFormat.Money(context.OnReports)</MudTd>
+                <MudTd DataLabel="Approved" Style="text-align:right">@TravelFormat.Money(context.Approved)</MudTd>
+                <MudTd DataLabel="Excluded" Style="text-align:right">@TravelFormat.Money(context.Excluded)</MudTd>
+                <MudTd DataLabel="Unmatched" Style="text-align:right">@context.Unmatched</MudTd>
+                <MudTd DataLabel="Overdue" Style="text-align:right">@context.Overdue</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No card programs yet. Add one under Setup › Card programs.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudTabPanel>
+    <MudTabPanel Text="Charges">
+        <MudStack Row="true" Spacing="3" Class="mb-2" Wrap="Wrap.Wrap">
+            <MudSelect T="Guid?" Value="_filterProgram" ValueChanged="v => FilterAsync(() => _filterProgram = v)" Label="Program" Clearable="true" Dense="true" Style="min-width:220px">
+                @foreach (var program in _programs)
+                {
+                    <MudSelectItem T="Guid?" Value="program.Id">@program.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="CardChargeState?" Value="_filterState" ValueChanged="v => FilterAsync(() => _filterState = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:200px">
+                @foreach (var state in Enum.GetValues<CardChargeState>())
+                {
+                    <MudSelectItem T="CardChargeState?" Value="state">@TravelFormat.Charge(state).Text</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch T="bool" Value="_unmatchedOnly" ValueChanged="v => FilterAsync(() => _unmatchedOnly = v)" Color="Color.Primary" Label="Unmatched cards only" />
+        </MudStack>
+        <MudTable T="CardTransactionDto" Items="_charges" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" data-testid="card-transactions">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>Cardholder</MudTh>
+                <MudTh>Merchant</MudTh>
+                <MudTh Style="text-align:right">Amount</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Report</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Date">@context.TransactionDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</MudTd>
+                <MudTd DataLabel="Cardholder">@(context.EmployeeName ?? "No matching card") <span class="mud-text-secondary">••@context.CardLast4</span></MudTd>
+                <MudTd DataLabel="Merchant">@context.Merchant</MudTd>
+                <MudTd DataLabel="Amount" Style="text-align:right">@TravelFormat.Money(context.Amount)</MudTd>
+                <MudTd DataLabel="Status">
+                    @{ var (text, color) = TravelFormat.Charge(context.State); }
+                    <MudChip T="string" Size="Size.Small" Color="color" Variant="Variant.Outlined" Class="my-0" title="@context.ExcludedReason">@text</MudChip>
+                    @if (context.IsOverdue)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="my-0">@context.AgeDays days</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Report">@context.ExpenseReportTitle</MudTd>
+                <MudTd Style="white-space:nowrap">
+                    @if (context.CardId is null && context.State == CardChargeState.Unassigned)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => AssignAsync(context)">Assign card</MudButton>
+                    }
+                    @if (context.State == CardChargeState.Unassigned)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => ExcludeAsync(context)">Exclude</MudButton>
+                    }
+                    else if (context.State == CardChargeState.Excluded)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => RestoreAsync(context)">Restore</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No charges match.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudTabPanel>
+    <MudTabPanel Text="Aging">
+        @if (_aging is { } a)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                Charges not yet on a submitted expense report, by cardholder and age (as of @a.AsOf.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)).
+                @a.OverdueCount overdue.
+            </MudText>
+            <MudTable T="CardAgingRowDto" Items="a.Rows" Dense="true" Breakpoint="Breakpoint.Sm" data-testid="card-aging">
+                <HeaderContent>
+                    <MudTh>Cardholder</MudTh>
+                    <MudTh>Cards</MudTh>
+                    <MudTh Style="text-align:right">0–30 days</MudTh>
+                    <MudTh Style="text-align:right">31–60</MudTh>
+                    <MudTh Style="text-align:right">61–90</MudTh>
+                    <MudTh Style="text-align:right">Over 90</MudTh>
+                    <MudTh Style="text-align:right">Total</MudTh>
+                    <MudTh Style="text-align:right">Overdue</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Cardholder">@context.Cardholder</MudTd>
+                    <MudTd DataLabel="Cards">@context.Cards</MudTd>
+                    <MudTd DataLabel="0–30 days" Style="text-align:right">@TravelFormat.Money(context.Days0To30)</MudTd>
+                    <MudTd DataLabel="31–60" Style="text-align:right">@TravelFormat.Money(context.Days31To60)</MudTd>
+                    <MudTd DataLabel="61–90" Style="text-align:right">@TravelFormat.Money(context.Days61To90)</MudTd>
+                    <MudTd DataLabel="Over 90" Style="text-align:right">@TravelFormat.Money(context.Over90)</MudTd>
+                    <MudTd DataLabel="Total" Style="text-align:right"><b>@TravelFormat.Money(context.Total)</b></MudTd>
+                    <MudTd DataLabel="Overdue" Style="text-align:right">@context.Overdue</MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Every charge is on a submitted expense report.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        }
+    </MudTabPanel>
+    <MudTabPanel Text="Statements">
+        <MudTable T="CardStatementImportDto" Items="_imports" Loading="_loading" Dense="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>Imported</MudTh>
+                <MudTh>Program</MudTh>
+                <MudTh>File</MudTh>
+                <MudTh Style="text-align:right">Rows</MudTh>
+                <MudTh Style="text-align:right">Imported</MudTh>
+                <MudTh Style="text-align:right">Already imported</MudTh>
+                <MudTh Style="text-align:right">Unmatched</MudTh>
+                <MudTh Style="text-align:right">Amount</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Imported">@context.ImportedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture) · @context.ImportedBy</MudTd>
+                <MudTd DataLabel="Program">@context.ProgramName</MudTd>
+                <MudTd DataLabel="File">@context.FileName (@context.Format)</MudTd>
+                <MudTd DataLabel="Rows" Style="text-align:right">@context.Rows</MudTd>
+                <MudTd DataLabel="Imported" Style="text-align:right">@context.Imported</MudTd>
+                <MudTd DataLabel="Already imported" Style="text-align:right">@context.Duplicates</MudTd>
+                <MudTd DataLabel="Unmatched" Style="text-align:right">@context.Unmatched</MudTd>
+                <MudTd DataLabel="Amount" Style="text-align:right">@TravelFormat.Money(context.ImportedTotal)</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private IReadOnlyList<CardProgramDto> _programs = [];
+    private IReadOnlyList<CardReconciliationDto> _reconciliation = [];
+    private IReadOnlyList<CardTransactionDto> _charges = [];
+    private IReadOnlyList<CardStatementImportDto> _imports = [];
+    private CardAgingDto? _aging;
+    private CardImportResultDto? _lastImport;
+    private Guid? _importProgramId;
+    private Guid? _filterProgram;
+    private CardChargeState? _filterState;
+    private bool _unmatchedOnly;
+    private bool _loading = true;
+    private bool _busy;
+    private int _tab;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _importProgramId = _programs.FirstOrDefault(p => p.IsActive)?.Id;
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _programs = await Cards.ListProgramsAsync();
+            _reconciliation = await Cards.GetReconciliationAsync();
+            _charges = await Cards.ListTransactionsAsync(new CardTransactionQuery(_filterProgram, _filterState, UnmatchedOnly: _unmatchedOnly));
+            _aging = await Cards.GetAgingAsync();
+            _imports = await Cards.ListImportsAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load card data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task FilterAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task ImportAsync(IBrowserFile? file)
+    {
+        if (file is null || _importProgramId is not { } programId)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            buffer.Position = 0;
+            _lastImport = await Cards.ImportStatementAsync(programId, file.Name, buffer);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExcludeAsync(CardTransactionDto charge)
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Exclude the charge", "Exclude",
+                $"{charge.Merchant} {TravelFormat.Money(charge.Amount)} leaves the cardholder's list. Say why (for example, a duplicate or a refund already matched).", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Cards.ExcludeTransactionAsync(charge.Id, new ExcludeCardTransactionRequest(reason)));
+        }
+    }
+
+    private Task RestoreAsync(CardTransactionDto charge) => RunAsync(() => Cards.RestoreTransactionAsync(charge.Id));
+
+    private async Task AssignAsync(CardTransactionDto charge)
+    {
+        var cards = (await Cards.ListCardsAsync(charge.ProgramId)).Where(c => c.IsActive).ToList();
+        var parameters = new DialogParameters<AssignCardDialog> { { d => d.Cards, cards }, { d => d.Charge, charge } };
+        var dialog = await DialogService.ShowAsync<AssignCardDialog>("Assign the charge to a card", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: Guid cardId })
+        {
+            await RunAsync(() => Cards.AssignCardAsync(charge.Id, new AssignCardRequest(cardId)));
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
