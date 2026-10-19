@@ -156,6 +156,12 @@ public sealed class PricingService(IWorkbenchDbContextFactory dbFactory, AuditRe
             throw new ArgumentException("The target price can't be negative.");
         }
 
+        if (request.OpportunityId is { } opportunityId && opportunityId != proposal.OpportunityId
+            && !await db.Set<Workbench.Domain.Crm.Opportunity>().AnyAsync(o => o.Id == opportunityId, ct))
+        {
+            throw new ArgumentException("That opportunity doesn't exist.");
+        }
+
         proposal.Number = number;
         proposal.Title = request.Title.Required("Title").Limit(200, "Title");
         proposal.Customer = Optional(request.Customer, 200, "Customer");

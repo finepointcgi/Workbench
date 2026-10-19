@@ -24,6 +24,7 @@ internal sealed class ProposalConfiguration : IEntityTypeConfiguration<Proposal>
         b.Property(p => p.HandedOffBy).HasMaxLength(320);
         b.HasIndex(p => p.Number).IsUnique();
         b.HasIndex(p => p.OpportunityId);
+        b.HasOne<Workbench.Domain.Crm.Opportunity>().WithMany().HasForeignKey(p => p.OpportunityId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 

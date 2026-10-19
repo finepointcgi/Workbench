@@ -46,15 +46,25 @@ public sealed class PricingPermissionTests
     public async Task Pricing_finance_and_admins_price_proposals(string email)
     {
         await using var seeded = await HostAsync();
+        var opportunity = new Workbench.Domain.Crm.Opportunity { Number = "OPP-0001", Name = "Recompete", AgencyName = "Army PEO", CreatedBy = SeededHost.Admin };
+        await using (var db = await seeded.Host.Get<IWorkbenchDbContextFactory>().CreateAsync())
+        {
+            db.Set<Workbench.Domain.Crm.Opportunity>().Add(opportunity);
+            await db.SaveChangesAsync();
+        }
+
         var pricing = seeded.As(email).Host.Get<IProposalPricingService>();
 
-        var proposal = await pricing.CreateProposalAsync(new SaveProposalRequest("P-1", "Bid", PricingContractKind.FirmFixedPrice, OpportunityId: Guid.NewGuid(),
-            OpportunityName: "Recompete"));
+        // Pricing-only users can't open the pipeline, but the picker still finds the opportunity to link.
+        var found = Assert.Single(await seeded.Host.Get<IPricingOpportunityLookup>().SearchAsync("recomp"));
+        Assert.Equal(new OpportunityRefDto(opportunity.Id, "OPP-0001 Recompete", "Army PEO"), found);
+        var proposal = await pricing.CreateProposalAsync(new SaveProposalRequest("P-1", "Bid", PricingContractKind.FirmFixedPrice, OpportunityId: opportunity.Id,
+            OpportunityName: found.Name));
         var result = await pricing.CalculateAsync(proposal.Models.Single().Id);
 
-        Assert.Equal("Recompete", Assert.Single(await pricing.ListProposalsAsync()).OpportunityName);
+        Assert.Equal("OPP-0001 Recompete", Assert.Single(await pricing.ListProposalsAsync()).OpportunityName);
         Assert.Equal(0m, result.Totals.Price);
-        Assert.Empty(await seeded.Host.Get<IPricingOpportunityLookup>().SearchAsync("re"));
+        await Assert.ThrowsAsync<ArgumentException>(() => pricing.CreateProposalAsync(new SaveProposalRequest("P-2", "Bid", PricingContractKind.FirmFixedPrice, OpportunityId: Guid.NewGuid())));
     }
 
     [Fact]
