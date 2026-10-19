@@ -1,0 +1,76 @@
+@* Bid-and-proposal effort: the opportunity's B&P charge code (an indirect code under the organization's B&P element,
+   created at Capture) and the time charged to it. Labor cost shows to Finance and administrators only. *@
+@inject IPipelineService Pipeline
+@inject IOpportunityService Opportunities
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.subtitle1" HtmlTag="h2">B&amp;P charge code</MudText>
+@if (Opportunity.BpChargeCode is { } bpCode)
+{
+    <MudText Class="mb-3" data-testid="bp-code">
+        Charge time spent pursuing this opportunity to <strong>@bpCode</strong>. It's an indirect bid-and-proposal code (not a direct project),
+        and closes when the pursuit ends.
+    </MudText>
+}
+else if (Opportunity.Stage < OpportunityStage.Capture)
+{
+    <MudText Class="mud-text-secondary mb-3">The B&amp;P charge code is created when the opportunity reaches Capture.</MudText>
+}
+else
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-3">This opportunity has no B&amp;P charge code (no B&amp;P element was set up when it reached Capture).</MudAlert>
+    @if (Opportunity.CanEdit && Opportunity.Stage.IsOpen())
+    {
+        <MudButton Variant="Variant.Outlined" OnClick="CreateAsync" Class="mb-3">Create the B&amp;P charge code</MudButton>
+    }
+}
+
+@if (_spend is { } s)
+{
+    <MudSimpleTable Dense="true" Outlined="true" Style="max-width: 640px">
+        <caption class="wb-sr-only">B&amp;P effort</caption>
+        <tbody>
+            <tr><th scope="row">Approved hours</th><td data-testid="bp-hours">@s.ApprovedHours.ToString("0.0")</td></tr>
+            <tr><th scope="row">Hours not yet approved</th><td>@s.PendingHours.ToString("0.0")</td></tr>
+            @if (s.LaborCost is { } cost)
+            {
+                <tr><th scope="row">Labor cost (approved, at cost rates)</th><td>@CrmFormat.Money(cost)</td></tr>
+            }
+            <tr><th scope="row">People</th><td>@s.People</td></tr>
+            <tr><th scope="row">Charged</th><td>@(s.FirstCharged is null ? "—" : $"{CrmFormat.Date(s.FirstCharged)} – {CrmFormat.Date(s.LastCharged)}")</td></tr>
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    [Parameter] public EventCallback<OpportunityDto> Changed { get; set; }
+
+    private BpSpendDto? _spend;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _spend = Opportunity.BpWbsElementId is null ? null : (await Pipeline.GetBpSpendAsync(Opportunity.Id)).FirstOrDefault();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            await Changed.InvokeAsync(await Opportunities.EnsureBpChargeCodeAsync(Opportunity.Id));
+            Snackbar.Add("B&P charge code created.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

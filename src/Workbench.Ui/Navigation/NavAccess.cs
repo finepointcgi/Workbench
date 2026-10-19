@@ -20,7 +20,8 @@ public sealed record NavAccess(
     bool IsProjectManager = false,
     int ApprovalCount = 0,
     int LeavePending = 0,
-    int ReceivableCount = 0)
+    int ReceivableCount = 0,
+    bool ManagesOpportunities = false)
 {
     /// <summary>Nobody signed in (or the server is unreachable): Home only.</summary>
     public static NavAccess Anonymous { get; } = new((CurrentUserInfo?)null);
@@ -49,6 +50,12 @@ public sealed record NavAccess(
 
     /// <summary>Materials, Finance or Admin: sees the Materials section.</summary>
     public bool CanViewMaterials => User?.Roles.CanViewMaterials() == true;
+
+    /// <summary>Sees the whole capture pipeline: Business development, Finance or Admin.</summary>
+    public bool SeesPipeline => User?.Roles.CanViewPipeline() == true;
+
+    /// <summary>The pipeline, or the capture/proposal manager of an opportunity (who sees just theirs).</summary>
+    public bool ShowBusinessDevelopment => SeesPipeline || ManagesOpportunities;
 
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
@@ -88,8 +95,10 @@ public sealed record NavAccess(
         var projectManager = user.EmployeeId is { } employeeId && await TryAsync(services.GetService<IProjectService>(),
             async s => (await s.ListProjectsAsync(cancellationToken)).Any(p => p.ProjectManagerId == employeeId), false);
         var approvals = await CountApprovalsAsync(services, cancellationToken);
+        var opportunities = !user.Roles.CanViewPipeline() && await TryAsync(services.GetService<Contracts.Crm.IOpportunityService>(),
+            async s => (await s.ListAsync(new Contracts.Crm.OpportunityFilter(MineOnly: true), cancellationToken)).Count > 0, false);
 
-        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable);
+        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities);
     }
 
     /// <summary>How many documents in the approvals inbox wait on the signed-in user.</summary>

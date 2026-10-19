@@ -1,0 +1,167 @@
+@* Calls, meetings, emails and notes logged by hand, and tasks with due dates (they show on the assignee's home page). *@
+@inject ICrmAccountService Crm
+@inject ISnackbar Snackbar
+
+@if (CanLog)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Log activity</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+            <MudSelect T="CrmActivityKind" @bind-Value="_kind" Label="Type" Style="max-width: 140px" data-testid="activity-kind">
+                @foreach (var k in Enum.GetValues<CrmActivityKind>())
+                {
+                    <MudSelectItem T="CrmActivityKind" Value="k">@k</MudSelectItem>
+                }
+            </MudSelect>
+            @if (Contacts.Count > 0)
+            {
+                <MudSelect T="Guid?" @bind-Value="_contact" Label="Contact" Clearable="true" Style="min-width: 200px">
+                    @foreach (var c in Contacts)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.FullName</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField T="string" @bind-Value="_subject" Label="Subject" MaxLength="300" Style="min-width: 260px" data-testid="activity-subject" />
+            @if (_kind == CrmActivityKind.Task)
+            {
+                <MudDatePicker Label="Due" @bind-Date="_due" DateFormat="yyyy-MM-dd" Style="max-width: 160px" />
+                <MudSelect T="string" @bind-Value="_assignee" Label="Assigned to" Clearable="true" Style="min-width: 200px">
+                    @foreach (var u in People)
+                    {
+                        <MudSelectItem T="string" Value="u.Email">@u.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudDatePicker Label="Date" @bind-Date="_on" DateFormat="yyyy-MM-dd" Style="max-width: 160px" />
+            }
+        </MudStack>
+        <MudTextField T="string" @bind-Value="_body" Label="Details" Lines="2" MaxLength="4000" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="LogAsync" Disabled="_busy" data-testid="activity-log">@(_kind == CrmActivityKind.Task ? "Add task" : "Log")</MudButton>
+    </MudPaper>
+}
+
+@if (_items is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_items.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No activity yet.</MudText>
+}
+else
+{
+    <MudList T="string" Dense="true" aria-label="Activity" data-testid="activity-list">
+        @foreach (var a in _items)
+        {
+            <MudListItem T="string" Icon="@Icon(a.Kind)">
+                <div class="d-flex align-center gap-2 flex-wrap">
+                    @if (a.Kind == CrmActivityKind.Task)
+                    {
+                        <MudCheckBox T="bool" Value="a.IsDone" ValueChanged="v => DoneAsync(a, v)" Dense="true" aria-label="@($"Done: {a.Subject}")" />
+                    }
+                    <span style="@(a.IsDone ? "text-decoration: line-through" : null)"><strong>@a.Subject</strong></span>
+                    <span class="mud-text-secondary">
+                        @a.Kind ·
+                        @(a.Kind == CrmActivityKind.Task ? $"due {CrmFormat.Date(a.DueOn)}{(a.AssignedTo is { } to ? $" · {to}" : "")}" : CrmFormat.Date(a.OccurredOn))
+                        @if (a.ContactName is { } contact)
+                        {
+                            <span> · with @contact</span>
+                        }
+                        @if (OpportunityId is null && a.OpportunityName is { } opp)
+                        {
+                            <span> · <a href="@($"bd/opportunities/{a.OpportunityId}")">@opp</a></span>
+                        }
+                        · by @a.CreatedBy
+                    </span>
+                </div>
+                @if (a.Body is { } body)
+                {
+                    <div class="mud-text-secondary" style="white-space: pre-wrap">@body</div>
+                }
+            </MudListItem>
+        }
+    </MudList>
+}
+
+@code {
+    [Parameter] public Guid? OpportunityId { get; set; }
+
+    [Parameter] public Guid? AccountId { get; set; }
+
+    [Parameter] public bool CanLog { get; set; }
+
+    [Parameter] public IReadOnlyList<UserDto> People { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<CrmContactDto> Contacts { get; set; } = [];
+
+    private IReadOnlyList<CrmActivityDto>? _items;
+    private CrmActivityKind _kind = CrmActivityKind.Call;
+    private string? _subject;
+    private string? _body;
+    private DateTime? _on = DateTime.Today;
+    private DateTime? _due = DateTime.Today.AddDays(7);
+    private string? _assignee;
+    private Guid? _contact;
+    private bool _busy;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _items = await Crm.ListActivitiesAsync(new CrmActivityFilter(AccountId, null, OpportunityId));
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _items = [];
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task LogAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Crm.LogActivityAsync(new SaveCrmActivityRequest(_kind, _subject ?? "", _body, AccountId, _contact, OpportunityId,
+                CrmFormat.ToDateOnly(_on), _kind == CrmActivityKind.Task ? CrmFormat.ToDateOnly(_due) : null, _kind == CrmActivityKind.Task ? _assignee : null));
+            (_subject, _body, _contact) = (null, null, null);
+            Snackbar.Add(_kind == CrmActivityKind.Task ? "Task added." : "Logged.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DoneAsync(CrmActivityDto activity, bool done)
+    {
+        try
+        {
+            await Crm.SetTaskDoneAsync(activity.Id, done);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static string Icon(CrmActivityKind kind) => kind switch
+    {
+        CrmActivityKind.Call => Icons.Material.Filled.Phone,
+        CrmActivityKind.Meeting => Icons.Material.Filled.Groups,
+        CrmActivityKind.Email => Icons.Material.Filled.Email,
+        CrmActivityKind.Task => Icons.Material.Filled.TaskAlt,
+        _ => Icons.Material.Filled.Notes,
+    };
+}

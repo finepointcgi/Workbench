@@ -139,7 +139,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "sheets", "finance", "materials", "reports", "admin"], Sections(nav));
+        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "growth", "sheets", "finance", "materials", "reports", "admin"], Sections(nav));
         foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Revenue & compliance" })
         {
             Assert.Single(nav.FindAll($"[data-testid='nav-group-{group}']"));
@@ -154,7 +154,7 @@ public sealed class NavMenuTests
         Assert.DoesNotContain("admin/users", links);
         Assert.DoesNotContain("notifications", links);
         Assert.Contains(">Setup<", nav.Find("[data-testid='nav-admin']").OuterHtml.Replace(" ", ""));
-        Assert.True(links.Count <= 66 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR's pay and benefit costs)
+        Assert.True(links.Count <= 72 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 6 under Business development
     }
 
     [Fact]

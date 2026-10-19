@@ -37,6 +37,10 @@ public enum OrgRoles
     /// (firming planned buys into requisitions). Sees inventory values but not labor cost rates.
     /// </summary>
     Materials = 64,
+    /// Business development: sees the capture pipeline (accounts, contacts, opportunities, forecast) and creates leads and
+    /// opportunities; edits the opportunities they capture or manage the proposal for. Pipeline values are business-sensitive.
+    /// </summary>
+    BusinessDevelopment = 128,
 }
 
 public static class OrgRoleChecks
@@ -69,10 +73,10 @@ public static class OrgRoleChecks
 
     /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
     public static IReadOnlyList<OrgRoles> All { get; } =
-        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr, OrgRoles.Materials];
+        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Hr, OrgRoles.Materials, OrgRoles.BusinessDevelopment];
 
     /// <summary>Every role flag combined (what the system user has).</summary>
-    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.Hr | OrgRoles.Materials;
+    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager | OrgRoles.Hr | OrgRoles.Materials | OrgRoles.BusinessDevelopment;
 
     /// <summary>A role's name for people: "Project manager", "Resource manager", or the enum name.</summary>
     public static string Label(OrgRoles role) => role switch
@@ -80,6 +84,7 @@ public static class OrgRoleChecks
         OrgRoles.ProjectManager => "Project manager",
         OrgRoles.ResourceManager => "Resource manager",
         OrgRoles.Hr => "HR",
+        OrgRoles.BusinessDevelopment => "Business development",
         _ => role.ToString(),
     };
 }

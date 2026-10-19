@@ -1,0 +1,199 @@
+@page "/bd/opportunities"
+@* Every opportunity the user may see, with filters (stage, agency, manager, new vs recompete, search) and totals. *@
+@inject IOpportunityService Opportunities
+@inject ICrmAccountService Accounts
+@inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
+
+<PageTitle>Opportunities · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Opportunities</MudText>
+    <MudSpacer />
+    @if (_canCreate)
+    {
+        <MudButton Href="bd/opportunities/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">New opportunity</MudButton>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_all is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudTextField T="string" @bind-Value="_search" Label="Search" Immediate="true" DebounceInterval="200" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width: 260px" data-testid="opportunity-search"
+                      HelperText="Name, number, solicitation, agency or NAICS" />
+        <MudSelect T="string" @bind-Value="_stage" Label="Stage" Dense="true" Style="max-width: 200px" data-testid="stage-filter">
+            <MudSelectItem T="string" Value="@OpenStages">Open pursuits</MudSelectItem>
+            <MudSelectItem T="string" Value="@AnyStage">Any stage</MudSelectItem>
+            @foreach (var stage in Enum.GetValues<OpportunityStage>())
+            {
+                <MudSelectItem T="string" Value="@stage.ToString()">@CrmFormat.Stage(stage)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="Guid?" @bind-Value="_agency" Label="Agency" Dense="true" Clearable="true" Style="min-width: 220px">
+            @foreach (var a in _agencies)
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@(a.ParentName is { } parent ? $"{a.Name} ({parent})" : a.Name)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string" @bind-Value="_kind" Label="Type" Dense="true" Style="max-width: 160px">
+            <MudSelectItem T="string" Value="@("")">New and recompete</MudSelectItem>
+            <MudSelectItem T="string" Value="@nameof(OpportunityKind.New)">New business</MudSelectItem>
+            <MudSelectItem T="string" Value="@nameof(OpportunityKind.Recompete)">Recompetes</MudSelectItem>
+        </MudSelect>
+        <MudSwitch T="bool" @bind-Value="_mine" Color="Color.Primary" Label="Mine only" />
+    </MudStack>
+
+    var rows = Visible.ToList();
+    @if (rows.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-6"><MudText Class="mud-text-secondary">No opportunities match.</MudText></MudPaper>
+    }
+    else
+    {
+        <MudTable T="OpportunityDto" Items="rows" Dense="true" Hover="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" SortLabel="Sort by"
+                  aria-label="Opportunities" data-testid="opportunity-table">
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.Number">Opportunity</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.AgencyName ?? string.Empty">Agency</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => (int)o.Stage">Stage</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="OpportunityDto" SortBy="o => o.EstimatedValue">Value</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align:right">Pwin / Pgo</MudTh>
+                <MudTh Style="text-align:right"><MudTableSortLabel T="OpportunityDto" SortBy="o => o.WeightedValue">Weighted</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.ProposalDueOn ?? DateOnly.MaxValue">Proposal due</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.EstimatedAwardDate ?? DateOnly.MaxValue">Award</MudTableSortLabel></MudTh>
+                <MudTh>Capture manager</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Opportunity">
+                    <a href="@($"bd/opportunities/{context.Id}")"><span class="mud-text-secondary">@context.Number</span> @context.Name</a>
+                    @if (context.Kind == OpportunityKind.Recompete)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Recompete@(context.IncumbentName is { } inc ? $" · incumbent {inc}" : "")</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Agency">@context.AgencyName</MudTd>
+                <MudTd DataLabel="Stage">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@CrmFormat.StageColor(context.Stage)" Icon="@CrmFormat.StageIcon(context.Stage)" Class="ma-0">@CrmFormat.Stage(context.Stage)</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Value" Style="text-align:right">@CrmFormat.Money(context.EstimatedValue)</MudTd>
+                <MudTd DataLabel="Pwin / Pgo" Style="text-align:right">@context.Pwin% / @context.Pgo%</MudTd>
+                <MudTd DataLabel="Weighted" Style="text-align:right">@CrmFormat.Money(context.WeightedValue)</MudTd>
+                <MudTd DataLabel="Proposal due">@CrmFormat.Date(context.ProposalDueOn)</MudTd>
+                <MudTd DataLabel="Award">@CrmFormat.Date(context.EstimatedAwardDate)</MudTd>
+                <MudTd DataLabel="Capture manager">@context.CaptureManagerName</MudTd>
+            </RowTemplate>
+            <FooterContent>
+                <MudTd colspan="3"><strong>@rows.Count opportunities</strong></MudTd>
+                <MudTd Style="text-align:right"><strong>@CrmFormat.Money(rows.Sum(r => r.EstimatedValue))</strong></MudTd>
+                <MudTd />
+                <MudTd Style="text-align:right"><strong>@CrmFormat.Money(rows.Sum(r => r.WeightedValue))</strong></MudTd>
+                <MudTd colspan="3" />
+            </FooterContent>
+        </MudTable>
+    }
+}
+
+@code {
+    private const string OpenStages = "open";
+    private const string AnyStage = "any";
+
+    private IReadOnlyList<OpportunityDto>? _all;
+    private List<CrmAccountDto> _agencies = [];
+    private string _search = "";
+    private string _stage = OpenStages;
+    private Guid? _agency;
+    private string _kind = "";
+    private bool _mine;
+    private bool _canCreate;
+    private string? _error;
+    private string _me = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var me = await CurrentUser.GetAsync();
+            _me = me.Email.ToLowerInvariant();
+            _canCreate = me.Roles.IsBusinessDevelopment();
+            _all = await Opportunities.ListAsync(new OpportunityFilter());
+            try
+            {
+                _agencies = (await Accounts.ListAccountsAsync()).Where(a => a.Kind.IsGovernment()).ToList();
+            }
+            catch (WorkbenchForbiddenException)
+            {
+                // Managers without a pipeline role see their opportunities but not the account list.
+                _agencies = [];
+            }
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private IEnumerable<OpportunityDto> Visible
+    {
+        get
+        {
+            IEnumerable<OpportunityDto> rows = _all ?? [];
+            rows = _stage switch
+            {
+                OpenStages => rows.Where(o => o.Stage.IsOpen()),
+                AnyStage => rows,
+                var s => rows.Where(o => o.Stage.ToString() == s),
+            };
+            if (_agency is { } agency)
+            {
+                var ids = Descendants(agency);
+                rows = rows.Where(o => o.AgencyAccountId is { } a && ids.Contains(a));
+            }
+
+            if (Enum.TryParse<OpportunityKind>(_kind, out var kind))
+            {
+                rows = rows.Where(o => o.Kind == kind);
+            }
+
+            if (_mine)
+            {
+                rows = rows.Where(o => o.CaptureManagerEmail == _me || o.ProposalManagerEmail == _me);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var t = _search.Trim();
+                rows = rows.Where(o => o.Name.Contains(t, StringComparison.OrdinalIgnoreCase) || o.Number.Contains(t, StringComparison.OrdinalIgnoreCase)
+                                       || (o.SolicitationNumber?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false)
+                                       || (o.AgencyName?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false)
+                                       || (o.NaicsCode?.StartsWith(t, StringComparison.Ordinal) ?? false));
+            }
+
+            return rows;
+        }
+    }
+
+    private HashSet<Guid> Descendants(Guid id)
+    {
+        var result = new HashSet<Guid> { id };
+        var added = true;
+        while (added)
+        {
+            added = false;
+            foreach (var a in _agencies.Where(a => a.ParentId is { } p && result.Contains(p) && !result.Contains(a.Id)))
+            {
+                added |= result.Add(a.Id);
+            }
+        }
+
+        return result;
+    }
+}

@@ -1,0 +1,248 @@
+@page "/bd/accounts/{Id:guid}"
+@* One account: details, the offices below it, contacts, its opportunities, activity, and the customer it became. *@
+@inject ICrmAccountService Crm
+@inject IOpportunityService Opportunities
+@inject IContractService Contracts
+@inject IUserDirectory Users
+@inject ICurrentUserContext CurrentUser
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_account?.Name ?? "Account") · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Account</MudText>
+    <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+}
+else if (_account is null || _model is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudIconButton Href="bd/accounts" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Accounts" />
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_account.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@CrmFormat.AccountKind(_account.Kind)</MudChip>
+        @if (_account.ParentId is { } parent)
+        {
+            <MudText Class="mud-text-secondary">Part of <a href="@($"bd/accounts/{parent}")">@_account.ParentName</a></MudText>
+        }
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Details</MudText>
+                <AccountForm Model="_model" Accounts="_accounts" Self="_account.Id" ReadOnly="!_canEdit" />
+                @if (_canEdit)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+                }
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Contacts</MudText>
+                @if (_contacts.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No contacts yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Class="mb-3">
+                        <caption class="wb-sr-only">Contacts</caption>
+                        <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Title</th><th scope="col">Email</th><th scope="col">Phone</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _contacts)
+                            {
+                                <tr>
+                                    <th scope="row" style="font-weight: normal">@c.FullName@(c.IsActive ? "" : " (inactive)")</th>
+                                    <td>@CrmLabels.Label(c.Role)</td>
+                                    <td>@c.Title</td>
+                                    <td>@if (c.Email is { } e) { <a href="@($"mailto:{e}")">@e</a> }</td>
+                                    <td>@c.Phone</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                @if (_canEdit)
+                {
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                        <MudTextField T="string" @bind-Value="_first" Label="First name" MaxLength="100" autocomplete="off" Style="max-width: 160px" data-testid="contact-first" />
+                        <MudTextField T="string" @bind-Value="_last" Label="Last name" MaxLength="100" autocomplete="off" Style="max-width: 160px" data-testid="contact-last" />
+                        <MudSelect T="ContactRole" @bind-Value="_role" Label="Role" Style="max-width: 220px">
+                            @foreach (var r in Enum.GetValues<ContactRole>())
+                            {
+                                <MudSelectItem T="ContactRole" Value="r">@CrmLabels.Label(r)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudTextField T="string" @bind-Value="_title" Label="Title" MaxLength="200" Style="max-width: 200px" />
+                        <MudTextField T="string" @bind-Value="_email" Label="Email" MaxLength="320" autocomplete="off" Style="max-width: 220px" />
+                        <MudTextField T="string" @bind-Value="_phone" Label="Phone" MaxLength="64" autocomplete="off" Style="max-width: 160px" />
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="AddContactAsync" Disabled="_busy" data-testid="contact-add">Add contact</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Activity</MudText>
+                <ActivityPanel AccountId="_account.Id" CanLog="_canEdit" People="_people" Contacts="_contacts" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            @if (_children.Count > 0)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mb-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2">@(_account.Kind.IsGovernment() ? "Offices" : "Divisions")</MudText>
+                    <ul>
+                        @foreach (var c in _children)
+                        {
+                            <li><a href="@($"bd/accounts/{c.Id}")">@c.Name</a></li>
+                        }
+                    </ul>
+                </MudPaper>
+            }
+            @if (_account.Kind.IsGovernment())
+            {
+                <MudPaper Outlined="true" Class="pa-4 mb-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2">Opportunities</MudText>
+                    @if (_opportunities.Count == 0)
+                    {
+                        <MudText Class="mud-text-secondary">None.</MudText>
+                    }
+                    else
+                    {
+                        <ul>
+                            @foreach (var o in _opportunities)
+                            {
+                                <li><a href="@($"bd/opportunities/{o.Id}")">@o.Number @o.Name</a> · @CrmFormat.Stage(o.Stage) · @CrmFormat.Compact(o.EstimatedValue)</li>
+                            }
+                        </ul>
+                    }
+                </MudPaper>
+            }
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Customer</MudText>
+                <MudText Class="mb-2" data-testid="account-customer">
+                    @(_account.CustomerName is { } customer ? $"Billed as {customer}." : "Not a customer yet. It's linked when a won opportunity is handed off, or link it here.")
+                </MudText>
+                @if (_canEdit && _customers.Count > 0)
+                {
+                    <MudSelect T="Guid?" Value="_account.CustomerId" ValueChanged="LinkAsync" Label="Linked customer" Clearable="true">
+                        @foreach (var c in _customers)
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private CrmAccountDto? _account;
+    private AccountModel? _model;
+    private IReadOnlyList<CrmAccountDto> _accounts = [];
+    private List<CrmAccountDto> _children = [];
+    private IReadOnlyList<CrmContactDto> _contacts = [];
+    private IReadOnlyList<OpportunityDto> _opportunities = [];
+    private IReadOnlyList<CustomerDto> _customers = [];
+    private IReadOnlyList<UserDto> _people = [];
+    private bool _canEdit;
+    private bool _busy;
+    private string? _error;
+    private string? _first, _last, _title, _email, _phone;
+    private ContactRole _role = ContactRole.ProgramManager;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            var me = await CurrentUser.GetAsync();
+            _canEdit = me.Roles.CanViewPipeline();
+            _accounts = await Crm.ListAccountsAsync();
+            _people = await Users.SearchAsync(null, 500);
+            await LoadAsync();
+            if (_canEdit)
+            {
+                try
+                {
+                    _customers = await Contracts.ListCustomersAsync();
+                }
+                catch (WorkbenchForbiddenException)
+                {
+                    _customers = [];
+                }
+            }
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _account = await Crm.GetAccountAsync(Id);
+        _model = AccountModel.From(_account);
+        _children = _accounts.Where(a => a.ParentId == Id).ToList();
+        _contacts = await Crm.ListContactsAsync(Id);
+        _opportunities = _account.Kind.IsGovernment() ? await Opportunities.ListAsync(new OpportunityFilter(AgencyAccountId: Id)) : [];
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            _account = await Crm.UpdateAccountAsync(Id, _model!.ToRequest());
+            Snackbar.Add("Saved.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddContactAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Crm.CreateContactAsync(new SaveCrmContactRequest(Id, _first ?? "", _last ?? "", _role, _title, _email, _phone));
+            (_first, _last, _title, _email, _phone) = (null, null, null, null, null);
+            _contacts = await Crm.ListContactsAsync(Id);
+            Snackbar.Add("Contact added.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LinkAsync(Guid? customerId)
+    {
+        try
+        {
+            _account = await Crm.LinkCustomerAsync(Id, customerId);
+            Snackbar.Add(customerId is null ? "Unlinked." : "Linked.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

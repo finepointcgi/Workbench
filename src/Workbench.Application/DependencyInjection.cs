@@ -83,6 +83,7 @@ public static class DependencyInjection
         Tasks.TaskRegistration.AddWorkbenchTasks(services); // Task assignment (item Assignees), its notifications and the "Assigned to you" to-do; above AddWorkbenchIdentity.
         Hr.HrRegistration.AddWorkbenchHr(services); // HR: personnel, positions, compensation (pay rate history), benefits, onboarding/offboarding, reports, to-dos; above AddWorkbenchIdentity.
         Materials.MaterialsRegistration.AddWorkbenchMaterials(services); // Parts, inventory, BOMs, work orders, MRP; posts through the GL (JournalSource.Inventory/Manufacturing), decorates PO receiving; above AddWorkbenchIdentity.
+        Crm.CrmRegistration.AddWorkbenchCrm(services); // Business development: accounts, opportunities, gates (approval handler), SAM.gov leads, pipeline, to-dos; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

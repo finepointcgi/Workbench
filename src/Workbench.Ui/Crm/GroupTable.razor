@@ -1,0 +1,32 @@
+@* Win/loss counts, values and win rate for one grouping (agency, fiscal year, new vs recompete). *@
+<MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">@Title</MudText>
+@if (Rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No decisions yet.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Class="mb-2">
+        <caption class="wb-sr-only">Win/loss @Title.ToLowerInvariant()</caption>
+        <thead>
+            <tr><th scope="col">@Column</th><th scope="col" style="text-align:right">Won</th><th scope="col" style="text-align:right">Lost</th><th scope="col" style="text-align:right">No-bid</th><th scope="col" style="text-align:right">Won value</th><th scope="col" style="text-align:right">Win rate</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Rows)
+            {
+                <tr>
+                    <th scope="row" style="font-weight: normal">@r.Group</th><td style="text-align:right">@r.Won</td><td style="text-align:right">@r.Lost</td><td style="text-align:right">@r.NoBid</td>
+                    <td style="text-align:right">@CrmFormat.Money(r.WonValue)</td><td style="text-align:right">@(r.WinRate is { } w ? $"{w:0.#}%" : "—")</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired] public IReadOnlyList<WinLossByGroupDto> Rows { get; set; } = [];
+
+    private string Column => Title.StartsWith("By ", StringComparison.Ordinal) ? char.ToUpperInvariant(Title[3]) + Title[4..] : "Type";
+}

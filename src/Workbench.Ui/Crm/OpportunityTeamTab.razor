@@ -1,0 +1,184 @@
+@* Teaming partners (with workshare) and expected competitors. Saved together with the opportunity's details. *@
+@inject IOpportunityService Opportunities
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.subtitle1" HtmlTag="h2">Teaming partners</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Our share: <strong data-testid="our-workshare">@OurShare.ToString("0.##")%</strong> of the work.</MudText>
+@if (_teammates.Count == 0)
+{
+    <MudText Class="mud-text-secondary mb-2">No teammates yet.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Outlined="true" Class="mb-2">
+        <caption class="wb-sr-only">Teaming partners</caption>
+        <thead><tr><th scope="col">Company</th><th scope="col">Role</th><th scope="col" style="text-align:right">Workshare</th><th scope="col">Notes</th>@if (CanEdit) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+        <tbody>
+            @foreach (var t in _teammates)
+            {
+                <tr>
+                    <td>@NameOf(t.AccountId, t.Name)</td>
+                    <td>@t.Role</td>
+                    <td style="text-align:right">@t.WorksharePercent.ToString("0.##")%</td>
+                    <td>@t.Notes</td>
+                    @if (CanEdit)
+                    {
+                        <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove {NameOf(t.AccountId, t.Name)}")" OnClick="() => _teammates.Remove(t)" /></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+@if (CanEdit)
+{
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-6">
+        <MudSelect T="Guid?" @bind-Value="_teammateAccount" Label="Partner account" Clearable="true" Style="min-width: 220px">
+            @foreach (var a in Accounts.Where(a => !a.Kind.IsGovernment()))
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@a.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_teammateAccount is null)
+        {
+            <MudTextField T="string" @bind-Value="_teammateName" Label="Or company name" MaxLength="200" />
+        }
+        <MudSelect T="TeamingRole" @bind-Value="_teammateRole" Label="Role" Style="max-width: 160px">
+            @foreach (var r in Enum.GetValues<TeamingRole>())
+            {
+                <MudSelectItem T="TeamingRole" Value="r">@r</MudSelectItem>
+            }
+        </MudSelect>
+        <MudNumericField T="decimal" @bind-Value="_teammateShare" Label="Workshare (%)" Min="0" Max="100" Style="max-width: 140px" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddTeammate">Add partner</MudButton>
+    </MudStack>
+}
+
+<MudText Typo="Typo.subtitle1" HtmlTag="h2">Competitors</MudText>
+@if (_competitors.Count == 0)
+{
+    <MudText Class="mud-text-secondary mb-2">No competitors noted.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Outlined="true" Class="mb-2">
+        <caption class="wb-sr-only">Competitors</caption>
+        <thead><tr><th scope="col">Company</th><th scope="col">Incumbent</th><th scope="col">Notes</th>@if (CanEdit) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+        <tbody>
+            @foreach (var c in _competitors)
+            {
+                <tr>
+                    <td>@NameOf(c.AccountId, c.Name)</td>
+                    <td>@(c.IsIncumbent ? "Yes" : "")</td>
+                    <td>@c.Notes</td>
+                    @if (CanEdit)
+                    {
+                        <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove {NameOf(c.AccountId, c.Name)}")" OnClick="() => _competitors.Remove(c)" /></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+@if (CanEdit)
+{
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-4">
+        <MudSelect T="Guid?" @bind-Value="_competitorAccount" Label="Competitor account" Clearable="true" Style="min-width: 220px">
+            @foreach (var a in Accounts.Where(a => !a.Kind.IsGovernment()))
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@a.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_competitorAccount is null)
+        {
+            <MudTextField T="string" @bind-Value="_competitorName" Label="Or company name" MaxLength="200" />
+        }
+        <MudCheckBox T="bool" @bind-Value="_competitorIncumbent" Label="Incumbent" />
+        <MudTextField T="string" @bind-Value="_competitorNotes" Label="Notes" MaxLength="1000" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddCompetitor">Add competitor</MudButton>
+    </MudStack>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="team-save">Save team and competition</MudButton>
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<CrmAccountDto> Accounts { get; set; } = [];
+
+    [Parameter] public EventCallback<OpportunityDto> Changed { get; set; }
+
+    private List<SaveTeammate> _teammates = [];
+    private List<SaveCompetitor> _competitors = [];
+    private Guid? _teammateAccount;
+    private string? _teammateName;
+    private TeamingRole _teammateRole;
+    private decimal _teammateShare;
+    private Guid? _competitorAccount;
+    private string? _competitorName;
+    private bool _competitorIncumbent;
+    private string? _competitorNotes;
+    private bool _busy;
+    private OpportunityDto? _for;
+
+    private bool CanEdit => Opportunity.CanEdit;
+
+    private decimal OurShare => Math.Max(0, 100 - _teammates.Sum(t => t.WorksharePercent));
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_for, Opportunity))
+        {
+            _for = Opportunity;
+            var request = CrmFormat.ToRequest(Opportunity);
+            _teammates = request.Teammates!.ToList();
+            _competitors = request.Competitors!.ToList();
+        }
+    }
+
+    private string NameOf(Guid? accountId, string name) => accountId is { } id ? Accounts.FirstOrDefault(a => a.Id == id)?.Name ?? name : name;
+
+    private void AddTeammate()
+    {
+        var name = _teammateAccount is { } id ? Accounts.First(a => a.Id == id).Name : _teammateName?.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            Snackbar.Add("Choose a partner account or type the company's name.", Severity.Warning);
+            return;
+        }
+
+        _teammates.Add(new SaveTeammate(_teammateAccount, name, _teammateRole, _teammateShare));
+        (_teammateAccount, _teammateName, _teammateShare) = (null, null, 0);
+    }
+
+    private void AddCompetitor()
+    {
+        var name = _competitorAccount is { } id ? Accounts.First(a => a.Id == id).Name : _competitorName?.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            Snackbar.Add("Choose a competitor account or type the company's name.", Severity.Warning);
+            return;
+        }
+
+        _competitors.Add(new SaveCompetitor(_competitorAccount, name, _competitorIncumbent, _competitorNotes));
+        (_competitorAccount, _competitorName, _competitorIncumbent, _competitorNotes) = (null, null, false, null);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var updated = await Opportunities.UpdateAsync(Opportunity.Id, CrmFormat.ToRequest(Opportunity) with { Teammates = _teammates, Competitors = _competitors });
+            Snackbar.Add("Saved.", Severity.Success);
+            await Changed.InvokeAsync(updated);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

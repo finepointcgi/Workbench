@@ -1,0 +1,336 @@
+@page "/bd/leads"
+@* New leads from SAM.gov saved searches and CSV imports, waiting to become opportunities or be dismissed. Solicitations
+   already in the pipeline (or seen before) are skipped. *@
+@using Microsoft.AspNetCore.Components.Forms
+@inject IOpportunityLeadService Leads
+@inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Leads · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-3">Leads</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_leads is null || _searches is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-3">
+        <MudTabPanel Text="@($"To review ({_leads.Count})")">
+            @if (_leads.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">No new leads. Run a saved search or import a CSV.</MudText>
+            }
+            else
+            {
+                <MudTable T="OpportunityLeadDto" Items="_leads" Dense="true" Hover="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" aria-label="Leads to review" data-testid="lead-table">
+                    <HeaderContent>
+                        <MudTh>Notice</MudTh>
+                        <MudTh>Agency</MudTh>
+                        <MudTh>NAICS / set-aside</MudTh>
+                        <MudTh>Posted</MudTh>
+                        <MudTh>Response due</MudTh>
+                        <MudTh Style="text-align:right">Value</MudTh>
+                        @if (_canReview)
+                        {
+                            <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+                        }
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Notice">
+                            @if (context.Url is { } url)
+                            {
+                                <a href="@url" target="_blank" rel="noopener noreferrer">@context.Title<span class="wb-sr-only"> (opens in a new tab)</span></a>
+                            }
+                            else
+                            {
+                                @context.Title
+                            }
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                                @(context.SolicitationNumber ?? "No solicitation number") · @(context.NoticeType ?? context.Source.ToString())@(context.SavedSearchName is { } s ? $" · {s}" : "")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Agency">@context.Agency@(context.Office is { } o ? $" / {o}" : "")</MudTd>
+                        <MudTd DataLabel="NAICS / set-aside">@context.NaicsCode · @OpportunityStages.Label(context.SetAside)</MudTd>
+                        <MudTd DataLabel="Posted">@CrmFormat.Date(context.PostedOn)</MudTd>
+                        <MudTd DataLabel="Response due">@CrmFormat.Date(context.ResponseDueOn)</MudTd>
+                        <MudTd DataLabel="Value" Style="text-align:right">@(context.EstimatedValue is { } v ? CrmFormat.Compact(v) : "—")</MudTd>
+                        @if (_canReview)
+                        {
+                            <MudTd>
+                                <MudStack Row="true" Spacing="1">
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => AcceptAsync(context)" aria-label="@($"Add {context.Title} to the pipeline")" data-testid="lead-accept">Pursue</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => DismissAsync(context)" aria-label="@($"Dismiss {context.Title}")">Dismiss</MudButton>
+                                </MudStack>
+                            </MudTd>
+                        }
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Saved searches">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Searches run against SAM.gov's contract opportunities (daily when an API key is configured, or with Run now). Without a key, sample notices stand in.
+            </MudText>
+            @foreach (var s in _searches)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="saved-search">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                        <MudText Typo="Typo.subtitle2" HtmlTag="h2">@s.Name</MudText>
+                        @if (!s.IsActive)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text">Paused</MudChip>
+                        }
+                        <MudSpacer />
+                        @if (_canReview)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => RunAsync(s)" Disabled="_busy" data-testid="search-run">Run now</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(s)">Edit</MudButton>
+                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" aria-label="@($"Delete {s.Name}")" OnClick="() => DeleteAsync(s)" />
+                        }
+                    </MudStack>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                        NAICS @(s.NaicsCodes.Count == 0 ? "any" : string.Join(", ", s.NaicsCodes))
+                        · set-aside @(s.SetAsides.Count == 0 ? "any" : string.Join(", ", s.SetAsides.Select(OpportunityStages.Label)))
+                        @(s.Agencies.Count == 0 ? "" : $" · agencies {string.Join(", ", s.Agencies)}")
+                        @(s.Keywords is { } k ? $" · \"{k}\"" : "")
+                        · last @s.PostedWithinDays days
+                        · @(s.LastRunAtUtc is { } run ? $"last run {run.ToLocalTime():MMM d h:mm tt}, {s.LastRunNewLeads} new" : "not run yet")
+                    </MudText>
+                </MudPaper>
+            }
+            @if (_canReview)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mt-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2">@(_editing is null ? "New saved search" : $"Edit {_editing.Name}")</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_name" Label="Name" MaxLength="200" data-testid="search-name" /></MudItem>
+                        <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_naics" Label="NAICS codes" HelperText="Comma-separated, e.g. 541511, 541512" data-testid="search-naics" /></MudItem>
+                        <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_agencies" Label="Agencies" HelperText="Comma-separated parts of the agency path, e.g. ARMY, CISA" /></MudItem>
+                        <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_keywords" Label="Keywords (in the title)" MaxLength="500" /></MudItem>
+                        <MudItem xs="12" sm="8">
+                            <MudSelect T="SetAside" MultiSelection="true" @bind-SelectedValues="_setAsides" Label="Set-asides (none chosen: any)">
+                                @foreach (var s in Enum.GetValues<SetAside>())
+                                {
+                                    <MudSelectItem T="SetAside" Value="s">@OpportunityStages.Label(s)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="6" sm="2"><MudNumericField T="int" @bind-Value="_days" Label="Posted within (days)" Min="1" Max="364" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudSwitch T="bool" @bind-Value="_active" Label="Active" Color="Color.Primary" /></MudItem>
+                    </MudGrid>
+                    <MudStack Row="true" Class="mt-3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSearchAsync" Disabled="_busy" data-testid="search-save">Save search</MudButton>
+                        @if (_editing is not null)
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="() => Edit(null)">Cancel</MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+        </MudTabPanel>
+
+        @if (_canReview)
+        {
+            <MudTabPanel Text="Import CSV">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    A CSV with a header row, such as a SAM.gov or GovWin export. Columns: Title (required), Solicitation Number, Notice Id, Agency, Office, NAICS,
+                    Set-Aside, Notice Type, Posted Date, Response Date, Place of Performance, URL, Description, Estimated Value.
+                </MudText>
+                <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".csv,.txt">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="@context.OpenFilePickerAsync">Choose file</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate />
+                </MudFileUpload>
+                <MudTextField T="string" @bind-Value="_csv" Label="@(_fileName ?? "Or paste CSV here")" Lines="6" Variant="Variant.Outlined" Class="mt-2"
+                              Style="font-family: monospace; font-size: 12px" data-testid="lead-csv" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_csv)" data-testid="lead-import">Import</MudButton>
+                @if (_import is { } r)
+                {
+                    <MudAlert Severity="@(r.Errors.Count > 0 ? Severity.Warning : Severity.Success)" Class="mt-3">
+                        @r.Created new lead(s), @r.Duplicates already known, from @r.Found row(s).
+                        @foreach (var e in r.Errors.Take(10))
+                        {
+                            <div>@e</div>
+                        }
+                    </MudAlert>
+                }
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<OpportunityLeadDto>? _leads;
+    private IReadOnlyList<SavedLeadSearchDto>? _searches;
+    private bool _canReview;
+    private bool _busy;
+    private string? _error;
+    private SavedLeadSearchDto? _editing;
+    private string? _name, _naics, _agencies, _keywords;
+    private IReadOnlyCollection<SetAside> _setAsides = [];
+    private int _days = 30;
+    private bool _active = true;
+    private string? _csv;
+    private string? _fileName;
+    private LeadImportResultDto? _import;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _canReview = (await CurrentUser.GetAsync()).Roles.IsBusinessDevelopment();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _leads = await Leads.ListLeadsAsync(LeadStatus.New);
+        _searches = await Leads.ListSearchesAsync();
+    }
+
+    private async Task AcceptAsync(OpportunityLeadDto lead)
+    {
+        try
+        {
+            var opportunity = await Leads.AcceptAsync(lead.Id, new AcceptLeadRequest());
+            Snackbar.Add($"Added {opportunity.Number} to the pipeline.", Severity.Success);
+            Navigation.NavigateTo($"bd/opportunities/{opportunity.Id}");
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DismissAsync(OpportunityLeadDto lead)
+    {
+        try
+        {
+            await Leads.DismissAsync(lead.Id);
+            _leads = await Leads.ListLeadsAsync(LeadStatus.New);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task RunAsync(SavedLeadSearchDto search)
+    {
+        _busy = true;
+        try
+        {
+            var r = await Leads.RunSearchAsync(search.Id);
+            Snackbar.Add($"{search.Name}: {r.Created} new lead(s), {r.Duplicates} already known.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Edit(SavedLeadSearchDto? search)
+    {
+        _editing = search;
+        _name = search?.Name;
+        _naics = search is null ? null : string.Join(", ", search.NaicsCodes);
+        _agencies = search is null ? null : string.Join(", ", search.Agencies);
+        _keywords = search?.Keywords;
+        _setAsides = search?.SetAsides.ToList() ?? [];
+        _days = search?.PostedWithinDays ?? 30;
+        _active = search?.IsActive ?? true;
+    }
+
+    private static List<string> Split(string? text) => (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task SaveSearchAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = new SaveLeadSearchRequest(_name ?? "", Split(_naics), Split(_agencies), _setAsides.ToList(), _keywords, _days, _active);
+            _ = _editing is null ? await Leads.CreateSearchAsync(request) : await Leads.UpdateSearchAsync(_editing.Id, request);
+            Snackbar.Add("Search saved.", Severity.Success);
+            Edit(null);
+            _searches = await Leads.ListSearchesAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(SavedLeadSearchDto search)
+    {
+        try
+        {
+            await Leads.DeleteSearchAsync(search.Id);
+            _searches = await Leads.ListSearchesAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _csv = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+        }
+        catch (IOException ex)
+        {
+            Snackbar.Add($"Couldn't read the file: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        try
+        {
+            _import = await Leads.ImportCsvAsync(_csv ?? "");
+            _leads = await Leads.ListLeadsAsync(LeadStatus.New);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

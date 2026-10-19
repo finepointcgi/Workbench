@@ -1,0 +1,161 @@
+@page "/bd/forecast"
+@* The pipeline forecast (open opportunities by fiscal quarter of expected award, weighted by Pwin × Pgo, new vs
+   recompete, and what was won), win/loss analysis with reasons, and B&P spending per opportunity. *@
+@inject IPipelineService Pipeline
+
+<PageTitle>Forecast and win/loss · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-3">Forecast and win/loss</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_forecast is null || _winLoss is null || _bp is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="6" md="3"><Tile Label="Open pipeline" Value="@CrmFormat.Compact(_forecast.TotalValue)" /></MudItem>
+        <MudItem xs="6" md="3"><Tile Label="Weighted (Pwin × Pgo)" Value="@CrmFormat.Compact(_forecast.WeightedValue)" /></MudItem>
+        <MudItem xs="6" md="3"><Tile Label="Win rate (count)" Value="@(_winLoss.WinRateByCount is { } r ? $"{r:0.#}%" : "—")" /></MudItem>
+        <MudItem xs="6" md="3"><Tile Label="Win rate (value)" Value="@(_winLoss.WinRateByValue is { } v ? $"{v:0.#}%" : "—")" /></MudItem>
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Weighted forecast by fiscal quarter</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            Open opportunities by expected award date: value × Pwin × Pgo. Won is what was awarded in the quarter.
+            @if (_forecast.UndatedCount > 0)
+            {
+                <span>@_forecast.UndatedCount opportunities have no award date (@CrmFormat.Money(_forecast.UndatedWeighted) weighted) and aren't in a quarter.</span>
+            }
+        </MudText>
+        @if (_forecast.Quarters.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Nothing to forecast yet.</MudText>
+        }
+        else
+        {
+            <AccessibleChart Title="Weighted pipeline by fiscal quarter" Labels="_labels" Series="_series" Format="@(v => CrmFormat.Money((decimal)v))" ShowTable="false">
+                <MudChart T="double" ChartType="ChartType.StackedBar" ChartSeries="_series" ChartLabels="_labels" Width="100%" Height="260px" LegendPosition="Position.Bottom" />
+            </AccessibleChart>
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="forecast-table" Class="mt-3">
+                <caption class="wb-sr-only">Weighted forecast by fiscal quarter</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Quarter</th><th scope="col" style="text-align:right">Opportunities</th><th scope="col" style="text-align:right">Total value</th>
+                        <th scope="col" style="text-align:right">Weighted</th><th scope="col" style="text-align:right">New (weighted)</th>
+                        <th scope="col" style="text-align:right">Recompete (weighted)</th><th scope="col" style="text-align:right">Won</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var q in _forecast.Quarters)
+                    {
+                        <tr>
+                            <th scope="row">@q.Label</th><td style="text-align:right">@q.Count</td><td style="text-align:right">@CrmFormat.Money(q.TotalValue)</td>
+                            <td style="text-align:right">@CrmFormat.Money(q.WeightedValue)</td><td style="text-align:right">@CrmFormat.Money(q.NewWeighted)</td>
+                            <td style="text-align:right">@CrmFormat.Money(q.RecompeteWeighted)</td><td style="text-align:right">@CrmFormat.Money(q.WonValue)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Win/loss</MudText>
+        <MudText Class="mb-3" data-testid="win-loss-summary">
+            @_winLoss.Won won (@CrmFormat.Money(_winLoss.WonValue)) · @_winLoss.Lost lost (@CrmFormat.Money(_winLoss.LostValue)) · @_winLoss.NoBid no-bid
+        </MudText>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3">Reasons</MudText>
+                <MudSimpleTable Dense="true">
+                    <caption class="wb-sr-only">Win/loss reasons</caption>
+                    <thead><tr><th scope="col">Reason</th><th scope="col" style="text-align:right">Won</th><th scope="col" style="text-align:right">Lost</th><th scope="col" style="text-align:right">No-bid</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _winLoss.Reasons)
+                        {
+                            <tr><th scope="row">@OpportunityStages.Label(r.Reason)</th><td style="text-align:right">@r.Won</td><td style="text-align:right">@r.Lost</td><td style="text-align:right">@r.NoBid</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <GroupTable Title="By fiscal year" Rows="_winLoss.ByFiscalYear" />
+                <GroupTable Title="New vs recompete" Rows="_winLoss.ByKind" />
+            </MudItem>
+            <MudItem xs="12">
+                <GroupTable Title="By agency" Rows="_winLoss.ByAgency" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">B&amp;P spending</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Time charged to each opportunity's B&amp;P charge code (indirect). Labor cost shows to Finance and administrators.</MudText>
+        @if (_bp.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No opportunity has a B&amp;P charge code yet.</MudText>
+        }
+        else
+        {
+            var showCost = _bp.Any(b => b.LaborCost is not null);
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="bp-table">
+                <caption class="wb-sr-only">B&amp;P spending by opportunity</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Opportunity</th><th scope="col">Stage</th><th scope="col">Charge code</th><th scope="col" style="text-align:right">Approved hours</th>
+                        <th scope="col" style="text-align:right">Not yet approved</th>
+                        @if (showCost) { <th scope="col" style="text-align:right">Labor cost</th> }
+                        <th scope="col" style="text-align:right">People</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in _bp)
+                    {
+                        <tr>
+                            <th scope="row" style="font-weight: normal"><a href="@($"bd/opportunities/{b.OpportunityId}?tab=bp")">@b.Number @b.Name</a></th>
+                            <td>@CrmFormat.Stage(b.Stage)</td><td>@b.ChargeCode</td>
+                            <td style="text-align:right">@b.ApprovedHours.ToString("0.0")</td><td style="text-align:right">@b.PendingHours.ToString("0.0")</td>
+                            @if (showCost) { <td style="text-align:right">@(b.LaborCost is { } c ? CrmFormat.Money(c) : "—")</td> }
+                            <td style="text-align:right">@b.People</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private ForecastDto? _forecast;
+    private WinLossDto? _winLoss;
+    private IReadOnlyList<BpSpendDto>? _bp;
+    private string[] _labels = [];
+    private List<ChartSeries<double>> _series = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _forecast = await Pipeline.GetForecastAsync();
+            _winLoss = await Pipeline.GetWinLossAsync();
+            _bp = await Pipeline.GetBpSpendAsync();
+            _labels = _forecast.Quarters.Select(q => q.Label).ToArray();
+            _series =
+            [
+                new() { Name = "New (weighted)", Data = new ChartData<double>(_forecast.Quarters.Select(q => (double)q.NewWeighted).ToList()) },
+                new() { Name = "Recompete (weighted)", Data = new ChartData<double>(_forecast.Quarters.Select(q => (double)q.RecompeteWeighted).ToList()) },
+            ];
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+}

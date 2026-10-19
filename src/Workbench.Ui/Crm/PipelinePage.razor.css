@@ -1,0 +1,25 @@
+.pipeline-board ::deep .board-lanes {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    align-items: flex-start;
+    padding-bottom: 8px;
+}
+
+.pipeline-board ::deep .board-lane {
+    flex: 0 0 270px;
+    background: var(--mud-palette-background-gray);
+    border-radius: var(--mud-default-borderradius);
+}
+
+.pipeline-board ::deep .board-lane-zone {
+    min-height: 48px;
+}
+
+.pipeline-board ::deep .board-card:hover {
+    box-shadow: var(--mud-elevation-4);
+}
+
+.pipeline-board ::deep .board-card-title {
+    overflow-wrap: anywhere;
+}

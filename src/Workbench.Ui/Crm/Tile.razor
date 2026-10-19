@@ -1,0 +1,11 @@
+@* A labelled figure. *@
+<MudPaper Outlined="true" Class="pa-3">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@Label</MudText>
+    <MudText Typo="Typo.h5" HtmlTag="p">@Value</MudText>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+}

@@ -1,0 +1,139 @@
+@* An opportunity's details: identification, the buy, value and dates, people and probabilities. *@
+
+<MudGrid Spacing="3">
+    <MudItem xs="12">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">The opportunity</MudText>
+    </MudItem>
+    <MudItem xs="12" md="8">
+        <MudTextField T="string" @bind-Value="Model.Name" Label="Name" Required="true" MaxLength="300" ReadOnly="ReadOnly" data-testid="opp-name" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField T="string" @bind-Value="Model.SolicitationNumber" Label="Solicitation number" MaxLength="100" ReadOnly="ReadOnly" HelperText="Used to spot duplicates from SAM.gov" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField T="string" @bind-Value="Model.Description" Label="Description" Lines="3" MaxLength="4000" ReadOnly="ReadOnly" />
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudSelect T="Guid?" @bind-Value="Model.AgencyAccountId" Label="Agency or office" Clearable="true" ReadOnly="ReadOnly" data-testid="opp-agency">
+            @foreach (var a in Accounts.Where(a => a.Kind.IsGovernment()))
+            {
+                <MudSelectItem T="Guid?" Value="a.Id">@(a.ParentName is { } p ? $"{a.Name} ({p})" : a.Name)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        @if (Model.AgencyAccountId is null)
+        {
+            <MudTextField T="string" @bind-Value="Model.AgencyName" Label="Agency (not an account yet)" MaxLength="300" ReadOnly="ReadOnly" />
+        }
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudTextField T="string" @bind-Value="Model.NaicsCode" Label="NAICS" MaxLength="6" ReadOnly="ReadOnly" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudSelect T="SetAside" @bind-Value="Model.SetAside" Label="Set-aside" ReadOnly="ReadOnly">
+            @foreach (var s in Enum.GetValues<SetAside>())
+            {
+                <MudSelectItem T="SetAside" Value="s">@OpportunityStages.Label(s)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudTextField T="string" @bind-Value="Model.ContractVehicle" Label="Contract vehicle" MaxLength="200" ReadOnly="ReadOnly" HelperText="e.g. GSA MAS, OASIS+, standalone" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudSelect T="ContractKind?" @bind-Value="Model.ContractType" Label="Contract type" Clearable="true" ReadOnly="ReadOnly">
+            @foreach (var k in Enum.GetValues<ContractKind>())
+            {
+                <MudSelectItem T="ContractKind?" Value="k">@CrmFormat.ContractKind(k)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField T="string" @bind-Value="Model.PlaceOfPerformance" Label="Place of performance" MaxLength="300" ReadOnly="ReadOnly" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudSelect T="OpportunityKind" @bind-Value="Model.Kind" Label="New or recompete" ReadOnly="ReadOnly">
+            <MudSelectItem T="OpportunityKind" Value="OpportunityKind.New">New business</MudSelectItem>
+            <MudSelectItem T="OpportunityKind" Value="OpportunityKind.Recompete">Recompete</MudSelectItem>
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        @if (Model.Kind == OpportunityKind.Recompete)
+        {
+            <MudSelect T="Guid?" @bind-Value="Model.IncumbentAccountId" Label="Incumbent" Clearable="true" ReadOnly="ReadOnly">
+                @foreach (var a in Accounts.Where(a => !a.Kind.IsGovernment()))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Name</MudSelectItem>
+                }
+            </MudSelect>
+            @if (Model.IncumbentAccountId is null)
+            {
+                <MudTextField T="string" @bind-Value="Model.IncumbentName" Label="Incumbent (name)" MaxLength="200" ReadOnly="ReadOnly" />
+            }
+        }
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Value and dates</MudText>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudNumericField T="decimal" @bind-Value="Model.EstimatedValue" Label="Estimated value ($)" Min="0" Format="N0" ReadOnly="ReadOnly" data-testid="opp-value"
+                         HelperText="Whole period, options included" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudNumericField T="int?" @bind-Value="Model.PeriodOfPerformanceMonths" Label="Period of performance (months)" Min="1" Max="600" ReadOnly="ReadOnly" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudDatePicker Label="Estimated award date" @bind-Date="Model.EstimatedAwardDate" DateFormat="yyyy-MM-dd" ReadOnly="ReadOnly" Clearable="true" />
+    </MudItem>
+    <MudItem xs="6" md="3" />
+    <MudItem xs="6" md="3">
+        <MudDatePicker Label="RFI response due" @bind-Date="Model.RfiDueOn" DateFormat="yyyy-MM-dd" ReadOnly="ReadOnly" Clearable="true" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudDatePicker Label="RFP release" @bind-Date="Model.RfpReleaseOn" DateFormat="yyyy-MM-dd" ReadOnly="ReadOnly" Clearable="true" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudDatePicker Label="Proposal due" @bind-Date="Model.ProposalDueOn" DateFormat="yyyy-MM-dd" ReadOnly="ReadOnly" Clearable="true" />
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">People and probability</MudText>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudSelect T="string" @bind-Value="Model.CaptureManagerEmail" Label="Capture manager" Clearable="true" ReadOnly="ReadOnly" data-testid="opp-capture">
+            @foreach (var u in People)
+            {
+                <MudSelectItem T="string" Value="u.Email">@u.DisplayName (@u.Email)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudSelect T="string" @bind-Value="Model.ProposalManagerEmail" Label="Proposal manager" Clearable="true" ReadOnly="ReadOnly">
+            @foreach (var u in People)
+            {
+                <MudSelectItem T="string" Value="u.Email">@u.DisplayName (@u.Email)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudNumericField T="int" @bind-Value="Model.Pwin" Label="Pwin (%)" Min="0" Max="100" ReadOnly="ReadOnly" HelperText="Probability we win" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudNumericField T="int" @bind-Value="Model.Pgo" Label="Pgo (%)" Min="0" Max="100" ReadOnly="ReadOnly" HelperText="Probability it's awarded" />
+    </MudItem>
+    <MudItem xs="12" md="6" Class="d-flex align-center">
+        <MudText data-testid="opp-weighted">Weighted value: <strong>@CrmFormat.Money(Model.Weighted)</strong></MudText>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public OpportunityModel Model { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<CrmAccountDto> Accounts { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<UserDto> People { get; set; } = [];
+
+    [Parameter] public bool ReadOnly { get; set; }
+}
