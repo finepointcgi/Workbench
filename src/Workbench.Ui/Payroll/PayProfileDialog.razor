@@ -11,6 +11,13 @@
                 }
             </MudSelect>
             <MudTextField @bind-Value="_providerId" Label="Provider employee id" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="EmploymentTypeKind" @bind-Value="_employmentType" Label="Employment type" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       HelperText="Leave policies can apply to some employment types only" data-testid="employment-type">
+                @foreach (var t in Enum.GetValues<EmploymentTypeKind>())
+                {
+                    <MudSelectItem T="EmploymentTypeKind" Value="t">@PayrollFormat.Label(t)</MudSelectItem>
+                }
+            </MudSelect>
             <MudSelect T="PayTypeKind" @bind-Value="_payType" Label="Pay type" Variant="Variant.Outlined" Margin="Margin.Dense">
                 <MudSelectItem T="PayTypeKind" Value="PayTypeKind.Hourly">Hourly</MudSelectItem>
                 <MudSelectItem T="PayTypeKind" Value="PayTypeKind.Salaried">Salaried</MudSelectItem>
@@ -24,6 +31,30 @@
             {
                 <MudNumericField T="decimal?" @bind-Value="_hourly" Label="Hourly pay rate" Variant="Variant.Outlined" Margin="Margin.Dense" Format="N4"
                                  HelperText="@(Profile.HasRate ? "Leave blank to keep the rate on file" : "")" />
+            }
+            @if (RateChanging)
+            {
+                <MudDatePicker @bind-Date="_effective" Editable="true" Label="New rate effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="rate-effective"
+                               HelperText="Pay periods ending before this date keep the earlier rate" />
+                <MudTextField @bind-Value="_reason" Label="Reason for the change" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" data-testid="rate-reason" />
+            }
+            @if (_history is { Count: > 0 })
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-2">Pay rate history</MudText>
+                <MudSimpleTable Dense="true" data-testid="rate-history">
+                    <thead><tr><th>From</th><th>Type</th><th>Rate</th><th>Reason</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _history)
+                        {
+                            <tr>
+                                <td>@r.EffectiveFrom.ToString("yyyy-MM-dd")@(r.IsCurrent ? " (current)" : r.EffectiveFrom > DateOnly.FromDateTime(DateTime.Today) ? " (upcoming)" : "")</td>
+                                <td>@r.PayType</td>
+                                <td>@(r.AnnualSalary is { } s ? $"{PayrollFormat.Money(s)} / yr" : r.HourlyRate is { } h ? $"{PayrollFormat.Money(h)} / h" : "•••••")</td>
+                                <td class="mud-text-secondary">@r.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
             }
         </MudStack>
     </DialogContent>
@@ -45,13 +76,35 @@
     private PayTypeKind _payType;
     private decimal? _salary;
     private decimal? _hourly;
+    private EmploymentTypeKind _employmentType;
+    private DateTime? _effective;
+    private string? _reason;
+    private IReadOnlyList<PayRateDto>? _history;
     private bool _busy;
 
-    protected override void OnInitialized()
+    /// <summary>A new rate is entered (or the pay type changes) on a profile that has one: it's dated and explained.</summary>
+    private bool RateChanging => Profile.HasProfile && Profile.HasRate
+        && ((_payType == PayTypeKind.Salaried ? _salary : _hourly) is not null || _payType != Profile.PayType);
+
+    protected override async Task OnInitializedAsync()
     {
         _groupId = Profile.PayGroupId;
         _providerId = Profile.ProviderEmployeeId;
         _payType = Profile.HasProfile ? Profile.PayType : Profile.IsExempt ? PayTypeKind.Salaried : PayTypeKind.Hourly;
+        _employmentType = Profile.EmploymentType;
+        _effective = DateTime.Today;
+        _history = Profile.Rates;
+        if (_history is null && Profile.HasProfile)
+        {
+            try
+            {
+                _history = (await Profiles.GetAsync(Profile.EmployeeId)).Rates;
+            }
+            catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+            {
+                _history = null;
+            }
+        }
     }
 
     private async Task SaveAsync()
@@ -60,7 +113,8 @@
         try
         {
             var saved = await Profiles.SaveAsync(Profile.EmployeeId, new SavePayProfileRequest(_groupId, _providerId, _payType,
-                _payType == PayTypeKind.Salaried ? _salary : null, _payType == PayTypeKind.Hourly ? _hourly : null));
+                _payType == PayTypeKind.Salaried ? _salary : null, _payType == PayTypeKind.Hourly ? _hourly : null,
+                RateChanging && _effective is { } d ? DateOnly.FromDateTime(d) : null, RateChanging ? _reason : null, _employmentType));
             Snackbar.Add("Payroll profile saved.", Severity.Success);
             MudDialog.Close(DialogResult.Ok(saved));
         }

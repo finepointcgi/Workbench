@@ -9,9 +9,10 @@
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Approvals</MudText>
 <MudText Class="mud-text-secondary mb-4">
     Everything waiting on you (or on someone you're standing in for), across timesheets, expenses, ODCs, purchasing,
-    bills, invoices and journal entries. The module pages still work:
+    bills, invoices, journal entries and leave requests. The module pages still work:
     <MudLink Href="time/approvals">timesheets</MudLink>, <MudLink Href="odcs/approvals">ODCs and expenses</MudLink>,
-    <MudLink Href="purchasing/approvals">AP bills</MudLink>, <MudLink Href="purchasing/requisitions">requisitions</MudLink>.
+    <MudLink Href="purchasing/approvals">AP bills</MudLink>, <MudLink Href="purchasing/requisitions">requisitions</MudLink>,
+    <MudLink Href="leave?tab=approvals">leave</MudLink>.
 </MudText>
 
 <MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
@@ -54,7 +55,7 @@
                             @context.StepName @(context.ScopeLabel is null ? "" : $"({context.ScopeLabel})")@(context.OnBehalfOf is null ? "" : $" · for {context.OnBehalfOf}")
                         </MudText>
                     </MudTd>
-                    <MudTd DataLabel="Amount" Style="text-align:right; white-space:nowrap">@(context.DocumentType == ApprovalDocumentTypes.Timesheet ? $"{context.Amount:0.0} h" : context.Amount?.ToString("C"))</MudTd>
+                    <MudTd DataLabel="Amount" Style="text-align:right; white-space:nowrap">@(ApprovalDocumentTypes.AmountIsHours(context.DocumentType) ? $"{context.Amount:0.0} h" : context.Amount?.ToString("C"))</MudTd>
                     <MudTd DataLabel="Waiting" Style="white-space:nowrap">@(context.BusinessDaysWaiting == 0 ? "Today" : context.BusinessDaysWaiting == 1 ? "1 business day" : $"{context.BusinessDaysWaiting} business days")</MudTd>
                     <MudTd DataLabel="Decide" Class="wb-inbox-actions">
                         <div class="d-flex flex-wrap gap-1 justify-end">

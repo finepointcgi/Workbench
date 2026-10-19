@@ -18,6 +18,16 @@ public enum PayType
     Salaried,
 }
 
+/// <summary>How an employee is employed. Leave policies can be limited to some of these.</summary>
+public enum EmploymentType
+{
+    FullTime,
+    PartTime,
+    Temporary,
+    Seasonal,
+    Intern,
+}
+
 /// <summary>Employees paid together on one schedule by one provider company.</summary>
 public sealed class PayGroup : Entity
 {
@@ -60,7 +70,9 @@ public sealed class PayPeriod : Entity
 
 /// <summary>
 /// How an employee is paid. Sensitive: Finance and administrators only, and the rate is masked until revealed (which is
-/// recorded as a security event).
+/// recorded as a security event). The rate history is <see cref="EmployeePayRate"/>; <see cref="PayType"/>,
+/// <see cref="AnnualSalary"/>, <see cref="HourlyRate"/> and <see cref="EffectiveFrom"/> mirror its latest row. Anything
+/// that needs the rate for a date (exports, reconciliation) reads the history (<c>Application.Payroll.PayRates</c>).
 /// </summary>
 public sealed class EmployeePayProfile : Entity
 {
@@ -72,6 +84,8 @@ public sealed class EmployeePayProfile : Entity
 
     public PayType PayType { get; set; } = PayType.Hourly;
 
+    public EmploymentType EmploymentType { get; set; } = EmploymentType.FullTime;
+
     /// <summary>Salaried employees: annual salary.</summary>
     public decimal? AnnualSalary { get; set; }
 
@@ -81,6 +95,27 @@ public sealed class EmployeePayProfile : Entity
     public DateOnly EffectiveFrom { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public string? UpdatedBy { get; set; }
+
+    /// <summary>Hourly pay equivalent: the hourly rate, or the salary over 2,080 hours.</summary>
+    public decimal? EquivalentHourlyRate => PayType == PayType.Salaried
+        ? AnnualSalary is { } salary ? Math.Round(salary / 2080m, 4, MidpointRounding.AwayFromZero) : null
+        : HourlyRate;
+}
+
+/// <summary>
+/// An employee's pay rate from <see cref="EffectiveFrom"/> until the next row starts. Append-only: a change or a
+/// correction is a new row with a reason; for the same effective date the latest recorded row wins.
+/// </summary>
+public sealed class EmployeePayRate : Entity
+{
+    public Guid EmployeeId { get; set; }
+    public DateOnly EffectiveFrom { get; set; }
+    public PayType PayType { get; set; }
+    public decimal? AnnualSalary { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public string? Reason { get; set; }
+    public required string CreatedBy { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
 
     /// <summary>Hourly pay equivalent: the hourly rate, or the salary over 2,080 hours.</summary>
     public decimal? EquivalentHourlyRate => PayType == PayType.Salaried

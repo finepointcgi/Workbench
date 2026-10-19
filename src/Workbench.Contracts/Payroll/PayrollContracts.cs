@@ -9,6 +9,8 @@ public enum PayFrequencyKind { Weekly, Biweekly, SemiMonthly, Monthly }
 
 public enum PayTypeKind { Hourly, Salaried }
 
+public enum EmploymentTypeKind { FullTime, PartTime, Temporary, Seasonal, Intern }
+
 public enum PayrollRunState { Draft, Exported, RegisterImported, Posted, Voided }
 
 // ---- Pay groups and calendars ----
@@ -67,8 +69,24 @@ public interface IPayGroupService
 // ---- Employee payroll profiles (sensitive) ----
 
 /// <summary>
+/// One row of an employee's pay rate history, in effect from <see cref="EffectiveFrom"/> until the next row.
+/// <see cref="AnnualSalary"/> and <see cref="HourlyRate"/> are null unless revealed.
+/// </summary>
+public sealed record PayRateDto(
+    DateOnly EffectiveFrom,
+    PayTypeKind PayType,
+    decimal? AnnualSalary,
+    decimal? HourlyRate,
+    string? Reason,
+    string CreatedBy,
+    DateTime CreatedAtUtc,
+    bool IsCurrent);
+
+/// <summary>
 /// An employee's payroll profile. <see cref="AnnualSalary"/> and <see cref="HourlyRate"/> are null unless revealed:
-/// lists never carry pay rates (<see cref="HasRate"/> says whether one is on file).
+/// lists never carry pay rates (<see cref="HasRate"/> says whether one is on file). Pay type, rate and
+/// <see cref="EffectiveFrom"/> are those in effect today; <see cref="Rates"/> is the history (newest first, including
+/// rates that start later), only on single-profile reads.
 /// </summary>
 public sealed record PayProfileDto(
     Guid EmployeeId,
@@ -85,11 +103,15 @@ public sealed record PayProfileDto(
     decimal? AnnualSalary,
     decimal? HourlyRate,
     DateOnly? EffectiveFrom,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc,
+    EmploymentTypeKind EmploymentType = EmploymentTypeKind.FullTime,
+    IReadOnlyList<PayRateDto>? Rates = null);
 
 /// <summary>
 /// Creates or changes a profile. Salaried employees need <see cref="AnnualSalary"/>, hourly ones <see cref="HourlyRate"/>.
-/// Leave both rates null to keep the rate on file (so a masked form can change other fields).
+/// Leave both rates null to keep the rate on file (so a masked form can change other fields). A changed rate is added
+/// to the history from <see cref="EffectiveFrom"/> (default: the hire date for a new profile, otherwise today), with
+/// <see cref="Reason"/>. <see cref="EmploymentType"/> null keeps the current one.
 /// </summary>
 public sealed record SavePayProfileRequest(
     Guid? PayGroupId,
@@ -97,7 +119,9 @@ public sealed record SavePayProfileRequest(
     PayTypeKind PayType,
     decimal? AnnualSalary = null,
     decimal? HourlyRate = null,
-    DateOnly? EffectiveFrom = null);
+    DateOnly? EffectiveFrom = null,
+    string? Reason = null,
+    EmploymentTypeKind? EmploymentType = null);
 
 public interface IPayrollProfileService
 {
@@ -296,6 +320,6 @@ public interface IPayrollRunService
     /// <summary>Step 6: posts the payroll journal (idempotent per register) and runs leave accrual for the period.</summary>
     Task<PayrollRunDto> PostAsync(Guid runId, CancellationToken cancellationToken = default);
 
-    /// <summary>Reverses the posted journal and voids the run (reason required).</summary>
+    /// <summary>Reverses the posted journal and the period's leave accrual, and voids the run (reason required).</summary>
     Task<PayrollRunDto> VoidAsync(Guid runId, VoidPayrollRequest request, CancellationToken cancellationToken = default);
 }

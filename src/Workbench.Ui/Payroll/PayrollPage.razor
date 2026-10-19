@@ -316,7 +316,7 @@ else
 
     private async Task EditProfileAsync(PayProfileDto profile)
     {
-        var parameters = new DialogParameters<PayProfileDialog> { { x => x.Profile, profile }, { x => x.Groups, _groups } };
+        var parameters = new DialogParameters<PayProfileDialog> { { x => x.Profile, _revealed.GetValueOrDefault(profile.EmployeeId) ?? profile }, { x => x.Groups, _groups } };
         var dialog = await DialogService.ShowAsync<PayProfileDialog>($"Payroll profile · {profile.EmployeeName}", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false })
         {

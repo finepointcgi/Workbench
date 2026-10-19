@@ -117,7 +117,7 @@ public sealed class PayrollRunService(
                 lines.Add((e.Employee.Id, category, code, hours, new PayrollHoursLine(id, e.Employee.DisplayName, code, hours, e.CostCenter)));
             }
 
-            if (e.Profile.PayType == PayType.Hourly || data.Settings?.ExportSalariedRegularHours == true)
+            if (e.PayType == PayType.Hourly || data.Settings?.ExportSalariedRegularHours == true)
             {
                 Add(EarningCodes.Regular, e.Split.Regular);
             }
@@ -378,6 +378,18 @@ public sealed class PayrollRunService(
             register.Status = PayrollRegisterStatus.Voided;
         }
 
+        // Posting accrued the period's leave, so voiding a posted run takes it back (re-posting accrues it again).
+        if (run.Status == PayrollRunStatus.Posted)
+        {
+            var period = await db.Set<PayPeriod>().AsNoTracking().FirstAsync(p => p.Id == run.PayPeriodId, cancellationToken);
+            var (entries, hours) = await LeaveEngine.ReverseAccrualAsync(db, period, reason, audit.Actor, UtcNow, cancellationToken);
+            if (entries > 0)
+            {
+                audit.Record(db, LeaveEngine.AuditEntityType, period.Id, "Accrual reversed", null,
+                    new { EntriesReversed = entries, HoursReversed = hours, period.Start, period.End, RunId = run.Id }, reason);
+            }
+        }
+
         run.Status = PayrollRunStatus.Voided;
         run.VoidedAtUtc = UtcNow;
         run.VoidedBy = audit.Actor;
@@ -410,19 +422,25 @@ public sealed class PayrollRunService(
                 notes.Add("No check in the register.");
             }
 
-            var hasRate = (e.Profile.AnnualSalary ?? e.Profile.HourlyRate) is not null;
+            // The rate in effect for the pay period (on its last day); earlier periods keep the rate they were paid at.
+            var hasRate = e.Rate is not null && (e.Rate.AnnualSalary ?? e.Rate.HourlyRate) is not null;
             if (!hasRate)
             {
                 notes.Add("No pay rate on file.");
             }
 
-            var x = PayrollReconciliation.Explain(new PayBasis(e.Profile.PayType, e.Profile.AnnualSalary, e.Profile.HourlyRate, perYear), e.Split, gross);
+            foreach (var change in e.RateChanges)
+            {
+                notes.Add($"Pay rate changed {change:MMM d}, within the period: reconciled at the rate in effect on {data.Period.End:MMM d}.");
+            }
+
+            var x = PayrollReconciliation.Explain(new PayBasis(e.PayType, e.Rate?.AnnualSalary, e.Rate?.HourlyRate, perYear), e.Split, gross);
             if (lines.Count == 0)
             {
                 x = x with { Unexplained = 0 };
             }
 
-            rows.Add(new ReconciliationRowDto(e.Employee.Id, e.Employee.DisplayName, (PayTypeKind)(int)e.Profile.PayType, e.Split.Regular, e.Split.Overtime, e.Split.LeaveTotal,
+            rows.Add(new ReconciliationRowDto(e.Employee.Id, e.Employee.DisplayName, (PayTypeKind)(int)e.PayType, e.Split.Regular, e.Split.Overtime, e.Split.LeaveTotal,
                 hasRate ? x.PayRate : null, x.WorkedAtPayRate, x.LeavePay, x.OvertimePremium, x.SalariedVariance, x.ExpectedGross, gross, x.Unexplained,
                 e.AccruedCost, gross - e.AccruedCost, notes));
             // Only a paid employee's accrual is cleared; an unpaid one's stays in accrued payroll until a register pays it.
@@ -490,7 +508,12 @@ internal sealed class PayrollData
     public required IReadOnlyList<EarningCodeMapping> EarningCodes { get; init; }
     public required List<EmployeePayroll> Employees { get; init; }
 
-    internal sealed record EmployeePayroll(Employee Employee, EmployeePayProfile Profile, string? CostCenter, HoursSplit Split, EmployeeHoursDto Hours, decimal AccruedCost);
+    /// <summary><paramref name="Rate"/> is the pay rate in effect on the period's last day (null when none is).</summary>
+    internal sealed record EmployeePayroll(Employee Employee, EmployeePayProfile Profile, EmployeePayRate? Rate, IReadOnlyList<DateOnly> RateChanges,
+        string? CostCenter, HoursSplit Split, EmployeeHoursDto Hours, decimal AccruedCost)
+    {
+        public PayType PayType => Rate?.PayType ?? Profile.PayType;
+    }
 
     public static async Task<PayrollData> LoadAsync(IWorkbenchDbContext db, PayrollRun run, CancellationToken ct)
     {
@@ -499,6 +522,7 @@ internal sealed class PayrollData
         var settings = await db.Set<PayrollProviderSetting>().AsNoTracking().FirstOrDefaultAsync(s => s.ProviderKey == group.ProviderKey, ct);
         var mappings = Payroll.EarningCodes.Parse(settings?.EarningCodes);
         var profiles = await db.Set<EmployeePayProfile>().AsNoTracking().Where(p => p.PayGroupId == group.Id).ToListAsync(ct);
+        var history = await PayRates.HistoryAsync(db, profiles, ct);
         var ids = profiles.Select(p => p.EmployeeId).ToList();
         var employees = (await db.Set<Employee>().AsNoTracking().Where(e => ids.Contains(e.Id)).ToListAsync(ct))
             .Where(e => e.HireDate <= period.End && (e.TerminationDate is null || e.TerminationDate >= period.Start))
@@ -529,6 +553,9 @@ internal sealed class PayrollData
         foreach (var profile in profiles.Where(p => employees.ContainsKey(p.EmployeeId)))
         {
             var employee = employees[profile.EmployeeId];
+            var payRates = history[profile.EmployeeId];
+            var rate = PayRates.InEffect(payRates, period.End);
+            var payType = rate?.PayType ?? profile.PayType;
             var mine = entries.Where(e => e.EmployeeId == employee.Id).ToList();
             var split = PayrollHours.Split(!employee.IsExempt, period.Start, period.End,
                 mine.Select(e => new ApprovedHours(e.WorkDate, e.Code, e.Kind == ChargeKind.Leave, e.Hours)));
@@ -586,9 +613,10 @@ internal sealed class PayrollData
                 leave.Add(new LeaveHoursDto(code, earning, hours));
             }
 
-            var hoursDto = new EmployeeHoursDto(employee.Id, employee.DisplayName, profile.ProviderEmployeeId, employee.IsExempt, (PayTypeKind)(int)profile.PayType,
+            var hoursDto = new EmployeeHoursDto(employee.Id, employee.DisplayName, profile.ProviderEmployeeId, employee.IsExempt, (PayTypeKind)(int)payType,
                 split.Regular, split.Overtime, leave, issues);
-            result.Add(new EmployeePayroll(employee, profile, employee.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null, split, hoursDto, accrued));
+            var changes = PayRates.ChangesWithin(payRates, period.Start, period.End).Select(r => r.EffectiveFrom).Distinct().ToList();
+            result.Add(new EmployeePayroll(employee, profile, rate, changes, employee.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null, split, hoursDto, accrued));
         }
 
         return new PayrollData

@@ -27,6 +27,7 @@ public static class ApprovalRegistration
         services.AddScoped<IApprovalDocumentHandler, ApBillApprovalHandler>();
         services.AddScoped<IApprovalDocumentHandler, InvoiceApprovalHandler>();
         services.AddScoped<IApprovalDocumentHandler, JournalEntryApprovalHandler>();
+        services.AddScoped<IApprovalDocumentHandler, LeaveRequestApprovalHandler>();
         return services;
     }
 

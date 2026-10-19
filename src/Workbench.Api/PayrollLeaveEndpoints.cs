@@ -44,6 +44,7 @@ internal static class PayrollLeaveEndpoints
 
         l.MapGet("/policies", (bool? includeInactive, ILeavePolicyService s, CancellationToken ct) => s.ListAsync(includeInactive ?? false, ct));
         l.MapGet("/policies/charge-codes", (ILeavePolicyService s, CancellationToken ct) => s.ListLeaveChargeCodesAsync(ct));
+        l.MapGet("/policies/mine", (ILeavePolicyService s, CancellationToken ct) => s.ListMineAsync(ct));
         l.MapPost("/policies", (SaveLeavePolicyRequest r, ILeavePolicyService s, CancellationToken ct) => s.CreateAsync(r, ct));
         l.MapPut("/policies/{id:guid}", (Guid id, SaveLeavePolicyRequest r, ILeavePolicyService s, CancellationToken ct) => s.UpdateAsync(id, r, ct));
 

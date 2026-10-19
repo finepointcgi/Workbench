@@ -50,6 +50,21 @@ public sealed class LeavePolicy : Entity
     public bool IsActive { get; set; } = true;
     public DateTime UpdatedAtUtc { get; set; }
 
+    // Eligibility. Every criterion left empty applies to everyone; an employee must match each one that is set (any of
+    // its listed values). Org units include their sub-units. Pay group and employment type come from the payroll profile.
+
+    /// <summary>Org unit ids, comma-separated; null for every org unit.</summary>
+    public string? EligibleOrgUnitIds { get; set; }
+
+    /// <summary>Pay group ids, comma-separated; null for every pay group.</summary>
+    public string? EligiblePayGroupIds { get; set; }
+
+    /// <summary>True for exempt employees only, false for non-exempt only, null for both.</summary>
+    public bool? EligibleExempt { get; set; }
+
+    /// <summary><c>EmploymentType</c> names, comma-separated (e.g. <c>FullTime,PartTime</c>); null for every type.</summary>
+    public string? EligibleEmploymentTypes { get; set; }
+
     public List<LeaveAccrualTier> Tiers { get; } = [];
 }
 
