@@ -50,7 +50,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Equal(["home", "my-work", "projects", "sheets", "materials", "reports"], Sections(nav));
+        Assert.Equal(["home", "my-work", "projects", "people", "sheets", "materials", "reports"], Sections(nav));
         foreach (var page in new[] { "materials", "materials/inventory", "materials/receiving", "materials/boms", "materials/work-orders", "materials/mrp", "materials/reports" })
         {
             Assert.Contains(page, links);
@@ -154,7 +154,7 @@ public sealed class NavMenuTests
         Assert.DoesNotContain("admin/users", links);
         Assert.DoesNotContain("notifications", links);
         Assert.Contains(">Setup<", nav.Find("[data-testid='nav-admin']").OuterHtml.Replace(" ", ""));
-        Assert.True(links.Count <= 72 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 6 under Business development
+        Assert.True(links.Count <= 80 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 6 under Business development, 4 for the assistant
     }
 
     [Fact]
