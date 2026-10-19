@@ -17,7 +17,7 @@ on:
       ref:
         description: Git ref to build and deploy
         required: true
-        default: main
+        default: master
 
 permissions:
   contents: read
