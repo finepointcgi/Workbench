@@ -83,22 +83,32 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
             CreatedAtUtc = ledger.UtcNow,
         };
 
-        // One line per account and currency (the documents are on the run's lines); functional only, so a revalued bank
-        // account's balance in its own currency doesn't move.
-        foreach (var g in revalued.GroupBy(b => (b.AccountId, b.CurrencyCode, b.Kind)).OrderBy(g => g.Key.Kind).ThenBy(g => g.Key.CurrencyCode, StringComparer.Ordinal))
+        // Per company (each company's lines balance on their own, so no intercompany lines are added), one line per account
+        // and currency (the documents are on the run's lines); functional only, so a revalued bank account's balance in its
+        // own currency doesn't move.
+        foreach (var company in revalued.GroupBy(b => b.CompanyId).OrderBy(c => c.Key))
         {
-            var net = g.Sum(b => b.GainLoss!.Value);
-            if (net != 0)
+            foreach (var g in company.GroupBy(b => (b.AccountId, b.CurrencyCode, b.Kind)).OrderBy(g => g.Key.Kind).ThenBy(g => g.Key.CurrencyCode, StringComparer.Ordinal))
             {
-                entry.Lines.Add(CurrencySupport.Line(entry, g.Key.AccountId, net, $"Revalue {g.Count()} {g.Key.Kind.ToString().ToLowerInvariant()} balance(s) in {g.Key.CurrencyCode} at {g.First().Rate:0.######}"));
+                var net = g.Sum(b => b.GainLoss!.Value);
+                if (net != 0)
+                {
+                    var line = CurrencySupport.Line(entry, g.Key.AccountId, net, $"Revalue {g.Count()} {g.Key.Kind.ToString().ToLowerInvariant()} balance(s) in {g.Key.CurrencyCode} at {g.First().Rate:0.######}");
+                    line.CompanyId = company.Key;
+                    entry.Lines.Add(line);
+                }
+            }
+
+            var companyNet = company.Sum(b => b.GainLoss!.Value);
+            if (companyNet != 0)
+            {
+                var line = CurrencySupport.Line(entry, unrealized.Id, -companyNet, companyNet > 0 ? "Unrealized foreign exchange gain" : "Unrealized foreign exchange loss");
+                line.CompanyId = company.Key;
+                entry.Lines.Add(line);
             }
         }
 
         var total = revalued.Sum(b => b.GainLoss!.Value);
-        if (total != 0)
-        {
-            entry.Lines.Add(CurrencySupport.Line(entry, unrealized.Id, -total, total > 0 ? "Unrealized foreign exchange gain" : "Unrealized foreign exchange loss"));
-        }
 
         if (entry.Lines.Count < 2)
         {

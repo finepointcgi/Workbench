@@ -14,6 +14,7 @@
                        OnClick="ToggleDrawer" aria-label="Toggle navigation" aria-expanded="@(_drawerOpen ? "true" : "false")" />
         <MudText Typo="Typo.h6" HtmlTag="span" Class="ml-2">Workbench</MudText>
         <MudSpacer />
+        <Workbench.Ui.Companies.CompanySwitcher />
         <CommandPalette Access="_access" Ask="AskAssistantAsync" />
         <Workbench.Ui.Assistant.AssistantButton @ref="_assistant" Access="_access" />
         <HelpButton Access="_access" />

@@ -33,8 +33,11 @@ public enum IndirectRateBasis
 /// base and the cascade order (fringe, then overhead, then G&amp;A). Unallowable and applied-burden accounts never
 /// count toward a pool, whatever is selected.
 /// </summary>
-public sealed class IndirectPoolSetup : Entity
+public sealed class IndirectPoolSetup : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The company whose pool this is; each company builds and allocates its own pools.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public IndirectPool Pool { get; set; }
     public required string Name { get; set; }
     public AllocationBase Base { get; set; }

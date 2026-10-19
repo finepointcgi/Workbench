@@ -259,6 +259,7 @@ public sealed class ApPaymentService(
 
             var entry = new JournalEntry
             {
+                CompanyId = bill.CompanyId,
                 Date = request.PaidOn,
                 Source = JournalSource.AP,
                 SourceId = payment.Id,

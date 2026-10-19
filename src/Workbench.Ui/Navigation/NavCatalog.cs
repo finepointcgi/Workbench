@@ -183,6 +183,7 @@ public static class NavCatalog
         new(Reports, null, "HR reports", "hr/reports", Icons.Material.Filled.Assessment, a => a.IsHr || a.IsFinance, Keywords: "headcount turnover eeo-1 vets-4212 clearances expirations benefits"),
         new(Reports, null, "Timesheet flags", "time/flags", Icons.Material.Filled.Flag, a => a.ShowTeamTime || a.IsFinance, Keywords: "anomalies odd timesheets dcaa review weekend late revisions"),
         new(Reports, null, "Financial statements", "accounting/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "balance sheet income statement trial balance p&l"),
+        new(Reports, null, "Consolidated statements", "accounting/consolidated", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "consolidation eliminations multicompany intercompany companies"),
         new(Reports, null, "AP reports", "purchasing/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "payables aging 1099"),
         new(Reports, null, "Asset reports", "assets/reports", Icons.Material.Filled.Assessment, FinanceOnly),
         new(Reports, null, "Revenue reports", "accounting/revenue/reports", Icons.Material.Filled.Assessment, FinanceOnly),
@@ -208,6 +209,7 @@ public static class NavCatalog
         new(Admin, null, "Import", "setup/import", Icons.Material.Filled.UploadFile, FinanceOnly, Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
         new(Admin, null, "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, FinanceOnly, Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
         new(Admin, null, "Organization", "setup/organization", Icons.Material.Filled.Tune, FinanceOnly, Keywords: "settings timesheet cadence company"),
+        new(Admin, "Setup", "Companies", "setup/companies", Icons.Material.Filled.Domain, FinanceOnly, Keywords: "multicompany legal entity intercompany ein due to due from"),
 
         // Findable with Ctrl+K only.
         new(Home, null, "Notifications", "notifications", Icons.Material.Filled.Notifications, Everyone, Keywords: "alerts email digest settings", InMenu: false),

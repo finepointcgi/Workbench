@@ -1,0 +1,57 @@
+@* Adds or changes a company: code, legal name, EIN, fiscal year and whether it's active. *@
+@using Workbench.Contracts.Companies
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_code" Label="Code" Required="true" MaxLength="16" AutoFocus="true" autocomplete="off"
+                          HelperText="Short and unique, for example FED. Shown in the company switcher." data-testid="company-code" />
+            <MudTextField @bind-Value="_name" Label="Legal name" Required="true" MaxLength="200" autocomplete="off" data-testid="company-name" />
+            <MudTextField @bind-Value="_ein" Label="EIN (optional)" MaxLength="10" autocomplete="off" HelperText="Employer identification number, like 12-3456789." />
+            <MudSelect T="int" @bind-Value="_month" Label="Fiscal year starts in"
+                       HelperText="Companies share the fiscal calendar, so this matches Setup › Fiscal calendar.">
+                @for (var m = 1; m <= 12; m++)
+                {
+                    var month = m;
+                    <MudSelectItem T="int" Value="month">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField Value="@("USD")" Label="Home currency" ReadOnly="true" HelperText="Every company keeps its books in US dollars for now." />
+            @if (Company?.IsDefault != true)
+            {
+                <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="Active (inactive companies take no new postings)" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name)"
+                   OnClick="Save" data-testid="company-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public CompanyDto? Company { get; set; }
+
+    [Parameter]
+    public int DefaultMonth { get; set; } = 10;
+
+    private string? _code;
+    private string? _name;
+    private string? _ein;
+    private int _month = 10;
+    private bool _active = true;
+
+    protected override void OnInitialized()
+    {
+        (_code, _name, _ein, _month, _active) = Company is { } c
+            ? (c.Code, c.LegalName, c.Ein, c.FiscalYearStartMonth, c.IsActive)
+            : (null, null, null, DefaultMonth, true);
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveCompanyRequest(_code!.Trim(), _name!.Trim(), _ein, _month, _active)));
+}
