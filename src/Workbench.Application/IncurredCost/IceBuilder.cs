@@ -671,7 +671,8 @@ internal static class IceBuilder
         private IceScheduleDto ScheduleH1()
         {
             var t = new Table("H-1", "Direct labor hours by contract", "Approved hours on direct charge codes in the year, by contract and labor category, at cost.",
-                [Text("contract", "Contract"), Text("category", "Labor category"), Hours("hours", "Hours"), Amount("cost", "Labor cost")]);
+                [Text("contract", "Contract"), Text("category", "Labor category"), Hours("hours", "Hours"), Hours("uncompensated", "Uncompensated hours (included)"),
+                 Amount("cost", "Labor cost")]);
             var projects = s.Projects.ToDictionary(p => p.Id);
             var byBucket = s.Hours.GroupBy(h => projects.TryGetValue(h.ProjectId, out var p) ? p.ContractId?.ToString() ?? None : None).ToDictionary(g => g.Key);
             foreach (var bucket in _buckets.Where(x => byBucket.ContainsKey(x.Key)).Concat(byBucket.Keys.Where(k => _buckets.All(x => x.Key != k))
@@ -682,16 +683,27 @@ internal static class IceBuilder
                 foreach (var category in rows)
                 {
                     t.Add($"{bucket.Key}:{category.Key}").T("contract", bucket.Label).T("category", category.Key)
-                        .N("hours", category.Sum(h => h.Hours)).N("cost", category.Sum(h => h.Cost));
+                        .N("hours", category.Sum(h => h.Hours)).N("uncompensated", category.Sum(h => h.UncompensatedHours)).N("cost", category.Sum(h => h.Cost));
                 }
 
                 t.Add($"subtotal:{bucket.Key}", IceRowKind.Subtotal).T("contract", $"Total {bucket.Label}")
-                    .N("hours", byBucket[bucket.Key].Sum(h => h.Hours)).N("cost", byBucket[bucket.Key].Sum(h => h.Cost));
+                    .N("hours", byBucket[bucket.Key].Sum(h => h.Hours)).N("uncompensated", byBucket[bucket.Key].Sum(h => h.UncompensatedHours)).N("cost", byBucket[bucket.Key].Sum(h => h.Cost));
             }
 
             var hours = s.Hours.Sum(h => h.Hours);
             var cost = s.Hours.Sum(h => h.Cost);
-            t.Add("total", IceRowKind.Total).T("contract", "Total").N("hours", hours).N("cost", cost);
+            var uncompensated = s.Hours.Sum(h => h.UncompensatedHours);
+            t.Add("total", IceRowKind.Total).T("contract", "Total").N("hours", hours).N("uncompensated", uncompensated).N("cost", cost);
+
+            // DCAA: uncompensated overtime of exempt staff is recorded (total time accounting) and disclosed with the method used to cost it.
+            t.Notes.Add("Hours are all hours worked and recorded, including uncompensated overtime: hours exempt salaried employees worked beyond their "
+                + $"standard week without additional pay. Direct uncompensated hours: {uncompensated:N2}"
+                + (s.UncompensatedHoursAll is { } all ? $"; on all charges, direct and indirect: {all:N2}." : "."));
+            if (s.LaborCostMethod is { } method)
+            {
+                t.Notes.Add($"Uncompensated overtime costing method: {method}. Standard records uncompensated hours at no cost; total time accounting "
+                    + "(effective rate) spreads each period's salary over all hours worked.");
+            }
             Total("H-1", "hours", "Direct labor hours", hours);
             var gl = _labor.Values.Sum();
             if (cost != gl)

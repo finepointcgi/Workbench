@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddPricingClients(serverBaseAddress);
         services.AddAssistantClients(serverBaseAddress);
         services.AddPlanningClients(serverBaseAddress);
+        services.AddTotalTimeClients(serverBaseAddress);
         return services;
     }
 }

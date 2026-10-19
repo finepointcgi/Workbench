@@ -1,0 +1,57 @@
+@* Total time accounting on a timesheet: an exempt employee's standard vs worked hours, the uncompensated hours and the
+   company policy. Hidden for non-exempt staff (their extra hours are paid overtime) and when the service isn't registered. *@
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+@if (_summary is { IsExempt: true } s && Timesheet is { } t)
+{
+    var uncompensated = Math.Max(0, t.TotalHours - t.StandardHours);
+    <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="total-time">
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="6" AlignItems="AlignItems.Center">
+            <div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Standard hours</MudText>
+                <MudText Typo="Typo.h6" data-testid="tta-standard">@Hours(t.StandardHours)</MudText>
+            </div>
+            <div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Hours worked</MudText>
+                <MudText Typo="Typo.h6" data-testid="tta-worked">@Hours(t.TotalHours)</MudText>
+            </div>
+            <div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Uncompensated hours</MudText>
+                <MudText Typo="Typo.h6" data-testid="tta-uncompensated" Color="@(uncompensated > 0 ? Color.Warning : Color.Default)">@Hours(uncompensated)</MudText>
+            </div>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Policy">
+                Exempt · @LaborCostMethods.Label(s.Method)
+            </MudChip>
+        </MudStack>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2" data-testid="tta-note">@s.PolicyNote</MudText>
+    </MudPaper>
+}
+
+@code {
+    private TimesheetTotalTimeDto? _summary;
+    private Guid? _loadedFor;
+
+    [Parameter, EditorRequired]
+    public TimesheetDto? Timesheet { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Timesheet is null || Timesheet.Id == _loadedFor)
+        {
+            return;
+        }
+
+        _loadedFor = Timesheet.Id;
+        try
+        {
+            _summary = Services.GetService<ITotalTimeService>() is { } service ? await service.GetTimesheetSummaryAsync(Timesheet.Id) : null;
+        }
+        catch (Exception ex) when (ex is WorkbenchNotFoundException or UnauthorizedAccessException or ArgumentException or HttpRequestException)
+        {
+            _summary = null;
+        }
+    }
+
+    private static string Hours(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture) + " h";
+}

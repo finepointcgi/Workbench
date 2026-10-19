@@ -89,8 +89,8 @@ internal sealed record DirectCost(Guid ProjectId, Guid WbsElementId, DateOnly Da
 internal static class DirectCosts
 {
     /// <summary>
-    /// Approved time on direct WBS elements (hours × the cost rate effective on the work date, per entry to the cent, like
-    /// the GL and the financials) and approved ODCs, dated <paramref name="start"/> through <paramref name="end"/>.
+    /// Approved time on direct WBS elements (hours × the cost rate effective on the work date, per entry to the cent, by
+    /// the labor cost method, like the GL and the financials) and approved ODCs, dated <paramref name="start"/> through <paramref name="end"/>.
     /// </summary>
     public static async Task<List<DirectCost>> LoadAsync(IWorkbenchDbContext db, Guid? projectId, DateOnly start, DateOnly end, ICollection<string> notes, CancellationToken ct)
     {
@@ -100,26 +100,20 @@ internal static class DirectCosts
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 join w in wbs on e.WbsElementId equals w.Id
                 where t.Status == TimesheetStatus.Approved && e.WorkDate >= start && e.WorkDate <= end && e.Hours != 0
-                select new { w.ProjectId, e.WbsElementId, t.EmployeeId, e.WorkDate, e.Hours })
+                select new { w.ProjectId, e.WbsElementId, t.EmployeeId, e.WorkDate, e.Hours, e.Id, e.TimesheetId })
             .ToListAsync(ct);
-        var employeeIds = labor.Select(l => l.EmployeeId).Distinct().ToList();
-        var rates = new EffectiveRateTable<Guid>();
-        foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employeeIds.Contains(r.EmployeeId)).ToListAsync(ct))
-        {
-            rates.Add(r.EmployeeId, r.EffectiveFrom, r.HourlyCost);
-        }
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, labor.Select(l => l.TimesheetId), ct);
 
         var result = new List<DirectCost>();
         var missing = 0m;
         foreach (var l in labor)
         {
-            var rate = rates.Find(l.EmployeeId, l.WorkDate);
-            if (rate is null)
+            if (book.MissingRate(l.Id))
             {
                 missing += l.Hours;
             }
 
-            result.Add(new DirectCost(l.ProjectId, l.WbsElementId, l.WorkDate, l.Hours, Money.Round(l.Hours * (rate ?? 0)), 0, 0));
+            result.Add(new DirectCost(l.ProjectId, l.WbsElementId, l.WorkDate, l.Hours, book.Cost(l.Id), 0, 0));
         }
 
         if (missing != 0)

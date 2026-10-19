@@ -155,16 +155,10 @@ internal static class CeilingEngine
                 from e in db.Set<TimeEntry>().AsNoTracking()
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 where wbsIds.Contains(e.WbsElementId) && e.Hours != 0
-                select new { e.WbsElementId, e.LaborCategoryId, t.EmployeeId, e.WorkDate, e.Hours })
+                select new { e.WbsElementId, e.LaborCategoryId, e.Hours, e.Id, e.TimesheetId })
             .ToListAsync(ct);
-        var employees = hours.Select(h => h.EmployeeId).Distinct().ToList();
-        var costRates = new EffectiveRateTable<Guid>();
-        foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employees.Contains(r.EmployeeId)).ToListAsync(ct))
-        {
-            costRates.Add(r.EmployeeId, r.EffectiveFrom, r.HourlyCost);
-        }
-
-        var labor = hours.Select(h => (h.WbsElementId, h.LaborCategoryId, h.Hours, Cost: h.Hours * (costRates.Find(h.EmployeeId, h.WorkDate) ?? 0m))).ToList();
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, hours.Select(h => h.TimesheetId), ct); // Total time accounting for exempt staff.
+        var labor = hours.Select(h => (h.WbsElementId, h.LaborCategoryId, h.Hours, Cost: book.Cost(h.Id))).ToList();
         var odcs = await db.Set<OdcEntry>().AsNoTracking()
             .Where(o => wbsIds.Contains(o.WbsElementId) && !o.IsUnallowable && (o.Status == OdcStatus.Submitted || o.Status == OdcStatus.Approved))
             .Select(o => new { o.WbsElementId, o.Amount })

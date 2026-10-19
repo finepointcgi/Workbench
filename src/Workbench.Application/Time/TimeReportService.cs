@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.TotalTime;
 using Workbench.Contracts.Time;
 using Workbench.Domain.ProjectAccounting;
 
@@ -49,23 +50,22 @@ public sealed class TimeReportService(IWorkbenchDbContextFactory dbFactory, Time
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var rows = await LoadAsync(db, from, to, approvedOnly: true, cancellationToken);
         var categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(l => l.Id, l => l.Code, cancellationToken);
-        var employeeIds = rows.Select(r => r.Employee.Id).Distinct().ToList();
-        var rates = (await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employeeIds.Contains(r.EmployeeId)).ToListAsync(cancellationToken))
-            .GroupBy(r => r.EmployeeId)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.EffectiveFrom).ToList());
+        var book = await LaborCostBook.LoadAsync(db, rows.Select(r => r.Entry.TimesheetId), cancellationToken);
 
-        var csv = new StringBuilder("EmployeeNumber,Employee,WorkDate,Project,Wbs,LaborCategory,Hours,HourlyCost,Cost\r\n");
+        var csv = new StringBuilder("EmployeeNumber,Employee,WorkDate,Project,Wbs,LaborCategory,Hours,HourlyCost,Cost,UncompensatedHours\r\n");
         foreach (var r in rows.OrderBy(r => r.Employee.EmployeeNumber).ThenBy(r => r.Entry.WorkDate).ThenBy(r => r.Wbs.Code, StringComparer.Ordinal))
         {
-            // Labor cost = approved hours x the cost rate effective on the work date; never stored.
-            var rate = rates.GetValueOrDefault(r.Employee.Id)?.FirstOrDefault(x => x.EffectiveFrom <= r.Entry.WorkDate)?.HourlyCost;
-            var cost = rate is { } v ? decimal.Round(v * r.Entry.Hours, 2, MidpointRounding.AwayFromZero) : (decimal?)null;
+            // Labor cost = approved hours x the cost rate effective on the work date, by the labor cost method (total time
+            // accounting for exempt staff); never stored. HourlyCost is the effective rate when salary is spread over all hours.
+            var rate = book.Rate(r.Entry.Id);
+            var cost = rate is null ? (decimal?)null : book.Cost(r.Entry.Id);
             csv.AppendJoin(',',
                 Csv(r.Employee.EmployeeNumber), Csv(r.Employee.DisplayName), r.Entry.WorkDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 Csv(r.Project.Code), Csv(r.Wbs.Code), Csv(categories.GetValueOrDefault(r.Entry.LaborCategoryId, "")),
                 r.Entry.Hours.ToString("0.00", CultureInfo.InvariantCulture),
                 rate?.ToString("0.0000", CultureInfo.InvariantCulture) ?? "",
-                cost?.ToString("0.00", CultureInfo.InvariantCulture) ?? "");
+                cost?.ToString("0.00", CultureInfo.InvariantCulture) ?? "",
+                book.UncompensatedHours(r.Entry.Id).ToString("0.00", CultureInfo.InvariantCulture));
             csv.Append("\r\n");
         }
 

@@ -538,17 +538,12 @@ internal sealed class PayrollData
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 join w in db.Set<WbsElement>().AsNoTracking() on e.WbsElementId equals w.Id
                 where t.Status == TimesheetStatus.Approved && activeIds.Contains(t.EmployeeId) && e.WorkDate >= weeksFrom && e.WorkDate <= weeksTo
-                select new { t.EmployeeId, e.WorkDate, w.Code, w.Kind, e.Hours })
+                select new { t.EmployeeId, e.WorkDate, w.Code, w.Kind, e.Hours, e.Id, e.TimesheetId })
             .ToListAsync(ct);
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, entries.Select(e => e.TimesheetId), ct);
         var sheets = await db.Set<Timesheet>().AsNoTracking()
             .Where(t => activeIds.Contains(t.EmployeeId) && t.PeriodEnd >= period.Start && t.PeriodStart <= period.End)
             .Select(t => new { t.EmployeeId, t.PeriodStart, t.PeriodEnd, t.Status }).ToListAsync(ct);
-        var rates = new EffectiveRateTable<Guid>();
-        foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => activeIds.Contains(r.EmployeeId)).ToListAsync(ct))
-        {
-            rates.Add(r.EmployeeId, r.EffectiveFrom, r.HourlyCost);
-        }
-
         var result = new List<EmployeePayroll>();
         foreach (var profile in profiles.Where(p => employees.ContainsKey(p.EmployeeId)))
         {
@@ -560,9 +555,9 @@ internal sealed class PayrollData
             var split = PayrollHours.Split(!employee.IsExempt, period.Start, period.End,
                 mine.Select(e => new ApprovedHours(e.WorkDate, e.Code, e.Kind == ChargeKind.Leave, e.Hours)));
 
-            // Labor the GL accrued (credited to 2100) for these hours: hours × the cost rate on the work date, per entry.
-            var accrued = mine.Where(e => e.WorkDate >= period.Start && e.WorkDate <= period.End)
-                .Sum(e => rates.Find(employee.Id, e.WorkDate) is { } rate ? Money.Round(e.Hours * rate) : 0);
+            // Labor the GL accrued (credited to 2100) for these hours: hours × the cost rate on the work date, per entry, by the
+            // labor cost method (an exempt employee's uncompensated hours under total time accounting).
+            var accrued = mine.Where(e => e.WorkDate >= period.Start && e.WorkDate <= period.End).Sum(e => book.Cost(e.Id));
 
             var issues = new List<HoursIssueDto>();
             if (profile.ProviderEmployeeId is null)
