@@ -213,21 +213,20 @@ public sealed partial class StandardReportService
         var time = await (from e in db.Set<TimeEntry>().AsNoTracking()
                           join t in db.Set<Timesheet>() on e.TimesheetId equals t.Id
                           where ids.Contains(e.WbsElementId) && t.Status == TimesheetStatus.Approved && e.WorkDate >= @from && e.WorkDate <= to
-                          select new { e.WorkDate, t.EmployeeId, t.Id, e.WbsElementId, e.Hours, e.Comment })
+                          select new { e.WorkDate, t.EmployeeId, t.Id, EntryId = e.Id, e.WbsElementId, e.Hours, e.Comment })
             .ToListAsync(ct);
         var odcs = await db.Set<OdcEntry>().AsNoTracking()
             .Where(o => ids.Contains(o.WbsElementId) && o.Status == OdcStatus.Approved && !o.IsUnallowable && o.IncurredOn >= from && o.IncurredOn <= to)
             .ToListAsync(ct);
         var lookups = await TimeLookups.LoadAsync(db, time.Select(x => x.EmployeeId).Concat(odcs.Where(o => o.EmployeeId != null).Select(o => o.EmployeeId!.Value)),
-            elements, context.IsFinance, ct);
+            elements, context.IsFinance, ct, time.Select(x => x.Id));
 
         b.Column("date", "Date", ReportColumnType.Date).Column("kind", "Kind").Column("wbs", "WBS").Column("who", "Employee / vendor")
             .Column("description", "Description").Column("hours", "Hours", ReportColumnType.Hours).Column("amount", "Amount", ReportColumnType.Money);
         foreach (var x in time.OrderBy(x => x.WorkDate))
         {
-            var rate = context.IsFinance ? lookups.CostRates.Find(x.EmployeeId, x.WorkDate) : null;
             b.Add(ReportRowKind.Detail, 0, null, null, x.WorkDate, "Labor", lookups.Wbs.GetValueOrDefault(x.WbsElementId)?.Code,
-                lookups.Employees.GetValueOrDefault(x.EmployeeId)?.DisplayName, x.Comment, x.Hours, rate is { } r ? ReportValues.Cents(r * x.Hours) : null);
+                lookups.Employees.GetValueOrDefault(x.EmployeeId)?.DisplayName, x.Comment, x.Hours, context.IsFinance ? lookups.CostOf(x.EntryId, x.EmployeeId, x.WorkDate, x.Hours) : null);
         }
 
         foreach (var o in odcs.OrderBy(o => o.IncurredOn))
@@ -237,7 +236,7 @@ public sealed partial class StandardReportService
         }
 
         b.Add(ReportRowKind.Total, 0, null, null, null, "Total", null, null, null, time.Sum(x => x.Hours),
-            context.IsFinance ? time.Sum(x => lookups.CostRates.Find(x.EmployeeId, x.WorkDate) is { } r ? ReportValues.Cents(r * x.Hours) : 0m) + odcs.Sum(o => o.Amount) : odcs.Sum(o => o.Amount));
+            context.IsFinance ? time.Sum(x => lookups.CostOf(x.EntryId, x.EmployeeId, x.WorkDate, x.Hours) ?? 0m) + odcs.Sum(o => o.Amount) : odcs.Sum(o => o.Amount));
         if (!context.IsFinance)
         {
             b.Note("Labor cost per entry is shown to Finance and administrators only; the total is ODCs only.");

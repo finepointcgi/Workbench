@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Workbench.Application.Financials;
 using Workbench.Application.Odcs;
+using Workbench.Application.TotalTime;
 using Workbench.Contracts;
 using Workbench.Contracts.Accounting;
 using Workbench.Domain.Accounting;
@@ -135,6 +136,11 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
         {
             db.Set<JournalEntry>().Add(entry);
             await ledger.PostAsync(db, entry, ct);
+        }
+
+        if (planned.Labor is { } labor)
+        {
+            await LaborCostAudit.RecordAsync(db, sourceId, revision, labor, ledger.Actor, ledger.UtcNow, ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -354,7 +360,7 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
 
     // ---- Planning entries ----
 
-    private sealed record Plan(List<JournalEntry> Entries, string? Problem, decimal Amount)
+    private sealed record Plan(List<JournalEntry> Entries, string? Problem, decimal Amount, TimesheetCost? Labor = null)
     {
         public static Plan Failed(string problem) => new([], problem, 0);
     }
@@ -375,6 +381,18 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
         }
 
         var name = employee?.DisplayName ?? "employee";
+        if (entries.FirstOrDefault(e => rates.Find(sheet.EmployeeId, e.WorkDate) is null) is { } unrated)
+        {
+            return Plan.Failed($"{name} has no cost rate on {unrated.WorkDate:yyyy-MM-dd}; add one under Setup › People.");
+        }
+
+        // Labor cost is computed, never typed: hours × the cost rate effective on the work date, per entry to the cent (the
+        // same rounding the project financials use, so the two reconcile), adjusted for exempt staff's uncompensated hours by
+        // the organization's labor cost method (total time accounting).
+        var labor = employee is null
+            ? null
+            : LaborCostBook.Cost(sheet, employee, await LaborCostPolicies.MethodOnAsync(db, sheet.PeriodStart, ct), rates);
+        var entryCost = labor?.Entries.ToDictionary(c => c.EntryId, c => c.Cost) ?? [];
         var costed = new List<(FiscalPeriod Period, bool Redirected, Guid Account, WbsElement Wbs, decimal Hours, decimal Cost)>();
         foreach (var e in entries)
         {
@@ -388,19 +406,12 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
                 return Plan.Failed(context.MissingLaborRule(wbs));
             }
 
-            // Labor cost is computed, never typed: hours × the cost rate effective on the work date, per entry to the cent
-            // (the same rounding the project financials use, so the two reconcile).
-            if (rates.Find(sheet.EmployeeId, e.WorkDate) is not { } rate)
-            {
-                return Plan.Failed($"{name} has no cost rate on {e.WorkDate:yyyy-MM-dd}; add one under Setup › People.");
-            }
-
             if (!context.TryResolve(e.WorkDate, out var period, out var redirected, out var problem))
             {
                 return Plan.Failed(problem!);
             }
 
-            costed.Add((period!, redirected, account, wbs, e.Hours, Money.Round(e.Hours * rate)));
+            costed.Add((period!, redirected, account, wbs, e.Hours, entryCost.TryGetValue(e.Id, out var c) ? c : Money.Round(e.Hours * rates.Find(sheet.EmployeeId, e.WorkDate)!.Value)));
         }
 
         var accrued = context.Rule(PostingRuleKind.AccruedPayroll, "");
@@ -469,7 +480,7 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
             result.Add(entry);
         }
 
-        return new Plan(result, null, costed.Sum(c => c.Cost));
+        return new Plan(result, null, costed.Sum(c => c.Cost), labor);
     }
 
     private Plan PlanOdc(OdcEntry odc, int revision, PostingContext context)

@@ -58,14 +58,9 @@ public sealed class BillingCostSource(IEnumerable<IBurdenedCostService> provider
                 from e in db.Set<TimeEntry>().AsNoTracking()
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 where t.Status == TimesheetStatus.Approved && ids.Contains(e.WbsElementId) && e.WorkDate >= start && e.WorkDate <= end
-                select new { e.WbsElementId, t.EmployeeId, e.WorkDate, e.Hours })
+                select new { e.WbsElementId, t.EmployeeId, e.WorkDate, e.Hours, e.Id, e.TimesheetId })
             .ToListAsync(ct);
-        var employeeIds = hours.Select(h => h.EmployeeId).Distinct().ToList();
-        var costRates = new EffectiveRateTable<Guid>();
-        foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employeeIds.Contains(r.EmployeeId)).ToListAsync(ct))
-        {
-            costRates.Add(r.EmployeeId, r.EffectiveFrom, r.HourlyCost);
-        }
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, hours.Select(h => h.TimesheetId), ct); // Total time accounting for exempt staff.
 
         var odcs = await db.Set<OdcEntry>().AsNoTracking()
             .Where(o => ids.Contains(o.WbsElementId) && o.Status == OdcStatus.Approved && o.IncurredOn >= start && o.IncurredOn <= end)
@@ -77,7 +72,7 @@ public sealed class BillingCostSource(IEnumerable<IBurdenedCostService> provider
         {
             var element = wbs[id];
             var h = hours.Where(x => x.WbsElementId == id).ToList();
-            var labor = Money.Round(h.Sum(x => x.Hours * (costRates.Find(x.EmployeeId, x.WorkDate) ?? 0m)));
+            var labor = h.Sum(x => book.Cost(x.Id));
             var o = odcs.Where(x => x.WbsElementId == id).ToList();
             lines.Add(new BurdenedCostLine(projectId, id, element.Code, element.ClinId, h.Sum(x => x.Hours), labor, 0, 0, 0,
                 o.Where(x => !x.IsUnallowable).Sum(x => x.Amount), o.Where(x => x.IsUnallowable).Sum(x => x.Amount)));

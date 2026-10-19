@@ -190,6 +190,7 @@ public static class DatabaseInitializer
         await CrmSeed.SeedAsync(db, services, cancellationToken); // Business development: Blake Diaz (bd@), 10 opportunities across the stages, accounts, contacts, leads.
         await PricingSeed.SeedAsync(db, services, cancellationToken); // Proposal pricing: Riley Quinn (Pricing role), forward pricing rates, PRP-2027-014 with a scenario and version 1.
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
+        await TotalTimeSeed.SeedAsync(db, cancellationToken); // Total time accounting: Robin Hale (E1050, exempt) with a 50-hour week on 1001 and 1002; the Hybrid labor cost method.
     }
 
     /// <summary>

@@ -103,10 +103,11 @@ internal static class FinancialsLoader
                 from e in db.Set<TimeEntry>().AsNoTracking()
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 where t.Status == TimesheetStatus.Approved && wbsIds.Contains(e.WbsElementId)
-                select new LaborActual(e.WbsElementId, t.EmployeeId, e.LaborCategoryId, e.WorkDate, e.Hours))
+                select new { Actual = new LaborActual(e.WbsElementId, t.EmployeeId, e.LaborCategoryId, e.WorkDate, e.Hours, e.Id), e.TimesheetId })
             .ToListAsync(ct);
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, labor.Select(l => l.TimesheetId), ct);
 
-        var employeeIds = labor.Select(l => l.EmployeeId).Distinct().ToList();
+        var employeeIds = labor.Select(l => l.Actual.EmployeeId).Distinct().ToList();
         var costRates = new EffectiveRateTable<Guid>();
         foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employeeIds.Contains(r.EmployeeId)).ToListAsync(ct))
         {
@@ -123,7 +124,7 @@ internal static class FinancialsLoader
             }
         }
 
-        var costed = LaborCosting.Cost(labor, costRates, billRates, out var missing);
+        var costed = LaborCosting.Cost(labor.Select(l => l.Actual), book, costRates, billRates, out var missing);
         if (missing > 0)
         {
             notes.Add($"{missing:N1} approved hours have no cost rate on their work date and are costed at $0.");
