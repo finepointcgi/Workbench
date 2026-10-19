@@ -110,6 +110,7 @@ public sealed class UserLifecycle(
             IsFinance = roles.HasFlag(OrgRoles.Finance),
             IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper),
             IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager),
+            IsProjectManager = roles.HasFlag(OrgRoles.ProjectManager),
             CreatedAtUtc = now,
             IsActive = active,
             DeactivatedAtUtc = active ? null : now,
@@ -154,7 +155,7 @@ public sealed class UserLifecycle(
         email = AccessControl.Normalize(email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await LoadAsync(db, email, cancellationToken);
-        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager);
+        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager);
         if (user.IsAdmin && !roles.IsAdmin())
         {
             if (IsSelf(actor, email))
@@ -169,6 +170,12 @@ public sealed class UserLifecycle(
         user.IsFinance = roles.HasFlag(OrgRoles.Finance);
         user.IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper);
         user.IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager);
+        user.IsProjectManager = roles.HasFlag(OrgRoles.ProjectManager);
+        if (!before.HasFlag(OrgRoles.ProjectManager) && user.IsProjectManager)
+        {
+            await ProjectWorkspaceOwnership.EnsureForManagerAsync(db, user, cancellationToken); // Owner of their projects' workspaces
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         if (before != roles)
         {
@@ -280,7 +287,7 @@ public sealed class UserLifecycle(
 
     internal static string RoleText(OrgRoles roles)
     {
-        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
+        var names = OrgRoleChecks.All.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
         return names.Count == 0 ? "Employee" : string.Join(", ", names);
     }
 

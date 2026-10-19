@@ -16,7 +16,8 @@ public sealed record ItemDto(
     DateOnly? Start,
     DateOnly? Finish,
     string? CostpointWbsId,
-    IReadOnlyDictionary<string, string?> Values);
+    IReadOnlyDictionary<string, string?> Values,
+    bool IsMilestone = false);
 
 /// <summary>Creates an item. A null <paramref name="Order"/> appends it after its siblings.</summary>
 public sealed record CreateItemRequest(
@@ -25,15 +26,20 @@ public sealed record CreateItemRequest(
     int? Order = null,
     DateOnly? Start = null,
     DateOnly? Finish = null,
-    IReadOnlyDictionary<string, string?>? Values = null);
+    IReadOnlyDictionary<string, string?>? Values = null,
+    bool IsMilestone = false);
 
-/// <summary>Replaces the editable fields of an item. Send the full set of values.</summary>
+/// <summary>
+/// Replaces the editable fields of an item. Send the full set of values. <paramref name="IsMilestone"/> null leaves it
+/// as it is. A milestone has one date: Start and Finish are set to the same day (Finish, or Start if there's no Finish).
+/// </summary>
 public sealed record UpdateItemRequest(
     string Title,
     DateOnly? Start,
     DateOnly? Finish,
     string? CostpointWbsId,
-    IReadOnlyDictionary<string, string?> Values);
+    IReadOnlyDictionary<string, string?> Values,
+    bool? IsMilestone = null);
 
 /// <summary>Moves an item under <paramref name="ParentId"/> (null = top level) at position <paramref name="Order"/>.</summary>
 public sealed record MoveItemRequest(Guid? ParentId, int Order);

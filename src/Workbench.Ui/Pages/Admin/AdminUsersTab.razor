@@ -22,6 +22,7 @@
         <MudTh>Status</MudTh>
         <MudTh>Admin</MudTh>
         <MudTh>Finance</MudTh>
+        <MudTh>Project manager</MudTh>
         <MudTh>Timekeeper</MudTh>
         <MudTh>Resource manager</MudTh>
         <MudTh>Employee</MudTh>
@@ -50,12 +51,12 @@
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text">SCIM</MudChip>
             }
         </MudTd>
-        @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager })
+        @foreach (var role in OrgRoleChecks.All)
         {
-            <MudTd DataLabel="@role.ToString()">
+            <MudTd DataLabel="@OrgRoleChecks.Label(role)">
                 <MudSwitch T="bool" Value="context.Roles.HasFlag(role)" ValueChanged="value => SetRoleAsync(context, role, value)" Color="Color.Primary"
                            Disabled="!context.IsActive || (role == OrgRoles.Admin && IsMe(context))"
-                           aria-label="@($"{role}: {context.Email}")" />
+                           aria-label="@($"{OrgRoleChecks.Label(role)}: {context.Email}")" />
             </MudTd>
         }
         <MudTd DataLabel="Employee">

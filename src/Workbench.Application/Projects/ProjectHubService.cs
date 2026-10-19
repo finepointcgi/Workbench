@@ -89,7 +89,7 @@ public sealed class ProjectHubService(
             Ceilings: readsMoney,
             Costs: true, // Finance, admins and the PM see every ODC; everyone else only their own entries.
             Team: readsMoney,
-            Setup: viewer.IsFinance);
+            Setup: viewer.IsFinance || (viewer.IsProjectManager && viewer.EmployeeId is { } pm && project.ProjectManagerId == pm));
 
         var alerts = new List<ProjectAlertDto>();
         if (money is not null)
@@ -255,7 +255,7 @@ public sealed class ProjectHubService(
         var today = Today;
         var open = leaves.Where(i => !IsDone(i)).ToList();
         var milestones = open
-            .Where(i => i.Start is not null && i.Start == i.Finish)
+            .Where(i => i.IsMilestone && i.Finish is not null)
             .OrderBy(i => i.Finish)
             .Take(5)
             .Select(i => new ProjectMilestoneDto(i.Id, i.Title, i.Finish!.Value, i.Finish < today))

@@ -95,3 +95,8 @@
     z-index: 2;
     padding: 2px 4px 4px;
 }
+
+.calendar-view ::deep .calendar-milestone {
+    margin-right: 4px;
+    font-size: 0.85em;
+}

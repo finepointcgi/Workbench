@@ -1,0 +1,77 @@
+@* Status and % complete of one task: for Editors, and for its assignees whatever their role (the server allows exactly that). *@
+@inject ITaskAssignmentService TaskService
+@inject ISnackbar Snackbar
+
+@if (Tasks is { } tasks && (tasks.StatusColumn is not null || tasks.PercentColumn is not null))
+{
+    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Wrap="Wrap.Wrap" data-testid="task-status-editor">
+        @if (tasks.StatusColumn is { } statusColumn)
+        {
+            <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Margin="Margin.Dense" Style="min-width:160px; max-width:200px" data-testid="task-status">
+                <MudSelectItem T="string" Value="@string.Empty">(none)</MudSelectItem>
+                @foreach (var option in statusColumn.Options)
+                {
+                    <MudSelectItem T="string" Value="@option">@option</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        @if (tasks.PercentColumn is not null)
+        {
+            <MudNumericField T="decimal?" @bind-Value="_percent" Label="% complete" Min="0" Max="100" Step="10" Margin="Margin.Dense" Style="max-width:130px" data-testid="task-percent" />
+        }
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SaveAsync" Disabled="_busy || !Dirty" data-testid="task-status-save">Update</MudButton>
+    </MudStack>
+}
+
+@code {
+    [CascadingParameter]
+    public SheetTasksDto? Tasks { get; set; }
+
+    [Parameter, EditorRequired]
+    public ItemDto Item { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private string _status = string.Empty;
+    private decimal? _percent;
+    private string _loadedStatus = string.Empty;
+    private decimal? _loadedPercent;
+    private Guid _itemId;
+    private bool _busy;
+
+    private bool Dirty => _status != _loadedStatus || _percent != _loadedPercent;
+
+    protected override void OnParametersSet()
+    {
+        var status = Tasks?.StatusColumn is { } s ? Item.Values.GetValueOrDefault(s.Id.ToString()) ?? "" : "";
+        var percent = Tasks?.PercentColumn is { } p && decimal.TryParse(Item.Values.GetValueOrDefault(p.Id.ToString()), System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : (decimal?)null;
+        if (_itemId != Item.Id || status != _loadedStatus || percent != _loadedPercent)
+        {
+            (_itemId, _status, _loadedStatus, _percent, _loadedPercent) = (Item.Id, status, status, percent, percent);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            await TaskService.UpdateStatusAsync(Tasks!.SheetId, Item.Id, new UpdateTaskStatusRequest(
+                Tasks.StatusColumn is null || _status == _loadedStatus ? null : _status,
+                _percent == _loadedPercent ? null : _percent ?? 0));
+            (_loadedStatus, _loadedPercent) = (_status, _percent);
+            Snackbar.Add("Task updated.", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't update the task: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

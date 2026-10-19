@@ -69,6 +69,6 @@ public static class Tours
     public static Tour For(NavAccess access) =>
         access.IsAdmin ? Administrator
         : access.IsFinance ? Finance
-        : access.IsProjectManager || access.IsTimesheetApprover || access.IsLeaveApprover || access.IsResourceManager ? Manager
+        : access.IsPm || access.IsTimesheetApprover || access.IsLeaveApprover || access.IsResourceManager ? Manager
         : Employee;
 }

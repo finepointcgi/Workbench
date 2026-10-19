@@ -22,7 +22,7 @@ public sealed class GanttViewTests
 
         var sheetId = Guid.NewGuid();
         var phase = Item("Phase 1", null, 0, null, null);
-        var kickoff = Item("Kickoff", phase.Id, 0, Monday, Monday);
+        var kickoff = Item("Kickoff", phase.Id, 0, Monday, Monday) with { IsMilestone = true }; // a marked milestone draws as a diamond
         var design = Item("Design", phase.Id, 1, Monday.AddDays(1), Monday.AddDays(4));
         var docs = Item("Docs", null, 1, Monday, Monday.AddDays(1));
         var link = new DependencyDto(Guid.NewGuid(), kickoff.Id, design.Id, DependencyKind.FinishToStart, 0);

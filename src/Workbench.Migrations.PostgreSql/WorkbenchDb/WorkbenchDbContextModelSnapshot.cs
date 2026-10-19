@@ -3792,6 +3792,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.Property<bool>("IsFinance")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsProjectManager")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsResourceManager")
                         .HasColumnType("boolean");
 
@@ -4367,6 +4370,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
                     b.Property<DateOnly?>("Finish")
                         .HasColumnType("date");
+
+                    b.Property<bool>("IsMilestone")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
@@ -9258,6 +9264,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.Property<bool>("IsFinance")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsProjectManager")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsResourceManager")
                         .HasColumnType("boolean");
 
@@ -9453,6 +9462,45 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("UserHelpState");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Tasks.ItemAssignee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AssignedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssignedBy")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("SheetId");
+
+                    b.HasIndex("ItemId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("ItemAssignee");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Workspace", b =>
@@ -11274,6 +11322,15 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Tasks.ItemAssignee", b =>
+                {
+                    b.HasOne("Workbench.Domain.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Accounting.IndirectPoolSetup", b =>

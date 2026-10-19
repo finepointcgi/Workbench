@@ -102,6 +102,7 @@ public sealed class ActivityRecordingItemService(
         Add("Start", before.Start?.ToString("yyyy-MM-dd"), after.Start?.ToString("yyyy-MM-dd"));
         Add("Finish", before.Finish?.ToString("yyyy-MM-dd"), after.Finish?.ToString("yyyy-MM-dd"));
         Add("WBS", before.CostpointWbsId, after.CostpointWbsId);
+        Add("Milestone", before.IsMilestone ? "Yes" : null, after.IsMilestone ? "Yes" : null);
 
         // Everyone on the sheet reads its activity, so a restricted column's change is recorded without its name or values.
         var restricted = Sheets.RestrictedColumns.Of(columns);

@@ -3582,6 +3582,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<bool>("IsFinance")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsProjectManager")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsResourceManager")
                         .HasColumnType("INTEGER");
 
@@ -4108,6 +4111,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.Property<DateOnly?>("Finish")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsMilestone")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Order")
                         .HasColumnType("INTEGER");
@@ -8727,6 +8733,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<bool>("IsFinance")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsProjectManager")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsResourceManager")
                         .HasColumnType("INTEGER");
 
@@ -8904,6 +8913,43 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("UserHelpState");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Tasks.ItemAssignee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AssignedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssignedBy")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("SheetId");
+
+                    b.HasIndex("ItemId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("ItemAssignee");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Workspace", b =>
@@ -10724,6 +10770,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Tasks.ItemAssignee", b =>
+                {
+                    b.HasOne("Workbench.Domain.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Accounting.IndirectPoolSetup", b =>
