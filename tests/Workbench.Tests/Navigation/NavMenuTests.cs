@@ -9,7 +9,7 @@ namespace Workbench.Tests.Navigation;
 /// <summary>The menu is shaped by role: a few sections, each showing only what the user can use.</summary>
 public sealed class NavMenuTests
 {
-    private static readonly string[] EmployeeLinks = ["", "time", "expenses", "leave", "purchasing/requisitions", "projects", "sheets", "dashboards", "reports", "reports/writer"];
+    private static readonly string[] EmployeeLinks = ["", "time", "expenses", "leave", "purchasing/requisitions", "projects", "hr/me", "hr/benefits/me", "hr", "hr/org-chart", "sheets", "dashboards", "reports", "reports/writer"];
 
     // Approval pages are reached from the one inbox; none of them is a menu link any more.
     private static readonly string[] OldApprovalLinks = ["time/approvals", "odcs/approvals", "purchasing/approvals"];
@@ -38,7 +38,7 @@ public sealed class NavMenuTests
 
         var links = Links(nav);
         Assert.Equal(EmployeeLinks.Order(), links.Order());
-        Assert.Equal(["home", "my-work", "projects", "sheets", "reports"], Sections(nav));
+        Assert.Equal(["home", "my-work", "projects", "people", "sheets", "reports"], Sections(nav));
         Assert.Empty(nav.FindAll("[data-testid='nav-approvals']"));
         A11yAssert.Check(nav);
     }
@@ -67,7 +67,7 @@ public sealed class NavMenuTests
         Assert.Contains("odcs", links);
         Assert.Equal("3", nav.Find("[data-testid='approvals-count']").TextContent.Trim());
         Assert.DoesNotContain(links, l => l.StartsWith("accounting") || l.StartsWith("billing") || l.StartsWith("setup"));
-        Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "reports"], Sections(nav));
+        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "sheets", "reports"], Sections(nav));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class NavMenuTests
         Assert.Contains("reports/standard/project-status", links);
         Assert.Contains("reports/standard/funding-status", links);
         Assert.DoesNotContain(links, l => l.StartsWith("accounting") || l.StartsWith("billing") || l == "setup/projects" || l == "setup/people");
-        Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "reports"], Sections(nav));
+        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "sheets", "reports"], Sections(nav));
         A11yAssert.Check(nav);
     }
 
@@ -122,7 +122,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "finance", "reports", "admin"], Sections(nav));
+        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "sheets", "finance", "reports", "admin"], Sections(nav));
         foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Revenue & compliance" })
         {
             Assert.Single(nav.FindAll($"[data-testid='nav-group-{group}']"));
@@ -137,7 +137,7 @@ public sealed class NavMenuTests
         Assert.DoesNotContain("admin/users", links);
         Assert.DoesNotContain("notifications", links);
         Assert.Contains(">Setup<", nav.Find("[data-testid='nav-admin']").OuterHtml.Replace(" ", ""));
-        Assert.True(links.Count <= 61 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated");
+        Assert.True(links.Count <= 66 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR's pay and benefit costs)
     }
 
     [Fact]

@@ -55,6 +55,7 @@ public static class WorkbenchApi
         v1.MapSupportEndpoints();
         v1.MapMigrationEndpoints();
         v1.MapTaskEndpoints();
+        v1.MapHrEndpoints();
 
         return app;
     }

@@ -157,6 +157,7 @@ Details: [monitoring.md](monitoring.md).
 | `Assets:CapitalizationThreshold` / `:GainLossAccountNumber` / `:CashAccountNumber` | `5000` / `4900` / `1010` | |
 | `Payroll:Paylocity:BaseUrl` / `:TokenUrl` / `:Scope` | Paylocity production | Sandbox: `https://apisandbox.paylocity.com`. |
 | `Payroll:Paylocity:ClientId` / `:ClientSecret` | — | Secret is a **secret**. |
+| `Hr:CompensationFinanceThreshold` | `10000` | A pay change whose annualized increase is over this also needs Finance's approval (after HR). |
 | `Costpoint:Source` / `:Csv:Folder` / `:SyncInterval` | `None` / — / `24:00:00` | Legacy import path; hidden in the UI. |
 
 ## Backup job (environment of `scripts/backup-all.sh`)

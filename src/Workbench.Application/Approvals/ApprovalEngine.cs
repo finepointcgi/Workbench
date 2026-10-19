@@ -503,6 +503,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
         ApprovalOrgRole.Admin => roles.IsAdmin(),
         ApprovalOrgRole.ResourceManager => roles.IsResourceManager(),
         ApprovalOrgRole.ProjectManager => roles.IsProjectManager(),
+        ApprovalOrgRole.Hr => roles.IsHr(),
         _ => roles.HasFlag(OrgRoles.Timekeeper),
     };
 
@@ -515,6 +516,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
             ApprovalOrgRole.Admin => users.Where(u => u.IsAdmin),
             ApprovalOrgRole.ResourceManager => users.Where(u => u.IsResourceManager || u.IsAdmin),
             ApprovalOrgRole.ProjectManager => users.Where(u => u.IsProjectManager || u.IsAdmin),
+            ApprovalOrgRole.Hr => users.Where(u => u.IsHr || u.IsAdmin),
             _ => users.Where(u => u.IsTimekeeper),
         };
         return (await users.Select(u => u.Email).ToListAsync(ct)).Select(Normalize).ToList();
@@ -524,8 +526,8 @@ public sealed class ApprovalEngine(TimeProvider clock)
     {
         var normalized = Normalize(email);
         var user = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == normalized && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager }).FirstOrDefaultAsync(ct);
-        return user is null ? OrgRoles.Employee : Identity.AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager);
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr }).FirstOrDefaultAsync(ct);
+        return user is null ? OrgRoles.Employee : Identity.AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr);
     }
 
     public void AddAction(IWorkbenchDbContext db, ApprovalInstance instance, ApprovalTask? task, string action, string actor, string? onBehalfOf, string? comment) =>
