@@ -16,13 +16,19 @@ namespace Workbench.Application.MyWork;
 /// item writes) and page the results.
 /// </para>
 /// </summary>
-public sealed class MyWorkService(ISheetService sheets, IItemService items, ICurrentUser user, TimeProvider clock) : IMyWorkService
+public sealed class MyWorkService(ISheetService sheets, IItemService items, ICurrentUser user, TimeProvider clock,
+    Contracts.Tasks.ITaskAssignmentService? tasks = null) : IMyWorkService
 {
     public async Task<MyWorkDto> GetAsync(CancellationToken cancellationToken = default)
     {
         var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
         var email = user.Email;
         var found = new List<MyWorkItem>();
+
+        // Items assigned through the Assignees field, by sheet (the service only returns sheets the user can see).
+        var assigned = tasks is null ? []
+            : (await tasks.ListMineAsync(includeDone: true, cancellationToken)).GroupBy(t => t.SheetId)
+                .ToDictionary(g => g.Key, g => (IReadOnlySet<Guid>)g.Select(t => t.ItemId).ToHashSet());
         foreach (var summary in await sheets.ListAsync(cancellationToken))
         {
             if (summary.ItemCount == 0)
@@ -31,7 +37,8 @@ public sealed class MyWorkService(ISheetService sheets, IItemService items, ICur
             }
 
             var sheet = await sheets.GetAsync(summary.Id, cancellationToken);
-            if (sheet is null || !sheet.Columns.Any(c => c.Type == ColumnKind.Person))
+            var mine = assigned.GetValueOrDefault(summary.Id);
+            if (sheet is null || (mine is null && !sheet.Columns.Any(c => c.Type == ColumnKind.Person)))
             {
                 continue;
             }
@@ -46,7 +53,7 @@ public sealed class MyWorkService(ISheetService sheets, IItemService items, ICur
                 continue; // deleted (or hidden) between the list and the load
             }
 
-            found.AddRange(MyWorkCalculator.ItemsFor(sheet, sheetItems, email, today));
+            found.AddRange(MyWorkCalculator.ItemsFor(sheet, sheetItems, email, today, mine));
         }
 
         return MyWorkCalculator.Summarize(email, today, found);

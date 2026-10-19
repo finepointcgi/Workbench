@@ -6,6 +6,13 @@
         <a href="@Href" class="board-card-title mud-typography mud-typography-body2" @ref="_link" @onclick:preventDefault @onclick:stopPropagation
            @onclick="() => OnOpen.InvokeAsync(Item)">@Item.Title</a>
         <MudSpacer />
+        @if (CanAssign)
+        {
+            <div @onclick:stopPropagation>
+                <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Small" OnClick="() => OnAssign.InvokeAsync(Item)"
+                               aria-label="@($"Assign {Item.Title}")" Class="board-card-assign" data-testid="board-card-assign" />
+            </div>
+        }
         @if (Lanes.Count > 1)
         {
             <div @onclick:stopPropagation>
@@ -19,7 +26,7 @@
             </div>
         }
     </div>
-    @if (Item.Finish is not null || !string.IsNullOrEmpty(Item.CostpointWbsId) || !string.IsNullOrEmpty(Initials))
+    @if (Item.Finish is not null || !string.IsNullOrEmpty(Item.CostpointWbsId) || !string.IsNullOrEmpty(Initials) || Assignees.Count > 0)
     {
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
             @if (Item.Finish is { } finish)
@@ -36,7 +43,11 @@
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" title="WBS code">@Item.CostpointWbsId</MudChip>
             }
             <MudSpacer />
-            @if (!string.IsNullOrEmpty(Initials))
+            @if (Assignees.Count > 0)
+            {
+                <AssigneeChips Assignees="Assignees" Max="3" />
+            }
+            else if (!string.IsNullOrEmpty(Initials))
             {
                 <MudTooltip Text="@Person">
                     <MudAvatar Size="Size.Small" Color="Color.Primary" Class="board-card-avatar">@Initials</MudAvatar>
@@ -52,6 +63,16 @@
 
     [Parameter]
     public string? Person { get; set; }
+
+    /// <summary>The item's Assignees; shown instead of the Person column's avatar when there are any.</summary>
+    [Parameter]
+    public IReadOnlyList<Workbench.Contracts.Tasks.TaskAssigneeDto> Assignees { get; set; } = [];
+
+    [Parameter]
+    public bool CanAssign { get; set; }
+
+    [Parameter]
+    public EventCallback<ItemDto> OnAssign { get; set; }
 
     [Parameter]
     public DateOnly Today { get; set; }

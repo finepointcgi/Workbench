@@ -14,9 +14,9 @@
     [Parameter] public bool AllowAdmin { get; set; } = true;
 
     private IEnumerable<OrgRoles> Choices =>
-        new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => AllowAdmin || r != OrgRoles.Admin);
+        OrgRoleChecks.All.Where(r => AllowAdmin || r != OrgRoles.Admin);
 
-    private static string Label(OrgRoles role) => role == OrgRoles.ResourceManager ? "Resource manager" : role.ToString();
+    private static string Label(OrgRoles role) => OrgRoleChecks.Label(role);
 
     private Task Toggle(OrgRoles role, bool on) => RolesChanged.InvokeAsync(on ? Roles | role : Roles & ~role);
 }

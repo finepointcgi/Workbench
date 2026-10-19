@@ -1,0 +1,104 @@
+@* Assigns an item to people from the directory, with an optional due date (the item's Finish). Saves through ITaskAssignmentService. *@
+@inject ITaskAssignmentService Tasks
+@inject IUserDirectory Users
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudAutocomplete T="UserDto" Value="_pick" ValueChanged="AddAsync" SearchFunc="SearchAsync" ToStringFunc="@(u => u is null ? "" : $"{u.DisplayName} ({u.Email})")"
+                         Label="Add people" Placeholder="Search by name or email" ResetValueOnEmptyText="true" DebounceInterval="200"
+                         Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="assign-search" />
+        <div class="d-flex flex-wrap gap-1 mt-3" role="list" aria-label="Assignees">
+            @if (_people.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Nobody yet.</MudText>
+            }
+            @foreach (var person in _people)
+            {
+                <span role="listitem">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" OnClose="() => Remove(person.Email)"
+                             CloseIcon="@Icons.Material.Filled.Close" data-testid="assignee-chip">@person.Name</MudChip>
+                </span>
+            }
+        </div>
+        <MudDatePicker @bind-Date="_due" Label="Due (the task's finish)" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                       Class="mt-4" data-testid="assign-due" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="assign-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter, EditorRequired]
+    public ItemDto Item { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<TaskAssigneeDto> Current { get; set; } = [];
+
+    private sealed record Person(string Email, string Name);
+
+    private List<Person> _people = [];
+    private UserDto? _pick;
+    private DateTime? _due;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        _people = Current.Select(a => new Person(a.Email, a.DisplayName)).ToList();
+        _due = Item.Finish?.ToDateTime(TimeOnly.MinValue);
+    }
+
+    private async Task<IEnumerable<UserDto>> SearchAsync(string? text, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var users = await Users.SearchAsync(text, 10, cancellationToken);
+            return users.Where(u => _people.All(p => !string.Equals(p.Email, u.Email, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private Task AddAsync(UserDto? user)
+    {
+        if (user is not null && _people.All(p => !string.Equals(p.Email, user.Email, StringComparison.OrdinalIgnoreCase)))
+        {
+            _people.Add(new Person(user.Email, user.DisplayName));
+        }
+
+        _pick = null;
+        return Task.CompletedTask;
+    }
+
+    private void Remove(string email) => _people.RemoveAll(p => p.Email == email);
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var due = _due is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
+            await Tasks.SetAssigneesAsync(SheetId, Item.Id, new SetAssigneesRequest(_people.Select(p => p.Email).ToList(), due, ClearDue: due is null && Item.Finish is not null));
+            Snackbar.Add(_people.Count == 0 ? "Unassigned." : $"Assigned to {string.Join(", ", _people.Select(p => p.Name))}.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't assign: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -8,6 +8,7 @@
 @inject ISnackbar Snackbar
 @inject Workbench.Contracts.ProjectAccounting.IProjectService ProjectService
 @inject Workbench.Contracts.Financials.IFinancialAccessService FinancialAccess
+@inject IServiceProvider Services
 
 @if (!Embedded)
 {
@@ -50,6 +51,8 @@ else
 
     @* Views hide edit affordances from Viewers and Commenters; the server enforces the same rules. *@
     <CascadingValue Value="_access">
+    @* Task assignment (Assignees, "My tasks"): null where the service isn't registered, which hides those affordances. *@
+    <CascadingValue Value="_tasks">
     <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" KeepPanelsAlive="false">
         <MudTabPanel Text="Grid" Icon="@Icons.Material.Filled.GridOn">
             <SheetGridView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
@@ -81,7 +84,8 @@ else
     </MudTabs>
 
     @* Collaboration: item details panel (?item={id}) and live reload when others change the sheet. *@
-    <ItemDetailsDrawer Sheet="_sheet" Items="_items" Version="_liveVersion" />
+    <ItemDetailsDrawer Sheet="_sheet" Items="_items" Version="_liveVersion" Changed="LoadAsync" />
+    </CascadingValue>
     </CascadingValue>
 }
 <SheetLiveRefresher SheetId="SheetId" Changed="OnLiveChangeAsync" />
@@ -100,6 +104,7 @@ else
     private int _liveVersion;
     private SheetAccess _access = new(null);
     private Workbench.Contracts.ProjectAccounting.ProjectDto? _project;
+    private SheetTasksDto? _tasks;
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -111,6 +116,8 @@ else
             _sheet = await SheetService.GetAsync(SheetId);
             _items = _sheet is null ? [] : await ItemService.ListAsync(SheetId);
             _access = new SheetAccess(_sheet is null ? null : await Permissions.GetMyRoleAsync(SheetId));
+            _tasks = _sheet is not null && Services.GetService(typeof(ITaskAssignmentService)) is ITaskAssignmentService tasks
+                ? await tasks.GetSheetAsync(SheetId) : null;
             var project = _sheet is null ? null : await ProjectService.GetProjectForSheetAsync(SheetId);
 
             // The Financials tab only for those who may read the project's financials (Finance, Admin, its manager).

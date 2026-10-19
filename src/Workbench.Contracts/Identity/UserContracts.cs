@@ -21,6 +21,12 @@ public enum OrgRoles
 
     /// <summary>Staffs every project: manages anyone's allocations and sees capacity and utilization (no cost rates).</summary>
     ResourceManager = 8,
+
+    /// <summary>
+    /// Runs projects: sets up the projects they manage (WBS, charge assignments, plan sheets), edits their draft budgets and
+    /// EACs, staffs them, approves what's charged to them and assigns tasks. Scoped to projects they manage; no cost rates.
+    /// </summary>
+    ProjectManager = 16,
 }
 
 public static class OrgRoleChecks
@@ -35,6 +41,27 @@ public static class OrgRoleChecks
 
     /// <summary>ResourceManager or Admin: manages every project's allocations.</summary>
     public static bool IsResourceManager(this OrgRoles roles) => (roles & (OrgRoles.ResourceManager | OrgRoles.Admin)) != 0;
+
+    /// <summary>ProjectManager or Admin: the org role, not "manages some project" (see <c>Project.ProjectManagerId</c>).</summary>
+    public static bool IsProjectManager(this OrgRoles roles) => (roles & (OrgRoles.ProjectManager | OrgRoles.Admin)) != 0;
+
+    /// <summary>ProjectManager, Finance or Admin: may create projects and set up the ones they manage (Finance/Admin: every one).</summary>
+    public static bool CanManageProjects(this OrgRoles roles) => (roles & (OrgRoles.ProjectManager | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
+    /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
+    public static IReadOnlyList<OrgRoles> All { get; } =
+        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager];
+
+    /// <summary>Every role flag combined (what the system user has).</summary>
+    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager;
+
+    /// <summary>A role's name for people: "Project manager", "Resource manager", or the enum name.</summary>
+    public static string Label(OrgRoles role) => role switch
+    {
+        OrgRoles.ProjectManager => "Project manager",
+        OrgRoles.ResourceManager => "Resource manager",
+        _ => role.ToString(),
+    };
 }
 
 public sealed record UserDto(string Email, string DisplayName, OrgRoles Roles, DateTime CreatedAtUtc, DateTime? LastSeenAtUtc)

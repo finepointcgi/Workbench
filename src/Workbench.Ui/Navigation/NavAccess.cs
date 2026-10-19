@@ -35,11 +35,17 @@ public sealed record NavAccess(
 
     public bool IsResourceManager => User?.Roles.IsResourceManager() == true;
 
+    /// <summary>Has the Project manager org role (whether or not they manage a project yet).</summary>
+    public bool HasProjectManagerRole => User?.Roles.HasFlag(OrgRoles.ProjectManager) == true;
+
+    /// <summary>Runs projects: the Project manager role, or the manager of at least one project.</summary>
+    public bool IsPm => IsProjectManager || HasProjectManagerRole;
+
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
 
     /// <summary>Anyone who approves something, or has something waiting on them.</summary>
-    public bool ShowApprovals => IsSignedIn && (ApprovalCount > 0 || IsFinance || IsTimekeeper || IsTimesheetApprover || IsLeaveApprover || IsProjectManager);
+    public bool ShowApprovals => IsSignedIn && (ApprovalCount > 0 || IsFinance || IsTimekeeper || IsTimesheetApprover || IsLeaveApprover || IsPm);
 
     /// <summary>Supervisors, timekeepers and administrators see their team's timesheets.</summary>
     public bool ShowTeamTime => IsAdmin || IsTimekeeper || IsTimesheetApprover;

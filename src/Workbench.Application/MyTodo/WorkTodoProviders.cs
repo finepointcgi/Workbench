@@ -74,8 +74,13 @@ public sealed class SheetTodoProvider : IMyTodoProvider
 
         var work = await myWork.GetAsync(cancellationToken);
         var soon = context.Today.AddDays(DueSoonDays);
+
+        // Tasks assigned through the Assignees field are listed by the Tasks provider ("Assigned to you: ...").
+        var assigned = context.Service<Contracts.Tasks.ITaskAssignmentService>() is { } tasks
+            ? (await tasks.ListMineAsync(includeDone: true, cancellationToken)).Select(t => t.ItemId).ToHashSet()
+            : [];
         return work.Items
-            .Where(i => i.Bucket != MyWorkBucket.Done && i.Due is { } due && due <= soon)
+            .Where(i => i.Bucket != MyWorkBucket.Done && i.Due is { } due && due <= soon && !assigned.Contains(i.Item.Id))
             .Select(i => new MyTodoItem(
                 $"sheet:{i.SheetId}:{i.Item.Id}", TodoCategories.Sheet,
                 i.Item.Title,

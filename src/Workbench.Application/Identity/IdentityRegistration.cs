@@ -38,9 +38,11 @@ public static class IdentityRegistration
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         services.AddScoped<IWorkspaceMembershipService, WorkspaceMembershipService>();
+        services.AddScoped<SheetWorkspacePreference>();
         services.AddScoped<ISheetWorkspacePicker, EditableWorkspacePicker>();
         services.AddScoped<ProjectAccess>();
         services.AddScoped<RestrictedColumnAccess>();
+        services.AddScoped<AssigneeStatusPermission>();
         services.AddScoped<IFinancialAccessService>(sp => sp.GetRequiredService<ProjectAccess>());
 
         services.Decorate<ISheetService, PermissionCheckingSheetService>();
@@ -55,6 +57,7 @@ public static class IdentityRegistration
         services.Decorate<IPeopleService, PermissionCheckingPeopleService>();
         services.Decorate<IContractService, PermissionCheckingContractService>();
         services.Decorate<IProjectService, PermissionCheckingProjectService>();
+        services.Decorate<IPlanSyncService, PermissionCheckingPlanSyncService>(); // Plan sheet sync: project setup (Finance, Admin, the project's PM with the role).
         services.Decorate<IFiscalCalendarService, PermissionCheckingFiscalCalendarService>();
         services.Decorate<IAuditLogService, PermissionCheckingAuditLogService>();
         services.Decorate<ITimeReportService, PermissionCheckingTimeReportService>();
@@ -85,6 +88,7 @@ public static class IdentityRegistration
         services.Decorate<Workbench.Contracts.Support.ISupportService, PermissionCheckingSupportService>(); // Support requests: send and read your own; admins list, read and update all.
         services.Decorate<Workbench.Contracts.Payroll.IPayrollLayoutService, PermissionCheckingPayrollLayoutService>(); // Payroll file layouts: Finance or Admin only.
         services.AddWorkbenchMigrationPermissions(); // Cut-over checklist and Costpoint reconciliation: Finance or Admin only.
+        services.Decorate<Workbench.Contracts.Tasks.ITaskAssignmentService, PermissionCheckingTaskAssignmentService>(); // Tasks: Viewers read, Editors/Owners assign, assignees update their own status; workload Finance/Admin/PM.
         return services;
     }
 

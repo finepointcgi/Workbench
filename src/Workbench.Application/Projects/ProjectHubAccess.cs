@@ -15,13 +15,13 @@ public sealed class ProjectHubAccess(IWorkbenchDbContextFactory dbFactory, Acces
 {
     public AccessControl Access => access;
 
-    public sealed record Viewer(bool IsFinance, bool IsAdmin, Guid? EmployeeId);
+    public sealed record Viewer(bool IsFinance, bool IsAdmin, Guid? EmployeeId, bool IsProjectManager = false);
 
     public async Task<Viewer> GetViewerAsync(CancellationToken ct)
     {
         access.RequireSignedIn();
         var roles = await access.GetOrgRolesAsync(ct);
-        return new Viewer(roles.IsFinance(), roles.IsAdmin(), await access.GetEmployeeIdAsync(ct));
+        return new Viewer(roles.IsFinance(), roles.IsAdmin(), await access.GetEmployeeIdAsync(ct), roles.HasFlag(Contracts.Identity.OrgRoles.ProjectManager));
     }
 
     /// <summary>Projects the employee has recorded time on, is assigned to (on a WBS element) or is allocated to.</summary>

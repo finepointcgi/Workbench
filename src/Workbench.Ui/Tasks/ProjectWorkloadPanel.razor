@@ -1,0 +1,79 @@
+@* Open tasks per person on the project's plan sheet (Assignees and Person columns): who is carrying what, and what's late. *@
+@inject IServiceProvider Services
+
+@if (_workload is { } workload)
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-1">Workload</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Open tasks assigned on the plan sheet, per person.</MudText>
+    @if (workload.SheetId is null)
+    {
+        <MudText Class="mud-text-secondary">This project has no plan sheet yet.</MudText>
+    }
+    else
+    {
+        <MudTable Items="workload.People" Dense="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" aria-label="Workload" data-testid="workload-table">
+            <HeaderContent>
+                <MudTh>Person</MudTh>
+                <MudTh Style="text-align:right">Open</MudTh>
+                <MudTh Style="text-align:right">Overdue</MudTh>
+                <MudTh Style="text-align:right">Due this week</MudTh>
+                <MudTh>Next due</MudTh>
+                <MudTh>Tasks</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Person">@context.DisplayName</MudTd>
+                <MudTd DataLabel="Open" Style="text-align:right">@context.Open</MudTd>
+                <MudTd DataLabel="Overdue" Style="text-align:right">
+                    @if (context.Overdue > 0)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Icon="@Icons.Material.Filled.Warning">@context.Overdue overdue</MudChip>
+                    }
+                    else
+                    {
+                        <span>0</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Due this week" Style="text-align:right">@context.DueThisWeek</MudTd>
+                <MudTd DataLabel="Next due">@(context.NextDue?.ToString("ddd MMM d") ?? "—")</MudTd>
+                <MudTd DataLabel="Tasks">
+                    @foreach (var task in context.Tasks.Take(3))
+                    {
+                        <div><a href="@($"sheets/{workload.SheetId}?item={task.ItemId}")">@task.Title</a>
+                            <span class="mud-text-secondary">@(task.Due is { } d ? $" · {d:MMM d}" : "")</span></div>
+                    }
+                    @if (context.Tasks.Count > 3)
+                    {
+                        <span class="mud-text-secondary">and @(context.Tasks.Count - 3) more</span>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="mud-text-secondary">No open tasks are assigned yet. Assign them from the plan sheet.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    private ProjectWorkloadDto? _workload;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Services.GetService(typeof(ITaskAssignmentService)) is not ITaskAssignmentService tasks)
+        {
+            return;
+        }
+
+        try
+        {
+            _workload = await tasks.GetProjectWorkloadAsync(ProjectId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            _workload = null;
+        }
+    }
+}

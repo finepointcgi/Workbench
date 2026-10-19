@@ -168,18 +168,21 @@ public static class DatabaseInitializer
         await IncurredCostSeed.SeedAsync(db, cancellationToken); // Incurred cost: a FY2026 draft from the seeded books (last: reads every ledger seed).
         await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
         await CeilingsSeed.SeedAsync(db, cancellationToken);
+        await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
     }
 
     /// <summary>
     /// The people offered by the development sign-in page, each matching a seeded employee by email
-    /// (<see cref="ProjectAccountingSeed"/>). dev@ is an Admin, pm@ is Finance, the others are plain Employees.
+    /// (<see cref="ProjectAccountingSeed"/>, <see cref="ProjectManagerSeed"/>). dev@ is an Admin, pm@ is Finance and a Project
+    /// manager, sam.pm@ is only a Project manager, the others are plain Employees.
     /// </summary>
-    public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin, bool IsFinance)> DevUsers { get; } =
+    public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin, bool IsFinance, bool IsProjectManager)> DevUsers { get; } =
     [
-        ("dev@workbench.local", "Dana Lee", true, false),
-        ("pm@example.com", "Pat Morgan", false, true),
-        ("analyst@example.com", "Alex Rivera", false, false),
-        ("viewer@example.com", "Val Chen", false, false),
+        ("dev@workbench.local", "Dana Lee", true, false, false),
+        ("pm@example.com", "Pat Morgan", false, true, true),
+        (ProjectManagerSeed.SamEmail, "Sam Patel", false, false, true),
+        ("analyst@example.com", "Alex Rivera", false, false, false),
+        ("viewer@example.com", "Val Chen", false, false, false),
     ];
 
     private static async Task SeedUsersAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
@@ -190,7 +193,7 @@ public static class DatabaseInitializer
         }
 
         var now = DateTime.UtcNow;
-        db.Set<AppUser>().AddRange(DevUsers.Select(u => new AppUser { Email = u.Email, DisplayName = u.DisplayName, IsAdmin = u.IsAdmin, IsFinance = u.IsFinance, CreatedAtUtc = now }));
+        db.Set<AppUser>().AddRange(DevUsers.Select(u => new AppUser { Email = u.Email, DisplayName = u.DisplayName, IsAdmin = u.IsAdmin, IsFinance = u.IsFinance, IsProjectManager = u.IsProjectManager, CreatedAtUtc = now }));
         await db.SaveChangesAsync(cancellationToken);
     }
 }
