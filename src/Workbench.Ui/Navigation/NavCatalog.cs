@@ -111,6 +111,7 @@ public static class NavCatalog
         new(Finance, "Assets", "Asset register", "assets", Icons.Material.Filled.ListAlt, FinanceOnly, MatchAll: true, Detail: "Asset", Keywords: "fixed assets"),
         new(Finance, "Assets", "Capitalize", "assets/capitalize", Icons.Material.Filled.AddBox, FinanceOnly, InMenu: false),
         new(Finance, "Assets", "Depreciation", "assets/depreciation", Icons.Material.Filled.TrendingDown, FinanceOnly),
+        new(Finance, "Assets", "Asset categories", "assets/categories", Icons.Material.Filled.Category, FinanceOnly, Keywords: "fixed asset classes useful life depreciation method"),
 
         new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, FinanceOnly, Detail: "Payroll run", Keywords: "paylocity pay runs"),
 

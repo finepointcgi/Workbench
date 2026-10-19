@@ -274,6 +274,14 @@ await notifications.PublishAsync(
   is the scheduled amount through the period less what's posted (late additions catch up once), unique per asset and period,
   so runs are idempotent; closed periods are refused; `DepreciationCloseCheck` adds "Depreciation posted" to the period close.
   Government-furnished and contractor-acquired property is tracked but never depreciated.
+- An asset's schedule is `AssetSupport.Schedule(asset)` (method + `DepreciationConvention`: full month, mid-month or following
+  month); use `ExpectedThrough` rather than calling the calculator yourself. Categories (`/assets/categories`, Finance/Admin)
+  carry the default method, convention, life, accounts and an optional capitalization threshold (else `Assets:CapitalizationThreshold`);
+  a category with assets is deactivated, never deleted.
+- Opening balances (Costpoint "Fixed assets" importer): `OpeningBalanceDate` (a month end) + `OpeningAccumulatedDepreciation`,
+  never posted. The schedule puts the opening amount in the cut-over month and spreads cost − salvage − opening over the
+  remaining months, so runs resume the month after the cut-over and catch up once. Reports treat the opening amount as
+  depreciation in the cut-over month. Asset exports record `export.assets` (`SecurityLoggingAssetReportService`).
 
 ## Payroll and leave (wave 6)
 

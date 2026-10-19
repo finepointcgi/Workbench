@@ -205,7 +205,7 @@ public sealed class ImportPermissionTests
     {
         await using var host = await ImportHost.CreateAsync();
         var kinds = await host.Imports.ListKindsAsync();
-        Assert.Equal(12, kinds.Count);
+        Assert.Equal(13, kinds.Count);
         foreach (var kind in kinds.Where(k => k.SampleFile is not null))
         {
             Assert.True(File.Exists(Samples.PathOf(kind.SampleFile!)), kind.SampleFile);
