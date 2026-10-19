@@ -18,13 +18,22 @@ to run the management system around them.
 | [secure-development-policy.md](secure-development-policy.md) | A.8.25–8.33 | Approve; name owners |
 | [backup-policy.md](backup-policy.md) | A.8.13 | Set RPO/RTO, retention, locations |
 | [incident-response-plan.md](incident-response-plan.md) | A.5.24–5.28, A.6.8 | Contacts, reporting duties; includes a runbook |
+| [cryptography-policy.md](cryptography-policy.md) | A.8.24 | Approve; name key owners and vault |
+| [logging-monitoring-policy.md](logging-monitoring-policy.md) | A.8.15–8.17 | Set retention, SIEM and review cadence |
+| [supplier-security-policy.md](supplier-security-policy.md) | A.5.19–5.23 | Approve; keep the supplier register |
+| [asset-management-policy.md](asset-management-policy.md) | A.5.9–5.14, A.7.9–7.14 | Approve; name asset owners |
+| [evidence-catalog.md](evidence-catalog.md) | 9.1, all | What Workbench records for each control, and what to file when |
 | [supplier-security-checklist.md](supplier-security-checklist.md) | A.5.19–5.23 | Use for each supplier |
 | [business-continuity-plan.md](business-continuity-plan.md) | A.5.29–5.30, A.8.14 | Set targets; test |
 | [asset-inventory.md](asset-inventory.md) | A.5.9–5.12 | List your assets and owners |
 | [internal-audit-programme.md](internal-audit-programme.md) | 9.2 | Plan audits; choose auditors |
 | [management-review.md](management-review.md) | 9.3 | Use for each review |
 
+Related: NIST SP 800-171 / CMMC Level 2 in [../compliance/nist-800-171/](../compliance/nist-800-171/README.md) and DCAA
+accounting system readiness in [../compliance/dcaa/sf1408.md](../compliance/dcaa/sf1408.md).
+
 Supporting technical documents: [../security/threat-model.md](../security/threat-model.md),
+[../security/sso-entra.md](../security/sso-entra.md), [../security/sso-okta.md](../security/sso-okta.md),
 [../security/configuration.md](../security/configuration.md),
 [../operations/backup-restore.md](../operations/backup-restore.md) and [../../SECURITY.md](../../SECURITY.md).
 
@@ -38,7 +47,7 @@ Placeholders look like `<this>`. Text in *italics* is guidance; delete it once t
 | Joiners, movers, leavers (A.5.16, A.6.5) | Invites, SCIM provisioning and deactivation, role changes: all in the security event log |
 | Event logging (A.8.15) | **Users and security → Security events**: filter and CSV export |
 | Privileged access (A.8.2) | Admin and Finance roles; role changes logged; last-admin protection |
-| Secure authentication and sessions (A.8.5) | OIDC/SSO (MFA at your IdP), idle and absolute session timeouts, sign out everywhere |
+| Secure authentication and sessions (A.8.5) | **Users and security → Sign-in**: your Entra ID/Okta provider, MFA required (admins or everyone, refusals logged), re-authentication for sensitive actions, idle and absolute session timeouts, sign out everywhere |
 | Records retention and legal hold (A.5.33, A.8.10) | **Users and security → Retention**: policies, run reports, legal holds |
 | Backups and restore tests (A.8.13) | `scripts/backup.sh`, `scripts/restore.sh`, restore test records |
 | Secure development (A.8.25–8.29) | CI: build, tests, vulnerable-package check, secret scanning, SBOM; CODEOWNERS reviews |

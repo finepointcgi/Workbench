@@ -1,0 +1,194 @@
+@page "/admin/dcaa-readiness"
+@using Workbench.Contracts.Security
+@inject IComplianceChecklistService Checklists
+@inject IUserDirectory Users
+@inject ISnackbar Snackbar
+
+<PageTitle>DCAA readiness · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">DCAA accounting system readiness</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (!_isAdmin)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Only administrators can use the readiness checklist.</MudAlert>
+}
+else if (_checklist is { } checklist)
+{
+    <MudText Class="mud-text-secondary mb-2">@checklist.Description</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        For each criterion: what Workbench does, the report that proves it, a live check of your data, and your reviewer's
+        answer (kept with who and when, as evidence). Items marked <strong>CPA review</strong> need a GovCon CPA's judgement.
+        The full write-up is <code>@checklist.DocumentPath</code>.
+    </MudText>
+
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4" data-testid="dcaa-summary">
+        <MudChip T="string" Variant="Variant.Outlined" Color="Color.Success">@Count(ChecklistStatus.Meets) meet</MudChip>
+        <MudChip T="string" Variant="Variant.Outlined" Color="Color.Warning">@Count(ChecklistStatus.Partial) partial</MudChip>
+        <MudChip T="string" Variant="Variant.Outlined" Color="Color.Error">@Count(ChecklistStatus.DoesNotMeet) don't meet</MudChip>
+        <MudChip T="string" Variant="Variant.Outlined">@Count(ChecklistStatus.NotApplicable) not applicable</MudChip>
+        <MudChip T="string" Variant="Variant.Outlined">@Count(ChecklistStatus.NotReviewed) not reviewed</MudChip>
+        <MudChip T="string" Variant="Variant.Outlined" Color="Color.Info">@checklist.Items.Count(i => i.CpaReview) need CPA review</MudChip>
+    </MudStack>
+
+    @foreach (var section in checklist.Items.GroupBy(i => i.Section))
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">@section.Key</MudText>
+        @foreach (var item in section)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="@($"dcaa-item-{item.Key}")">
+                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h3" Style="flex:1 1 320px"><strong>@item.Criterion</strong></MudText>
+                    @if (item.CpaReview)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info">CPA review</MudChip>
+                    }
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="StatusColor(item.Status)">@StatusText(item.Status)</MudChip>
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">@item.Reference</MudText>
+                <MudText Typo="Typo.body2" Class="mb-1"><strong>Workbench:</strong> @item.WorkbenchFeature</MudText>
+                <MudText Typo="Typo.body2" Class="mb-1">
+                    <strong>Evidence:</strong> @item.Evidence
+                    @if (item.Link is { } link)
+                    {
+                        <MudLink Href="@link" Class="ml-1">Open</MudLink>
+                    }
+                </MudText>
+                @if (item.LiveCheckDetail is { } detail)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-1">
+                        <MudIcon Icon="@CheckIcon(item.LiveCheckPassed)" Color="@CheckColor(item.LiveCheckPassed)" Size="Size.Small" Style="vertical-align:middle" />
+                        <span class="ml-1">Your data: @detail</span>
+                    </MudText>
+                }
+                @if (item.CpaNote is { } note)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2 mud-text-secondary"><strong>For the CPA:</strong> @note</MudText>
+                }
+
+                <MudGrid Spacing="2" Class="mt-1">
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="ChecklistStatus" Label="Your assessment" Value="Edit(item).Status" ValueChanged="s => Edit(item).Status = s" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var status in Enum.GetValues<ChecklistStatus>())
+                            {
+                                <MudSelectItem Value="status">@StatusText(status)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string" Label="Notes (required unless it meets)" Value="Edit(item).Notes" ValueChanged="n => Edit(item).Notes = n" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" MaxLength="4000" Lines="1" Sizing="InputSizing.Auto" />
+                    </MudItem>
+                    <MudItem xs="12" sm="2" Class="d-flex align-center">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveAsync(item)" Disabled="_busy" aria-label="@($"Save {item.Key}")">Save</MudButton>
+                    </MudItem>
+                </MudGrid>
+                @if (item.ReviewedBy is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Reviewed by @item.ReviewedBy on @item.ReviewedAtUtc?.ToString("yyyy-MM-dd HH:mm") UTC</MudText>
+                }
+            </MudPaper>
+        }
+    }
+}
+
+@code {
+    private ChecklistDto? _checklist;
+    private bool _loading = true;
+    private bool _isAdmin;
+    private bool _busy;
+    private readonly Dictionary<string, Draft> _drafts = [];
+
+    private sealed class Draft
+    {
+        public ChecklistStatus Status { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isAdmin = (await Users.GetMeAsync()).IsAdmin;
+            if (_isAdmin)
+            {
+                _checklist = await Checklists.GetAsync(ComplianceChecklists.DcaaSf1408);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load the checklist: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Draft Edit(ChecklistItemDto item)
+    {
+        if (!_drafts.TryGetValue(item.Key, out var draft))
+        {
+            draft = new Draft { Status = item.Status, Notes = item.Notes };
+            _drafts[item.Key] = draft;
+        }
+
+        return draft;
+    }
+
+    private async Task SaveAsync(ChecklistItemDto item)
+    {
+        var draft = Edit(item);
+        _busy = true;
+        try
+        {
+            var saved = await Checklists.SaveAnswerAsync(ComplianceChecklists.DcaaSf1408, item.Key, new SaveChecklistAnswerRequest(draft.Status, draft.Notes));
+            _checklist = _checklist! with { Items = _checklist.Items.Select(i => i.Key == saved.Key ? saved : i).ToList() };
+            Snackbar.Add("Saved.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private int Count(ChecklistStatus status) => _checklist?.Items.Count(i => i.Status == status) ?? 0;
+
+    private static string StatusText(ChecklistStatus status) => status switch
+    {
+        ChecklistStatus.Meets => "Meets",
+        ChecklistStatus.Partial => "Partially meets",
+        ChecklistStatus.DoesNotMeet => "Doesn't meet",
+        ChecklistStatus.NotApplicable => "Not applicable",
+        _ => "Not reviewed",
+    };
+
+    private static Color StatusColor(ChecklistStatus status) => status switch
+    {
+        ChecklistStatus.Meets => Color.Success,
+        ChecklistStatus.Partial => Color.Warning,
+        ChecklistStatus.DoesNotMeet => Color.Error,
+        _ => Color.Default,
+    };
+
+    private static string CheckIcon(bool? passed) => passed switch
+    {
+        true => Icons.Material.Filled.CheckCircle,
+        false => Icons.Material.Filled.Warning,
+        _ => Icons.Material.Filled.Info,
+    };
+
+    private static Color CheckColor(bool? passed) => passed switch
+    {
+        true => Color.Success,
+        false => Color.Warning,
+        _ => Color.Info,
+    };
+}

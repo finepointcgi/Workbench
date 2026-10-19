@@ -45,13 +45,24 @@ Outside Development, only invited, SCIM-provisioned or bootstrap-admin people ca
 
 ## 4. Authentication and sessions (A.5.17, A.8.5)
 
-- Passwords and MFA are managed by the IdP under `<IdP password and MFA standard>`.
-- Workbench sessions expire after 30 minutes idle and 12 hours after sign-in (configurable; don't lengthen without a
-  risk assessment). Open browser sessions re-check every minute and on reconnect that the user is still active.
+- Passwords and MFA are managed by the IdP under `<IdP password and MFA standard>`. Setup:
+  [../security/sso-entra.md](../security/sso-entra.md) or [../security/sso-okta.md](../security/sso-okta.md).
+- **MFA is enforced by Workbench** as well (**Users and security › Sign-in › Multi-factor authentication**): set to
+  `<Everyone / Administrators>`. A sign-in whose token doesn't report MFA (`amr`/`acr`) is refused and logged
+  (`signin.mfa_required`).
+- **Only the organization's IdP**: `<on/off>` ("Only allow sign-in through this provider").
+- **Just-in-time provisioning**: `<invite only / allowed domains: ...>`; roles from IdP groups `<list of groups → roles>`;
+  `<the IdP manages roles: yes/no>`.
+- Workbench sessions expire after 30 minutes idle and 12 hours after sign-in (server configuration), or after
+  `<n>` hours (organization limit). Don't lengthen without a risk assessment. Open browser sessions re-check every
+  minute and on reconnect that the user is still active.
+- **Re-authentication**: showing pay rates, bank account numbers or vendor tax ids, changing bank accounts, approval
+  workflows or sign-in settings needs a sign-in within `<15>` minutes; Workbench sends the person back to the IdP with
+  `prompt=login`.
 - API tokens for the desktop app come from the IdP and stop working when the user is deactivated or signed out
   everywhere.
-- Secrets (OIDC client secret, SCIM token, database password) live in `<vault>`, are rotated yearly and on staff
-  change, and are never committed (CI scans for them).
+- Secrets (OIDC client secrets, SCIM token, database password) live in `<vault>` or encrypted in Workbench, are rotated
+  yearly and on staff change, and are never committed (CI scans for them). See [cryptography-policy.md](cryptography-policy.md).
 
 ## 5. Access reviews (A.5.18)
 
