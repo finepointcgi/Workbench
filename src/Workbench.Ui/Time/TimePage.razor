@@ -33,6 +33,7 @@ else if (_detail is null)
 else
 {
     <TimesheetStatusBanner Timesheet="_detail.Timesheet" WaitingOn="_waitingOn" />
+    <Workbench.Ui.TotalTime.TimesheetTotalTime Timesheet="_detail.Timesheet" />
     @if (_leave is not null)
     {
         @if (_leave.Prefill.Count > 0 && !_detail.Timesheet.IsLocked)

@@ -21,6 +21,7 @@ else
     </MudStack>
     <MudText Typo="Typo.subtitle1" Class="mb-2">@t.EmployeeName · @TimePage.PeriodLabel(t) · @t.TotalHours.ToString("0.##") h</MudText>
     <TimesheetStatusBanner Timesheet="t" />
+    <Workbench.Ui.TotalTime.TimesheetTotalTime Timesheet="t" />
 
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Entry changes after submission</MudText>
     <MudTable Items="_detail.Revisions" Dense="true" Outlined="true" data-testid="revisions">

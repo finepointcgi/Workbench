@@ -190,18 +190,19 @@ public sealed class TimeEntrySource : ReportSource
         }
 
         var loaded = await query.OrderBy(x => x.e.WorkDate).ThenBy(x => x.e.Id).Take(RowLimit + 1)
-            .Select(x => new { x.t.EmployeeId, x.e.WorkDate, x.t.PeriodStart, x.t.Status, x.e.WbsElementId, x.e.LaborCategoryId, x.e.Hours, x.e.Comment, x.e.EnteredAtUtc })
+            .Select(x => new { x.e.Id, x.e.TimesheetId, x.t.EmployeeId, x.e.WorkDate, x.t.PeriodStart, x.t.Status, x.e.WbsElementId, x.e.LaborCategoryId, x.e.Hours, x.e.Comment, x.e.EnteredAtUtc })
             .ToListAsync(ct);
-        var lookups = await TimeLookups.LoadAsync(db, loaded.Select(x => x.EmployeeId), loaded.Select(x => x.WbsElementId), access.IsFinance, ct);
+        var lookups = await TimeLookups.LoadAsync(db, loaded.Select(x => x.EmployeeId), loaded.Select(x => x.WbsElementId), access.IsFinance, ct, loaded.Select(x => x.TimesheetId));
         return Rows(loaded, x =>
         {
             var emp = lookups.Employees.GetValueOrDefault(x.EmployeeId);
             var w = lookups.Wbs.GetValueOrDefault(x.WbsElementId);
             var p = w is null ? null : lookups.Projects.GetValueOrDefault(w.ProjectId);
-            var rate = access.IsFinance ? lookups.CostRates.Find(x.EmployeeId, x.WorkDate) : null;
+            var rate = access.IsFinance ? lookups.RateOf(x.Id, x.EmployeeId, x.WorkDate) : null;
+            var cost = access.IsFinance ? lookups.CostOf(x.Id, x.EmployeeId, x.WorkDate, x.Hours) : null;
             return [emp?.EmployeeNumber, emp?.DisplayName, emp?.OrgUnitId is { } o ? lookups.Orgs.GetValueOrDefault(o) : null, x.WorkDate, lookups.Period(x.WorkDate), x.PeriodStart, x.Status,
                 p?.Code, p?.Name, w?.Code, w?.Name, w?.Kind, lookups.Categories.GetValueOrDefault(x.LaborCategoryId), x.Hours, x.Comment, x.EnteredAtUtc,
-                rate, rate is { } r ? ReportValues.Cents(r * x.Hours) : null];
+                rate, cost];
         });
     }
 }
@@ -214,11 +215,22 @@ internal sealed record TimeLookups(
     Dictionary<Guid, string> Categories,
     Dictionary<Guid, string> Orgs,
     List<FiscalPeriod> Periods,
-    EffectiveRateTable<Guid> CostRates)
+    EffectiveRateTable<Guid> CostRates,
+    TotalTime.LaborCostBook Book)
 {
     public string? Period(DateOnly date) => Periods.FirstOrDefault(p => p.Start <= date && p.End >= date)?.Name;
 
-    public static async Task<TimeLookups> LoadAsync(IWorkbenchDbContext db, IEnumerable<Guid> employeeIds, IEnumerable<Guid> wbsIds, bool withCostRates, CancellationToken ct)
+    /// <summary>The entry's cost rate: the effective rate when total time accounting spread a salary over its hours, else the hourly rate on the date.</summary>
+    public decimal? RateOf(Guid entryId, Guid employeeId, DateOnly date) => Book.Contains(entryId) ? Book.Rate(entryId) : CostRates.Find(employeeId, date);
+
+    /// <summary>The entry's labor cost by the labor cost method (null without a cost rate).</summary>
+    public decimal? CostOf(Guid entryId, Guid employeeId, DateOnly date, decimal hours) =>
+        Book.Contains(entryId)
+            ? Book.MissingRate(entryId) ? null : Book.Cost(entryId)
+            : CostRates.Find(employeeId, date) is { } r ? ReportValues.Cents(r * hours) : null;
+
+    public static async Task<TimeLookups> LoadAsync(
+        IWorkbenchDbContext db, IEnumerable<Guid> employeeIds, IEnumerable<Guid> wbsIds, bool withCostRates, CancellationToken ct, IEnumerable<Guid>? timesheetIds = null)
     {
         var empIds = employeeIds.Distinct().ToList();
         var wIds = wbsIds.Distinct().ToList();
@@ -238,7 +250,8 @@ internal sealed record TimeLookups(
             }
         }
 
-        return new TimeLookups(employees, wbs, projects, categories, orgs, periods, rates);
+        var book = withCostRates && timesheetIds is not null ? await TotalTime.LaborCostBook.LoadAsync(db, timesheetIds, ct) : TotalTime.LaborCostBook.Empty;
+        return new TimeLookups(employees, wbs, projects, categories, orgs, periods, rates, book);
     }
 }
 

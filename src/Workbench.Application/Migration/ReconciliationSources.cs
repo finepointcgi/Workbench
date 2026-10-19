@@ -195,7 +195,7 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
 
     // ---- Labor distribution ----
 
-    private sealed record LaborEntry(string EmployeeNumber, string EmployeeName, string ProjectCode, string WbsCode, string LaborCategory, DateOnly Date, decimal Hours, decimal Rate);
+    private sealed record LaborEntry(string EmployeeNumber, string EmployeeName, string ProjectCode, string WbsCode, string LaborCategory, DateOnly Date, decimal Hours, decimal Rate, decimal Cost);
 
     private async Task<List<LaborEntry>> LaborEntriesAsync(ReconScope scope, CancellationToken ct)
     {
@@ -207,13 +207,11 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
                           join p in db.Set<Project>().AsNoTracking() on w.ProjectId equals p.Id
                           join l in db.Set<LaborCategory>().AsNoTracking() on e.LaborCategoryId equals l.Id
                           where t.Status == TimesheetStatus.Approved && e.WorkDate >= scope.From && e.WorkDate <= scope.To && e.Hours != 0
-                          select new { emp.Id, emp.EmployeeNumber, emp.DisplayName, ProjectCode = p.Code, WbsCode = w.Code, Plc = l.Code, e.WorkDate, e.Hours })
+                          select new { emp.Id, emp.EmployeeNumber, emp.DisplayName, ProjectCode = p.Code, WbsCode = w.Code, Plc = l.Code, e.WorkDate, e.Hours, EntryId = e.Id, e.TimesheetId })
             .ToListAsync(ct);
-        var employees = rows.Select(r => r.Id).Distinct().ToList();
-        var rates = (await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employees.Contains(r.EmployeeId)).ToListAsync(ct))
-            .GroupBy(r => r.EmployeeId).ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.EffectiveFrom).ToList());
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, rows.Select(r => r.TimesheetId), ct); // Labor cost by the labor cost method.
         return rows.Select(r => new LaborEntry(r.EmployeeNumber, r.DisplayName, r.ProjectCode, r.WbsCode, r.Plc, r.WorkDate, r.Hours,
-            rates.GetValueOrDefault(r.Id)?.FirstOrDefault(c => c.EffectiveFrom <= r.WorkDate)?.HourlyCost ?? 0m)).ToList();
+            book.Rate(r.EntryId) ?? 0m, book.Cost(r.EntryId))).ToList();
     }
 
     private async Task<IReadOnlyList<WorkbenchFigure>> LaborHoursAsync(ReconScope scope, CancellationToken ct)
@@ -221,7 +219,7 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
         var figures = new List<WorkbenchFigure>();
         foreach (var e in await LaborEntriesAsync(scope, ct))
         {
-            var values = new Dictionary<string, decimal> { ["Hours"] = e.Hours, ["LaborCost"] = Math.Round(e.Hours * e.Rate, 2, MidpointRounding.AwayFromZero) };
+            var values = new Dictionary<string, decimal> { ["Hours"] = e.Hours, ["LaborCost"] = e.Cost };
             if (scope.ProjectLevel)
             {
                 figures.Add(new WorkbenchFigure([e.EmployeeNumber, e.ProjectCode], e.EmployeeName, values));
@@ -240,7 +238,7 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
         var entries = (await LaborEntriesAsync(scope, ct)).Where(e => matches([e.EmployeeNumber, e.WbsCode])).OrderBy(e => e.Date).ThenBy(e => e.WbsCode, StringComparer.Ordinal).ToList();
         return new ReconDetail(["Date", "Employee", "WBS", "PLC", "Hours", "Cost rate", "Labor cost"],
             entries.Take(MaxDetailRows).Select(e => (IReadOnlyList<string>)[Day(e.Date), $"{e.EmployeeNumber} {e.EmployeeName}", e.WbsCode, e.LaborCategory, Money(e.Hours),
-                e.Rate.ToString("0.0000", CultureInfo.InvariantCulture), Money(Math.Round(e.Hours * e.Rate, 2, MidpointRounding.AwayFromZero))]).ToList(),
+                e.Rate.ToString("0.0000", CultureInfo.InvariantCulture), Money(e.Cost)]).ToList(),
             $"Approved time entries {Day(scope.From)} to {Day(scope.To)}; cost at the rate in force on each day.");
     }
 

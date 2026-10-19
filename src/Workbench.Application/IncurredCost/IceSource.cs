@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Financials;
 using Workbench.Application.IndirectRates;
+using Workbench.Application.TotalTime;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
 using Workbench.Domain.IncurredCost;
@@ -43,8 +44,11 @@ internal sealed record IceContract(
 
 internal sealed record IceFlaggedOdc(Guid Id, DateOnly Date, string Project, string Type, string Description, string? Reason, decimal Amount, string? PostedTo);
 
-/// <summary>Approved direct hours for one project and labor category, at cost (hours × the cost rate on the work date, per entry).</summary>
-internal sealed record IceHours(Guid ProjectId, string LaborCategory, decimal Hours, decimal Cost);
+/// <summary>
+/// Approved direct hours for one project and labor category, at cost (hours × the cost rate on the work date, per entry, by
+/// the labor cost method). <paramref name="UncompensatedHours"/> are exempt staff's hours beyond their standard week (included in Hours).
+/// </summary>
+internal sealed record IceHours(Guid ProjectId, string LaborCategory, decimal Hours, decimal Cost, decimal UncompensatedHours = 0);
 
 /// <summary>
 /// Billing for one contract: invoices dated in the year (cost lines vs fee lines) and cumulatively through year end.
@@ -70,6 +74,12 @@ internal sealed record IceSource
     public required IReadOnlyList<IceContract> Contracts { get; init; }
     public required IReadOnlyList<IceFlaggedOdc> FlaggedOdcs { get; init; }
     public required IReadOnlyList<IceHours> Hours { get; init; }
+
+    /// <summary>Uncompensated hours on every charge (direct, indirect and leave) in the year; null in packages built before total time accounting.</summary>
+    public decimal? UncompensatedHoursAll { get; init; }
+
+    /// <summary>The labor cost method(s) in effect during the year, as plain text (null in older packages).</summary>
+    public string? LaborCostMethod { get; init; }
     public required IReadOnlyList<IceBilling> Billing { get; init; }
     public required IReadOnlyList<IceTmBilled> TmBilled { get; init; }
     public required IReadOnlyList<IceSubcontract> Subcontracts { get; init; }
@@ -171,7 +181,8 @@ internal static class IceSourceLoader
 
         var projects = await db.Set<Project>().AsNoTracking().Select(p => new IceProject(p.Id, p.Code, p.Name, p.ContractId)).ToListAsync(ct);
         var contracts = await LoadContractsAsync(db, ct);
-        var hours = await LoadHoursAsync(db, year, ct);
+        var (hours, uncompensatedAll) = await LoadHoursAsync(db, year, ct);
+        var laborMethod = await LaborMethodTextAsync(db, year, ct);
         var (billing, tm, register) = await LoadBillingAsync(db, year, ct);
         var subcontracts = await LoadSubcontractsAsync(db, year, ct);
 
@@ -198,6 +209,8 @@ internal static class IceSourceLoader
             Accounts = accounts,
             Pools = pools,
             Direct = direct,
+            UncompensatedHoursAll = uncompensatedAll,
+            LaborCostMethod = laborMethod,
             Projects = projects,
             Contracts = contracts,
             FlaggedOdcs = flaggedOdcs.OrderBy(o => o.IncurredOn).ThenBy(o => o.Code, StringComparer.Ordinal)
@@ -241,28 +254,41 @@ internal static class IceSourceLoader
             .ToList();
     }
 
-    private static async Task<List<IceHours>> LoadHoursAsync(IWorkbenchDbContext db, FiscalYear year, CancellationToken ct)
+    private static async Task<(List<IceHours> Hours, decimal UncompensatedAll)> LoadHoursAsync(IWorkbenchDbContext db, FiscalYear year, CancellationToken ct)
     {
         var entries = await (
                 from e in db.Set<TimeEntry>().AsNoTracking()
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 join w in db.Set<WbsElement>().AsNoTracking() on e.WbsElementId equals w.Id
                 where t.Status == TimesheetStatus.Approved && w.Kind == ChargeKind.Direct && e.WorkDate >= year.Start && e.WorkDate <= year.End && e.Hours != 0
-                select new { w.ProjectId, e.LaborCategoryId, t.EmployeeId, e.WorkDate, e.Hours })
+                select new { w.ProjectId, e.LaborCategoryId, t.EmployeeId, e.WorkDate, e.Hours, e.Id })
             .ToListAsync(ct);
-        var employeeIds = entries.Select(e => e.EmployeeId).Distinct().ToList();
-        var rates = new EffectiveRateTable<Guid>();
-        foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employeeIds.Contains(r.EmployeeId)).ToListAsync(ct))
-        {
-            rates.Add(r.EmployeeId, r.EffectiveFrom, r.HourlyCost);
-        }
+        var sheetIds = await db.Set<Timesheet>().AsNoTracking()
+            .Where(t => t.Status == TimesheetStatus.Approved && t.PeriodEnd >= year.Start && t.PeriodStart <= year.End).Select(t => t.Id).ToListAsync(ct);
+        var book = await LaborCostBook.LoadAsync(db, sheetIds, ct);
+        var uncompensatedAll = book.Sheets.Values.SelectMany(s => s.Cost.Entries)
+            .Where(e => e.WorkDate >= year.Start && e.WorkDate <= year.End).Sum(e => e.UncompensatedHours);
 
         var categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, c => $"{c.Code} {c.Name}", ct);
-        return entries
+        var hours = entries
             .GroupBy(e => (e.ProjectId, e.LaborCategoryId))
             .Select(g => new IceHours(g.Key.ProjectId, categories.GetValueOrDefault(g.Key.LaborCategoryId, "(no labor category)"), g.Sum(e => e.Hours),
-                g.Sum(e => Money.Round(e.Hours * (rates.Find(e.EmployeeId, e.WorkDate) ?? 0)))))
+                g.Sum(e => book.Cost(e.Id)), g.Sum(e => book.UncompensatedHours(e.Id))))
             .ToList();
+        return (hours, uncompensatedAll);
+    }
+
+    /// <summary>The labor cost method(s) in effect during the year, e.g. "Standard" or "Standard until 2026-04-06, then Hybrid".</summary>
+    private static async Task<string> LaborMethodTextAsync(IWorkbenchDbContext db, FiscalYear year, CancellationToken ct)
+    {
+        var policies = await LaborCostPolicies.LoadAsync(db, ct);
+        var parts = new List<string> { Contracts.TotalTime.LaborCostMethods.Label((Contracts.TotalTime.LaborCostMethodKind)(int)LaborCostPolicies.MethodOn(policies, year.Start)) };
+        foreach (var p in policies.Where(p => p.EffectiveFrom > year.Start && p.EffectiveFrom <= year.End))
+        {
+            parts.Add($"from {p.EffectiveFrom:yyyy-MM-dd} {Contracts.TotalTime.LaborCostMethods.Label((Contracts.TotalTime.LaborCostMethodKind)(int)p.Method)}");
+        }
+
+        return string.Join(", then ", parts);
     }
 
     private static async Task<(List<IceBilling>, List<IceTmBilled>, decimal)> LoadBillingAsync(IWorkbenchDbContext db, FiscalYear year, CancellationToken ct)

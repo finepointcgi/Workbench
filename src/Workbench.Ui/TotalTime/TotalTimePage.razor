@@ -1,0 +1,258 @@
+@page "/accounting/total-time"
+@layout Workbench.Ui.Layout.AccountingLayout
+@inject ITotalTimeService TotalTime
+@inject ISnackbar Snackbar
+
+<PageTitle>Total time accounting · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Total time accounting"
+                  Subtitle="Exempt salaried employees record every hour they work. Hours beyond their standard week are uncompensated overtime. Choose how that labor is costed, and see its effect on rates and projects." />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_settings is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="current-method">
+        Current method: <strong>@LaborCostMethods.Label(_settings.Current)</strong>. @LaborCostMethods.Describe(_settings.Current)
+    </MudAlert>
+
+    <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Spacing="3" Class="mb-3">
+        <MudDatePicker Label="From" @bind-Date="_from" DateFormat="yyyy-MM-dd" Style="max-width: 180px" />
+        <MudDatePicker Label="To" @bind-Date="_to" DateFormat="yyyy-MM-dd" Style="max-width: 180px" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="LoadReportAsync" Disabled="_loading" StartIcon="@Icons.Material.Filled.Refresh">Show</MudButton>
+    </MudStack>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab" data-testid="tta-tabs">
+        <MudTabPanel Text="Effective rates">
+            @if (_report is { } r)
+            {
+                <MudTable Items="r.EffectiveRates" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" data-testid="effective-rates">
+                    <HeaderContent>
+                        <MudTh>Employee</MudTh>
+                        <MudTh>Period</MudTh>
+                        <MudTh>Method</MudTh>
+                        <MudTh Style="text-align:right">Standard hours</MudTh>
+                        <MudTh Style="text-align:right">Hours worked</MudTh>
+                        <MudTh Style="text-align:right">Uncompensated</MudTh>
+                        <MudTh Style="text-align:right">Hourly rate</MudTh>
+                        <MudTh Style="text-align:right">Salary for period</MudTh>
+                        <MudTh Style="text-align:right">Labor cost</MudTh>
+                        <MudTh Style="text-align:right">Effective rate</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Employee">@context.EmployeeName <span class="mud-text-secondary">@context.EmployeeNumber · @(context.IsExempt ? "Exempt" : "Non-exempt")</span></MudTd>
+                        <MudTd DataLabel="Period">@AccountingFormat.Date(context.PeriodStart) to @AccountingFormat.Date(context.PeriodEnd)</MudTd>
+                        <MudTd DataLabel="Method">@LaborCostMethods.Label(context.Method)@(context.EffectiveRateApplied ? " (salary spread)" : "")</MudTd>
+                        <MudTd DataLabel="Standard hours" Style="text-align:right">@Hours(context.StandardHours)</MudTd>
+                        <MudTd DataLabel="Hours worked" Style="text-align:right">@Hours(context.WorkedHours)</MudTd>
+                        <MudTd DataLabel="Uncompensated" Style="text-align:right">@Hours(context.UncompensatedHours)</MudTd>
+                        <MudTd DataLabel="Hourly rate" Style="text-align:right">@Rate(context.HourlyRate)</MudTd>
+                        <MudTd DataLabel="Salary for period" Style="text-align:right">@(context.PeriodSalary is { } s ? AccountingFormat.Amount(s) : "—")</MudTd>
+                        <MudTd DataLabel="Labor cost" Style="text-align:right">@AccountingFormat.Amount(context.LaborCost)</MudTd>
+                        <MudTd DataLabel="Effective rate" Style="text-align:right"><strong>@Rate(context.EffectiveRate)</strong></MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText>No approved timesheets in these dates.</MudText></NoRecordsContent>
+                </MudTable>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Uncompensated overtime">
+            @if (_report is { } r)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    Hours exempt staff worked beyond their standard week, by employee, project and period. Total: @Hours(r.Uncompensated.Sum(u => u.UncompensatedHours)).
+                </MudText>
+                <MudTable Items="r.Uncompensated" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" data-testid="uncompensated">
+                    <HeaderContent>
+                        <MudTh>Employee</MudTh>
+                        <MudTh>Project</MudTh>
+                        <MudTh>Period</MudTh>
+                        <MudTh Style="text-align:right">Hours worked on project</MudTh>
+                        <MudTh Style="text-align:right">Uncompensated hours</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Employee">@context.EmployeeName <span class="mud-text-secondary">@context.EmployeeNumber</span></MudTd>
+                        <MudTd DataLabel="Project">@context.ProjectCode @context.ProjectName</MudTd>
+                        <MudTd DataLabel="Period">@AccountingFormat.Date(context.PeriodStart) to @AccountingFormat.Date(context.PeriodEnd)</MudTd>
+                        <MudTd DataLabel="Hours worked on project" Style="text-align:right">@Hours(context.WorkedHours)</MudTd>
+                        <MudTd DataLabel="Uncompensated hours" Style="text-align:right">@Hours(context.UncompensatedHours)</MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText>No uncompensated overtime in these dates.</MudText></NoRecordsContent>
+                </MudTable>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Effect on project cost">
+            @if (_report is { } r)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    Labor cost on each project under the standard method (uncompensated hours at no cost) and under total time accounting (salary spread over every hour).
+                    "Applied" is the cost under the method in effect for each period.
+                </MudText>
+                <MudTable Items="r.ProjectEffect" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" data-testid="project-effect">
+                    <HeaderContent>
+                        <MudTh>Project</MudTh>
+                        <MudTh Style="text-align:right">Hours</MudTh>
+                        <MudTh Style="text-align:right">Uncompensated</MudTh>
+                        <MudTh Style="text-align:right">Standard cost</MudTh>
+                        <MudTh Style="text-align:right">Total time cost</MudTh>
+                        <MudTh Style="text-align:right">Difference</MudTh>
+                        <MudTh Style="text-align:right">Applied</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Project">@context.ProjectCode @context.ProjectName</MudTd>
+                        <MudTd DataLabel="Hours" Style="text-align:right">@Hours(context.Hours)</MudTd>
+                        <MudTd DataLabel="Uncompensated" Style="text-align:right">@Hours(context.UncompensatedHours)</MudTd>
+                        <MudTd DataLabel="Standard cost" Style="text-align:right">@AccountingFormat.Amount(context.StandardCost)</MudTd>
+                        <MudTd DataLabel="Total time cost" Style="text-align:right">@AccountingFormat.Amount(context.TotalTimeCost)</MudTd>
+                        <MudTd DataLabel="Difference" Style="text-align:right">@AccountingFormat.Amount(context.Difference)</MudTd>
+                        <MudTd DataLabel="Applied" Style="text-align:right">@AccountingFormat.Amount(context.AppliedCost)</MudTd>
+                    </RowTemplate>
+                    <FooterContent>
+                        <MudTd><strong>Total</strong></MudTd>
+                        <MudTd Style="text-align:right">@Hours(r.ProjectEffect.Sum(p => p.Hours))</MudTd>
+                        <MudTd Style="text-align:right">@Hours(r.ProjectEffect.Sum(p => p.UncompensatedHours))</MudTd>
+                        <MudTd Style="text-align:right">@AccountingFormat.Amount(r.ProjectEffect.Sum(p => p.StandardCost))</MudTd>
+                        <MudTd Style="text-align:right">@AccountingFormat.Amount(r.ProjectEffect.Sum(p => p.TotalTimeCost))</MudTd>
+                        <MudTd Style="text-align:right">@AccountingFormat.Amount(r.ProjectEffect.Sum(p => p.Difference))</MudTd>
+                        <MudTd Style="text-align:right">@AccountingFormat.Amount(r.ProjectEffect.Sum(p => p.AppliedCost))</MudTd>
+                    </FooterContent>
+                    <NoRecordsContent><MudText>No approved time in these dates.</MudText></NoRecordsContent>
+                </MudTable>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Labor cost method">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Change the method</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                        A change starts on a timesheet period boundary, no earlier than @_settings.EarliestChange.ToString("MMM d, yyyy", CultureInfo.InvariantCulture), so periods already worked keep their costs.
+                        Your method is part of your disclosed cost accounting practice; tell your DCAA auditor before changing it.
+                    </MudText>
+                    <MudRadioGroup T="LaborCostMethodKind" @bind-Value="_method">
+                        @foreach (var m in Enum.GetValues<LaborCostMethodKind>())
+                        {
+                            <MudRadio T="LaborCostMethodKind" Value="m" Color="Color.Primary">
+                                <strong>@LaborCostMethods.Label(m)</strong>: @LaborCostMethods.Describe(m)
+                            </MudRadio>
+                        }
+                    </MudRadioGroup>
+                    <MudDatePicker Label="Starting" @bind-Date="_effective" DateFormat="yyyy-MM-dd" MinDate="@_settings.EarliestChange.ToDateTime(TimeOnly.MinValue)" Class="mt-3" Style="max-width: 220px" />
+                    <MudTextField Label="Reason" @bind-Value="_reason" Lines="2" MaxLength="500" Class="mt-2" Required="true" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="@(_saving || string.IsNullOrWhiteSpace(_reason) || _effective is null)"
+                               OnClick="SaveMethodAsync" data-testid="save-method">Save method</MudButton>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">History</MudText>
+                    <MudTable Items="_settings.History" Dense="true" Breakpoint="Breakpoint.Sm" data-testid="method-history">
+                        <HeaderContent>
+                            <MudTh>Starting</MudTh>
+                            <MudTh>Method</MudTh>
+                            <MudTh>Reason</MudTh>
+                            <MudTh>By</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Starting">@AccountingFormat.Date(context.EffectiveFrom)</MudTd>
+                            <MudTd DataLabel="Method">@LaborCostMethods.Label(context.Method)</MudTd>
+                            <MudTd DataLabel="Reason">@context.Reason</MudTd>
+                            <MudTd DataLabel="By">@context.CreatedBy</MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent><MudText>Standard since the start. No changes yet.</MudText></NoRecordsContent>
+                    </MudTable>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+    </MudTabs>
+
+    @if (_report is { Notes.Count: > 0 } report && _tab < 3)
+    {
+        @foreach (var note in report.Notes)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@note</MudText>
+        }
+    }
+}
+
+@code {
+    private LaborCostSettingsDto? _settings;
+    private TotalTimeReportDto? _report;
+    private DateTime? _from = DateTime.Today.AddDays(-28);
+    private DateTime? _to = DateTime.Today;
+    private DateTime? _effective;
+    private LaborCostMethodKind _method;
+    private string? _reason;
+    private int _tab;
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await TotalTime.GetSettingsAsync();
+            _method = _settings.Current;
+            _effective = _settings.EarliestChange.ToDateTime(TimeOnly.MinValue);
+            await LoadReportAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadReportAsync()
+    {
+        if (_from is not { } from || _to is not { } to)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _report = await TotalTime.GetReportAsync(DateOnly.FromDateTime(from), DateOnly.FromDateTime(to));
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveMethodAsync()
+    {
+        if (_effective is not { } effective)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            _settings = await TotalTime.SetMethodAsync(new SetLaborCostMethodRequest(_method, DateOnly.FromDateTime(effective), _reason ?? ""));
+            _reason = null;
+            Snackbar.Add($"{LaborCostMethods.Label(_method)} starts {AccountingFormat.Date(_settings.History[0].EffectiveFrom)}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static string Hours(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Rate(decimal? value) => value is { } v ? v.ToString("#,##0.00##", CultureInfo.InvariantCulture) : "—";
+}

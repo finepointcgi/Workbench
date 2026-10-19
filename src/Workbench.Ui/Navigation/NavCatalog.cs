@@ -149,6 +149,7 @@ public static class NavCatalog
         new(Finance, "Revenue & compliance", "Revenue setup", "accounting/revenue/setup", Icons.Material.Filled.Tune, FinanceOnly, InMenu: false),
         new(Finance, "Revenue & compliance", "Incurred cost", "accounting/incurred-cost", Icons.Material.Filled.Gavel, FinanceOnly, Detail: "Submission", Keywords: "ice dcaa submission"),
         new(Finance, "Revenue & compliance", "Indirect rates", "accounting/indirect-rates", Icons.Material.Filled.Percent, FinanceOnly, Keywords: "fringe overhead g&a pools"),
+        new(Finance, "Revenue & compliance", "Total time accounting", "accounting/total-time", Icons.Material.Filled.MoreTime, FinanceOnly, Keywords: "tta uncompensated overtime exempt salaried effective rate labor cost method"),
         new(Finance, null, "Revenue by project", "accounting/revenue/projects", Icons.Material.Filled.TrendingUp, FinanceOnly, Detail: "Project", InMenu: false),
 
         // Materials: the Materials role (and administrators) runs it; Finance reads parts, inventory and the inventory reports

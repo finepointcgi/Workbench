@@ -141,16 +141,17 @@ public sealed class ClinFundingCalculator(
                 from e in db.Set<TimeEntry>().AsNoTracking()
                 join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
                 where t.Status == TimesheetStatus.Submitted && wbsIds.Contains(e.WbsElementId)
-                select new LaborActual(e.WbsElementId, t.EmployeeId, e.LaborCategoryId, e.WorkDate, e.Hours))
+                select new { Actual = new LaborActual(e.WbsElementId, t.EmployeeId, e.LaborCategoryId, e.WorkDate, e.Hours, e.Id), e.TimesheetId })
             .ToListAsync(ct);
-        var employeeIds = pendingLabor.Select(l => l.EmployeeId).Distinct().ToList();
+        var book = await TotalTime.LaborCostBook.LoadAsync(db, pendingLabor.Select(l => l.TimesheetId), ct);
+        var employeeIds = pendingLabor.Select(l => l.Actual.EmployeeId).Distinct().ToList();
         var rates = new EffectiveRateTable<Guid>();
         foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employeeIds.Contains(r.EmployeeId)).ToListAsync(ct))
         {
             rates.Add(r.EmployeeId, r.EffectiveFrom, r.HourlyCost);
         }
 
-        foreach (var l in LaborCosting.Cost(pendingLabor, rates, null, out _))
+        foreach (var l in LaborCosting.Cost(pendingLabor.Select(l => l.Actual), book, rates, null, out _))
         {
             Add(l.WbsElementId, l.WorkDate, l.Cost, committed: true);
         }
