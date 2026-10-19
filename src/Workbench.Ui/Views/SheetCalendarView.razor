@@ -25,6 +25,13 @@
             <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => _month = CalendarLayout.FirstOfMonth(Today)">Today</MudButton>
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="ml-2 calendar-title">@_month.ToString("MMMM yyyy", CultureInfo.CurrentCulture)</MudText>
             <MudSpacer />
+            <div style="width:240px">
+                <MudSelect T="CalendarScope" @bind-Value="_scope" Label="Show" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" data-testid="calendar-scope">
+                    <MudSelectItem T="CalendarScope" Value="CalendarScope.Major">Milestones and major items</MudSelectItem>
+                    <MudSelectItem T="CalendarScope" Value="CalendarScope.Milestones">Milestones only</MudSelectItem>
+                    <MudSelectItem T="CalendarScope" Value="CalendarScope.All">All items</MudSelectItem>
+                </MudSelect>
+            </div>
             @if (Sources.Count > 1)
             {
                 <div style="width:220px">
@@ -63,6 +70,19 @@
             }
         </div>
 
+        @if (ShowingAllInstead)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" data-testid="calendar-fallback">
+                This sheet has no milestones or summary rows yet, so every item is shown. Mark key dates as milestones from an item's menu.
+            </MudText>
+        }
+        else if (HiddenCount > 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" data-testid="calendar-hidden">
+                @HiddenCount more @(HiddenCount == 1 ? "item is" : "items are") hidden. Choose "All items" to see everything.
+            </MudText>
+        }
+
         @if (UnplacedCount > 0)
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
@@ -95,10 +115,47 @@
 
     private ColumnDto? SourceColumn => DateColumns.FirstOrDefault(c => c.Id.ToString() == _source);
 
-    private IReadOnlyList<CalendarEntry> Entries =>
+    /// <summary>
+    /// What the calendar shows. By default only the milestones and the major items (summary rows such as phases), so a
+    /// plan with thousands of tasks stays readable; "All items" shows everything with a date.
+    /// </summary>
+    private enum CalendarScope
+    {
+        Major,
+        Milestones,
+        All,
+    }
+
+    private CalendarScope _scope = CalendarScope.Major;
+
+    private IReadOnlyList<CalendarEntry> AllEntries =>
         (SourceColumn is { } column ? CalendarLayout.FromDateColumn(Items, column) : CalendarLayout.FromSchedule(Items)).ToList();
 
-    private int UnplacedCount => Items.Count - Entries.Count;
+    private HashSet<Guid> Parents => Items.Where(i => i.ParentId is not null).Select(i => i.ParentId!.Value).ToHashSet();
+
+    private bool IsMajor(ItemDto item, HashSet<Guid> parents) => item.IsMilestone || parents.Contains(item.Id);
+
+    /// <summary>A sheet with no milestones and no summary rows would show nothing, so it shows everything instead.</summary>
+    private bool ShowingAllInstead => _scope == CalendarScope.Major && !Items.Any(i => IsMajor(i, Parents));
+
+    private IReadOnlyList<CalendarEntry> Entries
+    {
+        get
+        {
+            var all = AllEntries;
+            if (_scope == CalendarScope.All || ShowingAllInstead)
+            {
+                return all;
+            }
+
+            var parents = Parents;
+            return all.Where(e => _scope == CalendarScope.Milestones ? e.Item.IsMilestone : IsMajor(e.Item, parents)).ToList();
+        }
+    }
+
+    private int HiddenCount => AllEntries.Count - Entries.Count;
+
+    private int UnplacedCount => Items.Count - AllEntries.Count;
 
     protected override void OnParametersSet()
     {
@@ -128,7 +185,7 @@
         _addingDate = null;
         var request = SourceColumn is { } column
             ? new CreateItemRequest(title, Values: new Dictionary<string, string?> { [column.Id.ToString()] = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) })
-            : new CreateItemRequest(title, Start: day, Finish: day);
+            : new CreateItemRequest(title, Start: day, Finish: day, IsMilestone: _scope != CalendarScope.All); // added from the key-dates view, so it stays on it
         try
         {
             await ItemService.CreateAsync(SheetId, request);

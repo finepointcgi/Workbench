@@ -56,7 +56,9 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
             Start = request.Start,
             Finish = request.Finish,
             Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken),
+            IsMilestone = request.IsMilestone,
         };
+        PinMilestoneDate(item);
         db.Items.Add(item);
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);
@@ -74,6 +76,8 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         item.Title = request.Title.Trim();
         item.Start = request.Start;
         item.Finish = request.Finish;
+        item.IsMilestone = request.IsMilestone ?? item.IsMilestone;
+        PinMilestoneDate(item);
         item.CostpointWbsId = string.IsNullOrWhiteSpace(request.CostpointWbsId) ? null : request.CostpointWbsId.Trim();
         item.Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken);
         await TouchSheetAsync(db, sheetId, cancellationToken);
@@ -201,6 +205,16 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         foreach (var sibling in siblings.OrderBy(s => s.Order).ToList())
         {
             sibling.Order = order++;
+        }
+    }
+
+    /// <summary>A milestone is one day: its finish (or its start when it has no finish) is both dates.</summary>
+    private static void PinMilestoneDate(Item item)
+    {
+        if (item.IsMilestone && (item.Finish ?? item.Start) is { } day)
+        {
+            item.Start = day;
+            item.Finish = day;
         }
     }
 

@@ -73,6 +73,9 @@ public static class DatabaseInitializer
                 Values = new() { [status.Id.ToString()] = "In progress", [owner.Id.ToString()] = "analyst@example.com", [hours.Id.ToString()] = "60", [budget.Id.ToString()] = "9000" } },
             new Item { Title = "Baseline schedule", ParentId = phase.Id, Order = 2, Start = today.AddDays(11), Finish = today.AddDays(20), CostpointWbsId = "1001.01.03",
                 Values = new() { [status.Id.ToString()] = "Not started", [owner.Id.ToString()] = "pm@example.com", [hours.Id.ToString()] = "40", [budget.Id.ToString()] = "6000" } },
+            // A milestone: a key date with no duration (the calendar and Gantt show it as a diamond).
+            new Item { Title = "Planning complete (baseline approved)", ParentId = phase.Id, Order = 3, Start = today.AddDays(20), Finish = today.AddDays(20),
+                IsMilestone = true, Values = new() { [status.Id.ToString()] = "Not started", [owner.Id.ToString()] = "pm@example.com" } },
             new Item { Title = "Phase 2: Execution", Order = 1, Start = today.AddDays(21), Finish = today.AddDays(90), CostpointWbsId = "1001.02" },
         ]);
         var tracker = new Sheet

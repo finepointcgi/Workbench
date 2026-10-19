@@ -17,6 +17,10 @@
              style="grid-column:@(segment.Column + 1) / span @segment.Span; grid-row:@(segment.Lane + 2); @BarStyle(color)"
              data-item-id="@segment.Entry.Item.Id" data-start="@segment.Start.ToString("yyyy-MM-dd")" data-end="@segment.End.ToString("yyyy-MM-dd")"
              title="@Tooltip(segment.Entry)" @onclick="() => OnItemClick.InvokeAsync(segment.Entry.Item)">
+            @if (segment.Entry.Item.IsMilestone)
+            {
+                <span class="calendar-milestone" aria-hidden="true">◆</span>
+            }
             @segment.Entry.Item.Title
         </div>
     }
@@ -106,9 +110,9 @@
     }
 
     private static string Tooltip(CalendarEntry entry) =>
-        entry.Start == entry.End
+        (entry.Item.IsMilestone ? "Milestone: " : "") + (entry.Start == entry.End
             ? $"{entry.Item.Title} ({entry.Start:MMM d})"
-            : $"{entry.Item.Title} ({entry.Start:MMM d} – {entry.End:MMM d})";
+            : $"{entry.Item.Title} ({entry.Start:MMM d} – {entry.End:MMM d})");
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {
