@@ -9,7 +9,8 @@ namespace Workbench.Application.Accounting;
 /// The ledger's invariants in one place, used by manual journal entries and subledger posting alike:
 /// an entry balances to the cent, posts only into an open fiscal period, to active detail accounts with consistent
 /// segments, is immutable once posted (corrections are reversals), and every post and reversal is audited in the same
-/// unit of work. Callers add new entries to the context and save.
+/// unit of work. Each company's ledger balances on its own (<see cref="Companies.CompanyLedger"/>). Callers add new entries
+/// to the context and save.
 /// </summary>
 public sealed class GeneralLedger(AuditRecorder audit, TimeProvider clock)
 {
@@ -93,6 +94,8 @@ public sealed class GeneralLedger(AuditRecorder audit, TimeProvider clock)
                 throw new ArgumentException($"Line {line.LineNumber}: the organization unit doesn't exist.");
             }
         }
+
+        await Companies.CompanyLedger.ResolveAsync(db, entry, accounts, ct);
     }
 
     /// <summary>
@@ -106,6 +109,7 @@ public sealed class GeneralLedger(AuditRecorder audit, TimeProvider clock)
         var period = await OpenPeriodForAsync(db, entry.Date, ct);
         entry.FiscalPeriodId = period.Id;
         await ValidateLinesAsync(db, entry, ct);
+        await Companies.CompanyLedger.BalanceAsync(db, entry, ct);
         entry.MarkPosted(await NextSequenceAsync(db, ct), Actor, UtcNow);
         audit.Record(db, AuditEntityType, entry.Id, "Posted", after: AuditSnapshot(entry));
     }

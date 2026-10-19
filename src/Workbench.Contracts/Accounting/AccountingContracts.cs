@@ -111,13 +111,17 @@ public sealed record JournalLineInput(
     Guid? ProjectId = null,
     Guid? WbsElementId = null);
 
-/// <summary>A manual entry (or a system entry from another accounting module, with its own source and source id).</summary>
+/// <summary>
+/// A manual entry (or a system entry from another accounting module, with its own source and source id).
+/// <see cref="CompanyId"/> (multicompany) is the company it's entered in: the user's selected company when null.
+/// </summary>
 public sealed record SaveJournalEntryRequest(
     DateOnly Date,
     string Description,
     IReadOnlyList<JournalLineInput> Lines,
     JournalEntrySource Source = JournalEntrySource.Manual,
-    Guid? SourceId = null);
+    Guid? SourceId = null,
+    Guid? CompanyId = null);
 
 /// <summary>Reverses a posted entry. The reversal is dated <see cref="Date"/> (default: the original date) in an open period.</summary>
 public sealed record ReverseJournalEntryRequest(string Reason, DateOnly? Date = null);

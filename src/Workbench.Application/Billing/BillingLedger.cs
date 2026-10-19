@@ -61,7 +61,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
             Memo: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease ? l.Description : null));
         var label = invoice.Type == InvoiceType.CreditMemo ? "Credit memo" : "Invoice";
         return await PostAsync(db, invoice.Id, invoice.InvoiceDate, $"{label} {invoice.Number} · {contract.ContractNumber}",
-            (ArBilled, null, null, invoice.Total, $"{label} {invoice.Number}"), credits, ct);
+            (ArBilled, null, null, invoice.Total, $"{label} {invoice.Number}"), credits, ct, invoice.CompanyId);
     }
 
     public async Task<JournalEntry> PostPaymentAsync(IWorkbenchDbContext db, Payment payment, string customerName, CancellationToken ct)
@@ -73,7 +73,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
 
         var memo = payment.Reference is null ? null : $"Ref {payment.Reference}";
         return await PostAsync(db, payment.Id, payment.ReceivedOn, $"Cash receipt · {customerName}" + (memo is null ? "" : $" · {memo}"),
-            (Cash, null, null, payment.Amount, memo), [(ArBilled, null, null, payment.Amount, memo)], ct);
+            (Cash, null, null, payment.Amount, memo), [(ArBilled, null, null, payment.Amount, memo)], ct, payment.CompanyId);
     }
 
     /// <summary>Posts the accrual dated <paramref name="date"/> and its reversal on <paramref name="reverseOn"/>.</summary>
@@ -109,7 +109,8 @@ public sealed class BillingLedger(GeneralLedger ledger)
     private async Task<JournalEntry> PostAsync(
         IWorkbenchDbContext db, Guid sourceId, DateOnly date, string description,
         (string Account, Guid? ProjectId, Guid? WbsElementId, decimal Debit, string? Memo) debit,
-        IEnumerable<(string Account, Guid? ProjectId, Guid? WbsElementId, decimal Credit, string? Memo)> credits, CancellationToken ct)
+        IEnumerable<(string Account, Guid? ProjectId, Guid? WbsElementId, decimal Credit, string? Memo)> credits, CancellationToken ct,
+        Guid companyId = default)
     {
         var accounts = await db.Set<Account>().AsNoTracking().ToDictionaryAsync(a => a.Number, a => a.Id, ct);
         Guid AccountId(string number) => accounts.TryGetValue(number, out var id)
@@ -118,6 +119,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
 
         var entry = new JournalEntry
         {
+            CompanyId = companyId,
             Date = date,
             Source = JournalSource.Billing,
             SourceId = sourceId,

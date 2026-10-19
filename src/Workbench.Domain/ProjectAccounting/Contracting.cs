@@ -26,8 +26,11 @@ public enum ContractStatus
     Closed,
 }
 
-public sealed class Contract : Entity
+public sealed class Contract : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The legal company that holds the contract; its projects and invoices belong to the same company.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public Guid CustomerId { get; set; }
     public required string ContractNumber { get; set; }
     public required string Name { get; set; }

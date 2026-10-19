@@ -131,6 +131,7 @@ public sealed class AssetService(
         {
             var date = await DateInOpenPeriodAsync(db, bill.InvoiceDate, cancellationToken);
             var entry = NewEntry(date, JournalSource.Asset, asset.Id, $"Capitalize {bill.Number} line {line.LineNumber} as asset {asset.TagNumber}");
+            entry.CompanyId = asset.CompanyId;
             AddLine(entry, asset.AssetAccountId, asset.Cost, 0, $"{asset.TagNumber} {asset.Description}", line.OrgUnitId);
             AddLine(entry, line.AccountId!.Value, 0, asset.Cost, $"Reclass to asset {asset.TagNumber}", line.OrgUnitId);
             db.Set<JournalEntry>().Add(entry);
@@ -237,6 +238,7 @@ public sealed class AssetService(
             var cash = await AssetSupport.AccountByNumberAsync(db, options.Value.CashAccountNumber, "cash", cancellationToken);
             var gainLoss = await AssetSupport.AccountByNumberAsync(db, options.Value.GainLossAccountNumber, "gain/loss on disposal", cancellationToken);
             var entry = NewEntry(request.DisposedOn, JournalSource.Asset, asset.Id, $"Dispose of asset {asset.TagNumber}: {asset.Description}");
+            entry.CompanyId = asset.CompanyId;
             entry.FiscalPeriodId = period.Id;
             var memo = $"{asset.TagNumber} disposal";
             if (asset.AccumulatedDepreciation > 0)

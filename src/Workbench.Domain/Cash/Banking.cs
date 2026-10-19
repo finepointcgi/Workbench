@@ -5,8 +5,11 @@ namespace Workbench.Domain.Cash;
 /// account number are kept in clear; a full number, when entered, is stored encrypted (Data Protection) and revealed
 /// only through an audited security event. Accounts are deactivated, never deleted.
 /// </summary>
-public sealed class BankAccount : Entity
+public sealed class BankAccount : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The company that owns the account.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public required string Name { get; set; }
     public required string BankName { get; set; }
 

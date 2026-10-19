@@ -54,6 +54,7 @@ public static class DependencyInjection
         services.AddCrmClients(serverBaseAddress);
         services.AddPricingClients(serverBaseAddress);
         services.AddAssistantClients(serverBaseAddress);
+        services.AddCompanyClients(serverBaseAddress);
         return services;
     }
 }

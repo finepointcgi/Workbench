@@ -416,6 +416,8 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
             var redirected = group.Any(c => c.Redirected);
             var entry = new JournalEntry
             {
+                // The employee's home company accrues the labor; time charged to another company's project crosses companies.
+                CompanyId = employee?.CompanyId ?? Guid.Empty,
                 Date = redirected ? period.Start : Min(sheet.PeriodEnd, period.End),
                 FiscalPeriodId = period.Id,
                 Source = JournalSource.Timesheet,
@@ -504,6 +506,8 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
         var orgUnit = odc.EmployeeId is { } eid ? context.Employees.GetValueOrDefault(eid)?.OrgUnitId : null;
         var entry = new JournalEntry
         {
+            // An expense is owed by the employee's home company; a vendor ODC by the project's company (filled in on posting).
+            CompanyId = isExpense && odc.EmployeeId is { } owner && context.Employees.TryGetValue(owner, out var spender) ? spender.CompanyId : Guid.Empty,
             Date = redirected ? period!.Start : odc.IncurredOn,
             FiscalPeriodId = period!.Id,
             Source = JournalSource.Odc,

@@ -64,6 +64,12 @@ public sealed class DepreciationService(IWorkbenchDbContextFactory dbFactory, Au
             var memo = $"{asset.TagNumber} {asset.Description}";
             AssetService.AddLine(entry, asset.ExpenseAccountId, amount, 0, memo, asset.OrgUnitId, asset.ProjectId, asset.WbsElementId);
             AssetService.AddLine(entry, asset.AccumulatedDepreciationAccountId, 0, amount, memo, asset.OrgUnitId);
+
+            // Each asset depreciates in its own company's ledger (a project line posts to the project's company).
+            foreach (var line in entry.Lines.TakeLast(2).Where(l => l.ProjectId is null))
+            {
+                line.CompanyId = asset.CompanyId;
+            }
             asset.AccumulatedDepreciation += amount;
             db.Set<AssetDepreciation>().Add(new AssetDepreciation { AssetId = asset.Id, FiscalPeriodId = period.Id, RunId = run.Id, PeriodStart = period.Start, Amount = amount });
         }

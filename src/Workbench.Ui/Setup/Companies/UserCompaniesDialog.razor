@@ -1,0 +1,46 @@
+@* Chooses the companies one person may use. None ticked means every company. *@
+@using Workbench.Contracts.Companies
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-2">Which companies can <b>@User.DisplayName</b> use? Leave them all unticked for every company.</MudText>
+        <MudStack Spacing="0">
+            @foreach (var company in Companies)
+            {
+                var id = company.Id;
+                <MudCheckBox T="bool" Value="_chosen.Contains(id)" ValueChanged="v => Toggle(id, v)" Label="@($"{company.Code} · {company.LegalName}")" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="() => MudDialog.Close(DialogResult.Ok(_chosen.ToList()))">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public UserCompanyAccessDto User { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CompanyDto> Companies { get; set; } = [];
+
+    private HashSet<Guid> _chosen = [];
+
+    protected override void OnInitialized() => _chosen = User.CompanyIds.ToHashSet();
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on)
+        {
+            _chosen.Add(id);
+        }
+        else
+        {
+            _chosen.Remove(id);
+        }
+    }
+}

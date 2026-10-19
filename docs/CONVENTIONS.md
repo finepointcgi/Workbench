@@ -536,3 +536,15 @@ Checks:
   a new rule is a key in `TimesheetFlagRules` and never blocks anything.
 - Providers live in Infrastructure (`Assistant/AnthropicModelClient`, the official Anthropic SDK; Bedrock via
   `Anthropic.Bedrock`); tests and Development use `FakeAssistantModel` (`Assistant:EnableFakeProvider`).
+
+## Multicompany
+
+- Legal companies within a tenant (`Domain/Companies`, `Contracts/Companies`, `Application/Companies`; design and the
+  shared-versus-owned line in `docs/multicompany.md`). Company-owned entities implement `ICompanyOwned`; their column is
+  configured in `Configurations/CompanyConfigurations.cs` (default = `Company.DefaultId`, so migrations backfill existing rows).
+- Post through `GeneralLedger`: set `JournalEntry.CompanyId` to the source document's company (leave lines empty unless
+  a line belongs to another company); the ledger fills lines from their projects, adds due-to/due-from lines across
+  companies and refuses closed or inactive companies. Never write journal lines with a company yourself to "balance".
+- A new company-owned record type gets a `CompanyColumnConfiguration<T>` and, if users list or open it, a company filter in
+  `CompanyPermissionDecorators.cs` (`CompanyGuard.FilterAsync` / `EnsureAsync` / `StampNewAsync`).
+- Reports that add up ledger lines filter by `CompanyScope.VisibleCompanyIdsAsync()` (null = all companies).
