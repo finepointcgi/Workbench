@@ -1,0 +1,67 @@
+@* Stock by location, lot, serial and owner, with the movements a Materials user can make from each row. *@
+@inject IDialogService DialogService
+@inject IInventoryService Inventory
+@inject ISnackbar Snackbar
+
+@if (Balances.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No stock.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="balances">
+<caption class="wb-sr-only">@Caption</caption>
+        <thead>
+            <tr>
+                @if (ShowPart) { <th scope="col">Part</th> }
+                <th scope="col">Location</th><th scope="col">Lot</th><th scope="col">Serial</th><th scope="col">Owner</th>
+                <th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Value</th><th scope="col">Received</th>
+                @if (CanEdit && Options is not null) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var b in Balances)
+            {
+                var name = $"{b.PartNumber} {b.Location} {b.Lot} {b.Serial}".Trim();
+                <tr>
+                    @if (ShowPart) { <td><MudLink Href="@($"materials/parts/{b.PartId}")">@b.PartNumber</MudLink> <span class="mud-text-secondary">@b.PartDescription</span></td> }
+                    <td style="white-space:nowrap">@b.Location</td>
+                    <td>@b.Lot</td>
+                    <td>@b.Serial</td>
+                    <td>
+                        @MaterialsFormat.Label(b.Ownership)@(b.OwnerProjectCode is { } p ? $" · {p}" : "")
+                        @if (b.GovernmentReference is { } r) { <span class="mud-text-secondary"> (@r)</span> }
+                    </td>
+                    <td style="text-align:right">@MaterialsFormat.Qty(b.Quantity) @b.UnitOfMeasure</td>
+                    <td style="text-align:right">@(b.Ownership == StockOwnership.GovernmentFurnished ? "Not valued" : MaterialsFormat.Amount(b.Value))</td>
+                    <td style="white-space:nowrap">@MaterialsFormat.Date(b.ReceivedOn)</td>
+                    @if (CanEdit && Options is not null)
+                    {
+                        <td style="white-space:nowrap">
+                            <MudButton Size="Size.Small" OnClick="() => RunAsync(StockAction.Issue, b)" aria-label="@($"Issue {name}")">Issue</MudButton>
+                            <MudButton Size="Size.Small" OnClick="() => RunAsync(StockAction.Transfer, b)" aria-label="@($"Transfer {name}")">Move</MudButton>
+                            <MudButton Size="Size.Small" OnClick="() => RunAsync(StockAction.Count, b)" aria-label="@($"Count {name}")">Count</MudButton>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InventoryBalanceDto> Balances { get; set; } = [];
+    [Parameter] public MaterialsOptionsDto? Options { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public bool ShowPart { get; set; }
+    [Parameter] public string Caption { get; set; } = "Stock";
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task RunAsync(StockAction mode, InventoryBalanceDto balance)
+    {
+        if (await StockActions.RunAsync(DialogService, Inventory, Snackbar, mode, Options!, balance))
+        {
+            await Changed.InvokeAsync();
+        }
+    }
+}

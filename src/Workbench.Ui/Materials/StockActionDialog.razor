@@ -1,0 +1,133 @@
+@* One stock movement: issue to a project, transfer, cycle count (from a balance) or adjust (from a part). Returns the request. *@
+<MudDialog>
+    <DialogContent>
+        @if (Balance is { } b)
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">
+                @b.PartNumber at @b.Location@(b.Lot.Length > 0 ? $", lot {b.Lot}" : "")@(b.Serial.Length > 0 ? $", serial {b.Serial}" : ""):
+                @MaterialsFormat.Qty(b.Quantity) @b.UnitOfMeasure (@MaterialsFormat.Label(b.Ownership)@(b.OwnerProjectCode is { } p ? $" for {p}" : ""))
+            </MudText>
+        }
+        <MudGrid Spacing="2">
+            <MudItem xs="6"><MudDatePicker @bind-Date="_date" Label="Date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            @switch (Mode)
+            {
+                case StockAction.Issue:
+                    <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_quantity" Label="Quantity" Min="0" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12">
+                        <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge to (project WBS)" Dense="true" Required="true">
+                            @foreach (var c in Options.ChargeCodes) { <MudSelectItem T="Guid?" Value="c.WbsElementId">@c.ProjectCode @c.WbsCode · @c.Name</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    break;
+                case StockAction.Transfer:
+                    <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_quantity" Label="Quantity" Min="0" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12"><BinSelect Options="Options" @bind-Value="_binId" Label="To location" /></MudItem>
+                    break;
+                case StockAction.Count:
+                    <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_quantity" Label="Counted quantity" Min="0" Margin="Margin.Dense" /></MudItem>
+                    break;
+                case StockAction.Adjust:
+                    <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_quantity" Label="Quantity to add (negative to remove)" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12"><BinSelect Options="Options" @bind-Value="_binId" Label="Location" /></MudItem>
+                    @if (Part?.Summary.Tracking == PartTracking.Lot || Part?.Summary.Tracking == PartTracking.Serial)
+                    {
+                        <MudItem xs="6"><MudTextField T="string" @bind-Value="_lot" Label="Lot" Margin="Margin.Dense" /></MudItem>
+                    }
+                    @if (Part?.Summary.Tracking == PartTracking.Serial)
+                    {
+                        <MudItem xs="6"><MudTextField T="string" @bind-Value="_serial" Label="Serial" Margin="Margin.Dense" /></MudItem>
+                    }
+                    <MudItem xs="6">
+                        <MudSelect T="StockOwnership" @bind-Value="_ownership" Label="Owner" Dense="true">
+                            @foreach (var o in Enum.GetValues<StockOwnership>()) { <MudSelectItem T="StockOwnership" Value="o">@MaterialsFormat.Label(o)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    @if (_ownership != StockOwnership.General)
+                    {
+                        <MudItem xs="6">
+                            <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Dense="true">
+                                @foreach (var p in Options.Projects) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem> }
+                            </MudSelect>
+                        </MudItem>
+                    }
+                    @if (Part?.Summary.CostMethod == PartCostMethod.Average)
+                    {
+                        <MudItem xs="6"><MudNumericField T="decimal?" @bind-Value="_unitCost" Label="Unit cost (additions)" Min="0" Format="0.00##" Margin="Margin.Dense" /></MudItem>
+                    }
+                    break;
+            }
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_note" Label="@(Mode == StockAction.Adjust ? "Reason" : "Note")" Required="@(Mode == StockAction.Adjust)" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!Valid" OnClick="Save" data-testid="stock-save">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public StockAction Mode { get; set; }
+    [Parameter, EditorRequired] public MaterialsOptionsDto Options { get; set; } = default!;
+    [Parameter] public InventoryBalanceDto? Balance { get; set; }
+    [Parameter] public PartDto? Part { get; set; }
+
+    private DateTime? _date = DateTime.Today;
+    private decimal _quantity;
+    private Guid? _wbsId;
+    private Guid? _binId;
+    private string? _lot;
+    private string? _serial;
+    private StockOwnership _ownership;
+    private Guid? _projectId;
+    private decimal? _unitCost;
+    private string? _note;
+
+    private string ConfirmText => Mode switch
+    {
+        StockAction.Issue => "Issue",
+        StockAction.Transfer => "Transfer",
+        StockAction.Count => "Record count",
+        _ => "Adjust",
+    };
+
+    private bool Valid => _date is not null && Mode switch
+    {
+        StockAction.Issue => _quantity > 0 && _wbsId is not null,
+        StockAction.Transfer => _quantity > 0 && _binId is not null,
+        StockAction.Count => _quantity >= 0,
+        _ => _quantity != 0 && _binId is not null && !string.IsNullOrWhiteSpace(_note),
+    };
+
+    protected override void OnInitialized()
+    {
+        if (Mode == StockAction.Count && Balance is { } b)
+        {
+            _quantity = b.Quantity;
+        }
+
+        if (Mode == StockAction.Adjust)
+        {
+            _binId = Part?.DefaultBinId;
+            _unitCost = Part?.Summary.AverageCost;
+        }
+    }
+
+    private void Save()
+    {
+        var date = DateOnly.FromDateTime(_date!.Value);
+        object request = Mode switch
+        {
+            StockAction.Issue => new IssueToProjectRequest(Balance?.PartId ?? Part!.Summary.Id, _quantity, date, _wbsId!.Value, Balance?.Id, _note),
+            StockAction.Transfer => new TransferRequest(Balance!.Id, _quantity, date, WarehouseOf(_binId!.Value), _binId!.Value, _note),
+            StockAction.Count => new CycleCountRequest(Balance!.Id, _quantity, date, _note),
+            _ => new AdjustInventoryRequest(Part!.Summary.Id, WarehouseOf(_binId!.Value), _binId!.Value, _quantity, date, _note!, _lot, _serial, _ownership,
+                _ownership == StockOwnership.General ? null : _projectId, _unitCost),
+        };
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private Guid WarehouseOf(Guid binId) => Options.Warehouses.First(w => w.Bins.Any(b => b.Id == binId)).Id;
+}

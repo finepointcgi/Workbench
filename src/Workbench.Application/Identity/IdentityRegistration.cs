@@ -89,6 +89,7 @@ public static class IdentityRegistration
         services.Decorate<Workbench.Contracts.Payroll.IPayrollLayoutService, PermissionCheckingPayrollLayoutService>(); // Payroll file layouts: Finance or Admin only.
         services.AddWorkbenchMigrationPermissions(); // Cut-over checklist and Costpoint reconciliation: Finance or Admin only.
         services.Decorate<Workbench.Contracts.Tasks.ITaskAssignmentService, PermissionCheckingTaskAssignmentService>(); // Tasks: Viewers read, Editors/Owners assign, assignees update their own status; workload Finance/Admin/PM.
+        services.AddWorkbenchMaterialsPermissions(); // Materials: read Materials/Finance/Admin, change Materials/Admin; revaluation and WIP Finance; own shop labor anyone.
         return services;
     }
 

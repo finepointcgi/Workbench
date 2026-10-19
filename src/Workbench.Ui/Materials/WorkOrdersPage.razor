@@ -1,0 +1,123 @@
+@page "/materials/work-orders"
+@inject IManufacturingService Manufacturing
+@inject IPartService PartService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Work orders · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Work orders" Subtitle="Build to a project (cost on its WBS element as incurred, delivered to it) or to stock (cost in work in process until completion, variance at close).">
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_options is null" data-testid="new-wo">New work order</MudButton>
+    }
+</MaterialsHeader>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+        <MudSelect T="WorkOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:160px">
+            @foreach (var s in Enum.GetValues<WorkOrderState>()) { <MudSelectItem T="WorkOrderState?" Value="s">@MaterialsFormat.Label(s)</MudSelectItem> }
+        </MudSelect>
+        <MudSwitch T="bool" Value="_open" ValueChanged="v => SetAsync(() => _open = v)" Label="Open only" Color="Color.Primary" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (_orders.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No work orders.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="work-orders">
+<caption class="wb-sr-only">Work orders</caption>
+                <thead><tr><th scope="col">Work order</th><th scope="col">Part</th><th scope="col">For</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Completed</th><th scope="col" style="text-align:right">Scrapped</th><th scope="col">Start</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var w in _orders)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/work-orders/{w.Id}")">@w.Number</MudLink></td>
+                            <td>@w.PartNumber <span class="mud-text-secondary">@w.PartDescription</span></td>
+                            <td>@(w.ProjectCode is { } p ? $"{p} {w.WbsCode}" : "Stock")</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(w.Quantity)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(w.QuantityCompleted)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(w.QuantityScrapped)</td>
+                            <td>@MaterialsFormat.Date(w.StartDate)</td>
+                            <td>@MaterialsFormat.Date(w.DueDate)@if (w.IsLate) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Class="ml-1 my-0">Late</MudChip> }</td>
+                            <td><MudChip T="string" Size="Size.Small" Color="MaterialsFormat.Color(w.Status)" Class="my-0">@MaterialsFormat.Label(w.Status)</MudChip></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<WorkOrderSummaryDto> _orders = [];
+    private MaterialsOptionsDto? _options;
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private string? _search;
+    private WorkOrderState? _status;
+    private bool _open = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            _options = await PartService.GetOptionsAsync();
+            _parts = await PartService.ListAsync(new PartQuery(Source: PartSourceKind.Make));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _options = null;
+        }
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _orders = await Manufacturing.ListWorkOrdersAsync(new WorkOrderQuery(_status, null, null, _open, _search));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task NewAsync()
+    {
+        var dialog = await DialogService.ShowAsync<WorkOrderDialog>("New work order",
+            new DialogParameters<WorkOrderDialog> { { d => d.Options, _options }, { d => d.Parts, _parts } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveWorkOrderRequest request })
+        {
+            try
+            {
+                var wo = await Manufacturing.CreateWorkOrderAsync(request);
+                Navigation.NavigateTo($"materials/work-orders/{wo.Summary.Id}");
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+}

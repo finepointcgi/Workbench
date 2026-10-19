@@ -1,0 +1,192 @@
+@page "/materials/receiving"
+@inject IInventoryService Inventory
+@inject IPartService PartService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Receiving · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Receiving" Subtitle="Receive purchase order lines for parts into stock (the PO receipt and three-way match work as always), and record government-furnished material.">
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AssuredWorkload" OnClick="GovernmentAsync" Disabled="_options is null" data-testid="receive-gfm">Receive government-furnished</MudButton>
+    }
+</MaterialsHeader>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Open purchase order lines</MudText>
+    <MudPaper Outlined="true" Class="pa-2 mb-4" Style="overflow-x:auto">
+        @if (_lines.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Nothing to receive. Firm planned buys from MRP, or link a PO line to a part below.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="receivable">
+<caption class="wb-sr-only">Open purchase order lines for parts</caption>
+                <thead><tr><th scope="col">PO</th><th scope="col">Vendor</th><th scope="col">Part</th><th scope="col">Tracking</th><th scope="col">Owner</th><th scope="col">Needed</th><th scope="col" style="text-align:right">Ordered</th><th scope="col" style="text-align:right">Received</th><th scope="col" style="text-align:right">Open</th><th scope="col" style="text-align:right">Price</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var l in _lines)
+                    {
+                        <tr>
+                            <td style="white-space:nowrap">@l.PurchaseOrderNumber · @l.LineNumber</td>
+                            <td>@l.Vendor</td>
+                            <td><MudLink Href="@($"materials/parts/{l.PartId}")">@l.PartNumber</MudLink></td>
+                            <td>@MaterialsFormat.Label(l.Tracking)</td>
+                            <td>@MaterialsFormat.Label(l.Ownership)@(l.OwnerProjectCode is { } p ? $" · {p}" : "")</td>
+                            <td>@MaterialsFormat.Date(l.NeededBy)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.Ordered)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.Received)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.Open)</td>
+                            <td style="text-align:right">@MaterialsFormat.Cost(l.UnitPrice)</td>
+                            <td>
+                                @if (MaterialsFormat.CanEdit(User))
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => ReceiveAsync(l)" aria-label="@($"Receive {l.PurchaseOrderNumber} line {l.LineNumber}")">Receive</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    @if (MaterialsFormat.CanEdit(User) && _linkable.Count > 0)
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Link purchase order lines to parts</MudText>
+        <MudText Class="mud-text-secondary mb-2">Lines charged to the inventory clearing account (1405 Inventory received not invoiced) that aren't linked to a part yet.</MudText>
+        <MudPaper Outlined="true" Class="pa-2 mb-4" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Purchase order lines to link</caption>
+                <thead><tr><th scope="col">PO</th><th scope="col">Description</th><th scope="col" style="text-align:right">Quantity</th><th scope="col">Part</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var l in _linkable)
+                    {
+                        <tr>
+                            <td>@l.PurchaseOrderNumber · @l.LineNumber</td>
+                            <td>@l.Description</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.Quantity)</td>
+                            <td style="min-width:220px">
+                                <MudSelect T="Guid?" Value="_linkPart.GetValueOrDefault(l.PurchaseOrderLineId)" ValueChanged="v => _linkPart[l.PurchaseOrderLineId] = v" Dense="true"
+                                           aria-label="@($"Part for {l.PurchaseOrderNumber} line {l.LineNumber}")">
+                                    @foreach (var p in _parts.Where(p => p.Source == PartSourceKind.Buy)) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display</MudSelectItem> }
+                                </MudSelect>
+                            </td>
+                            <td><MudButton Size="Size.Small" Disabled="@(_linkPart.GetValueOrDefault(l.PurchaseOrderLineId) is null)" OnClick="() => LinkAsync(l)" aria-label="@($"Link {l.PurchaseOrderNumber} line {l.LineNumber}")">Link</MudButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">On the dock: <MudLink Href="m/receive" Typo="Typo.body2">receive on a phone</MudLink> (parts without lot or serial tracking).</MudText>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Recent receipts</MudText>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <TransactionsTable Transactions="_recent" ShowPart="true" Caption="Recent receipts" />
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<ReceivablePartLineDto> _lines = [];
+    private IReadOnlyList<LinkablePurchaseLineDto> _linkable = [];
+    private IReadOnlyList<InventoryTransactionDto> _recent = [];
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private readonly Dictionary<Guid, Guid?> _linkPart = [];
+    private MaterialsOptionsDto? _options;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _options = await PartService.GetOptionsAsync();
+            _parts = await PartService.ListAsync(new PartQuery());
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _lines = await Inventory.ListReceivableLinesAsync();
+            _linkable = MaterialsFormat.CanEdit(User) ? await Inventory.ListLinkableLinesAsync() : [];
+            var receipts = await Inventory.ListTransactionsAsync(new TransactionQuery(Type: InventoryMovement.PurchaseReceipt, Take: 15));
+            var government = await Inventory.ListTransactionsAsync(new TransactionQuery(Type: InventoryMovement.GovernmentReceipt, Take: 15));
+            _recent = receipts.Concat(government).OrderByDescending(t => t.Number, StringComparer.Ordinal).Take(20).ToList();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task ReceiveAsync(ReceivablePartLineDto line)
+    {
+        var dialog = await DialogService.ShowAsync<ReceiveDialog>("Receive into inventory",
+            new DialogParameters<ReceiveDialog> { { d => d.Line, line }, { d => d.Options, _options } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ReceiveIntoInventoryRequest request })
+        {
+            try
+            {
+                var created = await Inventory.ReceivePurchaseOrderAsync(request);
+                Snackbar.Add($"Received {MaterialsFormat.Qty(created.Sum(t => t.Quantity))} {line.PartNumber} ({string.Join(", ", created.Select(t => t.Number))}).", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task GovernmentAsync()
+    {
+        var dialog = await DialogService.ShowAsync<GovernmentReceiptDialog>("Receive government-furnished material",
+            new DialogParameters<GovernmentReceiptDialog> { { d => d.Options, _options }, { d => d.Parts, _parts } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: GovernmentReceiptRequest request })
+        {
+            try
+            {
+                var created = await Inventory.ReceiveGovernmentFurnishedAsync(request);
+                Snackbar.Add($"Government-furnished material recorded ({string.Join(", ", created.Select(t => t.Number))}); it isn't valued.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task LinkAsync(LinkablePurchaseLineDto line)
+    {
+        try
+        {
+            await Inventory.LinkPurchaseOrderLineAsync(new LinkPurchaseLineRequest(line.PurchaseOrderLineId, _linkPart[line.PurchaseOrderLineId]!.Value));
+            Snackbar.Add($"{line.PurchaseOrderNumber} line {line.LineNumber} linked; receive it above.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,198 @@
+@page "/materials/mrp"
+@inject IMrpService Mrp
+@inject IPartService PartService
+@inject ISnackbar Snackbar
+
+<PageTitle>MRP · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="MRP workbench"
+                 Subtitle="Nets work order, project and forecast demand plus safety stock against stock on hand and on order, level by level with lead times, and suggests what to buy and build. Firm suggestions into requisitions (the normal approval flow) or work orders.">
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudNumericField T="int" @bind-Value="_horizon" Label="Horizon (days)" Min="1" Max="730" Margin="Margin.Dense" Style="max-width:140px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="RunAsync" Disabled="_busy" data-testid="mrp-run">Run MRP</MudButton>
+    }
+</MaterialsHeader>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <div role="status" class="wb-sr-only">@_status</div>
+    <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+        <MudTabPanel Text="Planned orders">
+            @if (_run is not { } run)
+            {
+                <MudText Class="mud-text-secondary">MRP hasn't run yet.</MudText>
+            }
+            else
+            {
+                <MudText Class="mb-2">
+                    Run @run.RunAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) by @run.RunBy as of @MaterialsFormat.Date(run.AsOf), @run.HorizonDays-day horizon:
+                    <b>@run.PlannedOrders.Count(p => p.Status == PlannedOrderState.Planned)</b> to act on, <b>@run.LateCount</b> late.
+                </MudText>
+                @foreach (var m in run.Messages)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-1">@m</MudAlert>
+                }
+                <MudPaper Outlined="true" Class="pa-2 mt-2" Style="overflow-x:auto">
+                    @if (run.PlannedOrders.Count == 0)
+                    {
+                        <MudText Class="mud-text-secondary">Nothing to plan: supply covers demand.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="planned-orders">
+<caption class="wb-sr-only">Planned orders</caption>
+                            <thead><tr>@if (MaterialsFormat.CanEdit(User)) { <th scope="col"><span class="wb-sr-only">Select</span></th> }<th scope="col">Action</th><th scope="col">Part</th><th scope="col" style="text-align:right">Quantity</th><th scope="col">Release</th><th scope="col">Need</th><th scope="col">Vendor</th><th scope="col" style="text-align:right">Est. cost</th><th scope="col">Covers</th><th scope="col">Status</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in run.PlannedOrders)
+                                {
+                                    <tr>
+                                        @if (MaterialsFormat.CanEdit(User))
+                                        {
+                                            <td>
+                                                @if (p.Status == PlannedOrderState.Planned)
+                                                {
+                                                    <MudCheckBox T="bool" Value="_selected.Contains(p.Id)" ValueChanged="v => Toggle(p.Id, v)" Dense="true" aria-label="@($"Select {p.Kind} {p.PartNumber}")" />
+                                                }
+                                            </td>
+                                        }
+                                        <td>@(p.Kind == PlannedOrderType.Buy ? "Buy" : "Make")</td>
+                                        <td><MudLink Href="@($"materials/parts/{p.PartId}")">@p.PartNumber</MudLink> <span class="mud-text-secondary">@p.PartDescription</span></td>
+                                        <td style="text-align:right">@MaterialsFormat.Qty(p.Quantity)</td>
+                                        <td style="white-space:nowrap">@MaterialsFormat.Date(p.ReleaseDate)@if (p.IsLate) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning" Class="ml-1 my-0">Late</MudChip> }</td>
+                                        <td style="white-space:nowrap">@MaterialsFormat.Date(p.NeedDate)</td>
+                                        <td>@p.PreferredVendor</td>
+                                        <td style="text-align:right">@MaterialsFormat.Amount(Math.Round(p.Quantity * p.UnitCost, 2))</td>
+                                        <td style="max-width:360px">@p.Pegging@(p.ProjectCode is { } pc ? $" (project {pc})" : "")</td>
+                                        <td>@(p.Status == PlannedOrderState.Firmed ? $"Firmed: {p.FirmedDocument}" : p.Status.ToString())</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudPaper>
+                @if (MaterialsFormat.CanEdit(User) && run.PlannedOrders.Any(p => p.Status == PlannedOrderState.Planned))
+                {
+                    <MudStack Row="true" Spacing="2" Class="mt-2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Text" OnClick="SelectAll">Select all</MudButton>
+                        <MudSelect T="Guid?" @bind-Value="_orgId" Label="Charge requisitions to (default: your organization)" Dense="true" Clearable="true" Style="min-width:280px">
+                            @foreach (var o in _options?.OrgUnits ?? []) { <MudSelectItem T="Guid?" Value="o.Id">@o.Code · @o.Name</MudSelectItem> }
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_selected.Count == 0 || _busy)" OnClick="FirmAsync" data-testid="mrp-firm">Firm @_selected.Count selected</MudButton>
+                    </MudStack>
+                }
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Project requirements">
+            <DemandEditor Options="_options" Parts="_parts" CanEdit="MaterialsFormat.CanEdit(User)" Forecasts="false" />
+        </MudTabPanel>
+        <MudTabPanel Text="Forecasts">
+            <DemandEditor Options="_options" Parts="_parts" CanEdit="MaterialsFormat.CanEdit(User)" Forecasts="true" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private MrpRunDto? _run;
+    private MaterialsOptionsDto? _options;
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private readonly HashSet<Guid> _selected = [];
+    private int _horizon = 120;
+    private Guid? _orgId;
+    private bool _busy;
+    private string? _status;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _run = await Mrp.GetLatestAsync();
+            _options = await PartService.GetOptionsAsync();
+            _parts = await PartService.ListAsync(new PartQuery());
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on)
+        {
+            _selected.Add(id);
+        }
+        else
+        {
+            _selected.Remove(id);
+        }
+    }
+
+    private void SelectAll()
+    {
+        foreach (var p in _run!.PlannedOrders.Where(p => p.Status == PlannedOrderState.Planned))
+        {
+            _selected.Add(p.Id);
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        _busy = true;
+        try
+        {
+            _run = await Mrp.RunAsync(new RunMrpRequest(_horizon));
+            _selected.Clear();
+            _status = $"MRP planned {_run.PlannedOrders.Count} orders.";
+            Snackbar.Add(_status, Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task FirmAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mrp.FirmAsync(new FirmPlannedOrdersRequest(_selected.ToList(), _orgId));
+            var parts = new List<string>();
+            if (result.Requisitions.Count > 0)
+            {
+                parts.Add($"requisitions {string.Join(", ", result.Requisitions)} submitted for approval");
+            }
+
+            if (result.WorkOrders.Count > 0)
+            {
+                parts.Add($"work orders {string.Join(", ", result.WorkOrders)} planned");
+            }
+
+            _status = $"Firmed: {string.Join("; ", parts)}.";
+            Snackbar.Add(_status, Severity.Success);
+            _selected.Clear();
+            _run = await Mrp.GetLatestAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

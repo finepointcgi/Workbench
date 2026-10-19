@@ -1,0 +1,74 @@
+@page "/materials/inventory"
+@inject IInventoryService Inventory
+@inject IPartService PartService
+
+<PageTitle>Inventory · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Inventory" Subtitle="Stock on hand by location, lot, serial and owner. Contract inventory is issued only to its project; government-furnished material only to its project, never valued." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Part, lot or serial" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:240px" />
+        <MudSelect T="Guid?" Value="_warehouseId" ValueChanged="v => SetAsync(() => _warehouseId = v)" Label="Warehouse" Clearable="true" Dense="true" Style="min-width:160px">
+            @foreach (var w in _options?.Warehouses ?? []) { <MudSelectItem T="Guid?" Value="w.Id">@w.Code</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="StockOwnership?" Value="_ownership" ValueChanged="v => SetAsync(() => _ownership = v)" Label="Owner" Clearable="true" Dense="true" Style="min-width:200px">
+            @foreach (var o in Enum.GetValues<StockOwnership>()) { <MudSelectItem T="StockOwnership?" Value="o">@MaterialsFormat.Label(o)</MudSelectItem> }
+        </MudSelect>
+        <MudSpacer />
+        <MudText>Value <b>@MaterialsFormat.Amount(_balances.Sum(b => b.Value))</b></MudText>
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <BalancesTable Balances="_balances" Options="_options" CanEdit="MaterialsFormat.CanEdit(User)" ShowPart="true" Caption="Inventory" Changed="LoadAsync" />
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<InventoryBalanceDto> _balances = [];
+    private MaterialsOptionsDto? _options;
+    private string? _search;
+    private Guid? _warehouseId;
+    private StockOwnership? _ownership;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _options = await PartService.GetOptionsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _options = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _balances = await Inventory.ListBalancesAsync(new BalanceQuery(null, _warehouseId, _ownership, null, _search));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+}

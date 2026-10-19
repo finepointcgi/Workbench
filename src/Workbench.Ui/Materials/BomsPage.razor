@@ -1,0 +1,95 @@
+@page "/materials/boms"
+@inject IManufacturingService Manufacturing
+@inject IPartService PartService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Bills of materials · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Bills of materials" Subtitle="Multi-level BOMs by revision, with component effectivity dates. One revision per part is active: work orders and MRP use it." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudSelect T="Guid?" @bind-Value="_newPart" Label="Make part" Dense="true" Style="min-width:260px">
+                    @foreach (var p in _parts.Where(p => p.Source == PartSourceKind.Make)) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+                </MudSelect>
+                <MudTextField T="string" @bind-Value="_newRevision" Label="Revision" Margin="Margin.Dense" Style="max-width:120px" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Disabled="@(_newPart is null || string.IsNullOrWhiteSpace(_newRevision))" OnClick="CreateAsync" data-testid="new-bom">New BOM</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (_boms.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No bills of materials yet.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="boms">
+<caption class="wb-sr-only">Bills of materials</caption>
+                <thead><tr><th scope="col">Part</th><th scope="col">Description</th><th scope="col">Revision</th><th scope="col">Status</th><th scope="col" style="text-align:right">Components</th><th scope="col">Updated</th></tr></thead>
+                <tbody>
+                    @foreach (var b in _boms)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/boms/{b.Id}")">@b.PartNumber@(b.PartRevision.Length > 0 ? $" rev {b.PartRevision}" : "")</MudLink></td>
+                            <td>@b.PartDescription</td>
+                            <td>@b.Revision</td>
+                            <td>@(b.IsActive ? "Active" : "Inactive")</td>
+                            <td style="text-align:right">@b.ComponentCount</td>
+                            <td>@b.UpdatedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [SupplyParameterFromQuery(Name = "part")] public Guid? PartFilter { get; set; }
+
+    private IReadOnlyList<BomSummaryDto> _boms = [];
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private Guid? _newPart;
+    private string? _newRevision = "A";
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _parts = await PartService.ListAsync(new PartQuery());
+            _boms = await Manufacturing.ListBomsAsync(PartFilter);
+            _newPart ??= PartFilter;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            var bom = await Manufacturing.SaveBomAsync(null, new SaveBomRequest(_newPart!.Value, _newRevision!, []));
+            Navigation.NavigateTo($"materials/boms/{bom.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

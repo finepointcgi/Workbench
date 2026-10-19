@@ -1,0 +1,213 @@
+@page "/materials/boms/{BomId:guid}"
+@inject IManufacturingService Manufacturing
+@inject IPartService PartService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_bom is { } t ? $"{t.Summary.PartNumber} BOM {t.Summary.Revision}" : "BOM") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Bill of materials" BackHref="materials/boms" BackLabel="Bills of materials" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_bom is not { } bom)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = bom.Summary;
+    <MaterialsHeader Title="@($"{s.PartNumber} · BOM revision {s.Revision}")" BackHref="materials/boms" BackLabel="Bills of materials" Subtitle="@s.PartDescription">
+        <MudChip T="string" Size="Size.Small" Color="@(s.IsActive ? Color.Success : Color.Default)" Icon="@(s.IsActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)">@(s.IsActive ? "Active" : "Inactive")</MudChip>
+        <MudButton Variant="Variant.Outlined" Href="@($"materials/parts/{s.PartId}")">Part</MudButton>
+        @if (Editable)
+        {
+            @if (!s.IsActive)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ActivateAsync" data-testid="bom-activate">Activate</MudButton>
+            }
+            <MudTextField T="string" @bind-Value="_copyRevision" Label="New revision" Margin="Margin.Dense" Style="max-width:120px" />
+            <MudButton Variant="Variant.Outlined" Disabled="string.IsNullOrWhiteSpace(_copyRevision)" OnClick="CopyAsync">Copy to revision</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+        <MudTabPanel Text="Components">
+            <MudPaper Outlined="true" Class="pa-2 mb-2" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="bom-components">
+<caption class="wb-sr-only">Components</caption>
+                    <thead><tr><th scope="col">Component</th><th scope="col">Qty per</th><th scope="col">Scrap %</th><th scope="col">Effective from</th><th scope="col">Effective to</th><th scope="col">Ref. designators</th><th scope="col">Op</th><th scope="col" style="text-align:right">Unit cost</th>@if (Editable) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            var name = _parts.FirstOrDefault(p => p.Id == row.PartId)?.Display ?? "new component";
+                            <tr>
+                                <td style="min-width:220px">
+                                    <MudSelect T="Guid?" @bind-Value="row.PartId" Dense="true" Disabled="!Editable" aria-label="@($"Component part ({name})")">
+                                        @foreach (var p in _parts.Where(p => p.Id != s.PartId)) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+                                    </MudSelect>
+                                </td>
+                                <td style="max-width:110px"><MudNumericField T="decimal" @bind-Value="row.QuantityPer" Min="0" Disabled="!Editable" Margin="Margin.Dense" aria-label="@($"Quantity per for {name}")" /></td>
+                                <td style="max-width:90px"><MudNumericField T="decimal" @bind-Value="row.Scrap" Min="0" Max="99" Disabled="!Editable" Margin="Margin.Dense" aria-label="@($"Scrap percent for {name}")" /></td>
+                                <td style="max-width:150px"><MudDatePicker @bind-Date="row.From" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" AutoClose="true" Disabled="!Editable" aria-label="@($"Effective from for {name}")" /></td>
+                                <td style="max-width:150px"><MudDatePicker @bind-Date="row.To" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" AutoClose="true" Disabled="!Editable" aria-label="@($"Effective to for {name}")" /></td>
+                                <td><MudTextField T="string" @bind-Value="row.RefDes" Disabled="!Editable" Margin="Margin.Dense" aria-label="@($"Reference designators for {name}")" /></td>
+                                <td style="max-width:80px"><MudNumericField T="int?" @bind-Value="row.Operation" Disabled="!Editable" Margin="Margin.Dense" aria-label="@($"Operation for {name}")" /></td>
+                                <td style="text-align:right">@MaterialsFormat.Cost(_parts.FirstOrDefault(p => p.Id == row.PartId) is { } cp ? (cp.CostMethod == PartCostMethod.Standard ? cp.StandardCost : cp.AverageCost) : 0)</td>
+                                @if (Editable)
+                                {
+                                    <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _rows.Remove(row)" aria-label="@($"Remove {name}")" /></td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+            @if (Editable)
+            {
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _rows.Add(new Row { QuantityPer = 1 })" data-testid="bom-add">Add component</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" data-testid="bom-save">Save BOM</MudButton>
+                </MudStack>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Indented bill">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudNumericField T="decimal" @bind-Value="_explodeQty" Label="Quantity" Min="1" Margin="Margin.Dense" Style="max-width:140px" />
+                <MudButton Variant="Variant.Outlined" OnClick="ExplodeAsync">Explode</MudButton>
+                <MudSpacer />
+                <MudText>Rolled-up material @MaterialsFormat.Amount(_explosion.Where(r => r.Source == PartSourceKind.Buy).Sum(r => r.ExtendedCost))</MudText>
+            </MudStack>
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="bom-explosion">
+<caption class="wb-sr-only">Indented bill of materials</caption>
+                    <thead><tr><th scope="col">Level</th><th scope="col">Part</th><th scope="col">Make/buy</th><th scope="col" style="text-align:right">Qty per</th><th scope="col" style="text-align:right">Extended</th><th scope="col" style="text-align:right">Unit cost</th><th scope="col" style="text-align:right">Extended cost</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _explosion)
+                        {
+                            <tr>
+                                <td>@r.Level</td>
+                                <td style="padding-left:@(8 + 18 * (r.Level - 1))px"><MudLink Href="@($"materials/parts/{r.PartId}")">@r.PartNumber</MudLink> @r.PartDescription</td>
+                                <td>@r.Source</td>
+                                <td style="text-align:right">@MaterialsFormat.Qty(r.QuantityPer)</td>
+                                <td style="text-align:right">@MaterialsFormat.Qty(r.ExtendedQuantity) @r.UnitOfMeasure</td>
+                                <td style="text-align:right">@MaterialsFormat.Cost(r.UnitCost)</td>
+                                <td style="text-align:right">@MaterialsFormat.Amount(r.ExtendedCost)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudTabPanel>
+        <MudTabPanel Text="Routing">
+            <RoutingEditor PartId="s.PartId" CanEdit="Editable" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter] public Guid BomId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private sealed class Row
+    {
+        public Guid? PartId { get; set; }
+        public decimal QuantityPer { get; set; }
+        public decimal Scrap { get; set; }
+        public DateTime? From { get; set; }
+        public DateTime? To { get; set; }
+        public string? RefDes { get; set; }
+        public int? Operation { get; set; }
+    }
+
+    private BomDto? _bom;
+    private List<Row> _rows = [];
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private IReadOnlyList<BomExplosionRowDto> _explosion = [];
+    private decimal _explodeQty = 1;
+    private string? _copyRevision;
+    private string? _error;
+    private bool _forbidden;
+
+    private bool Editable => MaterialsFormat.CanEdit(User);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _parts = await PartService.ListAsync(new PartQuery());
+            Show(await Manufacturing.GetBomAsync(BomId));
+            await ExplodeAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Show(BomDto bom)
+    {
+        _bom = bom;
+        _rows = bom.Components.Select(c => new Row
+        {
+            PartId = c.ComponentPartId, QuantityPer = c.QuantityPer, Scrap = c.ScrapPercent,
+            From = c.EffectiveFrom is { } f ? MaterialsFormat.ToDateTime(f) : null, To = c.EffectiveTo is { } t ? MaterialsFormat.ToDateTime(t) : null,
+            RefDes = c.ReferenceDesignators, Operation = c.OperationSequence,
+        }).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var components = _rows.Where(r => r.PartId is not null).Select(r => new SaveBomComponentRequest(r.PartId!.Value, r.QuantityPer, r.Scrap,
+                r.From is { } f ? DateOnly.FromDateTime(f) : null, r.To is { } t ? DateOnly.FromDateTime(t) : null, r.RefDes, r.Operation)).ToList();
+            Show(await Manufacturing.SaveBomAsync(BomId, new SaveBomRequest(_bom!.Summary.PartId, _bom.Summary.Revision, components, _bom.Notes)));
+            await ExplodeAsync();
+            Snackbar.Add("BOM saved.", Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ActivateAsync()
+    {
+        try
+        {
+            Show(await Manufacturing.ActivateBomAsync(BomId));
+            Snackbar.Add($"Revision {_bom!.Summary.Revision} is now active.", Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            var copy = await Manufacturing.CopyBomAsync(BomId, _copyRevision!);
+            Navigation.NavigateTo($"materials/boms/{copy.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ExplodeAsync()
+    {
+        try
+        {
+            _explosion = await Manufacturing.ExplodeAsync(_bom!.Summary.PartId, _explodeQty <= 0 ? 1 : _explodeQty, MaterialsFormat.Today);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

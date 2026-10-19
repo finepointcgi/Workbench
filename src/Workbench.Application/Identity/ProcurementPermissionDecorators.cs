@@ -118,11 +118,11 @@ public sealed class PermissionCheckingPurchaseOrderService(IPurchaseOrderService
 
     private Task RequireFinanceAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
 
-    /// <summary>Finance, or a receiver named on the order; to anyone else it doesn't exist.</summary>
+    /// <summary>Finance, Materials (receives into inventory), or a receiver named on the order; to anyone else it doesn't exist.</summary>
     private async Task RequireReceiverAsync(Guid purchaseOrderId, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance())
+        if ((await access.GetOrgRolesAsync(ct)) is var roles && (roles.IsFinance() || roles.IsMaterials()))
         {
             return;
         }

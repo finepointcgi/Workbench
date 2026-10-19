@@ -36,6 +36,7 @@ public static class NavCatalog
     public const string Sheets = "sheets";
     public const string Finance = "finance";
     public const string Reports = "reports";
+    public const string Materials = "materials";
     public const string Admin = "admin";
 
     public static IReadOnlyList<NavSection> Sections { get; } =
@@ -46,6 +47,7 @@ public static class NavCatalog
         new(Projects, "Projects", Icons.Material.Filled.Work, "projects"),
         new(Sheets, "Sheets & dashboards", Icons.Material.Filled.TableChart),
         new(Finance, "Finance", Icons.Material.Filled.AccountBalance),
+        new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing),
         new(Reports, "Reports", Icons.Material.Filled.Assessment),
         new(Admin, "Admin", Icons.Material.Filled.AdminPanelSettings),
     ];
@@ -125,6 +127,20 @@ public static class NavCatalog
         new(Finance, "Revenue & compliance", "Incurred cost", "accounting/incurred-cost", Icons.Material.Filled.Gavel, FinanceOnly, Detail: "Submission", Keywords: "ice dcaa submission"),
         new(Finance, "Revenue & compliance", "Indirect rates", "accounting/indirect-rates", Icons.Material.Filled.Percent, FinanceOnly, Keywords: "fringe overhead g&a pools"),
         new(Finance, null, "Revenue by project", "accounting/revenue/projects", Icons.Material.Filled.TrendingUp, FinanceOnly, Detail: "Project", InMenu: false),
+
+        // Materials: the Materials role (and administrators) runs it; Finance reads parts, inventory and the inventory reports
+        // (the other pages still open for Finance from links on those).
+        new(Materials, null, "Parts", "materials", Icons.Material.Filled.Category, a => a.CanViewMaterials, MatchAll: true, Keywords: "part master item inventory make buy"),
+        new(Materials, null, "Part", "materials/parts", Icons.Material.Filled.Category, a => a.CanViewMaterials, Detail: "Part", InMenu: false),
+        new(Materials, null, "Inventory", "materials/inventory", Icons.Material.Filled.Inventory2, a => a.CanViewMaterials, Keywords: "stock on hand bins lots serials gfm"),
+        new(Materials, null, "Receiving", "materials/receiving", Icons.Material.Filled.MoveToInbox, a => a.IsMaterials, Keywords: "receive po government furnished gfm"),
+        new(Materials, null, "Transactions", "materials/transactions", Icons.Material.Filled.SwapVert, a => a.IsMaterials, Keywords: "issue transfer adjustment cycle count"),
+        new(Materials, "Manufacturing", "Bills of materials", "materials/boms", Icons.Material.Filled.AccountTree, a => a.IsMaterials, Detail: "BOM", Keywords: "bom routing where used"),
+        new(Materials, "Manufacturing", "Work orders", "materials/work-orders", Icons.Material.Filled.Build, a => a.IsMaterials, Detail: "Work order", Keywords: "wo shop floor kit wip"),
+        new(Materials, "Manufacturing", "MRP", "materials/mrp", Icons.Material.Filled.EventNote, a => a.IsMaterials, Keywords: "material requirements planning planned orders forecast"),
+        new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, a => a.IsMaterials, MatchAll: true, Keywords: "mobile receiving", InMenu: false),
+        new(Materials, null, "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, a => a.CanViewMaterials, Keywords: "valuation aging gfm wip trace"),
+        new(Materials, null, "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, a => a.IsMaterials, Keywords: "warehouses bins work centers"),
 
         // Reports: one place for every report.
         new(Reports, null, "Report catalog", "reports", Icons.Material.Filled.LibraryBooks, Everyone, MatchAll: true, Keywords: "reports"),

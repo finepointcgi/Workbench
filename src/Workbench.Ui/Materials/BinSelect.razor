@@ -1,0 +1,18 @@
+@* Picks a bin (shown as warehouse / bin). *@
+<MudSelect T="Guid?" Value="Value" ValueChanged="ValueChanged" Label="@Label" Dense="true" Clearable="@Clearable">
+    @foreach (var w in Options.Warehouses.Where(w => w.IsActive))
+    {
+        foreach (var b in w.Bins.Where(b => b.IsActive))
+        {
+            <MudSelectItem T="Guid?" Value="b.Id">@w.Code / @b.Code</MudSelectItem>
+        }
+    }
+</MudSelect>
+
+@code {
+    [Parameter, EditorRequired] public MaterialsOptionsDto Options { get; set; } = default!;
+    [Parameter] public Guid? Value { get; set; }
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "Location";
+    [Parameter] public bool Clearable { get; set; }
+}

@@ -1,0 +1,287 @@
+@page "/materials/work-orders/{WorkOrderId:guid}"
+@inject IManufacturingService Manufacturing
+@inject IPartService PartService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_wo?.Summary.Number ?? "Work order") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Work order" BackHref="materials/work-orders" BackLabel="Work orders" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_wo is not { } wo)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = wo.Summary;
+    var open = s.Status is WorkOrderState.Released or WorkOrderState.InProgress;
+    <MaterialsHeader Title="@($"{s.Number} · {s.PartNumber}")" BackHref="materials/work-orders" BackLabel="Work orders"
+                     Subtitle="@($"{s.PartDescription} — {(s.ProjectCode is { } p ? $"for {p} {s.WbsCode}" : "to stock")}")">
+        <MudChip T="string" Size="Size.Small" Color="MaterialsFormat.Color(s.Status)">@MaterialsFormat.Label(s.Status)</MudChip>
+        @if (Editable)
+        {
+            @if (s.Status == WorkOrderState.Planned)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Manufacturing.ReleaseAsync(s.Id), "Released."))" data-testid="wo-release">Release</MudButton>
+            }
+            @if (open)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="@(() => RunAsync(() => Manufacturing.IssueComponentsAsync(s.Id, new IssueComponentsRequest(MaterialsFormat.Today)), "Components kitted."))"
+                           Disabled="@(wo.Components.All(c => c.QuantityOpen == 0))" data-testid="wo-kit">Kit all components</MudButton>
+            }
+            @if (s.Status is WorkOrderState.Completed || (s.Status == WorkOrderState.InProgress && s.QuantityCompleted > 0))
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="@(() => RunAsync(() => Manufacturing.CloseAsync(s.Id, new CloseWorkOrderRequest(MaterialsFormat.Today)), "Closed."))" data-testid="wo-close">Close</MudButton>
+            }
+            @if (s.Status is WorkOrderState.Planned or WorkOrderState.Released)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelAsync">Cancel order</MudButton>
+            }
+        }
+    </MaterialsHeader>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[]
+        {
+            ("Quantity", MaterialsFormat.Qty(s.Quantity)), ("Completed", MaterialsFormat.Qty(s.QuantityCompleted)), ("Scrapped", MaterialsFormat.Qty(s.QuantityScrapped)),
+            ("Material cost", MaterialsFormat.Amount(wo.Cost.MaterialCost)), ("Labor cost", MaterialsFormat.Amount(wo.Cost.LaborCost)),
+            (s.ProjectCode is null ? "In WIP" : "Collected on the project", s.ProjectCode is null ? MaterialsFormat.Amount(wo.Cost.WipBalance) : MaterialsFormat.Amount(wo.Cost.LaborCost is { } l ? wo.Cost.MaterialCost + l : null)),
+        })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="p">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    <MudText Class="mud-text-secondary mb-3">
+        Start @MaterialsFormat.Date(s.StartDate) · due @MaterialsFormat.Date(s.DueDate)@(s.IsLate ? " (late)" : "") · BOM @(wo.BomRevision ?? "—") · routing @(wo.RoutingRevision ?? "—")
+        @if (wo.ChargeCode is { } cc) { <span> · shop floor charges @cc on their timesheets</span> }
+        @if (wo.CompletionLocation is { } loc && s.ProjectCode is null) { <span> · completes to @loc</span> }
+        · completed cost @MaterialsFormat.Amount(wo.Cost.CompletedCost) · variance @MaterialsFormat.Amount(wo.Cost.VarianceCost) · standard @MaterialsFormat.Amount(wo.Cost.StandardCost)
+    </MudText>
+
+    <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+        <MudTabPanel Text="Components">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (wo.Components.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">@(s.Status == WorkOrderState.Planned ? "Components come from the active BOM when the order is released." : "No components.")</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="wo-components">
+<caption class="wb-sr-only">Components</caption>
+                        <thead><tr><th scope="col">Component</th><th scope="col" style="text-align:right">Qty per</th><th scope="col" style="text-align:right">Required</th><th scope="col" style="text-align:right">Issued</th><th scope="col" style="text-align:right">Open</th><th scope="col" style="text-align:right">Available</th>@if (Editable && open) { <th scope="col">Issue</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var c in wo.Components)
+                            {
+                                <tr>
+                                    <td><MudLink Href="@($"materials/parts/{c.PartId}")">@c.PartNumber</MudLink> <span class="mud-text-secondary">@c.PartDescription</span></td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(c.QuantityPer)</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(c.QuantityRequired) @c.UnitOfMeasure</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(c.QuantityIssued)</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(c.QuantityOpen)</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(c.Available)@if (c.Available < c.QuantityOpen) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1 my-0">Short</MudChip> }</td>
+                                    @if (Editable && open)
+                                    {
+                                        <td style="white-space:nowrap">
+                                            <MudNumericField T="decimal" Value="_issue.GetValueOrDefault(c.Id, c.QuantityOpen)" ValueChanged="v => _issue[c.Id] = v" Min="0" Margin="Margin.Dense" Style="max-width:110px;display:inline-flex"
+                                                             aria-label="@($"Quantity of {c.PartNumber} to issue")" />
+                                            <MudButton Size="Size.Small" OnClick="() => IssueOneAsync(c)" aria-label="@($"Issue {c.PartNumber}")">Issue</MudButton>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+        <MudTabPanel Text="Operations and labor">
+            <MudPaper Outlined="true" Class="pa-2 mb-3" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Operations</caption>
+                    <thead><tr><th scope="col">Seq</th><th scope="col">Operation</th><th scope="col">Work center</th><th scope="col">Labor category</th><th scope="col" style="text-align:right">Planned (h)</th><th scope="col" style="text-align:right">Reported (h)</th><th scope="col" style="text-align:right">Qty done</th></tr></thead>
+                    <tbody>
+                        @foreach (var o in wo.Operations)
+                        {
+                            <tr><td>@o.Sequence</td><td>@o.Description</td><td>@o.WorkCenter</td><td>@o.LaborCategory</td><td style="text-align:right">@MaterialsFormat.Qty(o.PlannedHours)</td><td style="text-align:right">@MaterialsFormat.Qty(o.HoursReported)</td><td style="text-align:right">@MaterialsFormat.Qty(o.QuantityCompleted)</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+            @if (open && wo.Operations.Count > 0 && _options is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Report labor</MudText>
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                        <MudSelect T="Guid?" @bind-Value="_opId" Label="Operation" Dense="true" Style="min-width:180px">
+                            @foreach (var o in wo.Operations) { <MudSelectItem T="Guid?" Value="o.Id">@o.Sequence @o.Description</MudSelectItem> }
+                        </MudSelect>
+                        @if (Editable)
+                        {
+                            <MudSelect T="Guid?" @bind-Value="_employeeId" Label="Employee" Dense="true" Clearable="true" Style="min-width:180px">
+                                @foreach (var e in _options.Employees) { <MudSelectItem T="Guid?" Value="e.Id">@e.Name</MudSelectItem> }
+                            </MudSelect>
+                        }
+                        <MudDatePicker @bind-Date="_laborDate" Label="Work date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:160px" />
+                        <MudNumericField T="decimal" @bind-Value="_hours" Label="Hours" Min="0" Max="24" Margin="Margin.Dense" Style="max-width:100px" />
+                        <MudNumericField T="decimal" @bind-Value="_laborQty" Label="Qty done" Min="0" Margin="Margin.Dense" Style="max-width:100px" />
+                        <MudButton Variant="Variant.Outlined" Disabled="@(_opId is null || _hours <= 0 || _laborDate is null)" OnClick="ReportAsync" data-testid="wo-labor">Report</MudButton>
+                    </MudStack>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">The hours also go on the employee's timesheet (the DCAA record) against @(wo.ChargeCode ?? "the order's charge code"); the column below compares them.</MudText>
+                </MudPaper>
+            }
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (wo.Labor.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No labor reported.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Labor reported</caption>
+                        <thead><tr><th scope="col">Date</th><th scope="col">Employee</th><th scope="col">Operation</th><th scope="col" style="text-align:right">Hours</th><th scope="col" style="text-align:right">On timesheet</th><th scope="col" style="text-align:right">Qty</th><th scope="col" style="text-align:right">Cost</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in wo.Labor)
+                            {
+                                <tr>
+                                    <td>@MaterialsFormat.Date(l.WorkDate)</td><td>@l.Employee</td><td>@l.Operation</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(l.Hours)</td>
+                                    <td style="text-align:right">@(l.TimesheetHours is { } th ? MaterialsFormat.Qty(th) : "—")@if (l.TimesheetHours is { } t2 && t2 < l.Hours) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1 my-0">Less on timesheet</MudChip> }</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityCompleted)</td>
+                                    <td style="text-align:right">@MaterialsFormat.Amount(l.Cost)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+        @if (Editable && open)
+        {
+            <MudTabPanel Text="Complete or scrap">
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">@(s.ProjectCode is null ? "Complete to stock" : "Deliver to the project")</MudText>
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                        <MudNumericField T="decimal" @bind-Value="_completeQty" Label="Quantity" Min="0" Margin="Margin.Dense" Style="max-width:120px" />
+                        @if (wo.Tracking != PartTracking.None)
+                        {
+                            <MudTextField T="string" @bind-Value="_lot" Label="Lot" Margin="Margin.Dense" Style="max-width:140px" />
+                        }
+                        @if (wo.Tracking == PartTracking.Serial)
+                        {
+                            <MudTextField T="string" @bind-Value="_serials" Label="Serial numbers (comma separated)" Margin="Margin.Dense" Style="min-width:240px" />
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_completeQty <= 0" OnClick="CompleteAsync" data-testid="wo-complete">@(s.ProjectCode is null ? "Complete" : "Deliver")</MudButton>
+                    </MudStack>
+                </MudPaper>
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Scrap</MudText>
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                        <MudNumericField T="decimal" @bind-Value="_scrapQty" Label="Quantity" Min="0" Margin="Margin.Dense" Style="max-width:120px" />
+                        <MudTextField T="string" @bind-Value="_scrapReason" Label="Reason" Margin="Margin.Dense" Style="min-width:240px" />
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="@(_scrapQty <= 0 || string.IsNullOrWhiteSpace(_scrapReason))" OnClick="ScrapAsync">Scrap</MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudTabPanel>
+        }
+        <MudTabPanel Text="Transactions">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto"><TransactionsTable Transactions="wo.Transactions" ShowPart="true" Caption="Work order transactions" /></MudPaper>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [Parameter] public Guid WorkOrderId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private WorkOrderDto? _wo;
+    private MaterialsOptionsDto? _options;
+    private readonly Dictionary<Guid, decimal> _issue = [];
+    private Guid? _opId;
+    private Guid? _employeeId;
+    private DateTime? _laborDate = DateTime.Today;
+    private decimal _hours;
+    private decimal _laborQty;
+    private decimal _completeQty;
+    private string? _lot;
+    private string? _serials;
+    private decimal _scrapQty;
+    private string? _scrapReason;
+    private string? _error;
+    private bool _forbidden;
+
+    private bool Editable => MaterialsFormat.CanEdit(User);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Show(await Manufacturing.GetWorkOrderAsync(WorkOrderId));
+            _options ??= await PartService.GetOptionsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            if (_wo is null)
+            {
+                (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+            }
+        }
+    }
+
+    private void Show(WorkOrderDto wo)
+    {
+        _wo = wo;
+        _issue.Clear();
+        _completeQty = Math.Max(0, wo.Summary.Quantity - wo.Summary.QuantityCompleted - wo.Summary.QuantityScrapped);
+        _opId ??= wo.Operations.FirstOrDefault()?.Id;
+    }
+
+    private async Task RunAsync(Func<Task<WorkOrderDto>> action, string message)
+    {
+        try
+        {
+            Show(await action());
+            Snackbar.Add(message, Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private Task IssueOneAsync(WorkOrderComponentDto c) =>
+        RunAsync(() => Manufacturing.IssueComponentsAsync(WorkOrderId, new IssueComponentsRequest(MaterialsFormat.Today, [new IssueComponentLine(c.Id, _issue.GetValueOrDefault(c.Id, c.QuantityOpen))])),
+            $"{c.PartNumber} issued.");
+
+    private async Task ReportAsync()
+    {
+        await RunAsync(() => Manufacturing.ReportLaborAsync(WorkOrderId, new ReportLaborRequest(_opId!.Value, DateOnly.FromDateTime(_laborDate!.Value), _hours, _laborQty, _employeeId)), "Labor reported.");
+        (_hours, _laborQty) = (0, 0);
+    }
+
+    private Task CompleteAsync()
+    {
+        var serials = (_serials ?? "").Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return RunAsync(() => Manufacturing.CompleteAsync(WorkOrderId, new CompleteWorkOrderRequest(_completeQty, MaterialsFormat.Today, null, null, _lot, serials.Length == 0 ? null : serials)),
+            _wo!.Summary.ProjectCode is null ? "Completed to stock." : "Delivered to the project.");
+    }
+
+    private Task ScrapAsync() => RunAsync(() => Manufacturing.ScrapAsync(WorkOrderId, new ScrapRequest(_scrapQty, MaterialsFormat.Today, _scrapReason!)), "Scrap recorded.");
+
+    private async Task CancelAsync()
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, $"Cancel {_wo!.Summary.Number}", "Cancel order", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Manufacturing.CancelAsync(WorkOrderId, new CancelWorkOrderRequest(reason)), "Cancelled.");
+        }
+    }
+}

@@ -1,0 +1,9 @@
+@* Shown when a materials page can't load. *@
+<MudAlert Severity="@(Forbidden ? Severity.Info : Severity.Error)" Class="mb-4" data-testid="load-error">
+    @(Forbidden ? "This is for the Materials role, Finance and administrators." : Message)
+</MudAlert>
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public bool Forbidden { get; set; }
+}
