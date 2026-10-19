@@ -434,7 +434,15 @@ Federal customers buy against Section 508, which means WCAG 2.1 AA. The conforma
 - **Announcements**: snackbars are announced (role="alert"). For a change the user didn't trigger by moving focus (a card
   moved, a result count) use a visually hidden `role="status"` region (`class="wb-sr-only"`). When an action removes the
   element that had focus (an approved inbox row), move focus somewhere sensible (`ElementReference.FocusAsync()`).
-- **Drag and drop always has a keyboard way** (board: "Move to" menu; Gantt: dates in the Grid view and the schedule table).
+- **Drag and drop always has a keyboard way** (board: "Move to" menu; Gantt: dates in the Grid view and the schedule table,
+  dependencies under "Depends on" in the item details panel; grid: "Column width" in the column menu).
+- **Busy buttons** may use `Disabled="_busy"`: `a11y.js` keeps focus on a button that disables itself while it works (it
+  gets focus back when re-enabled, or focus moves to the next control if it stays disabled). Don't remove a focused button
+  from the page instead; if an action removes it, move focus yourself.
+- **Time limits**: the idle sign-out warning lives in `js/session.js` (plain DOM, because anything the circuit renders counts
+  as activity and would reset the idle clock). Don't add other time limits without a warning and a way to extend.
+- **Input purpose** (1.3.5): a field that asks for the user's own name, email or phone gets `autocomplete="name"` /
+  `"email"` / `"tel"`; one about someone else (an employee, an invitee, a vendor contact) gets `autocomplete="off"`.
 - **Breadcrumbs** use `<AccessibleBreadcrumbs>` (a labelled `nav`, no `href="#"` items).
 - Helpers: `.wb-sr-only` (visually hidden text) and the focus ring live in `Ui/wwwroot/a11y.css`.
 
@@ -452,5 +460,6 @@ Checks:
 
   (`RateLimiting__Enabled=false` on the server: the scanner signs in once per role, but session pings add up.) Use
   `A11Y_PAGES=/time,/expenses` to check a few pages while you work.
+- **Browser behaviour** axe can't see (the idle warning, busy-button focus): `node keyboard.mjs` against the same server.
 - **Keyboard**: before merging new UI, do the task with the keyboard alone (Tab, Shift+Tab, Enter, Space, Escape, arrows) and
   check the focus ring is always visible.
