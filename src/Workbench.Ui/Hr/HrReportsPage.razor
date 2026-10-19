@@ -1,0 +1,214 @@
+@page "/hr/reports"
+@inject IHrReportService Reports
+@inject IHrPersonnelService Personnel
+@inject IHrAccessService HrAccess
+
+<PageTitle>HR reports · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">HR reports</MudText>
+<MudText Class="mud-text-secondary mb-4">Headcount, turnover, expiring clearances and certifications, the benefits summary and the government EEO-1 and VETS-4212 data.</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading || _access is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    var workforce = _access.IsHr || _access.IsFinance;
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" @bind-ActivePanelIndex="_tab">
+        @if (workforce)
+        {
+            <MudTabPanel Text="Headcount and turnover" data-testid="tab-headcount">
+                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3" Wrap="Wrap.Wrap">
+                    <MudDatePicker @bind-Date="_from" Editable="true" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px" />
+                    <MudDatePicker @bind-Date="_to" Editable="true" Label="To (headcount as of)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:200px" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunHeadcountAsync">Run</MudButton>
+                </MudStack>
+                @if (_headcount is { } h && _turnover is { } t)
+                {
+                    <MudStack Row="true" Spacing="6" Class="mb-3" Wrap="Wrap.Wrap" data-testid="turnover">
+                        <MudText><strong>@h.Total</strong> employees on @HrFormat.Date(h.AsOf)</MudText>
+                        <MudText><strong>@t.Hires</strong> hired</MudText>
+                        <MudText><strong>@t.Separations</strong> left (@t.Voluntary voluntary, @t.Involuntary involuntary)</MudText>
+                        <MudText>Turnover <strong>@HrFormat.Percent(t.TurnoverRate)</strong> of an average @t.AverageHeadcount.ToString("0.#", CultureInfo.InvariantCulture)</MudText>
+                    </MudStack>
+                    <MudGrid>
+                        <MudItem xs="12" md="6"><HeadcountTable Title="By org unit" Rows="h.ByOrgUnit" /></MudItem>
+                        <MudItem xs="12" md="6"><HeadcountTable Title="By employment type" Rows="h.ByEmploymentType" /></MudItem>
+                    </MudGrid>
+                    @if (t.SeparationList.Count > 0)
+                    {
+                        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-1">Separations</MudText>
+                        <MudSimpleTable Dense="true" Outlined="true" aria-label="Separations">
+                            <thead><tr><th scope="col">Employee</th><th scope="col">Last day</th><th scope="col">Reason</th><th scope="col">Org unit</th></tr></thead>
+                            <tbody>
+                                @foreach (var s in t.SeparationList)
+                                {
+                                    <tr><td>@s.EmployeeName</td><td>@HrFormat.Date(s.LastDay)</td><td>@s.Reason</td><td>@s.OrgUnitName</td></tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                }
+            </MudTabPanel>
+        }
+
+        <MudTabPanel Text="Expiring credentials" data-testid="tab-expirations">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                <MudSelect T="int" Value="_days" ValueChanged="DaysChangedAsync" Label="Expiring within" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:200px">
+                    <MudSelectItem T="int" Value="30">30 days</MudSelectItem>
+                    <MudSelectItem T="int" Value="60">60 days</MudSelectItem>
+                    <MudSelectItem T="int" Value="90">90 days</MudSelectItem>
+                    <MudSelectItem T="int" Value="180">180 days</MudSelectItem>
+                    <MudSelectItem T="int" Value="365">A year</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+            <MudTable T="CredentialDto" Items="_expiring" Dense="true" aria-label="Expiring clearances and certifications" data-testid="expiring">
+                <HeaderContent><MudTh>Employee</MudTh><MudTh>Kind</MudTh><MudTh>Name</MudTh><MudTh>Expires</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Employee"><MudLink Href="@($"hr/employees/{context.EmployeeId}")">@context.EmployeeName</MudLink></MudTd>
+                    <MudTd DataLabel="Kind">@HrLabels.Label(context.Kind)</MudTd>
+                    <MudTd DataLabel="Name">@context.Name@(context.ClearanceLevel is { } l ? $" ({HrLabels.Label(l)})" : "")</MudTd>
+                    <MudTd DataLabel="Expires">@HrFormat.Expiry(context.DaysToExpiry, context.ExpiresOn)</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="mud-text-secondary">Nothing expires in that time.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        @if (workforce)
+        {
+            <MudTabPanel Text="Benefits enrollment" data-testid="tab-benefits">
+                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                    <MudDatePicker @bind-Date="_asOf" Editable="true" Label="As of" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunBenefitsAsync">Run</MudButton>
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Disabled="Busy" OnClick="ExportBenefitsAsync">CSV</MudButton>
+                </MudStack>
+                @if (_benefits is { } b)
+                {
+                    <MudText Class="mb-2">@b.EnrolledEmployees of @b.EligibleEmployees employees enrolled in something; @b.Waived waiver(s). Company cost @HrFormat.Money(b.EmployerMonthlyTotal) a month (fringe), employees @HrFormat.Money(b.EmployeeMonthlyTotal).</MudText>
+                    <MudTable T="BenefitSummaryRowDto" Items="b.Rows" Dense="true" aria-label="Benefits enrollment summary" data-testid="benefit-summary">
+                        <HeaderContent><MudTh>Plan</MudTh><MudTh>Coverage</MudTh><MudTh>Enrolled</MudTh><MudTh Style="text-align:right">Employees / month</MudTh><MudTh Style="text-align:right">Company / month</MudTh><MudTh>GL account</MudTh></HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Plan">@context.PlanCode · @context.PlanName</MudTd>
+                            <MudTd DataLabel="Coverage">@context.Coverage</MudTd>
+                            <MudTd DataLabel="Enrolled">@context.Enrolled</MudTd>
+                            <MudTd DataLabel="Employees / month" Style="text-align:right">@HrFormat.Money(context.EmployeeMonthly)</MudTd>
+                            <MudTd DataLabel="Company / month" Style="text-align:right">@HrFormat.Money(context.EmployerMonthly)</MudTd>
+                            <MudTd DataLabel="GL account">@(context.ExpenseAccount ?? "Payroll default")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
+        }
+
+        @if (_access.IsHr)
+        {
+            <MudTabPanel Text="EEO-1" data-testid="tab-eeo1">
+                <MudAlert Severity="Severity.Info" Class="mb-3">Restricted: HR and administrators only. Exports are recorded in the security log.</MudAlert>
+                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                    <MudDatePicker @bind-Date="_snapshot" Editable="true" Label="Snapshot date (a pay period in Q4)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:260px" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunEeo1Async" data-testid="run-eeo1">Run</MudButton>
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Disabled="Busy" OnClick="ExportEeo1Async">CSV</MudButton>
+                </MudStack>
+                @if (_eeo1 is { } e)
+                {
+                    <MudText Class="mb-2">@e.Employees employees; @e.NotDisclosed didn't self-identify; @e.MissingJobCategory without an EEO-1 job category (set it on the position or the person's EEO record).</MudText>
+                    <MudTable T="Eeo1CellDto" Items="e.Cells" Dense="true" aria-label="EEO-1 counts" data-testid="eeo1">
+                        <HeaderContent><MudTh>Job category</MudTh><MudTh>Race/ethnicity</MudTh><MudTh>Sex</MudTh><MudTh>Employees</MudTh></HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Job category">@HrLabels.Label(context.JobCategory)</MudTd>
+                            <MudTd DataLabel="Race/ethnicity">@HrLabels.Label(context.Race)</MudTd>
+                            <MudTd DataLabel="Sex">@(context.Gender == EeoGender.NotDisclosed ? "Not disclosed" : context.Gender.ToString())</MudTd>
+                            <MudTd DataLabel="Employees">@context.Count</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
+            <MudTabPanel Text="VETS-4212" data-testid="tab-vets">
+                <MudAlert Severity="Severity.Info" Class="mb-3">Restricted: HR and administrators only. Exports are recorded in the security log.</MudAlert>
+                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
+                    <MudDatePicker @bind-Date="_periodEnd" Editable="true" Label="12-month period ending" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunVetsAsync">Run</MudButton>
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Disabled="Busy" OnClick="ExportVetsAsync">CSV</MudButton>
+                </MudStack>
+                @if (_vets is { } v)
+                {
+                    <MudText Class="mb-2">@HrFormat.Date(v.PeriodStart) – @HrFormat.Date(v.PeriodEnd): between @v.MinEmployees and @v.MaxEmployees employees.</MudText>
+                    <MudTable T="Vets4212RowDto" Items="v.Rows" Dense="true" aria-label="VETS-4212 counts" data-testid="vets">
+                        <HeaderContent><MudTh>Job category</MudTh><MudTh>Protected veterans</MudTh><MudTh>All employees</MudTh><MudTh>Protected veteran hires</MudTh><MudTh>All hires</MudTh></HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Job category">@HrLabels.Label(context.JobCategory)</MudTd>
+                            <MudTd DataLabel="Protected veterans">@context.ProtectedVeteranEmployees</MudTd>
+                            <MudTd DataLabel="All employees">@context.TotalEmployees</MudTd>
+                            <MudTd DataLabel="Protected veteran hires">@context.ProtectedVeteranHires</MudTd>
+                            <MudTd DataLabel="All hires">@context.TotalHires</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private HrAccessDto? _access;
+    private int _tab;
+    private DateTime? _from = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime? _to = DateTime.Today;
+    private DateTime? _asOf = DateTime.Today;
+    private DateTime? _snapshot = DateTime.Today;
+    private DateTime? _periodEnd = DateTime.Today;
+    private int _days = 60;
+    private HeadcountReportDto? _headcount;
+    private TurnoverReportDto? _turnover;
+    private IReadOnlyList<CredentialDto> _expiring = [];
+    private BenefitSummaryDto? _benefits;
+    private Eeo1ReportDto? _eeo1;
+    private Vets4212ReportDto? _vets;
+
+    private static DateOnly D(DateTime? value) => HrFormat.ToDate(value) ?? DateOnly.FromDateTime(DateTime.Today);
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        _access = await HrAccess.GetAsync();
+        _expiring = await Personnel.ListExpiringCredentialsAsync(_days);
+        if (_access.IsHr || _access.IsFinance)
+        {
+            await RunHeadcountAsync();
+            _benefits = await Reports.GetBenefitSummaryAsync(D(_asOf));
+            _tab = Tab == "expirations" ? 1 : 0;
+        }
+    });
+
+    private Task RunHeadcountAsync() => RunAsync(async () =>
+    {
+        _headcount = await Reports.GetHeadcountAsync(D(_to));
+        _turnover = await Reports.GetTurnoverAsync(D(_from), D(_to));
+    });
+
+    private async Task DaysChangedAsync(int days)
+    {
+        _days = days;
+        await RunAsync(async () => _expiring = await Personnel.ListExpiringCredentialsAsync(days));
+    }
+
+    private Task RunBenefitsAsync() => RunAsync(async () => _benefits = await Reports.GetBenefitSummaryAsync(D(_asOf)));
+
+    private Task ExportBenefitsAsync() => RunAsync(async () => await Download(await Reports.ExportBenefitSummaryAsync(D(_asOf))));
+
+    private Task RunEeo1Async() => RunAsync(async () => _eeo1 = await Reports.GetEeo1Async(D(_snapshot)));
+
+    private Task ExportEeo1Async() => RunAsync(async () => await Download(await Reports.ExportEeo1Async(D(_snapshot))));
+
+    private Task RunVetsAsync() => RunAsync(async () => _vets = await Reports.GetVets4212Async(D(_periodEnd)));
+
+    private Task ExportVetsAsync() => RunAsync(async () => await Download(await Reports.ExportVets4212Async(D(_periodEnd))));
+
+    private Task Download(HrExportFile file) => DownloadAsync(file.FileName, file.ContentType, file.Content);
+}

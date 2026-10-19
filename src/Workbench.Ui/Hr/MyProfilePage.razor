@@ -1,0 +1,111 @@
+@page "/hr/me"
+@inject IHrPersonnelService Personnel
+
+<PageTitle>My profile · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">My profile</MudText>
+    <MudSpacer />
+    <MudButton Href="hr/benefits/me" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.HealthAndSafety">My benefits</MudButton>
+</MudStack>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Info">@Error</MudAlert>
+}
+else if (Loading || _record is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudText Class="mud-text-secondary mb-3">@_record.Summary.EmployeeNumber · @_record.Summary.Email. Changes to your personal details and emergency contacts go to HR for approval.</MudText>
+    @foreach (var r in _record.PendingRequests ?? [])
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" data-testid="pending-request">
+            Waiting for HR: @r.Summary (asked @r.CreatedAtUtc.ToLocalTime().ToString("MMM d", CultureInfo.InvariantCulture)).
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CancelAsync(r)" Disabled="Busy">Cancel request</MudButton>
+        </MudAlert>
+    }
+
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
+        <MudTabPanel Text="Job">
+            @if (_record.Job is { } job)
+            {
+                <JobSummary Job="job" />
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Personal and contacts" data-testid="tab-personal">
+            @if (!_editing)
+            {
+                @if (_record.Personal is { } p)
+                {
+                    <PersonalSummary Personal="p" />
+                }
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Emergency contacts</MudText>
+                <ContactsEditor Contacts="_contacts" ReadOnly="true" />
+                <MudButton Class="mt-3" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => _editing = true" Disabled="@((_record.PendingRequests?.Count ?? 0) > 0)" data-testid="request-change">
+                    Ask HR to change these
+                </MudButton>
+            }
+            else
+            {
+                <PersonalForm Value="_personal" Self="true" />
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Emergency contacts</MudText>
+                <ContactsEditor Contacts="_contacts" />
+                <MudTextField @bind-Value="_comment" Label="Note for HR (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Style="max-width:760px" autocomplete="off" />
+                <MudStack Row="true" Class="mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SubmitAsync" data-testid="submit-change">Send to HR</MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="CancelEditAsync">Cancel</MudButton>
+                </MudStack>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Credentials">
+            <CredentialsPanel EmployeeId="_record.Summary.EmployeeId" Credentials="_record.Credentials ?? []" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Send HR a copy when you earn or renew a certification or clearance.</MudText>
+        </MudTabPanel>
+        <MudTabPanel Text="Documents">
+            <DocumentsPanel EmployeeId="_record.Summary.EmployeeId" Documents="_record.Documents ?? []" />
+        </MudTabPanel>
+        <MudTabPanel Text="Self-identification" data-testid="tab-eeo">
+            <EeoPanel EmployeeId="_record.Summary.EmployeeId" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private EmployeeRecordDto? _record;
+    private PersonalForm.Model _personal = new();
+    private List<ContactsEditor.Row> _contacts = [];
+    private string? _comment;
+    private bool _editing;
+
+    protected override Task OnInitializedAsync() => LoadAsync(ReloadAsync);
+
+    private async Task ReloadAsync()
+    {
+        _record = await Personnel.GetMineAsync();
+        _personal = _record.Personal is { } p ? PersonalForm.Model.From(p) : new();
+        _contacts = (_record.EmergencyContacts ?? []).Select(ContactsEditor.Row.From).ToList();
+    }
+
+    private Task SubmitAsync() => RunAsync(async () =>
+    {
+        await Personnel.RequestChangeAsync(new SubmitHrChangeRequest(_personal.ToRequest(), _contacts.Select(c => c.ToRequest()).ToList(), _comment));
+        _editing = false;
+        _comment = null;
+        await ReloadAsync();
+    }, "Sent to HR");
+
+    private async Task CancelEditAsync()
+    {
+        _editing = false;
+        await ReloadAsync();
+    }
+
+    private Task CancelAsync(HrChangeRequestDto request) => RunAsync(async () =>
+    {
+        await Personnel.CancelChangeAsync(request.Id);
+        await ReloadAsync();
+    }, "Request cancelled");
+}

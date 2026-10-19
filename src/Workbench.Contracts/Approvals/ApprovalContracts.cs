@@ -11,8 +11,10 @@ public static class ApprovalDocumentTypes
     public const string Invoice = "invoice";
     public const string JournalEntry = "journal-entry";
     public const string LeaveRequest = "leave-request";
+    public const string HrChange = "hr-change";
+    public const string Compensation = "compensation";
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest];
+    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation];
 
     public static string Label(string documentType) => documentType switch
     {
@@ -24,6 +26,8 @@ public static class ApprovalDocumentTypes
         Invoice => "Invoice",
         JournalEntry => "Manual journal entry",
         LeaveRequest => "Leave request",
+        HrChange => "Personnel change",
+        Compensation => "Compensation change",
         _ => documentType,
     };
 
@@ -43,7 +47,7 @@ public enum ApproverRuleKind
     /// <summary>The approver set for each charged org unit (or the submitter's org unit): one approval per unit.</summary>
     OrgUnitManager,
 
-    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager).</summary>
+    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, HR).</summary>
     OrgRole,
 
     /// <summary>Each listed person: every one of them must approve.</summary>
@@ -53,7 +57,7 @@ public enum ApproverRuleKind
     AnyOf,
 }
 
-public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager }
+public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Hr }
 
 /// <summary>What happens when the step's approver is the submitter (DCAA: nobody approves their own document).</summary>
 public enum SelfApprovalPolicy

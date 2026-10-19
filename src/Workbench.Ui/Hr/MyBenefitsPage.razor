@@ -1,0 +1,221 @@
+@page "/hr/benefits/me"
+@inject IBenefitService Benefits
+
+<PageTitle>My benefits · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">My benefits</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Info">@Error</MudAlert>
+}
+else if (Loading || _b is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    @if (_b.Opportunities.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            You can change medical, dental, vision, life and FSA/HSA elections at open enrollment, in your first 30 days, or within 30 days of a life event
+            (report one below). 401(k) contributions change any time.
+        </MudAlert>
+    }
+    else
+    {
+        @foreach (var o in _b.Opportunities)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-2" data-testid="opportunity">
+                <strong>@o.Label</strong>: choose your benefits by @HrFormat.Date(o.EndsOn) for coverage from @HrFormat.Date(o.CoverageStart).
+            </MudAlert>
+        }
+    }
+
+    <MudText Typo="Typo.h5" HtmlTag="h2" Class="mt-4 mb-2">Current and upcoming coverage</MudText>
+    <ElectionTable Elections="_b.Elections" Dependents="_b.Dependents" />
+
+    <MudText Typo="Typo.h5" HtmlTag="h2" Class="mt-6 mb-2">Make a choice</MudText>
+    <MudPaper Outlined="true" Class="pa-4 mb-4" Style="max-width:1000px" data-testid="elect-form">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_source" Label="When" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="elect-source">
+                    @foreach (var o in _b.Opportunities) { <MudSelectItem T="string" Value="@Key(o)">@o.Label (coverage from @HrFormat.Date(o.CoverageStart))</MudSelectItem> }
+                    <MudSelectItem T="string" Value="@("anytime")">401(k) change (any time, from next month)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="Guid?" Value="_planId" ValueChanged="PlanChanged" Label="Plan" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="elect-plan">
+                    @foreach (var p in _b.AvailablePlans.Where(p => _source != "anytime" || p.Type == BenefitPlanType.Retirement401k))
+                    {
+                        <MudSelectItem T="Guid?" Value="p.Id">@BenefitLabels.Label(p.Type): @p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (Selected is { } plan)
+            {
+                <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_waive" Label="@($"Waive {BenefitLabels.Label(plan.Type)} coverage")" Color="Color.Primary" /></MudItem>
+                @if (!_waive)
+                {
+                    @if (plan.Tiers.Count > 0)
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="CoverageLevel?" @bind-Value="_coverage" Label="Coverage" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="elect-coverage">
+                                @foreach (var t in plan.Tiers)
+                                {
+                                    <MudSelectItem T="CoverageLevel?" Value="t.Coverage">@BenefitLabels.Label(t.Coverage) · you pay @HrFormat.Money(t.EmployeeMonthlyCost)/month</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle2" HtmlTag="h3">Who's covered</MudText>
+                            @if (_b.Dependents.All(d => !d.IsActive))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Add dependents below to cover them.</MudText>
+                            }
+                            @foreach (var d in _b.Dependents.Where(d => d.IsActive))
+                            {
+                                <MudCheckBox T="bool" Value="_dependents.Contains(d.Id)" ValueChanged="on => ToggleDependent(d.Id, on)" Label="@($"{d.Name} ({d.Relationship})")" Color="Color.Primary" />
+                            }
+                        </MudItem>
+                    }
+                    else
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="decimal?" @bind-Value="_amount" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" data-testid="elect-amount"
+                                             Label="@(plan.Type == BenefitPlanType.Retirement401k ? $"Percent of pay (up to {plan.AnnualElectionLimit:0.##}%)" : $"Amount for the year (up to {HrFormat.Money(plan.AnnualElectionLimit)})")" />
+                        </MudItem>
+                    }
+                }
+            }
+        </MudGrid>
+        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || Selected is null || _source is null)" OnClick="ElectAsync" data-testid="elect">Save my choice</MudButton>
+    </MudPaper>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.h5" HtmlTag="h2" Class="mb-2">Dependents</MudText>
+            <MudSimpleTable Dense="true" Outlined="true" aria-label="Dependents" Class="mb-3">
+                <thead><tr><th scope="col">Name</th><th scope="col">Relationship</th><th scope="col">Born</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _b.Dependents)
+                    {
+                        <tr><td>@d.Name</td><td>@d.Relationship</td><td>@HrFormat.Date(d.BirthDate)</td><td>@(d.IsActive ? "Active" : "Removed")</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">Add a dependent</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="6"><MudTextField @bind-Value="_dep.First" Label="First name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                    <MudItem xs="6"><MudTextField @bind-Value="_dep.Last" Label="Last name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                    <MudItem xs="6">
+                        <MudSelect T="DependentRelationship" @bind-Value="_dep.Relationship" Label="Relationship" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var r in Enum.GetValues<DependentRelationship>()) { <MudSelectItem T="DependentRelationship" Value="r">@r</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6"><MudDatePicker @bind-Date="_dep.Birth" Editable="true" Label="Birth date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                </MudGrid>
+                <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="AddDependentAsync">Add</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.h5" HtmlTag="h2" Class="mb-2">Life events</MudText>
+            @foreach (var e in _b.LifeEvents)
+            {
+                <MudText Class="mb-1">@BenefitLabels.Label(e.Kind) on @HrFormat.Date(e.EventDate): @(e.Status switch { LifeEventStatus.Pending => "waiting for HR", LifeEventStatus.Approved => $"verified, change benefits by {HrFormat.Date(e.WindowEndsOn)}", _ => "not verified" })</MudText>
+            }
+            <MudPaper Outlined="true" Class="pa-3 mt-2">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">Report a life event</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudSelect T="LifeEventKind" @bind-Value="_eventKind" Label="What happened" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var k in Enum.GetValues<LifeEventKind>()) { <MudSelectItem T="LifeEventKind" Value="k">@BenefitLabels.Label(k)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6"><MudDatePicker @bind-Date="_eventDate" Editable="true" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_eventNote" Label="Note for HR" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                </MudGrid>
+                <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="ReportAsync" data-testid="report-life-event">Send to HR</MudButton>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private EmployeeBenefitsDto? _b;
+    private string? _source;
+    private Guid? _planId;
+    private CoverageLevel? _coverage;
+    private decimal? _amount;
+    private bool _waive;
+    private readonly HashSet<Guid> _dependents = [];
+    private DependentForm _dep = new();
+    private LifeEventKind _eventKind = LifeEventKind.Marriage;
+    private DateTime? _eventDate = DateTime.Today;
+    private string? _eventNote;
+
+    private sealed class DependentForm
+    {
+        public string? First { get; set; }
+        public string? Last { get; set; }
+        public DependentRelationship Relationship { get; set; } = DependentRelationship.Child;
+        public DateTime? Birth { get; set; }
+    }
+
+    private BenefitPlanDto? Selected => _b?.AvailablePlans.FirstOrDefault(p => p.Id == _planId);
+
+    private static string Key(EnrollmentOpportunityDto o) => $"{o.Source}:{o.LifeEventId}";
+
+    protected override Task OnInitializedAsync() => LoadAsync(ReloadAsync);
+
+    private async Task ReloadAsync()
+    {
+        _b = await Benefits.GetMineAsync();
+        _source ??= _b.Opportunities.Select(Key).FirstOrDefault();
+    }
+
+    private void PlanChanged(Guid? id)
+    {
+        _planId = id;
+        _coverage = null;
+        _amount = null;
+        _waive = false;
+        _dependents.Clear();
+    }
+
+    private void ToggleDependent(Guid id, bool on)
+    {
+        if (on)
+        {
+            _dependents.Add(id);
+        }
+        else
+        {
+            _dependents.Remove(id);
+        }
+    }
+
+    private Task ElectAsync() => RunAsync(async () =>
+    {
+        var opportunity = _b!.Opportunities.FirstOrDefault(o => Key(o) == _source);
+        var source = _source == "anytime" ? ElectionSource.AnyTime : opportunity?.Source ?? throw new ArgumentException("Choose when this change applies.");
+        await Benefits.ElectAsync(_b.EmployeeId, new ElectBenefitRequest(_planId!.Value, _coverage, _dependents.ToList(), _amount, source, _waive, opportunity?.LifeEventId));
+        PlanChanged(null);
+        await ReloadAsync();
+    }, "Saved");
+
+    private Task AddDependentAsync() => RunAsync(async () =>
+    {
+        await Benefits.SaveDependentAsync(_b!.EmployeeId, null, new SaveDependentRequest(_dep.First ?? "", _dep.Last ?? "", _dep.Relationship, HrFormat.ToDate(_dep.Birth) ?? default));
+        _dep = new();
+        await ReloadAsync();
+    }, "Dependent added");
+
+    private Task ReportAsync() => RunAsync(async () =>
+    {
+        await Benefits.ReportLifeEventAsync(_b!.EmployeeId, new ReportLifeEventRequest(_eventKind, HrFormat.ToDate(_eventDate) ?? DateOnly.FromDateTime(DateTime.Today), _eventNote));
+        _eventNote = null;
+        await ReloadAsync();
+    }, "Sent to HR. You'll be able to change your benefits once HR verifies it.");
+}

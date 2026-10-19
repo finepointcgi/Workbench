@@ -1,0 +1,89 @@
+@page "/hr/onboarding/{ChecklistId:guid}"
+@inject IOnboardingService Onboarding
+@inject IHrAccessService HrAccess
+
+<PageTitle>Checklist · Workbench</PageTitle>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading || _c is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@_c.Kind: @_c.EmployeeName</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_c.Status</MudChip>
+    </MudStack>
+    <MudText Class="mud-text-secondary mb-3">
+        @(_c.Kind == ChecklistKind.Onboarding ? "Starts" : "Last day") @HrFormat.Date(_c.AnchorDate)@(_c.TemplateName is null ? "" : $" · {_c.TemplateName}")@(_c.TerminationReason is { } r ? $" · {r}" : "")
+    </MudText>
+    @if (_c.Kind == ChecklistKind.Offboarding)
+    {
+        <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" data-testid="payroll-flags">
+            <MudChip T="string" Variant="Variant.Outlined" Icon="@(_c.AccessDeprovisionedAtUtc is null ? Icons.Material.Filled.HourglassEmpty : Icons.Material.Filled.Check)">Access @(_c.AccessDeprovisionedAtUtc is null ? "still active" : "removed")</MudChip>
+            <MudChip T="string" Variant="Variant.Outlined" Icon="@(_c.FinalTimesheetApproved ? Icons.Material.Filled.Check : Icons.Material.Filled.HourglassEmpty)">Final timesheet @(_c.FinalTimesheetApproved ? "approved" : "not approved yet")</MudChip>
+            <MudChip T="string" Variant="Variant.Outlined" Icon="@(_c.LeavePayoutHours is null ? Icons.Material.Filled.HourglassEmpty : Icons.Material.Filled.Check)">Leave payout @(_c.LeavePayoutHours is { } h ? $"{h:0.##} h" : "not recorded")</MudChip>
+        </MudStack>
+    }
+    <MudTable T="ChecklistTaskDto" Items="_c.Tasks" Dense="true" aria-label="Tasks" data-testid="checklist-tasks">
+        <HeaderContent><MudTh>Task</MudTh><MudTh>Owner</MudTh><MudTh>Due</MudTh><MudTh>Status</MudTh><MudTh><span class="wb-sr-only">Actions</span></MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Task">@context.Title@(context.Note is null ? "" : $" — {context.Note}")</MudTd>
+            <MudTd DataLabel="Owner">@ChecklistLabels.Label(context.Owner)@(context.AssigneeEmail is null ? "" : $" ({context.AssigneeEmail})")</MudTd>
+            <MudTd DataLabel="Due">@HrFormat.Date(context.DueDate)</MudTd>
+            <MudTd DataLabel="Status">@(context.Status == ChecklistTaskStatus.Open ? "Open" : $"{context.Status} by {context.CompletedBy}")</MudTd>
+            <MudTd>
+                @if (context.CanComplete)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="() => CompleteAsync(context)" aria-label="@($"Mark done: {context.Title}")">@ActionLabel(context)</MudButton>
+                }
+                @if (_isHr && context.Status == ChecklistTaskStatus.Open)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="Busy" OnClick="() => SkipAsync(context)" aria-label="@($"Not needed: {context.Title}")">Not needed</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudTextField @bind-Value="_note" Label="Note (saved with the next task you complete; needed for Not needed)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Style="max-width:720px" autocomplete="off" />
+}
+
+@code {
+    [Parameter] public Guid ChecklistId { get; set; }
+
+    private EmployeeChecklistDto? _c;
+    private bool _isHr;
+    private string? _note;
+
+
+    protected override Task OnParametersSetAsync() => LoadAsync(async () =>
+    {
+        _isHr = (await HrAccess.GetAsync()).IsHr;
+        _c = await Onboarding.GetAsync(ChecklistId);
+    });
+
+    private static string ActionLabel(ChecklistTaskDto t) => t.Action switch
+    {
+        ChecklistAction.DeprovisionAccess => "Deactivate sign-in",
+        ChecklistAction.RecoverAsset => "Mark returned",
+        ChecklistAction.FinalTimesheet => "Check final timesheet",
+        ChecklistAction.LeavePayout => "Record leave payout",
+        ChecklistAction.EndBenefits => "End benefits",
+        _ => "Done",
+    };
+
+    private Task CompleteAsync(ChecklistTaskDto t) => RunAsync(async () =>
+    {
+        _c = await Onboarding.CompleteTaskAsync(t.Id, new CompleteChecklistTaskRequest(_note));
+        _note = null;
+    }, "Done");
+
+    private Task SkipAsync(ChecklistTaskDto t) => RunAsync(async () =>
+    {
+        _c = await Onboarding.SkipTaskAsync(t.Id, new CompleteChecklistTaskRequest(_note));
+        _note = null;
+    }, "Marked not needed");
+}

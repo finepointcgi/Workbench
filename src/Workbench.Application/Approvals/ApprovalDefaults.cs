@@ -53,6 +53,18 @@ public static class ApprovalDefaults
             new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Allow),
         ]),
 
+        // HR: an employee's change to their own record goes to HR (administrators are members of every HR step).
+        ApprovalDocumentTypes.HrChange => new([
+            new("HR", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Hr), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
+        ]),
+
+        // Pay changes: HR, then Finance when the annualized increase is over Hr:CompensationFinanceThreshold.
+        ApprovalDocumentTypes.Compensation => new([
+            new("HR", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Hr), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
+            new("Finance", 2, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
+                Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 

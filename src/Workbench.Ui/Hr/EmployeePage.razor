@@ -1,0 +1,249 @@
+@page "/hr/employees/{EmployeeId:guid}"
+@inject IHrPersonnelService Personnel
+@inject IHrAccessService HrAccess
+@inject IPositionService Positions
+@inject Workbench.Contracts.ProjectAccounting.IPeopleService People
+
+<PageTitle>@(_record?.Summary.DisplayName ?? "Employee") · Workbench</PageTitle>
+
+@if (Forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="You can't open this record" Message="@Error" />
+}
+else if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading || _record is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    var s = _record.Summary;
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@s.DisplayName</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HrFormat.Color(s.Status)">@HrLabels.Label(s.Status)</MudChip>
+        <MudSpacer />
+        @if (_access?.IsHr == true && s.Status != EmploymentStatus.Terminated && _access.EmployeeId != s.EmployeeId)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.ExitToApp" OnClick="() => _showOffboard = !_showOffboard" data-testid="offboard">Offboard</MudButton>
+        }
+    </MudStack>
+    <MudText Class="mud-text-secondary mb-3">@s.EmployeeNumber · @(s.JobTitle ?? "No title") · @s.Email@(s.SupervisorName is null ? "" : $" · reports to {s.SupervisorName}")</MudText>
+
+    @if (_showOffboard)
+    {
+        <OffboardPanel EmployeeId="EmployeeId" EmployeeName="@s.DisplayName" Done="OffboardedAsync" />
+    }
+
+    @if (_record.Access == HrRecordAccess.Directory)
+    {
+        <MudAlert Severity="Severity.Info">You see this person's directory details only. Their manager and HR see the rest of the record.</MudAlert>
+    }
+    else
+    {
+        var full = _record.Access == HrRecordAccess.Full;
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" @bind-ActivePanelIndex="_tab">
+            <MudTabPanel Text="Job" data-testid="tab-job">
+                @if (full)
+                {
+                    <MudPaper Outlined="true" Class="pa-4" Style="max-width:960px">
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" sm="6"><MudTextField @bind-Value="_job.JobTitle" Label="Job title" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudSelect T="Guid?" @bind-Value="_job.PositionId" Label="Position" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                                    @foreach (var p in _positions)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Title (@p.Open open)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudSelect T="Guid?" @bind-Value="_job.OrgUnitId" Label="Org unit" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                                    @foreach (var u in _units)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="u.Id">@u.Code · @u.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudSelect T="Guid?" @bind-Value="_job.SupervisorId" Label="Supervisor" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                                    @foreach (var p in _people.Where(p => p.EmployeeId != EmployeeId))
+                                    {
+                                        <MudSelectItem T="Guid?" Value="p.EmployeeId">@p.DisplayName</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudSelect T="EmploymentTypeKind" @bind-Value="_job.EmploymentType" Label="Employment type" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                    @foreach (var t in Enum.GetValues<EmploymentTypeKind>())
+                                    {
+                                        <MudSelectItem T="EmploymentTypeKind" Value="t">@HrLabels.Label(t)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudSelect T="EmploymentStatus" @bind-Value="_job.Status" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                    @foreach (var t in Enum.GetValues<EmploymentStatus>())
+                                    {
+                                        <MudSelectItem T="EmploymentStatus" Value="t">@HrLabels.Label(t)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="4" Class="d-flex align-center"><MudCheckBox T="bool" @bind-Value="_job.IsExempt" Label="FLSA exempt" Color="Color.Primary" /></MudItem>
+                            <MudItem xs="12" sm="8"><MudTextField @bind-Value="_job.WorkLocation" Label="Work location" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_job.WorkState" Label="Work state (VA)" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="2" autocomplete="off" /></MudItem>
+                        </MudGrid>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Hired @HrFormat.Date(s.HireDate)@(s.TerminationDate is { } t ? $" · last day {HrFormat.Date(t)}" : "")</MudText>
+                        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveJobAsync" data-testid="save-job">Save job details</MudButton>
+                    </MudPaper>
+                }
+                else if (_record.Job is { } job)
+                {
+                    <JobSummary Job="job" />
+                }
+            </MudTabPanel>
+
+            @if (_record.Personal is { } personal)
+            {
+                <MudTabPanel Text="Personal" data-testid="tab-personal">
+                    @if (full)
+                    {
+                        <PersonalForm Value="_personal" />
+                        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SavePersonalAsync">Save personal details</MudButton>
+                    }
+                    else
+                    {
+                        <PersonalSummary Personal="personal" />
+                    }
+                </MudTabPanel>
+                <MudTabPanel Text="Emergency contacts">
+                    <ContactsEditor Contacts="_contacts" ReadOnly="!full" />
+                    @if (full)
+                    {
+                        <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveContactsAsync">Save emergency contacts</MudButton>
+                    }
+                </MudTabPanel>
+            }
+
+            <MudTabPanel Text="Credentials" data-testid="tab-credentials">
+                <CredentialsPanel EmployeeId="EmployeeId" Credentials="_record.Credentials ?? []" CanEdit="full" Changed="ReloadAsync" />
+            </MudTabPanel>
+
+            @if (_record.Documents is { } documents)
+            {
+                <MudTabPanel Text="Documents">
+                    <DocumentsPanel EmployeeId="EmployeeId" Documents="documents" CanUpload="full" Changed="ReloadAsync" />
+                </MudTabPanel>
+            }
+
+            @if (full)
+            {
+                <MudTabPanel Text="EEO and veteran" data-testid="tab-eeo">
+                    <EeoPanel EmployeeId="EmployeeId" IsHr="true" />
+                </MudTabPanel>
+            }
+
+            @if (_access?.IsHr == true || _access?.IsFinance == true)
+            {
+                <MudTabPanel Text="Compensation" data-testid="tab-compensation">
+                    <CompensationPanel EmployeeId="EmployeeId" CanPropose="@(_access.IsHr && _access.EmployeeId != EmployeeId)" />
+                </MudTabPanel>
+            }
+
+            @if (full)
+            {
+                <MudTabPanel Text="Benefits">
+                    <BenefitsPanel EmployeeId="EmployeeId" />
+                </MudTabPanel>
+            }
+        </MudTabs>
+    }
+}
+
+@code {
+    [Parameter] public Guid EmployeeId { get; set; }
+
+    private EmployeeRecordDto? _record;
+    private HrAccessDto? _access;
+    private IReadOnlyList<PositionDto> _positions = [];
+    private IReadOnlyList<Workbench.Contracts.ProjectAccounting.OrgUnitDto> _units = [];
+    private IReadOnlyList<EmployeeSummaryDto> _people = [];
+    private JobForm _job = new();
+    private PersonalForm.Model _personal = new();
+    private List<ContactsEditor.Row> _contacts = [];
+    private bool _showOffboard;
+    private int _tab;
+
+
+    private sealed class JobForm
+    {
+        public string? JobTitle { get; set; }
+        public Guid? PositionId { get; set; }
+        public Guid? OrgUnitId { get; set; }
+        public Guid? SupervisorId { get; set; }
+        public EmploymentTypeKind EmploymentType { get; set; }
+        public EmploymentStatus Status { get; set; }
+        public bool IsExempt { get; set; }
+        public string? WorkLocation { get; set; }
+        public string? WorkState { get; set; }
+    }
+
+    protected override Task OnParametersSetAsync() => LoadAsync(async () =>
+    {
+        _access = await HrAccess.GetAsync();
+        await ReloadAsync();
+        if (_record?.Access == HrRecordAccess.Full)
+        {
+            _positions = await Positions.ListAsync();
+            _units = await People.ListOrgUnitsAsync();
+            _people = await Personnel.ListAsync(new EmployeeQuery());
+        }
+    });
+
+    private async Task ReloadAsync()
+    {
+        _record = await Personnel.GetAsync(EmployeeId);
+        if (_record.Job is { } j)
+        {
+            _job = new JobForm
+            {
+                JobTitle = j.JobTitle, PositionId = j.PositionId, OrgUnitId = j.OrgUnitId, SupervisorId = j.SupervisorId, EmploymentType = j.EmploymentType,
+                Status = j.Status, IsExempt = j.IsExempt, WorkLocation = j.WorkLocation, WorkState = j.WorkState,
+            };
+        }
+
+        if (_record.Personal is { } p)
+        {
+            _personal = PersonalForm.Model.From(p);
+        }
+
+        _contacts = (_record.EmergencyContacts ?? []).Select(ContactsEditor.Row.From).ToList();
+    }
+
+    private Task SaveJobAsync() => RunAsync(async () =>
+    {
+        _record = await Personnel.SaveJobAsync(EmployeeId, new SaveJobInfoRequest(_job.JobTitle, _job.PositionId, _job.OrgUnitId, _job.SupervisorId, _job.EmploymentType,
+            _job.Status, _job.IsExempt, _job.WorkLocation, _job.WorkState));
+        await ReloadAsync();
+    }, "Job details saved");
+
+    private Task SavePersonalAsync() => RunAsync(async () =>
+    {
+        await Personnel.SavePersonalAsync(EmployeeId, _personal.ToRequest());
+        await ReloadAsync();
+    }, "Personal details saved");
+
+    private Task SaveContactsAsync() => RunAsync(async () =>
+    {
+        await Personnel.SaveEmergencyContactsAsync(EmployeeId, _contacts.Select(c => c.ToRequest()).ToList());
+        await ReloadAsync();
+    }, "Emergency contacts saved");
+
+    private async Task OffboardedAsync()
+    {
+        _showOffboard = false;
+        await ReloadAsync();
+    }
+}

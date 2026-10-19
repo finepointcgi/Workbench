@@ -1,0 +1,13 @@
+<MudSimpleTable Dense="true" Outlined="true" Style="max-width:720px" aria-label="Personal details">
+    <tbody>
+        <tr><th scope="row">Preferred name</th><td>@Personal.PreferredName</td></tr>
+        <tr><th scope="row">Personal email</th><td>@Personal.PersonalEmail</td></tr>
+        <tr><th scope="row">Phone</th><td>@Personal.PersonalPhone</td></tr>
+        <tr><th scope="row">Address</th><td>@string.Join(", ", new[] { Personal.AddressLine1, Personal.AddressLine2, Personal.City, Personal.State, Personal.PostalCode }.Where(x => !string.IsNullOrEmpty(x)))</td></tr>
+        <tr><th scope="row">Birth date</th><td>@HrFormat.Date(Personal.BirthDate)</td></tr>
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public PersonalInfoDto Personal { get; set; } = default!;
+}

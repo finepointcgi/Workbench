@@ -1,0 +1,50 @@
+@inject IOnboardingService Onboarding
+
+<MudPaper Outlined="true" Class="pa-4" Style="max-width:900px">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">New template</MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="8"><MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+        <MudItem xs="12" sm="4">
+            <MudSelect T="ChecklistKind" @bind-Value="_kind" Label="Kind" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem T="ChecklistKind" Value="ChecklistKind.Onboarding">Onboarding</MudSelectItem>
+                <MudSelectItem T="ChecklistKind" Value="ChecklistKind.Offboarding">Offboarding</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+    @foreach (var row in _tasks)
+    {
+        var r = row;
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-2" Wrap="Wrap.Wrap">
+            <MudTextField @bind-Value="r.Title" Label="Task" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:320px" autocomplete="off" />
+            <MudSelect T="ChecklistOwner" @bind-Value="r.Owner" Label="Owner" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:160px">
+                @foreach (var o in Enum.GetValues<ChecklistOwner>()) { <MudSelectItem T="ChecklistOwner" Value="o">@ChecklistLabels.Label(o)</MudSelectItem> }
+            </MudSelect>
+            <MudNumericField T="int" @bind-Value="r.Offset" Label="Due (days from the date)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:200px" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="@($"Remove task {r.Title}")" OnClick="() => _tasks.Remove(r)" />
+        </MudStack>
+    }
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _tasks.Add(new Row())" Class="mt-2">Add a task</MudButton>
+    <div><MudButton Class="mt-2" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveAsync">Save template</MudButton></div>
+</MudPaper>
+
+@code {
+    [Parameter] public EventCallback Saved { get; set; }
+
+    private string? _name;
+    private ChecklistKind _kind = ChecklistKind.Onboarding;
+    private List<Row> _tasks = [new()];
+
+    private sealed class Row
+    {
+        public string? Title { get; set; }
+        public ChecklistOwner Owner { get; set; } = ChecklistOwner.Hr;
+        public int Offset { get; set; }
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        await Onboarding.SaveTemplateAsync(null, new SaveChecklistTemplateRequest(_name ?? "", _kind, true, _tasks.Select(t => new SaveChecklistTemplateTask(t.Title ?? "", t.Owner, t.Offset)).ToList()));
+        (_name, _tasks) = (null, [new()]);
+        await Saved.InvokeAsync();
+    }, "Template saved");
+}

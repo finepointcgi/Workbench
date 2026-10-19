@@ -1,0 +1,253 @@
+@page "/hr/benefits"
+@inject IBenefitService Benefits
+@inject IBenefitDeductionService Deductions
+@inject IHrAccessService HrAccess
+@inject NavigationManager Navigation
+
+<PageTitle>Benefits administration · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Benefits administration</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Plans and their monthly costs, open enrollment, life events and the deductions sent to payroll. Each plan's employer cost posts to its GL account
+    with the payroll journal, so map plans to fringe accounts.
+</MudText>
+
+@if (Forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="Benefits administration is for HR, Finance and administrators" Message="@Error" />
+}
+else if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Plans" data-testid="tab-plans">
+            <MudTable T="BenefitPlanDto" Items="_plans" Dense="true" aria-label="Benefit plans" Class="mb-4" data-testid="plans">
+                <HeaderContent>
+                    <MudTh>Code</MudTh><MudTh>Plan</MudTh><MudTh>Type</MudTh><MudTh>Plan year</MudTh><MudTh>Deduction code</MudTh><MudTh>Costs per month (employee / company)</MudTh><MudTh>GL account</MudTh><MudTh>Enrolled</MudTh>
+                    @if (_access?.IsHr == true) { <MudTh><span class="wb-sr-only">Actions</span></MudTh> }
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Code">@context.Code</MudTd>
+                    <MudTd DataLabel="Plan">@context.Name@(context.IsHighDeductible ? " (HDHP)" : "")@(context.IsActive ? "" : " (inactive)")</MudTd>
+                    <MudTd DataLabel="Type">@BenefitLabels.Label(context.Type)</MudTd>
+                    <MudTd DataLabel="Plan year">@HrFormat.Date(context.StartsOn) – @HrFormat.Date(context.EndsOn)</MudTd>
+                    <MudTd DataLabel="Deduction code">@context.DeductionCode@(context.IsPreTax ? " (pre-tax)" : "")</MudTd>
+                    <MudTd DataLabel="Costs">
+                        @if (context.Tiers.Count > 0)
+                        {
+                            @string.Join("; ", context.Tiers.Select(t => $"{BenefitLabels.Label(t.Coverage)} {HrFormat.Money(t.EmployeeMonthlyCost)} / {HrFormat.Money(t.EmployerMonthlyCost)}"))
+                        }
+                        else if (context.Type == BenefitPlanType.Retirement401k)
+                        {
+                            @($"Up to {context.AnnualElectionLimit:0.##}% of pay; match {HrFormat.Percent(context.EmployerMatchRate)} up to {HrFormat.Percent(context.EmployerMatchCapPercent)} of pay")
+                        }
+                        else
+                        {
+                            @($"Up to {HrFormat.Money(context.AnnualElectionLimit)} a year{(context.EmployerMonthlyContribution is > 0 ? $"; company {HrFormat.Money(context.EmployerMonthlyContribution)}/month" : "")}")
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="GL account">
+                        <MudSelect T="Guid?" Value="context.ExpenseAccountId" ValueChanged="v => SetAccountAsync(context, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Text"
+                                   aria-label="@($"GL account for {context.Code}")" Clearable="true" Placeholder="Payroll default (6030)" Style="min-width:220px">
+                            @foreach (var a in _accounts) { <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name@(a.IsFringe ? "" : " (not fringe)")</MudSelectItem> }
+                        </MudSelect>
+                        @if (context.ExpenseAccountId is not null && !context.ExpenseAccountIsFringe)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Warning">▲ Not a fringe account: the cost won't reach the fringe pool.</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Enrolled">@context.Enrolled</MudTd>
+                    @if (_access?.IsHr == true) { <MudTd><MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {context.Code}")" OnClick="() => Edit(context)" /></MudTd> }
+                </RowTemplate>
+            </MudTable>
+            @if (_access?.IsHr == true)
+            {
+                <PlanEditor @key="_editKey" Plan="_editing" Saved="PlanSavedAsync" Accounts="_accounts" />
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Open enrollment" data-testid="tab-windows">
+            <MudTable T="OpenEnrollmentWindowDto" Items="_windows" Dense="true" aria-label="Open enrollment windows" Class="mb-4">
+                <HeaderContent><MudTh>Name</MudTh><MudTh>Opens</MudTh><MudTh>Closes</MudTh><MudTh>Coverage from</MudTh><MudTh>Status</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Name">@context.Name</MudTd>
+                    <MudTd DataLabel="Opens">@HrFormat.Date(context.OpensOn)</MudTd>
+                    <MudTd DataLabel="Closes">@HrFormat.Date(context.ClosesOn)</MudTd>
+                    <MudTd DataLabel="Coverage from">@HrFormat.Date(context.CoverageStartsOn)</MudTd>
+                    <MudTd DataLabel="Status">@(context.IsOpen ? "Open now" : context.OpensOn > DateOnly.FromDateTime(DateTime.Today) ? "Scheduled" : "Closed")</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="mud-text-secondary">No open enrollment windows.</MudText></NoRecordsContent>
+            </MudTable>
+            @if (_access?.IsHr == true)
+            {
+                <MudPaper Outlined="true" Class="pa-4" Style="max-width:900px">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Schedule open enrollment</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="3"><MudTextField @bind-Value="_window.Name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+                        <MudItem xs="4" sm="3"><MudDatePicker @bind-Date="_window.Opens" Editable="true" Label="Opens" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="4" sm="3"><MudDatePicker @bind-Date="_window.Closes" Editable="true" Label="Closes" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="4" sm="3"><MudDatePicker @bind-Date="_window.Coverage" Editable="true" Label="Coverage from" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                    </MudGrid>
+                    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveWindowAsync">Schedule</MudButton>
+                </MudPaper>
+            }
+        </MudTabPanel>
+
+        @if (_access?.IsHr == true)
+        {
+            <MudTabPanel Text="@($"Life events ({_lifeEvents.Count})")" data-testid="tab-life-events">
+                <MudTable T="LifeEventDto" Items="_lifeEvents" Dense="true" aria-label="Life events waiting to be verified">
+                    <HeaderContent><MudTh>Employee</MudTh><MudTh>Event</MudTh><MudTh>Date</MudTh><MudTh>Note</MudTh><MudTh>Reported</MudTh><MudTh><span class="wb-sr-only">Actions</span></MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Employee"><MudLink Href="@($"hr/employees/{context.EmployeeId}")">@context.EmployeeName</MudLink></MudTd>
+                        <MudTd DataLabel="Event">@BenefitLabels.Label(context.Kind)</MudTd>
+                        <MudTd DataLabel="Date">@HrFormat.Date(context.EventDate)</MudTd>
+                        <MudTd DataLabel="Note">@context.Note</MudTd>
+                        <MudTd DataLabel="Reported">@context.ReportedAtUtc.ToLocalTime().ToString("MMM d", CultureInfo.InvariantCulture)</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Color="Color.Success" Disabled="Busy" OnClick="() => DecideLifeEventAsync(context, true)" aria-label="@($"Verify {context.EmployeeName}'s life event")">Verify</MudButton>
+                            <MudButton Size="Size.Small" Color="Color.Error" Disabled="Busy" OnClick="() => DecideLifeEventAsync(context, false)" aria-label="@($"Reject {context.EmployeeName}'s life event")">Reject</MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText Class="mud-text-secondary">No life events waiting.</MudText></NoRecordsContent>
+                </MudTable>
+            </MudTabPanel>
+        }
+
+        <MudTabPanel Text="Payroll deductions" data-testid="tab-deductions">
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3" Wrap="Wrap.Wrap">
+                <MudSelect T="DeductionPeriodDto" Value="_period" ValueChanged="PeriodChangedAsync" Label="Pay period" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:360px"
+                           ToStringFunc="@(p => p is null ? "" : $"{p.PayGroupCode} · {HrFormat.Date(p.Start)} – {HrFormat.Date(p.End)}")" data-testid="deduction-period">
+                    @foreach (var p in _periods)
+                    {
+                        <MudSelectItem T="DeductionPeriodDto" Value="p">@p.PayGroupCode · @HrFormat.Date(p.Start) – @HrFormat.Date(p.End) · check @HrFormat.Date(p.CheckDate)@(p.LastExportedAtUtc is null ? "" : " · exported")</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _preview is null)" OnClick="ExportAsync" StartIcon="@Icons.Material.Filled.Download" data-testid="export-deductions">Export to payroll provider</MudButton>
+            </MudStack>
+            @if (_preview is { } preview)
+            {
+                <MudText Class="mud-text-secondary mb-2">
+                    Elections in force on @HrFormat.Date(preview.PeriodEnd): employees @HrFormat.Money(preview.EmployeeTotal), company @HrFormat.Money(preview.EmployerTotal) this period.
+                    @(preview.LastExportedAtUtc is { } at ? $"Last exported {at.ToLocalTime():MMM d h:mm tt}." : "")
+                </MudText>
+                <MudTable T="DeductionLineDto" Items="preview.Lines" Dense="true" aria-label="Deductions for the pay period" data-testid="deduction-lines">
+                    <HeaderContent><MudTh>Employee</MudTh><MudTh>Provider id</MudTh><MudTh>Plan</MudTh><MudTh>Deduction code</MudTh><MudTh Style="text-align:right">Employee</MudTh><MudTh Style="text-align:right">Company</MudTh><MudTh>Issue</MudTh></HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Employee">@context.EmployeeName</MudTd>
+                        <MudTd DataLabel="Provider id">@context.ProviderEmployeeId</MudTd>
+                        <MudTd DataLabel="Plan">@context.PlanCode</MudTd>
+                        <MudTd DataLabel="Deduction code">@context.DeductionCode</MudTd>
+                        <MudTd DataLabel="Employee" Style="text-align:right">@(context.EmployeePercent is { } pct ? $"{pct:0.##}% of pay" : HrFormat.Money(context.EmployeeAmount))</MudTd>
+                        <MudTd DataLabel="Company" Style="text-align:right">@(context.EmployeePercent is not null ? "match in Paylocity" : HrFormat.Money(context.EmployerAmount))</MudTd>
+                        <MudTd DataLabel="Issue">@if (context.Issue is { } issue) { <span>▲ @issue (left out)</span> }</MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText Class="mud-text-secondary">No elections in force for this pay group.</MudText></NoRecordsContent>
+                </MudTable>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private HrAccessDto? _access;
+    private IReadOnlyList<BenefitPlanDto> _plans = [];
+    private IReadOnlyList<BenefitAccountOptionDto> _accounts = [];
+    private IReadOnlyList<OpenEnrollmentWindowDto> _windows = [];
+    private IReadOnlyList<LifeEventDto> _lifeEvents = [];
+    private IReadOnlyList<DeductionPeriodDto> _periods = [];
+    private DeductionPeriodDto? _period;
+    private DeductionPreviewDto? _preview;
+    private BenefitPlanDto? _editing;
+    private int _editKey;
+    private int _tab;
+    private readonly WindowForm _window = new();
+
+    private sealed class WindowForm
+    {
+        public string? Name { get; set; } = $"Open enrollment {DateTime.Today.Year + 1}";
+        public DateTime? Opens { get; set; } = DateTime.Today;
+        public DateTime? Closes { get; set; } = DateTime.Today.AddDays(27);
+        public DateTime? Coverage { get; set; } = new DateTime(DateTime.Today.Year + 1, 1, 1);
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        _access = await HrAccess.GetAsync();
+        if (!_access.IsHr && !_access.IsFinance)
+        {
+            throw new UnauthorizedAccessException("Benefits setup is for HR, Finance and administrators. Your own benefits are under My benefits.");
+        }
+
+        _accounts = await Benefits.ListExpenseAccountsAsync();
+        _periods = await Deductions.ListPeriodsAsync();
+        await ReloadAsync();
+        _tab = Tab switch { "windows" => 1, "life-events" when _access.IsHr => 2, "deductions" => _access.IsHr ? 3 : 2, _ => 0 };
+    });
+
+    private async Task ReloadAsync()
+    {
+        _plans = await Benefits.ListPlansAsync(includeInactive: true);
+        _windows = await Benefits.ListWindowsAsync();
+        _lifeEvents = _access?.IsHr == true ? await Benefits.ListPendingLifeEventsAsync() : [];
+    }
+
+    private void Edit(BenefitPlanDto plan)
+    {
+        _editing = plan;
+        _editKey++;
+    }
+
+    private async Task PlanSavedAsync()
+    {
+        _editing = null;
+        _editKey++;
+        await ReloadAsync();
+    }
+
+    private Task SetAccountAsync(BenefitPlanDto plan, Guid? accountId) => RunAsync(async () =>
+    {
+        await Benefits.SetPlanAccountAsync(plan.Id, accountId);
+        await ReloadAsync();
+    }, $"{plan.Code} posts to the new account");
+
+    private Task SaveWindowAsync() => RunAsync(async () =>
+    {
+        await Benefits.SaveWindowAsync(null, new SaveOpenEnrollmentWindowRequest(_window.Name ?? "", HrFormat.ToDate(_window.Opens) ?? default, HrFormat.ToDate(_window.Closes) ?? default,
+            HrFormat.ToDate(_window.Coverage) ?? default));
+        await ReloadAsync();
+    }, "Open enrollment scheduled");
+
+    private Task DecideLifeEventAsync(LifeEventDto e, bool approve) => RunAsync(async () =>
+    {
+        await Benefits.DecideLifeEventAsync(e.Id, new DecideLifeEventRequest(approve, null));
+        await ReloadAsync();
+    }, approve ? "Verified: the employee can change their benefits" : "Rejected");
+
+    private async Task PeriodChangedAsync(DeductionPeriodDto? period)
+    {
+        _period = period;
+        _preview = null;
+        if (period is not null)
+        {
+            await RunAsync(async () => _preview = await Deductions.PreviewAsync(period.PayGroupId, period.PayPeriodId));
+        }
+    }
+
+    private Task ExportAsync() => RunAsync(async () =>
+    {
+        var file = await Deductions.ExportAsync(_period!.PayGroupId, _period.PayPeriodId);
+        await DownloadAsync(file.FileName, file.ContentType, file.Content);
+        _preview = await Deductions.PreviewAsync(_period.PayGroupId, _period.PayPeriodId);
+        _periods = await Deductions.ListPeriodsAsync();
+    }, "Deductions exported. Import the file into Paylocity before running payroll.");
+}

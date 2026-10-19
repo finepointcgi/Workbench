@@ -1,0 +1,47 @@
+@* Emergency contacts: a list edited in place (HR, or the employee in a change request). *@
+@if (Contacts.Count == 0)
+{
+    <MudText Class="mud-text-secondary mb-2">No emergency contacts on file.</MudText>
+}
+@foreach (var c in Contacts)
+{
+    var row = c;
+    <MudPaper Outlined="true" Class="pa-3 mb-2" Style="max-width:960px">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="3"><MudTextField @bind-Value="row.Name" Label="Name" ReadOnly="ReadOnly" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="12" sm="2"><MudTextField @bind-Value="row.Relationship" Label="Relationship" ReadOnly="ReadOnly" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="12" sm="2"><MudTextField @bind-Value="row.Phone" Label="Phone" ReadOnly="ReadOnly" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="12" sm="3"><MudTextField @bind-Value="row.Email" Label="Email" ReadOnly="ReadOnly" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="8" sm="1" Class="d-flex align-center"><MudCheckBox T="bool" @bind-Value="row.IsPrimary" Disabled="ReadOnly" Label="Primary" Color="Color.Primary" /></MudItem>
+            @if (!ReadOnly)
+            {
+                <MudItem xs="4" sm="1" Class="d-flex align-center">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="@($"Remove {row.Name}")" OnClick="() => Contacts.Remove(row)" />
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+}
+@if (!ReadOnly && Contacts.Count < 5)
+{
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => Contacts.Add(new Row())">Add a contact</MudButton>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<Row> Contacts { get; set; } = [];
+
+    [Parameter] public bool ReadOnly { get; set; }
+
+    public sealed class Row
+    {
+        public string? Name { get; set; }
+        public string? Relationship { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public bool IsPrimary { get; set; }
+
+        public static Row From(EmergencyContactDto c) => new() { Name = c.Name, Relationship = c.Relationship, Phone = c.Phone, Email = c.Email, IsPrimary = c.IsPrimary };
+
+        public SaveEmergencyContact ToRequest() => new(Name ?? "", Relationship, Phone ?? "", Email, IsPrimary);
+    }
+}

@@ -1,0 +1,17 @@
+@* Read-only job fields (supervisors, Finance and the employee). *@
+<MudSimpleTable Dense="true" Outlined="true" Style="max-width:720px" aria-label="Job details">
+    <tbody>
+        <tr><th scope="row">Job title</th><td>@Job.JobTitle</td></tr>
+        <tr><th scope="row">Position</th><td>@(Job.PositionCode is null ? "" : $"{Job.PositionCode} · {Job.PositionTitle}")</td></tr>
+        <tr><th scope="row">Org unit</th><td>@Job.OrgUnitName</td></tr>
+        <tr><th scope="row">Supervisor</th><td>@Job.SupervisorName</td></tr>
+        <tr><th scope="row">Employment</th><td>@HrLabels.Label(Job.EmploymentType) · @(Job.IsExempt ? "FLSA exempt" : "FLSA non-exempt")</td></tr>
+        <tr><th scope="row">Status</th><td>@HrLabels.Label(Job.Status)</td></tr>
+        <tr><th scope="row">Work location</th><td>@Job.WorkLocation@(Job.WorkState is null ? "" : $" ({Job.WorkState})")</td></tr>
+        <tr><th scope="row">Hired</th><td>@HrFormat.Date(Job.HireDate)@(Job.TerminationDate is { } t ? $" · last day {HrFormat.Date(t)}" : "")</td></tr>
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public JobInfoDto Job { get; set; } = default!;
+}

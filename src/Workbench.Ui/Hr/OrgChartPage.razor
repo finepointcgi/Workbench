@@ -1,0 +1,69 @@
+@page "/hr/org-chart"
+@inject IHrPersonnelService Personnel
+
+<PageTitle>Org chart · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Org chart</MudText>
+<MudText Class="mud-text-secondary mb-4">Who reports to whom, from each person's supervisor. Expand a manager to see their team.</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4" data-testid="org-chart">
+        <ul class="wb-orgchart" role="tree" aria-label="Org chart">
+            @foreach (var root in Children(null))
+            {
+                @Node(root, 1)
+            }
+        </ul>
+    </MudPaper>
+}
+
+
+@code {
+    private IReadOnlyList<OrgChartNodeDto> _nodes = [];
+    private readonly HashSet<Guid> _collapsed = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () => _nodes = await Personnel.GetOrgChartAsync());
+
+    private IEnumerable<OrgChartNodeDto> Children(Guid? manager) => _nodes.Where(n => n.SupervisorId == manager);
+
+    private RenderFragment Node(OrgChartNodeDto n, int level) => __builder =>
+    {
+        var open = !_collapsed.Contains(n.EmployeeId);
+        <li role="treeitem" aria-level="@level" aria-expanded="@(n.DirectReports > 0 ? (open ? "true" : "false") : null)">
+            <span class="wb-org-node">
+                @if (n.DirectReports > 0)
+                {
+                    <button type="button" class="wb-org-toggle" aria-label="@($"{(open ? "Collapse" : "Expand")} {n.DisplayName}'s team")" @onclick="() => Toggle(n.EmployeeId)">@(open ? "▾" : "▸")</button>
+                }
+                <a href="@($"hr/employees/{n.EmployeeId}")"><strong>@n.DisplayName</strong></a>
+                <span class="mud-text-secondary">@n.JobTitle@(n.OrgUnitName is null ? "" : $" · {n.OrgUnitName}")@(n.DirectReports > 0 ? $" · {n.DirectReports} direct report(s)" : "")</span>
+            </span>
+            @if (n.DirectReports > 0 && open)
+            {
+                <ul role="group">
+                    @foreach (var child in Children(n.EmployeeId))
+                    {
+                        @Node(child, level + 1)
+                    }
+                </ul>
+            }
+        </li>
+    };
+
+    private void Toggle(Guid id)
+    {
+        if (!_collapsed.Remove(id))
+        {
+            _collapsed.Add(id);
+        }
+    }
+}

@@ -1,0 +1,42 @@
+@inject IOnboardingService Onboarding
+@inject NavigationManager Navigation
+
+<MudPaper Outlined="true" Class="pa-4 mb-4" Style="max-width:900px" data-testid="offboard-panel">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Offboard @EmployeeName</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Sets the last day (no charging after it) and lists the work: IT deactivates the sign-in, Finance recovers assets in their custody,
+        the manager approves the final timesheet, and HR records the leave payout and ends benefits.
+    </MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_lastDay" Editable="true" Label="Last day" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" sm="4">
+            <MudSelect T="TerminationReason" @bind-Value="_reason" Label="Reason" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var r in Enum.GetValues<TerminationReason>())
+                {
+                    <MudSelectItem T="TerminationReason" Value="r">@(r == TerminationReason.EndOfContract ? "End of contract" : r.ToString())</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4"><MudTextField @bind-Value="_note" Label="Note" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+    </MudGrid>
+    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Error" Disabled="Busy" OnClick="StartAsync" data-testid="start-offboarding">Start offboarding</MudButton>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    [Parameter] public string EmployeeName { get; set; } = "";
+
+    [Parameter] public EventCallback Done { get; set; }
+
+    private DateTime? _lastDay = DateTime.Today.AddDays(14);
+    private TerminationReason _reason = TerminationReason.Voluntary;
+    private string? _note;
+
+    private Task StartAsync() => RunAsync(async () =>
+    {
+        var checklist = await Onboarding.StartOffboardingAsync(new StartOffboardingRequest(EmployeeId, HrFormat.ToDate(_lastDay) ?? DateOnly.FromDateTime(DateTime.Today), _reason, null, _note));
+        await Done.InvokeAsync();
+        Navigation.NavigateTo($"hr/onboarding/{checklist.Id}");
+    }, "Offboarding started");
+}

@@ -35,6 +35,9 @@ public sealed record NavAccess(
 
     public bool IsResourceManager => User?.Roles.IsResourceManager() == true;
 
+    /// <summary>HR or Admin: personnel records, compensation, benefits, onboarding and HR reports.</summary>
+    public bool IsHr => User?.Roles.IsHr() == true;
+
     /// <summary>Has the Project manager org role (whether or not they manage a project yet).</summary>
     public bool HasProjectManagerRole => User?.Roles.HasFlag(OrgRoles.ProjectManager) == true;
 

@@ -1,0 +1,124 @@
+@page "/hr/onboarding"
+@inject IOnboardingService Onboarding
+@inject IHrPersonnelService Personnel
+@inject IHrAccessService HrAccess
+
+<PageTitle>Onboarding and offboarding · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Onboarding and offboarding</MudText>
+<MudText Class="mud-text-secondary mb-4">Each checklist's tasks belong to HR, IT, Finance, the manager or the new hire, and show on their home page until done.</MudText>
+
+@if (Error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@Error</MudAlert>
+}
+else if (Loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
+        <MudTabPanel Text="@($"My tasks ({_mine.Count})")" data-testid="tab-my-tasks">
+            <MudTable T="MyChecklistTaskDto" Items="_mine" Dense="true" aria-label="My onboarding and offboarding tasks">
+                <HeaderContent><MudTh>Task</MudTh><MudTh>For</MudTh><MudTh>Owner</MudTh><MudTh>Due</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Task"><MudLink Href="@($"hr/onboarding/{context.Task.ChecklistId}")">@context.Task.Title</MudLink></MudTd>
+                    <MudTd DataLabel="For">@context.Kind: @context.EmployeeName</MudTd>
+                    <MudTd DataLabel="Owner">@ChecklistLabels.Label(context.Task.Owner)</MudTd>
+                    <MudTd DataLabel="Due">@HrFormat.Date(context.Task.DueDate)@(context.Task.DueDate < DateOnly.FromDateTime(DateTime.Today) ? " (overdue)" : "")</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="mud-text-secondary">Nothing waiting on you.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+        <MudTabPanel Text="Checklists" data-testid="tab-checklists">
+            <MudSwitch T="bool" Value="_openOnly" ValueChanged="OpenChangedAsync" Color="Color.Primary" Label="Open only" Class="mb-2" />
+            <MudTable T="EmployeeChecklistDto" Items="_checklists" Dense="true" Hover="true" aria-label="Checklists" Class="mb-4" data-testid="checklists">
+                <HeaderContent><MudTh>Employee</MudTh><MudTh>Kind</MudTh><MudTh>Date</MudTh><MudTh>Open tasks</MudTh><MudTh>Status</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Employee"><MudLink Href="@($"hr/onboarding/{context.Id}")">@context.EmployeeName</MudLink></MudTd>
+                    <MudTd DataLabel="Kind">@context.Kind</MudTd>
+                    <MudTd DataLabel="Date">@(context.Kind == ChecklistKind.Onboarding ? "Starts" : "Last day") @HrFormat.Date(context.AnchorDate)</MudTd>
+                    <MudTd DataLabel="Open tasks">@context.OpenTasks of @context.Tasks.Count</MudTd>
+                    <MudTd DataLabel="Status">@context.Status</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="mud-text-secondary">No checklists.</MudText></NoRecordsContent>
+            </MudTable>
+            @if (_isHr)
+            {
+                <MudPaper Outlined="true" Class="pa-4" Style="max-width:900px">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Start onboarding</MudText>
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                        <MudSelect T="Guid?" @bind-Value="_newHire" Label="New hire" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:260px" data-testid="onboard-employee">
+                            @foreach (var p in _people) { <MudSelectItem T="Guid?" Value="p.EmployeeId">@p.DisplayName (starts @HrFormat.Date(p.HireDate))</MudSelectItem> }
+                        </MudSelect>
+                        <MudSelect T="Guid?" @bind-Value="_template" Label="Template" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:240px" Clearable="true">
+                            @foreach (var t in _templates.Where(t => t.Kind == ChecklistKind.Onboarding)) { <MudSelectItem T="Guid?" Value="t.Id">@t.Name</MudSelectItem> }
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Busy || _newHire is null)" OnClick="StartAsync" data-testid="start-onboarding">Start</MudButton>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Add the person under Setup › People first. To offboard someone, open their record and choose Offboard.</MudText>
+                </MudPaper>
+            }
+        </MudTabPanel>
+        @if (_isHr)
+        {
+            <MudTabPanel Text="Templates" data-testid="tab-templates">
+                @foreach (var t in _templates)
+                {
+                    <MudPaper Outlined="true" Class="pa-4 mb-3" Style="max-width:900px">
+                        <MudText Typo="Typo.h6" HtmlTag="h2">@t.Name <span class="mud-text-secondary">(@t.Kind@(t.IsActive ? "" : ", inactive"))</span></MudText>
+                        <ol class="mt-2">
+                            @foreach (var task in t.Tasks)
+                            {
+                                <li>@task.Title · @ChecklistLabels.Label(task.Owner) · @(task.DueOffsetDays == 0 ? "on the day" : task.DueOffsetDays > 0 ? $"{task.DueOffsetDays} days after" : $"{-task.DueOffsetDays} days before")</li>
+                            }
+                        </ol>
+                    </MudPaper>
+                }
+                <TemplateEditor Saved="ReloadAsync" />
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<MyChecklistTaskDto> _mine = [];
+    private IReadOnlyList<EmployeeChecklistDto> _checklists = [];
+    private IReadOnlyList<ChecklistTemplateDto> _templates = [];
+    private IReadOnlyList<EmployeeSummaryDto> _people = [];
+    private bool _isHr;
+    private bool _openOnly = true;
+    private Guid? _newHire;
+    private Guid? _template;
+
+    protected override Task OnInitializedAsync() => LoadAsync(async () =>
+    {
+        _isHr = (await HrAccess.GetAsync()).IsHr;
+        await ReloadAsync();
+    });
+
+    private async Task ReloadAsync()
+    {
+        _mine = await Onboarding.ListMyTasksAsync();
+        _checklists = await Onboarding.ListAsync(_openOnly);
+        if (_isHr)
+        {
+            _templates = await Onboarding.ListTemplatesAsync();
+            _people = (await Personnel.ListAsync(new EmployeeQuery())).OrderByDescending(p => p.HireDate).ToList();
+        }
+    }
+
+    private async Task OpenChangedAsync(bool value)
+    {
+        _openOnly = value;
+        await RunAsync(ReloadAsync);
+    }
+
+    private Task StartAsync() => RunAsync(async () =>
+    {
+        await Onboarding.StartOnboardingAsync(new StartOnboardingRequest(_newHire!.Value, _template));
+        _newHire = null;
+        await ReloadAsync();
+    }, "Onboarding started; everyone with a task was told");
+}
