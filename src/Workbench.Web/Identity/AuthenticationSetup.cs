@@ -102,13 +102,20 @@ public static class AuthenticationSetup
 
                     return Task.CompletedTask;
                 };
-                o.Events.OnValidatePrincipal = SessionValidation.ValidateCookieAsync;
+                o.Events.OnValidatePrincipal = async context =>
+                {
+                    await SessionValidation.ValidateCookieAsync(context);
+                    await OrganizationSessionPolicy.ValidateCookieAsync(context);
+                };
             });
 
         if (scimEnabled)
         {
             auth.AddScheme<AuthenticationSchemeOptions, ScimAuthenticationHandler>(ScimAuthenticationHandler.SchemeName, null);
         }
+
+        // The organization's own IdP (per tenant, from Admin › Users and security › Sign-in), whatever the server config.
+        auth.AddOrganizationSso(services);
 
         if (oidc.IsConfigured)
         {
@@ -118,53 +125,13 @@ public static class AuthenticationSetup
                 o.ClientId = oidc.ClientId;
                 o.ClientSecret = oidc.ClientSecret;
                 o.RequireHttpsMetadata = oidc.RequireHttpsMetadata;
-                o.ResponseType = "code";
-                o.UsePkce = true;
-                o.MapInboundClaims = false;
                 o.GetClaimsFromUserInfoEndpoint = true;
-                o.SaveTokens = false;
-                o.TokenValidationParameters.NameClaimType = "name";
+                OrganizationSso.ConfigureProtocol(o, "oidc");
                 o.Scope.Clear();
                 foreach (var scope in new[] { "openid", "profile", "email" }.Concat(oidc.Scopes).Distinct())
                 {
                     o.Scope.Add(scope);
                 }
-
-                o.Events.OnRedirectToIdentityProvider = context =>
-                {
-                    // API and hub callers can't follow a redirect to the sign-in page.
-                    if (IsApiRequest(context.Request))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        context.HandleResponse();
-                    }
-
-                    return Task.CompletedTask;
-                };
-                o.Events.OnTokenValidated = async context =>
-                {
-                    if (ClaimsUser.EmailOf(context.Principal) is not { } email)
-                    {
-                        await context.HttpContext.RequestServices.GetRequiredService<SecurityEventLog>()
-                            .RecordAsync(SecurityEventTypes.SignInFailure, null, SecurityOutcomes.Failure, "oidc: no email claim", actor: "anonymous");
-                        context.Fail("The identity provider didn't send an email, preferred_username or upn claim.");
-                        return;
-                    }
-
-                    var gate = context.HttpContext.RequestServices.GetRequiredService<SignInGate>();
-                    var decision = await gate.EvaluateAsync(email, ClaimsUser.NameOf(context.Principal), "oidc", interactive: true, context.HttpContext.RequestAborted);
-                    if (!decision.Allowed)
-                    {
-                        context.Fail(decision.Reason ?? "Sign-in refused.");
-                    }
-                };
-                o.Events.OnRemoteFailure = context =>
-                {
-                    // A refused or failed sign-in shows a plain page instead of an exception.
-                    context.Response.Redirect($"{AccountEndpoints.AccessDeniedPath}?reason=signin");
-                    context.HandleResponse();
-                    return Task.CompletedTask;
-                };
             });
 
             auth.AddJwtBearer(o =>
@@ -198,7 +165,8 @@ public static class AuthenticationSetup
                         // Every API call: deactivated users and revoked sessions are refused (A.8.5). Only refusals are logged.
                         var services = context.HttpContext.RequestServices;
                         var decision = await services.GetRequiredService<SignInGate>()
-                            .EvaluateAsync(email, ClaimsUser.NameOf(context.Principal), "bearer", interactive: false, context.HttpContext.RequestAborted);
+                            .EvaluateAsync(email, ClaimsUser.NameOf(context.Principal), "bearer", interactive: false, context.HttpContext.RequestAborted,
+                                OrganizationSso.ReadClaims(context.Principal!, "groups", groupsCount: false));
                         if (!decision.Allowed)
                         {
                             context.Fail(decision.Reason ?? "Refused.");
@@ -233,6 +201,13 @@ public static class AuthenticationSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, PrincipalCircuitHandler>());
         services.AddScoped<ISignOutService, WebSignOutService>();
         services.AddSingleton(new AccountOptions(devSignIn, oidc.IsConfigured));
+        services.AddScoped<ISignInContext, WebSignInContext>();
+        services.AddSingleton(new SignInServerInfo
+        {
+            ServerOidcConfigured = oidc.IsConfigured,
+            IdleTimeoutMinutes = (int)session.IdleTimeout.TotalMinutes,
+            AbsoluteLifetimeHours = (int)session.AbsoluteLifetime.TotalHours,
+        });
         return builder;
     }
 
