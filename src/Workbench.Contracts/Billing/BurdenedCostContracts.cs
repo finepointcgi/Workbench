@@ -6,6 +6,9 @@ public enum RateBasis
     Provisional,
     Target,
     Actual,
+
+    /// <summary>Forward pricing rates, for proposals (see proposal pricing).</summary>
+    ForwardPricing,
 }
 
 /// <summary>

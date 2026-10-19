@@ -16,12 +16,16 @@ public enum AllocationBase
     ValueAdded,
 }
 
-/// <summary>Which rate: provisional billing rates set at the start of the year, targets, or actual rates from closing the year.</summary>
+/// <summary>
+/// Which rate: provisional billing rates set at the start of the year, targets, actual rates from closing the year, or
+/// forward pricing rates (the rates proposals are priced at, often agreed in an FPRA or proposed in an FPRP).
+/// </summary>
 public enum IndirectRateBasis
 {
     Provisional,
     Target,
     Actual,
+    ForwardPricing,
 }
 
 /// <summary>

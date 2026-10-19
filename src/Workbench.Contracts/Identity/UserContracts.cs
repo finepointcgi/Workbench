@@ -27,6 +27,12 @@ public enum OrgRoles
     /// EACs, staffs them, approves what's charged to them and assigns tasks. Scoped to projects they manage; no cost rates.
     /// </summary>
     ProjectManager = 16,
+
+    /// <summary>
+    /// Prices proposals: sees employee cost rates (as labor rate averages), indirect rates and fee in proposal pricing, and
+    /// builds, compares and locks prices. Nothing else in Finance. (256 leaves room for roles other branches add.)
+    /// </summary>
+    Pricing = 256,
 }
 
 public static class OrgRoleChecks
@@ -48,12 +54,16 @@ public static class OrgRoleChecks
     /// <summary>ProjectManager, Finance or Admin: may create projects and set up the ones they manage (Finance/Admin: every one).</summary>
     public static bool CanManageProjects(this OrgRoles roles) => (roles & (OrgRoles.ProjectManager | OrgRoles.Finance | OrgRoles.Admin)) != 0;
 
+    /// <summary>Pricing, Finance or Admin: may see and edit proposal prices (cost rates, indirect rates, fee).</summary>
+    public static bool CanPrice(this OrgRoles roles) => (roles & (OrgRoles.Pricing | OrgRoles.Finance | OrgRoles.Admin)) != 0;
+
     /// <summary>Every assignable organization role, in display order (Employee is implicit).</summary>
     public static IReadOnlyList<OrgRoles> All { get; } =
-        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager];
+        [OrgRoles.Admin, OrgRoles.Finance, OrgRoles.ProjectManager, OrgRoles.Timekeeper, OrgRoles.ResourceManager, OrgRoles.Pricing];
 
     /// <summary>Every role flag combined (what the system user has).</summary>
-    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager;
+    public const OrgRoles Everything = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager | OrgRoles.ProjectManager
+        | OrgRoles.Pricing;
 
     /// <summary>A role's name for people: "Project manager", "Resource manager", or the enum name.</summary>
     public static string Label(OrgRoles role) => role switch

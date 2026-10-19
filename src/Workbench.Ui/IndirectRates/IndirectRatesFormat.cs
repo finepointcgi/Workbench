@@ -10,7 +10,9 @@ public static class IndirectRatesFormat
 {
     public static readonly CostPool[] Pools = [CostPool.Fringe, CostPool.Overhead, CostPool.GeneralAndAdministrative];
 
-    public static readonly RateBasis[] Bases = [RateBasis.Provisional, RateBasis.Target, RateBasis.Actual];
+    public static readonly RateBasis[] Bases = [RateBasis.Provisional, RateBasis.Target, RateBasis.Actual, RateBasis.ForwardPricing];
+
+    public static string Label(RateBasis basis) => basis == RateBasis.ForwardPricing ? "Forward pricing" : basis.ToString();
 
     /// <summary>A fraction as a percentage (0.32 → 32.00%); a dash for null.</summary>
     public static string Percent(decimal? rate) => rate is { } r ? (r * 100).ToString("0.00", CultureInfo.InvariantCulture) + "%" : "—";

@@ -41,6 +41,9 @@ public sealed record NavAccess(
     /// <summary>Runs projects: the Project manager role, or the manager of at least one project.</summary>
     public bool IsPm => IsProjectManager || HasProjectManagerRole;
 
+    /// <summary>Prices proposals: the Pricing role, Finance or Admin.</summary>
+    public bool CanPrice => User?.Roles.CanPrice() == true;
+
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
 

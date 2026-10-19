@@ -64,9 +64,9 @@ public sealed class AccessControl(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await db.Set<AppUser>().AsNoTracking()
             .Where(u => u.Email == email && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager })
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsPricing })
             .FirstOrDefaultAsync(cancellationToken);
-        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager);
+        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsPricing);
     }
 
     /// <summary>The employee record with the signed-in user's email, if any.</summary>
@@ -91,9 +91,9 @@ public sealed class AccessControl(
         }
     }
 
-    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper, bool resourceManager = false, bool projectManager = false) =>
+    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper, bool resourceManager = false, bool projectManager = false, bool pricing = false) =>
         (admin ? OrgRoles.Admin : 0) | (finance ? OrgRoles.Finance : 0) | (timekeeper ? OrgRoles.Timekeeper : 0)
-        | (resourceManager ? OrgRoles.ResourceManager : 0) | (projectManager ? OrgRoles.ProjectManager : 0);
+        | (resourceManager ? OrgRoles.ResourceManager : 0) | (projectManager ? OrgRoles.ProjectManager : 0) | (pricing ? OrgRoles.Pricing : 0);
 
     /// <summary>The user's role on a sheet (Owner for admins), or null when they can't see it or it doesn't exist.</summary>
     public async Task<WorkspaceRole?> GetSheetRoleAsync(Guid sheetId, CancellationToken cancellationToken = default)
