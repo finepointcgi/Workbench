@@ -178,7 +178,7 @@ public sealed partial class SignInSettingsService(
             throw new ArgumentException("Each group can be mapped once; combine its roles in one row.", nameof(request));
         }
 
-        const OrgRoles allRoles = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper | OrgRoles.ResourceManager;
+        const OrgRoles allRoles = OrgRoleChecks.Everything;
         if ((request.DefaultRoles & ~allRoles) != 0 || mappings.Any(m => (m.Roles & ~allRoles) != 0))
         {
             throw new ArgumentException("Unknown role.", nameof(request));

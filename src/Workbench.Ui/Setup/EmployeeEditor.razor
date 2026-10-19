@@ -6,11 +6,11 @@
                           Immediate="true" data-testid="employee-number" />
         </MudItem>
         <MudItem xs="12" sm="8">
-            <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true"
+            <MudTextField @bind-Value="_name" Label="Name" autocomplete="off" Required="true" RequiredError="Name is required." Immediate="true"
                           data-testid="employee-name" />
         </MudItem>
         <MudItem xs="12">
-            <MudTextField @bind-Value="_email" Label="Email" Required="true" RequiredError="Email is required." Immediate="true"
+            <MudTextField @bind-Value="_email" Label="Email" autocomplete="off" Required="true" RequiredError="Email is required." Immediate="true"
                           Validation="@(new Func<string?, string?>(ValidateEmail))" InputType="InputType.Email"
                           HelperText="Matches the person's sign-in account." data-testid="employee-email" />
         </MudItem>

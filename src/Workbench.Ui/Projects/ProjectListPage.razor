@@ -3,12 +3,17 @@
 @inject IProjectHubService Hub
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>Projects · Workbench</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
     <MudText Typo="Typo.h4" HtmlTag="h1">@(_list is { ShowsMoney: false } ? "My projects" : "Projects")</MudText>
     <MudSpacer />
+    @if (_canCreate)
+    {
+        <MudButton Href="setup/projects/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" data-testid="new-project">New project</MudButton>
+    }
     <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
 </MudStack>
 
@@ -193,8 +198,21 @@ else
     private string? _search;
     private bool _mineOnly; // Finance sees every project by default; "Mine" narrows to what they manage or charge to.
     private string _status = OpenStatus;
+    private bool _canCreate; // Finance, administrators and project managers (a project on a contract is then a request).
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Optional so the page renders where no user context is registered (tests).
+            _canCreate = Services.GetService(typeof(ICurrentUserContext)) is ICurrentUserContext context && (await context.GetAsync()).Roles.CanManageProjects();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+        }
+
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {

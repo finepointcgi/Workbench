@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MudBlazor;
 using MudBlazor.Services;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
 using Workbench.Ui.Collaboration;
 
@@ -31,6 +32,20 @@ public sealed class ItemDetailsDrawerTests
         Assert.Contains("pm@example.com", cut.Markup);
         Assert.Contains("Nov 2, 2026", cut.Markup);
         cut.WaitForAssertion(() => Assert.Contains("Looks good", cut.Markup));
+    }
+
+    [Fact]
+    public async Task Scheduled_sheets_show_depends_on_with_a_keyboard_way_to_link_items()
+    {
+        await using var ctx = CreateContext();
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo($"sheets/{Sheet.Summary.Id}?item={Review.Id}");
+
+        var cut = Render(ctx);
+
+        cut.WaitForAssertion(() => Assert.Contains("Kickoff meeting", cut.Find("[data-testid='depends-on'] ul").TextContent));
+        Assert.NotNull(cut.Find("button[aria-label='Remove dependency on Kickoff meeting']"));
+        Assert.Empty(cut.FindAll("[data-testid='add-dependency']")); // Kickoff is the only other item, and it's linked already.
+        Workbench.Tests.Accessibility.A11yAssert.Check(cut);
     }
 
     [Fact]
@@ -79,6 +94,7 @@ public sealed class ItemDetailsDrawerTests
         ctx.Services.AddSingleton<ICommentService>(new FakeComments());
         ctx.Services.AddSingleton<IAttachmentService>(new FakeAttachments());
         ctx.Services.AddSingleton<IActivityService>(new FakeActivity());
+        ctx.Services.AddSingleton<IDependencyService>(new FakeDependencies());
         return ctx;
     }
 
@@ -116,5 +132,15 @@ public sealed class ItemDetailsDrawerTests
     {
         public Task<IReadOnlyList<ActivityDto>> ListAsync(Guid sheetId, Guid? itemId = null, int limit = 100, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ActivityDto>>([]);
+    }
+
+    private sealed class FakeDependencies : IDependencyService
+    {
+        public Task<IReadOnlyList<DependencyDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<DependencyDto>>([new DependencyDto(Guid.NewGuid(), Kickoff.Id, Review.Id, DependencyKind.FinishToStart, 0)]);
+
+        public Task<DependencyDto> AddAsync(Guid sheetId, CreateDependencyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task RemoveAsync(Guid sheetId, Guid dependencyId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ScheduleAnalysis> AnalyzeAsync(Guid sheetId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

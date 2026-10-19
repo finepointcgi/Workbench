@@ -10,7 +10,7 @@ internal static class Mapping
 
     public static ItemDto ToDto(this Item i) =>
         new(i.Id, i.ParentId, i.Order, i.Title, i.Start, i.Finish, i.CostpointWbsId,
-            new Dictionary<string, string?>(i.Values));
+            new Dictionary<string, string?>(i.Values), i.IsMilestone);
 
     public static ColumnType ToDomain(this ColumnKind kind) => (ColumnType)(int)kind;
 }

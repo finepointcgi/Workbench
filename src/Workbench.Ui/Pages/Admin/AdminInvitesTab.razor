@@ -11,15 +11,15 @@
 <MudPaper Outlined="true" Class="pa-3 mb-4">
     <MudGrid Spacing="2">
         <MudItem xs="12" md="4">
-            <MudTextField @bind-Value="_email" Immediate="true" Label="Email" InputType="InputType.Email" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-email" />
+            <MudTextField @bind-Value="_email" Immediate="true" Label="Email" InputType="InputType.Email" autocomplete="off" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-email" />
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudTextField @bind-Value="_name" Immediate="true" Label="Name" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-name" />
+            <MudTextField @bind-Value="_name" Immediate="true" Label="Name" autocomplete="off" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="invite-name" />
         </MudItem>
         <MudItem xs="12" md="3" Class="d-flex align-center flex-wrap">
-            @foreach (var role in new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager })
+            @foreach (var role in OrgRoleChecks.All)
             {
-                <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@role.ToString()" Dense="true" Color="Color.Primary" />
+                <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@OrgRoleChecks.Label(role)" Dense="true" Color="Color.Primary" />
             }
         </MudItem>
         <MudItem xs="12" md="2" Class="d-flex align-center">
@@ -137,7 +137,7 @@
 
     internal static string RoleText(OrgRoles roles)
     {
-        var names = new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
+        var names = OrgRoleChecks.All.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
         return names.Count == 0 ? "Employee" : string.Join(", ", names);
     }
 

@@ -90,6 +90,78 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
         return ids.ToHashSet();
     }
 
+    /// <summary>True when the user is the project's manager (<c>Project.ProjectManagerId</c> is their employee).</summary>
+    public async Task<bool> ManagesProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        if (!access.IsAuthenticated || await access.GetEmployeeIdAsync(cancellationToken) is not { } me)
+        {
+            return false;
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await db.Set<Project>().AsNoTracking().AnyAsync(p => p.Id == projectId && p.ProjectManagerId == me, cancellationToken);
+    }
+
+    /// <summary>
+    /// Project setup (WBS, charge assignments, plan sheet, the project's own details): Finance and Admin everywhere; the
+    /// Project manager role on projects they manage. Managing a project without the role keeps only what it gave before
+    /// (financials and budgets).
+    /// </summary>
+    public async Task<bool> CanSetUpProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        if (!access.IsAuthenticated)
+        {
+            return false;
+        }
+
+        var roles = await access.GetOrgRolesAsync(cancellationToken);
+        return roles.IsFinance() || (roles.HasFlag(OrgRoles.ProjectManager) && await ManagesProjectAsync(projectId, cancellationToken));
+    }
+
+    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless <see cref="CanSetUpProjectAsync"/>.</summary>
+    public async Task RequireProjectSetupAsync(Guid projectId, string what, CancellationToken cancellationToken = default)
+    {
+        access.RequireSignedIn();
+        if (!await CanSetUpProjectAsync(projectId, cancellationToken))
+        {
+            throw new WorkbenchForbiddenException($"Only Finance, administrators and the project's manager (with the Project manager role) can {what}.");
+        }
+    }
+
+    /// <summary>The project a WBS element belongs to.</summary>
+    public async Task<Guid> ProjectOfWbsElementAsync(Guid wbsElementId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await db.Set<WbsElement>().AsNoTracking().Where(w => w.Id == wbsElementId).Select(w => (Guid?)w.ProjectId).FirstOrDefaultAsync(cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("WBS element", wbsElementId);
+    }
+
+    /// <summary>The project a charge assignment's WBS element belongs to.</summary>
+    public async Task<Guid> ProjectOfAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await db.Set<ChargeAssignment>().AsNoTracking().Where(a => a.Id == assignmentId)
+                .Join(db.Set<WbsElement>(), a => a.WbsElementId, w => w.Id, (a, w) => (Guid?)w.ProjectId).FirstOrDefaultAsync(cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Charge assignment", assignmentId);
+    }
+
+    /// <summary>Projects the user manages, or null for Finance and Admin (every project).</summary>
+    public async Task<IReadOnlySet<Guid>?> ManagedProjectIdsAsync(CancellationToken cancellationToken = default)
+    {
+        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        {
+            return null;
+        }
+
+        if (await access.GetEmployeeIdAsync(cancellationToken) is not { } me)
+        {
+            return new HashSet<Guid>();
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return (await db.Set<Project>().AsNoTracking().Where(p => p.ProjectManagerId == me).Select(p => p.Id).ToListAsync(cancellationToken)).ToHashSet();
+    }
+
     /// <summary>The project a budget version belongs to, or null when the version doesn't exist.</summary>
     public async Task<Guid?> ProjectOfBudgetVersionAsync(Guid versionId, CancellationToken cancellationToken = default)
     {

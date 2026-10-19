@@ -85,6 +85,43 @@ public sealed class CalendarViewTests
     }
 
     [Fact]
+    public async Task Shows_only_milestones_and_major_items_by_default()
+    {
+        var day = CalendarLayout.FirstOfMonth(Today).AddDays(9);
+        var phase = ViewFakes.Item("Phase 1", start: day, finish: day.AddDays(5));
+        var task = ViewFakes.Item("Write the plan", start: day, finish: day.AddDays(2), parentId: phase.Id);
+        var milestone = ViewFakes.Item("Plan approved", start: day.AddDays(5), finish: day.AddDays(5), parentId: phase.Id) with { IsMilestone = true };
+        await using var ctx = ViewFakes.CreateContext(new RecordingItemService());
+
+        var calendar = ctx.Render<SheetCalendarView>(p => p
+            .Add(v => v.Sheet, ViewFakes.Sheet(true))
+            .Add(v => v.Items, [phase, task, milestone]));
+
+        Assert.NotEmpty(Bars(calendar, phase));
+        Assert.NotEmpty(Bars(calendar, milestone));
+        Assert.Contains("◆", Bars(calendar, milestone)[0].TextContent);
+        Assert.Empty(Bars(calendar, task)); // an ordinary task stays off the key-dates calendar
+        Assert.Contains("1 more item is hidden", calendar.Find("[data-testid=calendar-hidden]").TextContent);
+    }
+
+    [Fact]
+    public async Task A_sheet_without_milestones_or_phases_shows_every_item()
+    {
+        var day = CalendarLayout.FirstOfMonth(Today).AddDays(9);
+        var a = ViewFakes.Item("Ticket A", start: day, finish: day);
+        var b = ViewFakes.Item("Ticket B", start: day.AddDays(1), finish: day.AddDays(1));
+        await using var ctx = ViewFakes.CreateContext(new RecordingItemService());
+
+        var calendar = ctx.Render<SheetCalendarView>(p => p
+            .Add(v => v.Sheet, ViewFakes.Sheet(true))
+            .Add(v => v.Items, [a, b]));
+
+        Assert.NotEmpty(Bars(calendar, a));
+        Assert.NotEmpty(Bars(calendar, b));
+        Assert.Single(calendar.FindAll("[data-testid=calendar-fallback]"));
+    }
+
+    [Fact]
     public async Task Uses_a_date_column_when_the_sheet_has_no_schedule()
     {
         var due = new ColumnDto(Guid.NewGuid(), "Due", ColumnKind.Date, 0, [], null);

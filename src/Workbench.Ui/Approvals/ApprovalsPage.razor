@@ -77,7 +77,7 @@
             Out of office? Let someone decide your approvals between two dates. Each decision records that it was made on your behalf.
         </MudText>
         <MudGrid>
-            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_delegate" Label="Delegate's email" data-testid="delegate-email" /></MudItem>
+            <MudItem xs="12" sm="4"><MudTextField @bind-Value="_delegate" Label="Delegate's email" autocomplete="off" data-testid="delegate-email" /></MudItem>
             <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="_from" Label="From" /></MudItem>
             <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="_to" Label="To" /></MudItem>
             <MudItem xs="12" sm="4">

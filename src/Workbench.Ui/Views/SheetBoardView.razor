@@ -4,6 +4,7 @@
 @inject IColumnService ColumnService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <div class="board-view">
     @if (_laneColumn is null)
@@ -31,6 +32,10 @@
                 </MudSelect>
             </div>
             <MudSwitch T="bool" Value="_leavesOnly" ValueChanged="SetLeavesOnly" Color="Color.Primary" Label="Leaf items only" />
+            @if (Tasks is not null)
+            {
+                <MudSwitch T="bool" Value="_myTasks" ValueChanged="SetMyTasks" Color="Color.Primary" Label="My tasks" data-testid="board-my-tasks" />
+            }
         </MudStack>
 
         <MudDropContainer @ref="_container" T="ItemDto" Items="VisibleItems" ItemsSelector="IsInLane" ItemDropped="OnItemDroppedAsync"
@@ -57,7 +62,8 @@
             <ItemRenderer>
                 <BoardCard Item="context" Person="@PersonOf(context)" Today="Today" OnOpen="Open" Href="@($"sheets/{SheetId}?item={context.Id}")"
                            Lanes="@(CanEdit ? Lanes : [])" CurrentLane="@(_laneColumn is null ? null : BoardLanes.ValueOf(context, _laneColumn))"
-                           OnMove="m => MoveToLaneAsync(m.Item, m.LaneValue)" TakeFocus="@(context.Id == _focusItemId)" />
+                           OnMove="m => MoveToLaneAsync(m.Item, m.LaneValue)" TakeFocus="@(context.Id == _focusItemId)"
+                           Assignees="@(Tasks?.For(context.Id) ?? [])" CanAssign="CanAssign" OnAssign="AssignAsync" />
             </ItemRenderer>
         </MudDropContainer>
         @* Announces keyboard and drag moves to screen readers. *@
@@ -72,6 +78,7 @@
     private ColumnDto? _laneColumn;
     private Guid? _chosenColumnId;
     private bool _leavesOnly;
+    private bool _myTasks;
     private bool _busy;
     private List<ItemDto> _items = [];
     private MudDropContainer<ItemDto>? _container;
@@ -88,7 +95,8 @@
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
-    private IReadOnlyList<ItemDto> VisibleItems => _leavesOnly ? BoardLanes.Leaves(_items).ToList() : _items;
+    private IReadOnlyList<ItemDto> VisibleItems =>
+        (_leavesOnly ? BoardLanes.Leaves(_items) : _items).Where(i => !_myTasks || TaskView.IsMine(Tasks, Sheet, i)).ToList();
 
     private IReadOnlyList<BoardLane> Lanes => _laneColumn is null ? [] : BoardLanes.Group(_laneColumn, VisibleItems);
 
@@ -115,6 +123,21 @@
         _focusItemId = null;
         _leavesOnly = value;
         _lanesChanged = true;
+    }
+
+    private void SetMyTasks(bool value)
+    {
+        _focusItemId = null;
+        _myTasks = value;
+        _lanesChanged = true;
+    }
+
+    private async Task AssignAsync(ItemDto item)
+    {
+        if (await TaskView.AssignAsync(DialogService, SheetId, item, Tasks?.For(item.Id) ?? []))
+        {
+            await Changed.InvokeAsync();
+        }
     }
 
     private static string LaneId(string value) => LanePrefix + value;
