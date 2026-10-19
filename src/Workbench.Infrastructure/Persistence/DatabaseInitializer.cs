@@ -190,6 +190,7 @@ public static class DatabaseInitializer
         await CrmSeed.SeedAsync(db, services, cancellationToken); // Business development: Blake Diaz (bd@), 10 opportunities across the stages, accounts, contacts, leads.
         await PricingSeed.SeedAsync(db, services, cancellationToken); // Proposal pricing: Riley Quinn (Pricing role), forward pricing rates, PRP-2027-014 with a scenario and version 1.
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
+        await GovernmentBillingSeed.SeedAsync(db, factory, cancellationToken); // Government billing: progress payments on W56HZV-26-C-0042 (4101), performance-based payments on N00019-26-C-0117 (4201).
     }
 
     /// <summary>

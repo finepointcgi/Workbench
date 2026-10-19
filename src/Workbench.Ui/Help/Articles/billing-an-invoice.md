@@ -25,7 +25,7 @@ Hours and costs can only be billed once. [Unallowable](term:unallowable) costs a
 ## Post and send
 
 1. Select **Approve and post**. The invoice posts to the general ledger.
-2. Download it as **SF 1034** or a **WAWF CSV** for the government's invoicing system, and select **Mark sent**.
+2. Select **Print** for the contract's format (SF 1034 or your own layout), or send it to PIEE from the **PIEE (WAWF)** panel (see [Bill the government](help:government-billing)), and select **Mark sent**.
 
 ## When the customer pays
 

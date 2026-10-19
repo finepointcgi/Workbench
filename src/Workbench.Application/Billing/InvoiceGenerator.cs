@@ -73,7 +73,7 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
     {
         InvoiceType.TimeAndMaterials => IsTimeAndMaterials(p),
         InvoiceType.CostPlus or InvoiceType.TrueUp => IsCostType(p),
-        InvoiceType.FixedPriceMilestone => p == ClinPricing.FirmFixedPrice,
+        InvoiceType.FixedPriceMilestone or InvoiceType.PerformanceBased => p == ClinPricing.FirmFixedPrice,
         _ => false,
     };
 
@@ -93,6 +93,12 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
 
         var prior = await PriorInvoicesAsync(db, ctx.Contract.Id, excludeInvoiceId, approvedOnly, ct);
         var warnings = new List<string>();
+        if (type == InvoiceType.PerformanceBased)
+        {
+            // Performance-based payments are contract financing: events for the whole contract or a CLIN, any pricing.
+            return await PerformanceEventsAsync(db, ctx, to, excludeInvoiceId, warnings, ct);
+        }
+
         var clins = ctx.Clins.Where(c => Bills(type, c.Pricing)).ToList();
         foreach (var unexercised in clins.Where(c => !c.IsExercised))
         {
@@ -112,6 +118,7 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
             InvoiceType.CostPlus => await CostAsync(db, ctx, clins, InvoiceType.CostPlus, from, to, releaseWithhold, prior, warnings, ct),
             InvoiceType.TrueUp => await CostAsync(db, ctx, clins, InvoiceType.TrueUp, from, to, false, prior, warnings, ct),
             InvoiceType.FixedPriceMilestone => await MilestonesAsync(db, ctx, clins, to, excludeInvoiceId, warnings, ct),
+            InvoiceType.ProgressPayment => throw new ArgumentException("Progress payments are requested on an SF 1443 from the contract's progress payments page."),
             _ => throw new ArgumentException("Credit memos are created from an approved invoice."),
         };
         return result with { Lines = Order(ctx, result.Lines) };
@@ -515,6 +522,37 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
     }
 
     /// <summary>
+    /// Completed, unbilled performance-based payment events through <paramref name="to"/>. The lines have no CLIN: they are
+    /// financing, liquidated later from deliveries, not billings against CLIN funding.
+    /// </summary>
+    private static async Task<Generation> PerformanceEventsAsync(
+        IWorkbenchDbContext db, BillingContext ctx, DateOnly to, Guid? excludeInvoiceId, List<string> warnings, CancellationToken ct)
+    {
+        var settings = await ContractFinancingLedger.SettingsAsync(db, ctx.Contract.Id, ct);
+        if (settings?.Financing != ContractFinancing.PerformanceBased)
+        {
+            warnings.Add($"Contract {ctx.Contract.ContractNumber} doesn't use performance-based payments. Turn them on in its billing settings.");
+            return new Generation([], warnings, null);
+        }
+
+        var events = await db.Set<PerformanceBasedPaymentEvent>().AsNoTracking().Where(e => e.ContractId == ctx.Contract.Id).ToListAsync(ct);
+        foreach (var late in events.Where(e => e.CompletedDate is null && e.PlannedDate <= to))
+        {
+            warnings.Add($"Event \"{late.Description}\" was planned for {late.PlannedDate:yyyy-MM-dd} but isn't complete, so it isn't billed.");
+        }
+
+        var lines = events
+            .Where(e => e.CompletedDate is { } done && done <= to && (e.InvoiceId is null || e.InvoiceId == excludeInvoiceId))
+            .OrderBy(e => e.Order).ThenBy(e => e.PlannedDate)
+            .Select(e => new DraftLine(null, InvoiceLineKind.PerformanceBasedPayment,
+                $"Performance-based payment event {e.Order}: {e.Description}{(e.ClinId is { } c && ctx.Clin(c) is { } clin ? $" (CLIN {clin.Number})" : "")} (completed {e.CompletedDate:yyyy-MM-dd})",
+                null, null, null, null, 1, e.Amount, e.Amount,
+                [new BilledSource { Kind = BilledSourceKind.PerformanceEvent, SourceId = e.Id, Date = e.CompletedDate!.Value, Quantity = 1, Rate = e.Amount, Amount = e.Amount, Description = e.Description }]))
+            .ToList();
+        return new Generation(lines, warnings, null);
+    }
+
+    /// <summary>
     /// The funding check for each CLIN on the invoice: billed on approved invoices (credit memos net) plus this invoice,
     /// against funded value and ceiling.
     /// </summary>
@@ -571,6 +609,8 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
         InvoiceType.CostPlus => "cost-plus",
         InvoiceType.FixedPriceMilestone => "FFP milestone",
         InvoiceType.TrueUp => "cost-plus (true-up)",
+        InvoiceType.ProgressPayment => "progress payment",
+        InvoiceType.PerformanceBased => "performance-based payment",
         _ => "credit memo",
     };
 

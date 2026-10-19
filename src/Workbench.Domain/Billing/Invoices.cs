@@ -17,6 +17,12 @@ public enum InvoiceType
 
     /// <summary>A credit against an approved invoice.</summary>
     CreditMemo,
+
+    /// <summary>A progress payment based on cost (FAR 52.232-16), from an SF 1443 request. Financing, not revenue.</summary>
+    ProgressPayment,
+
+    /// <summary>Performance-based payments (FAR 32.10) for completed events. Financing, not revenue.</summary>
+    PerformanceBased,
 }
 
 public enum InvoiceStatus
@@ -57,6 +63,15 @@ public enum InvoiceLineKind
 
     /// <summary>A manual adjustment, true-up or credit.</summary>
     Adjustment,
+
+    /// <summary>The amount requested on an SF 1443 progress payment request.</summary>
+    ProgressPayment,
+
+    /// <summary>A completed performance-based payment event.</summary>
+    PerformanceBasedPayment,
+
+    /// <summary>Negative: progress or performance-based payments recouped from a delivery invoice.</summary>
+    Liquidation,
 }
 
 /// <summary>
@@ -191,6 +206,7 @@ public enum BilledSourceKind
     TimeEntry,
     Odc,
     Milestone,
+    PerformanceEvent,
 }
 
 /// <summary>
