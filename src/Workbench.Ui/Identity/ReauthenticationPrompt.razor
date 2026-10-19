@@ -1,0 +1,41 @@
+@implements IDisposable
+@inject IReauthenticationService Reauthentication
+@inject NavigationManager Navigation
+
+@* Shown when a sensitive action (pay rates, bank details, approval workflows, sign-in settings) was refused because the
+   sign-in is too old. "Sign in again" goes back to the identity provider and returns to this page. *@
+@if (_pending is { } pending)
+{
+    <MudPaper Elevation="8" Class="pa-4" Style="position:fixed; right:16px; bottom:16px; max-width:420px; z-index:2000" role="alertdialog"
+              aria-labelledby="reauth-title" data-testid="reauth-prompt">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="reauth-title" Class="mb-1">Confirm it's you</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">@pending.Message</MudText>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+            <MudButton Variant="Variant.Text" OnClick="Dismiss">Not now</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SignInAgain" data-testid="reauth-sign-in">Sign in again</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private ReauthenticationRequiredException? _pending;
+
+    protected override void OnInitialized() => Reauthentication.Required += OnRequired;
+
+    public void Dispose() => Reauthentication.Required -= OnRequired;
+
+    private void OnRequired(ReauthenticationRequiredException exception) =>
+        _ = InvokeAsync(() =>
+        {
+            _pending = exception;
+            StateHasChanged();
+        });
+
+    private void Dismiss() => _pending = null;
+
+    private void SignInAgain()
+    {
+        var returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.NavigateTo($"account/reauthenticate?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+    }
+}

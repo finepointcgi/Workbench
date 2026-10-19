@@ -26,7 +26,7 @@ public static class DevSignIn
     internal static void Map(IEndpointRouteBuilder app)
     {
         app.MapGet(Path, async (HttpContext http, IAntiforgery antiforgery, IWorkbenchDbContextFactory dbFactory, TimeProvider clock, Application.Tenancy.ITenantContext tenants,
-            Application.Tenancy.TenancyOptions tenancy, string? returnUrl) =>
+            Application.Tenancy.TenancyOptions tenancy, SignInSettingsStore signInSettings, string? returnUrl, string? reauth) =>
         {
             if (tenants.IsHost)
             {
@@ -46,7 +46,10 @@ public static class DevSignIn
                 .ToListAsync(http.RequestAborted);
             var known = users.Select(u => u.Email).ToHashSet();
             var tokens = antiforgery.GetAndStoreTokens(http);
-            return Results.Content(RenderPage(users, invites.Where(i => !known.Contains(i.Email)).ToList(), tokens, AccountEndpoints.SafeReturnUrl(returnUrl)), "text/html; charset=utf-8");
+            var policy = await signInSettings.GetAsync(http.RequestAborted);
+            var organizationIdp = policy.OrganizationIdpReady ? policy.Settings.DisplayName ?? "your organization's identity provider" : null;
+            return Results.Content(RenderPage(users, invites.Where(i => !known.Contains(i.Email)).ToList(), tokens, AccountEndpoints.SafeReturnUrl(returnUrl),
+                organizationIdp: organizationIdp, reauth: reauth == "1"), "text/html; charset=utf-8");
         }).AllowAnonymous().ExcludeFromDescription();
 
         app.MapPost(Path, async (HttpContext http, SignInGate gate, TimeProvider clock, [Microsoft.AspNetCore.Mvc.FromForm] string email, [Microsoft.AspNetCore.Mvc.FromForm] string? returnUrl) =>
@@ -60,8 +63,11 @@ public static class DevSignIn
                 return Results.Redirect($"{AccountEndpoints.AccessDeniedPath}?reason=signin");
             }
 
+            var now = clock.GetUtcNow();
             var identity = new ClaimsIdentity(
-                [new Claim("sub", user.Email), new Claim("email", user.Email), new Claim("name", user.DisplayName), Security.SessionValidation.SignedInAt(clock.GetUtcNow())],
+                [new Claim("sub", user.Email), new Claim("email", user.Email), new Claim("name", user.DisplayName), Security.SessionValidation.SignedInAt(now),
+                    new Claim(OrganizationSso.AuthTimeClaim, now.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+                    new Claim(OrganizationSso.MfaClaim, "false"), new Claim(OrganizationSso.MethodClaim, "dev")],
                 "dev", "name", "role");
             await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
             return Results.LocalRedirect(AccountEndpoints.SafeReturnUrl(returnUrl));
@@ -84,7 +90,8 @@ public static class DevSignIn
         return roles.Length == 0 ? "Employee" : roles;
     }
 
-    private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false)
+    private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false,
+        string? organizationIdp = null, bool reauth = false)
     {
         static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
         var html = new StringBuilder("""
@@ -97,11 +104,21 @@ public static class DevSignIn
               h1 { font-size: 1.4rem; margin: 0 0 4px; } h2 { font-size: 1rem; margin: 20px 0 4px; } p { color: #6b7280; margin: 0 0 20px; }
               button { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 12px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
               button:hover { border-color: #2563eb; background: #eff6ff; } small { display: block; color: #6b7280; }
-              .admin { font-size: .75rem; color: #2563eb; margin-left: 6px; }
+              .admin { font-size: .75rem; color: #2563eb; margin-left: 6px; } .note { color: #92400e; background: #fffbeb; padding: 8px; border-radius: 6px; }
             </style></head><body><main>
             <h1>Sign in (development)</h1>
             <p>No identity provider is configured, so pick a seeded user. This page doesn't exist outside Development.</p>
             """);
+        if (reauth)
+        {
+            html.Append("<p class=\"note\"><strong>Confirm it's you.</strong> A sensitive action needs a recent sign-in: pick your user again.</p>");
+        }
+
+        if (organizationIdp is not null)
+        {
+            html.Append($"""<p><a href="{AccountEndpoints.SignInPath}?returnUrl={E(Uri.EscapeDataString(returnUrl))}">Sign in with {E(organizationIdp)}</a></p>""");
+        }
+
         foreach (var user in users)
         {
             html.Append($"""
