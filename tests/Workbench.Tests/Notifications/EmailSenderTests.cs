@@ -31,6 +31,8 @@ public sealed class EmailSenderTests : IDisposable
     [InlineData(null, "smtp.contoso.test", typeof(SmtpEmailSender))]
     [InlineData("Pickup", "smtp.contoso.test", typeof(PickupFolderEmailSender))]
     [InlineData("Smtp", null, typeof(SmtpEmailSender))]
+    [InlineData("SendGrid", null, typeof(SendGridEmailSender))]
+    [InlineData("ses", null, typeof(SesEmailSender))]
     public void Mode_selects_the_sender(string? mode, string? host, Type expected)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -38,13 +40,15 @@ public sealed class EmailSenderTests : IDisposable
             ["Email:Mode"] = mode,
             ["Email:Smtp:Host"] = host,
             ["Email:PickupFolder"] = _folder,
+            ["Email:Ses:Region"] = "us-east-1",
         }).Build();
         var services = new ServiceCollection();
         services.AddSingleton<IEmailSender, NullEmailSender>();
 
         services.AddNotificationInfrastructure(configuration);
 
-        Assert.IsType(expected, services.BuildServiceProvider().GetRequiredService<IEmailSender>());
+        var sender = Assert.IsType<InstrumentedEmailSender>(services.BuildServiceProvider().GetRequiredService<IEmailSender>());
+        Assert.IsType(expected, sender.Inner);
     }
 
     public void Dispose()

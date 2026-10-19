@@ -6,8 +6,9 @@ namespace Workbench.Web.Security;
 
 /// <summary>
 /// Refuses to start outside Development with a known-weak configuration (ISO 27001 A.8.9, A.8.24): the dev sign-in
-/// page, plain HTTP without a TLS-terminating proxy, SCIM without a strong token, or SQLite in Production without an
-/// explicit opt-in. Development is never checked.
+/// page, plain HTTP without a TLS-terminating proxy, SCIM without a strong token, SQLite in Production without an
+/// explicit opt-in, and in Production an unencrypted Data Protection key ring or SMTP without TLS. Development is never
+/// checked.
 /// </summary>
 public static class ProductionConfigurationCheck
 {
@@ -55,6 +56,17 @@ public static class ProductionConfigurationCheck
             problems.Add("Database:Provider is Sqlite in Production. Use PostgreSQL, or set Database:AllowSqliteInProduction=true for a single-user evaluation.");
         }
 
+        problems.AddRange(DataProtectionProblems(configuration, environment));
+
+        var smtpPlainText = configuration["Email:Smtp:Security"] is { Length: > 0 } smtpSecurity
+            ? smtpSecurity.Equals("None", StringComparison.OrdinalIgnoreCase)
+            : !configuration.GetValue("Email:Smtp:EnableSsl", true);
+        var emailMode = configuration["Email:Mode"] is { Length: > 0 } m ? m : string.IsNullOrWhiteSpace(configuration["Email:Smtp:Host"]) ? "Pickup" : "Smtp";
+        if (environment.IsProduction() && emailMode.Equals("Smtp", StringComparison.OrdinalIgnoreCase) && smtpPlainText)
+        {
+            problems.Add("Email is sent over SMTP without TLS. Set Email:Smtp:Security to Auto, StartTls or SslOnConnect.");
+        }
+
         if (tenancy.IsMultiTenant)
         {
             // MultiTenant (A.8.3, A.5.23): tenants only admit invited people, and the host site needs its own admins.
@@ -72,6 +84,56 @@ public static class ProductionConfigurationCheck
             {
                 problems.Add("Tenancy:BaseDomain is localhost. Set the domain tenants are subdomains of (e.g. workbench.example).");
             }
+        }
+
+        return problems;
+    }
+
+    /// <summary>
+    /// The Data Protection key ring protects cookies and the secrets stored encrypted (vendor TINs, bank accounts), so in
+    /// Production it must be encrypted at rest and kept somewhere every instance shares and backups include.
+    /// </summary>
+    private static IEnumerable<string> DataProtectionProblems(IConfiguration configuration, IHostEnvironment environment)
+    {
+        var settings = configuration.GetSection(DataProtectionSettings.SectionName).Get<DataProtectionSettings>() ?? new DataProtectionSettings();
+        KeyEncryptionMode mode;
+        try
+        {
+            mode = settings.ResolveKeyEncryption();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return [ex.Message];
+        }
+
+        var problems = new List<string>();
+        switch (mode)
+        {
+            case KeyEncryptionMode.None when environment.IsProduction():
+                problems.Add("Data Protection keys aren't encrypted at rest. Set DataProtection:KeyEncryption to Certificate (DataProtection:CertificatePath or :CertificateThumbprint), AzureKeyVault (DataProtection:AzureKeyVault:KeyId) or AwsKms (DataProtection:AwsKms:KeyId).");
+                break;
+            case KeyEncryptionMode.Certificate when string.IsNullOrWhiteSpace(settings.CertificatePath) && string.IsNullOrWhiteSpace(settings.CertificateThumbprint):
+                problems.Add("DataProtection:KeyEncryption is Certificate but neither DataProtection:CertificatePath nor :CertificateThumbprint is set.");
+                break;
+            case KeyEncryptionMode.Certificate when !string.IsNullOrWhiteSpace(settings.CertificatePath) && !File.Exists(settings.CertificatePath):
+                problems.Add($"DataProtection:CertificatePath '{settings.CertificatePath}' doesn't exist.");
+                break;
+            case KeyEncryptionMode.AzureKeyVault when !Uri.TryCreate(settings.AzureKeyVault.KeyId, UriKind.Absolute, out var keyId) || keyId.Scheme != Uri.UriSchemeHttps:
+                problems.Add("DataProtection:KeyEncryption is AzureKeyVault but DataProtection:AzureKeyVault:KeyId isn't an https:// key identifier.");
+                break;
+            case KeyEncryptionMode.AwsKms when string.IsNullOrWhiteSpace(settings.AwsKms.KeyId):
+                problems.Add("DataProtection:KeyEncryption is AwsKms but DataProtection:AwsKms:KeyId is empty.");
+                break;
+        }
+
+        foreach (var previous in settings.PreviousCertificates.Where(c => !string.IsNullOrWhiteSpace(c.Path) && !File.Exists(c.Path)))
+        {
+            problems.Add($"DataProtection:PreviousCertificates path '{previous.Path}' doesn't exist.");
+        }
+
+        if (environment.IsProduction() && settings.Store.Equals("Default", StringComparison.OrdinalIgnoreCase))
+        {
+            problems.Add("DataProtection:Store is Default in Production: keys would live on one machine (or vanish with a container). Use Database.");
         }
 
         return problems;

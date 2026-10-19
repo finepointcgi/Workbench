@@ -175,6 +175,16 @@ public static class SecurityHeaders
                     o.KnownProxies.Add(address);
                 }
             }
+
+            // ForwardedHeaders:KnownNetworks: CIDR ranges of proxies whose addresses change (a container network, a
+            // Kubernetes pod range), e.g. 172.28.0.0/24.
+            foreach (var network in configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+            {
+                if (System.Net.IPNetwork.TryParse(network, out var parsed))
+                {
+                    o.KnownIPNetworks.Add(parsed);
+                }
+            }
         });
         return services;
     }

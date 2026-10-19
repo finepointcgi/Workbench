@@ -109,6 +109,8 @@ public sealed class TenancyUnitTests
             ["Security:TlsTerminatedByProxy"] = "true",
             ["Database:Provider"] = "PostgreSQL",
             ["Scim:BearerToken"] = new string('x', 40),
+            ["DataProtection:KeyEncryption"] = "AwsKms",
+            ["DataProtection:AwsKms:KeyId"] = "arn:aws:kms:us-east-1:111122223333:alias/workbench-dp",
         };
         Assert.Empty(Problems("Production", baseline));
 
