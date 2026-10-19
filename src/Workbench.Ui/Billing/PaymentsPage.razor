@@ -14,7 +14,7 @@
 }
 else if (_customers is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -60,7 +60,7 @@ else
                                 <td class="@(i.DaysPastDue > 0 ? "mud-error-text" : "")">@BillingFormat.Date(i.DueDate)</td>
                                 <td style="text-align:right">@BillingFormat.Amount(i.Balance)</td>
                                 <td>
-                                    <MudNumericField T="decimal" Value="_apply.GetValueOrDefault(i.Id)" ValueChanged="v => _apply[i.Id] = v" Format="N2" HideSpinButtons="true"
+                                    <MudNumericField T="decimal" Value="_apply.GetValueOrDefault(i.Id)" aria-label="@($"Amount to apply, invoice {i.Number}")" ValueChanged="v => _apply[i.Id] = v" Format="N2" HideSpinButtons="true"
                                                      Min="0" Max="i.Balance" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="apply-amount" />
                                 </td>
                                 <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _apply[i.Id] = i.Balance">Full</MudButton></td>

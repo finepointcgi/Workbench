@@ -59,7 +59,7 @@
             {
                 <MudNumericField T="decimal?" @bind-Value="_billing" Label="Billing ceiling ($)" Min="0" Clearable="true" HelperText="Invoices may not bill past it (when blocking)." />
             }
-            <MudRadioGroup T="CeilingMode" @bind-Value="_mode">
+            <MudRadioGroup T="CeilingMode" @bind-Value="_mode" aria-label="When the ceiling is reached">
                 <MudRadio T="CeilingMode" Value="CeilingMode.Warn">Warn</MudRadio>
                 <MudRadio T="CeilingMode" Value="CeilingMode.Block" data-testid="ceiling-block">Block</MudRadio>
             </MudRadioGroup>

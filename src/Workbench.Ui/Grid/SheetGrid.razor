@@ -8,10 +8,16 @@
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 
+@* ARIA grid: focus stays on the container and aria-activedescendant points screen readers at the active cell, so
+   moving with the arrow keys announces the cell (its column header and value). The table is presentational; the rows
+   and cells carry the grid roles. *@
 <div class="wb-grid" @ref="_container" tabindex="0" role="grid" aria-label="@Sheet.Summary.Name"
-     aria-rowcount="@_rows.Count" aria-colcount="@_columns.Count" style="max-height:@Height"
+     aria-rowcount="@(_rows.Count + 1)" aria-colcount="@(_columns.Count + 2)" style="max-height:@Height"
+     aria-activedescendant="@(ActiveRow is not null && ActiveColumn is not null ? ActiveCellId : null)"
+     aria-describedby="@($"{_gridId}-help")"
      @onkeydown="OnKeyDownAsync">
-    <table class="wb-table" style="width:@(TableWidth)px">
+    <span id="@($"{_gridId}-help")" class="wb-sr-only">Arrow keys move between cells. Enter or F2 edits a cell, Enter saves, Escape cancels. Space toggles a checkbox.</span>
+    <table class="wb-table" style="width:@(TableWidth)px" role="presentation">
         <colgroup>
             <col style="width:@(GutterWidth)px" />
             @foreach (var column in _columns)
@@ -20,9 +26,10 @@
             }
             <col style="width:@(AddColumnWidth)px" />
         </colgroup>
-        <thead>
-            <tr>
-                <th class="wb-gutter wb-sticky">
+        <thead role="rowgroup">
+            <tr role="row" aria-rowindex="1">
+                <th class="wb-gutter wb-sticky" role="columnheader" aria-colindex="1">
+                    <span class="wb-sr-only">Row</span>
                     <MudMenu Icon="@Icons.Material.Filled.UnfoldMore" Size="Size.Small" Dense="true" AriaLabel="Rows">
                         <MudMenuItem Icon="@Icons.Material.Filled.UnfoldMore" OnClick="ExpandAll">Expand all</MudMenuItem>
                         <MudMenuItem Icon="@Icons.Material.Filled.UnfoldLess" OnClick="CollapseAll">Collapse all</MudMenuItem>
@@ -31,11 +38,12 @@
                 @for (var c = 0; c < _columns.Count; c++)
                 {
                     var column = _columns[c];
-                    <th data-col="@c" class="@(column.Kind == GridColumnKind.Title ? "wb-title wb-sticky" : null)" title="@HeaderTooltip(column)">
+                    <th data-col="@c" class="@(column.Kind == GridColumnKind.Title ? "wb-title wb-sticky" : null)" title="@HeaderTooltip(column)"
+                        role="columnheader" aria-colindex="@(c + 2)">
                         <div class="wb-th">
                             @if (column.IsFormula)
                             {
-                                <MudIcon Icon="@Icons.Material.Filled.Functions" Size="Size.Small" Class="wb-fx" />
+                                <MudIcon Icon="@Icons.Material.Filled.Functions" Size="Size.Small" Class="wb-fx" aria-hidden="true" /><span class="wb-sr-only">Formula column:</span>
                             }
                             @if (column.IsRestricted)
                             {
@@ -73,7 +81,7 @@
                         <span class="wb-resize" data-key="@column.Key" aria-hidden="true"></span>
                     </th>
                 }
-                <th class="wb-add-col">
+                <th class="wb-add-col" role="columnheader" aria-colindex="@(_columns.Count + 2)">
                     @if (CanEdit)
                     {
                         <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="AddColumnAsync" aria-label="Add column" />
@@ -81,10 +89,10 @@
                 </th>
             </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
             <Virtualize Items="_rows" ItemSize="RowHeight" OverscanCount="10" SpacerElement="tr" Context="row">
-                <tr class="@RowClass(row)" aria-rowindex="@(IndexOf(row) + 2)">
-                    <td class="wb-gutter wb-sticky">
+                <tr class="@RowClass(row)" role="row" aria-rowindex="@(IndexOf(row) + 2)">
+                    <td class="wb-gutter wb-sticky" role="rowheader" aria-colindex="1">
                         <div class="wb-gutter-cell">
                         <span class="wb-rownum">@(IndexOf(row) + 1)</span>
                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="wb-row-menu" AriaLabel="Row actions">
@@ -110,7 +118,8 @@
                         var editing = active && _editing;
                         var raw = CellFormat.GetRaw(row.Item, column);
                         <td class="@CellClass(column, active, editing)" data-col="@colIndex" role="gridcell"
-                            aria-selected="@(active ? "true" : "false")"
+                            id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)"
+                            aria-selected="@(active ? "true" : "false")" aria-readonly="@(!column.ReadOnly && CanEdit ? null : "true")"
                             @onclick="() => OnCellClickAsync(row, colIndex)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
                             @if (editing)
                             {
@@ -138,7 +147,7 @@
                             else if (column.ValueKind == ColumnKind.Checkbox)
                             {
                                 var isChecked = raw == "true";
-                                <span class="wb-check" role="checkbox" aria-checked="@(isChecked ? "true" : "false")"
+                                <span class="wb-check" role="checkbox" aria-checked="@(isChecked ? "true" : "false")" aria-label="@column.Name"
                                       @onclick="() => ToggleCheckboxAsync(row, colIndex)" @onclick:stopPropagation="true">
                                     <MudIcon Icon="@(isChecked ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
                                              Size="Size.Small" Color="@(isChecked ? Color.Primary : Color.Default)" />
@@ -150,7 +159,7 @@
                             }
                         </td>
                     }
-                    <td class="wb-filler"></td>
+                    <td class="wb-filler" role="presentation"></td>
                 </tr>
             </Virtualize>
         </tbody>
@@ -200,6 +209,8 @@
     private readonly Dictionary<string, int> _widths = [];
 
     private Guid? _activeId;
+    private readonly string _gridId = $"wb-grid-{Guid.NewGuid():N}";
+    private string ActiveCellId => $"{_gridId}-active";
     private int _activeRow = -1;
     private int _activeCol;
     private bool _editing;

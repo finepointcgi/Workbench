@@ -13,7 +13,7 @@
 }
 else if (_forecast is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -34,7 +34,9 @@ else
     </MudGrid>
 
     <MudPaper Outlined="true" Class="pa-4 mb-3">
-        <MudChart T="double" ChartType="ChartType.Line" ChartSeries="Series" ChartLabels="Labels" Width="100%" Height="300px" LegendPosition="Position.Bottom" data-testid="forecast-chart" />
+        <AccessibleChart Title="Cash forecast by week" Labels="Labels" Series="Series" LabelHeader="Week starting" ShowTable="false">
+            <MudChart T="double" ChartType="ChartType.Line" ChartSeries="Series" ChartLabels="Labels" Width="100%" Height="300px" LegendPosition="Position.Bottom" data-testid="forecast-chart" />
+        </AccessibleChart>
     </MudPaper>
 
     <MudPaper Outlined="true" Class="mb-3" Style="overflow-x:auto">
@@ -55,7 +57,7 @@ else
                         <td style="text-align:right">@AccountingFormat.Blank(w.Payables)</td>
                         <td style="text-align:right">@AccountingFormat.Blank(w.Payroll)</td>
                         <td style="text-align:right">@AccountingFormat.Blank(w.Other)</td>
-                        <td><MudNumericField T="decimal" Value="_whatIf[week - 1]" ValueChanged="v => _whatIf[week - 1] = v" Format="N2" Margin="Margin.Dense" HideSpinButtons="true" data-testid="what-if" /></td>
+                        <td><MudNumericField T="decimal" Value="_whatIf[week - 1]" aria-label="@($"What-if amount, week {week}")" ValueChanged="v => _whatIf[week - 1] = v" Format="N2" Margin="Margin.Dense" HideSpinButtons="true" data-testid="what-if" /></td>
                         <td style="text-align:right; @(w.Closing < 0 ? "color:var(--mud-palette-error)" : "")"><b>@CashFormat.Amount(w.Closing)</b></td>
                     </tr>
                     @if (_detailWeek == week)
@@ -94,7 +96,7 @@ else
                         @foreach (var i in _items)
                         {
                             <tr><td>@i.Name</td><td style="text-align:right">@CashFormat.Amount(i.Amount)</td><td>@i.Frequency</td><td>@CashFormat.Date(i.StartDate)</td><td>@CashFormat.Date(i.EndDate)</td>
-                                <td><MudSwitch T="bool" Value="i.IsActive" ValueChanged="v => SetActiveAsync(i, v)" Color="Color.Primary" /></td></tr>
+                                <td><MudSwitch T="bool" Value="i.IsActive" aria-label="@($"{i.Name} active")" ValueChanged="v => SetActiveAsync(i, v)" Color="Color.Primary" /></td></tr>
                         }
                     </tbody>
                 </MudSimpleTable>

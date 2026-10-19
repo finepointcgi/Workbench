@@ -1,0 +1,182 @@
+/* Accessibility rules shared by every layout (WCAG 2.1 AA). Loaded by the web host (App.razor) and the desktop app. */
+
+/* Skip link: first thing in the tab order, visible only while focused (2.4.1). */
+.wb-skip-link {
+    position: absolute;
+    left: 8px;
+    top: -48px;
+    z-index: 10001;
+    padding: 8px 16px;
+    border-radius: 4px;
+    background: #fff;
+    color: #0b3b75;
+    font-weight: 600;
+    text-decoration: underline;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+}
+
+.wb-skip-link:focus {
+    top: 8px;
+}
+
+/* The main landmark takes focus from the skip link; it needs no ring of its own. */
+.wb-main:focus {
+    outline: none;
+}
+
+/* Visible keyboard focus everywhere (2.4.7). MudBlazor relies on a faint ripple overlay for most controls, which isn't
+   enough contrast; give every focusable control a 2px ring that shows on light and dark surfaces. "html body" outranks
+   MudBlazor's "button:focus { outline: none }". */
+html body :focus-visible {
+    outline: 2px solid var(--mud-palette-primary, #1F5AA6);
+    outline-offset: 2px;
+}
+
+html body .mud-appbar :focus-visible,
+html body .wb-m-nav :focus-visible {
+    outline-color: currentColor;
+}
+
+/* Inputs show focus with their own underline/outline; keep a ring on the wrapper too for the outlined variant. */
+.mud-input-control input:focus-visible,
+.mud-input-control textarea:focus-visible {
+    outline: none;
+}
+
+.mud-input-control:focus-within .mud-input.mud-input-outlined .mud-input-outlined-border {
+    border-width: 2px;
+}
+
+/* Text that is only for screen readers (captions, chart data tables, live regions). */
+.wb-sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* Links are underlined so they don't rely on color alone (1.4.1); MudLink only underlines on hover by default. */
+a.mud-link.mud-link-underline-hover,
+.mud-table-cell a:not(.mud-button-root):not(.mud-chip),
+.mud-typography a:not(.mud-button-root):not(.mud-chip) {
+    text-decoration: underline;
+}
+
+/* Alert text in the text and outlined variants: the tinted status colors are under 4.5:1 on their own tint (most in the
+   dark theme), so the message uses the body text color and the icon and border carry the status. */
+.mud-alert[class*="mud-alert-text-"] .mud-alert-message,
+.mud-alert[class*="mud-alert-outlined-"] .mud-alert-message {
+    color: var(--mud-palette-text-primary);
+}
+
+/* Disabled wizard tabs (steps not reached yet) stay readable. */
+.mud-tab.mud-disabled {
+    color: var(--mud-palette-text-secondary);
+}
+
+/* Honour the reduced-motion setting (2.3.3, best practice): no ripples, slides or smooth scrolling. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Windows high-contrast / forced colors: keep focus and chips visible. */
+@media (forced-colors: active) {
+    html body :focus-visible {
+        outline: 2px solid CanvasText;
+    }
+
+    .mud-chip {
+        border: 1px solid CanvasText;
+    }
+}
+
+/* Chart data tables (Accessibility/AccessibleChart). */
+.wb-chart {
+    margin: 0;
+}
+
+.wb-chart-data {
+    margin-top: 4px;
+    font-size: .875rem;
+}
+
+.wb-chart-data > summary {
+    cursor: pointer;
+    color: var(--mud-palette-primary);
+    padding: 4px 0;
+    width: fit-content;
+}
+
+.wb-chart-data-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.wb-data-table {
+    border-collapse: collapse;
+    margin-top: 4px;
+}
+
+.wb-data-table caption {
+    text-align: left;
+    font-weight: 600;
+    padding-bottom: 4px;
+}
+
+.wb-data-table th,
+.wb-data-table td {
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    padding: 4px 10px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.wb-data-table th[scope="row"],
+.wb-data-table thead th:first-child {
+    text-align: left;
+}
+
+/* Resourcing heat map cells (Resourcing/HeatMapTab): the whole cell is a button. */
+.wb-heat-cell {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.wb-heat-of {
+    font-size: .9em;
+}
+
+.wb-heat-marker {
+    font-size: .75em;
+}
+
+/* Breadcrumbs (Accessibility/AccessibleBreadcrumbs): text items in secondary text, links underlined. */
+.wb-crumb {
+    color: var(--mud-palette-text-secondary);
+}
+
+.wb-crumb[aria-current="page"] {
+    color: var(--mud-palette-text-primary);
+}
+
+.wb-crumb-link {
+    color: var(--mud-palette-primary);
+    text-decoration: underline;
+}

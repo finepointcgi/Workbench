@@ -11,7 +11,7 @@
 
 <MudDataGrid T="LaborCategoryDto" Items="_categories" Loading="_loading" Dense="true" Hover="true" QuickFilter="Matches">
     <ToolBarContent>
-        <MudTextField @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+        <MudTextField aria-label="Search labor categories" @bind-Value="_search" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       Immediate="true" Clearable="true" />
         <MudSpacer />
         <MudSwitch @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />

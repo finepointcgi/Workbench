@@ -24,7 +24,7 @@
 }
 else if (_report is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -65,8 +65,10 @@ else
         }
         else
         {
-            <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_series" ChartLabels="_labels" Width="100%" Height="300px" LegendPosition="Position.Bottom"
+            <AccessibleChart Title="Year-to-date actual vs provisional rate (%)" Labels="_labels" Series="_series" Format="RateText">
+                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_series" ChartLabels="_labels" Width="100%" Height="300px" LegendPosition="Position.Bottom"
                       data-testid="rate-chart" />
+            </AccessibleChart>
         }
     </MudPaper>
 
@@ -149,4 +151,6 @@ else
             _error = AccountingFormat.Error(ex);
         }
     }
+
+    private static string RateText(double v) => v.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture) + "%";
 }

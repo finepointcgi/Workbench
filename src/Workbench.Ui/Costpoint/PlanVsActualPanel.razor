@@ -11,7 +11,7 @@
 
 @if (_data is null)
 {
-    <MudProgressLinear Indeterminate="_loading" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="_loading" Color="Color.Primary" />
 }
 else
 {
@@ -61,8 +61,10 @@ else
     @if (_data.Rows.Count > 0)
     {
         <MudText Typo="Typo.subtitle2" HtmlTag="h3">Planned budget vs actual cost by WBS</MudText>
-        <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_series" ChartLabels="_labels"
+        <AccessibleChart Title="Planned budget vs actual cost by WBS" Labels="_labels" Series="_series" LabelHeader="WBS" ShowTable="false">
+            <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_series" ChartLabels="_labels"
                   Width="100%" Height="280px" LegendPosition="Position.Bottom" />
+        </AccessibleChart>
     }
 }
 

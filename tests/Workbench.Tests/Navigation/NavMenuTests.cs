@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Identity;
@@ -39,6 +40,7 @@ public sealed class NavMenuTests
         Assert.Equal(EmployeeLinks.Order(), links.Order());
         Assert.Equal(["home", "my-work", "projects", "sheets", "reports"], Sections(nav));
         Assert.Empty(nav.FindAll("[data-testid='nav-approvals']"));
+        A11yAssert.Check(nav);
     }
 
     [Fact]

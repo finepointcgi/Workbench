@@ -11,7 +11,7 @@
 
 @if (_workflows is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -48,7 +48,7 @@ else
                         <td style="min-width:280px">
                             @if (_isAdmin)
                             {
-                                <MudSelect T="Guid?" Value="unit.EmployeeId" ValueChanged="v => SetApproverAsync(unit, v)" Dense="true" Clearable="true" Placeholder="Nobody">
+                                <MudSelect T="Guid?" Value="unit.EmployeeId" aria-label="@($"Approver for {unit.OrgUnitCode} {unit.OrgUnitName}")" ValueChanged="v => SetApproverAsync(unit, v)" Dense="true" Clearable="true" Placeholder="Nobody">
                                     @foreach (var e in _employees)
                                     {
                                         <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>

@@ -11,7 +11,7 @@
             @foreach (var m in c.Measures)
             {
                 <MudText Typo="Typo.caption">@CeilingFormat.Metric(m.Metric): @CeilingFormat.Amount(m.Metric, m.Consumed) of @CeilingFormat.Amount(m.Metric, m.Limit) (@m.PercentConsumed.ToString("0.#")%)</MudText>
-                <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" />
+                <MudProgressLinear Value="@((double)Math.Min(m.PercentConsumed, 100m))" Color="@CeilingFormat.Color(m.Level)" Size="Size.Small" Rounded="true" aria-label="@($"{CeilingFormat.Metric(m.Metric)} ceiling used")" />
             }
             @foreach (var o in c.ActiveOverrides)
             {

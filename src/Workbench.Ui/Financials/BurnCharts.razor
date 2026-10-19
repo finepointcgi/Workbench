@@ -8,11 +8,15 @@
     }
     else
     {
-        <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_cumulative" ChartLabels="_labels" Width="100%" Height="260px"
+        <AccessibleChart Title="Cumulative budget vs actual" Labels="_labels" Series="_cumulative" Format="@(v => FinancialFormat.Money((decimal)v))">
+            <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_cumulative" ChartLabels="_labels" Width="100%" Height="260px"
                   LegendPosition="Position.Bottom" />
+        </AccessibleChart>
         <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mt-4">Per period</MudText>
-        <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_perPeriod" ChartLabels="_labels" Width="100%" Height="260px"
+        <AccessibleChart Title="Budget vs actual per period" Labels="_labels" Series="_perPeriod" Format="@(v => FinancialFormat.Money((decimal)v))">
+            <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_perPeriod" ChartLabels="_labels" Width="100%" Height="260px"
                   LegendPosition="Position.Bottom" />
+        </AccessibleChart>
     }
     @if (Burn.UnphasedBudgetAmount != 0)
     {

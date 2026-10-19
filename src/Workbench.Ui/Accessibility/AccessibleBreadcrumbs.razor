@@ -1,0 +1,28 @@
+@* MudBreadcrumbs inside a "Breadcrumb" navigation landmark. Items without a link (section names and the current page)
+   are plain text instead of MudBlazor's grey href="#" links, which fail contrast and are a dead tab stop; the last item
+   is marked aria-current="page". *@
+
+<nav aria-label="Breadcrumb" class="@NavClass">
+    <MudBreadcrumbs Items="Items" Class="@Class" data-testid="@TestId">
+        <ItemTemplate Context="item">
+            @if (item.Disabled || string.IsNullOrEmpty(item.Href) || item.Href == "#")
+            {
+                <span class="wb-crumb" aria-current="@(ReferenceEquals(item, Items.LastOrDefault()) ? "page" : null)">@item.Text</span>
+            }
+            else
+            {
+                <a href="@item.Href" class="wb-crumb-link">@item.Text</a>
+            }
+        </ItemTemplate>
+    </MudBreadcrumbs>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<BreadcrumbItem> Items { get; set; } = [];
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public string? NavClass { get; set; }
+
+    [Parameter] public string? TestId { get; set; }
+}

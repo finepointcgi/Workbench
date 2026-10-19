@@ -1,3 +1,4 @@
+using Workbench.Tests.Accessibility;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -88,5 +89,7 @@ public sealed class CommandPaletteTests
 
         provider.WaitForAssertion(() =>
             Assert.Equal("true", provider.FindAll("[data-testid='palette-result']")[1].GetAttribute("aria-selected")));
+        Assert.Equal(provider.FindAll("[data-testid='palette-result']")[1].Id, provider.Find("input").GetAttribute("aria-activedescendant"));
+        A11yAssert.Check(provider);
     }
 }

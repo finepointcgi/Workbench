@@ -29,7 +29,7 @@
 
 @if (_sources is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -79,7 +79,7 @@ else
                                 var field = c.Field;
                                 <MudPaper Outlined="true" Class="pa-1 d-flex align-center gap-1">
                                     <MudText Typo="Typo.body2" Class="px-1">@FieldLabel(field)</MudText>
-                                    <MudSelect T="ReportAggregate" Value="c.Aggregate" ValueChanged="a => SetAggregate(field, a)" Dense="true" Margin="Margin.Dense" Style="width:110px">
+                                    <MudSelect T="ReportAggregate" Value="c.Aggregate" aria-label="@($"Total for {FieldLabel(field)}")" ValueChanged="a => SetAggregate(field, a)" Dense="true" Margin="Margin.Dense" Style="width:110px">
                                         @foreach (var a in Enum.GetValues<ReportAggregate>())
                                         {
                                             <MudSelectItem T="ReportAggregate" Value="a">@(a == ReportAggregate.None ? "Value" : a.ToString())</MudSelectItem>
@@ -144,7 +144,7 @@ else
 
 @if (_running)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" Class="mb-2" />
 }
 @if (_result is not null)
 {

@@ -18,7 +18,7 @@
 }
 else if (_dashboard is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -78,7 +78,7 @@ else
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete widget" OnClick="() => DeleteWidgetAsync(widget)" />
                         }
                     </MudStack>
-                    <div style="flex:1;overflow:auto;min-height:0">
+                    <div style="flex:1;overflow:auto;min-height:0" data-wb-scroll="@widget.Title">
                         <WidgetView Data="Data(widget)" ChartHeight="@($"{HeightPx(widget.Height) - 180}px")" />
                     </div>
                 </MudPaper>
