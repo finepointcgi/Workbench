@@ -20,13 +20,13 @@
     }
     else
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
     }
 }
 else
 {
     <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudTextField T="string" @bind-Value="_search" Immediate="true" DebounceInterval="200" Placeholder="Search by code, name, manager or contract"
+        <MudTextField T="string" @bind-Value="_search" aria-label="Search projects" Immediate="true" DebounceInterval="200" Placeholder="Search by code, name, manager or contract"
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Style="min-width: 300px" data-testid="project-search" />
         @if (_list.SeesAll)
         {
@@ -72,7 +72,7 @@ else
     }
     else
     {
-        <MudTable T="ProjectHubRowDto" Items="Visible" Dense="true" Hover="true" Outlined="true" Elevation="0" OnRowClick="Open" RowStyle="cursor: pointer"
+        <MudTable SortLabel="Sort by" T="ProjectHubRowDto" Items="Visible" Dense="true" Hover="true" Outlined="true" Elevation="0" OnRowClick="Open" RowStyle="cursor: pointer"
                   Breakpoint="Breakpoint.Sm" data-testid="project-table">
             <HeaderContent>
                 <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Code" InitialDirection="SortDirection.Ascending">Project</MudTableSortLabel></MudTh>
@@ -147,7 +147,7 @@ else
                                 <MudTooltip Text="@($"{FinancialFormat.Percent(m.PercentFunded)} of the contract is funded; {FinancialFormat.Money(m.FundingLeft ?? 0)} funding left")">
                                     <span>@FinancialFormat.Percent(used)</span>
                                 </MudTooltip>
-                                <MudProgressLinear Value="ProjectsFormat.Bar(used)" Color="ProjectsFormat.BurnColor(used)" Size="Size.Small" Rounded="true" />
+                                <MudProgressLinear Value="ProjectsFormat.Bar(used)" Color="ProjectsFormat.BurnColor(used)" Size="Size.Small" Rounded="true" aria-label="@($"Funding used, {context.Name}")" />
                             }
                             else
                             {
@@ -158,7 +158,7 @@ else
                             <span>@FinancialFormat.Money(m.Spent) of @FinancialFormat.Money(m.Budget)</span>
                             @if (m.PercentSpent is { } spent)
                             {
-                                <MudProgressLinear Value="ProjectsFormat.Bar(spent)" Color="ProjectsFormat.BurnColor(spent)" Size="Size.Small" Rounded="true" />
+                                <MudProgressLinear Value="ProjectsFormat.Bar(spent)" Color="ProjectsFormat.BurnColor(spent)" Size="Size.Small" Rounded="true" aria-label="@($"Spent of budget, {context.Name}")" />
                             }
                         </MudTd>
                         <MudTd DataLabel="Forecast vs budget">

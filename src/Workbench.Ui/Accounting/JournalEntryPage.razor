@@ -33,7 +33,7 @@
 }
 else if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else if (!IsEditable && _entry is { } entry)
 {
@@ -94,14 +94,15 @@ else
         </MudStack>
     </MudPaper>
     <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-3">
-        <MudSimpleTable Dense="true" data-testid="entry-editor">
+        <MudSimpleTable Dense="true" data-testid="entry-editor" aria-label="Journal entry lines">
             <thead><tr><th style="min-width:240px">Account</th><th style="min-width:150px">Project</th><th style="min-width:170px">WBS</th><th style="min-width:120px">Org unit</th><th style="min-width:120px">Debit</th><th style="min-width:120px">Credit</th><th style="min-width:160px">Memo</th><th></th></tr></thead>
             <tbody>
                 @foreach (var line in _lines)
                 {
+                    var n = _lines.IndexOf(line) + 1;
                     <tr>
                         <td>
-                            <MudSelect T="Guid?" @bind-Value="line.AccountId" Dense="true" Placeholder="Account" Margin="Margin.Dense">
+                            <MudSelect T="Guid?" @bind-Value="line.AccountId" Dense="true" Placeholder="Account" Margin="Margin.Dense" aria-label="@($"Account, line {n}")">
                                 @foreach (var a in _postable)
                                 {
                                     <MudSelectItem T="Guid?" Value="a.Id">@AccountingFormat.AccountLabel(a)</MudSelectItem>
@@ -109,7 +110,7 @@ else
                             </MudSelect>
                         </td>
                         <td>
-                            <MudSelect T="Guid?" Value="line.ProjectId" ValueChanged="v => SetProjectAsync(line, v)" Dense="true" Clearable="true" Margin="Margin.Dense">
+                            <MudSelect T="Guid?" Value="line.ProjectId" ValueChanged="v => SetProjectAsync(line, v)" Dense="true" Clearable="true" Margin="Margin.Dense" aria-label="@($"Project, line {n}")">
                                 @foreach (var p in _projects)
                                 {
                                     <MudSelectItem T="Guid?" Value="p.Id">@p.Code</MudSelectItem>
@@ -117,7 +118,7 @@ else
                             </MudSelect>
                         </td>
                         <td>
-                            <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Dense="true" Clearable="true" Margin="Margin.Dense" Disabled="line.ProjectId is null">
+                            <MudSelect T="Guid?" @bind-Value="line.WbsElementId" Dense="true" Clearable="true" Margin="Margin.Dense" Disabled="line.ProjectId is null" aria-label="@($"WBS, line {n}")">
                                 @foreach (var w in WbsFor(line.ProjectId))
                                 {
                                     <MudSelectItem T="Guid?" Value="w.Id">@w.Code @w.Name</MudSelectItem>
@@ -125,17 +126,17 @@ else
                             </MudSelect>
                         </td>
                         <td>
-                            <MudSelect T="Guid?" @bind-Value="line.OrgUnitId" Dense="true" Clearable="true" Margin="Margin.Dense">
+                            <MudSelect T="Guid?" @bind-Value="line.OrgUnitId" Dense="true" Clearable="true" Margin="Margin.Dense" aria-label="@($"Org unit, line {n}")">
                                 @foreach (var o in _orgUnits)
                                 {
                                     <MudSelectItem T="Guid?" Value="o.Id">@o.Code</MudSelectItem>
                                 }
                             </MudSelect>
                         </td>
-                        <td><MudNumericField T="decimal" Value="line.Debit" ValueChanged="v => SetDebit(line, v)" HideSpinButtons="true" Format="N2" Min="0" Margin="Margin.Dense" Immediate="true" /></td>
-                        <td><MudNumericField T="decimal" Value="line.Credit" ValueChanged="v => SetCredit(line, v)" HideSpinButtons="true" Format="N2" Min="0" Margin="Margin.Dense" Immediate="true" /></td>
-                        <td><MudTextField T="string" @bind-Value="line.Memo" Margin="Margin.Dense" /></td>
-                        <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _lines.Remove(line)" Disabled="_lines.Count <= 2" aria-label="Remove line" /></td>
+                        <td><MudNumericField T="decimal" Value="line.Debit" ValueChanged="v => SetDebit(line, v)" HideSpinButtons="true" Format="N2" Min="0" Margin="Margin.Dense" Immediate="true" aria-label="@($"Debit, line {n}")" /></td>
+                        <td><MudNumericField T="decimal" Value="line.Credit" ValueChanged="v => SetCredit(line, v)" HideSpinButtons="true" Format="N2" Min="0" Margin="Margin.Dense" Immediate="true" aria-label="@($"Credit, line {n}")" /></td>
+                        <td><MudTextField T="string" @bind-Value="line.Memo" Margin="Margin.Dense" aria-label="@($"Memo, line {n}")" /></td>
+                        <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _lines.Remove(line)" Disabled="_lines.Count <= 2" aria-label="@($"Remove line {n}")" /></td>
                     </tr>
                 }
                 <tr>

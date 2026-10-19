@@ -1,0 +1,91 @@
+@* The app bar's "?" button: opens the help panel for the current page. It also hosts the welcome tour, so the layout
+   needs just this one line. A dot on the button means there's something new in What's new. *@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Support
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+@inject IServiceProvider Services
+
+<MudBadge Dot="true" Color="Color.Warning" Overlap="true" Visible="_hasNews" Bordered="true" Class="mx-1">
+    <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Inherit" OnClick="OpenAsync"
+                   aria-label="@(_hasNews ? "Help for this page (what's new available)" : "Help for this page")" aria-haspopup="dialog"
+                   data-testid="help-button" />
+</MudBadge>
+<WelcomeTour @ref="_tour" Access="Access" />
+
+@code {
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    private WelcomeTour? _tour;
+    private bool _hasNews;
+    private bool _checkedNews;
+    private bool _open;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_checkedNews || !Access.IsSignedIn || HelpLibrary.LatestVersion is not { } latest || Services.GetService<IHelpStateService>() is not { } state)
+        {
+            return;
+        }
+
+        _checkedNews = true;
+        try
+        {
+            var seen = (await state.GetAsync()).WhatsNewSeen;
+
+            // A brand-new user hasn't "missed" anything: the welcome tour covers it. Only flag news after a first visit.
+            _hasNews = seen is not null && !string.Equals(seen, latest, StringComparison.OrdinalIgnoreCase);
+            if (seen is null)
+            {
+                await state.MarkWhatsNewSeenAsync(latest);
+            }
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+        }
+    }
+
+    private async Task OpenAsync()
+    {
+        if (_open)
+        {
+            return;
+        }
+
+        _open = true;
+        try
+        {
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+            var parameters = new DialogParameters<HelpPanel>
+            {
+                { p => p.PagePath, path },
+                { p => p.HasNews, _hasNews },
+                { p => p.NewsSeen, EventCallback.Factory.Create(this, () => _hasNews = false) },
+            };
+            var options = new DialogOptions
+            {
+                Position = DialogPosition.CenterRight,
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                CloseButton = true,
+                CloseOnEscapeKey = true,
+                BackdropClick = true,
+            };
+            var dialog = await Dialogs.ShowAsync<HelpPanel>("Help", parameters, options);
+            var result = await dialog.Result;
+            switch (result?.Data as string)
+            {
+                case HelpPanel.TourAction when _tour is not null:
+                    await _tour.RestartAsync();
+                    break;
+                case HelpPanel.ReportAction:
+                    await Support.SupportDialogs.ReportAsync(Dialogs, Navigation);
+                    break;
+            }
+        }
+        finally
+        {
+            _open = false;
+        }
+    }
+}

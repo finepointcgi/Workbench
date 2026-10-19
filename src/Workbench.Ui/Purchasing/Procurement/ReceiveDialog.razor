@@ -16,7 +16,7 @@
                         <td style="text-align:right">@ProcurementFormat.Quantity(l.Quantity)</td>
                         <td style="text-align:right">@ProcurementFormat.Quantity(l.QuantityReceived)</td>
                         <td>
-                            <MudNumericField T="decimal" Value="_quantities.GetValueOrDefault(l.Id)" ValueChanged="@(v => _quantities[l.Id] = v)" Min="0" Max="@(l.Quantity - l.QuantityReceived)"
+                            <MudNumericField T="decimal" Value="_quantities.GetValueOrDefault(l.Id)" aria-label="@($"Quantity received now, {l.Description}")" ValueChanged="@(v => _quantities[l.Id] = v)" Min="0" Max="@(l.Quantity - l.QuantityReceived)"
                                              Margin="Margin.Dense" data-testid="receive-qty" />
                         </td>
                     </tr>

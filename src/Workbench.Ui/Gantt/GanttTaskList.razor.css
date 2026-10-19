@@ -74,6 +74,13 @@
 
     .gantt-task-link.critical {
         color: var(--mud-palette-error);
+        font-weight: 600;
+    }
+
+    /* Critical tasks are marked by shape and weight too, not by color alone (1.4.1). */
+    .gantt-task-link.critical::before {
+        content: "▲ ";
+        font-size: .75em;
     }
 
 ::deep .gantt-milestone-icon {

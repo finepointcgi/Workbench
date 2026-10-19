@@ -53,6 +53,7 @@ public sealed class SecurityEventLog(
             UserAgent = Clip(context.UserAgent, 512),
             Detail = Clip(detail, 2000),
         };
+        Operations.WorkbenchTelemetry.SecurityEvents.Add(1, new("event.type", eventType), new("outcome", outcome));
 
         try
         {

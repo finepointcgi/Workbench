@@ -7,12 +7,12 @@
 
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Users and security</MudText>
 <MudText Class="mud-text-secondary mb-4">
-    Who can sign in, what they can do, and the evidence an ISO 27001 auditor asks for: access reviews and the security event log.
+    Who can sign in and how (single sign-on, MFA), what they can do, and the evidence an ISO 27001 auditor asks for: access reviews and the security event log.
 </MudText>
 
 @if (_me is null && _loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else if (_me is not { IsAdmin: true })
 {
@@ -37,11 +37,14 @@ else
         <MudTabPanel Text="Retention" Icon="@Icons.Material.Filled.Inventory2">
             <AdminRetentionTab />
         </MudTabPanel>
+        <MudTabPanel Text="Sign-in" Icon="@Icons.Material.Filled.Key">
+            <AdminSignInTab />
+        </MudTabPanel>
     </MudTabs>
 }
 
 @code {
-    private static readonly string[] Tabs = ["users", "invites", "reviews", "events", "retention"];
+    private static readonly string[] Tabs = ["users", "invites", "reviews", "events", "retention", "sign-in"];
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }

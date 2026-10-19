@@ -217,6 +217,13 @@ public sealed class PermissionCheckingProjectService(IProjectService inner, Acce
         access.RequireSignedIn();
         return inner.ListChargeCodesAsync(employeeId, date, cancellationToken);
     }
+
+    public Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>> ListChargeCodesForDatesAsync(
+        Guid employeeId, IReadOnlyCollection<DateOnly> dates, CancellationToken cancellationToken = default)
+    {
+        access.RequireSignedIn();
+        return inner.ListChargeCodesForDatesAsync(employeeId, dates, cancellationToken);
+    }
 }
 
 public sealed class PermissionCheckingFiscalCalendarService(IFiscalCalendarService inner, AccessControl access) : IFiscalCalendarService

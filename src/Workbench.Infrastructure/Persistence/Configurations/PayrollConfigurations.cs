@@ -34,6 +34,8 @@ internal sealed class EmployeePayProfileConfiguration : IEntityTypeConfiguration
     {
         b.Property(p => p.ProviderEmployeeId).HasMaxLength(64);
         b.Property(p => p.PayType).HasConversion<string>().HasMaxLength(16);
+        // Profiles saved before employment types existed are full-time.
+        b.Property(p => p.EmploymentType).HasConversion<string>().HasMaxLength(16).HasDefaultValue(EmploymentType.FullTime);
         b.Property(p => p.AnnualSalary).HasPrecision(18, 2);
         b.Property(p => p.HourlyRate).HasPrecision(18, 4);
         b.Property(p => p.UpdatedBy).HasMaxLength(320);
@@ -41,6 +43,21 @@ internal sealed class EmployeePayProfileConfiguration : IEntityTypeConfiguration
         b.HasIndex(p => p.EmployeeId).IsUnique();
         b.HasOne<Employee>().WithMany().HasForeignKey(p => p.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<PayGroup>().WithMany().HasForeignKey(p => p.PayGroupId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class EmployeePayRateConfiguration : IEntityTypeConfiguration<EmployeePayRate>
+{
+    public void Configure(EntityTypeBuilder<EmployeePayRate> b)
+    {
+        b.Property(r => r.PayType).HasConversion<string>().HasMaxLength(16);
+        b.Property(r => r.AnnualSalary).HasPrecision(18, 2);
+        b.Property(r => r.HourlyRate).HasPrecision(18, 4);
+        b.Property(r => r.Reason).HasMaxLength(500);
+        b.Property(r => r.CreatedBy).HasMaxLength(320);
+        b.Ignore(r => r.EquivalentHourlyRate);
+        b.HasIndex(r => new { r.EmployeeId, r.EffectiveFrom });
+        b.HasOne<Employee>().WithMany().HasForeignKey(r => r.EmployeeId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

@@ -1,0 +1,13 @@
+@* Renders a help article (or any MarkdownDocument) safely: see MarkdownRenderer. *@
+@using Workbench.Ui.Help.Markdown
+
+<div class="wb-markdown">
+    @MarkdownRenderer.Render(Document, HeadingOffset)
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MarkdownDocument Document { get; set; } = default!;
+
+    /// <summary>Added to heading levels, so an article inside a panel titled with an h2 starts at h3.</summary>
+    [Parameter] public int HeadingOffset { get; set; }
+}

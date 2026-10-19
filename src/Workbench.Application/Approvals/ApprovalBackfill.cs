@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Workbench.Application.Purchasing;
 using Workbench.Contracts.Approvals;
 using Workbench.Domain.Approvals;
+using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -32,7 +33,16 @@ public sealed class ApprovalBackfill(
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
         var semaphore = _gate.For(Tenancy.TenantScope.Key);
-        await semaphore.WaitAsync(cancellationToken);
+        if (!await semaphore.WaitAsync(0, cancellationToken))
+        {
+            // Another inbox (or the startup job) is routing right now: wait for it rather than queueing a run of our own,
+            // so many approvers opening their inboxes at once don't line up behind each other's identical scans. New
+            // submissions are routed when they're submitted; only pre-workflow documents (seeded, imported) need this.
+            await semaphore.WaitAsync(cancellationToken);
+            semaphore.Release();
+            return 0;
+        }
+
         try
         {
             return await RunCoreAsync(cancellationToken);
@@ -112,6 +122,14 @@ public sealed class ApprovalBackfill(
                     : l.ApproverEmail is not null && l.ProjectId is { } p && task.ScopeKey == ApprovalEngine.ProjectScope(p)).ToList();
                 return lines.Count > 0 && lines.All(l => l.Status == ApLineStatus.Approved) ? lines[0].DecidedBy ?? "system" : null;
             }, cancellationToken);
+        }
+
+        var leaveIds = await db.Set<LeaveRequest>().AsNoTracking().Where(r => r.Status == LeaveRequestStatus.Pending).Select(r => r.Id).ToListAsync(cancellationToken);
+        foreach (var id in leaveIds.Where(id => Missing(ApprovalDocumentTypes.LeaveRequest, id)))
+        {
+            count += await RouteAsync(ApprovalDocumentTypes.LeaveRequest, id, async (ctx, ct) =>
+                await ApprovalSubjects.LeaveRequestAsync(ctx, await ctx.Set<LeaveRequest>().AsNoTracking().FirstAsync(r => r.Id == id, ct), ct),
+                null, cancellationToken);
         }
 
         if (count > 0)

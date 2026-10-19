@@ -1,0 +1,22 @@
+@* Organization role check boxes for a flags value (Employee is everyone, so it isn't a box). *@
+<MudStack Row="true" Spacing="0" Wrap="Wrap.Wrap">
+    @foreach (var role in Choices)
+    {
+        <MudCheckBox T="bool" Value="Roles.HasFlag(role)" ValueChanged="on => Toggle(role, on)" Dense="true" Size="Size.Small" Label="@Label(role)" />
+    }
+</MudStack>
+
+@code {
+    [Parameter] public OrgRoles Roles { get; set; }
+
+    [Parameter] public EventCallback<OrgRoles> RolesChanged { get; set; }
+
+    [Parameter] public bool AllowAdmin { get; set; } = true;
+
+    private IEnumerable<OrgRoles> Choices =>
+        new[] { OrgRoles.Admin, OrgRoles.Finance, OrgRoles.Timekeeper, OrgRoles.ResourceManager }.Where(r => AllowAdmin || r != OrgRoles.Admin);
+
+    private static string Label(OrgRoles role) => role == OrgRoles.ResourceManager ? "Resource manager" : role.ToString();
+
+    private Task Toggle(OrgRoles role, bool on) => RolesChanged.InvokeAsync(on ? Roles | role : Roles & ~role);
+}

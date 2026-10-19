@@ -34,6 +34,26 @@ public sealed class LeavePolicyService(IWorkbenchDbContextFactory dbFactory, Acc
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<LeavePolicyDto>> ListMineAsync(CancellationToken cancellationToken = default)
+    {
+        access.RequireSignedIn();
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var me = await EmployeeLinks.FindForUserAsync(db, access.Email, cancellationToken);
+        if (me is null)
+        {
+            return [];
+        }
+
+        // Policies that apply to me, and any I still have hours left in from before it stopped applying.
+        var eligibility = await LeaveEligibility.LoadAsync(db, [me.Id], cancellationToken);
+        await LeaveEngine.SyncUsageAsync(db, [me.Id], audit.Actor, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        var balances = await LeaveEngine.BalancesAsync(db, [me.Id], null, cancellationToken);
+        var policies = (await db.Set<LeavePolicy>().AsNoTracking().Include(p => p.Tiers).Where(p => p.IsActive).OrderBy(p => p.Code).ToListAsync(cancellationToken))
+            .Where(p => eligibility.Applies(p, me) || balances.GetValueOrDefault((me.Id, p.Id)) > 0).ToList();
+        var codes = await WbsCodesAsync(db, policies.Select(p => p.WbsElementId), cancellationToken);
+        return policies.Select(p => p.ToDto(codes.GetValueOrDefault(p.WbsElementId, "?"))).ToList();
+    }
+
     public async Task<LeavePolicyDto> CreateAsync(SaveLeavePolicyRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireAdminAsync(cancellationToken);
@@ -114,6 +134,7 @@ public sealed class LeavePolicyService(IWorkbenchDbContextFactory dbFactory, Acc
         policy.WaitingPeriodDays = r.WaitingPeriodDays;
         policy.AllowNegativeBalance = r.AllowNegativeBalance;
         policy.IsActive = r.IsActive;
+        await LeaveEligibility.ApplyAsync(db, policy, r.Eligibility, ct);
         policy.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         foreach (var t in tiers.OrderBy(t => t.MinYearsOfService))
         {
@@ -132,6 +153,10 @@ public sealed class LeavePolicyService(IWorkbenchDbContextFactory dbFactory, Acc
         p.WaitingPeriodDays,
         p.AllowNegativeBalance,
         p.IsActive,
+        p.EligibleOrgUnitIds,
+        p.EligiblePayGroupIds,
+        p.EligibleExempt,
+        p.EligibleEmploymentTypes,
         Tiers = p.Tiers.OrderBy(t => t.MinYearsOfService).Select(t => new { t.MinYearsOfService, t.Rate, t.MaxBalance }).ToList(),
     };
 

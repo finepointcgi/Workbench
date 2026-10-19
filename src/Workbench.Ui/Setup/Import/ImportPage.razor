@@ -10,7 +10,7 @@
 
 <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Rounded="true" TabPanelsClass="pt-4" data-testid="import-tabs">
     <MudTabPanel Text="New import" Icon="@Icons.Material.Filled.UploadFile">
-        <ImportWizard JobId="JobId" Done="ShowInHistory" />
+        <ImportWizard JobId="JobId" Done="ShowInHistory" InitialSource="@Source" InitialKind="@Kind" />
     </MudTabPanel>
     <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
         @if (_tab == 1)
@@ -26,6 +26,13 @@
 
     [Parameter]
     public Guid? HistoryJobId { get; set; }
+
+    /// <summary>Deep link from the go-live checklist: <c>?source=Costpoint&amp;kind=Accounts</c> opens the wizard at the upload step.</summary>
+    [SupplyParameterFromQuery]
+    public string? Source { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Kind { get; set; }
 
     private int _tab;
     private Guid? _historyJob;

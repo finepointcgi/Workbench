@@ -149,6 +149,9 @@ public sealed class MyTodoServiceTests
         Assert.Equal("Approve Alex Rivera's leave", approve.Title);
         Assert.Equal(new DateOnly(2026, 10, 28), approve.Due); // decide before it starts
         Assert.Equal(new TodoInlineAction(TodoInlineActionKind.ApproveLeave, "Approve", request.Id), approve.Action);
+        // It's in the approvals inbox preview too, but not counted again in the approvals to-do.
+        Assert.Contains(pm.Approvals!.Top, a => a.DocumentId == request.Id && a.DocumentType == ApprovalDocumentTypes.LeaveRequest);
+        Assert.DoesNotContain(pm.Items, i => i.Key == "approvals:inbox" && i.Reason.Contains("leave", StringComparison.OrdinalIgnoreCase));
 
         var analyst = await kit.GetAsync(Editor);
         Assert.Contains(analyst.Items, i => i.Key == $"leave:pending:{request.Id}" && i.Urgency == TodoUrgency.Later);

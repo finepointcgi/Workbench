@@ -1,0 +1,172 @@
+@* "Report a problem / Send feedback": a short form. The page path and app version are added automatically; nothing
+   else from the page (form values, query strings) is ever read. Used by the dialog and the /support/new page. *@
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts
+@using Workbench.Contracts.Support
+@inject ISupportService Support
+
+@if (_sent is { } sent)
+{
+    <div role="status" data-testid="support-sent">
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-3">
+            Thanks, it's on its way. Your reference is <strong>@sent.Reference</strong>.
+        </MudAlert>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Your administrators can see it, and you'll get a notification when its status changes.
+            You can follow it under <MudLink Href="support" Typo="Typo.body2" OnClick="() => Done.InvokeAsync(sent)">My support requests</MudLink>.
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Done.InvokeAsync(sent)" data-testid="support-done">Close</MudButton>
+    </div>
+}
+else
+{
+    <form @onsubmit="SendAsync" @onsubmit:preventDefault="true" aria-label="Report a problem or send feedback" data-testid="support-form">
+        <MudRadioGroup T="SupportKind" @bind-Value="_kind" aria-label="Kind of report" Class="mb-2" data-testid="support-kind">
+            <MudRadio T="SupportKind" Value="SupportKind.Problem" Color="Color.Primary">Report a problem</MudRadio>
+            <MudRadio T="SupportKind" Value="SupportKind.Feedback" Color="Color.Primary">Send feedback or an idea</MudRadio>
+        </MudRadioGroup>
+
+        <MudTextField T="string" @bind-Value="_summary" Immediate="true" aria-required="true"
+                      Label="@(_kind == SupportKind.Feedback ? "Your feedback in a sentence (required)" : "What happened? (required)")"
+                      MaxLength="SupportRules.SummaryMaxLength" Counter="SupportRules.SummaryMaxLength" Variant="Variant.Outlined"
+                      Error="_summaryError" ErrorText="Say briefly what happened." AutoFocus="true" data-testid="support-summary" />
+
+        <MudTextField T="string" @bind-Value="_details" Lines="4" Label="Anything else that would help? (optional)" Variant="Variant.Outlined" Class="mt-3"
+                      HelperText="@(_kind == SupportKind.Feedback ? "What would make this better for you?" : "What you were trying to do, and what you expected to happen.")"
+                      MaxLength="SupportRules.DetailsMaxLength" data-testid="support-details" />
+
+        <div class="mt-4">
+            <label for="wb-support-screenshot" class="wb-support-label">Screenshot (optional)</label>
+            <InputFile id="wb-support-screenshot" accept="@SupportRules.ScreenshotAccept" OnChange="OnFileChosen" class="wb-support-file"
+                       aria-describedby="wb-support-screenshot-help" data-testid="support-screenshot" />
+            <div id="wb-support-screenshot-help" class="mud-text-secondary wb-support-help">
+                A picture of the screen helps. PNG, JPG, GIF or WebP, up to @(SupportRules.MaxScreenshotBytes / (1024 * 1024)) MB. Check it doesn't show anything private.
+            </div>
+            @if (_file is not null)
+            {
+                <MudText Typo="Typo.body2" Class="mt-1">
+                    Attached: @_file.Name (@FormatSize(_file.Size))
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="RemoveFile" aria-label="@($"Remove {_file.Name}")">Remove</MudButton>
+                </MudText>
+            }
+        </div>
+
+        <MudPaper Outlined="true" Class="pa-3 mt-4" data-testid="support-captured">
+            <MudText Typo="Typo.body2"><strong>We'll also send</strong> the page you're on (<code>@(SupportRules.CleanPagePath(PagePath) ?? "/")</code>), the Workbench version (@AppInfo.Version) and your name.</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing you typed into the page, and no passwords, are sent.</MudText>
+        </MudPaper>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3" role="alert" data-testid="support-error">@_error</MudAlert>
+        }
+
+        <div class="d-flex justify-end gap-2 mt-4">
+            @if (ShowCancel)
+            {
+                <MudButton Variant="Variant.Text" OnClick="() => Cancelled.InvokeAsync()" Disabled="_busy">Cancel</MudButton>
+            }
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" data-testid="support-send">
+                @(_busy ? "Sending…" : "Send")
+            </MudButton>
+        </div>
+    </form>
+}
+
+@code {
+    /// <summary>The page the report is about (an app-relative path or URL; cleaned before sending).</summary>
+    [Parameter] public string? PagePath { get; set; }
+
+    /// <summary>The report started from an error screen.</summary>
+    [Parameter] public bool FromError { get; set; }
+
+    [Parameter] public SupportKind Kind { get; set; } = SupportKind.Problem;
+
+    [Parameter] public bool ShowCancel { get; set; } = true;
+
+    [Parameter] public EventCallback<SupportRequestDto> Done { get; set; }
+
+    [Parameter] public EventCallback Cancelled { get; set; }
+
+    private SupportKind _kind;
+    private string? _summary;
+    private string? _details;
+    private IBrowserFile? _file;
+    private string? _error;
+    private bool _summaryError;
+    private bool _busy;
+    private SupportRequestDto? _sent;
+
+    protected override void OnInitialized()
+    {
+        _kind = Kind;
+        if (FromError)
+        {
+            _summary = "Something went wrong on this page";
+        }
+    }
+
+    private void OnFileChosen(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var file = e.File;
+        if (!SupportRules.IsAllowedScreenshot(file.Name))
+        {
+            _file = null;
+            _error = "A screenshot must be a PNG, JPG, GIF or WebP image.";
+            return;
+        }
+
+        if (file.Size > SupportRules.MaxScreenshotBytes)
+        {
+            _file = null;
+            _error = $"That image is {FormatSize(file.Size)}; the limit is {SupportRules.MaxScreenshotBytes / (1024 * 1024)} MB.";
+            return;
+        }
+
+        _file = file;
+    }
+
+    private void RemoveFile() => _file = null;
+
+    private async Task SendAsync()
+    {
+        _error = null;
+        _summaryError = string.IsNullOrWhiteSpace(_summary);
+        if (_summaryError)
+        {
+            _error = "Say briefly what happened before sending.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var request = new SubmitSupportRequest(_kind, _summary!.Trim(), _details, SupportRules.CleanPagePath(PagePath), AppInfo.Version, FromError);
+            if (_file is not null)
+            {
+                await using var stream = _file.OpenReadStream(SupportRules.MaxScreenshotBytes);
+                _sent = await Support.SubmitAsync(request, new SupportScreenshot(_file.Name, stream));
+            }
+            else
+            {
+                _sent = await Support.SubmitAsync(request);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException)
+        {
+            _error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException)
+        {
+            _error = "It couldn't be sent just now. Check your connection and try again; if it keeps failing, tell your administrator.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    internal static string FormatSize(long bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / (1024.0 * 1024):0.#} MB" : $"{Math.Max(1, bytes / 1024)} KB";
+}

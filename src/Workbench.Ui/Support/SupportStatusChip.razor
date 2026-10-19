@@ -1,0 +1,22 @@
+@using Workbench.Contracts.Support
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorFor(Status)" Class="my-0" data-testid="support-status">@Text(Status)</MudChip>
+
+@code {
+    [Parameter] public SupportStatus Status { get; set; }
+
+    public static string Text(SupportStatus status) => status switch
+    {
+        SupportStatus.InProgress => "In progress",
+        SupportStatus.Resolved => "Resolved",
+        SupportStatus.Closed => "Closed",
+        _ => "New",
+    };
+
+    private static Color ColorFor(SupportStatus status) => status switch
+    {
+        SupportStatus.New => Color.Info,
+        SupportStatus.InProgress => Color.Warning,
+        SupportStatus.Resolved => Color.Success,
+        _ => Color.Default,
+    };
+}

@@ -17,7 +17,7 @@
 }
 else if (_balances is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else
 {
@@ -108,7 +108,7 @@ else
         {
             _balances = await Balances.GetMyBalancesAsync();
             _mine = await Requests.ListMineAsync();
-            _policies = await Policies.ListAsync();
+            _policies = await Policies.ListMineAsync(); // Only the policies that apply to me.
         }
         catch (Exception ex) when (MobileFormat.IsExpected(ex))
         {

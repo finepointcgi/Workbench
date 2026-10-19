@@ -9,11 +9,11 @@
 
 <PageTitle>@(_detail?.Report.Title ?? "Expense report") · Workbench</PageTitle>
 
-<MudBreadcrumbs Items="_crumbs" Class="px-0 pt-0" />
+<AccessibleBreadcrumbs Items="_crumbs" Class="px-0 pt-0" />
 
 @if (_detail is null)
 {
-    <MudProgressLinear Indeterminate="@_loading" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="@_loading" />
 }
 else
 {

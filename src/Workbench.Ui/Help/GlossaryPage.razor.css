@@ -1,0 +1,14 @@
+.wb-glossary {
+    margin: 0;
+    max-width: 80ch;
+}
+
+.wb-glossary-entry {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    scroll-margin-top: 72px;
+}
+
+.wb-glossary dd {
+    margin: 4px 0 0;
+}

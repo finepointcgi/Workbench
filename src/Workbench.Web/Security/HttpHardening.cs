@@ -43,7 +43,7 @@ public static class RateLimiting
 
                 var path = http.Request.Path;
                 var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                if (path.StartsWithSegments("/account") || path.StartsWithSegments("/signin-oidc") || path.StartsWithSegments("/signout-callback-oidc"))
+                if (path.StartsWithSegments("/account") || path.StartsWithSegments("/signin-oidc") || path.StartsWithSegments("/signout-callback-oidc") || path.StartsWithSegments("/signin-sso"))
                 {
                     return Window($"signin:{ip}", settings.SignInPerMinute);
                 }
@@ -173,6 +173,16 @@ public static class SecurityHeaders
                 if (System.Net.IPAddress.TryParse(proxy, out var address))
                 {
                     o.KnownProxies.Add(address);
+                }
+            }
+
+            // ForwardedHeaders:KnownNetworks: CIDR ranges of proxies whose addresses change (a container network, a
+            // Kubernetes pod range), e.g. 172.28.0.0/24.
+            foreach (var network in configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+            {
+                if (System.Net.IPNetwork.TryParse(network, out var parsed))
+                {
+                    o.KnownIPNetworks.Add(parsed);
                 }
             }
         });

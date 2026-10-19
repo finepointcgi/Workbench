@@ -13,7 +13,7 @@
 
 @if (_inbox is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
 else if (_inbox.Count == 0)
 {

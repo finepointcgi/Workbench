@@ -21,7 +21,7 @@ else
     </MudStack>
     @if (_busy)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" Class="mb-2" />
     }
     @if (_report is { } report)
     {

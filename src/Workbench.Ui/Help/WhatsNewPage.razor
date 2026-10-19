@@ -1,0 +1,13 @@
+@page "/help/whats-new"
+@* Recent changes, from Help/WhatsNew.md. Opening it marks the newest entry as seen. *@
+@inject IServiceProvider Services
+
+<PageTitle>What's new · Help · Workbench</PageTitle>
+
+<MudButton Href="help" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2 ml-n2">Help center</MudButton>
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-4">What's new</MudText>
+<WhatsNewList HeadingLevel="2" />
+
+@code {
+    protected override Task OnInitializedAsync() => WhatsNewList.MarkSeenAsync(Services);
+}

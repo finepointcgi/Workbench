@@ -12,7 +12,7 @@
 <MudDataGrid T="ContractDto" Items="_contracts" Loading="_loading" Dense="true" Hover="true" QuickFilter="Matches"
              RowClick="@(a => Navigation.NavigateTo($"setup/contracts/{a.Item.Id}"))" Style="cursor:pointer">
     <ToolBarContent>
-        <MudTextField @bind-Value="_search" Placeholder="Search number, name or customer" Adornment="Adornment.Start"
+        <MudTextField aria-label="Search contracts" @bind-Value="_search" Placeholder="Search number, name or customer" Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
     </ToolBarContent>
     <Columns>

@@ -67,7 +67,7 @@ public sealed partial class WebSecurityTests
 
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
-        Assert.Equal("Healthy", await ready.Content.ReadAsStringAsync());
+        Assert.Equal("Healthy", (string?)JsonNode.Parse(await ready.Content.ReadAsStringAsync())!["status"]);
     }
 
     [Fact]
@@ -119,6 +119,8 @@ public sealed partial class WebSecurityTests
             ["urls"] = "https://0.0.0.0:443",
             ["Scim:BearerToken"] = new string('x', 40),
             ["Database:Provider"] = "PostgreSQL",
+            ["DataProtection:KeyEncryption"] = "AwsKms",
+            ["DataProtection:AwsKms:KeyId"] = "arn:aws:kms:us-east-1:111122223333:alias/workbench-dp",
         });
         var scimOff = Problems("Staging", new()
         {

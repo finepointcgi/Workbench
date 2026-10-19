@@ -17,7 +17,8 @@ public static class ApprovalDefaults
     public static ApprovalWorkflowDefinition For(string documentType) => documentType switch
     {
         // DCAA: the supervisor approves; employees without one go to the administrators. Nobody approves their own.
-        ApprovalDocumentTypes.Timesheet => new([
+        // Leave requests always followed the timesheet rule.
+        ApprovalDocumentTypes.Timesheet or ApprovalDocumentTypes.LeaveRequest => new([
             new("Supervisor", 1, new(ApproverRuleKind.Supervisor), Fallback: new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Admin),
                 WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
         ]),

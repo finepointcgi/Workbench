@@ -1,0 +1,69 @@
+@* A chart with a text alternative (WCAG 1.1.1, 1.4.1): screen readers get the chart as one named image instead of
+   its SVG parts, and everyone can open the same numbers as a data table underneath. Wrap every MudChart in it:
+
+   <AccessibleChart Title="Cumulative budget vs actual" Labels="_labels" Series="_series" Format="FinancialFormat.Money">
+       <MudChart ... />
+   </AccessibleChart> *@
+
+<figure class="wb-chart" data-testid="accessible-chart">
+    <div role="img" aria-label="@($"{Title}. Chart; {(ShowTable ? "the data table follows" : "the same figures are in the table on this page")}.")">
+        @ChildContent
+    </div>
+    @if (ShowTable)
+    {
+    <details class="wb-chart-data">
+        <summary>Show data table<span class="wb-sr-only">: @Title</span></summary>
+        <div class="wb-chart-data-scroll">
+            <table class="wb-data-table">
+                <caption>@Title</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">@LabelHeader</th>
+                        @foreach (var s in Series)
+                        {
+                            <th scope="col">@s.Name</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < Labels.Count; i++)
+                    {
+                        var row = i;
+                        <tr>
+                            <th scope="row">@Labels[row]</th>
+                            @foreach (var s in Series)
+                            {
+                                <td>@(row < s.Data.Count ? FormatValue(s.Data.GetValue(row)) : "—")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+    }
+</figure>
+
+@code {
+    /// <summary>What the chart shows; names the image and captions the table.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>The x-axis labels (one table row each).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> Labels { get; set; } = [];
+
+    /// <summary>The chart's series (one table column each).</summary>
+    [Parameter, EditorRequired] public IEnumerable<ChartSeries<double>> Series { get; set; } = [];
+
+    /// <summary>Formats a value for the table; defaults to the value's own string.</summary>
+    [Parameter] public Func<double, string>? Format { get; set; }
+
+    /// <summary>The heading of the label column.</summary>
+    [Parameter] public string LabelHeader { get; set; } = "Period";
+
+    /// <summary>False when the page already shows the same figures in a table next to the chart.</summary>
+    [Parameter] public bool ShowTable { get; set; } = true;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string FormatValue(double value) => Format is null ? value.ToString("#,0.##", System.Globalization.CultureInfo.CurrentCulture) : Format(value);
+}

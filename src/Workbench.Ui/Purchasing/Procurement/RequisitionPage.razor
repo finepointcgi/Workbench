@@ -13,7 +13,7 @@
 }
 else if (_req is not { } req)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
@@ -50,6 +50,15 @@ else
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
             Waiting on @(r.Stage == RequisitionApprovalStage.Finance ? "Finance" : "the project manager")@(req.NeedsFinance && r.Stage == RequisitionApprovalStage.ProjectManager ? ", then Finance" : "").
+        </MudAlert>
+    }
+    @if (req.CeilingWarnings is { Count: > 0 } ceilingWarnings)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="req-ceiling-warnings">
+            @foreach (var w in ceilingWarnings)
+            {
+                <div>@w</div>
+            }
         </MudAlert>
     }
 

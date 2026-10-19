@@ -8,6 +8,9 @@ public static class SecurityEventTypes
     public const string DevSignIn = "signin.dev";
     public const string SignOut = "signout";
     public const string SessionRejected = "session.rejected";
+    public const string MfaRequired = "signin.mfa_required";
+    public const string Reauthenticated = "signin.reauthenticated";
+    public const string ReauthenticationRequired = "access.reauth_required";
 
     public const string RolesChanged = "user.roles_changed";
     public const string UserCreated = "user.created";
@@ -34,9 +37,12 @@ public static class SecurityEventTypes
     public const string ExportSecurityEvents = "export.security_events";
     public const string ExportReport = "export.report";
     public const string ExportEvm = "export.evm"; // IPMDAR Format 1/5 workbooks (earned value).
+    public const string ExportAssets = "export.assets"; // Fixed asset register, schedules, roll-forward and government property exports.
 
     public const string PeriodStatusChanged = "period.status_changed";
     public const string SettingChanged = "settings.changed";
+    public const string SignInSettingsChanged = "settings.sso";
+    public const string ComplianceChecklistAnswered = "compliance.checklist";
     public const string LegalHoldPlaced = "legal_hold.placed";
     public const string LegalHoldReleased = "legal_hold.released";
     public const string RetentionRun = "retention.run";
