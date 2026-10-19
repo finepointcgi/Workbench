@@ -178,6 +178,7 @@ internal sealed class TimeEntryConfiguration : IEntityTypeConfiguration<TimeEntr
         b.Property(e => e.Hours).Hours();
         b.Property(e => e.Comment).HasMaxLength(1000);
         b.HasIndex(e => new { e.WbsElementId, e.WorkDate });
+        b.HasIndex(e => e.WorkDate); // Period close, date-range labor reports and the unposted check filter by date alone.
         b.HasOne<WbsElement>().WithMany().HasForeignKey(e => e.WbsElementId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<LaborCategory>().WithMany().HasForeignKey(e => e.LaborCategoryId).OnDelete(DeleteBehavior.Restrict);
     }

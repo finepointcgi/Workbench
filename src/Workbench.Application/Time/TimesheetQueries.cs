@@ -143,9 +143,11 @@ internal static class TimesheetQueries
         IWorkbenchDbContext db, Employee employee, IReadOnlyList<TimesheetDayDto> days, IProjectService projects, CancellationToken cancellationToken)
     {
         var byCode = new Dictionary<Guid, (ChargeCodeDto Code, List<DateOnly> Dates)>();
+        var employed = days.Where(d => d.IsEmployed).Select(d => d.Date).ToList();
+        var codesByDate = employed.Count == 0 ? new Dictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>() : await projects.ListChargeCodesForDatesAsync(employee.Id, employed, cancellationToken);
         foreach (var day in days.Where(d => d.IsEmployed))
         {
-            foreach (var code in await projects.ListChargeCodesAsync(employee.Id, day.Date, cancellationToken))
+            foreach (var code in codesByDate[day.Date])
             {
                 if (!byCode.TryGetValue(code.WbsElementId, out var existing))
                 {
@@ -158,9 +160,12 @@ internal static class TimesheetQueries
 
         // "Recently used" = charged in the last eight weeks, so the grid can offer them first.
         var since = days[0].Date.AddDays(-56);
-        var recent = await db.Set<TimeEntry>().AsNoTracking()
-            .Where(e => e.WorkDate >= since && db.Set<Timesheet>().Any(t => t.Id == e.TimesheetId && t.EmployeeId == employee.Id))
-            .Select(e => e.WbsElementId)
+        // From the employee's timesheets (indexed by employee and period) rather than everyone's entries since then.
+        var recent = await (
+                from t in db.Set<Timesheet>().AsNoTracking()
+                join e in db.Set<TimeEntry>().AsNoTracking() on t.Id equals e.TimesheetId
+                where t.EmployeeId == employee.Id && t.PeriodEnd >= since && e.WorkDate >= since
+                select e.WbsElementId)
             .Distinct()
             .ToListAsync(cancellationToken);
         var recentSet = recent.ToHashSet();

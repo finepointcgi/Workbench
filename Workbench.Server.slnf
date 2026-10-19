@@ -14,7 +14,8 @@
       "src/Workbench.Ui/Workbench.Ui.csproj",
       "src/Workbench.Web/Workbench.Web.csproj",
       "src/Workbench.Worker/Workbench.Worker.csproj",
-      "tests/Workbench.Tests/Workbench.Tests.csproj"
+      "tests/Workbench.Tests/Workbench.Tests.csproj",
+      "tools/Workbench.LoadData/Workbench.LoadData.csproj"
     ]
   }
 }

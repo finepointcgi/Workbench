@@ -48,11 +48,20 @@ public sealed partial class StandardReportService
 
         var billed = await BilledByProjectAsync(projects.Select(x => x.Id).ToList(), ct);
         decimal tBudget = 0, tPeriodDirect = 0, tPeriodBurdened = 0, tHours = 0, tDirect = 0, tBurdened = 0, tEtc = 0, tEac = 0, tEacBurdened = 0, tFunded = 0, tBilled = 0;
-        foreach (var project in projects)
+        // Each project's figures come from four services (a hundred small queries): fetch a few projects at a time, then
+        // build the rows in project order.
+        var figures = new (IReadOnlyList<Contracts.Financials.WbsFinancialRowDto> Rows, BurdenedFinancialsDto Burdened, BurdenedCostResult Period, decimal? Funded)[projects.Count];
+        await Parallel.ForEachAsync(Enumerable.Range(0, projects.Count), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (i, token) =>
         {
-            var rows = await financials.GetWbsFinancialsAsync(project.Id, cancellationToken: ct);
-            var burdened = await burdenedFinancials.GetProjectAsync(project.Id, cancellationToken: ct);
-            var period = await burdenedCost.GetProjectCostAsync(project.Id, from, to, basis, ct);
+            var id = projects[i].Id;
+            figures[i] = (await financials.GetWbsFinancialsAsync(id, cancellationToken: token), await burdenedFinancials.GetProjectAsync(id, cancellationToken: token),
+                await burdenedCost.GetProjectCostAsync(id, from, to, basis, token), await FundedValueAsync(projects[i], token));
+        });
+
+        for (var index = 0; index < projects.Count; index++)
+        {
+            var project = projects[index];
+            var (rows, burdened, period, funded) = figures[index];
             if (!burdened.HasRates)
             {
                 b.Note("Some projects have no indirect rates for their fiscal years: burdened figures equal direct cost there.");
@@ -76,7 +85,6 @@ public sealed partial class StandardReportService
                 }
             }
 
-            var funded = await FundedValueAsync(project, ct);
             var t = burdened.Totals;
             var pDirect = period.Lines.Sum(l => l.DirectLabor + l.DirectOdc);
             var pBurdened = period.Lines.Sum(l => l.TotalCost);

@@ -144,62 +144,85 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ChargeCodeDto>> ListChargeCodesAsync(Guid employeeId, DateOnly date, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ChargeCodeDto>> ListChargeCodesAsync(Guid employeeId, DateOnly date, CancellationToken cancellationToken = default) =>
+        (await ListChargeCodesForDatesAsync(employeeId, [date], cancellationToken))[date];
+
+    public async Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>> ListChargeCodesForDatesAsync(
+        Guid employeeId, IReadOnlyCollection<DateOnly> dates, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var employee = await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Id == employeeId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Employee", employeeId);
-        if (!employee.IsActiveOn(date))
+        var result = dates.Distinct().ToDictionary(d => d, _ => (IReadOnlyList<ChargeCodeDto>)[]);
+        var active = result.Keys.Where(employee.IsActiveOn).ToList();
+        if (active.Count == 0)
         {
-            return [];
+            return result;
         }
 
-        var projects = await db.Set<Project>().AsNoTracking()
-            .Where(p => p.Status == ProjectStatus.Active)
-            .ToDictionaryAsync(p => p.Id, cancellationToken);
-        var elements = await db.Set<WbsElement>().AsNoTracking().ToListAsync(cancellationToken);
-        var parents = elements.Where(w => w.ParentId is not null).Select(w => w.ParentId!.Value).ToHashSet();
+        // Only candidates leave the database: open, chargeable leaves of active projects running during the dates that
+        // need no assignment or have one for this employee then (a mid-size contractor's WBS is thousands of elements).
+        // Each date is then checked exactly as before.
+        var (first, last) = (active.Min(), active.Max());
+        var assigned = db.Set<ChargeAssignment>().Where(a => a.EmployeeId == employeeId && (a.From == null || a.From <= last) && (a.To == null || a.To >= first));
+        var elements = await (
+                from w in db.Set<WbsElement>().AsNoTracking()
+                join p in db.Set<Project>() on w.ProjectId equals p.Id
+                where w.IsOpen && w.IsChargeable && p.Status == ProjectStatus.Active
+                      && (p.Start == null || p.Start <= last) && (p.Finish == null || p.Finish >= first)
+                      && !db.Set<WbsElement>().Any(c => c.ParentId == w.Id)
+                      && (!w.RequiresAssignment || assigned.Any(a => a.WbsElementId == w.Id))
+                select w)
+            .ToListAsync(cancellationToken);
+        var projectIds = elements.Select(w => w.ProjectId).Distinct().ToList();
+        var projects = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, cancellationToken);
+        var elementIds = elements.Select(w => w.Id).ToList();
         var assignments = await db.Set<ChargeAssignment>().AsNoTracking()
-            .Where(a => a.EmployeeId == employeeId)
+            .Where(a => a.EmployeeId == employeeId && elementIds.Contains(a.WbsElementId))
             .ToListAsync(cancellationToken);
         var clinIds = elements.Where(w => w.ClinId != null).Select(w => w.ClinId!.Value).Distinct().ToList();
         var clins = await db.Set<Clin>().AsNoTracking().Where(c => clinIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, cancellationToken);
 
-        var codes = new List<ChargeCodeDto>();
-        foreach (var element in elements.Where(w => w.IsOpen && w.IsChargeable && !parents.Contains(w.Id)))
+        foreach (var date in active)
         {
-            if (!projects.TryGetValue(element.ProjectId, out var project)
-                || (project.Start is { } start && date < start)
-                || (project.Finish is { } finish && date > finish))
+            var codes = new List<ChargeCodeDto>();
+            foreach (var element in elements)
             {
-                continue;
+                if (!projects.TryGetValue(element.ProjectId, out var project)
+                    || (project.Start is { } start && date < start)
+                    || (project.Finish is { } finish && date > finish))
+                {
+                    continue;
+                }
+
+                // Contract detail: no charging to an unexercised option CLIN or outside the CLIN's period of performance.
+                if (element.ClinId is { } clinId && clins.TryGetValue(clinId, out var clin)
+                    && ((clin.IsOption && !clin.IsExercised) || date < clin.PeriodStart || date > clin.PeriodEnd))
+                {
+                    continue;
+                }
+
+                var assignment = assignments.FirstOrDefault(a => a.WbsElementId == element.Id
+                    && (a.From is null || a.From <= date) && (a.To is null || a.To >= date));
+                if (element.RequiresAssignment && assignment is null)
+                {
+                    continue;
+                }
+
+                // An employee with no default labor category can only charge codes whose assignment names one.
+                if ((assignment?.LaborCategoryId ?? employee.DefaultLaborCategoryId) is not { } laborCategoryId)
+                {
+                    continue;
+                }
+
+                codes.Add(new ChargeCodeDto(element.Id, element.Code, element.Name, project.Id, project.Code, project.Name,
+                    (ChargeCodeKind)(int)element.Kind, laborCategoryId));
             }
 
-            // Contract detail: no charging to an unexercised option CLIN or outside the CLIN's period of performance.
-            if (element.ClinId is { } clinId && clins.TryGetValue(clinId, out var clin)
-                && ((clin.IsOption && !clin.IsExercised) || date < clin.PeriodStart || date > clin.PeriodEnd))
-            {
-                continue;
-            }
-
-            var assignment = assignments.FirstOrDefault(a => a.WbsElementId == element.Id
-                && (a.From is null || a.From <= date) && (a.To is null || a.To >= date));
-            if (element.RequiresAssignment && assignment is null)
-            {
-                continue;
-            }
-
-            // An employee with no default labor category can only charge codes whose assignment names one.
-            if ((assignment?.LaborCategoryId ?? employee.DefaultLaborCategoryId) is not { } laborCategoryId)
-            {
-                continue;
-            }
-
-            codes.Add(new ChargeCodeDto(element.Id, element.Code, element.Name, project.Id, project.Code, project.Name,
-                (ChargeCodeKind)(int)element.Kind, laborCategoryId));
+            result[date] = codes.OrderBy(c => c.Kind).ThenBy(c => c.Code, StringComparer.Ordinal).ToList();
         }
 
-        return codes.OrderBy(c => c.Kind).ThenBy(c => c.Code, StringComparer.Ordinal).ToList();
+        return result;
     }
 
     private static async Task ApplyAsync(IWorkbenchDbContext db, Project project, SaveProjectRequest request, CancellationToken cancellationToken)
