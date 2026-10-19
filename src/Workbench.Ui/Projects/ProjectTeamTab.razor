@@ -1,4 +1,4 @@
-@* The Team tab (Finance, administrators and the project's manager): who charges to the project and who is allocated to it. *@
+@* The Team tab (Finance, administrators and the project's manager): who charges to the project, who is allocated to it and their open tasks. *@
 @inject IProjectHubService HubService
 
 @if (_error is not null)
@@ -62,6 +62,7 @@ else
             <MudText Class="mud-text-secondary">Nobody charges to or is allocated to this project yet.</MudText>
         </NoRecordsContent>
     </MudTable>
+    <ProjectWorkloadPanel ProjectId="ProjectId" />
 }
 
 @code {

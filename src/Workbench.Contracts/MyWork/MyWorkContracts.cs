@@ -35,6 +35,6 @@ public sealed record MyWorkDto(string Email, DateOnly Today, DateOnly WeekEnd, M
 
 public interface IMyWorkService
 {
-    /// <summary>Items on every sheet the current user can see where any Person column is the user's email.</summary>
+    /// <summary>Items on every sheet the current user can see that are assigned to them (Assignees or any Person column).</summary>
     Task<MyWorkDto> GetAsync(CancellationToken cancellationToken = default);
 }

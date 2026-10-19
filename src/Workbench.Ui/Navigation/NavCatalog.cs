@@ -56,6 +56,9 @@ public static class NavCatalog
 
     private static bool AdminOnly(NavAccess a) => a.IsAdmin;
 
+    // Project managers who aren't Finance (Finance reaches the same pages under Setup and Finance).
+    private static bool PmNotFinance(NavAccess a) => a.IsPm && !a.IsFinance;
+
     public static IReadOnlyList<NavEntry> Entries { get; } =
     [
         new(Home, null, "Home", "", Icons.Material.Filled.Home, _ => true, MatchAll: true, Keywords: "my work start"),
@@ -73,8 +76,9 @@ public static class NavCatalog
             Keywords: "approve reject inbox timesheet expense odc bill requisition delegation"),
 
         new(Projects, null, "All projects", "projects", Icons.Material.Filled.Work, Everyone, Keywords: "contracts wbs"),
-        new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsResourceManager || a.IsProjectManager, Keywords: "allocations staffing capacity utilization"),
-        new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, a => a.IsFinance || a.IsProjectManager, MatchAll: true, Keywords: "other direct costs vendor"),
+        new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, a => a.HasProjectManagerRole && !a.IsFinance, MatchAll: true, Keywords: "create request project wbs plan"),
+        new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsResourceManager || a.IsPm, Keywords: "allocations staffing capacity utilization"),
+        new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, a => a.IsFinance || a.IsPm, MatchAll: true, Keywords: "other direct costs vendor"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
@@ -125,6 +129,8 @@ public static class NavCatalog
         // Reports: one place for every report.
         new(Reports, null, "Report catalog", "reports", Icons.Material.Filled.LibraryBooks, Everyone, MatchAll: true, Keywords: "reports"),
         new(Reports, null, "Report writer", "reports/writer", Icons.Material.Filled.Build, Everyone, Detail: "Report", Keywords: "custom report builder"),
+        new(Reports, "Project reports", "Project status", "reports/standard/project-status", Icons.Material.Filled.Assessment, PmNotFinance, Keywords: "eac etc budget variance pm"),
+        new(Reports, "Project reports", "Contract funding", "reports/standard/funding-status", Icons.Material.Filled.Assessment, PmNotFinance, Keywords: "ceiling funded clin"),
         new(Reports, null, "Financial statements", "accounting/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "balance sheet income statement trial balance p&l"),
         new(Reports, null, "AP reports", "purchasing/reports", Icons.Material.Filled.Assessment, FinanceOnly, Keywords: "payables aging 1099"),
         new(Reports, null, "Asset reports", "assets/reports", Icons.Material.Filled.Assessment, FinanceOnly),
@@ -161,7 +167,7 @@ public static class NavCatalog
         new(Home, null, "What's new", "help/whats-new", Icons.Material.Filled.NewReleases, _ => true, Keywords: "changes release notes changelog", InMenu: false),
         new(Home, null, "My support requests", "support", Icons.Material.Filled.SupportAgent, Everyone, Keywords: "report problem feedback bug help", InMenu: false),
         new(Admin, null, "Support requests", "admin/support", Icons.Material.Filled.SupportAgent, AdminOnly, Keywords: "help desk problems feedback bug reports", InMenu: false),
-        new(MyWork, null, "My allocations", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsSignedIn && !a.IsResourceManager && !a.IsProjectManager, Keywords: "resourcing staffing", InMenu: false),
+        new(MyWork, null, "My allocations", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsSignedIn && !a.IsResourceManager && !a.IsPm, Keywords: "resourcing staffing", InMenu: false),
     ];
 
     /// <summary>The section's title for this user: Finance people who aren't administrators see Admin as "Setup".</summary>

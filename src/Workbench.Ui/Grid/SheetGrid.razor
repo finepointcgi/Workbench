@@ -11,6 +11,16 @@
 @* ARIA grid: focus stays on the container and aria-activedescendant points screen readers at the active cell, so
    moving with the arrow keys announces the cell (its column header and value). The table is presentational; the rows
    and cells carry the grid roles. *@
+@if (Tasks is not null)
+{
+    <div class="d-flex align-center mb-1" style="gap:8px">
+        <MudSwitch T="bool" Value="_myTasks" ValueChanged="SetMyTasks" Color="Color.Primary" Size="Size.Small" Label="My tasks" data-testid="grid-my-tasks" />
+        @if (_myTasks)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary" role="status">Showing @_mine.Count @(_mine.Count == 1 ? "row" : "rows") assigned to you (and their parents).</MudText>
+        }
+    </div>
+}
 <div class="wb-grid" @ref="_container" tabindex="0" role="grid" aria-label="@Sheet.Summary.Name"
      aria-rowcount="@(_rows.Count + 1)" aria-colcount="@(_columns.Count + 2)" style="max-height:@Height"
      aria-activedescendant="@(ActiveRow is not null && ActiveColumn is not null ? ActiveCellId : null)"
@@ -97,6 +107,10 @@
                         <span class="wb-rownum">@(IndexOf(row) + 1)</span>
                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="wb-row-menu" AriaLabel="Row actions">
                             <MudMenuItem Icon="@Icons.Material.Filled.OpenInNew" Href="@DetailsHref(row.Item)">Open details</MudMenuItem>
+                            @if (CanAssign)
+                            {
+                                <MudMenuItem Icon="@Icons.Material.Filled.PersonAdd" OnClick="() => AssignAsync(row.Item)">Assign…</MudMenuItem>
+                            }
                             @if (CanEdit)
                             {
                                 <MudDivider />
@@ -143,6 +157,10 @@
                                     }
                                     <a class="wb-title-link" href="@DetailsHref(row.Item)" title="Open details">@row.Item.Title</a>
                                 </div>
+                            }
+                            else if (column.Kind == GridColumnKind.Assignees)
+                            {
+                                <AssigneeChips Assignees="@(Tasks?.For(row.Item.Id) ?? [])" Max="4" Empty="@(CanAssign ? "Assign…" : "—")" />
                             }
                             else if (column.ValueKind == ColumnKind.Checkbox)
                             {
@@ -223,6 +241,9 @@
     private bool _selectAllOnFocus;
     private bool _focusGrid;
     private bool _scrollToActive;
+    private bool _myTasks;
+    private IReadOnlySet<Guid> _mine = new HashSet<Guid>();
+    private SheetTasksDto? _lastTasks;
 
     private int TableWidth => GutterWidth + AddColumnWidth + _columns.Sum(WidthOf);
 
@@ -234,14 +255,16 @@
 
     protected override void OnParametersSet()
     {
-        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet))
+        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet) && ReferenceEquals(Tasks, _lastTasks))
         {
             return;
         }
 
         _lastItems = Items;
         _lastSheet = Sheet;
-        _columns = GridColumn.For(Sheet);
+        _lastTasks = Tasks;
+        _columns = GridColumn.For(Sheet, assignees: Tasks is not null);
+        _mine = TaskView.MineWithAncestors(Tasks, Sheet, Items);
         _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
         _children = Items.ToLookup(i => i.ParentId);
         _editing = false;
@@ -375,7 +398,7 @@
         void AddRows(Guid? parentId, int depth)
         {
             var first = true;
-            foreach (var item in _children[parentId].OrderBy(i => i.Order))
+            foreach (var item in _children[parentId].OrderBy(i => i.Order).Where(i => !_myTasks || _mine.Contains(i.Id)))
             {
                 var hasChildren = _children.Contains(item.Id);
                 rows.Add(new GridRow(item, depth, hasChildren, !first));
@@ -603,6 +626,12 @@
             return;
         }
 
+        if (column.Kind == GridColumnKind.Assignees)
+        {
+            _ = AssignAsync(row.Item);
+            return;
+        }
+
         if (column.ReadOnly)
         {
             Snackbar.Add($"{column.Name} is a formula column and can't be edited.", Severity.Info);
@@ -703,7 +732,7 @@
 
     private async Task ClearCellAsync(GridRow row, GridColumn column)
     {
-        if (column.ReadOnly || column.Kind == GridColumnKind.Title)
+        if (column.ReadOnly || column.Kind is GridColumnKind.Title or GridColumnKind.Assignees)
         {
             return;
         }
@@ -769,6 +798,29 @@
     }
 
     private static string InputType(ColumnKind kind) => kind == ColumnKind.Person ? "email" : "text";
+
+    // ---- Task assignment ----
+
+    private void SetMyTasks(bool on)
+    {
+        _myTasks = on;
+        RebuildRows();
+    }
+
+    private async Task AssignAsync(ItemDto item)
+    {
+        if (!CanAssign)
+        {
+            Snackbar.Add("You need edit access to this sheet to assign tasks.", Severity.Info);
+            return;
+        }
+
+        if (await TaskView.AssignAsync(DialogService, SheetId, item, Tasks?.For(item.Id) ?? []))
+        {
+            _focusGrid = true;
+            await Changed.InvokeAsync();
+        }
+    }
 
     // ---- Row actions ----
 

@@ -62,7 +62,7 @@ public sealed class WebHostAuthTests
 
         Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
         Assert.Equal("/sheets", signIn.Headers.Location!.ToString());
-        Assert.Equal(2, sheets!.Count);
+        Assert.Equal(3, sheets!.Count); // Program Office's two, and the viewer's seat on 1002's plan
     }
 
     [Theory]
@@ -142,7 +142,7 @@ public sealed class WebHostAuthTests
         using var pmRates = await pm.GetAsync($"/api/v1/employees/{analystContext.EmployeeId}/cost-rates");
         using var analystAudit = await analyst.GetAsync("/api/v1/audit");
 
-        Assert.Equal(OrgRoles.Finance, pmContext!.Roles);
+        Assert.Equal(OrgRoles.Finance | OrgRoles.ProjectManager, pmContext!.Roles);
         Assert.Equal(OrgRoles.Employee, analystContext.Roles);
         Assert.Equal(OrgRoles.Admin, devContext!.Roles);
         Assert.NotNull(pmContext.EmployeeId);

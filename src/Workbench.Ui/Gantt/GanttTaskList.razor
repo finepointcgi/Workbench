@@ -1,10 +1,14 @@
 @using System.Globalization
 
-<div class="gantt-task-list" role="table" aria-label="Tasks">
+<div class="@(Assignees is null ? "gantt-task-list" : "gantt-task-list with-assignees")" role="table" aria-label="Tasks">
     <div class="gantt-task-header" role="row" style="height:@(Px(GanttLayout.HeaderHeight))">
         <span class="gantt-col-name" role="columnheader">Task</span>
         <span class="gantt-col-date" role="columnheader">Start</span>
         <span class="gantt-col-date" role="columnheader">Finish</span>
+        @if (Assignees is not null)
+        {
+            <span class="gantt-col-assignee" role="columnheader">Assigned</span>
+        }
     </div>
     @foreach (var row in Rows)
     {
@@ -36,6 +40,22 @@
             </span>
             <span class="gantt-col-date" role="cell">@Format(row.Start)</span>
             <span class="gantt-col-date" role="cell">@Format(row.Finish)</span>
+            @if (Assignees is not null)
+            {
+                var people = Assignees(row.Item.Id);
+                var text = people.Count == 0 ? (CanAssign ? "+" : "—") : string.Join(" ", people.Select(Workbench.Ui.Tasks.TaskView.Initials));
+                <span class="gantt-col-assignee" role="cell" title="@Workbench.Ui.Tasks.TaskView.Names(people)">
+                    @if (CanAssign)
+                    {
+                        <button type="button" class="gantt-assign" @onclick="() => OnAssign.InvokeAsync(row.Item)" data-testid="gantt-assign"
+                                aria-label="@($"Assign {row.Item.Title} (now: {Workbench.Ui.Tasks.TaskView.Names(people)})")">@text</button>
+                    }
+                    else
+                    {
+                        <span aria-label="@Workbench.Ui.Tasks.TaskView.Names(people)">@text</span>
+                    }
+                </span>
+            }
         </div>
     }
 </div>
@@ -55,6 +75,16 @@
 
     [Parameter]
     public EventCallback<Guid> OnToggle { get; set; }
+
+    /// <summary>The assignees of an item; null hides the Assigned column (no task assignment on this page).</summary>
+    [Parameter]
+    public Func<Guid, IReadOnlyList<Workbench.Contracts.Tasks.TaskAssigneeDto>>? Assignees { get; set; }
+
+    [Parameter]
+    public bool CanAssign { get; set; }
+
+    [Parameter]
+    public EventCallback<ItemDto> OnAssign { get; set; }
 
     private static string Px(double value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "px";
 
