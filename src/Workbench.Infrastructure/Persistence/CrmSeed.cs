@@ -40,7 +40,7 @@ internal static class CrmSeed
         var category = await db.Set<LaborCategory>().FirstOrDefaultAsync(c => c.Code == "PM3", cancellationToken);
         var blake = new Employee
         {
-            EmployeeNumber = "E1006", Email = BdEmail, DisplayName = "Blake Diaz", OrgUnitId = pat.OrgUnitId, SupervisorId = pat.Id,
+            EmployeeNumber = "E1009", Email = BdEmail, DisplayName = "Blake Diaz", OrgUnitId = pat.OrgUnitId, SupervisorId = pat.Id,
             DefaultLaborCategoryId = category?.Id, HireDate = pat.HireDate,
         };
         db.Add(blake);

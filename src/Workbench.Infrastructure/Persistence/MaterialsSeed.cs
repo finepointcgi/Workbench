@@ -52,7 +52,7 @@ internal static class MaterialsSeed
 
         var mia = new Employee
         {
-            EmployeeNumber = "E1006", Email = MiaEmail, DisplayName = "Mia Torres", OrgUnitId = pat.OrgUnitId, SupervisorId = pat.Id,
+            EmployeeNumber = "E1008", Email = MiaEmail, DisplayName = "Mia Torres", OrgUnitId = pat.OrgUnitId, SupervisorId = pat.Id,
             DefaultLaborCategoryId = technician.Id, HireDate = pat.HireDate,
         };
         db.Add(mia);

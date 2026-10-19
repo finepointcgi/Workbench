@@ -40,7 +40,7 @@ else
         else
         {
             <AccessibleChart Title="Weighted pipeline by fiscal quarter" Labels="_labels" Series="_series" Format="@(v => CrmFormat.Money((decimal)v))" ShowTable="false">
-                <MudChart T="double" ChartType="ChartType.StackedBar" ChartSeries="_series" ChartLabels="_labels" Width="100%" Height="260px" LegendPosition="Position.Bottom" />
+                <MudChart T="double" ChartType="ChartType.StackedBar" ChartSeries="_series" ChartLabels="_labels" ChartOptions="_chartOptions" Width="100%" Height="260px" LegendPosition="Position.Bottom" />
             </AccessibleChart>
             <MudSimpleTable Dense="true" Outlined="true" data-testid="forecast-table" Class="mt-3">
                 <caption class="wb-sr-only">Weighted forecast by fiscal quarter</caption>
@@ -136,6 +136,7 @@ else
     private WinLossDto? _winLoss;
     private IReadOnlyList<BpSpendDto>? _bp;
     private string[] _labels = [];
+    private readonly StackedBarChartOptions _chartOptions = new() { YAxisToStringFunc = v => CrmFormat.Compact((decimal)v) };
     private List<ChartSeries<double>> _series = [];
     private string? _error;
 
