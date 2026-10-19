@@ -164,6 +164,7 @@ for (const role of roles) {
       const url = base + p + (width < 600 && p === '/' ? '?site=full' : '');
       const response = await page.goto(url);
       await settle(page);
+      if (new URL(page.url()).pathname.startsWith('/account/')) throw new Error(`signed out (landed on ${new URL(page.url()).pathname})`);
       if (!await setTheme(page, theme)) { skipped.push({ role, width, theme, page: p, reason: 'no dark theme' }); return; }
       const axe = await new AxeBuilder({ page }).withTags(tags).analyze();
       results.push({ role, width, theme, page: p, finalPath: new URL(page.url()).pathname, status: response?.status(),
@@ -180,4 +181,4 @@ for (const role of roles) {
 await browser.close();
 
 const blocking = await writeReport();
-process.exit(blocking.length ? 1 : 0);
+process.exit(blocking.length || results.some(r => r.error) ? 1 : 0);
