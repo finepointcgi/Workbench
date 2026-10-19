@@ -44,6 +44,7 @@ internal sealed class TenantAwareDbContextFactory(DatabaseProvider provider, IWo
         {
             var builder = new DbContextOptionsBuilder<WorkbenchDbContext>();
             builder.Use(provider, cs);
+            builder.AddInterceptors(DbTimingInterceptor.Instance);
             if (loggerFactory is not null)
             {
                 builder.UseLoggerFactory(loggerFactory);

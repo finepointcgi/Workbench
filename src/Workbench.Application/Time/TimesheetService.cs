@@ -316,10 +316,16 @@ public sealed class TimesheetService(
 
         // Re-check every entry in case a period closed or a charge code ended since it was entered.
         var isOpen = await TimesheetQueries.OpenPeriodsAsync(db, sheet.PeriodStart, sheet.PeriodEnd, cancellationToken);
-        foreach (var group in sheet.Entries.GroupBy(e => e.WorkDate))
+        var groups = sheet.Entries.GroupBy(e => e.WorkDate).ToList();
+        foreach (var group in groups)
         {
             ValidateDate(me, group.Key, isOpen, checkEmployment: true);
-            var codes = await projects.ListChargeCodesAsync(me.Id, group.Key, cancellationToken);
+        }
+
+        var codesByDate = groups.Count == 0 ? null : await projects.ListChargeCodesForDatesAsync(me.Id, groups.Select(g => g.Key).ToList(), cancellationToken);
+        foreach (var group in groups)
+        {
+            var codes = codesByDate![group.Key];
             if (group.FirstOrDefault(e => codes.All(c => c.WbsElementId != e.WbsElementId)) is { } invalid)
             {
                 throw new ArgumentException($"An entry on {invalid.WorkDate:yyyy-MM-dd} uses a charge code you can no longer charge. Move those hours first.");

@@ -222,16 +222,31 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
         var period = fiscalPeriodId is { } pid ? context.Periods.FirstOrDefault(p => p.Id == pid) ?? throw WorkbenchNotFoundException.For("Fiscal period", pid) : null;
         bool InPeriod(DateOnly d) => period is null || (period.Start <= d && d <= period.End);
 
-        var active = await db.Set<JournalEntry>().AsNoTracking().Include(e => e.Lines)
-            .Where(e => (e.Source == JournalSource.Timesheet || e.Source == JournalSource.Odc) && e.Status == JournalStatus.Posted)
+        // Only what the period involves: approved timesheets with hours in it, approved ODCs dated in it, and the posted
+        // labor and ODC entries of those sources or dated in the period. Without a period (the backlog), everything.
+        var (start, end) = period is null ? (DateOnly.MinValue, DateOnly.MaxValue) : (period.Start, period.End);
+        var sheets = await db.Set<Timesheet>().AsNoTracking().Include(t => t.Entries)
+            .Where(t => t.Status == TimesheetStatus.Approved && (period == null || t.Entries.Any(e => e.Hours != 0 && e.WorkDate >= start && e.WorkDate <= end)))
             .ToListAsync(ct);
+        var odcs = await db.Set<OdcEntry>().AsNoTracking()
+            .Where(o => o.Status == OdcStatus.Approved && (period == null || (o.IncurredOn >= start && o.IncurredOn <= end)))
+            .ToListAsync(ct);
+        var activeQuery = db.Set<JournalEntry>().AsNoTracking()
+            .Where(e => (e.Source == JournalSource.Timesheet || e.Source == JournalSource.Odc) && e.Status == JournalStatus.Posted);
+        if (period is not null)
+        {
+            var sourceIds = sheets.Select(t => t.Id).Concat(odcs.Select(o => o.Id)).ToList();
+            activeQuery = activeQuery.Where(e => e.FiscalPeriodId == period.Id || (e.SourceId != null && sourceIds.Contains(e.SourceId.Value)));
+        }
+
+        var active = await activeQuery.ToListAsync(ct);
+        var posted = active.Select(e => (e.Source, e.SourceId, e.SourceRevision)).ToHashSet();
         var result = new List<UnpostedItemDto>();
 
-        var sheets = await db.Set<Timesheet>().AsNoTracking().Include(t => t.Entries).Where(t => t.Status == TimesheetStatus.Approved).ToListAsync(ct);
         var sheetRevisions = sheets.ToDictionary(s => s.Id, s => s.Revision);
         foreach (var sheet in sheets.Where(s => s.Entries.Any(e => e.Hours != 0 && InPeriod(e.WorkDate))))
         {
-            if (active.Any(e => e.Source == JournalSource.Timesheet && e.SourceId == sheet.Id && e.SourceRevision == sheet.Revision))
+            if (posted.Contains((JournalSource.Timesheet, sheet.Id, sheet.Revision)))
             {
                 continue;
             }
@@ -246,11 +261,10 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
                 $"Labor: {context.EmployeeName(sheet.EmployeeId)}, week of {sheet.PeriodStart:yyyy-MM-dd}", sheet.PeriodEnd, plan.Amount, false, plan.Problem));
         }
 
-        var odcs = await db.Set<OdcEntry>().AsNoTracking().Where(o => o.Status == OdcStatus.Approved).ToListAsync(ct);
         var odcRevisions = await OdcRevisionsAsync(db, odcs, ct);
         foreach (var odc in odcs.Where(o => o.Amount != 0 && InPeriod(o.IncurredOn)))
         {
-            if (active.Any(e => e.Source == JournalSource.Odc && e.SourceId == odc.Id && e.SourceRevision == odcRevisions[odc.Id]))
+            if (posted.Contains((JournalSource.Odc, odc.Id, odcRevisions[odc.Id])))
             {
                 continue;
             }
@@ -259,16 +273,50 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
             result.Add(new UnpostedItemDto(Contracts.Accounting.JournalEntrySource.Odc, odc.Id, OdcDescription(odc), odc.IncurredOn, odc.Amount, false, plan.Problem));
         }
 
-        // Posted entries whose source was reopened (or re-approved as a new revision) still need their reversal.
-        foreach (var entry in active.Where(e => period is null || e.FiscalPeriodId == period.Id))
+        // Posted entries whose source was reopened (or re-approved as a new revision) still need their reversal. Sources
+        // posted into the period but not loaded above (their hours moved, or reopened) are looked up by id.
+        var inPeriod = active.Where(e => period is null || e.FiscalPeriodId == period.Id).ToList();
+        var otherSheets = inPeriod.Where(e => e.Source == JournalSource.Timesheet && !sheetRevisions.ContainsKey(e.SourceId!.Value)).Select(e => e.SourceId!.Value).Distinct().ToList();
+        if (otherSheets.Count > 0)
+        {
+            foreach (var t in await db.Set<Timesheet>().AsNoTracking().Where(t => t.Status == TimesheetStatus.Approved && otherSheets.Contains(t.Id))
+                         .Select(t => new { t.Id, t.Revision }).ToListAsync(ct))
+            {
+                sheetRevisions[t.Id] = t.Revision;
+            }
+        }
+
+        var otherOdcIds = inPeriod.Where(e => e.Source == JournalSource.Odc && !odcRevisions.ContainsKey(e.SourceId!.Value)).Select(e => e.SourceId!.Value).Distinct().ToList();
+        if (otherOdcIds.Count > 0)
+        {
+            var otherOdcs = await db.Set<OdcEntry>().AsNoTracking().Where(o => o.Status == OdcStatus.Approved && otherOdcIds.Contains(o.Id)).ToListAsync(ct);
+            foreach (var (id, revision) in await OdcRevisionsAsync(db, otherOdcs, ct))
+            {
+                odcRevisions[id] = revision;
+            }
+        }
+
+        var stale = new List<(JournalEntry Entry, int? Current)>();
+        foreach (var entry in inPeriod)
         {
             var current = entry.Source == JournalSource.Timesheet
                 ? sheetRevisions.TryGetValue(entry.SourceId!.Value, out var r) ? r : (int?)null
                 : odcRevisions.TryGetValue(entry.SourceId!.Value, out var o) ? o : null;
             if (current != entry.SourceRevision)
             {
+                stale.Add((entry, current));
+            }
+        }
+
+        if (stale.Count > 0)
+        {
+            var staleIds = stale.Select(s => s.Entry.Id).ToList();
+            var debits = await db.Set<JournalLine>().AsNoTracking().Where(l => staleIds.Contains(l.JournalEntryId))
+                .GroupBy(l => l.JournalEntryId).Select(g => new { g.Key, Debit = g.Sum(l => l.Debit) }).ToDictionaryAsync(x => x.Key, x => x.Debit, ct);
+            foreach (var (entry, current) in stale)
+            {
                 result.Add(new UnpostedItemDto(entry.Source.ToContract(), entry.SourceId!.Value, $"{entry.Number} {entry.Description}", entry.Date,
-                    entry.TotalDebit, true, current is null ? "The source was reopened; the entry needs a reversal." : "The source was approved again; the old revision needs a reversal."));
+                    debits.GetValueOrDefault(entry.Id), true, current is null ? "The source was reopened; the entry needs a reversal." : "The source was approved again; the old revision needs a reversal."));
             }
         }
 

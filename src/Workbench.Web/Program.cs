@@ -5,6 +5,7 @@ using Workbench.Costpoint;
 using Workbench.Infrastructure;
 using Workbench.Infrastructure.Persistence;
 using Workbench.Web.Components;
+using Workbench.Web.Diagnostics;
 using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
 using Workbench.Web.Notifications;
@@ -42,6 +43,7 @@ if (migrateOnly)
 }
 
 await app.Services.InitializeWorkbenchDatabaseAsync();
+app.UseWorkbenchServerTiming();
 app.UseWorkbenchSecurityHeaders();
 app.UseWorkbenchTenancy();
 
