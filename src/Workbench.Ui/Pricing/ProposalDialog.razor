@@ -1,0 +1,109 @@
+@* Creates a proposal (with its periods of performance) or edits its details. The opportunity link is an id plus a name until
+   the CRM module provides opportunities to pick from. *@
+@inject IPricingOpportunityLookup Opportunities
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2" Style="min-width: min(560px, 85vw)">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudTextField T="string" @bind-Value="_number" Label="Proposal number" Required="true" MaxLength="32" AutoFocus="true" autocomplete="off" Style="max-width: 180px" data-testid="proposal-number" />
+                <MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" MaxLength="200" autocomplete="off" Class="flex-grow-1" data-testid="proposal-title" />
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_customer" Label="Customer" MaxLength="200" autocomplete="off" />
+            <MudSelect T="PricingContractKind" @bind-Value="_type" Label="Contract type" data-testid="proposal-type">
+                @foreach (var t in Enum.GetValues<PricingContractKind>())
+                {
+                    <MudSelectItem T="PricingContractKind" Value="t">@PricingFormat.Label(t)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_opportunities.Count > 0)
+            {
+                <MudSelect T="Guid?" Value="_opportunityId" ValueChanged="PickOpportunity" Label="Opportunity" Clearable="true">
+                    @foreach (var o in _opportunities)
+                    {
+                        <MudSelectItem T="Guid?" Value="o.Id">@o.Name@(o.Customer is null ? "" : $" · {o.Customer}")</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudTextField T="string" @bind-Value="_opportunityName" Label="Opportunity" MaxLength="200" autocomplete="off"
+                              HelperText="The pursuit this bid is for. It links to the CRM opportunity once that module is in place." />
+            }
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudNumericField T="decimal?" @bind-Value="_target" Label="Target price (price-to-win)" Min="0" Format="N0" Culture="PricingFormat.Culture" HideSpinButtons="true" />
+                <MudDatePicker @bind-Date="_due" Label="Due date" Editable="true" DateFormat="yyyy-MM-dd" />
+            </MudStack>
+            @if (Existing is null)
+            {
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudDatePicker @bind-Date="_start" Label="Base period starts" Editable="true" DateFormat="yyyy-MM-dd" />
+                    <MudNumericField T="int" @bind-Value="_options" Label="Option years" Min="0" Max="9" />
+                </MudStack>
+            }
+            else
+            {
+                <MudSelect T="ProposalState" @bind-Value="_status" Label="Status" HelperText="Won is set by handing off a locked price.">
+                    @foreach (var s in Enum.GetValues<ProposalState>().Where(s => s != ProposalState.Won || Existing.Status == ProposalState.Won))
+                    {
+                        <MudSelectItem T="ProposalState" Value="s">@s</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField T="string" @bind-Value="_notes" Label="Notes" Lines="3" MaxLength="2000" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_number) || string.IsNullOrWhiteSpace(_title)" OnClick="Save" data-testid="proposal-save">
+            @(Existing is null ? "Create" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public ProposalDto? Existing { get; set; }
+
+    private string? _number, _title, _customer, _opportunityName, _notes;
+    private Guid? _opportunityId;
+    private PricingContractKind _type = PricingContractKind.CostPlusFixedFee;
+    private ProposalState _status;
+    private decimal? _target;
+    private DateTime? _due;
+    private DateTime? _start = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(1);
+    private int _options = 2;
+    private IReadOnlyList<OpportunityRefDto> _opportunities = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } p)
+        {
+            (_number, _title, _customer, _type, _status) = (p.Number, p.Title, p.Customer, p.ContractType, p.Status);
+            (_opportunityId, _opportunityName, _target, _notes) = (p.OpportunityId, p.OpportunityName, p.TargetPrice, p.Notes);
+            _due = p.DueDate?.ToDateTime(TimeOnly.MinValue);
+        }
+
+        try
+        {
+            _opportunities = await Opportunities.SearchAsync(null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _opportunities = [];
+        }
+    }
+
+    private void PickOpportunity(Guid? id)
+    {
+        _opportunityId = id;
+        _opportunityName = _opportunities.FirstOrDefault(o => o.Id == id)?.Name;
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveProposalRequest(_number!, _title!, _type, _customer, _opportunityId, _opportunityName, _target,
+        _due is { } d ? DateOnly.FromDateTime(d) : null, _notes, Existing is null ? null : _status,
+        _start is { } s ? DateOnly.FromDateTime(s) : null, _options)));
+}

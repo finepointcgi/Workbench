@@ -1,0 +1,194 @@
+@* The price at a glance: totals, wrap rate and margin, price-to-win, the price by CLIN and period, the cost build-up and the WBS. *@
+
+<MudGrid Spacing="2" Class="mb-4">
+    <MudItem xs="6" md="2">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Total cost</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="p" data-testid="tile-cost">@PricingFormat.Money(Result.Totals.TotalCost)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@PricingFormat.FeeWord(ContractType) (@PricingFormat.Percent(Result.FeeRate))</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="p">@PricingFormat.Money(Result.Totals.Fee)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Total price</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="p" data-testid="tile-price">@PricingFormat.Money(Result.Totals.Price)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Wrap rate</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="p" data-testid="tile-wrap">@PricingFormat.Multiplier(Result.WrapRate)</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Cost multiplier @PricingFormat.Multiplier(Result.CostMultiplier)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Margin (@PricingFormat.FeeWord(ContractType).ToLowerInvariant() ÷ price)</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="p" data-testid="tile-margin">@PricingFormat.Percent(Result.Margin)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="2">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Price-to-win</MudText>
+            @if (Result.PriceToWin is { } ptw)
+            {
+                <MudText Typo="Typo.h6" HtmlTag="p" Class="@(ptw.UnderTarget ? "mud-success-text" : "mud-error-text")" data-testid="tile-ptw">
+                    @(ptw.UnderTarget ? "▼" : "▲") @PricingFormat.Money(Math.Abs(ptw.Difference)) @(ptw.UnderTarget ? "under" : "over")
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Target @PricingFormat.Money(ptw.TargetPrice)@(ptw.FeeRateAtTarget is { } f ? $"; {PricingFormat.FeeWord(ContractType).ToLowerInvariant()} at target {PricingFormat.Percent(f)}" : "")
+                </MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Set a target price in Details.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Price by CLIN and period</MudText>
+<div style="overflow-x:auto" class="mb-4">
+    <MudSimpleTable Dense="true" Outlined="true" data-testid="clin-period">
+        <caption class="wb-sr-only">Price by CLIN and period</caption>
+        <thead>
+            <tr>
+                <th scope="col">CLIN</th>
+                @foreach (var p in Result.Periods)
+                {
+                    <th scope="col" style="text-align:right">@p.PeriodName@(p.IsOption ? " (option)" : "")</th>
+                }
+                <th scope="col" style="text-align:right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var clin in Result.Cells.GroupBy(c => (c.ClinId, c.ClinNumber, c.ClinDescription)))
+            {
+                <tr>
+                    <th scope="row" style="font-weight:normal">@clin.Key.ClinNumber · @clin.Key.ClinDescription</th>
+                    @foreach (var p in Result.Periods)
+                    {
+                        <td style="text-align:right">@PricingFormat.Money(clin.Where(c => c.PeriodId == p.PeriodId).Sum(c => c.Figures.Price))</td>
+                    }
+                    <td style="text-align:right">@PricingFormat.Money(clin.Sum(c => c.Figures.Price))</td>
+                </tr>
+            }
+            <tr style="font-weight:600">
+                <th scope="row">Total</th>
+                @foreach (var p in Result.Periods)
+                {
+                    <td style="text-align:right">@PricingFormat.Money(p.Figures.Price)</td>
+                }
+                <td style="text-align:right">@PricingFormat.Money(Result.Totals.Price)</td>
+            </tr>
+        </tbody>
+    </MudSimpleTable>
+</div>
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Cost build-up</MudText>
+<div style="overflow-x:auto" class="mb-4">
+    <MudSimpleTable Dense="true" Outlined="true">
+        <caption class="wb-sr-only">Cost build-up by period</caption>
+        <thead>
+            <tr>
+                <th scope="col">Element</th>
+                @foreach (var p in Result.Periods)
+                {
+                    <th scope="col" style="text-align:right">@p.PeriodName</th>
+                }
+                <th scope="col" style="text-align:right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var (label, pick, money) in Elements)
+            {
+                <tr style="@(label is "Total cost" or "Price" ? "font-weight:600" : "")">
+                    <th scope="row" style="font-weight:inherit">@(label == "Fee" ? PricingFormat.FeeWord(ContractType) : label)</th>
+                    @foreach (var p in Result.Periods)
+                    {
+                        <td style="text-align:right">@(money ? PricingFormat.Money(pick(p.Figures)) : PricingFormat.Hours(pick(p.Figures)))</td>
+                    }
+                    <td style="text-align:right">@(money ? PricingFormat.Money(pick(Result.Totals)) : PricingFormat.Hours(pick(Result.Totals)))</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</div>
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">By WBS</MudText>
+<div style="overflow-x:auto" class="mb-4">
+    <MudSimpleTable Dense="true" Outlined="true">
+        <caption class="wb-sr-only">Price by WBS element</caption>
+        <thead>
+            <tr>
+                <th scope="col">WBS</th>
+                <th scope="col" style="text-align:right">Hours</th>
+                <th scope="col" style="text-align:right">Direct labor</th>
+                <th scope="col" style="text-align:right">Other direct</th>
+                <th scope="col" style="text-align:right">Total cost</th>
+                <th scope="col" style="text-align:right">Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var w in Result.Wbs)
+            {
+                <tr>
+                    <th scope="row" style="font-weight:@(w.Depth == 0 ? 600 : 400); padding-left:@(8 + w.Depth * 18)px">@w.Code · @w.Name</th>
+                    <td style="text-align:right">@PricingFormat.Hours(w.Figures.Hours)</td>
+                    <td style="text-align:right">@PricingFormat.Money(w.Figures.DirectLabor)</td>
+                    <td style="text-align:right">@PricingFormat.Money(w.Figures.DirectOther)</td>
+                    <td style="text-align:right">@PricingFormat.Money(w.Figures.TotalCost)</td>
+                    <td style="text-align:right">@PricingFormat.Money(w.Figures.Price)</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</div>
+
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+    @PricingFormat.Label(Result.RateBasis) indirect rates, applied @string.Join(" → ", Result.Cascade.Select(s => $"{s.Pool} on {s.Base.ToLowerInvariant()}")). @Result.FeeExplanation.
+    @if (Result.IsLocked)
+    {
+        <span>Frozen when version @Result.Version was locked (@Result.ComputedAtUtc.ToLocalTime().ToString("MMM d, yyyy", PricingFormat.Culture)).</span>
+    }
+</MudText>
+@if (Result.Notes.Count > 0)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" data-testid="price-notes">
+        <ul class="ma-0 pl-4">
+            @foreach (var note in Result.Notes)
+            {
+                <li>@note</li>
+            }
+        </ul>
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public PriceResultDto Result { get; set; } = default!;
+
+    [Parameter]
+    public PricingContractKind ContractType { get; set; }
+
+    private static readonly (string Label, Func<PriceFiguresDto, decimal> Pick, bool Money)[] Elements =
+    [
+        ("Hours", f => f.Hours, false),
+        ("Direct labor", f => f.DirectLabor, true),
+        ("Fringe", f => f.Fringe, true),
+        ("Overhead", f => f.Overhead, true),
+        ("ODCs", f => f.Odc, true),
+        ("Travel", f => f.Travel, true),
+        ("Materials", f => f.Materials, true),
+        ("Subcontracts", f => f.Subcontracts, true),
+        ("G&A", f => f.GeneralAndAdministrative, true),
+        ("Total cost", f => f.TotalCost, true),
+        ("Fee", f => f.Fee, true),
+        ("Price", f => f.Price, true),
+    ];
+}

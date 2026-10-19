@@ -506,6 +506,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
         ApprovalOrgRole.Hr => roles.IsHr(),
         ApprovalOrgRole.Materials => roles.IsMaterials(),
         ApprovalOrgRole.BusinessDevelopment => roles.IsBusinessDevelopment(),
+        ApprovalOrgRole.Pricing => roles.CanPrice(),
         _ => roles.HasFlag(OrgRoles.Timekeeper),
     };
 
@@ -521,6 +522,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
             ApprovalOrgRole.Hr => users.Where(u => u.IsHr || u.IsAdmin),
             ApprovalOrgRole.Materials => users.Where(u => u.IsMaterials || u.IsAdmin),
             ApprovalOrgRole.BusinessDevelopment => users.Where(u => u.IsBusinessDevelopment || u.IsAdmin),
+            ApprovalOrgRole.Pricing => users.Where(u => u.IsPricing || u.IsFinance || u.IsAdmin),
             _ => users.Where(u => u.IsTimekeeper),
         };
         return (await users.Select(u => u.Email).ToListAsync(ct)).Select(Normalize).ToList();
@@ -530,8 +532,8 @@ public sealed class ApprovalEngine(TimeProvider clock)
     {
         var normalized = Normalize(email);
         var user = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == normalized && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment }).FirstOrDefaultAsync(ct);
-        return user is null ? OrgRoles.Employee : Identity.AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment);
+            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment, u.IsPricing }).FirstOrDefaultAsync(ct);
+        return user is null ? OrgRoles.Employee : Identity.AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment, user.IsPricing);
     }
 
     public void AddAction(IWorkbenchDbContext db, ApprovalInstance instance, ApprovalTask? task, string action, string actor, string? onBehalfOf, string? comment) =>

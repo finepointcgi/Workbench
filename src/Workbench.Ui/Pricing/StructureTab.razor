@@ -1,0 +1,213 @@
+@* Periods of performance, CLINs, and the basis-of-estimate WBS (with the narrative for each element). *@
+@inject IProposalPricingService Pricing
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Periods of performance</MudText>
+<MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="periods">
+    <caption class="wb-sr-only">Periods of performance</caption>
+    <thead><tr><th scope="col">Name</th><th scope="col">Starts</th><th scope="col">Ends</th><th scope="col">Option</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+    <tbody>
+        @foreach (var row in _periods)
+        {
+            <tr>
+                <td><MudTextField T="string" @bind-Value="row.Name" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="60" aria-label="Period name" /></td>
+                <td><MudDatePicker @bind-Date="row.Start" Margin="Margin.Dense" ReadOnly="ReadOnly" Editable="true" DateFormat="yyyy-MM-dd" aria-label="@($"{row.Name} starts")" /></td>
+                <td><MudDatePicker @bind-Date="row.End" Margin="Margin.Dense" ReadOnly="ReadOnly" Editable="true" DateFormat="yyyy-MM-dd" aria-label="@($"{row.Name} ends")" /></td>
+                <td><MudCheckBox T="bool" @bind-Value="row.IsOption" ReadOnly="ReadOnly" aria-label="@($"{row.Name} is an option")" Color="Color.Primary" /></td>
+                <td>
+                    @if (!ReadOnly)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _periods.Remove(row)" aria-label="@($"Remove {row.Name}")" />
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2" Class="mb-6">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPeriod">Add option year</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePeriodsAsync" Disabled="_busy" data-testid="save-periods">Save periods</MudButton>
+    </MudStack>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">CLINs</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Each CLIN is priced in every period. At award, option periods become 1001, 2001, … (the first digit is the period).</MudText>
+<MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="clins">
+    <caption class="wb-sr-only">CLINs</caption>
+    <thead><tr><th scope="col">Number</th><th scope="col">Description</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+    <tbody>
+        @foreach (var row in _clins)
+        {
+            <tr>
+                <td style="width:120px"><MudTextField T="string" @bind-Value="row.Number" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="6" aria-label="CLIN number" /></td>
+                <td><MudTextField T="string" @bind-Value="row.Description" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="200" aria-label="@($"CLIN {row.Number} description")" /></td>
+                <td>
+                    @if (!ReadOnly)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _clins.Remove(row)" aria-label="@($"Remove CLIN {row.Number}")" />
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2" Class="mb-6">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddClin">Add CLIN</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveClinsAsync" Disabled="_busy" data-testid="save-clins">Save CLINs</MudButton>
+    </MudStack>
+}
+
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">WBS and basis of estimate</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Explain how each element's hours and costs were estimated; the narrative goes in the cost volume.</MudText>
+<MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="wbs">
+    <caption class="wb-sr-only">WBS and basis of estimate</caption>
+    <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Parent</th><th scope="col">Basis of estimate</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+    <tbody>
+        @foreach (var row in _wbs)
+        {
+            <tr>
+                <td style="width:110px"><MudTextField T="string" @bind-Value="row.Code" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="40" aria-label="WBS code" /></td>
+                <td style="min-width:200px"><MudTextField T="string" @bind-Value="row.Name" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="200" aria-label="@($"WBS {row.Code} name")" /></td>
+                <td style="width:130px">
+                    <MudSelect T="string" @bind-Value="row.ParentCode" Margin="Margin.Dense" ReadOnly="ReadOnly" Clearable="!ReadOnly" aria-label="@($"WBS {row.Code} parent")">
+                        @foreach (var other in _wbs.Where(w => w != row && !string.IsNullOrWhiteSpace(w.Code)))
+                        {
+                            <MudSelectItem T="string" Value="other.Code">@other.Code</MudSelectItem>
+                        }
+                    </MudSelect>
+                </td>
+                <td style="min-width:320px"><MudTextField T="string" @bind-Value="row.Basis" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" Lines="2" Sizing="InputSizing.Auto" MaxLength="4000" aria-label="@($"WBS {row.Code} basis of estimate")" /></td>
+                <td>
+                    @if (!ReadOnly)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" OnClick="() => _wbs.Remove(row)" aria-label="@($"Remove WBS {row.Code}")" />
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+@if (!ReadOnly)
+{
+    <MudStack Row="true" Spacing="2" Class="mb-2">
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddWbs">Add WBS element</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveWbsAsync" Disabled="_busy" data-testid="save-wbs">Save WBS</MudButton>
+    </MudStack>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public PriceModelDto Model { get; set; } = default!;
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    [Parameter]
+    public EventCallback<PriceModelDto> Changed { get; set; }
+
+    private sealed class PeriodRow
+    {
+        public Guid? Id { get; set; }
+        public string Name { get; set; } = "";
+        public DateTime? Start { get; set; }
+        public DateTime? End { get; set; }
+        public bool IsOption { get; set; }
+    }
+
+    private sealed class ClinRow
+    {
+        public Guid? Id { get; set; }
+        public string Number { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    private sealed class WbsRow
+    {
+        public Guid? Id { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? ParentCode { get; set; }
+        public string? Basis { get; set; }
+    }
+
+    private PriceModelDto? _loaded;
+    private List<PeriodRow> _periods = [];
+    private List<ClinRow> _clins = [];
+    private List<WbsRow> _wbs = [];
+    private bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_loaded, Model))
+        {
+            return;
+        }
+
+        _loaded = Model;
+        _periods = Model.Periods.Select(p => new PeriodRow { Id = p.Id, Name = p.Name, Start = Date(p.Start), End = Date(p.End), IsOption = p.IsOption }).ToList();
+        _clins = Model.Clins.Select(c => new ClinRow { Id = c.Id, Number = c.Number, Description = c.Description }).ToList();
+        var codes = Model.Wbs.ToDictionary(w => w.Id, w => w.Code);
+        _wbs = Model.Wbs.Select(w => new WbsRow
+        {
+            Id = w.Id, Code = w.Code, Name = w.Name, Basis = w.BasisOfEstimate, ParentCode = w.ParentId is { } p ? codes.GetValueOrDefault(p) : null,
+        }).ToList();
+    }
+
+    private static DateTime Date(DateOnly d) => d.ToDateTime(TimeOnly.MinValue);
+
+    private void AddPeriod()
+    {
+        var last = _periods.Where(p => p.End is not null).MaxBy(p => p.End);
+        var start = last?.End?.AddDays(1) ?? DateTime.Today;
+        _periods.Add(new PeriodRow { Name = $"Option {_periods.Count(p => p.IsOption) + 1}", Start = start, End = start.AddYears(1).AddDays(-1), IsOption = true });
+    }
+
+    private void AddClin()
+    {
+        var next = _clins.Select(c => int.TryParse(c.Number, out var n) ? n : 0).DefaultIfEmpty(0).Max() + 1;
+        _clins.Add(new ClinRow { Number = next.ToString("0000", CultureInfo.InvariantCulture) });
+    }
+
+    private void AddWbs() => _wbs.Add(new WbsRow { Code = (_wbs.Count + 1).ToString("00", CultureInfo.InvariantCulture) });
+
+    private Task SavePeriodsAsync()
+    {
+        if (_periods.Any(p => p.Start is null || p.End is null))
+        {
+            Snackbar.Add("Give every period a start and an end.", Severity.Warning);
+            return Task.CompletedTask;
+        }
+
+        return SaveAsync(() => Pricing.SavePeriodsAsync(Model.Id, _periods.Select(p =>
+            new SavePricePeriodRequest(p.Id, p.Name, DateOnly.FromDateTime(p.Start!.Value), DateOnly.FromDateTime(p.End!.Value), p.IsOption)).ToList()), "Periods saved.");
+    }
+
+    private Task SaveClinsAsync() =>
+        SaveAsync(() => Pricing.SaveClinsAsync(Model.Id, _clins.Select(c => new SavePriceClinRequest(c.Id, c.Number, c.Description)).ToList()), "CLINs saved.");
+
+    private Task SaveWbsAsync() =>
+        SaveAsync(() => Pricing.SaveWbsAsync(Model.Id, _wbs.Select(w => new SavePriceWbsRequest(w.Id, w.Code, w.Name, w.Basis, w.ParentCode)).ToList()), "WBS saved.");
+
+    private async Task SaveAsync(Func<Task<PriceModelDto>> save, string done)
+    {
+        _busy = true;
+        try
+        {
+            var model = await save();
+            await Changed.InvokeAsync(model);
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException || ex.GetType().Name.Contains("NotFound"))
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

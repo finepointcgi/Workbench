@@ -114,6 +114,7 @@ public sealed class UserLifecycle(
             IsHr = roles.HasFlag(OrgRoles.Hr),
             IsMaterials = roles.HasFlag(OrgRoles.Materials),
             IsBusinessDevelopment = roles.HasFlag(OrgRoles.BusinessDevelopment),
+            IsPricing = roles.HasFlag(OrgRoles.Pricing),
             CreatedAtUtc = now,
             IsActive = active,
             DeactivatedAtUtc = active ? null : now,
@@ -158,7 +159,7 @@ public sealed class UserLifecycle(
         email = AccessControl.Normalize(email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await LoadAsync(db, email, cancellationToken);
-        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment);
+        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment, user.IsPricing);
         if (user.IsAdmin && !roles.IsAdmin())
         {
             if (IsSelf(actor, email))
@@ -177,6 +178,7 @@ public sealed class UserLifecycle(
         user.IsHr = roles.HasFlag(OrgRoles.Hr);
         user.IsMaterials = roles.HasFlag(OrgRoles.Materials);
         user.IsBusinessDevelopment = roles.HasFlag(OrgRoles.BusinessDevelopment);
+        user.IsPricing = roles.HasFlag(OrgRoles.Pricing);
         if (!before.HasFlag(OrgRoles.ProjectManager) && user.IsProjectManager)
         {
             await ProjectWorkspaceOwnership.EnsureForManagerAsync(db, user, cancellationToken); // Owner of their projects' workspaces

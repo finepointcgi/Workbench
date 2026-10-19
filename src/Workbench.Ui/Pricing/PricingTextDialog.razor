@@ -1,0 +1,53 @@
+@* A small dialog for naming a scenario or noting why a version is locked. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2" Style="min-width: min(480px, 85vw)">
+            @if (Message is not null)
+            {
+                <MudText>@Message</MudText>
+            }
+            @if (Label is not null)
+            {
+                <MudTextField T="string" @bind-Value="Text" Label="@Label" Required="true" MaxLength="100" AutoFocus="true" autocomplete="off" data-testid="dialog-text" />
+            }
+            <MudTextField T="string" @bind-Value="_note" Label="@NoteLabel" MaxLength="1000" Lines="2" AutoFocus="@(Label is null)" data-testid="dialog-note" />
+            @if (ShowSubmitted)
+            {
+                <MudCheckBox T="bool" @bind-Value="_flag" Label="Mark the proposal Submitted" Color="Color.Primary" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(Label is not null && string.IsNullOrWhiteSpace(Text))" OnClick="Ok" data-testid="dialog-ok">@Action</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    /// <summary>The name field's label; null for a dialog with only the note.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    [Parameter]
+    public string? Text { get; set; }
+
+    [Parameter]
+    public string NoteLabel { get; set; } = "Note";
+
+    [Parameter]
+    public string Action { get; set; } = "OK";
+
+    [Parameter]
+    public bool ShowSubmitted { get; set; }
+
+    private string? _note;
+    private bool _flag = true;
+
+    private void Ok() => MudDialog.Close(DialogResult.Ok(new PricingTextResult(Text?.Trim() ?? "", string.IsNullOrWhiteSpace(_note) ? null : _note.Trim(), ShowSubmitted && _flag)));
+}

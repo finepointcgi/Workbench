@@ -1,0 +1,131 @@
+@* The won handoff: from a locked version, generate the contract's CLINs and T&M bill rates, the project's WBS and a budget. *@
+@inject IProposalPricingService Pricing
+@inject ISnackbar Snackbar
+
+@if (Proposal.Handoff is { } done)
+{
+    var contract = Options.Contracts.FirstOrDefault(c => c.Id == done.ContractId);
+    var project = contract?.Projects.FirstOrDefault(p => p.Id == done.ProjectId);
+    <MudAlert Severity="Severity.Success" Class="mb-3" data-testid="handoff-done">
+        Won. @(Proposal.Models.FirstOrDefault(m => m.Id == done.ModelId)?.Name ?? "The locked version") was handed off by @done.HandedOffBy
+        on @done.HandedOffAtUtc.ToLocalTime().ToString("MMM d, yyyy", PricingFormat.Culture) to contract @(contract?.ContractNumber ?? "(closed)") and project @(project?.Code ?? "?").
+    </MudAlert>
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Outlined" Href="@($"setup/contracts/{done.ContractId}")">Open the contract</MudButton>
+        <MudButton Variant="Variant.Outlined" Href="@($"projects/{done.ProjectId}/financials")">Open the project's budget</MudButton>
+    </MudStack>
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mb-3">
+        When the bid is won, start execution from what was bid: CLINs on the contract (one per CLIN and period; options become 1001, 2001, … and start unexercised),
+        T&amp;M or labor-hour bill rates per labor category and period, the project's WBS elements (<i>project</i>.<i>code</i>), and a budget with the bid's hours by WBS,
+        labor category and fiscal period at the bid's direct rates, plus ODCs. Funded CLINs and existing bill rates are left alone.
+    </MudText>
+    @if (!CanHandOff)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">The handoff changes contracts and budgets, so Finance or an administrator runs it.</MudAlert>
+    }
+    else if (_locked.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">Lock the submitted price as a version first; the handoff starts from a locked version.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Outlined="true" Class="pa-4" Style="max-width:720px">
+            <MudStack Spacing="2">
+                <MudSelect T="Guid?" @bind-Value="_modelId" Label="Locked version" data-testid="handoff-version">
+                    @foreach (var m in _locked)
+                    {
+                        <MudSelectItem T="Guid?" Value="m.Id">@m.Name (@m.LockedAtUtc?.ToLocalTime().ToString("MMM d, yyyy", PricingFormat.Culture))</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid?" Value="_contractId" ValueChanged="PickContract" Label="Contract" data-testid="handoff-contract">
+                    @foreach (var c in Options.Contracts)
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Disabled="_contractId is null" HelperText="Create the contract and its project in Setup first." data-testid="handoff-project">
+                    @foreach (var p in Options.Contracts.FirstOrDefault(c => c.Id == _contractId)?.Projects ?? [])
+                    {
+                        <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="BudgetVersionKind" @bind-Value="_kind" Label="Budget version">
+                    <MudSelectItem T="BudgetVersionKind" Value="BudgetVersionKind.Current">Current</MudSelectItem>
+                    <MudSelectItem T="BudgetVersionKind" Value="BudgetVersionKind.Baseline">Baseline</MudSelectItem>
+                    <MudSelectItem T="BudgetVersionKind" Value="BudgetVersionKind.Forecast">Forecast</MudSelectItem>
+                </MudSelect>
+                <MudCheckBox T="bool" @bind-Value="_clins" Label="Add CLINs and their values" Color="Color.Primary" />
+                <MudCheckBox T="bool" Value="_rates && PricingFormat.IsTimeAndMaterials(Proposal.ContractType)" ValueChanged="v => _rates = v" Label="Add T&M / labor-hour bill rates (T&M and labor-hour bids)" Color="Color.Primary"
+                             Disabled="!PricingFormat.IsTimeAndMaterials(Proposal.ContractType)" />
+                <MudCheckBox T="bool" @bind-Value="_budget" Label="Create the budget" Color="Color.Primary" />
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.EmojiEvents" Disabled="_busy || _modelId is null || _contractId is null || _projectId is null"
+                           OnClick="HandOffAsync" data-testid="handoff-run">Mark won and hand off</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+}
+@if (_result is not null)
+{
+    <MudAlert Severity="Severity.Success" Class="mt-3" data-testid="handoff-result">
+        @_result.ClinsCreated CLIN@(_result.ClinsCreated == 1 ? "" : "s") added, @_result.ClinsUpdated updated; @_result.BillRatesAdded bill rate@(_result.BillRatesAdded == 1 ? "" : "s");
+        @_result.WbsCreated WBS element@(_result.WbsCreated == 1 ? "" : "s"); @(_result.BudgetVersionId is null ? "no budget" : $"a budget with {_result.BudgetLines} lines").
+        @foreach (var note in _result.Notes)
+        {
+            <div>@note</div>
+        }
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ProposalDto Proposal { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public PricingOptionsDto Options { get; set; } = default!;
+
+    [Parameter]
+    public bool CanHandOff { get; set; }
+
+    [Parameter]
+    public EventCallback HandedOff { get; set; }
+
+    private IReadOnlyList<PriceModelRefDto> _locked = [];
+    private Guid? _modelId, _contractId, _projectId;
+    private BudgetVersionKind _kind = BudgetVersionKind.Current;
+    private bool _clins = true, _rates = true, _budget = true, _busy;
+    private HandoffResultDto? _result;
+
+    protected override void OnParametersSet()
+    {
+        _locked = Proposal.Models.Where(m => m.IsLocked).OrderByDescending(m => m.Version).ToList();
+        _modelId ??= _locked.FirstOrDefault()?.Id;
+    }
+
+    private void PickContract(Guid? id)
+    {
+        _contractId = id;
+        _projectId = Options.Contracts.FirstOrDefault(c => c.Id == id)?.Projects.FirstOrDefault()?.Id;
+    }
+
+    private async Task HandOffAsync()
+    {
+        _busy = true;
+        try
+        {
+            _result = await Pricing.HandOffAsync(_modelId!.Value, new HandoffRequest(_contractId!.Value, _projectId!.Value, _kind, _clins, _rates && PricingFormat.IsTimeAndMaterials(Proposal.ContractType), _budget));
+            Snackbar.Add("Handed off. The proposal is marked Won.", Severity.Success);
+            await HandedOff.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException || ex.GetType().Name.Contains("NotFound"))
+        {
+            Snackbar.Add(PricingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

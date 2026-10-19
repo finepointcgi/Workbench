@@ -58,6 +58,7 @@ public static class WorkbenchApi
         v1.MapHrEndpoints();
         v1.MapMaterialsEndpoints();
         v1.MapCrmEndpoints();
+        v1.MapPricingEndpoints();
 
         return app;
     }

@@ -92,6 +92,7 @@ public static class IdentityRegistration
         services.AddWorkbenchHrPermissions(); // HR: records HR/Admin (employees self-service, supervisors/Finance job fields), EEO HR/Admin/self, compensation HR+Finance.
         services.AddWorkbenchMaterialsPermissions(); // Materials: read Materials/Finance/Admin, change Materials/Admin; revaluation and WIP Finance; own shop labor anyone.
         services.AddWorkbenchCrmPermissions(); // Business development: pipeline for BD/Finance/Admin; capture and proposal managers edit theirs; everyone else nothing.
+        services.AddWorkbenchPricingPermissions(); // Proposal pricing: Finance, Admin or the Pricing role; the won handoff Finance/Admin.
         return services;
     }
 
