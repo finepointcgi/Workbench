@@ -1,0 +1,20 @@
+Payroll Register Detail - Check Date 10/16/2026,,,,,
+Emp #,Employee,Pay Date,Det,Det Code,Amount
+1001,"Morgan, Pat",2026-10-16,E,REG,"6,800.00"
+1001,"Morgan, Pat",2026-10-16,E,OT,280.00
+1001,"Morgan, Pat",2026-10-16,T,FITW,"1,015.20"
+1001,"Morgan, Pat",2026-10-16,T,SS,438.96
+1001,"Morgan, Pat",2026-10-16,T,MED,103.44
+1001,"Morgan, Pat",2026-10-16,T,ER-SS,438.96
+1001,"Morgan, Pat",2026-10-16,T,ER-MED,102.66
+1001,"Morgan, Pat",2026-10-16,D,401K,412.50
+1001,"Morgan, Pat",2026-10-16,M,ER-MED-PLAN,685.00
+1001,"Morgan, Pat",2026-10-16,X,MEMO,1.00
+1002,"Rivera, Alex",2026-10-16,E,REG,"1,500.00"
+1002,"Rivera, Alex",2026-10-16,T,FITW,132.75
+1002,"Rivera, Alex",2026-10-16,T,SS,93.00
+1002,"Rivera, Alex",2026-10-16,T,MED,21.75
+1002,"Rivera, Alex",2026-10-16,T,ER-SS,93.00
+1002,"Rivera, Alex",2026-10-16,T,ER-MED,21.75
+1002,"Rivera, Alex",2026-10-16,D,401K,120.00
+1002,"Rivera, Alex",2026-10-16,M,ER-MED-PLAN,410.00

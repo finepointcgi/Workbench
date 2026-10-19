@@ -129,8 +129,8 @@ public sealed class PayrollRunService(
             }
         }
 
-        var file = provider.ExportHours(new PayrollHoursExport(data.Group.CompanyCode, data.Group.Code, data.Period.Start, data.Period.End, data.Period.CheckDate,
-            lines.Select(l => l.Line).ToList()));
+        var file = await provider.ExportHoursAsync(db, new PayrollHoursExport(data.Group.CompanyCode, data.Group.Code, data.Period.Start, data.Period.End, data.Period.CheckDate,
+            lines.Select(l => l.Line).ToList()), cancellationToken);
         db.Set<PayrollExportLine>().RemoveRange(run.ExportLines);
         run.ExportLines.Clear();
         foreach (var l in lines)
@@ -194,7 +194,7 @@ public sealed class PayrollRunService(
 
         var group = await db.Set<PayGroup>().AsNoTracking().FirstAsync(g => g.Id == run.PayGroupId, cancellationToken);
         var period = await db.Set<PayPeriod>().AsNoTracking().FirstAsync(p => p.Id == run.PayPeriodId, cancellationToken);
-        var parsed = providers.Get(group.ProviderKey).ParseRegister(request.Content);
+        var parsed = await providers.Get(group.ProviderKey).ParseRegisterAsync(db, request.Content, cancellationToken);
         var warnings = parsed.Warnings.ToList();
         var profiles = await db.Set<EmployeePayProfile>().AsNoTracking().Where(p => p.PayGroupId == group.Id && p.ProviderEmployeeId != null).ToListAsync(cancellationToken);
         var byProviderId = profiles.ToDictionary(p => p.ProviderEmployeeId!, p => p.EmployeeId, StringComparer.OrdinalIgnoreCase);

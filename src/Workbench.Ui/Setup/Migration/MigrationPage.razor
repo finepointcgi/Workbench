@@ -1,0 +1,215 @@
+@page "/setup/migration"
+@inject IMigrationService Migration
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Go-live migration · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Go-live migration" Subtitle="Move from Costpoint step by step: import each kind of data in order, check the tie-outs, then run a month in parallel and reconcile it to the penny. Each import can be rolled back.">
+    <MudButton Href="setup/migration/reconcile" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CompareArrows" data-testid="open-reconcile">Reconcile parallel month</MudButton>
+    <MudButton Href="setup/import" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.History">Import history</MudButton>
+</SetupHeader>
+
+@if (_checklist is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="cutover-settings">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Cut-over</MudText>
+                <MudStack Spacing="2">
+                    <MudDatePicker DateFormat="yyyy-MM-dd" Label="Cut-over date (first day in Workbench)" Date="_cutover" DateChanged="d => _cutover = d" Editable="true" Clearable="true"
+                                   HelperText="@(_cutover is { } c ? $"Opening balances are dated {c.AddDays(-1):yyyy-MM-dd}." : "Opening balances are dated the day before.")" data-testid="cutover-date" />
+                    <MudSelect T="Guid?" Label="Parallel month" @bind-Value="_parallel" Clearable="true" HelperText="Run in both systems, then reconciled." data-testid="parallel-period">
+                        @foreach (var p in _periods)
+                        {
+                            <MudSelectItem T="Guid?" Value="p.Id">@p.Name (@p.Start.ToString("MMM d") – @p.End.ToString("MMM d, yyyy"))@(p.Status == FiscalPeriodState.Closed ? " · closed" : "")</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSettingsAsync" Disabled="_busy" data-testid="save-cutover">Save</MudButton>
+                        @if (_checklist.Settings.UpdatedBy is { } by)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Saved by @by @(_checklist.Settings.UpdatedAtUtc is { } at ? MigrationFormat.When(at) : "")</MudText>
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="readiness">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">Progress</MudText>
+                    <MudSpacer />
+                    <MudText Typo="Typo.body2" data-testid="progress-count"><b>@_checklist.DoneCount</b> of @_checklist.Steps.Count steps done</MudText>
+                </MudStack>
+                <MudProgressLinear Value="@(100.0 * _checklist.DoneCount / Math.Max(1, _checklist.Steps.Count))" Color="Color.Success" Rounded="true" Size="Size.Medium" Class="mb-3" />
+                <Checks Items="_checklist.Readiness" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudStack Spacing="2" Class="mt-4" data-testid="migration-steps">
+        @foreach (var step in _checklist.Steps)
+        {
+            var (text, color, icon) = MigrationFormat.Status(step.Status);
+            <MudPaper Outlined="true" Class="pa-4" data-step="@step.Key">
+                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="3">
+                    <MudAvatar Color="@(step.Status is MigrationStepStatus.Done ? Color.Success : Color.Default)" Size="Size.Small" Variant="Variant.Outlined">@step.Order</MudAvatar>
+                    <MudStack Spacing="1" Style="flex:1;min-width:0">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                            <MudText Typo="Typo.subtitle1" HtmlTag="h3"><b>@step.Title</b></MudText>
+                            <MudChip T="string" Size="Size.Small" Color="color" Icon="@icon" Variant="Variant.Outlined" data-testid="step-status">@text</MudChip>
+                            <MudSpacer />
+                            @if (step.Link is { } link)
+                            {
+                                <MudButton Href="@link" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@step.LinkText</MudButton>
+                            }
+                            @if (step.ManualState is null)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => MarkAsync(step, MigrationStepState.Done)" data-testid="mark-done">Mark done</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => MarkAsync(step, MigrationStepState.Skipped)">Not applicable</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => MarkAsync(step, MigrationStepState.Pending)">Undo</MudButton>
+                            }
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Description</MudText>
+                        @if (step.ManualState is not null)
+                        {
+                            <MudText Typo="Typo.caption">Marked @(step.ManualState == MigrationStepState.Done ? "done" : "not applicable") by @step.ManualBy @(step.ManualAtUtc is { } m ? MigrationFormat.When(m) : "")@(step.ManualNote is { } n ? $": {n}" : "")</MudText>
+                        }
+                        @if (step.BlockedBy.Count > 0)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" data-testid="blocked-by">First: @string.Join(", ", step.BlockedBy).</MudAlert>
+                        }
+                        @if (step.Imports.Count > 0)
+                        {
+                            <MudSimpleTable Dense="true" Elevation="0" Class="mt-1">
+                                <tbody>
+                                    @foreach (var import in step.Imports)
+                                    {
+                                        <tr data-import="@import.Kind">
+                                            <td style="width:28%">@import.Title @(import.Required ? "" : "(optional)")</td>
+                                            <td style="width:34%">
+                                                @if (!import.Available)
+                                                {
+                                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Importer not in this build yet: enter the data on its own page or mark the step not applicable.</MudText>
+                                                }
+                                                else
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@MigrationFormat.JobColor(import.LastJobStatus)">@MigrationFormat.Job(import.LastJobStatus)</MudChip>
+                                                    @if (import.LastJobAtUtc is { } at)
+                                                    {
+                                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@MigrationFormat.When(at) · @import.LastJobBy@(import.LastJobErrors > 0 ? $" · {import.LastJobErrors} row error(s)" : "")</MudText>
+                                                    }
+                                                }
+                                            </td>
+                                            <td style="text-align:right">
+                                                @if (import.LastJobId is { } job)
+                                                {
+                                                    <MudButton Href="@($"setup/import/history/{job}")" Size="Size.Small" Variant="Variant.Text">History</MudButton>
+                                                }
+                                                @if (import.WizardLink is { } wizard)
+                                                {
+                                                    <MudButton Href="@wizard" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(step.Status == MigrationStepStatus.Blocked)"
+                                                               data-testid="open-wizard">@(import.LastJobStatus == ImportJobStatus.Imported ? "Import again" : "Import")</MudButton>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                        @if (step.Checks.Count > 0)
+                        {
+                            <Checks Items="step.Checks" />
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    private MigrationChecklistDto? _checklist;
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private DateTime? _cutover;
+    private Guid? _parallel;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            Show(await Migration.GetChecklistAsync());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private void Show(MigrationChecklistDto checklist)
+    {
+        _checklist = checklist;
+        _cutover = checklist.Settings.CutoverDate?.ToDateTime(TimeOnly.MinValue);
+        _parallel = checklist.Settings.ParallelPeriodId;
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Migration.SaveSettingsAsync(new SaveMigrationSettingsRequest(_cutover is { } c ? DateOnly.FromDateTime(c) : null, _parallel));
+            Show(await Migration.GetChecklistAsync());
+            Snackbar.Add("Cut-over saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task MarkAsync(MigrationStepDto step, MigrationStepState state)
+    {
+        string? note = null;
+        if (state != MigrationStepState.Pending)
+        {
+            var dialog = await DialogService.ShowAsync<NoteDialog>(state == MigrationStepState.Done ? $"Mark \"{step.Title}\" done" : $"\"{step.Title}\" doesn't apply", new DialogParameters<NoteDialog>
+            {
+                { d => d.Message, state == MigrationStepState.Done ? "For data entered by hand rather than imported." : "Say why this step doesn't apply to this company." },
+                { d => d.Required, state == MigrationStepState.Skipped },
+                { d => d.ConfirmText, state == MigrationStepState.Done ? "Mark done" : "Not applicable" },
+            });
+            var result = await dialog.Result;
+            if (result is null || result.Canceled)
+            {
+                return;
+            }
+
+            note = result.Data as string;
+        }
+
+        try
+        {
+            Show(await Migration.SetStepAsync(step.Key, new SetMigrationStepRequest(state, note)));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

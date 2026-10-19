@@ -147,6 +147,7 @@ public static class NavCatalog
         new(Admin, "Setup", "Per diem rates", "setup/per-diem", Icons.Material.Filled.Hotel, FinanceOnly, Keywords: "gsa travel"),
         new(Admin, null, "Approval workflows", "setup/approval-workflows", Icons.Material.Filled.AltRoute, FinanceOnly, Detail: "Workflow", Keywords: "routing approvers delegation"),
         new(Admin, null, "Import", "setup/import", Icons.Material.Filled.UploadFile, FinanceOnly, Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
+        new(Admin, null, "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, FinanceOnly, Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
         new(Admin, null, "Organization", "setup/organization", Icons.Material.Filled.Tune, FinanceOnly, Keywords: "settings timesheet cadence company"),
 
         // Findable with Ctrl+K only.

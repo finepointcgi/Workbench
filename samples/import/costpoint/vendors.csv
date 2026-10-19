@@ -1,0 +1,5 @@
+VEND_ID,VEND_NAME,ACTIVE_FL,PRINT_1099_FL,TERMS_DC,UEI,BUS_SIZE,CNTACT_NAME,EMAIL_ID
+DELTA,Delta Cloud Services Inc,Y,N,Net 30,DLT4CLD7SRV1,Large,Accounts Receivable,ar@deltacloud.example.com
+NORTHSTAR,Northstar Travel Management,Y,N,Net 30,NST8TRV2MGT3,Small,Dana Whitfield,billing@northstar.example.com
+KESTREL,Kestrel Analytics LLC,Y,Y,Net 15,KST9ANL4YTC5,Small,Lee Moreno,lee@kestrel.example.com
+OFFICEPRO,OfficePro Supply,Y,N,Net 30,,Small,,orders@officepro.example.com

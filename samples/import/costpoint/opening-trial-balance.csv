@@ -1,0 +1,24 @@
+ACCT_ID,ORG_ID,PROJ_ID,ACCT_NAME,DR_AMT,CR_AMT
+1010,1,,Cash - operating,412350.17,
+1110,1.01.10,2001,Accounts receivable - billed,186420.55,
+1510,1,,Computer equipment,48900.00,
+1590,1,,Accumulated depreciation,,12225.00
+2010,1,,Accounts payable,,38617.42
+2020,1,,AP retainage,,2500.00
+2100,1,,Accrued payroll,,61880.00
+3100,1,,Paid-in capital,,250000.00
+3200,1,,Retained earnings,,291480.84
+4010,1.01.10,2001,Revenue - cost-plus contracts,,171600.00
+5010,1.02.20,2001.02.02,Direct labor,58240.00,
+5010,1.01.10,2001.01.01,Direct labor,14800.00,
+5110,1.01.10,2001.01.02,Direct travel,3412.88,
+5140,1.02.20,2001.02.02,Subcontracts,25000.00,
+6010,1,9000.90,Paid leave and holidays,6150.00,
+6020,1,,Payroll taxes,7825.12,
+6030,1,,Health and retirement benefits,9500.00,
+6110,1.02,9000.10,Overhead labor,4200.00,
+6120,1,,Facilities and rent,12500.00,
+6130,1,,Overhead supplies,1804.54,
+6210,1,9000.20,G&A labor,8900.00,
+6220,1,,Professional fees,3500.00,
+6230,1,,Office and IT,24800.00,
