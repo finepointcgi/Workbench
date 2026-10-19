@@ -17,6 +17,7 @@
             }
 
             <MudSimpleTable Dense="true" Elevation="0" Class="mt-3 mb-4 item-details-fields">
+                <caption class="wb-sr-only">Fields</caption>
                 <tbody>
                     @if (item.Start is not null || item.Finish is not null || Sheet.Summary.SchedulingEnabled)
                     {
@@ -33,6 +34,11 @@
                     }
                 </tbody>
             </MudSimpleTable>
+
+            @if (Sheet.Summary.SchedulingEnabled)
+            {
+                <Workbench.Ui.Gantt.ItemDependencies SheetId="Sheet.Summary.Id" Item="item" Items="Items" Version="Version" />
+            }
 
             <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3" KeepPanelsAlive="false">
                 <MudTabPanel Text="Comments" Icon="@Icons.Material.Outlined.ChatBubbleOutline">

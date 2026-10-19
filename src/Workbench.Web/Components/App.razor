@@ -1,3 +1,4 @@
+@inject Workbench.Web.Security.SessionSettings Session
 <!DOCTYPE html>
 <html lang="en">
 
@@ -18,6 +19,11 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    @if (SessionMeta() is { } meta)
+    {
+        @* Read by js/session.js to warn before the idle sign-out (WCAG 2.2.1). *@
+        <meta name="wb-session" data-idle-seconds="@meta.IdleSeconds" data-ends-at="@meta.EndsAt" />
+    }
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
@@ -33,3 +39,22 @@
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    /// <summary>The idle timeout, and when the session's absolute lifetime ends (Unix ms), for a signed-in user.</summary>
+    private (long IdleSeconds, long? EndsAt)? SessionMeta()
+    {
+        var user = HttpContext?.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            return null;
+        }
+
+        var signedInAt = Workbench.Web.Security.SessionValidation.SignedInAtUtc(user);
+        long? endsAt = signedInAt is { } at ? new DateTimeOffset(at + Session.AbsoluteLifetime, TimeSpan.Zero).ToUnixTimeMilliseconds() : null;
+        return ((long)Session.IdleTimeout.TotalSeconds, endsAt);
+    }
+}

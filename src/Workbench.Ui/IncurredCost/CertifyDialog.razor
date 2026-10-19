@@ -4,7 +4,7 @@
         <MudStack Spacing="3">
             <MudAlert Severity="Severity.Info" Dense="true">FAR 42.703-2 requires the certificate to be signed by an official no lower than a vice president or chief financial officer.</MudAlert>
             <MudPaper Outlined="true" Class="pa-3" Style="white-space:pre-wrap;max-height:260px;overflow:auto" data-testid="certificate-text">@Certificate</MudPaper>
-            <MudTextField T="string" @bind-Value="_name" Label="Name of certifying official" Required="true" Immediate="true" data-testid="certify-name" />
+            <MudTextField T="string" @bind-Value="_name" Label="Name of certifying official" autocomplete="name" Required="true" Immediate="true" data-testid="certify-name" />
             <MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" Immediate="true" data-testid="certify-title" />
             <MudCheckBox T="bool" @bind-Value="_ack" Label="I have read the certificate and certify the package as stated" data-testid="certify-ack" />
         </MudStack>

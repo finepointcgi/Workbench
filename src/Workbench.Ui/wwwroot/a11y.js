@@ -43,3 +43,62 @@
   window.addEventListener("resize", schedule, { passive: true });
   schedule();
 })();
+
+// Focus stays on a button that disables itself while it works (WCAG 2.4.3). Most save and submit buttons render
+// Disabled="_busy": a disabled button loses focus, the browser drops it on <body>, and a keyboard or screen reader user is
+// sent back to the top of the page. This puts focus back on the button when it's enabled again. If it stays disabled (Save
+// with nothing left to save), focus goes to the next control once the page has settled, so it never ends on <body>.
+(() => {
+  const focusable = "a[href], button:not([disabled]), input:not([disabled]):not([type='hidden']), select:not([disabled]), "
+    + "textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  const settleMs = 1500;
+  let focused = null;   // the control that last took focus
+  let pending = null;   // a focused control that became disabled
+  let lastChange = 0;   // when the page last changed
+
+  const lost = () => !document.activeElement || document.activeElement === document.body;
+
+  document.addEventListener("focusin", (event) => {
+    focused = event.target;
+    pending = null;
+  }, true);
+
+  new MutationObserver((records) => {
+    lastChange = Date.now();
+    for (const record of records) {
+      const element = record.target;
+      if (record.type !== "attributes") {
+        continue;
+      }
+
+      if (element.disabled && element === focused) {
+        pending = element;
+      } else if (!element.disabled && element === pending) {
+        pending = null;
+        if (lost() && element.isConnected) {
+          element.focus({ preventScroll: true });
+        }
+      }
+    }
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["disabled"], childList: true, subtree: true });
+
+  const next = (from) => {
+    const candidates = [...document.querySelectorAll(focusable)].filter((e) => e.offsetParent !== null || e === document.activeElement);
+    return candidates.find((e) => from.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)
+      ?? candidates.reverse().find((e) => from.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_PRECEDING);
+  };
+
+  setInterval(() => {
+    if (!pending) {
+      return;
+    }
+
+    if (!lost() || !pending.isConnected) {
+      pending = null;
+    } else if (Date.now() - lastChange >= settleMs) {
+      const target = next(pending);
+      pending = null;
+      target?.focus({ preventScroll: true });
+    }
+  }, 250);
+})();
