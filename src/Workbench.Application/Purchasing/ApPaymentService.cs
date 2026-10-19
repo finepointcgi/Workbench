@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Workbench.Application.Accounting;
+using Workbench.Application.Currencies;
 using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Security;
@@ -46,8 +47,9 @@ public sealed class ApPaymentService(
 
         var bills = (await q.ToListAsync(cancellationToken)).Where(b => b.Balance > 0).OrderBy(b => b.DueDate).ThenBy(b => b.Number).ToList();
         var scheduled = await ScheduledAsync(db, bills.Select(b => b.Id).ToList(), null, cancellationToken);
+        var scheduledTx = await ScheduledTransactionAsync(db, bills.Select(b => b.Id).ToList(), cancellationToken);
         var summaries = await ApBillService.SummariesAsync(db, bills, cancellationToken);
-        return summaries.Select(s => new DueBillDto(s, scheduled.GetValueOrDefault(s.Id))).ToList();
+        return summaries.Select(s => new DueBillDto(s, scheduled.GetValueOrDefault(s.Id), scheduledTx.GetValueOrDefault(s.Id))).ToList();
     }
 
     public async Task<IReadOnlyList<PaymentRunDto>> ListRunsAsync(CancellationToken cancellationToken = default)
@@ -81,6 +83,7 @@ public sealed class ApPaymentService(
         var vendorIds = bills.Values.Select(b => b.VendorId).Distinct().ToList();
         var vendors = await db.Set<Vendor>().AsNoTracking().Where(v => vendorIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, cancellationToken);
         var scheduled = await ScheduledAsync(db, ids, null, cancellationToken);
+        var scheduledTx = await ScheduledTransactionAsync(db, ids, cancellationToken);
         var numbers = await db.Set<ApPaymentRun>().Select(r => r.Number).ToListAsync(cancellationToken);
         var run = new ApPaymentRun
         {
@@ -99,6 +102,31 @@ public sealed class ApPaymentService(
             if (bill.Status != ApBillStatus.Posted)
             {
                 throw new ArgumentException($"Bill {bill.Number} is {bill.Status}; only posted bills can be paid.");
+            }
+
+            if (bill.IsForeignCurrency)
+            {
+                // A foreign bill is paid in its own currency; the liability it relieves is fixed when the payment is recorded.
+                var currency = await CurrencySupport.OfAsync(db, bill.CurrencyCode, bill.ExchangeRate, cancellationToken);
+                var tx = currency.RoundTransaction(item.Amount);
+                if (tx <= 0 || tx != item.Amount)
+                {
+                    throw new ArgumentException($"The payment on {bill.Number} must be a positive {bill.CurrencyCode} amount with {currency.Decimals} decimal places.");
+                }
+
+                var txAvailable = bill.TransactionBalance - scheduledTx.GetValueOrDefault(bill.Id);
+                if (tx > txAvailable)
+                {
+                    throw new ArgumentException($"Bill {bill.Number} has {txAvailable:N2} {bill.CurrencyCode} left to pay (balance {bill.TransactionBalance:N2}, {scheduledTx.GetValueOrDefault(bill.Id):N2} already in open runs).");
+                }
+
+                db.Set<ApPayment>().Add(new ApPayment
+                {
+                    RunId = run.Id, BillId = bill.Id, VendorId = vendor.Id, Method = run.Method,
+                    CurrencyCode = bill.CurrencyCode, TransactionAmount = tx, ExchangeRate = bill.ExchangeRate,
+                    Amount = CurrencyMath.Relieved(tx, txAvailable, bill.Balance - scheduled.GetValueOrDefault(bill.Id), bill.ExchangeRate),
+                });
+                continue;
             }
 
             var amount = PurchasingSupport.Money(item.Amount, $"The payment on {bill.Number}");
@@ -205,15 +233,28 @@ public sealed class ApPaymentService(
         var vendors = await db.Set<Vendor>().AsNoTracking().Where(v => vendorIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, cancellationToken);
         var payables = await PurchasingSupport.PayablesAccountAsync(db, cancellationToken);
         var cash = await PurchasingSupport.AccountByNumberAsync(db, options.Value.CashAccountNumber, "cash", cancellationToken);
+        var foreign = payments.Any(p => p.CurrencyCode is not null);
+        if (foreign)
+        {
+            await CurrencySupport.EnsureGainLossAccountsAsync(dbFactory, UtcNow, cancellationToken);
+        }
+
+        var realized = foreign ? (await CurrencySupport.GainLossAccountsAsync(db, UtcNow, cancellationToken)).Realized : null;
+        var functional = foreign ? await CurrencySupport.FunctionalAsync(db, cancellationToken) : CurrencySupport.DefaultFunctional;
 
         foreach (var payment in payments.OrderBy(p => p.Reference, StringComparer.Ordinal))
         {
             var vendor = vendors[payment.VendorId];
             var bill = bills[payment.BillId];
             PurchasingSupport.EnsureVendorCanTransact(vendor, "paying it");
-            if (payment.Amount > bill.Balance)
+            if (payment.CurrencyCode is null && payment.Amount > bill.Balance)
             {
                 throw new ArgumentException($"Bill {bill.Number} only has {bill.Balance:N2} left to pay.");
+            }
+
+            if (payment.CurrencyCode is { } code && payment.TransactionAmount > bill.TransactionBalance)
+            {
+                throw new ArgumentException($"Bill {bill.Number} only has {bill.TransactionBalance:N2} {code} left to pay.");
             }
 
             var entry = new JournalEntry
@@ -225,8 +266,33 @@ public sealed class ApPaymentService(
                 CreatedBy = ledger.Actor,
                 CreatedAtUtc = ledger.UtcNow,
             };
-            entry.Lines.Add(new JournalLine { JournalEntryId = entry.Id, LineNumber = 1, AccountId = payables.Id, Debit = payment.Amount, Memo = $"{vendor.Code} {bill.InvoiceNumber}" });
-            entry.Lines.Add(new JournalLine { JournalEntryId = entry.Id, LineNumber = 2, AccountId = cash.Id, Credit = payment.Amount, Memo = $"{payment.Method} {payment.Reference}" });
+            if (payment.CurrencyCode is { } currency)
+            {
+                // Multicurrency: relieve the liability at the bill's rate, pay the cash at today's rate; the difference is realized.
+                var rate = request.ExchangeRates is not null && request.ExchangeRates.TryGetValue(currency, out var given)
+                    ? (given > 0 ? CurrencyMath.RoundRate(given) : throw new ArgumentException($"The {currency} rate must be positive."))
+                    : (await CurrencySupport.RequireRateAsync(db, currency, functional, request.PaidOn, Domain.Currencies.ExchangeRateType.Spot, cancellationToken)).Rate;
+                payment.Amount = CurrencyMath.Relieved(payment.TransactionAmount, bill.TransactionBalance, bill.Balance, bill.ExchangeRate);
+                payment.ExchangeRate = rate;
+                payment.CashAmount = CurrencyMath.ToFunctional(payment.TransactionAmount, rate);
+                payment.RealizedGainLoss = payment.Amount - payment.CashAmount.Value;
+                var cashAccount = await CurrencySupport.ForeignCashAccountAsync(db, currency, cancellationToken) ?? cash.Id;
+                entry.Lines.Add(CurrencySupport.Line(entry, payables.Id, payment.Amount, $"{vendor.Code} {bill.InvoiceNumber}", currency, payment.TransactionAmount, bill.ExchangeRate));
+                entry.Lines.Add(CurrencySupport.Line(entry, cashAccount, -payment.CashAmount.Value, $"{payment.Method} {payment.Reference}", currency, payment.TransactionAmount, rate));
+                if (payment.RealizedGainLoss != 0)
+                {
+                    entry.Lines.Add(CurrencySupport.Line(entry, realized!.Id, -payment.RealizedGainLoss,
+                        $"Realized {(payment.RealizedGainLoss > 0 ? "gain" : "loss")}: {currency} {bill.ExchangeRate:0.######} → {rate:0.######}"));
+                }
+
+                bill.TransactionPaid += payment.TransactionAmount;
+            }
+            else
+            {
+                entry.Lines.Add(new JournalLine { JournalEntryId = entry.Id, LineNumber = 1, AccountId = payables.Id, Debit = payment.Amount, Memo = $"{vendor.Code} {bill.InvoiceNumber}" });
+                entry.Lines.Add(new JournalLine { JournalEntryId = entry.Id, LineNumber = 2, AccountId = cash.Id, Credit = payment.Amount, Memo = $"{payment.Method} {payment.Reference}" });
+            }
+
             db.Set<JournalEntry>().Add(entry);
             await ledger.PostAsync(db, entry, cancellationToken);
 
@@ -270,6 +336,7 @@ public sealed class ApPaymentService(
             await ledger.ReverseAsync(db, entry, date, $"Void payment {payment.Reference}: {reason}", cancellationToken);
             var bill = await db.Set<ApBill>().FirstAsync(b => b.Id == payment.BillId, cancellationToken);
             bill.PaidAmount -= payment.Amount;
+            bill.TransactionPaid -= payment.CurrencyCode is null ? 0 : payment.TransactionAmount;
         }
 
         payment.Status = ApPaymentStatus.Void;
@@ -330,6 +397,16 @@ public sealed class ApPaymentService(
         return rows.GroupBy(r => r.BillId).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
     }
 
+    /// <summary>Amounts in the bill's currency in open runs not yet paid, per foreign bill.</summary>
+    private static async Task<Dictionary<Guid, decimal>> ScheduledTransactionAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> billIds, CancellationToken ct)
+    {
+        var rows = await db.Set<ApPayment>().AsNoTracking()
+            .Where(p => billIds.Contains(p.BillId) && p.Status == ApPaymentStatus.Scheduled && p.CurrencyCode != null)
+            .Join(db.Set<ApPaymentRun>().Where(r => OpenRuns.Contains(r.Status)), p => p.RunId, r => r.Id, (p, r) => new { p.BillId, p.TransactionAmount })
+            .ToListAsync(ct);
+        return rows.GroupBy(r => r.BillId).ToDictionary(g => g.Key, g => g.Sum(r => r.TransactionAmount));
+    }
+
     private static async Task<PaymentRunDto> RunDtoAsync(IWorkbenchDbContext db, Guid runId, CancellationToken ct)
     {
         var run = await db.Set<ApPaymentRun>().AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct) ?? throw WorkbenchNotFoundException.For("Payment run", runId);
@@ -349,6 +426,7 @@ public sealed class ApPaymentService(
             r.Id, r.Number, r.PaymentDate, r.Method.ToContract(), r.Status.ToContract(), r.CreatedBy, r.ApprovedBy, r.ApprovedAtUtc,
             byRun[r.Id].OrderBy(p => vendors[p.VendorId].Code).ThenBy(p => bills[p.BillId].Number).Select(p => new PaymentDto(
                 p.Id, r.Id, r.Number, p.BillId, bills[p.BillId].Number, bills[p.BillId].InvoiceNumber, p.VendorId, vendors[p.VendorId].Code, vendors[p.VendorId].Name,
-                p.Amount, p.Method.ToContract(), p.Status.ToContract(), p.Reference, p.PaidOn, p.JournalEntryId, p.VoidReason)).ToList())).ToList();
+                p.Amount, p.Method.ToContract(), p.Status.ToContract(), p.Reference, p.PaidOn, p.JournalEntryId, p.VoidReason,
+                p.CurrencyCode, p.TransactionAmount, p.CurrencyCode is null ? 1m : p.ExchangeRate, p.CashAmount, p.RealizedGainLoss)).ToList())).ToList();
     }
 }

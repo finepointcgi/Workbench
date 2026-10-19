@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Workbench.Application.Accounting;
 using Workbench.Application.Approvals;
+using Workbench.Application.Currencies;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Application.Odcs;
@@ -519,6 +520,9 @@ public sealed class ApBillService(
             VendorId = vendor.Id,
             SubcontractId = line.SubcontractId,
             InvoiceNumber = bill.InvoiceNumber,
+            CurrencyCode = bill.CurrencyCode,
+            TransactionAmount = bill.CurrencyCode is null ? null : line.TransactionAmount,
+            ExchangeRate = bill.CurrencyCode is null ? null : bill.ExchangeRate,
             Status = OdcStatus.Approved,
             SubmittedBy = bill.EnteredBy,
             CreatedAtUtc = UtcNow,
@@ -564,7 +568,7 @@ public sealed class ApBillService(
             CreatedAtUtc = ledger.UtcNow,
         };
 
-        void Line(Guid account, decimal debit, decimal credit, string memo, Guid? org = null) => entry.Lines.Add(new JournalLine
+        void Line(Guid account, decimal debit, decimal credit, string memo, Guid? org = null, decimal? transaction = null) => entry.Lines.Add(new JournalLine
         {
             JournalEntryId = entry.Id,
             LineNumber = entry.Lines.Count + 1,
@@ -573,7 +577,11 @@ public sealed class ApBillService(
             Debit = debit,
             Credit = credit,
             Memo = memo.Length > 500 ? memo[..500] : memo,
+            TransactionCurrency = transaction is null ? null : bill.CurrencyCode,
+            TransactionAmount = transaction is null ? null : Math.Abs(transaction.Value),
+            ExchangeRate = transaction is null ? null : bill.ExchangeRate,
         });
+        decimal? Tx(decimal amount) => bill.IsForeignCurrency ? amount : null;
 
         foreach (var line in accountLines)
         {
@@ -583,14 +591,14 @@ public sealed class ApBillService(
         var accountTotal = accountLines.Sum(l => l.Amount);
         if (accountTotal > 0)
         {
-            Line(payables.Id, 0, accountTotal, $"{vendor.Code} {bill.InvoiceNumber}");
+            Line(payables.Id, 0, accountTotal, $"{vendor.Code} {bill.InvoiceNumber}", transaction: Tx(accountLines.Sum(l => l.TransactionAmount ?? 0)));
         }
 
         if (bill.RetainageAmount > 0)
         {
             var retainage = await PurchasingSupport.EnsureRetainageAccountAsync(db, options.Value, UtcNow, ct);
-            Line(payables.Id, bill.RetainageAmount, 0, $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}");
-            Line(retainage.Id, 0, bill.RetainageAmount, $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}");
+            Line(payables.Id, bill.RetainageAmount, 0, $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}", transaction: Tx(bill.TransactionRetainage));
+            Line(retainage.Id, 0, bill.RetainageAmount, $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}", transaction: Tx(bill.TransactionRetainage));
         }
 
         // A new retainage account has to exist before the ledger validates the lines against it.
@@ -636,15 +644,37 @@ public sealed class ApBillService(
         bill.InvoiceDate = r.InvoiceDate;
         bill.DueDate = due;
         bill.Description = PurchasingSupport.Optional(r.Description, "Description", 500);
+
+        // Multicurrency: lines are entered in the bill's currency and kept in the functional currency at the bill's rate.
+        var currency = await CurrencySupport.ResolveAsync(db, r.CurrencyCode ?? vendor.CurrencyCode, r.InvoiceDate, r.ExchangeRate, ct);
         foreach (var input in r.Lines)
         {
+            decimal? transactionAmount = null;
+            var functionalAmount = input.Amount;
+            if (currency.IsForeign)
+            {
+                if (input.PurchaseOrderLineId is not null || input.OdcEntryId is not null)
+                {
+                    throw new ArgumentException($"Line {bill.Lines.Count + 1}: purchase orders and project ODCs are in {await CurrencySupport.FunctionalAsync(db, ct)}, so a {currency.Code} bill can't bill them. Enter the bill in {await CurrencySupport.FunctionalAsync(db, ct)}.");
+                }
+
+                if (currency.RoundTransaction(input.Amount) != input.Amount)
+                {
+                    throw new ArgumentException($"Line {bill.Lines.Count + 1}: {currency.Code} amounts have {currency.Decimals} decimal place{(currency.Decimals == 1 ? "" : "s")}.");
+                }
+
+                transactionAmount = input.Amount;
+                functionalAmount = currency.ToFunctional(input.Amount);
+            }
+
             var line = new ApBillLine
             {
                 BillId = bill.Id,
                 LineNumber = bill.Lines.Count + 1,
                 Kind = input.Kind.ToDomain(),
                 Description = input.Description ?? "",
-                Amount = input.Amount,
+                Amount = functionalAmount,
+                TransactionAmount = transactionAmount,
                 WbsElementId = input.WbsElementId,
                 OdcType = input.OdcType?.ToDomain(),
                 SubcontractId = input.SubcontractId,
@@ -667,6 +697,17 @@ public sealed class ApBillService(
 
         bill.Amount = bill.Lines.Sum(l => l.Amount);
         bill.RetainageAmount = bill.Lines.Sum(l => l.RetainageAmount);
+        bill.CurrencyCode = currency.Code;
+        bill.ExchangeRate = currency.Rate;
+        bill.TransactionAmount = currency.IsForeign ? bill.Lines.Sum(l => l.TransactionAmount ?? 0) : 0;
+        bill.TransactionRetainage = 0;
+        if (currency.IsForeign && bill.RetainageAmount != 0)
+        {
+            var subIds = bill.Lines.Where(l => l.SubcontractId != null).Select(l => l.SubcontractId!.Value).Distinct().ToList();
+            var percents = await db.Set<Subcontract>().AsNoTracking().Where(s => subIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.RetainagePercent, ct);
+            bill.TransactionRetainage = bill.Lines.Where(l => l.SubcontractId is { } s && percents.ContainsKey(s))
+                .Sum(l => currency.RoundTransaction((l.TransactionAmount ?? 0) * percents[l.SubcontractId!.Value] / 100m));
+        }
     }
 
     /// <summary>Checks one line and fills in what it implies (project, WBS and amount of a linked ODC; retainage).</summary>
@@ -939,6 +980,9 @@ public sealed class ApBillService(
         b.DueDate,
         b.Amount,
         b.RetainageAmount,
+        b.CurrencyCode,
+        b.ExchangeRate,
+        b.TransactionAmount,
         Lines = b.Lines.Select(l => new { l.LineNumber, Kind = l.Kind.ToString(), l.Amount, l.WbsElementId, l.SubcontractId, l.AccountId, l.OdcEntryId, l.PurchaseOrderLineId, l.Quantity }),
     };
 
@@ -953,7 +997,8 @@ public sealed class ApBillService(
 
     internal static BillSummaryDto Summary(ApBill b, Vendor v) => new(
         b.Id, b.Number, b.VendorId, v.Code, v.Name, b.InvoiceNumber, b.InvoiceDate, b.DueDate, b.Status.ToContract(),
-        b.Amount, b.RetainageAmount, b.PaidAmount, b.EnteredBy, b.PostingProblem);
+        b.Amount, b.RetainageAmount, b.PaidAmount, b.EnteredBy, b.PostingProblem,
+        b.CurrencyCode, b.CurrencyCode is null ? 1m : b.ExchangeRate, b.TransactionAmount, b.IsForeignCurrency ? b.TransactionBalance : 0m);
 
     private async Task<BillDto> DetailAsync(IWorkbenchDbContext db, Guid billId, CancellationToken ct)
     {
@@ -970,7 +1015,8 @@ public sealed class ApBillService(
             bill.Description,
             bill.Lines.OrderBy(l => l.LineNumber).Select(lookups.ToDto).ToList(),
             duplicates,
-            payments.OrderBy(x => x.p.PaidOn).Select(x => new BillPaymentDto(x.p.Id, x.p.RunId, x.Number, x.p.PaidOn, x.p.Amount, x.p.Method.ToContract(), x.p.Reference, x.p.Status.ToContract())).ToList(),
+            payments.OrderBy(x => x.p.PaidOn).Select(x => new BillPaymentDto(x.p.Id, x.p.RunId, x.Number, x.p.PaidOn, x.p.Amount, x.p.Method.ToContract(), x.p.Reference, x.p.Status.ToContract(),
+                x.p.TransactionAmount, x.p.CurrencyCode is null ? 1m : x.p.ExchangeRate, x.p.RealizedGainLoss)).ToList(),
             bill.JournalEntryId,
             bill.FundingOverrideBy,
             bill.FundingOverrideReason,
@@ -1024,7 +1070,7 @@ public sealed class ApBillService(
                 l.OrgUnitId, l.OrgUnitId is { } o ? _orgs.GetValueOrDefault(o) : null,
                 l.RetainageAmount, l.Status.ToContract(), l.ApproverEmail ?? PurchasingSupport.FinanceRoute, l.DecidedBy, l.DecidedAtUtc,
                 l.PurchaseOrderLineId, l.PurchaseOrderLineId is { } po ? _poNumbers.GetValueOrDefault(po) : null, l.Quantity, l.UnitPrice,
-                l.MatchProblem, l.MatchOverrideBy, l.MatchOverrideReason);
+                l.MatchProblem, l.MatchOverrideBy, l.MatchOverrideReason, l.TransactionAmount);
         }
     }
 }

@@ -120,6 +120,7 @@ else
                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
                     Created by @_invoice.CreatedBy@(_invoice.ApprovedBy is null ? "" : $"; approved by {_invoice.ApprovedBy} {_invoice.ApprovedAtUtc?.ToLocalTime():yyyy-MM-dd}")@(_invoice.SentAtUtc is null ? "" : $"; sent {_invoice.SentAtUtc?.ToLocalTime():yyyy-MM-dd}")
                 </MudText>
+                <Workbench.Ui.Currencies.InvoiceCurrencyCard Summary="s" CanEdit="_isFinance" Changed="ReloadAsync" />
                 @if (_invoice.FundingOverrideReason is not null)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Approved past funding: @_invoice.FundingOverrideReason</MudAlert>
@@ -191,6 +192,8 @@ else
             (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
         }
     }
+
+    private async Task ReloadAsync() => _invoice = await Invoices.GetAsync(InvoiceId);
 
     private async Task RunAsync(Func<Task<InvoiceDto>> action, string? done = null)
     {

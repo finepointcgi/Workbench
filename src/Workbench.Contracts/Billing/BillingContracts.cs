@@ -32,7 +32,17 @@ public sealed record InvoiceSummaryDto(
     decimal AmountPaid,
     decimal AmountCredited,
     decimal Balance,
-    int DaysPastDue);
+    int DaysPastDue,
+
+    // Added by multicurrency: an invoice issued in the customer's currency (null: the functional currency). The rate and the
+    // transaction amounts are fixed when it's approved; the amounts above stay functional.
+    string? CurrencyCode = null,
+    decimal ExchangeRate = 1m,
+    decimal TransactionTotal = 0m,
+    decimal TransactionBalance = 0m)
+{
+    public bool IsForeignCurrency => CurrencyCode is not null;
+}
 
 public sealed record InvoiceLineDto(
     Guid Id,
@@ -365,7 +375,8 @@ public interface IBillingMilestoneService
 
 // ---- Payments ----
 
-public sealed record PaymentApplicationDto(Guid InvoiceId, string InvoiceNumber, string ContractNumber, decimal Amount);
+/// <summary>For a foreign currency invoice, <see cref="Amount"/> is the receivable relieved and <see cref="TransactionAmount"/> what was applied in its currency.</summary>
+public sealed record PaymentApplicationDto(Guid InvoiceId, string InvoiceNumber, string ContractNumber, decimal Amount, decimal? TransactionAmount = null);
 
 public sealed record PaymentDto(
     Guid Id,
@@ -382,7 +393,13 @@ public sealed record PaymentDto(
     string? VoidReason,
     string CreatedBy,
     DateTime CreatedAtUtc,
-    IReadOnlyList<PaymentApplicationDto> Applications);
+    IReadOnlyList<PaymentApplicationDto> Applications,
+
+    // Added by multicurrency: Amount is the cash in the functional currency; a foreign receipt also has its own amount and rate.
+    string? CurrencyCode = null,
+    decimal TransactionAmount = 0m,
+    decimal ExchangeRate = 1m,
+    decimal RealizedGainLoss = 0m);
 
 public sealed record PaymentApplicationInput(Guid InvoiceId, decimal Amount);
 
@@ -394,7 +411,14 @@ public sealed record RecordPaymentRequest(
     CashReceiptMethod Method,
     IReadOnlyList<PaymentApplicationInput> Applications,
     string? Reference = null,
-    string? Notes = null);
+    string? Notes = null,
+
+    /// <summary>
+    /// Added by multicurrency: a receipt in another currency. The amount and applications are then in that currency, every
+    /// invoice must be in it, and the cash converts at <see cref="ExchangeRate"/> or the spot rate on the receipt date.
+    /// </summary>
+    string? CurrencyCode = null,
+    decimal? ExchangeRate = null);
 
 public sealed record PaymentQuery(Guid? CustomerId = null, DateOnly? From = null, DateOnly? To = null, int Take = 500);
 

@@ -89,7 +89,13 @@ else
                         <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" title="@context.UnallowableReason">Unallowable</MudChip>
                     }
                 </MudTd>
-                <MudTd DataLabel="Amount" Style="text-align:right">@OdcFormat.Money(context.Amount)</MudTd>
+                <MudTd DataLabel="Amount" Style="text-align:right">
+                    @OdcFormat.Money(context.Amount)
+                    @if (context.CurrencyCode is { } paid && context.TransactionAmount is { } tx)
+                    {
+                        <div class="mud-text-secondary" style="font-size:0.8rem">@Workbench.Ui.Currencies.CurrencyFormat.Amount(tx, paid) at @Workbench.Ui.Currencies.CurrencyFormat.Rate(context.ExchangeRate ?? 1)</div>
+                    }
+                </MudTd>
                 <MudTd DataLabel="Receipt">
                     @if (context.ReceiptFileId is not null)
                     {

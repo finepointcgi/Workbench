@@ -99,7 +99,11 @@ internal sealed class BillingLookups
         i.AmountPaid,
         i.AmountCredited,
         i.Balance,
-        BillingMapping.DaysPastDue(i, today));
+        BillingMapping.DaysPastDue(i, today),
+        i.CurrencyCode,
+        i.CurrencyCode is null ? 1m : i.ExchangeRate,
+        i.TransactionTotal,
+        i.TransactionBalance);
 
     public InvoiceLineDto Line(InvoiceLine l, Guid? id = null) => new(
         id ?? l.Id,

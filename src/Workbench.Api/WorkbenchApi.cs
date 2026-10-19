@@ -60,6 +60,7 @@ public static class WorkbenchApi
         v1.MapCrmEndpoints();
         v1.MapPricingEndpoints();
         v1.MapAssistantEndpoints();
+        v1.MapCurrencyEndpoints();
 
         return app;
     }

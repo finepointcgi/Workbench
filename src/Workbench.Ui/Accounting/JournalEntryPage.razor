@@ -71,7 +71,13 @@ else if (!IsEditable && _entry is { } entry)
                         <td>@l.OrgUnitCode</td>
                         <td>@l.ProjectCode</td>
                         <td>@l.WbsCode</td>
-                        <td>@l.Memo</td>
+                        <td>
+                            @l.Memo
+                            @if (l.TransactionCurrency is { } fc)
+                            {
+                                <div class="mud-text-secondary" style="font-size:0.8rem" data-testid="line-currency">@Workbench.Ui.Currencies.CurrencyFormat.Amount(l.TransactionAmount ?? 0, fc) at @Workbench.Ui.Currencies.CurrencyFormat.Rate(l.ExchangeRate ?? 1)</div>
+                            }
+                        </td>
                         <td style="text-align:right">@AccountingFormat.Blank(l.Debit)</td>
                         <td style="text-align:right">@AccountingFormat.Blank(l.Credit)</td>
                     </tr>

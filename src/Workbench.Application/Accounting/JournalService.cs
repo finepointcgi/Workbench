@@ -207,6 +207,9 @@ public sealed class JournalService(
                 Debit = input.Debit,
                 Credit = input.Credit,
                 Memo = string.IsNullOrWhiteSpace(input.Memo) ? null : input.Memo.Trim(),
+                TransactionCurrency = string.IsNullOrWhiteSpace(input.TransactionCurrency) ? null : input.TransactionCurrency.Trim().ToUpperInvariant(),
+                TransactionAmount = string.IsNullOrWhiteSpace(input.TransactionCurrency) ? null : input.TransactionAmount,
+                ExchangeRate = string.IsNullOrWhiteSpace(input.TransactionCurrency) ? null : input.ExchangeRate,
             });
         }
     }

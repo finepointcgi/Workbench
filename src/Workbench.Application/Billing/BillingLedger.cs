@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Accounting;
+using Workbench.Application.Currencies;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
 using Workbench.Domain.ProjectAccounting;
@@ -61,7 +62,66 @@ public sealed class BillingLedger(GeneralLedger ledger)
             Memo: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease ? l.Description : null));
         var label = invoice.Type == InvoiceType.CreditMemo ? "Credit memo" : "Invoice";
         return await PostAsync(db, invoice.Id, invoice.InvoiceDate, $"{label} {invoice.Number} · {contract.ContractNumber}",
-            (ArBilled, null, null, invoice.Total, $"{label} {invoice.Number}"), credits, ct);
+            (ArBilled, null, null, invoice.Total, $"{label} {invoice.Number}"), credits, ct,
+            stamp: invoice.CurrencyCode is { } currency
+                ? (entry, accounts) =>
+                {
+                    // Multicurrency: the receivable is owed in the invoice's currency.
+                    foreach (var line in entry.Lines.Where(l => l.AccountId == accounts[ArBilled]))
+                    {
+                        line.TransactionCurrency = currency;
+                        line.TransactionAmount = Math.Abs(invoice.TransactionTotal);
+                        line.ExchangeRate = invoice.ExchangeRate;
+                    }
+                }
+                : null);
+    }
+
+    /// <summary>
+    /// Posts a receipt in a foreign currency: debit cash (the bank account kept in that currency, else 1010) at the receipt's
+    /// rate, credit AR billed for what each invoice carried, and the difference to realized foreign exchange gain or loss.
+    /// </summary>
+    public async Task<JournalEntry> PostForeignPaymentAsync(
+        IWorkbenchDbContext db, Payment payment, string customerName, IReadOnlyDictionary<Guid, Invoice> invoices, Guid realizedAccountId, CancellationToken ct)
+    {
+        if (await ExistingAsync(db, payment.Id, ct) is { } existing)
+        {
+            return existing;
+        }
+
+        var currency = payment.CurrencyCode!;
+        var cash = await CurrencySupport.ForeignCashAccountAsync(db, currency, ct)
+            ?? await db.Set<Account>().AsNoTracking().Where(a => a.Number == Cash).Select(a => (Guid?)a.Id).FirstOrDefaultAsync(ct)
+            ?? throw new InvalidOperationException($"Account {Cash} isn't in the chart of accounts. Install the default chart (Accounting › Chart of accounts) first.");
+        var ar = await db.Set<Account>().AsNoTracking().Where(a => a.Number == ArBilled).Select(a => (Guid?)a.Id).FirstOrDefaultAsync(ct)
+            ?? throw new InvalidOperationException($"Account {ArBilled} isn't in the chart of accounts. Install the default chart (Accounting › Chart of accounts) first.");
+        var memo = payment.Reference is null ? null : $"Ref {payment.Reference}";
+        var entry = new JournalEntry
+        {
+            Date = payment.ReceivedOn,
+            Source = JournalSource.Billing,
+            SourceId = payment.Id,
+            SourceRevision = await db.Set<JournalEntry>().CountAsync(e => e.Source == JournalSource.Billing && e.SourceId == payment.Id, ct),
+            Description = $"Cash receipt · {customerName} · {payment.TransactionAmount:N2} {currency}" + (memo is null ? "" : $" · {memo}"),
+            CreatedBy = ledger.Actor,
+            CreatedAtUtc = ledger.UtcNow,
+        };
+        entry.Lines.Add(CurrencySupport.Line(entry, cash, payment.Amount, memo, currency, payment.TransactionAmount, payment.ExchangeRate));
+        foreach (var a in payment.Applications)
+        {
+            var invoice = invoices[a.InvoiceId];
+            entry.Lines.Add(CurrencySupport.Line(entry, ar, -a.Amount, $"Invoice {invoice.Number}", currency, a.TransactionAmount, invoice.ExchangeRate));
+        }
+
+        if (payment.RealizedGainLoss != 0)
+        {
+            entry.Lines.Add(CurrencySupport.Line(entry, realizedAccountId, -payment.RealizedGainLoss,
+                $"Realized {(payment.RealizedGainLoss > 0 ? "gain" : "loss")} on {currency} receipt at {payment.ExchangeRate:0.######}"));
+        }
+
+        db.Set<JournalEntry>().Add(entry);
+        await ledger.PostAsync(db, entry, ct);
+        return entry;
     }
 
     public async Task<JournalEntry> PostPaymentAsync(IWorkbenchDbContext db, Payment payment, string customerName, CancellationToken ct)
@@ -109,7 +169,8 @@ public sealed class BillingLedger(GeneralLedger ledger)
     private async Task<JournalEntry> PostAsync(
         IWorkbenchDbContext db, Guid sourceId, DateOnly date, string description,
         (string Account, Guid? ProjectId, Guid? WbsElementId, decimal Debit, string? Memo) debit,
-        IEnumerable<(string Account, Guid? ProjectId, Guid? WbsElementId, decimal Credit, string? Memo)> credits, CancellationToken ct)
+        IEnumerable<(string Account, Guid? ProjectId, Guid? WbsElementId, decimal Credit, string? Memo)> credits, CancellationToken ct,
+        Action<JournalEntry, IReadOnlyDictionary<string, Guid>>? stamp = null)
     {
         var accounts = await db.Set<Account>().AsNoTracking().ToDictionaryAsync(a => a.Number, a => a.Id, ct);
         Guid AccountId(string number) => accounts.TryGetValue(number, out var id)
@@ -153,6 +214,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
             Add(g.Key.Account, g.Key.ProjectId, g.Key.WbsElementId, -g.Sum(c => c.Credit), g.Select(c => c.Memo).FirstOrDefault(m => m is not null));
         }
 
+        stamp?.Invoke(entry, accounts);
         db.Set<JournalEntry>().Add(entry);
         await ledger.PostAsync(db, entry, ct);
         return entry;
