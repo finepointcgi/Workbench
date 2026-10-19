@@ -1,0 +1,49 @@
+@page "/planning/budget-vs-actual"
+@inject IFiscalCalendarService Calendar
+
+<PageTitle>Budget vs actual · Planning · Workbench</PageTitle>
+
+<PlanningHeader Title="Budget vs actual" Subtitle="A budget version against the posted general ledger, for one period and the year to date.">
+    @if (_periods.Count > 0)
+    {
+        <MudSelect T="Guid?" Value="_period?.Id" ValueChanged="v => _period = _periods.FirstOrDefault(p => p.Id == v)" Label="Fiscal period" Dense="true" Style="min-width:200px">
+            @foreach (var p in _periods.OrderByDescending(p => p.Start))
+            {
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</PlanningHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_period is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <BudgetVsActualView Period="_period" />
+}
+
+@code {
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private FiscalPeriodDto? _period;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            _period = AccountingFormat.DefaultPeriod(_periods);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+}

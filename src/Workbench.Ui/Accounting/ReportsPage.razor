@@ -32,6 +32,7 @@ else
         <MudTabPanel Text="Trial balance"><TrialBalanceView Period="_period" /></MudTabPanel>
         <MudTabPanel Text="General ledger"><LedgerView Period="_period" Accounts="_accounts" /></MudTabPanel>
         <MudTabPanel Text="Income statement"><StatementView Period="_period" Report="AccountingReport.IncomeStatement" /></MudTabPanel>
+        <MudTabPanel Text="Budget vs actual"><Workbench.Ui.Planning.BudgetVsActualView Period="_period" /></MudTabPanel>
         <MudTabPanel Text="Balance sheet"><StatementView Period="_period" Report="AccountingReport.BalanceSheet" /></MudTabPanel>
         <MudTabPanel Text="Project cost"><ProjectCostView Period="_period" /></MudTabPanel>
         <MudTabPanel Text="Reconciliation"><ReconciliationView /></MudTabPanel>

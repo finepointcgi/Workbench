@@ -1,0 +1,241 @@
+@page "/planning/budgets/{VersionId:guid}"
+@inject IGlBudgetService Budgets
+@inject IChartOfAccountsService Chart
+@inject IPeopleService People
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_grid?.Version.Name ?? "Budget") · Planning · Workbench</PageTitle>
+
+<PlanningHeader Title="@(_grid?.Version.Name ?? "Budget version")" Parent="Budgets" ParentHref="planning/budgets"
+                Subtitle="@Subtitle">
+    @if (_grid is { Version.IsLocked: false } g)
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CallSplit" OnClick="() => SpreadAsync(null)">Spread a year</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="ImportAsync" data-testid="import-csv">Import CSV</MudButton>
+        @if (g.Version.PlanningCycleId is null)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.Lock" OnClick="AdoptAsync" Disabled="_pending.Count > 0">Adopt and lock</MudButton>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="_pending.Count == 0" data-testid="save-cells">
+            Save@(_pending.Count > 0 ? $" ({_pending.Count})" : "")
+        </MudButton>
+    }
+</PlanningHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_grid is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_grid.Version.IsLocked)
+    {
+        <MudAlert Severity="Severity.Success" Icon="@Icons.Material.Filled.Lock" Class="mb-3" Dense="true">
+            Adopted @(_grid.Version.AdoptedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd")) by @_grid.Version.AdoptedBy. This version is locked; to change it, create a Revised version that starts from it.
+        </MudAlert>
+    }
+    else if (_grid.Version.PlanningCycleId is { } cycleId)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" Dense="true">
+            Org unit owners fill this version through its <MudLink Href="@($"planning/cycles/{cycleId}")">planning cycle</MudLink>: each approved budget replaces that unit's lines. Adopt it from the cycle.
+        </MudAlert>
+    }
+
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudSelect T="Guid?" Value="_orgFilter" ValueChanged="FilterAsync" Label="Org unit" Clearable="true" Dense="true" Style="min-width:200px">
+            @foreach (var o in _orgs)
+            {
+                <MudSelectItem T="Guid?" Value="o.Id">@o.Code @o.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (!_grid.Version.IsLocked)
+        {
+            <MudSelect T="Guid?" @bind-Value="_newAccount" Label="Add account" Dense="true" Style="min-width:260px">
+                @foreach (var a in _accounts)
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_newOrg" Label="for org unit" Dense="true" Style="min-width:180px">
+                @foreach (var o in _orgs)
+                {
+                    <MudSelectItem T="Guid?" Value="o.Id">@o.Code</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRow" Disabled="_newAccount is null || _newOrg is null">Add row</MudButton>
+        }
+    </MudStack>
+
+    <BudgetGrid Periods="_grid.Periods" Lines="_lines" ShowOrg="true" Editable="!_grid.Version.IsLocked" OnCellChanged="Changed" OnSpread="l => SpreadAsync(l)"
+                Caption="@($"{_grid.Version.Name} by account, org unit and month")" />
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">Amounts are in each account's natural sign: revenue and expenses are both positive. Type 0 or clear a cell to remove it.</MudText>
+}
+
+@code {
+    [Parameter]
+    public Guid VersionId { get; set; }
+
+    private BudgetGridDto? _grid;
+    private List<BudgetGridLine> _lines = [];
+    private IReadOnlyList<AccountOptionDto> _accounts = [];
+    private IReadOnlyList<OrgUnitDto> _orgs = [];
+    private readonly Dictionary<(Guid, Guid, Guid), decimal> _pending = [];
+    private Guid? _orgFilter;
+    private Guid? _newAccount;
+    private Guid? _newOrg;
+    private string? _error;
+    private bool _forbidden;
+
+    private string? Subtitle => _grid is null ? null
+        : $"FY{_grid.Version.FiscalYear} · {_grid.Version.Kind}{(_grid.Version.SourceVersionName is { } s ? $" · started from {s}" : "")} · revenue {PlanningFormat.Whole(_grid.Version.Revenue)}, expenses {PlanningFormat.Whole(_grid.Version.Expense)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await Chart.ListAccountsAsync(includeInactive: false);
+            _accounts = all.Where(a => !a.HasChildren && a.Type is AccountKind.Revenue or AccountKind.Expense && a.CostClass != CostClass.AppliedBurden)
+                .Select(a => new AccountOptionDto(a.Id, a.Number, a.Name, a.Type)).ToList();
+            _orgs = (await People.ListOrgUnitsAsync()).OrderBy(o => o.Code, StringComparer.Ordinal).ToList();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        Show(await Budgets.GetGridAsync(VersionId, _orgFilter));
+    }
+
+    private void Show(BudgetGridDto grid)
+    {
+        _grid = grid;
+        _pending.Clear();
+        _lines = grid.Rows.Select(r => new BudgetGridLine(r.AccountId, r.OrgUnitId, $"{r.AccountNumber} {r.AccountName}", r.OrgUnitCode, r.AccountType == AccountKind.Revenue, r.Amounts.ToArray())).ToList();
+    }
+
+    private async Task FilterAsync(Guid? org)
+    {
+        if (_pending.Count > 0)
+        {
+            Snackbar.Add("Save or discard your changes first.", Severity.Warning);
+            return;
+        }
+
+        _orgFilter = org;
+        await LoadAsync();
+    }
+
+    private void Changed((BudgetGridLine Line, int PeriodIndex) change) =>
+        _pending[(change.Line.AccountId, change.Line.OrgUnitId!.Value, _grid!.Periods[change.PeriodIndex].Id)] = change.Line.Amounts[change.PeriodIndex];
+
+    private void AddRow()
+    {
+        var account = _accounts.First(a => a.Id == _newAccount);
+        var org = _orgs.First(o => o.Id == _newOrg);
+        if (_lines.Any(l => l.AccountId == account.Id && l.OrgUnitId == org.Id))
+        {
+            Snackbar.Add($"{account.Number} for {org.Code} is already in the grid.", Severity.Info);
+            return;
+        }
+
+        _lines.Add(new BudgetGridLine(account.Id, org.Id, $"{account.Number} {account.Name}", org.Code, account.Type == AccountKind.Revenue, new decimal[_grid!.Periods.Count]));
+        _newAccount = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var count = _pending.Count;
+            await Budgets.SaveCellsAsync(VersionId, new SaveBudgetCellsRequest(_pending.Select(p => new BudgetCellInput(p.Key.Item1, p.Key.Item2, p.Key.Item3, p.Value)).ToList()));
+            await LoadAsync();
+            Snackbar.Add($"Saved {count} cell(s).", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SpreadAsync(BudgetGridLine? line)
+    {
+        if (_pending.Count > 0)
+        {
+            Snackbar.Add("Save your changes before spreading.", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<SpreadDialog> { { d => d.Periods, _grid!.Periods } };
+        if (line is null)
+        {
+            parameters.Add(d => d.Accounts, _accounts);
+            parameters.Add(d => d.OrgUnits, _orgs);
+            parameters.Add(d => d.OrgUnitId, _orgFilter);
+        }
+        else
+        {
+            parameters.Add(d => d.Line, $"{line.Account} · {line.Org}");
+            parameters.Add(d => d.AccountId, line.AccountId);
+            parameters.Add(d => d.OrgUnitId, line.OrgUnitId);
+            parameters.Add(d => d.Annual, line.Total);
+        }
+
+        var dialog = await Dialogs.ShowAsync<SpreadDialog>("Spread an annual amount", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: SpreadDialog.Result r })
+        {
+            return;
+        }
+
+        try
+        {
+            await Budgets.SpreadAsync(VersionId, new SpreadBudgetRequest(r.AccountId, r.OrgUnitId!.Value, r.Annual, r.Method, r.Profile));
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        var parameters = new DialogParameters<ImportBudgetDialog> { { d => d.VersionId, VersionId }, { d => d.FirstPeriod, _grid!.Periods.FirstOrDefault()?.Name ?? "" } };
+        var dialog = await Dialogs.ShowAsync<ImportBudgetDialog>("Import budget amounts", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium });
+        if (await dialog.Result is { Canceled: false, Data: BudgetImportResultDto result })
+        {
+            Snackbar.Add($"Imported {result.CellsSet} cell(s) from {result.RowsRead} row(s).", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task AdoptAsync()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Adopt this budget?",
+            $"{_grid!.Version.Name} will be locked: nobody can change its amounts afterwards. To change it later, create a Revised version from it.",
+            yesText: "Adopt and lock", cancelText: "Cancel");
+        if (ok != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Budgets.AdoptAsync(VersionId);
+            await LoadAsync();
+            Snackbar.Add($"{_grid.Version.Name} is adopted and locked.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

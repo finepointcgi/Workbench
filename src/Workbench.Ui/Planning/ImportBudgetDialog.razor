@@ -1,0 +1,87 @@
+@* Imports budget amounts from a CSV file (or pasted text). Nothing is saved when a row is wrong; the errors say which. *@
+@inject IGlBudgetService Budgets
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3" Style="min-width:min(560px, 90vw)">
+            <MudText Typo="Typo.body2">
+                Use a header row of <code>account,org,period,amount</code> (one row per month; the period is its name, like @(FirstPeriod), or its number 1–12),
+                or <code>account,org,annual</code> to spread each year's amount evenly. Rows for the same account, org and period add up.
+            </MudText>
+            <InputFile OnChange="LoadFileAsync" accept=".csv,text/csv" aria-label="Choose a CSV file" />
+            <MudTextField T="string" @bind-Value="_csv" Label="Or paste the CSV" Lines="8" Variant="Variant.Outlined" Immediate="true" Style="font-family:monospace" />
+            <MudCheckBox T="bool" @bind-Value="_replace" Label="Replace every line in this version (otherwise only the cells in the file change)" />
+            @if (_result is { Succeeded: false })
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">
+                    Nothing was imported. Fix these rows and try again:
+                    <ul class="mb-0">
+                        @foreach (var e in _result.Errors)
+                        {
+                            <li>@e</li>
+                        }
+                    </ul>
+                </MudAlert>
+            }
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_csv) || _busy)" OnClick="ImportAsync">Import</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid VersionId { get; set; }
+
+    [Parameter]
+    public string FirstPeriod { get; set; } = "2027-10";
+
+    private string? _csv;
+    private bool _replace;
+    private bool _busy;
+    private string? _error;
+    private BudgetImportResultDto? _result;
+
+    private async Task LoadFileAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(5_000_000));
+            _csv = await reader.ReadToEndAsync();
+            _error = null;
+        }
+        catch (IOException ex)
+        {
+            _error = $"The file couldn't be read ({ex.Message}). Files can be up to 5 MB.";
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _result = await Budgets.ImportCsvAsync(VersionId, new ImportBudgetCsvRequest(_csv!, _replace));
+            if (_result.Succeeded)
+            {
+                MudDialog.Close(DialogResult.Ok(_result));
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or HttpRequestException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+        }
+
+        _busy = false;
+    }
+}

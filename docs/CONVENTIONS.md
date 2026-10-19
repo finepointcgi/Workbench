@@ -536,3 +536,16 @@ Checks:
   a new rule is a key in `TimesheetFlagRules` and never blocks anything.
 - Providers live in Infrastructure (`Assistant/AnthropicModelClient`, the official Anthropic SDK; Bedrock via
   `Anthropic.Bedrock`); tests and Development use `FakeAssistantModel` (`Assistant:EnableFakeProvider`).
+
+## Recurring journals, corporate budgets and planning cycles
+
+- `Application/Planning`, `Contracts/Planning`, `Domain/Planning`. Recurring journals post with `JournalSource.Recurring` (source
+  id = the template, revision = the occurrence number) through `GeneralLedger` in one unit of work with their
+  `RecurringJournalRun`; the unique run per occurrence keeps "Generate due entries" and the six-hourly job
+  (`RecurringJournalSettings.AutoGenerate`) from both creating one. A closed period is a skipped run with a message, retried next time.
+- Corporate budgets are `GlBudgetVersion`/`GlBudgetLine` (account × org unit × fiscal period, natural sign, revenue and expense
+  detail accounts only), distinct from project `BudgetVersion`. Adopted versions are locked (`EnsureEditable`); changes go into
+  a Revised copy. Split money with `Domain.Planning.Allocation.Split` (whole cents, largest remainder) so spreads add up exactly.
+- Budgeted indirect rates reuse `PoolAccountMap` and `BurdenCascade.ActualRates` with budget amounts instead of GL balances.
+- Planning cycles route each org unit's `BudgetSubmission` through the `budget-submission` approval workflow (default: Finance);
+  the final approval replaces that unit's lines in the cycle's version. Owners edit their own unit; Finance/Admin everything.

@@ -1,0 +1,59 @@
+@page "/planning/my-budget"
+@layout Workbench.Ui.Layout.MainLayout
+@inject IPlanningCycleService Cycles
+
+<PageTitle>My budgets · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">My budgets</MudText>
+<MudText Class="mud-text-secondary mb-4">The org units whose budget you own. Fill in each month, then submit it for approval.</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_mine is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_mine.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">You don't own an org unit's budget. Finance assigns owners when they open a planning cycle.</MudText></MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="my-budgets">
+            <thead><tr><th>Org unit</th><th>Cycle</th><th>Status</th><th style="text-align:right">Total</th><th>Due</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _mine)
+                {
+                    <tr>
+                        <td>@s.OrgUnitCode @s.OrgUnitName</td>
+                        <td>FY@(s.FiscalYear) @s.CycleName</td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@PlanningFormat.Color(s.Status)" Class="ma-0">@PlanningFormat.Label(s.Status)</MudChip></td>
+                        <td style="text-align:right">@PlanningFormat.Whole(s.Total)</td>
+                        <td>@(s.DueDate is { } d ? AccountingFormat.Date(d) : "—")</td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@($"planning/submissions/{s.Id}")">Open</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<BudgetSubmissionSummaryDto>? _mine;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _mine = await Cycles.ListMineAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}

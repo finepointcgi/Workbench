@@ -1,0 +1,57 @@
+@* A new budget version: year, kind, name, and optionally the version to copy. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3" Style="min-width:min(460px, 90vw)">
+            <MudSelect T="int?" @bind-Value="_year" Label="Fiscal year" Required="true" Dense="true">
+                @foreach (var y in Years)
+                {
+                    <MudSelectItem T="int?" Value="y">FY@(y)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="BudgetVersionKind" @bind-Value="_kind" Label="Kind" Dense="true"
+                       HelperText="Original: the plan for the year. Revised: a change during the year. Forecast: the expected outcome.">
+                @foreach (var k in Enum.GetValues<BudgetVersionKind>())
+                {
+                    <MudSelectItem T="BudgetVersionKind" Value="k">@k</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField T="string" @bind-Value="_name" Label="Name" Required="true" Immediate="true" Placeholder="@($"FY{_year} {_kind}")" />
+            <MudTextField T="string" @bind-Value="_description" Label="Description (optional)" Lines="2" />
+            <MudSelect T="Guid?" @bind-Value="_copyFrom" Label="Start from (optional)" Clearable="true" Dense="true" HelperText="Copies its amounts; months are matched by their number in the year.">
+                @foreach (var v in Versions)
+                {
+                    <MudSelectItem T="Guid?" Value="v.Id">@v.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_year is null" OnClick="Create">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<int> Years { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<BudgetVersionDto> Versions { get; set; } = [];
+
+    [Parameter]
+    public int? Year { get; set; }
+
+    private int? _year;
+    private BudgetVersionKind _kind = BudgetVersionKind.Original;
+    private string? _name;
+    private string? _description;
+    private Guid? _copyFrom;
+
+    protected override void OnInitialized() => _year = Year ?? Years.FirstOrDefault();
+
+    private void Create() => MudDialog.Close(DialogResult.Ok(new CreateBudgetVersionRequest(_year!.Value, _kind,
+        string.IsNullOrWhiteSpace(_name) ? $"FY{_year} {_kind}" : _name.Trim(), _description, _copyFrom)));
+}

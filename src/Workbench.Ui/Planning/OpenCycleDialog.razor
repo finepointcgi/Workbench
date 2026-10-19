@@ -1,0 +1,105 @@
+@* Opens a planning cycle: the year, a due date and instructions, where each unit starts from, and an owner per org unit. *@
+@inject IPlanningCycleService Cycles
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudGrid Spacing="2">
+                <MudItem xs="6" sm="3">
+                    <MudSelect T="int?" @bind-Value="_year" Label="Fiscal year" Dense="true" Required="true">
+                        @foreach (var y in Years)
+                        {
+                            <MudSelectItem T="int?" Value="y">FY@(y)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="5"><MudTextField T="string" @bind-Value="_name" Label="Name" Immediate="true" Required="true" /></MudItem>
+                <MudItem xs="6" sm="4"><MudDatePicker Label="Due" @bind-Date="_due" DateFormat="yyyy-MM-dd" Clearable="true" /></MudItem>
+                <MudItem xs="12"><MudTextField T="string" @bind-Value="_instructions" Label="Instructions for owners (optional)" Lines="3" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="Guid?" @bind-Value="_copyFrom" Label="Start each unit from (optional)" Clearable="true" Dense="true" HelperText="Owners begin with that version's amounts for their unit.">
+                        @foreach (var v in Versions)
+                        {
+                            <MudSelectItem T="Guid?" Value="v.Id">@v.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3">Owners</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Each owner fills in and submits their unit's budget. Leave a unit without an owner to keep it out of the cycle.</MudText>
+            <MudSimpleTable Dense="true">
+                <thead><tr><th>Org unit</th><th>Owner</th></tr></thead>
+                <tbody>
+                    @foreach (var o in OrgUnits)
+                    {
+                        <tr>
+                            <td>@o.Code @o.Name</td>
+                            <td style="min-width:240px">
+                                <MudSelect T="Guid?" Value="_owners.GetValueOrDefault(o.Id)" ValueChanged="v => _owners[o.Id] = v" Dense="true" Clearable="true" aria-label="@($"Owner of {o.Code}")" Placeholder="Not in this cycle">
+                                    @foreach (var e in Employees)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="OpenAsync" Disabled="@(_busy || _year is null || !_owners.Values.Any(v => v is not null))">Open cycle</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<int> Years { get; set; } = [];
+    [Parameter] public int? Year { get; set; }
+    [Parameter] public IReadOnlyList<BudgetVersionDto> Versions { get; set; } = [];
+    [Parameter] public IReadOnlyList<OrgUnitDto> OrgUnits { get; set; } = [];
+    [Parameter] public IReadOnlyList<EmployeeDto> Employees { get; set; } = [];
+
+    private int? _year;
+    private string? _name = "Annual plan";
+    private DateTime? _due;
+    private string? _instructions;
+    private Guid? _copyFrom;
+    private readonly Dictionary<Guid, Guid?> _owners = [];
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _year = Year;
+        _copyFrom = Versions.Where(v => v.IsLocked && v.FiscalYear == (Year ?? 0) - 1).Select(v => (Guid?)v.Id).FirstOrDefault();
+    }
+
+    private async Task OpenAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var cycle = await Cycles.OpenCycleAsync(new OpenPlanningCycleRequest(_year!.Value, _name ?? "",
+                _owners.Where(o => o.Value is not null).Select(o => new CycleAssignmentInput(o.Key, o.Value!.Value)).ToList(),
+                _instructions, _due is { } d ? DateOnly.FromDateTime(d) : null, null, _copyFrom));
+            MudDialog.Close(DialogResult.Ok(cycle));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or HttpRequestException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+        }
+
+        _busy = false;
+    }
+}

@@ -1,0 +1,151 @@
+@* Accounts (× org units) by fiscal period. Editable cells report changes to the page, which saves them together. *@
+<MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-3">
+    <table class="mud-table-root" style="border-collapse:collapse; width:100%; font-size:0.85rem" data-testid="budget-grid">
+        <caption class="wb-sr-only">@Caption</caption>
+        <thead>
+            <tr style="border-bottom:1px solid var(--mud-palette-lines-default)">
+                <th scope="col" style="text-align:left; padding:6px 8px; position:sticky; left:0; background:var(--mud-palette-surface); min-width:220px">Account</th>
+                @if (ShowOrg)
+                {
+                    <th scope="col" style="text-align:left; padding:6px 8px">Org</th>
+                }
+                @foreach (var p in Periods)
+                {
+                    <th scope="col" style="text-align:right; padding:6px 4px; white-space:nowrap">@p.Name</th>
+                }
+                <th scope="col" style="text-align:right; padding:6px 8px">Year</th>
+                @if (ShowPriorYear)
+                {
+                    <th scope="col" style="text-align:right; padding:6px 8px; white-space:nowrap">Last year</th>
+                }
+                @if (Editable && OnSpread.HasDelegate)
+                {
+                    <th scope="col"><span class="wb-sr-only">Actions</span></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (Lines.Count == 0)
+            {
+                <tr><td colspan="@(Periods.Count + 4)" style="padding:12px 8px" class="mud-text-secondary">No budget lines yet. @(Editable ? "Add an account to start." : "")</td></tr>
+            }
+            @foreach (var line in Lines)
+            {
+                <tr style="border-bottom:1px solid var(--mud-palette-table-lines)">
+                    <th scope="row" style="text-align:left; font-weight:400; padding:4px 8px; position:sticky; left:0; background:var(--mud-palette-surface)">@line.Account</th>
+                    @if (ShowOrg)
+                    {
+                        <td style="padding:4px 8px">@line.Org</td>
+                    }
+                    @for (var i = 0; i < Periods.Count; i++)
+                    {
+                        var index = i;
+                        <td style="text-align:right; padding:2px">
+                            @if (Editable)
+                            {
+                                <input value="@PlanningFormat.Cell(line.Amounts[index])" inputmode="decimal" aria-label="@($"{line.Account}{(line.Org is null ? "" : " " + line.Org)}, {Periods[index].Name}")"
+                                       @onchange="e => ChangedAsync(line, index, e.Value?.ToString())"
+                                       style="@($"width:86px; text-align:right; padding:3px 4px; font:inherit; color:inherit; background:transparent; border:1px solid {(_invalid.Contains((line.Key, index)) ? "var(--mud-palette-error)" : "var(--mud-palette-lines-inputs)")}; border-radius:4px")" />
+                            }
+                            else
+                            {
+                                @PlanningFormat.Whole(line.Amounts[index])
+                            }
+                        </td>
+                    }
+                    <td style="text-align:right; padding:4px 8px; font-weight:500">@PlanningFormat.Whole(line.Total)</td>
+                    @if (ShowPriorYear)
+                    {
+                        <td style="text-align:right; padding:4px 8px" class="mud-text-secondary">@(line.PriorYear is { } py ? PlanningFormat.Whole(py) : "—")</td>
+                    }
+                    @if (Editable && OnSpread.HasDelegate)
+                    {
+                        <td style="padding:2px 4px">
+                            <MudTooltip Text="Spread an annual amount">
+                                <MudIconButton Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" aria-label="@($"Spread {line.Account}")" OnClick="() => OnSpread.InvokeAsync(line)" />
+                            </MudTooltip>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+        @if (Lines.Count > 0)
+        {
+            <tfoot>
+                @foreach (var (label, sign, filter) in Totals())
+                {
+                    <tr style="border-top:1px solid var(--mud-palette-lines-default); font-weight:600">
+                        <th scope="row" style="text-align:left; padding:6px 8px; position:sticky; left:0; background:var(--mud-palette-surface)">@label</th>
+                        @if (ShowOrg)
+                        {
+                            <td></td>
+                        }
+                        @for (var i = 0; i < Periods.Count; i++)
+                        {
+                            var index = i;
+                            <td style="text-align:right; padding:6px 4px">@PlanningFormat.Whole(Lines.Where(filter).Sum(l => sign(l) * l.Amounts[index]))</td>
+                        }
+                        <td style="text-align:right; padding:6px 8px">@PlanningFormat.Whole(Lines.Where(filter).Sum(l => sign(l) * l.Total))</td>
+                        @if (ShowPriorYear)
+                        {
+                            <td style="text-align:right; padding:6px 8px">@PlanningFormat.Whole(Lines.Where(filter).Sum(l => sign(l) * (l.PriorYear ?? 0)))</td>
+                        }
+                        @if (Editable && OnSpread.HasDelegate)
+                        {
+                            <td></td>
+                        }
+                    </tr>
+                }
+            </tfoot>
+        }
+    </table>
+</MudPaper>
+
+@code {
+    private readonly HashSet<(string, int)> _invalid = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<BudgetPeriodDto> Periods { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public List<BudgetGridLine> Lines { get; set; } = [];
+
+    [Parameter]
+    public bool Editable { get; set; }
+
+    [Parameter]
+    public bool ShowOrg { get; set; }
+
+    [Parameter]
+    public bool ShowPriorYear { get; set; }
+
+    [Parameter]
+    public string Caption { get; set; } = "Budget by account and period";
+
+    /// <summary>A cell was changed to a valid amount (the line's amount is already updated).</summary>
+    [Parameter]
+    public EventCallback<(BudgetGridLine Line, int PeriodIndex)> OnCellChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<BudgetGridLine> OnSpread { get; set; }
+
+    private IEnumerable<(string Label, Func<BudgetGridLine, decimal> Sign, Func<BudgetGridLine, bool> Filter)> Totals()
+    {
+        yield return ("Revenue", _ => 1, l => l.IsRevenue);
+        yield return ("Expenses", _ => 1, l => !l.IsRevenue);
+        yield return ("Net (revenue less expenses)", l => l.IsRevenue ? 1 : -1, _ => true);
+    }
+
+    private async Task ChangedAsync(BudgetGridLine line, int index, string? text)
+    {
+        if (PlanningFormat.Parse(text) is not { } amount)
+        {
+            _invalid.Add((line.Key, index));
+            return;
+        }
+
+        _invalid.Remove((line.Key, index));
+        line.Amounts[index] = amount;
+        await OnCellChanged.InvokeAsync((line, index));
+    }
+}

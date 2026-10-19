@@ -1,0 +1,107 @@
+@* Spreads an annual amount over the year's periods: evenly, like last year, or by percentages. Optionally picks the account (and org unit). *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3" Style="min-width:min(520px, 90vw)">
+            @if (Accounts is not null)
+            {
+                <MudSelect T="Guid?" @bind-Value="_accountId" Label="Account" Required="true" Dense="true">
+                    @foreach (var a in Accounts)
+                    {
+                        <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else
+            {
+                <MudText><b>@Line</b></MudText>
+            }
+            @if (OrgUnits is not null)
+            {
+                <MudSelect T="Guid?" @bind-Value="_orgUnitId" Label="Org unit" Required="true" Dense="true">
+                    @foreach (var o in OrgUnits)
+                    {
+                        <MudSelectItem T="Guid?" Value="o.Id">@o.Code @o.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField T="string" @bind-Value="_annual" Label="Amount for the year" Immediate="true" AutoFocus="true"
+                          Error="@(PlanningFormat.Parse(_annual) is null)" ErrorText="Enter an amount in dollars and cents." HelperText="Replaces this row's amounts. Any leftover cents go to the first periods." />
+            <MudRadioGroup T="SpreadMethod" @bind-Value="_method">
+                <MudRadio T="SpreadMethod" Value="SpreadMethod.Evenly">Evenly</MudRadio>
+                <MudRadio T="SpreadMethod" Value="SpreadMethod.PriorYearPattern">Like last year (by its actuals each month)</MudRadio>
+                <MudRadio T="SpreadMethod" Value="SpreadMethod.Profile">By percentages</MudRadio>
+            </MudRadioGroup>
+            @if (_method == SpreadMethod.Profile)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Percent of the year in each period (adds up to @PlanningFormat.Percent(_profile.Sum()); it must be 100%).</MudText>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px">
+                    @for (var i = 0; i < Periods.Count; i++)
+                    {
+                        var index = i;
+                        <MudNumericField T="decimal" Value="_profile[index]" ValueChanged="v => _profile[index] = v" Label="@Periods[index].Name" Dense="true" Min="0" Max="100" HideSpinButtons="true" Variant="Variant.Outlined" />
+                    }
+                </div>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanSpread)" OnClick="Spread">Spread</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<BudgetPeriodDto> Periods { get; set; } = [];
+
+    /// <summary>The row being spread, when it's fixed.</summary>
+    [Parameter]
+    public string? Line { get; set; }
+
+    [Parameter]
+    public Guid? AccountId { get; set; }
+
+    [Parameter]
+    public Guid? OrgUnitId { get; set; }
+
+    [Parameter]
+    public decimal Annual { get; set; }
+
+    /// <summary>Set to choose the account in the dialog.</summary>
+    [Parameter]
+    public IReadOnlyList<AccountOptionDto>? Accounts { get; set; }
+
+    /// <summary>Set to choose the org unit in the dialog.</summary>
+    [Parameter]
+    public IReadOnlyList<OrgUnitDto>? OrgUnits { get; set; }
+
+    /// <summary>What the dialog returns: the account, org unit, annual amount, method and (for profiles) the percentages.</summary>
+    public sealed record Result(Guid AccountId, Guid? OrgUnitId, decimal Annual, SpreadMethod Method, IReadOnlyList<decimal>? Profile);
+
+    private Guid? _accountId;
+    private Guid? _orgUnitId;
+    private string? _annual;
+    private SpreadMethod _method = SpreadMethod.Evenly;
+    private decimal[] _profile = [];
+
+    protected override void OnInitialized()
+    {
+        (_accountId, _orgUnitId) = (AccountId, OrgUnitId);
+        _annual = Annual == 0 ? "" : Annual.ToString("0.##", CultureInfo.InvariantCulture);
+        var even = Math.Round(100m / Math.Max(1, Periods.Count), 2);
+        _profile = Enumerable.Repeat(even, Periods.Count).ToArray();
+        if (_profile.Length > 0)
+        {
+            _profile[^1] += 100m - _profile.Sum();
+        }
+    }
+
+    private bool CanSpread => _accountId is not null && (OrgUnits is null || _orgUnitId is not null) && PlanningFormat.Parse(_annual) is not null
+        && (_method != SpreadMethod.Profile || Math.Abs(_profile.Sum() - 100m) <= 0.01m);
+
+    private void Spread() => MudDialog.Close(DialogResult.Ok(new Result(_accountId!.Value, _orgUnitId, PlanningFormat.Parse(_annual)!.Value, _method,
+        _method == SpreadMethod.Profile ? _profile.ToList() : null)));
+}

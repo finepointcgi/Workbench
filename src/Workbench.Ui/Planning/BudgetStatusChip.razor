@@ -1,0 +1,13 @@
+@if (Version.IsLocked)
+{
+    <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Lock" Class="ma-0">Adopted</MudChip>
+}
+else
+{
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0">Draft</MudChip>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public BudgetVersionDto Version { get; set; } = default!;
+}

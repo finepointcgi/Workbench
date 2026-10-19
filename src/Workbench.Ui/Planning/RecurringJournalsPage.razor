@@ -1,0 +1,217 @@
+@page "/accounting/recurring"
+@inject IRecurringJournalService Recurring
+@inject IFiscalCalendarService Calendar
+@inject IChartOfAccountsService Chart
+@inject IPeopleService People
+@inject IProjectService Projects
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Recurring journals · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Recurring journals" Subtitle="Entries that repeat: rent, accruals, amortization. Each template creates its entries on schedule, as drafts to review or posted, and can reverse each one at the start of the next period.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" Disabled="_error is not null" data-testid="new-template">New recurring journal</MudButton>
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_templates is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4">
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+            <MudSelect T="Guid?" @bind-Value="_periodId" Label="Generate for" Dense="true" Clearable="true" Style="min-width:220px"
+                       HelperText="@(_periodId is null ? "Everything due up to today" : "Only occurrences dated in this period")">
+                @foreach (var p in _periods.OrderByDescending(p => p.Start))
+                {
+                    <MudSelectItem T="Guid?" Value="p.Id">@p.Name@(p.Status == FiscalPeriodState.Closed ? " (closed)" : "")</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="GenerateAsync" Disabled="_busy" data-testid="generate-due">Generate due entries</MudButton>
+            <MudSpacer />
+            <MudSwitch T="bool" Value="_settings?.AutoGenerate ?? false" ValueChanged="SetAutoAsync" Color="Color.Primary"
+                       Label="Generate automatically (every six hours)" />
+        </MudStack>
+        @if (_settings?.LastAutoRunUtc is { } last)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Last automatic run @last.ToLocalTime().ToString("yyyy-MM-dd HH:mm"): @_settings.LastAutoRunSummary</MudText>
+        }
+        @if (_last is not null)
+        {
+            <MudAlert Severity="@(_last.Skipped > 0 ? Severity.Warning : Severity.Success)" Dense="true" Class="mt-2" data-testid="generate-result">
+                @($"{_last.Posted} posted, {_last.Drafted} drafted, {_last.Reversed} reversed, {_last.Skipped} skipped, {_last.AlreadyDone} already done.")
+                @if (_last.Messages.Count > 0)
+                {
+                    <ul class="mb-0">
+                        @foreach (var m in _last.Messages)
+                        {
+                            <li>@m</li>
+                        }
+                    </ul>
+                }
+            </MudAlert>
+        }
+    </MudPaper>
+
+    @if (_templates.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4"><MudText Class="mud-text-secondary">No recurring journals yet. Create one for entries you make every month, quarter or year.</MudText></MudPaper>
+    }
+    else
+    {
+        <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-4">
+            <MudSimpleTable Dense="true" Hover="true" data-testid="recurring-templates">
+                <thead><tr><th>Name</th><th>Schedule</th><th style="text-align:right">Amount</th><th>Creates</th><th>Next</th><th style="text-align:right">Generated</th><th>Active</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _templates)
+                    {
+                        <tr>
+                            <td><b>@t.Name</b><br /><span class="mud-text-secondary">@t.Description</span></td>
+                            <td>@PlanningFormat.Schedule(t)</td>
+                            <td style="text-align:right">@PlanningFormat.Amount(t.AmountPerOccurrence)@(t.AmountMode == RecurringAmounts.Percentage ? " (split by %)" : "")</td>
+                            <td>@(t.PostAutomatically ? "Posted entries" : "Drafts to review")@(t.AutoReverse ? ", reversed next period" : "")</td>
+                            <td style="white-space:nowrap">@(t.NextDate is { } n ? AccountingFormat.Date(n) : "—")</td>
+                            <td style="text-align:right">@t.Generated</td>
+                            <td><MudSwitch T="bool" Value="t.IsActive" ValueChanged="v => SetActiveAsync(t, v)" Color="Color.Primary" aria-label="@($"{t.Name} active")" /></td>
+                            <td style="white-space:nowrap">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {t.Name}")" OnClick="() => EditAsync(t)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.EventNote" Size="Size.Small" aria-label="@($"Schedule of {t.Name}")" OnClick="() => ScheduleAsync(t)" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_schedule is null ? "History" : $"Schedule: {_scheduleName}")</MudText>
+    @if (_schedule is not null)
+    {
+        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _schedule = null" Class="mb-2">Back to history</MudButton>
+    }
+    <RecurringRunTable Runs="@(_schedule ?? _history)" ShowTemplate="_schedule is null" />
+}
+
+@code {
+    private IReadOnlyList<RecurringTemplateDto>? _templates;
+    private IReadOnlyList<RecurringRunDto> _history = [];
+    private IReadOnlyList<RecurringRunDto>? _schedule;
+    private string? _scheduleName;
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private RecurringSettingsDto? _settings;
+    private RecurringGenerationResultDto? _last;
+    private Guid? _periodId;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            _settings = await Recurring.GetSettingsAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _templates = await Recurring.ListTemplatesAsync();
+        _history = await Recurring.ListHistoryAsync();
+    }
+
+    private async Task GenerateAsync()
+    {
+        _busy = true;
+        try
+        {
+            _last = await Recurring.GenerateDueAsync(new GenerateRecurringRequest(_periodId));
+            _schedule = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private async Task SetAutoAsync(bool on)
+    {
+        try
+        {
+            _settings = await Recurring.SaveSettingsAsync(new SaveRecurringSettingsRequest(on));
+            Snackbar.Add(on ? "Due entries will be generated automatically." : "Automatic generation is off.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SetActiveAsync(RecurringTemplateDto t, bool active)
+    {
+        try
+        {
+            await Recurring.SetActiveAsync(t.Id, active);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ScheduleAsync(RecurringTemplateDto t)
+    {
+        try
+        {
+            _schedule = await Recurring.GetScheduleAsync(t.Id, 6);
+            _scheduleName = t.Name;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(RecurringTemplateDto? template)
+    {
+        IReadOnlyList<AccountDto> accounts;
+        IReadOnlyList<OrgUnitDto> orgs;
+        IReadOnlyList<ProjectDto> projects;
+        try
+        {
+            accounts = (await Chart.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren).ToList();
+            orgs = (await People.ListOrgUnitsAsync()).OrderBy(o => o.Code, StringComparer.Ordinal).ToList();
+            projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+            return;
+        }
+
+        var parameters = new DialogParameters<RecurringTemplateDialog>
+        {
+            { d => d.Template, template }, { d => d.Accounts, accounts }, { d => d.OrgUnits, orgs }, { d => d.Projects, projects },
+        };
+        var dialog = await Dialogs.ShowAsync<RecurringTemplateDialog>(template is null ? "New recurring journal" : $"Edit {template.Name}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+}

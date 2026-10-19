@@ -1,0 +1,99 @@
+@page "/planning/cycles"
+@inject IPlanningCycleService Cycles
+@inject IGlBudgetService Budgets
+@inject IFiscalCalendarService Calendar
+@inject IPeopleService People
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Planning cycles · Planning · Workbench</PageTitle>
+
+<PlanningHeader Title="Planning cycles" Subtitle="Collect next year's budget from each org unit's owner. Each submission goes through approval; approved budgets roll up into the cycle's corporate version, which is locked when you adopt it.">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAsync" Disabled="_cycles is null" data-testid="open-cycle">Open a cycle</MudButton>
+</PlanningHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_cycles is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_cycles.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No planning cycles yet. Open one for next fiscal year and assign an owner to each org unit.</MudText></MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="planning-cycles">
+            <thead><tr><th>Cycle</th><th>Year</th><th>Status</th><th>Not started</th><th>Drafting</th><th>Waiting</th><th>Returned</th><th>Approved</th><th>Due</th><th>Version</th></tr></thead>
+            <tbody>
+                @foreach (var c in _cycles)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"planning/cycles/{c.Id}")">@c.Name</MudLink></td>
+                        <td>FY@(c.FiscalYear)</td>
+                        <td>@(c.Status == PlanningCycleState.Open ? "Open" : "Adopted")</td>
+                        <td>@c.Count(SubmissionState.NotStarted)</td>
+                        <td>@c.Count(SubmissionState.Drafting)</td>
+                        <td>@c.Count(SubmissionState.Submitted)</td>
+                        <td>@c.Count(SubmissionState.Returned)</td>
+                        <td>@c.Count(SubmissionState.Approved) of @c.Submissions.Count</td>
+                        <td>@(c.DueDate is { } d ? AccountingFormat.Date(d) : "—")</td>
+                        <td><MudLink Href="@($"planning/budgets/{c.VersionId}")">@c.VersionName</MudLink></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<PlanningCycleDto>? _cycles;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _cycles = await Cycles.ListCyclesAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task OpenAsync()
+    {
+        DialogParameters<OpenCycleDialog> parameters;
+        try
+        {
+            var years = (await Calendar.ListPeriodsAsync()).Select(p => p.FiscalYear).Distinct().OrderBy(y => y).ToList();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var current = (await Calendar.GetPeriodForDateAsync(today))?.FiscalYear ?? years.LastOrDefault();
+            parameters = new DialogParameters<OpenCycleDialog>
+            {
+                { d => d.Years, years }, { d => d.Year, years.Contains(current + 1) ? current + 1 : years.LastOrDefault() },
+                { d => d.Versions, await Budgets.ListVersionsAsync() },
+                { d => d.OrgUnits, (await People.ListOrgUnitsAsync()).OrderBy(o => o.Code, StringComparer.Ordinal).ToList() },
+                { d => d.Employees, (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToList() },
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+            return;
+        }
+
+        var dialog = await Dialogs.ShowAsync<OpenCycleDialog>("Open a planning cycle", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: PlanningCycleDto cycle })
+        {
+            Navigation.NavigateTo($"planning/cycles/{cycle.Id}");
+        }
+    }
+}

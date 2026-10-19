@@ -1,0 +1,117 @@
+@page "/planning/budgets"
+@inject IGlBudgetService Budgets
+@inject IFiscalCalendarService Calendar
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Budgets · Planning · Workbench</PageTitle>
+
+<PlanningHeader Title="Budgets" Subtitle="Corporate budgets by fiscal year: an amount for each account, org unit and month. Adopting a version locks it; revise it in a copy.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CompareArrows" Href="planning/budget-vs-actual">Budget vs actual</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="_years.Count == 0" data-testid="new-version">New version</MudButton>
+</PlanningHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_versions is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudSelect T="int?" Value="_year" ValueChanged="SetYearAsync" Label="Fiscal year" Clearable="true" Dense="true" Style="max-width:200px" Class="mb-3">
+        @foreach (var y in _years)
+        {
+            <MudSelectItem T="int?" Value="y">FY@(y)</MudSelectItem>
+        }
+    </MudSelect>
+    @if (_versions.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No budget versions@(_year is null ? "" : $" for FY{_year}") yet. Create one, or open a planning cycle to collect each org unit's budget.</MudText></MudPaper>
+    }
+    else
+    {
+        <MudPaper Outlined="true" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Hover="true" data-testid="budget-versions">
+                <thead><tr><th>Version</th><th>Year</th><th>Kind</th><th>Status</th><th style="text-align:right">Revenue</th><th style="text-align:right">Expenses</th><th style="text-align:right">Net</th><th>Created</th></tr></thead>
+                <tbody>
+                    @foreach (var v in _versions)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"planning/budgets/{v.Id}")">@v.Name</MudLink>
+                                @if (v.PlanningCycleId is { } c)
+                                {
+                                    <MudLink Href="@($"planning/cycles/{c}")" Typo="Typo.caption" Class="ml-2">planning cycle</MudLink>
+                                }
+                            </td>
+                            <td>FY@(v.FiscalYear)</td>
+                            <td>@v.Kind</td>
+                            <td><BudgetStatusChip Version="v" /></td>
+                            <td style="text-align:right">@PlanningFormat.Whole(v.Revenue)</td>
+                            <td style="text-align:right">@PlanningFormat.Whole(v.Expense)</td>
+                            <td style="text-align:right">@PlanningFormat.Whole(v.Net)</td>
+                            <td style="white-space:nowrap">@v.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd") · @v.CreatedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private IReadOnlyList<BudgetVersionDto>? _versions;
+    private IReadOnlyList<BudgetVersionDto> _all = [];
+    private List<int> _years = [];
+    private int? _year;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _years = (await Calendar.ListPeriodsAsync()).Select(p => p.FiscalYear).Distinct().OrderByDescending(y => y).ToList();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _all = await Budgets.ListVersionsAsync();
+        _versions = _year is null ? _all : _all.Where(v => v.FiscalYear == _year).ToList();
+    }
+
+    private async Task SetYearAsync(int? year)
+    {
+        _year = year;
+        await LoadAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        var parameters = new DialogParameters<BudgetVersionDialog> { { d => d.Years, _years }, { d => d.Versions, _all }, { d => d.Year, _year } };
+        var dialog = await Dialogs.ShowAsync<BudgetVersionDialog>("New budget version", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: CreateBudgetVersionRequest request })
+        {
+            return;
+        }
+
+        try
+        {
+            var version = await Budgets.CreateVersionAsync(request);
+            Navigation.NavigateTo($"planning/budgets/{version.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

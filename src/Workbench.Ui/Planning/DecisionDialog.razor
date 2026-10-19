@@ -1,0 +1,24 @@
+@* A comment for approving (optional) or returning (required) a budget. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2" Style="min-width:min(420px, 90vw)">
+            <MudText>@(Approve ? "The budget rolls up into the corporate version once the last approver approves." : "The owner can change it and submit again.")</MudText>
+            <MudTextField T="string" @bind-Value="_comment" Label="@(Approve ? "Comment (optional)" : "What should change?")" Lines="3" Immediate="true" AutoFocus="true" Required="!Approve" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="@(Approve ? Color.Success : Color.Warning)" Variant="Variant.Filled" Disabled="@(!Approve && string.IsNullOrWhiteSpace(_comment))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_comment?.Trim() ?? string.Empty))">@(Approve ? "Approve" : "Return")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public bool Approve { get; set; }
+
+    private string? _comment;
+}

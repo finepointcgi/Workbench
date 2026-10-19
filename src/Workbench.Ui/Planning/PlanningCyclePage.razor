@@ -1,0 +1,171 @@
+@page "/planning/cycles/{CycleId:guid}"
+@inject IPlanningCycleService Cycles
+@inject IPeopleService People
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_cycle?.Name ?? "Planning cycle") · Planning · Workbench</PageTitle>
+
+<PlanningHeader Title="@(_cycle is null ? "Planning cycle" : $"FY{_cycle.FiscalYear} {_cycle.Name}")" Parent="Planning cycles" ParentHref="planning/cycles" Subtitle="@Subtitle">
+    @if (_cycle is { Status: PlanningCycleState.Open } c)
+    {
+        <MudButton Variant="Variant.Outlined" Href="@($"planning/budgets/{c.VersionId}")" StartIcon="@Icons.Material.Filled.TableChart">Corporate version</MudButton>
+        <MudTooltip Text="@(c.CanAdopt ? "Lock the corporate version" : "Every org unit's budget must be approved first")">
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Lock" OnClick="AdoptAsync" Disabled="!c.CanAdopt" data-testid="adopt-cycle">Adopt budget</MudButton>
+        </MudTooltip>
+    }
+</PlanningHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_cycle is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_cycle.Status == PlanningCycleState.Adopted)
+    {
+        <MudAlert Severity="Severity.Success" Icon="@Icons.Material.Filled.Lock" Dense="true" Class="mb-3">
+            Adopted @(_cycle.AdoptedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd")) by @_cycle.AdoptedBy. <MudLink Href="@($"planning/budgets/{_cycle.VersionId}")">@_cycle.VersionName</MudLink> is locked.
+        </MudAlert>
+    }
+
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3" data-testid="cycle-status">
+        @foreach (var state in Enum.GetValues<SubmissionState>())
+        {
+            <MudPaper Outlined="true" Class="pa-3" Style="min-width:150px">
+                <MudText Typo="Typo.h5">@_cycle.Count(state)</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@PlanningFormat.Label(state)</MudText>
+            </MudPaper>
+        }
+    </MudStack>
+
+    @if (_cycle.Instructions is { } instructions)
+    {
+        <MudText Typo="Typo.body2" Class="mb-3"><b>Instructions:</b> @instructions</MudText>
+    }
+
+    <MudPaper Outlined="true" Style="overflow-x:auto" Class="mb-3">
+        <MudSimpleTable Dense="true" Hover="true" data-testid="cycle-submissions">
+            <thead><tr><th>Org unit</th><th>Owner</th><th>Status</th><th style="text-align:right">Total</th><th>Submitted</th><th>Decided</th><th>Comment</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _cycle.Submissions)
+                {
+                    <tr>
+                        <td>@s.OrgUnitCode @s.OrgUnitName</td>
+                        <td style="min-width:200px">
+                            @if (_cycle.Status == PlanningCycleState.Open && s.Status != SubmissionState.Approved && _employees.Count > 0)
+                            {
+                                <MudSelect T="Guid" Value="s.OwnerEmployeeId" ValueChanged="v => AssignAsync(s.OrgUnitId, v)" Dense="true" aria-label="@($"Owner of {s.OrgUnitCode}")">
+                                    @foreach (var e in _employees)
+                                    {
+                                        <MudSelectItem T="Guid" Value="e.Id">@e.DisplayName</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                @s.OwnerName
+                            }
+                        </td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@PlanningFormat.Color(s.Status)" Class="ma-0">@PlanningFormat.Label(s.Status)</MudChip></td>
+                        <td style="text-align:right">@PlanningFormat.Whole(s.Total)</td>
+                        <td style="white-space:nowrap">@(s.SubmittedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd") ?? "—")</td>
+                        <td style="white-space:nowrap">@(s.DecidedAtUtc is { } d ? $"{d.ToLocalTime():yyyy-MM-dd} · {s.DecidedBy}" : "—")</td>
+                        <td>@s.DecisionComment</td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"planning/submissions/{s.Id}")">Open</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (_cycle.Status == PlanningCycleState.Open)
+    {
+        var missing = _orgs.Where(o => _cycle.Submissions.All(s => s.OrgUnitId != o.Id)).ToList();
+        @if (missing.Count > 0 && _employees.Count > 0)
+        {
+            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudSelect T="Guid?" @bind-Value="_addOrg" Label="Add an org unit" Dense="true" Style="min-width:200px">
+                    @foreach (var o in missing)
+                    {
+                        <MudSelectItem T="Guid?" Value="o.Id">@o.Code @o.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_addOwner" Label="Owner" Dense="true" Style="min-width:200px">
+                    @foreach (var e in _employees)
+                    {
+                        <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" Disabled="_addOrg is null || _addOwner is null" OnClick="() => AssignAsync(_addOrg!.Value, _addOwner!.Value)">Add</MudButton>
+            </MudStack>
+        }
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid CycleId { get; set; }
+
+    private PlanningCycleDto? _cycle;
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private IReadOnlyList<OrgUnitDto> _orgs = [];
+    private Guid? _addOrg;
+    private Guid? _addOwner;
+    private string? _error;
+    private bool _forbidden;
+
+    private string? Subtitle => _cycle is null ? null
+        : $"Opened {_cycle.OpenedAtUtc.ToLocalTime():yyyy-MM-dd} by {_cycle.OpenedBy}{(_cycle.DueDate is { } d ? $" · due {AccountingFormat.Date(d)}" : "")} · rolls up into {_cycle.VersionName}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _cycle = await Cycles.GetCycleAsync(CycleId);
+            _employees = (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+            _orgs = (await People.ListOrgUnitsAsync()).OrderBy(o => o.Code, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task AssignAsync(Guid orgUnitId, Guid employeeId)
+    {
+        try
+        {
+            _cycle = await Cycles.AssignOwnerAsync(CycleId, new CycleAssignmentInput(orgUnitId, employeeId));
+            (_addOrg, _addOwner) = (null, null);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task AdoptAsync()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Adopt the budget?",
+            $"{_cycle!.VersionName} becomes FY{_cycle.FiscalYear}'s adopted budget and is locked. The cycle closes.", yesText: "Adopt and lock", cancelText: "Cancel");
+        if (ok != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _cycle = await Cycles.AdoptAsync(CycleId);
+            Snackbar.Add($"{_cycle.VersionName} is adopted.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

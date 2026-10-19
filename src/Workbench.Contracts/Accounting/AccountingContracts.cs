@@ -10,7 +10,7 @@ public enum BalanceSide { Debit, Credit }
 
 public enum CostClass { None, DirectLabor, DirectOdc, IndirectLabor, Fringe, Overhead, GeneralAndAdministrative, Unallowable, Other, AppliedBurden }
 
-public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal, Asset, Depreciation, Bank, Revenue, Inventory, Manufacturing }
+public enum JournalEntrySource { Manual, Timesheet, Odc, Payroll, Billing, AP, Allocation, Reversal, Asset, Depreciation, Bank, Revenue, Inventory, Manufacturing, Recurring }
 
 public enum JournalEntryState { Draft, Posted, Reversed }
 

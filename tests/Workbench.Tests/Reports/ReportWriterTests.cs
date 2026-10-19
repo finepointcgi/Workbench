@@ -22,10 +22,11 @@ public sealed class ReportWriterTests
         var pm = await kit.As(Owner).Writer.ListSourcesAsync();
         Assert.Contains(pm, s => s.Key == ReportSourceKeys.Invoices);
         Assert.Contains(pm.Single(s => s.Key == ReportSourceKeys.ProjectsWbs).Fields, f => f.Key == "contract_ceiling");
-        Assert.DoesNotContain(pm, s => s.Key is ReportSourceKeys.GlLines or ReportSourceKeys.ApBills);
+        Assert.DoesNotContain(pm, s => s.Key is ReportSourceKeys.GlLines or ReportSourceKeys.ApBills or ReportSourceKeys.GlBudgets);
 
         var finance = await kit.As(Finance).Writer.ListSourcesAsync();
-        Assert.Equal(7, finance.Count);
+        Assert.Equal(8, finance.Count);
+        Assert.Contains(finance, s => s.Key == ReportSourceKeys.GlBudgets);
         Assert.Contains(finance.Single(s => s.Key == ReportSourceKeys.TimeEntries).Fields, f => f.Key == "labor_cost" && f.Restricted);
     }
 

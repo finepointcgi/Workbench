@@ -1,0 +1,249 @@
+@page "/planning/submissions/{SubmissionId:guid}"
+@layout Workbench.Ui.Layout.MainLayout
+@inject IPlanningCycleService Cycles
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_s is null ? "Budget" : $"{_s.Summary.OrgUnitCode} budget") · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+    <MudStack Spacing="0">
+        <MudLink Href="planning/my-budget" Typo="Typo.caption">My budgets</MudLink>
+        <MudText Typo="Typo.h4" HtmlTag="h1">@(_s is null ? "Budget" : $"{_s.Summary.OrgUnitCode} {_s.Summary.OrgUnitName}: FY{_s.Summary.FiscalYear} budget")</MudText>
+    </MudStack>
+    <MudSpacer />
+    @if (_s is not null)
+    {
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+            @if (_s.CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CallSplit" OnClick="() => SpreadAsync(null)">Spread a year</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="_pending.Count == 0" data-testid="save-submission">
+                    Save@(_pending.Count > 0 ? $" ({_pending.Count})" : "")
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="_s.Rows.Count == 0" data-testid="submit-budget">Submit for approval</MudButton>
+            }
+            @if (_s.CanRecall)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" OnClick="RecallAsync">Recall</MudButton>
+            }
+            @if (_s.CanDecide)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.KeyboardReturn" OnClick="() => DecideAsync(false)">Return for changes</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="() => DecideAsync(true)" data-testid="approve-budget">Approve</MudButton>
+            }
+        </MudStack>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" Class="mt-3">@_error</MudAlert>
+}
+else if (_s is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudText Class="mud-text-secondary mb-3">
+        @_s.Summary.CycleName · owner @_s.Summary.OwnerName@(_s.Summary.DueDate is { } due ? $" · due {AccountingFormat.Date(due)}" : "")
+    </MudText>
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudChip T="string" Color="@PlanningFormat.Color(_s.Summary.Status)" Class="ma-0" data-testid="submission-status">@PlanningFormat.Label(_s.Summary.Status)</MudChip>
+        @if (_s.Summary.DecidedBy is { } by && _s.Summary.Status is SubmissionState.Approved or SubmissionState.Returned)
+        {
+            <MudText Typo="Typo.body2">by @by on @_s.Summary.DecidedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd")</MudText>
+        }
+    </MudStack>
+    @if (_s.Summary.Status == SubmissionState.Returned && _s.Summary.DecisionComment is { } why)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" Dense="true">Returned for changes: @why</MudAlert>
+    }
+    else if (_s.Summary.Status == SubmissionState.Approved)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-3" Dense="true">Approved and rolled up into the corporate budget.@(_s.Summary.DecisionComment is { } c ? $" “{c}”" : "")</MudAlert>
+    }
+    else if (_s.Summary.Status == SubmissionState.Submitted)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" Dense="true">Waiting for approval@(_s.CanDecide ? " from you" : "")@(_s.CanRecall ? ". Recall it to make changes" : "").</MudAlert>
+    }
+    @if (_s.Instructions is { } instructions)
+    {
+        <MudText Typo="Typo.body2" Class="mb-3"><b>Instructions from Finance:</b> @instructions</MudText>
+    }
+
+    @if (_s.CanEdit)
+    {
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+            <MudSelect T="Guid?" @bind-Value="_newAccount" Label="Add an account" Dense="true" Style="min-width:280px">
+                @foreach (var a in _s.Accounts.Where(a => _lines.All(l => l.AccountId != a.Id)))
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRow" Disabled="_newAccount is null">Add row</MudButton>
+        </MudStack>
+    }
+    <BudgetGrid Periods="_s.Periods" Lines="_lines" Editable="_s.CanEdit" ShowPriorYear="true" OnCellChanged="Changed" OnSpread="l => SpreadAsync(l)"
+                Caption="@($"{_s.Summary.OrgUnitCode} budget by account and month")" />
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">“Last year” is the unit's posted actuals for the prior fiscal year. Revenue and expenses are both entered as positive amounts.</MudText>
+}
+
+@code {
+    [Parameter]
+    public Guid SubmissionId { get; set; }
+
+    private BudgetSubmissionDto? _s;
+    private List<BudgetGridLine> _lines = [];
+    private readonly Dictionary<(Guid, Guid), decimal> _pending = [];
+    private Guid? _newAccount;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            Show(await Cycles.GetSubmissionAsync(SubmissionId));
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Show(BudgetSubmissionDto s)
+    {
+        _s = s;
+        _pending.Clear();
+        _lines = s.Rows.Select(r => new BudgetGridLine(r.AccountId, null, $"{r.AccountNumber} {r.AccountName}", null, r.AccountType == AccountKind.Revenue, r.Amounts.ToArray(),
+            s.PriorYearActuals.TryGetValue(r.AccountId, out var py) ? py : null)).ToList();
+    }
+
+    private void Changed((BudgetGridLine Line, int PeriodIndex) change) =>
+        _pending[(change.Line.AccountId, _s!.Periods[change.PeriodIndex].Id)] = change.Line.Amounts[change.PeriodIndex];
+
+    private void AddRow()
+    {
+        var a = _s!.Accounts.First(x => x.Id == _newAccount);
+        _lines.Add(new BudgetGridLine(a.Id, null, $"{a.Number} {a.Name}", null, a.Type == AccountKind.Revenue, new decimal[_s.Periods.Count],
+            _s.PriorYearActuals.TryGetValue(a.Id, out var py) ? py : null));
+        _newAccount = null;
+    }
+
+    private async Task<bool> SavePendingAsync()
+    {
+        if (_pending.Count == 0)
+        {
+            return true;
+        }
+
+        try
+        {
+            Show(await Cycles.SaveSubmissionCellsAsync(SubmissionId, new SaveSubmissionCellsRequest(_pending.Select(p => new SubmissionCellInput(p.Key.Item1, p.Key.Item2, p.Value)).ToList())));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+            return false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (await SavePendingAsync())
+        {
+            Snackbar.Add("Saved.", Severity.Success);
+        }
+    }
+
+    private async Task SpreadAsync(BudgetGridLine? line)
+    {
+        if (!await SavePendingAsync())
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<SpreadDialog> { { d => d.Periods, _s!.Periods } };
+        if (line is null)
+        {
+            parameters.Add(d => d.Accounts, _s.Accounts);
+        }
+        else
+        {
+            parameters.Add(d => d.Line, line.Account);
+            parameters.Add(d => d.AccountId, line.AccountId);
+            parameters.Add(d => d.Annual, line.Total);
+        }
+
+        var dialog = await Dialogs.ShowAsync<SpreadDialog>("Spread an annual amount", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: SpreadDialog.Result r })
+        {
+            return;
+        }
+
+        try
+        {
+            Show(await Cycles.SpreadSubmissionAsync(SubmissionId, new SpreadSubmissionRequest(r.AccountId, r.Annual, r.Method, r.Profile)));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!await SavePendingAsync())
+        {
+            return;
+        }
+
+        try
+        {
+            Show(await Cycles.SubmitAsync(SubmissionId));
+            Snackbar.Add("Submitted for approval.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task RecallAsync()
+    {
+        try
+        {
+            Show(await Cycles.RecallAsync(SubmissionId));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task DecideAsync(bool approve)
+    {
+        var parameters = new DialogParameters<DecisionDialog> { { d => d.Approve, approve } };
+        var dialog = await Dialogs.ShowAsync<DecisionDialog>(approve ? "Approve this budget" : "Return for changes", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string comment })
+        {
+            return;
+        }
+
+        try
+        {
+            var request = new DecideSubmissionRequest(string.IsNullOrWhiteSpace(comment) ? null : comment);
+            Show(approve ? await Cycles.ApproveAsync(SubmissionId, request) : await Cycles.ReturnAsync(SubmissionId, request));
+            Snackbar.Add(approve ? "Approved." : "Returned to the owner.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

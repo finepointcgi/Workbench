@@ -1,0 +1,193 @@
+@* Budget against posted actuals for a period and the year to date: the income statement, by org unit or by indirect pool. *@
+@inject IGlBudgetService Budgets
+@inject IBudgetReportService Reports
+@inject IPeopleService People
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudSelect T="Guid?" Value="_versionId" ValueChanged="v => SetAsync(() => _versionId = v)" Label="Budget version" Dense="true" Style="min-width:220px" data-testid="bva-version">
+        @foreach (var v in _versions)
+        {
+            <MudSelectItem T="Guid?" Value="v.Id">@v.Name@(v.IsLocked ? " (adopted)" : "")</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="BudgetReport" Value="_report" ValueChanged="v => SetAsync(() => _report = v)" Label="View" Dense="true" Style="min-width:200px">
+        <MudSelectItem T="BudgetReport" Value="BudgetReport.IncomeStatement">Income statement</MudSelectItem>
+        <MudSelectItem T="BudgetReport" Value="BudgetReport.ByOrgUnit">By org unit</MudSelectItem>
+        <MudSelectItem T="BudgetReport" Value="BudgetReport.ByPool">By indirect pool</MudSelectItem>
+    </MudSelect>
+    @if (_report != BudgetReport.ByOrgUnit)
+    {
+        <MudSelect T="Guid?" Value="_orgUnitId" ValueChanged="v => SetAsync(() => _orgUnitId = v)" Label="Org unit" Clearable="true" Dense="true" Style="min-width:180px">
+            @foreach (var o in _orgs)
+            {
+                <MudSelectItem T="Guid?" Value="o.Id">@o.Code @o.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_result is null">Export CSV</MudButton>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+}
+else if (_versions.Count == 0 && !_loading)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">FY@(Period.FiscalYear) has no budget version yet. Create one under Finance › Planning › Budgets.</MudText></MudPaper>
+}
+else if (_result is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @foreach (var note in _result.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        @_result.Title for @_result.FiscalPeriodName (year to date from @AccountingFormat.Date(_result.YearStart)). Variances are favourable when positive: revenue over budget, or cost under it.
+    </MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="budget-vs-actual">
+            <thead>
+                <tr>
+                    <th rowspan="2">Line</th>
+                    <th colspan="4" style="text-align:center; border-left:1px solid var(--mud-palette-lines-default)">@_result.FiscalPeriodName</th>
+                    <th colspan="4" style="text-align:center; border-left:1px solid var(--mud-palette-lines-default)">Year to date</th>
+                    <th rowspan="2" style="text-align:right; border-left:1px solid var(--mud-palette-lines-default)">Annual budget</th>
+                </tr>
+                <tr>
+                    @for (var i = 0; i < 2; i++)
+                    {
+                        <th style="text-align:right; border-left:1px solid var(--mud-palette-lines-default)">Budget</th>
+                        <th style="text-align:right">Actual</th>
+                        <th style="text-align:right">Variance</th>
+                        <th style="text-align:right">%</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var section in _result.Lines.GroupBy(l => l.Section))
+                {
+                    <tr><th colspan="10" style="text-align:left; background:var(--mud-palette-background-gray)">@section.Key</th></tr>
+                    @foreach (var l in section)
+                    {
+                        var f = l.Figures;
+                        <tr style="@(l.IsTotal ? "font-weight:600" : "")">
+                            <td>@(l.Code is null || _report == BudgetReport.ByOrgUnit ? "" : l.Code + " ")@l.Label</td>
+                            <td style="text-align:right; border-left:1px solid var(--mud-palette-lines-default)">@PlanningFormat.Amount(f.PeriodBudget)</td>
+                            <td style="text-align:right">@PlanningFormat.Amount(f.PeriodActual)</td>
+                            <td style="text-align:right" class="@PlanningFormat.VarianceClass(f.PeriodVariance)">@PlanningFormat.Amount(f.PeriodVariance)</td>
+                            <td style="text-align:right" class="@PlanningFormat.VarianceClass(f.PeriodVariance)">@PlanningFormat.Percent(f.PeriodVariancePercent)</td>
+                            <td style="text-align:right; border-left:1px solid var(--mud-palette-lines-default)">@PlanningFormat.Amount(f.YtdBudget)</td>
+                            <td style="text-align:right">@PlanningFormat.Amount(f.YtdActual)</td>
+                            <td style="text-align:right" class="@PlanningFormat.VarianceClass(f.YtdVariance)">@PlanningFormat.Amount(f.YtdVariance)</td>
+                            <td style="text-align:right" class="@PlanningFormat.VarianceClass(f.YtdVariance)">@PlanningFormat.Percent(f.YtdVariancePercent)</td>
+                            <td style="text-align:right; border-left:1px solid var(--mud-palette-lines-default)">@PlanningFormat.Amount(f.AnnualBudget)</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public FiscalPeriodDto Period { get; set; } = default!;
+
+    [Parameter]
+    public BudgetReport Initial { get; set; } = BudgetReport.IncomeStatement;
+
+    private IReadOnlyList<BudgetVersionDto> _versions = [];
+    private IReadOnlyList<OrgUnitDto> _orgs = [];
+    private BudgetVsActualDto? _result;
+    private Guid? _versionId;
+    private Guid? _orgUnitId;
+    private BudgetReport _report;
+    private int? _year;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _report = Initial;
+        try
+        {
+            _orgs = (await People.ListOrgUnitsAsync()).OrderBy(o => o.Code, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            // The org filter is optional.
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (_year != Period.FiscalYear)
+            {
+                _year = Period.FiscalYear;
+                _versions = await Budgets.ListVersionsAsync(Period.FiscalYear);
+                _versionId = (_versions.Where(v => v.IsLocked && v.Kind != BudgetVersionKind.Forecast).MaxBy(v => v.AdoptedAtUtc) ?? _versions.FirstOrDefault())?.Id;
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+
+        _loading = false;
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private BudgetVsActualQuery Query => new(_versionId!.Value, Period.Id, _report == BudgetReport.ByOrgUnit ? null : _orgUnitId);
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        if (_versionId is null)
+        {
+            _result = null;
+            return;
+        }
+
+        try
+        {
+            _result = _report switch
+            {
+                BudgetReport.ByOrgUnit => await Reports.GetByOrgUnitAsync(Query),
+                BudgetReport.ByPool => await Reports.GetByPoolAsync(Query),
+                _ => await Reports.GetIncomeStatementAsync(Query),
+            };
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            await AccountingFormat.DownloadAsync(JS, await Reports.ExportCsvAsync(_report, Query));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(AccountingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

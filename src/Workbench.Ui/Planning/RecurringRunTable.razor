@@ -1,0 +1,56 @@
+@* Occurrences of recurring journals: the entry each created (and its reversal), or why it was skipped. *@
+@if (Runs.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">Nothing generated yet.</MudText></MudPaper>
+}
+else
+{
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="recurring-runs">
+            <thead><tr>@if (ShowTemplate) { <th>Recurring journal</th> }<th>#</th><th>Date</th><th>Period</th><th>Status</th><th>Entry</th><th>Reversal</th><th style="text-align:right">Amount</th><th>Notes</th></tr></thead>
+            <tbody>
+                @foreach (var r in Runs)
+                {
+                    <tr>
+                        @if (ShowTemplate)
+                        {
+                            <td>@r.TemplateName</td>
+                        }
+                        <td>@r.Occurrence</td>
+                        <td style="white-space:nowrap">@AccountingFormat.Date(r.ScheduledDate)</td>
+                        <td>@r.PeriodName</td>
+                        <td>
+                            @switch (r.Status)
+                            {
+                                case RecurringRunState.Posted:
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0">Posted</MudChip>
+                                    break;
+                                case RecurringRunState.Draft:
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ma-0">Draft</MudChip>
+                                    break;
+                                case RecurringRunState.Skipped:
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ma-0">Skipped</MudChip>
+                                    break;
+                                default:
+                                    <span class="mud-text-secondary">@(r.ScheduledDate > DateOnly.FromDateTime(DateTime.Today) ? "Upcoming" : "Due")</span>
+                                    break;
+                            }
+                        </td>
+                        <td>@if (r.JournalEntryId is { } e) { <MudLink Href="@($"accounting/journal/{e}")">@r.EntryNumber</MudLink> }</td>
+                        <td>@if (r.ReversalEntryId is { } rv) { <MudLink Href="@($"accounting/journal/{rv}")">@r.ReversalNumber</MudLink> }</td>
+                        <td style="text-align:right">@PlanningFormat.Amount(r.Amount)</td>
+                        <td>@r.Message</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RecurringRunDto> Runs { get; set; } = [];
+
+    [Parameter]
+    public bool ShowTemplate { get; set; } = true;
+}

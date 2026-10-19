@@ -1,0 +1,116 @@
+@* Provisional, budgeted and actual rates side by side: budgeted rates come from a budget version's pool and base budgets. *@
+@using Workbench.Contracts.Planning
+@using Workbench.Ui.Planning
+@inject IBudgetReportService Reports
+@inject IGlBudgetService Budgets
+
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudSelect T="int" Value="_year" ValueChanged="SetYearAsync" Label="Fiscal year" Dense="true" Style="max-width:160px">
+        @foreach (var y in IndirectRatesFormat.FiscalYears(Periods))
+        {
+            <MudSelectItem T="int" Value="y">FY@(y)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="Guid?" Value="_versionId" ValueChanged="SetVersionAsync" Label="Budget version" Dense="true" Style="min-width:220px" Clearable="true">
+        @foreach (var v in _versions)
+        {
+            <MudSelectItem T="Guid?" Value="v.Id">@v.Name@(v.IsLocked ? " (adopted)" : "")</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSpacer />
+    <MudLink Href="planning/budget-vs-actual" Typo="Typo.body2">Pool budget vs actual</MudLink>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_rates is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @foreach (var note in _rates.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        Budgeted rate = the pool's budgeted cost over its budgeted base@(_rates.VersionName is { } n ? $" ({n})" : ""), through the same fringe → overhead → G&A cascade as actual rates.
+        Actual is the posted ledger through @_rates.ActualThrough.
+    </MudText>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="budgeted-rates">
+            <thead>
+                <tr><th>Pool</th><th style="text-align:right">Provisional</th><th style="text-align:right">Budgeted</th><th style="text-align:right">Target</th><th style="text-align:right">Actual so far</th>
+                    <th style="text-align:right">Budgeted − provisional</th><th style="text-align:right">Actual − budgeted</th>
+                    <th style="text-align:right">Budgeted pool</th><th style="text-align:right">Budgeted base</th><th style="text-align:right">Actual pool</th><th style="text-align:right">Actual base</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _rates.Pools)
+                {
+                    <tr>
+                        <td>@p.Name</td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(p.ProvisionalRate)</td>
+                        <td style="text-align:right"><b>@IndirectRatesFormat.Percent(p.BudgetedRate)</b></td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(p.TargetRate)</td>
+                        <td style="text-align:right">@IndirectRatesFormat.Percent(p.ActualRate)</td>
+                        <td style="text-align:right" class="@(p.BudgetedVsProvisional > 0 ? "mud-error-text" : "")">@IndirectRatesFormat.Percent(p.BudgetedVsProvisional)</td>
+                        <td style="text-align:right" class="@(p.ActualVsBudgeted > 0 ? "mud-error-text" : "")">@IndirectRatesFormat.Percent(p.ActualVsBudgeted)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.BudgetedPoolCost)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.BudgetedBase)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.ActualPoolCost)</td>
+                        <td style="text-align:right">@AccountingFormat.Amount(p.ActualBase)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">A rate above provisional (in red) means billing at provisional rates would under-recover indirect cost.</MudText>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<FiscalPeriodDto> Periods { get; set; } = [];
+
+    private int _year;
+    private Guid? _versionId;
+    private IReadOnlyList<BudgetVersionDto> _versions = [];
+    private BudgetedRatesDto? _rates;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _year = IndirectRatesFormat.DefaultYear(Periods);
+        await SetYearAsync(_year);
+    }
+
+    private async Task SetYearAsync(int year)
+    {
+        _year = year;
+        try
+        {
+            _versions = await Budgets.ListVersionsAsync(year);
+            _rates = await Reports.GetBudgetedRatesAsync(year);
+            _versionId = _rates.VersionId;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+
+    private async Task SetVersionAsync(Guid? versionId)
+    {
+        _versionId = versionId;
+        try
+        {
+            _rates = await Reports.GetBudgetedRatesAsync(_year, versionId);
+        }
+        catch (Exception ex)
+        {
+            _error = AccountingFormat.Error(ex);
+        }
+    }
+}
