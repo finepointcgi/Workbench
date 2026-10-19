@@ -6,8 +6,11 @@ set -euo pipefail
 DB="${1:-workbench_load_run}"
 CONTAINER="${PG_CONTAINER:-$(docker ps --format "{{.Names}} {{.Ports}}" | grep -m1 "0.0.0.0:5444->" | cut -d" " -f1)}"
 OUT="$(cd "$(dirname "$0")" && pwd)/fixtures.json"
-docker exec -i "$CONTAINER" psql -U workbench -d "$DB" -At <<'SQL' > "$OUT"
-WITH today AS (SELECT CURRENT_DATE AS d),
+# The local date, not the database clock (UTC): in the evening US time CURRENT_DATE is already tomorrow, and
+# tomorrow's timesheet period may not have started.
+TODAY="${TODAY:-$(date +%F)}"
+docker exec -i "$CONTAINER" psql -U workbench -d "$DB" -At -v today="$TODAY" <<'SQL' > "$OUT"
+WITH today AS (SELECT DATE :'today' AS d),
 current_period AS (SELECT p.* FROM "FiscalPeriod" p, today WHERE p."Start" <= today.d AND p."End" >= today.d),
 last_period AS (SELECT p.* FROM "FiscalPeriod" p, current_period c WHERE p."End" < c."Start" ORDER BY p."Start" DESC LIMIT 1),
 staff AS (

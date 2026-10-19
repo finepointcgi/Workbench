@@ -35,6 +35,26 @@ public sealed class ItemServiceTests
     }
 
     [Fact]
+    public async Task A_milestone_has_one_date_and_updates_keep_the_flag_unless_changed()
+    {
+        var sheetId = await NewSheetAsync();
+        var day = new DateOnly(2026, 11, 6);
+        var created = await _items.CreateAsync(sheetId, new CreateItemRequest("Design approved", Start: day.AddDays(-3), Finish: day, IsMilestone: true));
+        Assert.True(created.IsMilestone);
+        Assert.Equal((day, day), (created.Start, created.Finish)); // pinned to its finish
+
+        var renamed = await _items.UpdateAsync(sheetId, created.Id, new UpdateItemRequest("Design signed off", day, day, null, created.Values));
+        Assert.True(renamed.IsMilestone); // null leaves it as it is
+
+        var task = await _items.UpdateAsync(sheetId, created.Id, new UpdateItemRequest("Design work", day.AddDays(-5), day, null, created.Values, IsMilestone: false));
+        Assert.False(task.IsMilestone);
+        Assert.Equal(day.AddDays(-5), task.Start);
+
+        var startOnly = await _items.CreateAsync(sheetId, new CreateItemRequest("Go-live", Start: day, IsMilestone: true));
+        Assert.Equal((day, day), (startOnly.Start, startOnly.Finish));
+    }
+
+    [Fact]
     public async Task Move_under_descendant_is_rejected()
     {
         var sheetId = await NewSheetAsync();

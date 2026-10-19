@@ -255,7 +255,7 @@ public sealed class ProjectHubService(
         var today = Today;
         var open = leaves.Where(i => !IsDone(i)).ToList();
         var milestones = open
-            .Where(i => i.Start is not null && i.Start == i.Finish)
+            .Where(i => i.IsMilestone && i.Finish is not null)
             .OrderBy(i => i.Finish)
             .Take(5)
             .Select(i => new ProjectMilestoneDto(i.Id, i.Title, i.Finish!.Value, i.Finish < today))

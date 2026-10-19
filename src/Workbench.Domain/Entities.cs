@@ -72,4 +72,7 @@ public sealed class Item : Entity
 
     /// <summary>Custom cell values keyed by column id, stored as JSON.</summary>
     public Dictionary<string, string?> Values { get; set; } = [];
+
+    /// <summary>A milestone: a point in time (a deliverable, a review, a decision) with no duration, so Start = Finish.</summary>
+    public bool IsMilestone { get; set; }
 }

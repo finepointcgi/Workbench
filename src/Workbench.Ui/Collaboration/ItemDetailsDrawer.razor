@@ -23,6 +23,10 @@
                         <tr><th scope="row">Start</th><td>@(item.Start?.ToString("MMM d, yyyy") ?? "—")</td></tr>
                         <tr><th scope="row">Finish</th><td>@(item.Finish?.ToString("MMM d, yyyy") ?? "—")</td></tr>
                     }
+                    @if (item.IsMilestone)
+                    {
+                        <tr><th scope="row">Milestone</th><td data-testid="details-milestone">◆ Yes, a key date</td></tr>
+                    }
                     @foreach (var column in Sheet.Columns)
                     {
                         <tr><th scope="row">@column.Name</th><td style="overflow-wrap:anywhere">@Display(item, column)</td></tr>

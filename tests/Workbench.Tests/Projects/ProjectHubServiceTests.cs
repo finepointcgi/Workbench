@@ -190,7 +190,7 @@ public sealed class ProjectHubServiceTests
                 new Item { SheetId = seeded.SheetId, ParentId = parent.Id, Title = "Late task", Order = 1, Finish = new DateOnly(2020, 1, 1) },
                 new Item { SheetId = seeded.SheetId, ParentId = parent.Id, Title = "Blocked task", Order = 2, Finish = new DateOnly(2099, 1, 1), Values = { [key] = "Blocked" } },
                 new Item { SheetId = seeded.SheetId, ParentId = parent.Id, Title = "Done task", Order = 3, Finish = new DateOnly(2020, 1, 1), Values = { [key] = "Done" } },
-                new Item { SheetId = seeded.SheetId, ParentId = parent.Id, Title = "Design review", Order = 4, Start = new DateOnly(2099, 2, 1), Finish = new DateOnly(2099, 2, 1) });
+                new Item { SheetId = seeded.SheetId, ParentId = parent.Id, Title = "Design review", Order = 4, Start = new DateOnly(2099, 2, 1), Finish = new DateOnly(2099, 2, 1), IsMilestone = true });
             await db.SaveChangesAsync();
         }
 

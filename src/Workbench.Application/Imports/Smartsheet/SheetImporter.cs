@@ -272,6 +272,9 @@ public abstract class SheetImporter : IImporter
 
                 var start = Date(row, Field("Start"));
                 var finish = Date(row, Field("Finish"));
+                // Smartsheet's milestones are rows with a duration of 0.
+                var isMilestone = Field("Duration") is { } milestoneColumn && row.Cells.TryGetValue(milestoneColumn, out var milestoneCell)
+                    && (milestoneCell.DurationDays ?? (milestoneCell.Value is { } mv ? SmartsheetSources.ParseDuration(mv) : null)) == 0;
                 if (finish is null && start is { } s && Field("Duration") is { } durationColumn && row.Cells.TryGetValue(durationColumn, out var durationCell)
                     && (durationCell.DurationDays ?? (durationCell.Value is { } dv ? SmartsheetSources.ParseDuration(dv) : null)) is { } days && days > 0)
                 {
@@ -309,7 +312,8 @@ public abstract class SheetImporter : IImporter
                     var changed = new List<string>();
                     if (item.Title != title) changed.Add("title");
                     if (item.Start != start) changed.Add("start");
-                    if (item.Finish != finish) changed.Add("finish");
+                    if (item.Finish != finish && !(isMilestone && item.Finish == (finish ?? start))) changed.Add("finish");
+                    if (item.IsMilestone != isMilestone) changed.Add("milestone");
                     if (item.ParentId != parentItem) changed.Add("parent");
                     if (newCode != item.CostpointWbsId) changed.Add("WBS");
                     if (values.Any(kv => item.Values.GetValueOrDefault(kv.Key) != kv.Value)) changed.Add("values");
@@ -331,7 +335,7 @@ public abstract class SheetImporter : IImporter
                             await _items.MoveAsync(sheetId, item.Id, new MoveItemRequest(parentItem, int.MaxValue), cancellationToken);
                         }
 
-                        await _items.UpdateAsync(sheetId, item.Id, new UpdateItemRequest(title, start, finish, newCode, merged), cancellationToken);
+                        await _items.UpdateAsync(sheetId, item.Id, new UpdateItemRequest(title, start, finish, newCode, merged, isMilestone), cancellationToken);
                     }, cancellationToken);
                     continue;
                 }
@@ -340,7 +344,7 @@ public abstract class SheetImporter : IImporter
                     parentItem is null ? null : "child row" }.OfType<string>());
                 var created = await _run.CreateAsync(File, row.Number, typeof(Item), "Row", label, summary.Length == 0 ? title : summary, async () =>
                 {
-                    var dto = await _items.CreateAsync(sheetId, new CreateItemRequest(title, parentItem, null, start, finish, values), cancellationToken);
+                    var dto = await _items.CreateAsync(sheetId, new CreateItemRequest(title, parentItem, null, start, finish, values, isMilestone), cancellationToken);
                     if (code is not null)
                     {
                         await _items.UpdateAsync(sheetId, dto.Id, new UpdateItemRequest(dto.Title, dto.Start, dto.Finish, code, dto.Values), cancellationToken);

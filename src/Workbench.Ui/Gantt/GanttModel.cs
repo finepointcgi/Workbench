@@ -13,7 +13,8 @@ public enum GanttZoom
 /// <summary>One visible line of the Gantt, shared by the task list and the timeline so they stay aligned.</summary>
 public sealed record GanttRow(ItemDto Item, int Index, int Depth, bool IsSummary, DateOnly? Start, DateOnly? Finish)
 {
-    public bool IsMilestone => !IsSummary && Start is not null && Start == Finish;
+    /// <summary>Marked as a milestone (a one-day item with no duration), drawn as a diamond.</summary>
+    public bool IsMilestone => !IsSummary && Item.IsMilestone && Start is not null;
 
     public bool HasDates => Start is not null && Finish is not null;
 }
@@ -37,7 +38,7 @@ public static class GanttLayout
 
     /// <summary>
     /// Flattens the item tree depth-first in sibling order. Summary rows span all of their dated
-    /// descendants; leaves with only one date are drawn as milestones on that date.
+    /// descendants; a leaf with only one date spans that day (milestones are the items marked as such).
     /// </summary>
     public static IReadOnlyList<GanttRow> BuildRows(IReadOnlyList<ItemDto> items, IReadOnlySet<Guid> collapsed)
     {

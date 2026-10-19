@@ -102,6 +102,7 @@
                                 <MudDivider />
                                 <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="() => AddRowBelowAsync(row.Item)">Add row below</MudMenuItem>
                                 <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => AddChildAsync(row.Item)">Add child row</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.Flag" OnClick="() => ToggleMilestoneAsync(row.Item)" data-testid="toggle-milestone">@(row.Item.IsMilestone ? "Not a milestone" : "Mark as milestone")</MudMenuItem>
                                 <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentIncrease" Disabled="!row.HasPreviousSibling" OnClick="() => IndentAsync(row)">Indent</MudMenuItem>
                                 <MudMenuItem Icon="@Icons.Material.Filled.FormatIndentDecrease" Disabled="row.Item.ParentId is null" OnClick="() => OutdentAsync(row)">Outdent</MudMenuItem>
                                 <MudDivider />
@@ -140,6 +141,10 @@
                                     else
                                     {
                                         <span class="wb-toggle-spacer"></span>
+                                    }
+                                    @if (row.Item.IsMilestone)
+                                    {
+                                        <span class="wb-milestone" title="Milestone" aria-label="Milestone" data-testid="milestone-mark">◆</span>
                                     }
                                     <a class="wb-title-link" href="@DetailsHref(row.Item)" title="Open details">@row.Item.Title</a>
                                 </div>
@@ -709,6 +714,22 @@
         }
 
         await SaveAsync(row.Item, column, null);
+    }
+
+    /// <summary>Marks or unmarks a milestone. A milestone keeps one date: its finish (or start).</summary>
+    private async Task ToggleMilestoneAsync(ItemDto item)
+    {
+        try
+        {
+            var updated = await ItemService.UpdateAsync(SheetId, item.Id,
+                new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, item.Values, !item.IsMilestone));
+            ReplaceItem(updated);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't change the milestone: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task SaveAsync(ItemDto item, GridColumn column, string? value)
