@@ -46,8 +46,15 @@ public enum JournalStatus
 /// A journal entry: balanced debits and credits on one date in one fiscal period. Once posted it is immutable;
 /// a correction is a reversing entry (<see cref="ReversalOfId"/>) plus a new entry.
 /// </summary>
-public sealed class JournalEntry : Entity
+public sealed class JournalEntry : Entity, Companies.ICompanyOwned
 {
+    /// <summary>
+    /// The company the entry originates in (the timesheet's employee, the bill's or invoice's company). Lines can post to
+    /// other companies' ledgers; the ledger then adds intercompany lines so each company balances. Empty until posting
+    /// fills it in (from the first project line's company, else the default company).
+    /// </summary>
+    public Guid CompanyId { get; set; }
+
     /// <summary>Assigned when posted; 0 while a draft.</summary>
     public int Sequence { get; set; }
 
@@ -152,6 +159,7 @@ public sealed class JournalEntry : Entity
 
         var reversal = new JournalEntry
         {
+            CompanyId = CompanyId,
             Date = date,
             FiscalPeriodId = periodId,
             Source = JournalSource.Reversal,
@@ -167,6 +175,8 @@ public sealed class JournalEntry : Entity
             reversal.Lines.Add(new JournalLine
             {
                 JournalEntryId = reversal.Id,
+                CompanyId = line.CompanyId,
+                IntercompanyCompanyId = line.IntercompanyCompanyId,
                 LineNumber = line.LineNumber,
                 AccountId = line.AccountId,
                 OrgUnitId = line.OrgUnitId,
@@ -207,6 +217,15 @@ public sealed class JournalEntry : Entity
 public sealed class JournalLine : Entity
 {
     public Guid JournalEntryId { get; set; }
+
+    /// <summary>The ledger this line posts to. Empty until posting fills it in (the project's company, else the entry's).</summary>
+    public Guid CompanyId { get; set; }
+
+    /// <summary>
+    /// On a due-to/due-from line: the other company. Consolidation eliminates lines whose company and counterparty are both
+    /// in the consolidated group.
+    /// </summary>
+    public Guid? IntercompanyCompanyId { get; set; }
     public int LineNumber { get; set; }
     public Guid AccountId { get; set; }
     public Guid? OrgUnitId { get; set; }

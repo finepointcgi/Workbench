@@ -246,6 +246,20 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         project.Code = code;
         project.Name = request.Name.Required("Name");
         project.ContractId = request.ContractId;
+
+        // A contract's projects belong to the contract's company; posted cost never moves to another company's ledger.
+        if (request.ContractId is { } companyContractId
+            && await db.Set<Contract>().AsNoTracking().Where(c => c.Id == companyContractId).Select(c => (Guid?)c.CompanyId).FirstOrDefaultAsync(cancellationToken) is { } company
+            && company != project.CompanyId)
+        {
+            if (await db.Set<Domain.Accounting.JournalLine>().AnyAsync(l => l.ProjectId == project.Id, cancellationToken))
+            {
+                throw new ArgumentException("This project has posted cost in another company, so it can't move to a contract in this company.");
+            }
+
+            project.CompanyId = company;
+        }
+
         project.ProjectManagerId = request.ProjectManagerId;
         project.Status = (ProjectStatus)(int)request.Status;
         project.Start = request.Start;

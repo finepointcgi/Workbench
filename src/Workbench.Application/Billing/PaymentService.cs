@@ -104,6 +104,13 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
             CreatedBy = audit.Actor,
             CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
         };
+        // A receipt belongs to the company of the invoices it pays (one company per receipt).
+        if (invoices.Values.Select(i => i.CompanyId).Distinct().ToList() is { Count: > 1 })
+        {
+            throw new ArgumentException("A receipt can only pay one company's invoices; record one receipt per company.");
+        }
+
+        payment.CompanyId = invoices.Values.Select(i => i.CompanyId).FirstOrDefault(Domain.Companies.Company.DefaultId);
         foreach (var a in applications)
         {
             if (!invoices.TryGetValue(a.InvoiceId, out var invoice) || invoice.CustomerId != customer.Id)

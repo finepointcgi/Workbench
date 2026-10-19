@@ -55,6 +55,11 @@ public sealed class Account : Entity
     /// <summary>The summary account this one rolls up into.</summary>
     public Guid? ParentId { get; set; }
 
+    /// <summary>
+    /// Null for an account every company uses (the chart is shared); otherwise the only company that may post to it.
+    /// </summary>
+    public Guid? CompanyId { get; set; }
+
     /// <summary>Only meaningful for expense accounts; <see cref="CostClassification.None"/> otherwise.</summary>
     public CostClassification CostClass { get; set; }
 

@@ -57,8 +57,11 @@ public sealed class AssetCategory : Entity
 /// A fixed asset. Contractor-owned assets are depreciated monthly into the ledger; government-furnished and
 /// contractor-acquired property (FAR 52.245-1) is tracked for the property records but not depreciated by us.
 /// </summary>
-public sealed class FixedAsset : Entity
+public sealed class FixedAsset : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The company that owns the asset and books its depreciation.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     /// <summary>Our asset tag, for example "FA-00012". Unique.</summary>
     public required string TagNumber { get; set; }
 

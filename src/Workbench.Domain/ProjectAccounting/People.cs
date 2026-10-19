@@ -9,8 +9,11 @@ public sealed class OrgUnit : Entity
 }
 
 /// <summary>A person who records time. Linked to a sign-in account by <see cref="Email"/>.</summary>
-public sealed class Employee : Entity
+public sealed class Employee : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The employee's home company: labor cost is owed (accrued payroll) there, wherever the hours are charged.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public required string EmployeeNumber { get; set; }
     public required string Email { get; set; }
     public required string DisplayName { get; set; }

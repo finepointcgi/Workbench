@@ -24,7 +24,8 @@ public sealed record OpenForeignBalance(
     Guid AccountId,
     string AccountNumber,
     decimal? Rate,
-    decimal? RevaluedAmount)
+    decimal? RevaluedAmount,
+    Guid CompanyId = default)
 {
     /// <summary>
     /// Gain (positive) or loss (negative) on revaluing. An asset (receivable, bank) gains when it's worth more; a payable
@@ -81,7 +82,7 @@ public static class RevaluationEngine
                 }
 
                 balances.Add(new OpenForeignBalance(RevaluationItemKind.Receivable, i.Id, i.Number, customers.GetValueOrDefault(i.CustomerId) ?? "", i.InvoiceDate,
-                    i.CurrencyCode!, i.ExchangeRate, i.TransactionTotal, transaction, carrying, arAccount?.Id ?? Guid.Empty, arAccount?.Number ?? "1110", null, null));
+                    i.CurrencyCode!, i.ExchangeRate, i.TransactionTotal, transaction, carrying, arAccount?.Id ?? Guid.Empty, arAccount?.Number ?? "1110", null, null, i.CompanyId));
             }
         }
 
@@ -106,7 +107,7 @@ public static class RevaluationEngine
                 }
 
                 balances.Add(new OpenForeignBalance(RevaluationItemKind.Payable, b.Id, $"{b.Number} ({b.InvoiceNumber})", vendors.GetValueOrDefault(b.VendorId) ?? "", b.InvoiceDate,
-                    b.CurrencyCode!, b.ExchangeRate, b.TransactionAmount, transaction, carrying, payables.Id, payables.Number, null, null));
+                    b.CurrencyCode!, b.ExchangeRate, b.TransactionAmount, transaction, carrying, payables.Id, payables.Number, null, null, b.CompanyId));
             }
         }
 
@@ -140,7 +141,7 @@ public static class RevaluationEngine
 
             balances.Add(new OpenForeignBalance(RevaluationItemKind.Bank, bank.Id, $"{bank.Name} ••••{bank.AccountNumberLast4}", bank.BankName, asOf,
                 bank.Currency, transaction == 0 ? 0 : Math.Round(carrying / transaction, CurrencyMath.RateDecimals), transaction, transaction, carrying,
-                bank.GlAccountId, accounts.GetValueOrDefault(bank.GlAccountId) ?? "", null, null));
+                bank.GlAccountId, accounts.GetValueOrDefault(bank.GlAccountId) ?? "", null, null, bank.CompanyId));
         }
 
         // Value everything at the month-end rate (falling back to the latest rate of another type).

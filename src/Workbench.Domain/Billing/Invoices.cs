@@ -64,8 +64,11 @@ public enum InvoiceLineKind
 /// to the general ledger (<see cref="JournalEntryId"/>); voiding reverses that entry and releases the billed hours, ODCs
 /// and milestones so they can be billed again.
 /// </summary>
-public sealed class Invoice : Entity
+public sealed class Invoice : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The contract's company, which bills and posts the invoice.</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public Guid ContractId { get; set; }
     public Guid CustomerId { get; set; }
 
@@ -309,8 +312,11 @@ public enum PaymentMethod
 }
 
 /// <summary>A cash receipt from a customer, fully applied to its invoices. Posts debit cash, credit AR billed.</summary>
-public sealed class Payment : Entity
+public sealed class Payment : Entity, Companies.ICompanyOwned
 {
+    /// <summary>The company that received the cash (the company of the invoices it pays).</summary>
+    public Guid CompanyId { get; set; } = Companies.Company.DefaultId;
+
     public Guid CustomerId { get; set; }
     public DateOnly ReceivedOn { get; set; }
     public decimal Amount { get; set; }
