@@ -14,6 +14,7 @@ public sealed class UserInvite : Entity
     public bool IsResourceManager { get; set; }
     public bool IsProjectManager { get; set; }
     public bool IsHr { get; set; }
+    public bool IsMaterials { get; set; }
     public required string InvitedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }

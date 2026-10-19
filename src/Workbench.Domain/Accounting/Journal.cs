@@ -22,6 +22,12 @@ public enum JournalSource
 
     /// <summary>Monthly revenue recognition runs (source id = the project's revenue run).</summary>
     Revenue,
+
+    /// <summary>Materials: inventory receipts, issues to projects, adjustments, cycle counts and revaluations (source id = the inventory transaction).</summary>
+    Inventory,
+
+    /// <summary>Manufacturing: work-order issues to WIP, labor applied, scrap, completions and variances (source id = the transaction or labor report).</summary>
+    Manufacturing,
 }
 
 public enum JournalStatus

@@ -25,6 +25,8 @@ public sealed class AppUser : Entity
 
     /// <summary>Organization role HR: personnel records, EEO data, compensation, benefits, onboarding and offboarding.</summary>
     public bool IsHr { get; set; }
+    /// <summary>Organization role Materials: parts, inventory, BOMs, work orders and MRP planning.</summary>
+    public bool IsMaterials { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }

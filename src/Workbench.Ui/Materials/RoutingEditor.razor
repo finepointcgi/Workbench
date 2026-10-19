@@ -1,0 +1,92 @@
+@* The active routing of a make part: operations at work centers with setup and run hours and the labor category. *@
+@inject IManufacturingService Manufacturing
+@inject ISnackbar Snackbar
+
+@if (_centers.Count == 0 && CanEdit)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Add work centers under Materials › Setup first.</MudAlert>
+}
+<MudPaper Outlined="true" Class="pa-2 mb-2" Style="overflow-x:auto">
+    <MudSimpleTable Dense="true" Elevation="0" data-testid="routing">
+<caption class="wb-sr-only">Routing operations</caption>
+        <thead><tr><th scope="col">Seq</th><th scope="col">Operation</th><th scope="col">Work center</th><th scope="col">Setup (h)</th><th scope="col">Run (h per unit)</th>@if (CanEdit) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+        <tbody>
+            @foreach (var op in _ops)
+            {
+                var name = $"operation {op.Sequence}";
+                <tr>
+                    <td style="max-width:80px"><MudNumericField T="int" @bind-Value="op.Sequence" Disabled="!CanEdit" Margin="Margin.Dense" aria-label="@($"Sequence of {name}")" /></td>
+                    <td><MudTextField T="string" @bind-Value="op.Description" Disabled="!CanEdit" Margin="Margin.Dense" aria-label="@($"Description of {name}")" /></td>
+                    <td style="min-width:180px">
+                        <MudSelect T="Guid?" @bind-Value="op.WorkCenterId" Dense="true" Disabled="!CanEdit" aria-label="@($"Work center of {name}")">
+                            @foreach (var c in _centers) { <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem> }
+                        </MudSelect>
+                    </td>
+                    <td style="max-width:110px"><MudNumericField T="decimal" @bind-Value="op.Setup" Min="0" Disabled="!CanEdit" Margin="Margin.Dense" aria-label="@($"Setup hours of {name}")" /></td>
+                    <td style="max-width:130px"><MudNumericField T="decimal" @bind-Value="op.Run" Min="0" Disabled="!CanEdit" Margin="Margin.Dense" aria-label="@($"Run hours per unit of {name}")" /></td>
+                    @if (CanEdit)
+                    {
+                        <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _ops.Remove(op)" aria-label="@($"Remove {name}")" /></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+</MudPaper>
+@if (CanEdit)
+{
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="Add">Add operation</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_centers.Count == 0" data-testid="routing-save">Save routing</MudButton>
+    </MudStack>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid PartId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+
+    private sealed class Op
+    {
+        public int Sequence { get; set; }
+        public string? Description { get; set; }
+        public Guid? WorkCenterId { get; set; }
+        public decimal Setup { get; set; }
+        public decimal Run { get; set; }
+    }
+
+    private RoutingDto? _routing;
+    private List<Op> _ops = [];
+    private IReadOnlyList<WorkCenterDto> _centers = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _centers = (await Manufacturing.ListWorkCentersAsync()).Where(c => c.IsActive).ToList();
+            _routing = (await Manufacturing.ListRoutingsAsync(PartId)).FirstOrDefault(r => r.IsActive);
+            _ops = _routing?.Operations.Select(o => new Op { Sequence = o.Sequence, Description = o.Description, WorkCenterId = o.WorkCenterId, Setup = o.SetupHours, Run = o.RunHoursPerUnit }).ToList() ?? [];
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private void Add() => _ops.Add(new Op { Sequence = (_ops.Count == 0 ? 0 : _ops.Max(o => o.Sequence)) + 10, WorkCenterId = _centers.FirstOrDefault()?.Id });
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var request = new SaveRoutingRequest(PartId, _routing?.Revision ?? "A",
+                _ops.Select(o => new SaveRoutingOperationRequest(o.Sequence, o.Description ?? "", o.WorkCenterId ?? Guid.Empty, o.Setup, o.Run,
+                    _centers.FirstOrDefault(c => c.Id == o.WorkCenterId)?.LaborCategoryId)).ToList());
+            _routing = await Manufacturing.SaveRoutingAsync(_routing?.Id, request);
+            Snackbar.Add("Routing saved.", Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,39 @@
+@* Inventory transactions (newest first). *@
+@if (Transactions.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No transactions.</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="transactions">
+<caption class="wb-sr-only">@Caption</caption>
+        <thead><tr><th scope="col">No.</th><th scope="col">Date</th><th scope="col">Type</th>@if (ShowPart) { <th scope="col">Part</th> }<th scope="col">Location</th><th scope="col">Lot / serial</th><th scope="col" style="text-align:right">Qty</th><th scope="col" style="text-align:right">Amount</th><th scope="col">For</th><th scope="col">GL</th><th scope="col">Reason / document</th></tr></thead>
+        <tbody>
+            @foreach (var t in Transactions)
+            {
+                <tr>
+                    <td style="white-space:nowrap">@t.Number</td>
+                    <td style="white-space:nowrap">@MaterialsFormat.Date(t.Date)</td>
+                    <td>@MaterialsFormat.Label(t.Type)@(t.Ownership == StockOwnership.GovernmentFurnished ? " (GFM)" : "")</td>
+                    @if (ShowPart) { <td><MudLink Href="@($"materials/parts/{t.PartId}")">@t.PartNumber</MudLink></td> }
+                    <td style="white-space:nowrap">@t.Location</td>
+                    <td>@string.Join(" ", new[] { t.Lot, t.Serial }.Where(x => x.Length > 0))</td>
+                    <td style="text-align:right">@MaterialsFormat.Qty(t.Quantity)</td>
+                    <td style="text-align:right">@MaterialsFormat.Amount(t.Amount)@(t.Variance != 0 ? $" (var {MaterialsFormat.Amount(t.Variance)})" : "")</td>
+                    <td>
+                        @if (t.WorkOrderId is { } wo) { <MudLink Href="@($"materials/work-orders/{wo}")">@t.WorkOrderNumber</MudLink> }
+                        @string.Join(" ", new[] { t.ProjectCode, t.WbsCode == t.ProjectCode ? null : t.WbsCode }.OfType<string>())
+                    </td>
+                    <td>@t.JournalEntryNumber</td>
+                    <td>@string.Join(" · ", new[] { t.Reason, t.PurchaseOrderNumber, t.Reference }.OfType<string>())</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InventoryTransactionDto> Transactions { get; set; } = [];
+    [Parameter] public bool ShowPart { get; set; }
+    [Parameter] public string Caption { get; set; } = "Inventory transactions";
+}

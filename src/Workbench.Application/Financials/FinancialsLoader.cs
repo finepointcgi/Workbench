@@ -133,6 +133,7 @@ internal static class FinancialsLoader
             .Where(o => projectIds.Contains(o.ProjectId) && o.Status == OdcStatus.Approved && !o.IsUnallowable)
             .Select(o => new OdcActual(o.WbsElementId, o.IncurredOn, o.Amount))
             .ToListAsync(ct);
+        odcs.AddRange((await Materials.MaterialCostActuals.LoadAsync(db, projectIds, DateOnly.MinValue, DateOnly.MaxValue, ct)).Select(m => new OdcActual(m.WbsElementId, m.Date, m.Amount))); // Material issued from inventory.
         return (costed, odcs);
     }
 

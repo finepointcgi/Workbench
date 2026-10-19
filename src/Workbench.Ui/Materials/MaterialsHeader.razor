@@ -1,0 +1,10 @@
+@* Page heading for the materials screens. *@
+<PurchasingHeader Title="@Title" Subtitle="@Subtitle" BackHref="@(BackHref ?? "materials")" BackLabel="@(BackLabel ?? "Materials")">@ChildContent</PurchasingHeader>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? BackHref { get; set; }
+    [Parameter] public string? BackLabel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

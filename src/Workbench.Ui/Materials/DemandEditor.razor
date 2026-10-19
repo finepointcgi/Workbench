@@ -1,0 +1,158 @@
+@* Independent demand MRP nets: project material requirements (by WBS element) or part forecasts. *@
+@inject IPartService PartService
+@inject ISnackbar Snackbar
+
+@if (CanEdit && Options is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-3">
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+            <MudSelect T="Guid?" @bind-Value="_partId" Label="Part" Dense="true" Style="min-width:220px">
+                @foreach (var p in Parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+            </MudSelect>
+            @if (!Forecasts)
+            {
+                <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Project WBS element" Dense="true" Style="min-width:220px">
+                    @foreach (var c in Options.ChargeCodes) { <MudSelectItem T="Guid?" Value="c.WbsElementId">@c.ProjectCode @c.WbsCode · @c.Name</MudSelectItem> }
+                </MudSelect>
+            }
+            <MudNumericField T="decimal" @bind-Value="_quantity" Label="Quantity" Min="0" Margin="Margin.Dense" Style="max-width:120px" />
+            <MudDatePicker @bind-Date="_date" Label="@(Forecasts ? "Date" : "Needed by")" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:160px" />
+            <MudTextField T="string" @bind-Value="_note" Label="Note" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Outlined" Disabled="@(_partId is null || _quantity <= 0 || _date is null || (!Forecasts && _wbsId is null))" OnClick="AddAsync">Add</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+<MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+    @if (Forecasts)
+    {
+        @if (_forecasts.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No forecasts.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Forecasts</caption>
+                <thead><tr><th scope="col">Date</th><th scope="col">Part</th><th scope="col" style="text-align:right">Quantity</th><th scope="col">Note</th>@if (CanEdit) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+                <tbody>
+                    @foreach (var f in _forecasts)
+                    {
+                        <tr>
+                            <td>@MaterialsFormat.Date(f.Date)</td><td>@f.PartNumber</td><td style="text-align:right">@MaterialsFormat.Qty(f.Quantity)</td><td>@f.Note</td>
+                            @if (CanEdit) { <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteAsync(f)" aria-label="@($"Delete forecast of {f.PartNumber} on {MaterialsFormat.Date(f.Date)}")" /></td> }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    }
+    else
+    {
+        @if (_requirements.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No open project requirements.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Project material requirements</caption>
+                <thead><tr><th scope="col">Needed by</th><th scope="col">Project</th><th scope="col">Part</th><th scope="col" style="text-align:right">Required</th><th scope="col" style="text-align:right">Issued</th><th scope="col" style="text-align:right">Open</th><th scope="col">Note</th>@if (CanEdit) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+                <tbody>
+                    @foreach (var r in _requirements)
+                    {
+                        <tr>
+                            <td>@MaterialsFormat.Date(r.NeededBy)</td><td>@r.ProjectCode @r.WbsCode</td><td>@r.PartNumber <span class="mud-text-secondary">@r.PartDescription</span></td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(r.Quantity)</td><td style="text-align:right">@MaterialsFormat.Qty(r.QuantityIssued)</td><td style="text-align:right">@MaterialsFormat.Qty(r.OpenQuantity)</td><td>@r.Note</td>
+                            @if (CanEdit) { <td><MudButton Size="Size.Small" OnClick="() => CloseAsync(r)" aria-label="@($"Close requirement for {r.PartNumber} on {r.WbsCode}")">Close</MudButton></td> }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public MaterialsOptionsDto? Options { get; set; }
+    [Parameter] public IReadOnlyList<PartSummaryDto> Parts { get; set; } = [];
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public bool Forecasts { get; set; }
+
+    private IReadOnlyList<ForecastDto> _forecasts = [];
+    private IReadOnlyList<MaterialRequirementDto> _requirements = [];
+    private Guid? _partId;
+    private Guid? _wbsId;
+    private decimal _quantity;
+    private DateTime? _date = DateTime.Today.AddDays(30);
+    private string? _note;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            if (Forecasts)
+            {
+                _forecasts = await PartService.ListForecastsAsync();
+            }
+            else
+            {
+                _requirements = await PartService.ListRequirementsAsync();
+            }
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        try
+        {
+            var date = DateOnly.FromDateTime(_date!.Value);
+            if (Forecasts)
+            {
+                await PartService.AddForecastAsync(new SaveForecastRequest(_partId!.Value, date, _quantity, _note));
+            }
+            else
+            {
+                await PartService.AddRequirementAsync(new SaveMaterialRequirementRequest(_wbsId!.Value, _partId!.Value, _quantity, date, _note));
+            }
+
+            (_quantity, _note) = (0, null);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(ForecastDto f)
+    {
+        try
+        {
+            await PartService.DeleteForecastAsync(f.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task CloseAsync(MaterialRequirementDto r)
+    {
+        try
+        {
+            await PartService.CloseRequirementAsync(r.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

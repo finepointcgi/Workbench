@@ -84,7 +84,7 @@ public sealed class AccessReviewService(
                 AccessReviewId = review.Id,
                 UserEmail = user.Email,
                 DisplayName = user.DisplayName,
-                OrgRoles = UserLifecycle.RoleText(AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr)),
+                OrgRoles = UserLifecycle.RoleText(AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials)),
                 WorkspaceRoles = user.IsAdmin ? "All workspaces (Admin)" : byUser.GetValueOrDefault(user.Email) ?? "None",
                 LastSignInAtUtc = lastSignIn,
                 EmployeeName = employee is null ? null : $"{employee.EmployeeNumber} {employee.DisplayName}",

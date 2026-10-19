@@ -1,0 +1,184 @@
+@page "/materials/parts/{PartId:guid}"
+@inject IPartService PartService
+@inject IInventoryService Inventory
+@inject IManufacturingService Manufacturing
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_part?.Summary.Display ?? "Part") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Part" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_part is not { } part)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = part.Summary;
+    <MaterialsHeader Title="@($"{s.Display} · {s.Description}")" BackLabel="Parts">
+        @if (MaterialsFormat.CanEdit(User) && _options is not null)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditAsync" data-testid="part-edit">Edit</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="AdjustAsync" data-testid="part-adjust">Adjust stock</MudButton>
+        }
+        @if (User?.IsFinance == true && s.CostMethod == PartCostMethod.Standard)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PriceChange" OnClick="RevalueAsync" data-testid="part-revalue">Change standard cost</MudButton>
+        }
+        @if (s.Source == PartSourceKind.Make)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AccountTree" Href="@($"materials/boms?part={s.Id}")">Bill of materials</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[]
+        {
+            ("On hand", $"{MaterialsFormat.Qty(s.OnHand)} {s.UnitOfMeasure}"), ("Government-furnished", MaterialsFormat.Qty(s.OnHandGovernment)),
+            ("On order", MaterialsFormat.Qty(part.OnOrder)), ("Allocated to work orders", MaterialsFormat.Qty(part.Allocated)),
+            (MaterialsFormat.Label(s.CostMethod), MaterialsFormat.Cost(s.CostMethod == PartCostMethod.Standard ? s.StandardCost : s.AverageCost)), ("Book value", MaterialsFormat.Amount(s.Value)),
+        })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="p">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Part details</caption>
+            <tbody>
+                <tr><th scope="row" style="width:180px">Make or buy</th><td>@s.Source</td><th scope="row" style="width:180px">Tracking</th><td>@MaterialsFormat.Label(s.Tracking)</td></tr>
+                <tr><th scope="row">Preferred vendor</th><td>@s.PreferredVendor</td><th scope="row">Lead time</th><td>@s.LeadTimeDays days</td></tr>
+                <tr><th scope="row">Safety stock</th><td>@MaterialsFormat.Qty(part.SafetyStock)</td><th scope="row">Minimum / multiple</th><td>@MaterialsFormat.Qty(part.MinimumOrderQuantity) / @MaterialsFormat.Qty(part.OrderMultiple)</td></tr>
+                <tr><th scope="row">Default location</th><td>@part.DefaultLocation</td><th scope="row">Standard cost</th><td>@MaterialsFormat.Cost(s.StandardCost)</td></tr>
+                @if (part.Notes is { } n) { <tr><th scope="row">Notes</th><td colspan="3">@n</td></tr> }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Stock</MudText>
+    <MudPaper Outlined="true" Class="pa-2 mb-3" Style="overflow-x:auto">
+        <BalancesTable Balances="part.Balances" Options="_options" CanEdit="MaterialsFormat.CanEdit(User)" Caption="Stock of this part" Changed="LoadAsync" />
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Where used</MudText>
+    <MudPaper Outlined="true" Class="pa-2 mb-3">
+        @if (part.WhereUsed.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Not on any bill of materials.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Where used</caption>
+                <thead><tr><th scope="col">Level</th><th scope="col">Used in</th><th scope="col">BOM revision</th><th scope="col" style="text-align:right">Qty per</th></tr></thead>
+                <tbody>
+                    @foreach (var w in part.WhereUsed)
+                    {
+                        <tr>
+                            <td>@w.Level</td>
+                            <td style="padding-left:@(8 + 16 * (w.Level - 1))px"><MudLink Href="@($"materials/parts/{w.ParentPartId}")">@w.ParentNumber</MudLink> @w.ParentDescription</td>
+                            <td>@w.BomRevision@(w.BomActive ? "" : " (inactive)")</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(w.QuantityPer)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Recent transactions</MudText>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <TransactionsTable Transactions="part.RecentTransactions" Caption="Recent transactions of this part" />
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid PartId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private PartDto? _part;
+    private MaterialsOptionsDto? _options;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            _options ??= await PartService.GetOptionsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _options = null;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _part = await PartService.GetAsync(PartId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task EditAsync()
+    {
+        var dialog = await DialogService.ShowAsync<PartDialog>("Edit part", new DialogParameters<PartDialog> { { d => d.Options, _options }, { d => d.Part, _part } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SavePartRequest request })
+        {
+            try
+            {
+                _part = await PartService.UpdateAsync(PartId, request);
+                Snackbar.Add("Part saved.", Severity.Success);
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task AdjustAsync()
+    {
+        if (await StockActions.RunAsync(DialogService, Inventory, Snackbar, StockAction.Adjust, _options!, part: _part))
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task RevalueAsync()
+    {
+        var dialog = await DialogService.ShowAsync<RevalueDialog>("Change standard cost",
+            new DialogParameters<RevalueDialog> { { d => d.Current, _part!.Summary.StandardCost }, { d => d.OnHand, _part.Summary.OnHand } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ChangeStandardCostRequest request })
+        {
+            try
+            {
+                var t = await Inventory.ChangeStandardCostAsync(PartId, request);
+                Snackbar.Add($"Revalued: {MaterialsFormat.Amount(t.Amount)} ({t.JournalEntryNumber ?? "nothing posted"}).", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+}

@@ -1,0 +1,32 @@
+@* A new standard cost for a part with stock: the stock is revalued and the difference posts to the GL. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Currently @MaterialsFormat.Cost(Current) with @MaterialsFormat.Qty(OnHand) on hand. The stock is revalued at the new cost and the difference
+            (@MaterialsFormat.Amount(Math.Round(OnHand * (_cost - Current), 2))) posts against inventory adjustments.
+        </MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_cost" Label="New standard cost" Min="0" Format="0.00##" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6"><MudDatePicker @bind-Date="_date" Label="Effective" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Required="true" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_date is null || string.IsNullOrWhiteSpace(_reason) || _cost == Current)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new ChangeStandardCostRequest(_cost, DateOnly.FromDateTime(_date!.Value), _reason!)))">Revalue</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public decimal Current { get; set; }
+    [Parameter] public decimal OnHand { get; set; }
+
+    private decimal _cost;
+    private DateTime? _date = DateTime.Today;
+    private string? _reason;
+
+    protected override void OnInitialized() => _cost = Current;
+}

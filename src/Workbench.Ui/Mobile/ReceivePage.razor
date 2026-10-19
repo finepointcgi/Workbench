@@ -1,0 +1,93 @@
+@page "/m/receive"
+@layout MobileLayout
+@* Receiving into inventory on a phone: open PO lines for parts, received to each part's default location. Lot- and serial-tracked
+   parts are received on the full Materials › Receiving page (they need lots or serial numbers). *@
+@using Workbench.Contracts.Materials
+@inject IInventoryService Inventory
+@inject ISnackbar Snackbar
+
+<PageTitle>Receive · Workbench</PageTitle>
+
+<div class="wb-m-title"><h1>Receive</h1></div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" data-testid="error">@_error</MudAlert>
+}
+else if (_lines is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else if (_lines.Count == 0)
+{
+    <div class="wb-m-card wb-m-muted">Nothing to receive.</div>
+}
+else
+{
+    <div role="status" class="wb-sr-only">@_status</div>
+    @foreach (var l in _lines)
+    {
+        <div class="wb-m-card" data-testid="@($"receive-{l.PurchaseOrderLineId}")">
+            <b>@l.PartNumber</b> <span class="wb-m-muted">@l.PurchaseOrderNumber line @l.LineNumber · @l.Vendor</span>
+            <div class="wb-m-muted">@MobileFormat.Hours(l.Open) open of @MobileFormat.Hours(l.Ordered)</div>
+            @if (l.Tracking != PartTracking.None || l.BinId is null)
+            {
+                <div class="wb-m-muted mt-1">@(l.Tracking != PartTracking.None ? "Lot or serial tracked" : "No default location"): receive it on the desktop Receiving page.</div>
+            }
+            else
+            {
+                <div class="wb-m-row mt-1">
+                    <label class="wb-m-field"><span>Quantity</span><input class="wb-m-input" inputmode="decimal" @bind="_quantities[l.PurchaseOrderLineId]" aria-label="@($"Quantity of {l.PartNumber} received")" /></label>
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Disabled="_busy" OnClick="() => ReceiveAsync(l)" aria-label="@($"Receive {l.PartNumber}")">Receive</MudButton>
+            }
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<ReceivablePartLineDto>? _lines;
+    private readonly Dictionary<Guid, decimal> _quantities = [];
+    private string? _error;
+    private string? _status;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _lines = await Inventory.ListReceivableLinesAsync();
+            foreach (var l in _lines)
+            {
+                _quantities[l.PurchaseOrderLineId] = l.Open;
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or HttpRequestException)
+        {
+            _error = ex is UnauthorizedAccessException ? "Receiving into inventory is for the Materials role." : ex.Message;
+        }
+    }
+
+    private async Task ReceiveAsync(ReceivablePartLineDto line)
+    {
+        _busy = true;
+        try
+        {
+            var created = await Inventory.ReceivePurchaseOrderAsync(new ReceiveIntoInventoryRequest(line.PurchaseOrderId, DateOnly.FromDateTime(DateTime.Today),
+                [new ReceiveIntoInventoryLine(line.PurchaseOrderLineId, _quantities[line.PurchaseOrderLineId], line.WarehouseId, line.BinId)]));
+            _status = $"Received {MobileFormat.Hours(created.Sum(t => t.Quantity))} {line.PartNumber}.";
+            Snackbar.Add(_status, Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

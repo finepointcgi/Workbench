@@ -1,0 +1,126 @@
+@page "/materials/setup"
+@inject IPartService PartService
+@inject IManufacturingService Manufacturing
+@inject ISnackbar Snackbar
+
+<PageTitle>Materials setup · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Materials setup" Subtitle="Warehouses and bins where stock lives, and the work centers routings run at." />
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Warehouses and bins</MudText>
+        @foreach (var w in _warehouses)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="@($"warehouse-{w.Code}")">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">@w.Code · @w.Name@(w.IsActive ? "" : " (inactive)")</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Bins: @(w.Bins.Count == 0 ? "none" : string.Join(", ", w.Bins.Select(b => b.Code + (b.IsActive ? "" : " (inactive)"))))</MudText>
+                @if (Editable)
+                {
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-1">
+                        <MudTextField T="string" Value="_newBin.GetValueOrDefault(w.Id)" ValueChanged="v => _newBin[w.Id] = v" Label="New bin" Margin="Margin.Dense" Style="max-width:160px" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@string.IsNullOrWhiteSpace(_newBin.GetValueOrDefault(w.Id))" OnClick="() => AddBinAsync(w)" aria-label="@($"Add bin to {w.Code}")">Add bin</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+        }
+        @if (Editable)
+        {
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudTextField T="string" @bind-Value="_whCode" Label="Code" Margin="Margin.Dense" Style="max-width:120px" />
+                    <MudTextField T="string" @bind-Value="_whName" Label="Name" Margin="Margin.Dense" />
+                    <MudButton Variant="Variant.Outlined" Disabled="@(string.IsNullOrWhiteSpace(_whCode) || string.IsNullOrWhiteSpace(_whName))" OnClick="AddWarehouseAsync">Add warehouse</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Work centers</MudText>
+        <MudPaper Outlined="true" Class="pa-2 mb-2">
+            <MudSimpleTable Dense="true" Elevation="0">
+<caption class="wb-sr-only">Work centers</caption>
+                <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Labor category</th><th scope="col" style="text-align:right">Hours/day</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _centers) { <tr><td>@c.Code</td><td>@c.Name@(c.IsActive ? "" : " (inactive)")</td><td>@c.LaborCategory</td><td style="text-align:right">@MaterialsFormat.Qty(c.HoursPerDay)</td></tr> }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+        @if (Editable && _options is not null)
+        {
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudTextField T="string" @bind-Value="_wcCode" Label="Code" Margin="Margin.Dense" Style="max-width:120px" />
+                    <MudTextField T="string" @bind-Value="_wcName" Label="Name" Margin="Margin.Dense" />
+                    <MudSelect T="Guid?" @bind-Value="_wcCategory" Label="Labor category" Dense="true" Clearable="true" Style="min-width:160px">
+                        @foreach (var l in _options.LaborCategories) { <MudSelectItem T="Guid?" Value="l.Id">@l.Code · @l.Name</MudSelectItem> }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" Disabled="@(string.IsNullOrWhiteSpace(_wcCode) || string.IsNullOrWhiteSpace(_wcName))" OnClick="AddCenterAsync">Add work center</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<WarehouseDto> _warehouses = [];
+    private IReadOnlyList<WorkCenterDto> _centers = [];
+    private MaterialsOptionsDto? _options;
+    private readonly Dictionary<Guid, string?> _newBin = [];
+    private string? _whCode;
+    private string? _whName;
+    private string? _wcCode;
+    private string? _wcName;
+    private Guid? _wcCategory;
+
+    private bool Editable => MaterialsFormat.CanEdit(User);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _warehouses = await PartService.ListWarehousesAsync();
+            _centers = await Manufacturing.ListWorkCentersAsync();
+            _options ??= await PartService.GetOptionsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private Task AddBinAsync(WarehouseDto w) => SaveAsync(async () =>
+    {
+        await PartService.SaveBinAsync(w.Id, null, new SaveBinRequest(_newBin[w.Id]!));
+        _newBin[w.Id] = null;
+    });
+
+    private Task AddWarehouseAsync() => SaveAsync(async () =>
+    {
+        await PartService.SaveWarehouseAsync(null, new SaveWarehouseRequest(_whCode!, _whName!));
+        (_whCode, _whName) = (null, null);
+    });
+
+    private Task AddCenterAsync() => SaveAsync(async () =>
+    {
+        await Manufacturing.SaveWorkCenterAsync(null, new SaveWorkCenterRequest(_wcCode!, _wcName!, _wcCategory));
+        (_wcCode, _wcName, _wcCategory) = (null, null, null);
+    });
+}

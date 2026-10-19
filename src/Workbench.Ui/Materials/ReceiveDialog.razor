@@ -1,0 +1,46 @@
+@* Receive one PO line into stock: quantity, location and, for tracked parts, the lot or the serial numbers. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">@Line.PurchaseOrderNumber line @Line.LineNumber · @Line.PartNumber: @MaterialsFormat.Qty(Line.Open) of @MaterialsFormat.Qty(Line.Ordered) still open at @MaterialsFormat.Cost(Line.UnitPrice).</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="6"><MudDatePicker @bind-Date="_date" Label="Received on" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_quantity" Label="Quantity received" Min="0" Max="Line.Open" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12"><BinSelect Options="Options" @bind-Value="_binId" Label="Put away to" /></MudItem>
+            @if (Line.Tracking != PartTracking.None)
+            {
+                <MudItem xs="12"><MudTextField T="string" @bind-Value="_lot" Label="@(Line.Tracking == PartTracking.Lot ? "Lot" : "Lot (optional)")" Margin="Margin.Dense" /></MudItem>
+            }
+            @if (Line.Tracking == PartTracking.Serial)
+            {
+                <MudItem xs="12"><MudTextField T="string" @bind-Value="_serials" Label="Serial numbers (one per line or comma separated)" Lines="3" Margin="Margin.Dense" /></MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_date is null || _quantity <= 0 || _binId is null)" OnClick="Save" data-testid="receive-save">Receive</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public ReceivablePartLineDto Line { get; set; } = default!;
+    [Parameter, EditorRequired] public MaterialsOptionsDto Options { get; set; } = default!;
+
+    private DateTime? _date = DateTime.Today;
+    private decimal _quantity;
+    private Guid? _binId;
+    private string? _lot;
+    private string? _serials;
+
+    protected override void OnInitialized() => (_quantity, _binId) = (Line.Open, Line.BinId);
+
+    private void Save()
+    {
+        var serials = (_serials ?? "").Split([',', '\n', '\r', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var warehouse = Options.Warehouses.First(w => w.Bins.Any(b => b.Id == _binId)).Id;
+        MudDialog.Close(DialogResult.Ok(new ReceiveIntoInventoryRequest(Line.PurchaseOrderId, DateOnly.FromDateTime(_date!.Value),
+            [new ReceiveIntoInventoryLine(Line.PurchaseOrderLineId, _quantity, warehouse, _binId, _lot, serials.Length == 0 ? null : serials)])));
+    }
+}

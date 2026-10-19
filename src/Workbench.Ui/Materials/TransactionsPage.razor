@@ -1,0 +1,57 @@
+@page "/materials/transactions"
+@inject IInventoryService Inventory
+
+<PageTitle>Inventory transactions · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Inventory transactions" Subtitle="Every receipt, issue, transfer, adjustment, count and completion, with the journal entry it posted." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Number, lot or serial" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+        <MudSelect T="InventoryMovement?" Value="_type" ValueChanged="v => SetAsync(() => _type = v)" Label="Type" Clearable="true" Dense="true" Style="min-width:200px">
+            @foreach (var t in Enum.GetValues<InventoryMovement>()) { <MudSelectItem T="InventoryMovement?" Value="t">@MaterialsFormat.Label(t)</MudSelectItem> }
+        </MudSelect>
+        <MudDatePicker Date="_from" DateChanged="v => SetAsync(() => _from = v)" Label="From" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" AutoClose="true" Style="max-width:160px" />
+        <MudDatePicker Date="_to" DateChanged="v => SetAsync(() => _to = v)" Label="To" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" AutoClose="true" Style="max-width:160px" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <TransactionsTable Transactions="_rows" ShowPart="true" />
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<InventoryTransactionDto> _rows = [];
+    private string? _search;
+    private InventoryMovement? _type;
+    private DateTime? _from;
+    private DateTime? _to;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = await Inventory.ListTransactionsAsync(new TransactionQuery(null, null, null, _type,
+                _from is { } f ? DateOnly.FromDateTime(f) : null, _to is { } t ? DateOnly.FromDateTime(t) : null, _search, 500));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+}

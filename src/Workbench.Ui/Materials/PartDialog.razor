@@ -1,0 +1,94 @@
+@* Create or change a part in the part master. *@
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="8"><MudTextField T="string" @bind-Value="_number" Label="Part number" Required="true" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="4"><MudTextField T="string" @bind-Value="_revision" Label="Revision" Margin="Margin.Dense" autocomplete="off" /></MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_description" Label="Description" Required="true" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="4"><MudTextField T="string" @bind-Value="_uom" Label="Unit of measure" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="4">
+                <MudSelect T="PartSourceKind" @bind-Value="_source" Label="Make or buy" Dense="true">
+                    <MudSelectItem T="PartSourceKind" Value="PartSourceKind.Buy">Buy</MudSelectItem>
+                    <MudSelectItem T="PartSourceKind" Value="PartSourceKind.Make">Make</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="4">
+                <MudSelect T="PartTracking" @bind-Value="_tracking" Label="Lot/serial tracking" Dense="true">
+                    @foreach (var t in Enum.GetValues<PartTracking>()) { <MudSelectItem T="PartTracking" Value="t">@MaterialsFormat.Label(t)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect T="PartCostMethod" @bind-Value="_method" Label="Cost method" Dense="true">
+                    @foreach (var m in Enum.GetValues<PartCostMethod>()) { <MudSelectItem T="PartCostMethod" Value="m">@MaterialsFormat.Label(m)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_standard" Label="Standard cost" Min="0" Format="0.00##" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6">
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Preferred vendor" Dense="true" Clearable="true">
+                    @foreach (var v in Options.Vendors) { <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6"><MudNumericField T="int" @bind-Value="_lead" Label="Lead time (days)" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="4"><MudNumericField T="decimal" @bind-Value="_safety" Label="Safety stock" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="4"><MudNumericField T="decimal" @bind-Value="_moq" Label="Minimum order" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="4"><MudNumericField T="decimal" @bind-Value="_multiple" Label="Order multiple" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12">
+                <MudSelect T="Guid?" @bind-Value="_binId" Label="Default location" Dense="true" Clearable="true">
+                    @foreach (var w in Options.Warehouses)
+                    {
+                        foreach (var b in w.Bins.Where(b => b.IsActive))
+                        {
+                            <MudSelectItem T="Guid?" Value="b.Id">@w.Code / @b.Code</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_notes" Label="Notes" Lines="2" Margin="Margin.Dense" /></MudItem>
+            @if (Part is not null)
+            {
+                <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_active" Label="Active" Dense="true" /></MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_number) || string.IsNullOrWhiteSpace(_description))" OnClick="Save" data-testid="part-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public MaterialsOptionsDto Options { get; set; } = default!;
+    [Parameter] public PartDto? Part { get; set; }
+
+    private string? _number;
+    private string? _revision;
+    private string? _description;
+    private string? _uom = "EA";
+    private PartSourceKind _source;
+    private PartTracking _tracking;
+    private PartCostMethod _method;
+    private decimal _standard;
+    private Guid? _vendorId;
+    private int _lead;
+    private decimal _safety;
+    private decimal _moq;
+    private decimal _multiple;
+    private Guid? _binId;
+    private string? _notes;
+    private bool _active = true;
+
+    protected override void OnInitialized()
+    {
+        if (Part is { } p)
+        {
+            var s = p.Summary;
+            (_number, _revision, _description, _uom, _source, _tracking, _method, _standard) = (s.Number, s.Revision, s.Description, s.UnitOfMeasure, s.Source, s.Tracking, s.CostMethod, s.StandardCost);
+            (_vendorId, _lead, _safety, _moq, _multiple, _binId, _notes, _active) = (p.PreferredVendorId, s.LeadTimeDays, p.SafetyStock, p.MinimumOrderQuantity, p.OrderMultiple, p.DefaultBinId, p.Notes, s.IsActive);
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SavePartRequest(_number!, _revision, _description!, _uom ?? "EA", _source, _tracking, _method, _standard,
+        _vendorId, _lead, _safety, _moq, _multiple, null, _binId, _notes, _active)));
+}

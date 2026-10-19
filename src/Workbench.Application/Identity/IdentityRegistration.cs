@@ -90,6 +90,7 @@ public static class IdentityRegistration
         services.AddWorkbenchMigrationPermissions(); // Cut-over checklist and Costpoint reconciliation: Finance or Admin only.
         services.Decorate<Workbench.Contracts.Tasks.ITaskAssignmentService, PermissionCheckingTaskAssignmentService>(); // Tasks: Viewers read, Editors/Owners assign, assignees update their own status; workload Finance/Admin/PM.
         services.AddWorkbenchHrPermissions(); // HR: records HR/Admin (employees self-service, supervisors/Finance job fields), EEO HR/Admin/self, compensation HR+Finance.
+        services.AddWorkbenchMaterialsPermissions(); // Materials: read Materials/Finance/Admin, change Materials/Admin; revaluation and WIP Finance; own shop labor anyone.
         return services;
     }
 
