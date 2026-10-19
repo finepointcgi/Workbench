@@ -10,8 +10,9 @@ public static class ApprovalDocumentTypes
     public const string ApBill = "ap-bill";
     public const string Invoice = "invoice";
     public const string JournalEntry = "journal-entry";
+    public const string LeaveRequest = "leave-request";
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry];
+    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest];
 
     public static string Label(string documentType) => documentType switch
     {
@@ -22,8 +23,12 @@ public static class ApprovalDocumentTypes
         ApBill => "AP bill",
         Invoice => "Invoice",
         JournalEntry => "Manual journal entry",
+        LeaveRequest => "Leave request",
         _ => documentType,
     };
+
+    /// <summary>Documents whose amount is hours, not money (timesheets and leave requests).</summary>
+    public static bool AmountIsHours(string documentType) => documentType is Timesheet or LeaveRequest;
 }
 
 /// <summary>Who approves a step.</summary>

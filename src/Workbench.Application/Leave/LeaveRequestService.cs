@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Approvals;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Time;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Leave;
 using Workbench.Domain.Leave;
@@ -20,19 +22,23 @@ public static class LeaveNotificationKinds
 }
 
 /// <summary>
-/// Leave requests. The employee requests days; the supervisor approves or rejects (an administrator, for employees
-/// without a supervisor, the same rule as timesheets). Approved days pre-fill the employee's timesheet; the leave is
-/// only taken once those hours are on an approved timesheet.
+/// Leave requests. The employee requests days; the leave request approval workflow (Setup › Approval workflows; by
+/// default the supervisor, or an administrator for employees without one, the same rule as timesheets) approves or
+/// rejects. Approved days pre-fill the employee's timesheet; the leave is only taken once those hours are on an approved
+/// timesheet.
 /// </summary>
 public sealed class LeaveRequestService(
     IWorkbenchDbContextFactory dbFactory,
     AccessControl access,
     AuditRecorder audit,
     INotificationPublisher notifications,
-    TimeProvider clock) : ILeaveRequestService
+    TimeProvider clock,
+    ApprovalEngine? approvals = null) : ILeaveRequestService
 {
     public const string AuditEntityType = nameof(LeaveRequest);
     public const decimal MaxHoursPerDay = 24m;
+
+    private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
@@ -55,6 +61,8 @@ public sealed class LeaveRequestService(
         {
             throw new ArgumentException("Holidays come from the holiday calendar; they aren't requested.");
         }
+
+        var eligible = (await LeaveEligibility.LoadAsync(db, [me.Id], cancellationToken)).Applies(policy, me);
 
         if (request.EndDate < request.StartDate)
         {
@@ -94,6 +102,17 @@ public sealed class LeaveRequestService(
         var hours = perDay * days.Count;
         var warnings = new List<string>();
         var available = await AvailableAsync(db, me.Id, policy.Id, cancellationToken);
+        if (!eligible && available <= 0)
+        {
+            // Hours left from before the policy stopped applying can still be used, but nothing beyond them.
+            throw new ArgumentException($"{policy.Name} doesn't apply to you.");
+        }
+
+        if (!eligible && hours > available)
+        {
+            throw new ArgumentException($"{policy.Name} no longer applies to you: you can use the {available:0.##} h you have left, not {hours:0.##} h.");
+        }
+
         if (hours > available)
         {
             // Pending requests count too: they would take the balance down if approved.
@@ -123,10 +142,10 @@ public sealed class LeaveRequestService(
         leave.Days.AddRange(days.Select(d => new LeaveRequestDay { RequestId = leave.Id, Date = d, Hours = perDay }));
         db.Set<LeaveRequest>().Add(leave);
         audit.Record(db, AuditEntityType, leave.Id, "Requested", after: Snapshot(leave));
+        var route = await _approvals.StartAsync(db, await ApprovalSubjects.LeaveRequestAsync(db, leave, cancellationToken), cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
-        var approvers = await TimesheetQueries.ApproverEmailsAsync(db, me, cancellationToken);
-        await notifications.PublishAsync(approvers, LeaveNotificationKinds.Requested,
+        await notifications.PublishAsync(route.NotifyEmails, LeaveNotificationKinds.Requested,
             $"{me.DisplayName} requested {policy.Name}", $"{Range(leave)}: {hours:0.##} h", link: "leave?tab=approvals");
         return (await MapAsync(db, [leave], cancellationToken))[0] with { Warnings = warnings };
     }
@@ -150,6 +169,11 @@ public sealed class LeaveRequestService(
         var before = Snapshot(leave);
         leave.Status = LeaveRequestStatus.Cancelled;
         audit.Record(db, AuditEntityType, leave.Id, "Cancelled", before, Snapshot(leave));
+        if (!wasApproved)
+        {
+            await _approvals.CancelAsync(db, ApprovalDocumentTypes.LeaveRequest, leave.Id, access.Email, "Cancelled by the employee", cancellationToken);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         if (wasApproved)
         {
@@ -174,25 +198,30 @@ public sealed class LeaveRequestService(
             return true;
         }
 
-        return (await access.GetOrgRolesAsync(cancellationToken)).IsAdmin();
+        return (await access.GetOrgRolesAsync(cancellationToken)).IsAdmin()
+            || (await _approvals.ActionableAsync(db, ApprovalDocumentTypes.LeaveRequest, access.Email, cancellationToken)).Count > 0;
     }
 
     public async Task<IReadOnlyList<LeaveRequestDto>> ListPendingApprovalsAsync(CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        var pending = await db.Set<LeaveRequest>().AsNoTracking().Include(r => r.Days).Where(r => r.Status == LeaveRequestStatus.Pending).ToListAsync(cancellationToken);
-        var owners = await EmployeesAsync(db, pending.Select(r => r.EmployeeId), cancellationToken);
-        var mine = new List<LeaveRequest>();
-        foreach (var r in pending)
+        var ids = (await _approvals.ActionableAsync(db, ApprovalDocumentTypes.LeaveRequest, access.Email, cancellationToken))
+            .Select(x => x.Instance.DocumentId).ToHashSet();
+
+        // Requests made before leave was routed through workflows have no trip yet: route them in memory to see if they're mine.
+        var routed = await _approvals.RoutedDocumentIdsAsync(db, ApprovalDocumentTypes.LeaveRequest, cancellationToken);
+        foreach (var legacy in await db.Set<LeaveRequest>().AsNoTracking()
+            .Where(r => r.Status == LeaveRequestStatus.Pending && !routed.Contains(r.Id)).ToListAsync(cancellationToken))
         {
-            if (await TimesheetQueries.CanApproveAsync(db, owners[r.EmployeeId], access.Email, roles, cancellationToken))
+            if (await _approvals.PreviewCanDecideAsync(db, await ApprovalSubjects.LeaveRequestAsync(db, legacy, cancellationToken), access.Email, cancellationToken))
             {
-                mine.Add(r);
+                ids.Add(legacy.Id);
             }
         }
 
+        var mine = await db.Set<LeaveRequest>().AsNoTracking().Include(r => r.Days)
+            .Where(r => r.Status == LeaveRequestStatus.Pending && ids.Contains(r.Id)).ToListAsync(cancellationToken);
         return await MapAsync(db, mine.OrderBy(r => r.StartDate).ToList(), cancellationToken);
     }
 
@@ -208,16 +237,29 @@ public sealed class LeaveRequestService(
         await using var db = await dbFactory.CreateAsync(ct);
         var leave = await LoadAsync(db, requestId, ct);
         var owner = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == leave.EmployeeId, ct);
-        if (!await TimesheetQueries.CanApproveAsync(db, owner, access.Email, await access.GetOrgRolesAsync(ct), ct))
+        var own = string.Equals(owner.Email, access.Email, StringComparison.OrdinalIgnoreCase);
+        const string notYours = "Only the employee's supervisor (or an administrator, when they have none) can decide this request.";
+        if (own)
         {
-            throw new WorkbenchForbiddenException(string.Equals(owner.Email, access.Email, StringComparison.OrdinalIgnoreCase)
-                ? "You can't decide your own leave request."
-                : "Only the employee's supervisor (or an administrator, when they have none) can decide this request.");
+            throw new WorkbenchForbiddenException("You can't decide your own leave request.");
         }
 
         if (leave.Status != LeaveRequestStatus.Pending)
         {
+            if (!await TimesheetQueries.CanApproveAsync(db, owner, access.Email, await access.GetOrgRolesAsync(ct), ct)
+                && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.LeaveRequest, leave.Id, access.Email, ct))
+            {
+                throw new WorkbenchForbiddenException(notYours);
+            }
+
             throw new ArgumentException($"This request is already {leave.Status.ToString().ToLowerInvariant()}.");
+        }
+
+        var check = await _approvals.CheckAsync(db, ApprovalDocumentTypes.LeaveRequest, leave.Id, access.Email,
+            c => ApprovalSubjects.LeaveRequestAsync(db, leave, c), ct);
+        if (!check.CanDecide)
+        {
+            throw new WorkbenchForbiddenException(notYours);
         }
 
         var note = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
@@ -240,6 +282,17 @@ public sealed class LeaveRequestService(
 
                 warnings.Add($"{owner.DisplayName}'s {policy.Name} balance will go negative.");
             }
+        }
+
+        var outcome = await _approvals.DecideAsync(db, check, approve ? ApprovalDecisionKind.Approve : ApprovalDecisionKind.Reject, access.Email, note, ct);
+        if (approve && !outcome.IsComplete)
+        {
+            // A later workflow step still has to approve: the request stays pending.
+            audit.Record(db, AuditEntityType, leave.Id, "StepApproved", null, new { Step = string.Join(", ", outcome.Decided.Select(t => t.StepName)) }, note);
+            await db.SaveChangesAsync(ct);
+            await notifications.PublishAsync(outcome.NotifyEmails, LeaveNotificationKinds.Requested,
+                $"{owner.DisplayName} requested {policy.Name}", $"{Range(leave)}: {leave.Hours:0.##} h", link: "leave?tab=approvals");
+            return (await MapAsync(db, [leave], ct))[0] with { Warnings = warnings };
         }
 
         var before = Snapshot(leave);

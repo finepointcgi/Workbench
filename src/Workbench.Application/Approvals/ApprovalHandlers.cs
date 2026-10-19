@@ -3,6 +3,7 @@ using Workbench.Application.Identity;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Leave;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Time;
@@ -65,6 +66,17 @@ public sealed class ApBillApprovalHandler(IServiceProvider services) : IApproval
 
     public Task RejectAsync(Guid documentId, string reason, CancellationToken ct) =>
         services.GetRequiredService<IApBillService>().RejectAsync(documentId, new BillReasonRequest(reason), ct);
+}
+
+public sealed class LeaveRequestApprovalHandler(IServiceProvider services) : IApprovalDocumentHandler
+{
+    public string DocumentType => ApprovalDocumentTypes.LeaveRequest;
+
+    public Task ApproveAsync(Guid documentId, string? comment, CancellationToken ct) =>
+        services.GetRequiredService<ILeaveRequestService>().ApproveAsync(documentId, new DecideLeaveRequest(comment), ct);
+
+    public Task RejectAsync(Guid documentId, string reason, CancellationToken ct) =>
+        services.GetRequiredService<ILeaveRequestService>().RejectAsync(documentId, new DecideLeaveRequest(reason), ct);
 }
 
 /// <summary>

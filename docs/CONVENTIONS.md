@@ -288,6 +288,13 @@ await notifications.PublishAsync(
 - Leave balances are an append-only `LeaveLedgerEntry` ledger. Usage is never typed: `LeaveEngine.SyncUsageAsync` keeps one net row
   per approved timesheet on the policy's charge code. Accrual (per pay period, idempotent by `SourceKey`) runs when payroll posts.
   Holidays aren't a balance. Seeds: `PayrollSeed.cs`, `LeaveSeed.cs`.
+- Pay rates are effective-dated and append-only (`EmployeePayRate`; the profile's rate fields mirror the latest row). Read the
+  rate for a date with `PayRates.HistoryAsync` + `InEffect`: runs use the rate in effect on the pay period's last day. A
+  profile without rows reads as one rate from the hire date (`PayRates.BackfillAsync` stores it).
+- Leave requests go through the approval engine (document type `leave-request`, default = the timesheet rule). Voiding a
+  posted payroll run reverses that period's accrual (`LeaveEngine.ReverseAccrualAsync`); an accrual key counts as done while
+  its rows net above zero, so posting again accrues again. Policy eligibility (`LeaveEligibility`: org units with sub-units,
+  pay groups, exempt status, `EmploymentType` from the payroll profile; empty = everyone) gates accrual, balances and requests.
 
 ## Per diem and resource planning (wave 6)
 
