@@ -43,6 +43,7 @@ public static class SecurityEventTypes
     public const string PeriodStatusChanged = "period.status_changed";
     public const string SettingChanged = "settings.changed";
     public const string SignInSettingsChanged = "settings.sso";
+    public const string AssistantSettingsChanged = "settings.assistant"; // AI assistant turned on/off, connection, model, limits, notice accepted.
     public const string ComplianceChecklistAnswered = "compliance.checklist";
     public const string LegalHoldPlaced = "legal_hold.placed";
     public const string LegalHoldReleased = "legal_hold.released";

@@ -176,6 +176,7 @@ public sealed class EvmExportService(IWorkbenchDbContextFactory dbFactory, Billi
             row++;
         }
 
+        row = await NarrativeAsync(summary, row + 1, p.Project.Id, status.Period.FiscalPeriodId, cancellationToken);
         summary.Column(1).Width = 38;
         summary.Column(2).Width = 22;
 
@@ -258,6 +259,40 @@ public sealed class EvmExportService(IWorkbenchDbContextFactory dbFactory, Billi
         bcrs.Columns(1, 7).AdjustToContents();
         bcrs.Column(3).Width = 60;
         return Save(book, $"{p.Project.Code}-IPMDAR-Format5-{status.Period.Name}.xlsx");
+    }
+
+    /// <summary>The PM's saved monthly narrative for the period (Assistant › narrative), as the Format 5 analysis summary.</summary>
+    private async Task<int> NarrativeAsync(IXLWorksheet sheet, int row, Guid projectId, Guid fiscalPeriodId, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateAsync(ct);
+        var narrative = await db.Set<Domain.Assistant.ProjectNarrative>().AsNoTracking().SingleOrDefaultAsync(n => n.ProjectId == projectId && n.FiscalPeriodId == fiscalPeriodId, ct);
+        sheet.Cell(row, 1).Value = "Program narrative";
+        sheet.Cell(row, 1).Style.Font.Bold = true;
+        row++;
+        if (narrative is null)
+        {
+            sheet.Cell(row, 1).Value = "(No narrative saved for this period. The PM writes it on the project's Monthly narrative tab.)";
+            return row + 1;
+        }
+
+        (string Label, string? Text)[] sections =
+        [
+            ("Summary", narrative.Summary), ("Cost variance", narrative.CostVariance), ("Schedule variance", narrative.ScheduleVariance),
+            ("Changes in EAC", narrative.EacChanges), ("Accomplishments", narrative.Accomplishments), ("Upcoming milestones", narrative.UpcomingMilestones),
+            ("Risks and funding", narrative.Risks),
+        ];
+        foreach (var (label, text) in sections.Where(x => !string.IsNullOrWhiteSpace(x.Text)))
+        {
+            sheet.Cell(row, 1).Value = label;
+            sheet.Cell(row, 2).Value = text;
+            sheet.Cell(row, 2).Style.Alignment.WrapText = true;
+            sheet.Range(row, 2, row, 6).Merge();
+            row++;
+        }
+
+        sheet.Cell(row, 1).Value = "Narrative saved by";
+        sheet.Cell(row, 2).Value = $"{narrative.UpdatedBy}, {narrative.UpdatedAtUtc:yyyy-MM-dd}";
+        return row + 1;
     }
 
     private const int Header0Rows = 6;

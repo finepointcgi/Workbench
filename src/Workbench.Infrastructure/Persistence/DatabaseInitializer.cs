@@ -176,6 +176,7 @@ public static class DatabaseInitializer
         await MaterialsSeed.SeedAsync(db, services, cancellationToken); // Mia Torres (Materials), hardware project 3001: parts, 3-level BOM, stock, GFM, work orders.
         await CrmSeed.SeedAsync(db, services, cancellationToken); // Business development: Blake Diaz (bd@), 10 opportunities across the stages, accounts, contacts, leads.
         await PricingSeed.SeedAsync(db, services, cancellationToken); // Proposal pricing: Riley Quinn (Pricing role), forward pricing rates, PRP-2027-014 with a scenario and version 1.
+        await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
     }
 
     /// <summary>

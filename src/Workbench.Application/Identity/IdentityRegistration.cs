@@ -93,6 +93,7 @@ public static class IdentityRegistration
         services.AddWorkbenchMaterialsPermissions(); // Materials: read Materials/Finance/Admin, change Materials/Admin; revaluation and WIP Finance; own shop labor anyone.
         services.AddWorkbenchCrmPermissions(); // Business development: pipeline for BD/Finance/Admin; capture and proposal managers edit theirs; everyone else nothing.
         services.AddWorkbenchPricingPermissions(); // Proposal pricing: Finance, Admin or the Pricing role; the won handoff Finance/Admin.
+        services.AddWorkbenchAssistantPermissions(); // Assistant: ask signed in (tools check the user's access); settings/usage/audit Admin; narratives Finance/Admin/PM; flags filtered to reviewees.
         return services;
     }
 

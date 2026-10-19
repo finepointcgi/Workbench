@@ -1,0 +1,26 @@
+@* "2 flags" next to a timesheet in the approvals inbox; opens the flags. Renders nothing for a timesheet without flags. *@
+@inject IDialogService Dialogs
+
+@if (Flags is { Flags.Count: > 0 } flags)
+{
+    var warnings = flags.Flags.Count(f => f.Severity == TimesheetFlagSeverity.Warning);
+    var text = Label ?? $"{flags.Flags.Count} flag{(flags.Flags.Count == 1 ? "" : "s")}";
+    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="@(warnings > 0 ? Color.Warning : Color.Info)" Class="ml-1" Style="white-space:nowrap"
+               StartIcon="@Icons.Material.Filled.Flag" OnClick="OpenAsync" data-testid="timesheet-flags"
+               aria-label="@($"{text}: {flags.EmployeeName}'s timesheet, {string.Join(", ", flags.Flags.Select(f => f.Title))}")">
+        @text
+    </MudButton>
+}
+
+@code {
+    [Parameter] public TimesheetFlagsDto? Flags { get; set; }
+
+    /// <summary>The visible text (default "2 flags"); the accessible name always lists the flags.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    private async Task OpenAsync()
+    {
+        var parameters = new DialogParameters<TimesheetFlagsDialog> { { d => d.Flags, Flags! } };
+        await Dialogs.ShowAsync<TimesheetFlagsDialog>("Review flags", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+    }
+}

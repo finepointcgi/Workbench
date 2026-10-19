@@ -1,0 +1,107 @@
+@* One timesheet's review flags: what each rule saw, the facts, and (when the assistant is on) a plain-language
+   explanation. Flags are prompts to look closer; they never block approval. *@
+@using Microsoft.Extensions.DependencyInjection
+@inject ITimesheetFlagService FlagService
+@inject IServiceProvider Services
+
+<MudDialog data-testid="timesheet-flags-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6" HtmlTag="h2">Review flags: @Flags.EmployeeName, @Flags.PeriodStart.ToString("MMM d") – @Flags.PeriodEnd.ToString("MMM d, yyyy")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Workbench checks every timesheet against fixed rules and the person's own history. A flag is a prompt to look closer,
+            not a finding, and it never blocks submitting or approving.
+        </MudText>
+        @foreach (var flag in Flags.Flags)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="timesheet-flag">
+                <div class="d-flex align-center gap-2 mb-1">
+                    <MudIcon Icon="@(flag.Severity == TimesheetFlagSeverity.Warning ? Icons.Material.Filled.Warning : Icons.Material.Filled.Info)"
+                             Color="@(flag.Severity == TimesheetFlagSeverity.Warning ? Color.Warning : Color.Info)" Size="Size.Small" aria-hidden="true" />
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h3">@flag.Title</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(flag.Severity == TimesheetFlagSeverity.Warning ? "Look closer" : "For information")</MudChip>
+                </div>
+                <MudText Typo="Typo.body2">@flag.Detail</MudText>
+                @if (flag.Facts.Count > 0)
+                {
+                    <dl class="wb-flag-facts mt-1">
+                        @foreach (var fact in flag.Facts)
+                        {
+                            <dt>@fact.Label</dt>
+                            <dd>@fact.Value</dd>
+                        }
+                    </dl>
+                }
+
+                @if (_explanations.TryGetValue(flag.RuleKey, out var explanation))
+                {
+                    <MudAlert Severity="Severity.Normal" Dense="true" Class="mt-2" Icon="@Icons.Material.Filled.AutoAwesome" data-testid="flag-explanation">
+                        @explanation.Text
+                        @if (explanation.FromAssistant)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Written by the assistant from the facts above.</MudText>
+                        }
+                    </MudAlert>
+                }
+                else if (_canExplain)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AutoAwesome" Class="mt-1"
+                               Disabled="_busy == flag.RuleKey" OnClick="() => ExplainAsync(flag)" aria-label="@($"Explain the {flag.Title} flag in plain language")"
+                               data-testid="flag-explain">Explain in plain language</MudButton>
+                }
+            </MudPaper>
+        }
+        <span class="wb-sr-only" role="status">@_announcement</span>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Href="@Flags.Link" OnClick="() => MudDialog.Close()">Open the timesheet</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => MudDialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public TimesheetFlagsDto Flags { get; set; } = default!;
+
+    private readonly Dictionary<string, TimesheetFlagExplanationDto> _explanations = [];
+    private bool _canExplain;
+    private string? _busy;
+    private string? _announcement;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService<IAssistantService>() is { } assistant)
+        {
+            try
+            {
+                var status = await assistant.GetStatusAsync();
+                _canExplain = status.ExplainsTimesheetFlags && status.CanAsk;
+            }
+            catch (Exception ex) when (NavAccess.IsExpected(ex))
+            {
+            }
+        }
+    }
+
+    private async Task ExplainAsync(TimesheetFlagDto flag)
+    {
+        _busy = flag.RuleKey;
+        _announcement = "Writing an explanation";
+        try
+        {
+            _explanations[flag.RuleKey] = await FlagService.ExplainAsync(Flags.TimesheetId, flag.RuleKey);
+            _announcement = $"Explanation of {flag.Title} ready";
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex) || ex is WorkbenchNotFoundException)
+        {
+            _explanations[flag.RuleKey] = new TimesheetFlagExplanationDto(Flags.TimesheetId, flag.RuleKey, flag.Detail, false);
+            _announcement = "The assistant couldn't explain it; showing the rule's own description.";
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+}
