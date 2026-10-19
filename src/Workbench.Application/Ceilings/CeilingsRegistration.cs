@@ -29,6 +29,14 @@ public static class CeilingsRegistration
         services.Decorate<IApBillService, CeilingCheckingApBillService>();
         services.Decorate<IPurchaseOrderService, CeilingCheckingPurchaseOrderService>();
         services.Decorate<IInvoiceService, CeilingCheckingInvoiceService>();
+        services.Decorate<IRequisitionService, CeilingCheckingRequisitionService>();
+        return services;
+    }
+
+    /// <summary>For the server host: the hourly threshold-alert check (after the system-execution hosting).</summary>
+    public static IServiceCollection AddWorkbenchCeilingsHosting(this IServiceCollection services)
+    {
+        services.AddHostedService<CeilingAlertBackgroundService>();
         return services;
     }
 }

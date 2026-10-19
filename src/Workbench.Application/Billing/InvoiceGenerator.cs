@@ -19,7 +19,9 @@ internal sealed record DraftLine(
     decimal Quantity,
     decimal Rate,
     decimal Amount,
-    IReadOnlyList<BilledSource> Sources);
+    IReadOnlyList<BilledSource> Sources,
+    int? FiscalYear = null,
+    decimal? CostBasis = null);
 
 internal sealed record Generation(IReadOnlyList<DraftLine> Lines, IReadOnlyList<string> Warnings, string? RateNote);
 
@@ -321,35 +323,68 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
         // Fee on cost, less the withhold (none on the final invoice, which releases what was withheld).
         var settings = ctx.Settings;
         var billedInvoices = prior.Where(i => i.IsBilled).ToList();
-        var priorFee = prior.SelectMany(i => i.Lines).Where(l => l.Kind == InvoiceLineKind.Fee && l.ClinId != null)
-            .GroupBy(l => l.ClinId!.Value).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+        var feeLines = prior.SelectMany(i => i.Lines.Select(l => (Invoice: i, Line: l))).Where(x => x.Line.Kind == InvoiceLineKind.Fee && x.Line.ClinId != null).ToList();
+        var priorFee = feeLines.GroupBy(x => x.Line.ClinId!.Value).ToDictionary(g => g.Key, g => g.Sum(x => x.Line.Amount));
+        Dictionary<(Guid, int), decimal> priorFeeByYear = [];
+        YearSplit? split = null;
         foreach (var clin in clins)
         {
             var costHere = lines.Where(l => l.ClinId == clin.Id).Sum(l => l.Amount);
-            if (clin.Pricing != ClinPricing.CostNoFee && clin.FeeRate is > 0 and var feeRate && costHere != 0)
+            if (clin.Pricing != ClinPricing.CostNoFee && clin.FeeRate is > 0 and var clinFeeRate && costHere != 0)
             {
-                var fee = Money.Round(costHere * feeRate);
+                // Fee caps for one fiscal year only: split the CLIN's new cost by the year it's dated in and cap each part.
+                var years = new HashSet<int>();
                 foreach (var limit in limits ?? [])
                 {
-                    // Contract fee caps (ceilings module): a lower fee rate, or no more than the fee left under a fee ceiling.
-                    var cap = await limit.FeeLimitAsync(db, ctx.Contract.Id, clin.Id, feeRate, priorFee, ct);
-                    var uncapped = fee;
-                    feeRate = cap.FeeRate;
-                    fee = Money.Round(costHere * feeRate);
-                    if (cap.MaxFee is { } max && fee > max)
-                    {
-                        fee = Math.Max(0, max);
-                    }
-
-                    if (fee != uncapped && cap.Note is not null)
-                    {
-                        warnings.Add(cap.Note);
-                    }
+                    years.UnionWith(await limit.FeeCapYearsAsync(db, ctx.Contract.Id, clin.Id, ct));
                 }
 
-                priorFee[clin.Id] = priorFee.GetValueOrDefault(clin.Id) + fee;
-                lines.Add(new DraftLine(clin.Id, InvoiceLineKind.Fee, $"{(type == InvoiceType.TrueUp ? "True-up: fee" : "Fee")} {feeRate:P2} on {costHere:N2}",
-                    null, null, null, null, 1, feeRate, fee, []));
+                if (years.Count > 0 && split is null)
+                {
+                    split = await YearSplit.LoadAsync(db, costs, ctx, clinIds, windowFrom, to, basis, ct);
+                    priorFeeByYear = feeLines.GroupBy(x => (x.Line.ClinId!.Value, x.Line.CostBasis != null ? x.Line.FiscalYear : split.YearOf(x.Invoice.PeriodTo)))
+                        .Where(g => g.Key.Item2 is not null).ToDictionary(g => (g.Key.Item1, g.Key.Item2!.Value), g => g.Sum(x => x.Line.Amount));
+                }
+
+                var parts = years.Count == 0
+                    ? [(Year: (int?)null, Cost: costHere)]
+                    : split!.Split(clin.Id, cost.Where(l => l.ClinId == clin.Id).Sum(l => l.DirectLabor + l.Fringe + l.Overhead + l.GeneralAndAdministrative + l.DirectOdc), costHere,
+                        priorCost.SelectMany(i => i.Lines).Where(l => l.Kind == InvoiceLineKind.Fee && l.ClinId == clin.Id).ToList(), to);
+                var fee = 0m;
+                foreach (var (year, part) in parts)
+                {
+                    var feeRate = clinFeeRate;
+                    var partFee = Money.Round(part * feeRate);
+                    foreach (var limit in limits ?? [])
+                    {
+                        // Contract fee caps (ceilings module): a lower fee rate, or no more than the fee left under a fee ceiling.
+                        var cap = await limit.FeeLimitAsync(db, ctx.Contract.Id, clin.Id, year, feeRate, new FeeToDate(priorFee, priorFeeByYear), ct);
+                        var uncapped = partFee;
+                        feeRate = cap.FeeRate;
+                        partFee = Money.Round(part * feeRate);
+                        if (cap.MaxFee is { } max && partFee > max)
+                        {
+                            partFee = Math.Max(0, max);
+                        }
+
+                        if (partFee != uncapped && cap.Note is not null)
+                        {
+                            warnings.Add(cap.Note);
+                        }
+                    }
+
+                    priorFee[clin.Id] = priorFee.GetValueOrDefault(clin.Id) + partFee;
+                    if (year is { } y)
+                    {
+                        priorFeeByYear[(clin.Id, y)] = priorFeeByYear.GetValueOrDefault((clin.Id, y)) + partFee;
+                    }
+
+                    fee += partFee;
+                    var label = $"{(type == InvoiceType.TrueUp ? "True-up: fee" : "Fee")} {feeRate:P2} on {part:N2}";
+                    lines.Add(new DraftLine(clin.Id, InvoiceLineKind.Fee, years.Count == 0 ? label : $"{label} ({(year is { } fy ? $"FY{fy}" : "undated")} cost)",
+                        null, null, null, null, 1, feeRate, partFee, [], year, years.Count == 0 ? null : part));
+                }
+
                 if (!releaseWithhold && fee > 0 && settings?.FeeWithholdRate is > 0 and var withholdRate)
                 {
                     var withhold = Money.Round(fee * withholdRate);
@@ -378,6 +413,76 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
         }
 
         return new Generation(lines, warnings, rateNote);
+    }
+
+    /// <summary>
+    /// A CLIN's cost by the fiscal year it's dated in, for fee caps that apply to one year. Fee lines split this way record the
+    /// year and the cost they were billed on, so what's new is each year's cost less what was billed on it; cost billed before
+    /// without a year (invoices from before the split) is taken as the oldest cost.
+    /// </summary>
+    private sealed class YearSplit
+    {
+        private List<FiscalYear> _years = [];
+        private readonly Dictionary<(Guid Clin, int Year), decimal> _cost = [];
+
+        public static async Task<YearSplit> LoadAsync(
+            IWorkbenchDbContext db, BillingCostSource costs, BillingContext ctx, IReadOnlySet<Guid> clinIds, DateOnly from, DateOnly to, RateBasis basis, CancellationToken ct)
+        {
+            var split = new YearSplit { _years = (await db.Set<FiscalYear>().AsNoTracking().ToListAsync(ct)).OrderBy(y => y.Start).ToList() };
+            foreach (var year in split._years.Where(y => y.Start <= to && y.End >= from))
+            {
+                var start = year.Start > from ? year.Start : from;
+                var end = year.End < to ? year.End : to;
+                foreach (var project in ctx.Projects)
+                {
+                    var result = await costs.GetProjectCostAsync(db, project.Id, start, end, basis, ct);
+                    foreach (var l in result.Lines)
+                    {
+                        if ((l.ClinId ?? ctx.Wbs.GetValueOrDefault(l.WbsElementId)?.ClinId) is { } clin && clinIds.Contains(clin))
+                        {
+                            split._cost[(clin, year.Year)] = split._cost.GetValueOrDefault((clin, year.Year))
+                                + l.DirectLabor + l.Fringe + l.Overhead + l.GeneralAndAdministrative + l.DirectOdc;
+                        }
+                    }
+                }
+            }
+
+            return split;
+        }
+
+        public int? YearOf(DateOnly date) => _years.FirstOrDefault(y => y.Start <= date && date <= y.End)?.Year;
+
+        /// <summary>
+        /// <paramref name="newCost"/> by fiscal year (null: dated outside the fiscal calendar). <paramref name="totalCost"/> is the
+        /// CLIN's cost over the whole window and <paramref name="priorFeeLines"/> the CLIN's fee lines on the invoices that billed
+        /// the rest of it.
+        /// </summary>
+        public List<(int? Year, decimal Cost)> Split(Guid clinId, decimal totalCost, decimal newCost, IReadOnlyList<InvoiceLine> priorFeeLines, DateOnly to)
+        {
+            var buckets = _cost.Where(kv => kv.Key.Clin == clinId).OrderBy(kv => kv.Key.Year).Select(kv => (Year: (int?)kv.Key.Year, Cost: kv.Value)).ToList();
+            buckets.Insert(0, (null, totalCost - buckets.Sum(b => b.Cost)));
+            var attributed = priorFeeLines.Where(l => l.CostBasis != null).GroupBy(l => l.FiscalYear).ToDictionary(g => g.Key ?? 0, g => g.Sum(l => l.CostBasis!.Value));
+            var left = buckets.Select(b => (b.Year, Cost: b.Cost - attributed.GetValueOrDefault(b.Year ?? 0))).ToList();
+            var unattributed = totalCost - newCost - attributed.Values.Sum();
+            if (unattributed < 0 || unattributed > left.Where(b => b.Cost > 0).Sum(b => b.Cost))
+            {
+                // A window the years don't explain: all in the year the invoice ends in.
+                return [(YearOf(to), newCost)];
+            }
+
+            var parts = new List<(int? Year, decimal Cost)>();
+            foreach (var (year, amount) in left)
+            {
+                var taken = amount > 0 ? Math.Min(unattributed, amount) : 0;
+                unattributed -= taken;
+                if (amount - taken != 0)
+                {
+                    parts.Add((year, amount - taken));
+                }
+            }
+
+            return parts;
+        }
     }
 
     /// <summary>Fee withheld on billed invoices less what has been released (one CLIN, or all with null).</summary>

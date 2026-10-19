@@ -50,6 +50,10 @@ else
                 </MudTd>
                 <MudTd>
                     <MudChip T="string" Size="Size.Small" Color="@(context.Ceiling.Mode == CeilingMode.Block ? Color.Error : Color.Default)">@context.Ceiling.Mode</MudChip>
+                    @if (context.Ceiling.CheckAtRequisition)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Checks requisitions</MudText>
+                    }
                 </MudTd>
                 <MudTd Style="min-width:260px">
                     @foreach (var m in context.Measures)

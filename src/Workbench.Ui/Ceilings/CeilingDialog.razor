@@ -65,6 +65,13 @@
             </MudRadioGroup>
             <MudTextField @bind-Value="_thresholds" Label="Alert thresholds (%)" HelperText="Comma separated, for example 80,95,100." />
             <MudCheckBox T="bool" @bind-Value="_pmMayOverride" Label="The project manager may grant overrides" />
+            @if (_cost is not null)
+            {
+                <MudCheckBox T="bool" @bind-Value="_checkAtRequisition" Label="Check at requisition" data-testid="ceiling-check-requisition" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">
+                    Requisitions that would go past the cost ceiling are refused when it blocks. Otherwise they only warn, and the purchase order is checked.
+                </MudText>
+            }
             <MudTextField @bind-Value="_notes" Label="Notes" Lines="2" />
         </MudStack>
     </DialogContent>
@@ -92,7 +99,7 @@
     private decimal? _hours, _cost, _billing;
     private CeilingMode _mode = CeilingMode.Warn;
     private string? _thresholds = "80,95,100";
-    private bool _pmMayOverride;
+    private bool _pmMayOverride, _checkAtRequisition;
     private string? _notes;
     private bool _saving;
     private IReadOnlyList<Workbench.Contracts.Contracts.ClinDto> _clins = [];
@@ -112,6 +119,7 @@
         {
             (_hours, _cost, _billing, _mode) = (e.HoursCeiling, e.CostCeiling, e.BillingCeiling, e.Mode);
             (_thresholds, _pmMayOverride, _notes) = (string.Join(",", e.AlertThresholds), e.ProjectManagerMayOverride, e.Notes);
+            _checkAtRequisition = e.CheckAtRequisition;
             return;
         }
 
@@ -142,7 +150,8 @@
         try
         {
             var request = new SaveCeilingRequest(Scope, ContractId, _clinId, _projectId ?? ProjectId, _wbsId, _categoryId,
-                _hours, _cost, Scope is CeilingScope.Contract or CeilingScope.Clin ? _billing : null, _mode, _thresholds, _pmMayOverride, _notes);
+                _hours, _cost, Scope is CeilingScope.Contract or CeilingScope.Clin ? _billing : null, _mode, _thresholds, _pmMayOverride, _notes,
+                _cost is not null && _checkAtRequisition);
             if (Existing is { } e)
             {
                 await Ceilings.UpdateAsync(e.Id, request);

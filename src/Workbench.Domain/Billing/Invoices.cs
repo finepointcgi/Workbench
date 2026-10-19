@@ -177,6 +177,12 @@ public sealed class InvoiceLine : Entity
     /// <summary>True for lines the generator wrote; manual adjustments are kept when a draft is regenerated.</summary>
     public bool IsGenerated { get; set; } = true;
 
+    /// <summary>For fee lines split by the fiscal year of the cost (when a fee cap applies to one year only): that year.</summary>
+    public int? FiscalYear { get; set; }
+
+    /// <summary>For fee lines split by fiscal year: the cost of that year the fee was billed on.</summary>
+    public decimal? CostBasis { get; set; }
+
     public List<BilledSource> Sources { get; } = [];
 }
 
