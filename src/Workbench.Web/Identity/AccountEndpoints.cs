@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Workbench.Application.Identity;
 using Workbench.Application.Security;
 using Workbench.Contracts.Security;
 
@@ -12,6 +13,7 @@ public static class AccountEndpoints
     public const string SignOutPath = "/account/signout";
     public const string AccessDeniedPath = "/account/access-denied";
     public const string SessionPingPath = "/account/session/ping";
+    public const string ReauthenticatePath = "/account/reauthenticate";
 
     /// <summary>Sign-in and sign-out endpoints, and the dev sign-in page when it's enabled.</summary>
     public static IEndpointRouteBuilder MapWorkbenchAccountEndpoints(this IEndpointRouteBuilder app)
@@ -22,10 +24,38 @@ public static class AccountEndpoints
             DevSignIn.Map(app);
         }
 
-        app.MapGet(SignInPath, (string? returnUrl) => options.Oidc
-                ? Results.Challenge(new AuthenticationProperties { RedirectUri = SafeReturnUrl(returnUrl) }, [OpenIdConnectDefaults.AuthenticationScheme])
-                : Results.LocalRedirect($"{DevSignIn.Path}?returnUrl={Uri.EscapeDataString(SafeReturnUrl(returnUrl))}"))
+        // The organization's own IdP when it has one; else the server's; else (Development) the dev sign-in page.
+        // ?provider=server picks the server's IdP explicitly (refused at sign-in when the organization requires its own).
+        app.MapGet(SignInPath, async (HttpContext http, SignInSettingsStore store, Application.Tenancy.ITenantContext tenants, string? returnUrl, string? provider) =>
+            {
+                var properties = new AuthenticationProperties { RedirectUri = SafeReturnUrl(returnUrl) };
+                if (provider != "server" && !tenants.IsHost && (await store.GetAsync(http.RequestAborted)).OrganizationIdpReady)
+                {
+                    return Results.Challenge(properties, [OrganizationSso.Scheme]);
+                }
+
+                return options.Oidc
+                    ? Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme])
+                    : Results.LocalRedirect($"{DevSignIn.Path}?returnUrl={Uri.EscapeDataString(SafeReturnUrl(returnUrl))}");
+            })
             .AllowAnonymous().ExcludeFromDescription();
+
+        // Sensitive actions need a recent sign-in: send the user back to the IdP they used, which must ask for credentials again.
+        app.MapGet(ReauthenticatePath, (HttpContext http, TimeProvider clock, string? returnUrl) =>
+            {
+                var target = SafeReturnUrl(returnUrl);
+                var method = http.User.FindFirst(OrganizationSso.MethodClaim)?.Value;
+                var properties = new AuthenticationProperties { RedirectUri = target };
+                properties.Items[OrganizationSso.ReauthItem] = clock.GetUtcNow().ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return method switch
+                {
+                    "sso" => Results.Challenge(properties, [OrganizationSso.Scheme]),
+                    "oidc" when options.Oidc => Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]),
+                    _ when options.DevSignIn => Results.LocalRedirect($"{DevSignIn.Path}?returnUrl={Uri.EscapeDataString(target)}&reauth=1"),
+                    _ => Results.LocalRedirect($"{SignInPath}?returnUrl={Uri.EscapeDataString(target)}"),
+                };
+            })
+            .ExcludeFromDescription();
 
         // A GET so the shared Blazor UI can navigate to it; the cookie is SameSite=Lax and signing out is harmless.
         app.MapGet(SignOutPath, async (HttpContext http, SecurityEventLog log) =>
@@ -35,10 +65,16 @@ public static class AccountEndpoints
                     await log.RecordAsync(SecurityEventTypes.SignOut, email, actor: email);
                 }
 
-                return options.Oidc
-                    ? Results.SignOut(new AuthenticationProperties { RedirectUri = "/" },
-                        [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme])
-                    : Results.SignOut(new AuthenticationProperties { RedirectUri = "/" }, [CookieAuthenticationDefaults.AuthenticationScheme]);
+                // Also end the session at the IdP the user signed in with.
+                var method = http.User.FindFirst(OrganizationSso.MethodClaim)?.Value;
+                var properties = new AuthenticationProperties { RedirectUri = "/" };
+                return method switch
+                {
+                    "sso" => Results.SignOut(properties, [CookieAuthenticationDefaults.AuthenticationScheme, OrganizationSso.Scheme]),
+                    _ when options.Oidc && method != "dev" => Results.SignOut(properties,
+                        [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]),
+                    _ => Results.SignOut(properties, [CookieAuthenticationDefaults.AuthenticationScheme]),
+                };
             })
             .AllowAnonymous().ExcludeFromDescription();
 
@@ -53,9 +89,14 @@ public static class AccountEndpoints
 
     private static string AccessDeniedPage(string? reason)
     {
-        var message = reason == "signin"
-            ? "Your sign-in wasn't accepted. Your account may not be invited yet, may be deactivated, or the invitation may have expired. Ask a Workbench administrator."
-            : "You don't have access to that page.";
+        var message = reason switch
+        {
+            "signin" => "Your sign-in wasn't accepted. Your account may not be invited yet, may be deactivated, or the invitation may have expired. Ask a Workbench administrator.",
+            "mfa" => "Your organization requires multi-factor authentication, and your identity provider reported that this sign-in didn't use it. Sign in again and complete the second step (authenticator app, security key or code). If you weren't asked for one, ask your administrator to turn on MFA for Workbench at your identity provider.",
+            "org_idp" => "Your organization only allows sign-in through its own identity provider. Use the organization sign-in instead.",
+            "reauth" => "Your identity provider didn't ask for your credentials again, so the re-authentication didn't count. Try again, or ask your administrator.",
+            _ => "You don't have access to that page.",
+        };
         return $$"""
             <!DOCTYPE html>
             <html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />

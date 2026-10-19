@@ -180,6 +180,18 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - Keep pages working under the Content-Security-Policy: no inline `<script>` or `on*=` handlers, no `eval`; put JS in
   files under `wwwroot` and import them. Inline styles are allowed (MudBlazor needs them).
 
+## Sign-in, MFA and re-authentication
+
+- The organization's identity provider, MFA rule (off / admins / everyone), just-in-time provisioning and session policy
+  are tenant settings (`SignInSettings`, `ISignInSettingsService`, **Admin › Users and security › Sign-in**), read through
+  the cached `SignInSettingsStore`. Every sign-in goes through `SignInGate.EvaluateAsync(..., claims)`; don't add sign-in
+  paths that bypass it. Guides: `docs/security/sso-entra.md`, `sso-okta.md`.
+- A **sensitive action** (revealing pay, bank or tax data; changing bank accounts, approval workflows or sign-in settings)
+  calls `ReauthenticationGuard.RequireRecentAsync(SensitiveActions.X)` in a decorator registered by
+  `AddWorkbenchReauthentication` (above `AddWorkbenchIdentity`, so permission checks run first). It throws
+  `ReauthenticationRequiredException` (a 403); the layout's `ReauthenticationPrompt` offers "Sign in again". Add new
+  actions to `SensitiveActions`. Without an interactive session (jobs, service tests) the guard doesn't apply.
+
 ## Notifications (any feature)
 
 To tell someone something, inject `INotificationPublisher` (`Workbench.Application.Notifications`, a singleton) and

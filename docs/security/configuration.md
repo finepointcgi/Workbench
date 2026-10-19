@@ -78,6 +78,25 @@ Workbench reads them at startup, so restart the web host after rotating.
 Administrators can override retention periods in **Users and security → Retention**; every change is a
 `settings.changed` security event.
 
+## Organization sign-in (SSO, MFA, provisioning)
+
+Besides the server-wide `Authentication:Oidc` provider, each organization (each tenant in MultiTenant mode) can set
+its own OpenID Connect provider in **Admin › Users and security › Sign-in**: Entra ID ([sso-entra.md](sso-entra.md)),
+Okta ([sso-okta.md](sso-okta.md)) or any standards-compliant IdP. These settings live in the organization's database,
+not in configuration:
+
+| Setting | Effect |
+| --- | --- |
+| Identity provider (issuer, client id, secret) | **Sign in** uses it (scheme `OrganizationSso`, callback `/signin-sso`). The client secret is encrypted with Data Protection (per tenant) and never shown again. Issuers must be `https` (plain `http` only on loopback, for development). |
+| Only allow sign-in through this provider | Refuses the server-wide provider for this organization, including the desktop app's bearer tokens. Can be turned on only from a session that used the organization's provider. |
+| MFA: off / administrators / everyone | Refuses sign-ins (and bearer tokens) whose `amr`/`acr` don't include an accepted value; `signin.mfa_required` event. Can be tightened only from a session that used MFA. |
+| Just-in-time provisioning | Invite only, or also allowed email domains (default roles, never Admin); groups claim → roles; optionally the IdP manages roles at every sign-in (never removing the last admin). |
+| Re-authentication window (default 15 min) | Pay rates, bank account numbers and changes, vendor TINs, approval workflow changes and these settings need a recent sign-in; `/account/reauthenticate` sends the user to the IdP with `prompt=login` and `max_age=0` and rejects an old `auth_time`. |
+| Shorter session limit | An organization limit under `Authentication:Session:AbsoluteLifetimeHours`. |
+
+Register the redirect URIs `https://<host>/signin-sso` and `https://<host>/signout-callback-sso` at the IdP (shown on the
+page). The desktop app's bearer tokens still come from the server-wide provider. Changes are `settings.sso` security events.
+
 ## Startup check
 
 Outside Development, the web host lists every problem and refuses to start when:

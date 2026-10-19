@@ -134,6 +134,7 @@ public static class NavCatalog
         // Admin (administrators; Finance sees the setup parts, titled Setup).
         new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, FinanceOnly, Keywords: "employees cost rates supervisors"),
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
+        new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, FinanceOnly, Keywords: "history security"),
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, FinanceOnly, MatchAll: true),
         new(Admin, "Setup", "Org units", "setup/org-units", Icons.Material.Filled.AccountTree, FinanceOnly, Keywords: "departments"),

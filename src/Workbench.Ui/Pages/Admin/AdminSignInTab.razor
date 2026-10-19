@@ -1,0 +1,302 @@
+@using Workbench.Contracts.Security
+@inject ISignInSettingsService SignIn
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    How people sign in: your organization's identity provider (Microsoft Entra ID, Okta or another OpenID Connect provider),
+    whether they must use multi-factor authentication, who is created on first sign-in, and how long sessions last.
+    Setup guides: <code>docs/security/sso-entra.md</code> and <code>docs/security/sso-okta.md</code>. Every change is a
+    <code>settings.sso</code> security event and needs a recent sign-in.
+</MudText>
+
+@if (_settings is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var env = _settings.Environment;
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="sso-provider">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Identity provider</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            @if (env.ServerOidcConfigured)
+            {
+                <span>The server also has its own sign-in configured. While your provider is on, Workbench's sign-in button uses yours.</span>
+            }
+            else
+            {
+                <span>No server-wide identity provider is configured, so your provider is the way in (the dev sign-in exists only in Development).</span>
+            }
+        </MudText>
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="IdentityProviderKind" Label="Provider" @bind-Value="_kind" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="IdentityProviderKind.EntraId">Microsoft Entra ID</MudSelectItem>
+                    <MudSelectItem Value="IdentityProviderKind.Okta">Okta</MudSelectItem>
+                    <MudSelectItem Value="IdentityProviderKind.GenericOidc">Other OpenID Connect provider</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_label" Label="Button label" Placeholder="Acme Microsoft account" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_authority" Label="Issuer URL" HelperText="@IssuerHelp" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="512"
+                              data-testid="sso-authority" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_clientId" Label="Client (application) id" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" data-testid="sso-client-id" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_secret" Label="Client secret" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              HelperText="@SecretHelp" autocomplete="new-password" MaxLength="1000" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_scopes" Label="Extra scopes (optional)" HelperText="openid profile email are always requested" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" MaxLength="500" />
+            </MudItem>
+        </MudGrid>
+
+        <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined" Class="my-3">
+            Register these at your provider. Sign-in redirect URI: <code data-testid="sso-redirect-uri">@RedirectUri</code>.
+            Sign-out redirect URI: <code>@SignedOutUri</code>.
+        </MudAlert>
+
+        <MudStack Spacing="0">
+            <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="Sign in with this provider" data-testid="sso-enabled" />
+            <MudSwitch T="bool" @bind-Value="_requireOrgIdp" Color="Color.Primary" Disabled="!_enabled"
+                       Label="Only allow sign-in through this provider (refuse the server's sign-in)" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary ml-12">
+                To avoid locking everyone out, you can turn this on only while you're signed in through this provider
+                (you're signed in with: @(env.CurrentSessionMethod ?? "unknown")).
+            </MudText>
+        </MudStack>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-3">
+            @if (_settings.HasClientSecret)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Warning" OnClick="ClearSecretAsync" Disabled="_busy">Remove secret</MudButton>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProviderAsync" Disabled="_busy" data-testid="sso-save">Save provider</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="mfa-policy">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Multi-factor authentication</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Workbench doesn't ask for a second factor itself: your identity provider does, and reports it in the token
+            (<code>amr</code> or <code>acr</code>). Sign-ins without it are refused with an explanation.
+            Your current sign-in @(env.CurrentSessionMfa ? "used MFA" : "did not report MFA").
+        </MudText>
+        <MudRadioGroup T="MfaRequirement" @bind-Value="_mfa">
+            <MudRadio Value="MfaRequirement.Off" Color="Color.Primary">Not required</MudRadio>
+            <MudRadio Value="MfaRequirement.AdminsOnly" Color="Color.Primary">Administrators</MudRadio>
+            <MudRadio Value="MfaRequirement.Everyone" Color="Color.Primary">Everyone</MudRadio>
+        </MudRadioGroup>
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_amr" Label="amr values that prove MFA" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_acr" Label="acr values that prove MFA (optional)" HelperText="Entra: c1 (authentication context); Okta: phr, urn:okta:loa:2fa:any"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_requestedAcr" Label="Ask the provider for (optional)" HelperText="Sent as acr_values (Entra: as an authentication context)"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+            </MudItem>
+        </MudGrid>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveMfaAsync" Disabled="_busy" data-testid="mfa-save">Save MFA</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="provisioning">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Just-in-time provisioning</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Who gets a Workbench account on their first sign-in. Leavers: deactivate them here, or let your provider's SCIM
+            provisioning deactivate them (Users tab); they can't sign in afterwards and their sessions end at once.
+        </MudText>
+        <MudRadioGroup T="JitProvisioningMode" @bind-Value="_jit">
+            <MudRadio Value="JitProvisioningMode.InviteOnly" Color="Color.Primary">Only invited people</MudRadio>
+            <MudRadio Value="JitProvisioningMode.AllowedDomains" Color="Color.Primary">Also anyone from these email domains</MudRadio>
+        </MudRadioGroup>
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_domains" Label="Allowed email domains" Placeholder="acme.com acme-federal.com" Disabled="_jit == JitProvisioningMode.InviteOnly"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="1000" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_groupsClaim" Label="Groups claim" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100" />
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.subtitle2" Class="mt-3">Roles for people created on first sign-in</MudText>
+        <RoleChecks Roles="_defaultRoles" RolesChanged="r => _defaultRoles = r" AllowAdmin="false" />
+
+        <MudText Typo="Typo.subtitle2" Class="mt-3">Groups that grant roles</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+            Entra ID sends group object ids; Okta sends group names. Mapped roles are added for new people.
+        </MudText>
+        <MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="group-mappings">
+            <thead><tr><th>Group</th><th>Roles</th><th>Description</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var row in _mappings)
+                {
+                    <tr>
+                        <td><MudTextField @bind-Value="row.Group" Margin="Margin.Dense" Variant="Variant.Outlined" MaxLength="256" aria-label="Group" /></td>
+                        <td><RoleChecks Roles="row.Roles" RolesChanged="r => row.Roles = r" AllowAdmin="true" /></td>
+                        <td><MudTextField @bind-Value="row.Description" Margin="Margin.Dense" Variant="Variant.Outlined" MaxLength="200" aria-label="Description" /></td>
+                        <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _mappings.Remove(row)" aria-label="Remove mapping" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _mappings.Add(new MappingRow())">Add group</MudButton>
+        <MudSwitch T="bool" @bind-Value="_syncRoles" Color="Color.Primary" Class="mt-2"
+                   Label="The provider manages roles: set everyone's roles from their groups at each sign-in" />
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProvisioningAsync" Disabled="_busy" data-testid="provisioning-save">Save provisioning</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="session-policy">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Sessions and re-authentication</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Sessions end after @env.ServerIdleTimeoutMinutes minutes without activity and @env.ServerAbsoluteLifetimeHours hours after sign-in (server settings).
+            Showing pay rates, bank account numbers or vendor tax ids, changing bank accounts, approval workflows or these
+            settings needs a sign-in within the re-authentication window.
+        </MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudNumericField T="int" @bind-Value="_reauthMinutes" Label="Re-authentication window (minutes)" Min="1" Max="240" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudNumericField T="int?" @bind-Value="_maxHours" Label="Shorter session limit (hours, optional)" Min="1" Max="env.ServerAbsoluteLifetimeHours"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+            </MudItem>
+        </MudGrid>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSessionsAsync" Disabled="_busy" data-testid="sessions-save">Save sessions</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (_settings.UpdatedAtUtc is { } updated)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Last changed @updated.ToString("yyyy-MM-dd HH:mm") UTC by @_settings.UpdatedBy</MudText>
+    }
+}
+
+@code {
+    private SignInSettingsDto? _settings;
+    private bool _busy;
+    private bool _enabled;
+    private IdentityProviderKind _kind;
+    private string? _label;
+    private string? _authority;
+    private string? _clientId;
+    private string? _secret;
+    private string? _scopes;
+    private bool _requireOrgIdp;
+    private MfaRequirement _mfa;
+    private string? _amr;
+    private string? _acr;
+    private string? _requestedAcr;
+    private JitProvisioningMode _jit;
+    private string? _domains;
+    private string? _groupsClaim;
+    private OrgRoles _defaultRoles;
+    private bool _syncRoles;
+    private List<MappingRow> _mappings = [];
+    private int _reauthMinutes = 15;
+    private int? _maxHours;
+
+    private sealed class MappingRow
+    {
+        public string? Group { get; set; }
+        public OrgRoles Roles { get; set; }
+        public string? Description { get; set; }
+    }
+
+    private string RedirectUri => Navigation.BaseUri.TrimEnd('/') + SignInSettingsDto.RedirectPath;
+
+    private string SignedOutUri => Navigation.BaseUri.TrimEnd('/') + SignInSettingsDto.SignedOutCallbackPath;
+
+    private string IssuerHelp => _kind switch
+    {
+        IdentityProviderKind.EntraId => "https://login.microsoftonline.com/<directory (tenant) id>/v2.0",
+        IdentityProviderKind.Okta => "https://<your-org>.okta.com/oauth2/default (or your custom authorization server)",
+        _ => "The issuer; its /.well-known/openid-configuration must be reachable",
+    };
+
+    private string SecretHelp => _settings?.HasClientSecret == true
+        ? $"Set {_settings.ClientSecretSetAtUtc:yyyy-MM-dd}. Leave empty to keep it; it's stored encrypted and never shown again."
+        : "Not set. Stored encrypted and never shown again.";
+
+    protected override async Task OnInitializedAsync() => await RunAsync(() => SignIn.GetAsync(), null);
+
+    private Task SaveProviderAsync() =>
+        RunAsync(() => SignIn.SaveProviderAsync(new SaveSsoProviderRequest(_enabled, _kind, _label, _authority, _clientId, _secret, _scopes, _requireOrgIdp)), "Identity provider saved.");
+
+    private Task ClearSecretAsync() =>
+        RunAsync(() => SignIn.SaveProviderAsync(new SaveSsoProviderRequest(_enabled, _kind, _label, _authority, _clientId, null, _scopes, _requireOrgIdp, ClearClientSecret: true)),
+            "Client secret removed.");
+
+    private Task SaveMfaAsync() => RunAsync(() => SignIn.SaveMfaPolicyAsync(new SaveMfaPolicyRequest(_mfa, _amr, _acr, _requestedAcr)), "MFA policy saved.");
+
+    private Task SaveProvisioningAsync() =>
+        RunAsync(() => SignIn.SaveProvisioningAsync(new SaveProvisioningRequest(_jit, _domains, _defaultRoles, _groupsClaim, _syncRoles,
+            _mappings.Where(m => !string.IsNullOrWhiteSpace(m.Group)).Select(m => new SaveSsoGroupMapping(m.Group!, m.Roles, m.Description)).ToList())), "Provisioning saved.");
+
+    private Task SaveSessionsAsync() => RunAsync(() => SignIn.SaveSessionPolicyAsync(new SaveSessionPolicyRequest(_reauthMinutes, _maxHours)), "Session policy saved.");
+
+    private async Task RunAsync(Func<Task<SignInSettingsDto>> action, string? success)
+    {
+        _busy = true;
+        try
+        {
+            Load(await action());
+            if (success is not null)
+            {
+                Snackbar.Add(success, Severity.Success);
+            }
+        }
+        catch (ReauthenticationRequiredException)
+        {
+            // The "Confirm it's you" prompt explains it and offers to sign in again.
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or InvalidOperationException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Load(SignInSettingsDto s)
+    {
+        _settings = s;
+        _enabled = s.SsoEnabled;
+        _kind = s.ProviderKind;
+        _label = s.DisplayName;
+        _authority = s.Authority;
+        _clientId = s.ClientId;
+        _secret = null;
+        _scopes = s.Scopes;
+        _requireOrgIdp = s.RequireOrganizationIdp;
+        _mfa = s.Mfa;
+        _amr = s.AcceptedAmrValues;
+        _acr = s.AcceptedAcrValues;
+        _requestedAcr = s.RequestedAcrValues;
+        _jit = s.Jit;
+        _domains = s.AllowedEmailDomains;
+        _groupsClaim = s.GroupsClaim;
+        _defaultRoles = s.JitDefaultRoles;
+        _syncRoles = s.SyncRolesFromGroups;
+        _mappings = s.GroupMappings.Select(m => new MappingRow { Group = m.GroupValue, Roles = m.Roles, Description = m.Description }).ToList();
+        _reauthMinutes = s.ReauthenticationMinutes;
+        _maxHours = s.SessionMaxHours;
+    }
+}
