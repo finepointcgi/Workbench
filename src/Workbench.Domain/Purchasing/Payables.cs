@@ -133,6 +133,27 @@ public sealed class ApBill : Entity
     public decimal Payable => Amount - RetainageAmount;
 
     public decimal Balance => Payable - PaidAmount;
+
+    // ---- Added by multicurrency (additive). Amount, RetainageAmount and PaidAmount stay in the functional currency. ----
+
+    /// <summary>The vendor's invoice currency when it isn't the functional currency; null for functional-currency bills.</summary>
+    public string? CurrencyCode { get; set; }
+
+    /// <summary>Functional units per unit of <see cref="CurrencyCode"/> on the invoice date (1 for functional-currency bills).</summary>
+    public decimal ExchangeRate { get; set; } = 1m;
+
+    /// <summary>The bill in its own currency (0 for functional-currency bills).</summary>
+    public decimal TransactionAmount { get; set; }
+
+    public decimal TransactionRetainage { get; set; }
+
+    /// <summary>Paid in the bill's currency by non-void payments.</summary>
+    public decimal TransactionPaid { get; set; }
+
+    public bool IsForeignCurrency => CurrencyCode is not null;
+
+    /// <summary>What's left to pay in the bill's currency.</summary>
+    public decimal TransactionBalance => TransactionAmount - TransactionRetainage - TransactionPaid;
 }
 
 public sealed class ApBillLine : Entity
@@ -181,6 +202,9 @@ public sealed class ApBillLine : Entity
     public string? MatchOverrideBy { get; set; }
     public string? MatchOverrideReason { get; set; }
     public DateTime? MatchOverrideAtUtc { get; set; }
+
+    /// <summary>Added by multicurrency: the line in the bill's currency (null on functional-currency bills); <see cref="Amount"/> is functional.</summary>
+    public decimal? TransactionAmount { get; set; }
 }
 
 public enum PaymentMethod
@@ -238,4 +262,21 @@ public sealed class ApPayment : Entity
     public string? VoidReason { get; set; }
     public string? VoidedBy { get; set; }
     public DateTime? VoidedAtUtc { get; set; }
+
+    // ---- Added by multicurrency (additive). For a foreign bill, Amount is the liability relieved at the bill's rate. ----
+
+    /// <summary>The bill's currency when it isn't the functional currency.</summary>
+    public string? CurrencyCode { get; set; }
+
+    /// <summary>The paid amount in the bill's currency (0 for functional-currency payments).</summary>
+    public decimal TransactionAmount { get; set; }
+
+    /// <summary>The rate on the payment date (1 for functional-currency payments).</summary>
+    public decimal ExchangeRate { get; set; } = 1m;
+
+    /// <summary>The cash paid in the functional currency (the transaction amount at the payment rate); null means <see cref="Amount"/>.</summary>
+    public decimal? CashAmount { get; set; }
+
+    /// <summary>Gain (positive) or loss (negative): the liability relieved less the cash paid.</summary>
+    public decimal RealizedGainLoss { get; set; }
 }

@@ -8,6 +8,7 @@
 @inject IPeopleService People
 @inject IPurchaseOrderService Orders
 @inject IThreeWayMatchService Match
+@inject Workbench.Contracts.Currencies.ICurrencyService Currencies
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -46,10 +47,21 @@ else
                 <MudDatePicker @bind-Date="_dueDate" Label="Due date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true"
                                HelperText="@(_dueDate is null && Vendor is { } v ? $"Net {v.PaymentTermsDays}: {PurchasingFormat.Date(DefaultDue)}" : null)" />
             </MudItem>
+            <MudItem xs="12" md="2">
+                <Workbench.Ui.Currencies.CurrencyPicker @bind-Value="_currency" Label="Invoice currency" ShowFunctional="true" TestId="bill-currency"
+                                                        DefaultLabel="@(VendorCurrency is { } vc ? $"Vendor's currency ({vc})" : "Vendor's currency")" DefaultCode="@VendorCurrency"
+                                                        Date="@(_invoiceDate is { } d ? DateOnly.FromDateTime(d) : null)" />
+            </MudItem>
             <MudItem xs="12" md="10">
                 <MudTextField T="string" @bind-Value="_description" Label="Description" />
             </MudItem>
         </MudGrid>
+        @if (ForeignCode is { } fc)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" data-testid="bill-currency-note">
+                Line amounts are in @fc. They're converted to dollars at the spot rate on the invoice date and paid in @fc. A bill in @fc can't bill a purchase order or link a project ODC.
+            </MudAlert>
+        }
         @if (Vendor?.Status == VendorState.OnHold)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@Vendor.Code is on hold: bills can't be entered or submitted until the hold is released.</MudAlert>
@@ -70,7 +82,7 @@ else
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
             <MudText Typo="Typo.h6">Lines</MudText>
             <MudSpacer />
-            <MudText Class="mr-4">Total <b>@PurchasingFormat.Amount(_lines.Sum(l => l.Amount))</b></MudText>
+            <MudText Class="mr-4">Total <b>@(ForeignCode is { } tc ? Workbench.Ui.Currencies.CurrencyFormat.Amount(_lines.Sum(l => l.Amount), tc) : PurchasingFormat.Amount(_lines.Sum(l => l.Amount)))</b></MudText>
             @if (_openOrders.Count > 0)
             {
                 <MudSelect T="Guid?" @bind-Value="_fromOrderId" Label="Purchase order" Dense="true" Clearable="true" Style="max-width:280px" Class="mr-2" data-testid="bill-po">
@@ -300,6 +312,15 @@ else
 
     private VendorDto? Vendor => _vendors.FirstOrDefault(v => v.Id == _vendorId);
 
+    // Multicurrency: the bill's currency is the one chosen, else the vendor's; null means dollars.
+    private string? _currency;
+    private Dictionary<Guid, string?> _vendorCurrencies = [];
+    private string? _functional;
+
+    private string? VendorCurrency => _vendorId is { } v ? _vendorCurrencies.GetValueOrDefault(v) : null;
+
+    private string? ForeignCode => (_currency ?? VendorCurrency) is { } c && c != _functional ? c : null;
+
     private DateOnly DefaultDue => DateOnly.FromDateTime(_invoiceDate ?? DateTime.Today).AddDays(Vendor?.PaymentTermsDays ?? 30);
 
     private bool CanSave => !_saving && _vendorId is not null && !string.IsNullOrWhiteSpace(_invoiceNumber) && _invoiceDate is not null && _lines.Count > 0;
@@ -315,6 +336,17 @@ else
             _accounts = accounts.Where(a => !a.HasChildren && a.Type is AccountKind.Expense or AccountKind.Asset).ToList();
             _orgs = await People.ListOrgUnitsAsync();
             _openOrders = await Orders.ListAsync(new PurchaseOrderQuery(OpenOnly: true));
+            try
+            {
+                _vendorCurrencies = (await Currencies.ListPartyCurrenciesAsync())
+                    .Where(p => p.Kind == Workbench.Contracts.Currencies.CurrencyPartyKind.Vendor).ToDictionary(p => p.Id, p => p.CurrencyCode);
+                _functional = (await Currencies.ListCurrenciesAsync()).FirstOrDefault(c => c.IsFunctional)?.Code;
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                _vendorCurrencies = [];
+            }
+
             if (BillId is { } id)
             {
                 var bill = await Bills.GetAsync(id);
@@ -327,11 +359,12 @@ else
                 var b = bill.Bill;
                 (_number, _vendorId, _invoiceNumber, _invoiceDate, _dueDate, _description) =
                     (b.Number, b.VendorId, b.InvoiceNumber, PurchasingFormat.ToDateTime(b.InvoiceDate), PurchasingFormat.ToDateTime(b.DueDate), bill.Description);
+                _currency = b.CurrencyCode ?? (VendorCurrency is not null ? _functional : null);
                 foreach (var l in bill.Lines)
                 {
                     _lines.Add(new LineModel
                     {
-                        Kind = l.Kind, Description = l.Description, Amount = l.Amount, ProjectId = l.ProjectId, WbsElementId = l.WbsElementId,
+                        Kind = l.Kind, Description = l.Description, Amount = l.TransactionAmount ?? l.Amount, ProjectId = l.ProjectId, WbsElementId = l.WbsElementId,
                         OdcType = l.OdcType ?? OdcCostType.Materials, SubcontractId = l.SubcontractId, OdcEntryId = l.OdcEntryId, AccountId = l.AccountId, OrgUnitId = l.OrgUnitId,
                         PurchaseOrderLineId = l.PurchaseOrderLineId, Quantity = l.Quantity ?? 0, UnitPrice = l.UnitPrice ?? 0, PoLabel = l.PurchaseOrderNumber,
                         ChargeLabel = l.AccountNumber is { } acct ? $"{acct} {l.AccountName}" : $"{l.ProjectCode} {l.WbsCode}",
@@ -551,7 +584,7 @@ else
                 l.PurchaseOrderLineId,
                 l.PurchaseOrderLineId is null ? null : l.Quantity,
                 l.PurchaseOrderLineId is null ? null : l.UnitPrice)).ToList(),
-            PurchasingFormat.ToDateOnly(_dueDate), _description);
+            PurchasingFormat.ToDateOnly(_dueDate), _description, _currency);
         try
         {
             var saved = BillId is { } id ? await Bills.UpdateAsync(id, request) : await Bills.CreateAsync(request);

@@ -1,0 +1,138 @@
+@page "/accounting/foreign-currency"
+@using Workbench.Contracts.Currencies
+@using Workbench.Ui.Currencies
+@inject IRevaluationService Revaluation
+
+<PageTitle>Foreign currency report · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Foreign currency report"
+                  Subtitle="What is open in other currencies on a date, what it's worth at that date's rate, and the gains and losses realized on payments.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CurrencyExchange" Href="accounting/revaluation">Revaluation</MudButton>
+</AccountingHeader>
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3" Wrap="Wrap.Wrap">
+        <MudDatePicker @bind-Date="_from" Label="Realized from" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+        <MudDatePicker @bind-Date="_asOf" Label="As of" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" Disabled="@(_busy || _asOf is null)" data-testid="run-fx-report">Run</MudButton>
+    </MudStack>
+
+    @if (_report is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        var r = _report;
+        @foreach (var w in r.Warnings)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@w</MudAlert>
+        }
+
+        <MudGrid Spacing="2" Class="mb-3">
+            <MudItem xs="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3"><MudText Typo="Typo.caption" Class="mud-text-secondary">Unrealized at @r.AsOf.ToString("yyyy-MM-dd")</MudText><MudText Typo="Typo.h6" data-testid="fx-unrealized">@CurrencyFormat.GainLoss(r.UnrealizedTotal)</MudText></MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Outlined="true" Class="pa-3"><MudText Typo="Typo.caption" Class="mud-text-secondary">Realized @r.From.ToString("yyyy-MM-dd") to @r.AsOf.ToString("yyyy-MM-dd")</MudText><MudText Typo="Typo.h6" data-testid="fx-realized">@CurrencyFormat.GainLoss(r.RealizedTotal)</MudText></MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Exposure by currency</MudText>
+        <MudPaper Outlined="true" Class="mb-4" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" aria-label="Exposure by currency" data-testid="fx-exposure">
+                <thead><tr><th scope="col">Currency</th><th scope="col" style="text-align:right">Receivables</th><th scope="col" style="text-align:right">Payables</th><th scope="col" style="text-align:right">Bank</th><th scope="col" style="text-align:right">Net</th><th scope="col" style="text-align:right">Rate</th><th scope="col" style="text-align:right">Net in @r.FunctionalCurrency</th></tr></thead>
+                <tbody>
+                    @if (r.ByCurrency.Count == 0)
+                    {
+                        <tr><td colspan="7" class="mud-text-secondary">Nothing is open in another currency.</td></tr>
+                    }
+                    @foreach (var c in r.ByCurrency)
+                    {
+                        <tr>
+                            <th scope="row">@c.CurrencyCode</th>
+                            <td style="text-align:right">@c.ReceivableBalance.ToString("N2")</td><td style="text-align:right">@c.PayableBalance.ToString("N2")</td><td style="text-align:right">@c.BankBalance.ToString("N2")</td>
+                            <td style="text-align:right">@c.NetExposure.ToString("N2")</td><td style="text-align:right">@(c.Rate is { } rate ? CurrencyFormat.Rate(rate) : "No rate")</td>
+                            <td style="text-align:right">@(c.NetFunctional?.ToString("N2") ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Open documents</MudText>
+        <MudPaper Outlined="true" Class="mb-4" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" aria-label="Open foreign currency documents" data-testid="fx-documents">
+                <thead><tr><th scope="col">Kind</th><th scope="col">Document</th><th scope="col">Customer, vendor or bank</th><th scope="col">Date</th><th scope="col">Currency</th><th scope="col" style="text-align:right">Document rate</th><th scope="col" style="text-align:right">Amount</th><th scope="col" style="text-align:right">Open</th><th scope="col" style="text-align:right">Carried (@r.FunctionalCurrency)</th><th scope="col" style="text-align:right">Current rate</th><th scope="col" style="text-align:right">Worth now</th><th scope="col" style="text-align:right">Unrealized</th></tr></thead>
+                <tbody>
+                    @if (r.Documents.Count == 0)
+                    {
+                        <tr><td colspan="12" class="mud-text-secondary">No open documents in other currencies.</td></tr>
+                    }
+                    @foreach (var d in r.Documents)
+                    {
+                        <tr>
+                            <td>@CurrencyFormat.Label(d.Kind)</td><td>@d.DocumentNumber</td><td>@d.Party</td><td>@d.Date.ToString("yyyy-MM-dd")</td><td>@d.CurrencyCode</td>
+                            <td style="text-align:right">@CurrencyFormat.Rate(d.DocumentRate)</td><td style="text-align:right">@d.TransactionAmount.ToString("N2")</td><td style="text-align:right">@d.TransactionBalance.ToString("N2")</td>
+                            <td style="text-align:right">@d.FunctionalBalance.ToString("N2")</td><td style="text-align:right">@(d.CurrentRate is { } cr ? CurrencyFormat.Rate(cr) : "No rate")</td>
+                            <td style="text-align:right">@(d.CurrentValue?.ToString("N2") ?? "—")</td><td style="text-align:right">@(d.UnrealizedGainLoss is { } u ? CurrencyFormat.GainLoss(u) : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Realized on payments</MudText>
+        <MudPaper Outlined="true" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" aria-label="Realized gains and losses" data-testid="fx-realized-table">
+                <thead><tr><th scope="col">Date</th><th scope="col">Payment</th><th scope="col">Customer or vendor</th><th scope="col">Currency</th><th scope="col" style="text-align:right">Amount</th><th scope="col" style="text-align:right">Document rate</th><th scope="col" style="text-align:right">Payment rate</th><th scope="col" style="text-align:right">Gain or loss</th><th scope="col">Entry</th></tr></thead>
+                <tbody>
+                    @if (r.Realized.Count == 0)
+                    {
+                        <tr><td colspan="9" class="mud-text-secondary">No foreign currency payments in this range.</td></tr>
+                    }
+                    @foreach (var x in r.Realized)
+                    {
+                        <tr>
+                            <td>@x.Date.ToString("yyyy-MM-dd")</td><td>@x.Document</td><td>@x.Party</td><td>@x.CurrencyCode</td><td style="text-align:right">@x.TransactionAmount.ToString("N2")</td>
+                            <td style="text-align:right">@CurrencyFormat.Rate(x.DocumentRate)</td><td style="text-align:right">@CurrencyFormat.Rate(x.PaymentRate)</td><td style="text-align:right">@CurrencyFormat.GainLoss(x.GainLoss)</td><td>@x.JournalEntryNumber</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private DateTime? _asOf = DateTime.Today;
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-2);
+    private ForeignCurrencyReportDto? _report;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        try
+        {
+            _report = await Revaluation.GetReportAsync(DateOnly.FromDateTime(_asOf!.Value), _from is { } f ? DateOnly.FromDateTime(f) : null);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            (_error, _forbidden) = (AccountingFormat.Error(ex), AccountingFormat.IsForbidden(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

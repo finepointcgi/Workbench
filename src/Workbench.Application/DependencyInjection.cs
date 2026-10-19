@@ -86,6 +86,7 @@ public static class DependencyInjection
         Crm.CrmRegistration.AddWorkbenchCrm(services); // Business development: accounts, opportunities, gates (approval handler), SAM.gov leads, pipeline, to-dos; above AddWorkbenchIdentity.
         Pricing.PricingRegistration.AddWorkbenchPricing(services); // Proposal pricing (price models, scenarios, locked versions, cost volume, won handoff); above AddWorkbenchIdentity.
         Assistant.AssistantRegistration.AddWorkbenchAssistant(services); // AI assistant (off by default), PM narratives and timesheet flags; tools read through the permission-checked services; above AddWorkbenchIdentity.
+        Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

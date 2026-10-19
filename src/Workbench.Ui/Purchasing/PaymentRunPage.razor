@@ -62,7 +62,15 @@ else
                         <td>@p.VendorCode · @p.VendorName</td>
                         <td><MudLink Href="@($"purchasing/bills/{p.BillId}")">@p.BillNumber</MudLink></td>
                         <td>@p.InvoiceNumber</td>
-                        <td style="text-align:right">@PurchasingFormat.Amount(p.Amount)</td>
+                        <td style="text-align:right">
+                            @PurchasingFormat.Amount(p.Amount)
+                            @if (p.CurrencyCode is { } pc)
+                            {
+                                <div class="mud-text-secondary" style="font-size:0.8rem" data-testid="payment-currency">
+                                    Pay @Workbench.Ui.Currencies.CurrencyFormat.Amount(p.TransactionAmount, pc)@(p.CashAmount is { } cash ? $" · cash {PurchasingFormat.Amount(cash)} at {Workbench.Ui.Currencies.CurrencyFormat.Rate(p.ExchangeRate)} · {Workbench.Ui.Currencies.CurrencyFormat.GainLoss(p.RealizedGainLoss)}" : " at the paid-on date's rate")
+                                </div>
+                            }
+                        </td>
                         <td>
                             @if (run.Status == PaymentRunState.Approved && p.Status == PaymentState.Scheduled)
                             {

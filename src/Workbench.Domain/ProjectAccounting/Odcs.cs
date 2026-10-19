@@ -59,4 +59,10 @@ public sealed class OdcEntry : Entity
     public string? RejectionReason { get; set; }
     public string? RejectedBy { get; set; }
     public DateTime? RejectedAtUtc { get; set; }
+
+    // ---- Added by multicurrency (additive): an expense paid in another currency. Amount stays functional. ----
+
+    public string? CurrencyCode { get; set; }
+    public decimal? TransactionAmount { get; set; }
+    public decimal? ExchangeRate { get; set; }
 }

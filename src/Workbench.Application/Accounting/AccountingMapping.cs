@@ -70,6 +70,6 @@ internal sealed class LedgerLookups
             l.OrgUnitId, l.OrgUnitId is { } o ? OrgUnits.GetValueOrDefault(o) : null,
             l.ProjectId, l.ProjectId is { } p ? Projects.GetValueOrDefault(p) : null,
             l.WbsElementId, l.WbsElementId is { } w && Wbs.TryGetValue(w, out var wbs) ? wbs.Code : null,
-            l.Debit, l.Credit, l.Memo);
+            l.Debit, l.Credit, l.Memo, l.TransactionCurrency, l.TransactionAmount, l.ExchangeRate);
     }
 }

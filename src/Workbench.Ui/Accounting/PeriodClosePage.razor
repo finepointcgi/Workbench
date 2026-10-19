@@ -8,6 +8,7 @@
 <PageTitle>Period close · Accounting · Workbench</PageTitle>
 
 <AccountingHeader Title="Period close" Subtitle="Close a fiscal period once its time and ODCs are decided and posted and its trial balance balances. A closed period accepts no postings and no time or ODC changes.">
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CurrencyExchange" Href="accounting/revaluation" data-testid="close-revaluation">Currency revaluation</MudButton>
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAddCheck" OnClick="PostBacklogAsync" Disabled="@(_busy || _error is not null)"
                data-testid="post-backlog">Post backlog</MudButton>
 </AccountingHeader>

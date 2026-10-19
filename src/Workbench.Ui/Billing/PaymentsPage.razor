@@ -38,41 +38,51 @@ else
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_reference" Label="Reference (EFT trace, check no.)" /></MudItem>
+            <MudItem xs="12" md="2"><MudTextField @bind-Value="_reference" Label="Reference (EFT trace, check no.)" /></MudItem>
+            <MudItem xs="12" md="2">
+                <Workbench.Ui.Currencies.CurrencyPicker @bind-Value="_currency" Label="Received in" TestId="payment-currency"
+                                                        Date="@(_receivedOn is { } r ? DateOnly.FromDateTime(r) : null)" />
+            </MudItem>
         </MudGrid>
+        @if (_currency is { } rc)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" data-testid="payment-currency-note">
+                Amounts are in @rc. The cash posts at the spot rate on the receipt date; the difference from each invoice's rate is a realized gain or loss.
+            </MudAlert>
+        }
 
         @if (_customerId is not null)
         {
-            @if (_open.Count == 0)
+            @if (Visible.Count == 0)
             {
-                <MudText Class="mud-text-secondary mt-3">This customer has no open invoices.</MudText>
+                <MudText Class="mud-text-secondary mt-3">@(_open.Count == 0 ? "This customer has no open invoices." : $"This customer has no open invoices in {(_currency ?? "dollars")}; choose the currency their invoices are in.")</MudText>
             }
             else
             {
                 <MudSimpleTable Dense="true" Class="mt-3" data-testid="open-invoices">
                     <thead><tr><th>Invoice</th><th>Contract</th><th>Due</th><th style="text-align:right">Open balance</th><th style="text-align:right; width:180px">Apply</th><th></th></tr></thead>
                     <tbody>
-                        @foreach (var i in _open)
+                        @foreach (var i in Visible)
                         {
                             <tr>
                                 <td><MudLink Href="@($"billing/invoices/{i.Id}")">@i.Number</MudLink></td>
                                 <td>@i.ContractNumber</td>
                                 <td class="@(i.DaysPastDue > 0 ? "mud-error-text" : "")">@BillingFormat.Date(i.DueDate)</td>
-                                <td style="text-align:right">@BillingFormat.Amount(i.Balance)</td>
+                                <td style="text-align:right">@(i.CurrencyCode is { } ic ? Workbench.Ui.Currencies.CurrencyFormat.Amount(i.TransactionBalance, ic) : BillingFormat.Amount(i.Balance))</td>
                                 <td>
                                     <MudNumericField T="decimal" Value="_apply.GetValueOrDefault(i.Id)" aria-label="@($"Amount to apply, invoice {i.Number}")" ValueChanged="v => _apply[i.Id] = v" Format="N2" HideSpinButtons="true"
-                                                     Min="0" Max="i.Balance" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="apply-amount" />
+                                                     Min="0" Max="Open(i)" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="apply-amount" />
                                 </td>
-                                <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _apply[i.Id] = i.Balance">Full</MudButton></td>
+                                <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _apply[i.Id] = Open(i)">Full</MudButton></td>
                             </tr>
                         }
                     </tbody>
                     <tfoot>
-                        <tr><td colspan="4" style="text-align:right"><strong>Receipt amount</strong></td><td style="text-align:right" data-testid="receipt-total"><strong>@BillingFormat.Money(Total)</strong></td><td></td></tr>
+                        <tr><td colspan="4" style="text-align:right"><strong>Receipt amount</strong></td><td style="text-align:right" data-testid="receipt-total"><strong>@TotalLabel</strong></td><td></td></tr>
                     </tfoot>
                 </MudSimpleTable>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" StartIcon="@Icons.Material.Filled.Payments" OnClick="RecordAsync"
-                           Disabled="@(_busy || Total <= 0 || _receivedOn is null)" data-testid="record-payment-button">Record @BillingFormat.Money(Total)</MudButton>
+                           Disabled="@(_busy || Total <= 0 || _receivedOn is null)" data-testid="record-payment-button">Record @TotalLabel</MudButton>
             }
         }
     </MudPaper>
@@ -101,7 +111,13 @@ else
                                     <div><MudLink Href="@($"billing/invoices/{a.InvoiceId}")">@a.InvoiceNumber</MudLink> @BillingFormat.Amount(a.Amount)</div>
                                 }
                             </td>
-                            <td style="text-align:right">@BillingFormat.Amount(p.Amount)</td>
+                            <td style="text-align:right">
+                                @BillingFormat.Amount(p.Amount)
+                                @if (p.CurrencyCode is { } pc)
+                                {
+                                    <div class="mud-text-secondary" style="font-size:0.8rem">@Workbench.Ui.Currencies.CurrencyFormat.Amount(p.TransactionAmount, pc) at @Workbench.Ui.Currencies.CurrencyFormat.Rate(p.ExchangeRate) · @Workbench.Ui.Currencies.CurrencyFormat.GainLoss(p.RealizedGainLoss)</div>
+                                }
+                            </td>
                             <td>@if (p.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">@p.JournalEntryNumber</MudLink> }</td>
                             <td>
                                 @if (!p.IsVoid)
@@ -137,7 +153,16 @@ else
     private string? _error;
     private bool _forbidden;
 
-    private decimal Total => _apply.Where(a => _open.Any(i => i.Id == a.Key)).Sum(a => a.Value);
+    private decimal Total => _apply.Where(a => Visible.Any(i => i.Id == a.Key)).Sum(a => a.Value);
+
+    // Multicurrency: a receipt is in one currency and applies to the invoices issued in it.
+    private string? _currency;
+
+    private IReadOnlyList<InvoiceSummaryDto> Visible => _open.Where(i => i.CurrencyCode == _currency).ToList();
+
+    private static decimal Open(InvoiceSummaryDto i) => i.IsForeignCurrency ? i.TransactionBalance : i.Balance;
+
+    private string TotalLabel => _currency is { } c ? Workbench.Ui.Currencies.CurrencyFormat.Amount(Total, c) : BillingFormat.Money(Total);
 
     protected override async Task OnInitializedAsync()
     {
@@ -162,6 +187,8 @@ else
         _customerId = id;
         _apply.Clear();
         _open = id is { } c ? await Payments.ListOpenInvoicesAsync(c) : [];
+        var currencies = _open.Select(i => i.CurrencyCode).Distinct().ToList();
+        _currency = currencies.Count == 1 ? currencies[0] : _open.Any(i => i.CurrencyCode == _currency) ? _currency : null;
     }
 
     private async Task RecordAsync()
@@ -169,8 +196,8 @@ else
         _busy = true;
         try
         {
-            var applications = _apply.Where(a => a.Value > 0 && _open.Any(i => i.Id == a.Key)).Select(a => new PaymentApplicationInput(a.Key, a.Value)).ToList();
-            var payment = await Payments.RecordAsync(new RecordPaymentRequest(_customerId!.Value, DateOnly.FromDateTime(_receivedOn!.Value), Total, _method, applications, _reference));
+            var applications = _apply.Where(a => a.Value > 0 && Visible.Any(i => i.Id == a.Key)).Select(a => new PaymentApplicationInput(a.Key, a.Value)).ToList();
+            var payment = await Payments.RecordAsync(new RecordPaymentRequest(_customerId!.Value, DateOnly.FromDateTime(_receivedOn!.Value), Total, _method, applications, _reference, CurrencyCode: _currency));
             Snackbar.Add($"Recorded {BillingFormat.Money(payment.Amount)} (GL {payment.JournalEntryNumber}).", Severity.Success);
             _reference = null;
             await ReloadAsync();
