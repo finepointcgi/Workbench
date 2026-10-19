@@ -53,7 +53,7 @@ public enum ApproverRuleKind
     AnyOf,
 }
 
-public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager }
+public enum ApprovalOrgRole { Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Materials }
 
 /// <summary>What happens when the step's approver is the submitter (DCAA: nobody approves their own document).</summary>
 public enum SelfApprovalPolicy

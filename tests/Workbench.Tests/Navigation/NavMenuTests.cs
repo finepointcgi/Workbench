@@ -44,6 +44,23 @@ public sealed class NavMenuTests
     }
 
     [Fact]
+    public async Task The_materials_role_gets_the_materials_section_and_no_finance()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Materials));
+        await using var _ = ctx;
+
+        var links = Links(nav);
+        Assert.Equal(["home", "my-work", "projects", "sheets", "materials", "reports"], Sections(nav));
+        foreach (var page in new[] { "materials", "materials/inventory", "materials/receiving", "materials/boms", "materials/work-orders", "materials/mrp", "materials/reports" })
+        {
+            Assert.Contains(page, links);
+        }
+
+        Assert.DoesNotContain(links, l => l.StartsWith("accounting") || l.StartsWith("billing"));
+        A11yAssert.Check(nav);
+    }
+
+    [Fact]
     public async Task Receiving_shows_only_for_people_named_as_receivers()
     {
         var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Employee, Receivable: 2));
@@ -122,7 +139,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "finance", "reports", "admin"], Sections(nav));
+        Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "finance", "materials", "reports", "admin"], Sections(nav));
         foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Revenue & compliance" })
         {
             Assert.Single(nav.FindAll($"[data-testid='nav-group-{group}']"));

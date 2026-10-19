@@ -463,3 +463,20 @@ Checks:
 - **Browser behaviour** axe can't see (the idle warning, busy-button focus): `node keyboard.mjs` against the same server.
 - **Keyboard**: before merging new UI, do the task with the keyboard alone (Tab, Shift+Tab, Enter, Space, Escape, arrows) and
   check the focus ring is always visible.
+
+## Materials and manufacturing
+
+- Entities in `Domain/Materials` (`Part`, `Warehouse`, `Bin`, `InventoryBalance`, `InventoryTransaction`, `MaterialPurchaseLink`, `BillOfMaterial`/`BomComponent`,
+  `WorkCenter`, `Routing`/`RoutingOperation`, `WorkOrder` + components/operations/labor reports/genealogy, `PartForecast`, `ProjectMaterialRequirement`,
+  `MrpRun`, `PlannedOrder`). Contracts: `IPartService`, `IInventoryService`, `IManufacturingService`, `IMrpService`, `IMaterialReportService`
+  (`Contracts/Materials`). Org role `OrgRoles.Materials` (64): Materials/Admin change, Finance reads; revaluation and the WIP report are Finance.
+- Every stock movement goes through `StockEngine` (balances, moving-average or standard costing, the part's book value `Part.InventoryValue`) and
+  posts through `MaterialsLedger` (sources `Inventory`, `Manufacturing`). Government-furnished stock (FAR 52.245-1) moves at 0, never posts and is
+  never in average cost or valuation; contract and GFM stock is issued only to its project.
+- Purchasing is unchanged: part PO lines are account lines on 1405 (received not invoiced); `InventoryReceivingPurchaseOrderService` decorates
+  `IPurchaseOrderService.ReceiveAsync` so any receipt of a linked line puts the goods into stock (Dr inventory, Cr 1405, PPV for standard cost); the
+  AP bill from the PO clears 1405. Links live in `MaterialPurchaseLink` (requisition line or PO line), never on purchasing's tables.
+- Issues to a project WBS (directly or through a project work order) debit 5120 with project/WBS segments and reach the financials and burdened
+  cost as direct ODC through `MaterialCostActuals` (called from `FinancialsLoader` and `DirectCosts`). Stock work orders collect material and shop
+  labor (hours × the employee's cost rate, Dr WIP / Cr 6195 applied labor) in 1450, relieve it at completion and post the rest as the variance at close.
+  Shop floor hours also go on the timesheet (the DCAA record) against the work order's charge code; the work order page compares them.

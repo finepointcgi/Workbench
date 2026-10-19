@@ -41,6 +41,12 @@ public sealed record NavAccess(
     /// <summary>Runs projects: the Project manager role, or the manager of at least one project.</summary>
     public bool IsPm => IsProjectManager || HasProjectManagerRole;
 
+    /// <summary>Has the Materials org role (or is an administrator): changes parts, inventory, BOMs, work orders and MRP.</summary>
+    public bool IsMaterials => User?.Roles.IsMaterials() == true;
+
+    /// <summary>Materials, Finance or Admin: sees the Materials section.</summary>
+    public bool CanViewMaterials => User?.Roles.CanViewMaterials() == true;
+
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
 
