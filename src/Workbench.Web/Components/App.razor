@@ -24,10 +24,17 @@
     <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <SessionGuard @rendermode="InteractiveServer" />
+    <div id="blazor-error-ui" role="alert" data-nosnippet>
+        <strong>Something went wrong.</strong> Workbench lost track of this page; anything you saved is safe.
+        <a href="" class="reload">Reload the page</a>
+        <a href="support/new?from=error" id="wb-error-report">Report this</a>
+        <button type="button" class="dismiss" aria-label="Dismiss this message">×</button>
+    </div>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
     <script src="@Assets["js/session.js"]"></script>
     <script src="@Assets["js/pwa.js"]"></script>
+    <script src="@Assets["js/error-ui.js"]"></script>
 </body>
 
 </html>

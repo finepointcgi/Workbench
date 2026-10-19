@@ -1,0 +1,96 @@
+@page "/help"
+@page "/help/{Slug}"
+@* The help center: every article, grouped by topic, with search. /help/{slug} shows one article. *@
+@inject NavigationManager Navigation
+
+<PageTitle>@(_article is null ? "Help center" : $"{_article.Title} · Help") · Workbench</PageTitle>
+
+@if (Slug is not null && _article is null)
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Article not found</MudText>
+    <MudText Class="mt-2">There's no help article called “@Slug”. Try searching the help center.</MudText>
+    <MudButton Href="help" Variant="Variant.Text" Color="Color.Primary" Class="mt-4" StartIcon="@Icons.Material.Filled.ArrowBack">Help center</MudButton>
+}
+else if (_article is { } article)
+{
+    <MudText Typo="Typo.overline" Class="mud-text-secondary d-block">@article.Category</MudText>
+    <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1" data-testid="help-article-title">@article.Title</MudText>
+    @if (article.Summary.Length > 0)
+    {
+        <MudText Class="mud-text-secondary mb-4">@article.Summary</MudText>
+    }
+    <article aria-label="@article.Title" data-testid="help-article">
+        <HelpMarkdown Document="article.Document" />
+    </article>
+    <MudDivider Class="my-6" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Didn't find what you needed? <MudLink Href="help" Typo="Typo.body2">Search the help center</MudLink>,
+        see the <MudLink Href="help/glossary" Typo="Typo.body2">glossary</MudLink>, or
+        <MudLink Typo="Typo.body2" OnClick="ReportAsync">report a problem</MudLink>.
+    </MudText>
+}
+else
+{
+    <MudText Typo="Typo.h4" HtmlTag="h1">Help center</MudText>
+    <MudText Class="mud-text-secondary mb-4">Step-by-step help for everyday tasks. Press <kbd>?</kbd> at the top of any page for help with that page.</MudText>
+
+    <div role="search" class="mb-4" style="max-width:560px">
+        <MudTextField T="string" @bind-Value="_query" Immediate="true" DebounceInterval="150" Label="Search help" Variant="Variant.Outlined"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" data-testid="help-search"
+                      HelperText="For example: correct timesheet, per diem, close the month" />
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_query))
+    {
+        var results = HelpLibrary.Search(_query);
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2" aria-live="polite">@(results.Count == 0 ? $"No articles match “{_query}”" : $"{results.Count} {(results.Count == 1 ? "article" : "articles")} found")</MudText>
+        <ArticleList Articles="results" />
+        @if (results.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Try other words, look the term up in the <MudLink Href="help/glossary">glossary</MudLink>, or <MudLink OnClick="ReportAsync">ask your support team</MudLink>.</MudText>
+        }
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            @foreach (var group in HelpLibrary.Ordered().GroupBy(a => a.Category))
+            {
+                <MudItem xs="12" md="6">
+                    <MudPaper Outlined="true" Class="pa-4" Style="height:100%">
+                        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@group.Key</MudText>
+                        <ArticleList Articles="group.ToList()" />
+                    </MudPaper>
+                </MudItem>
+            }
+            <MudItem xs="12" md="6">
+                <MudPaper Outlined="true" Class="pa-4" Style="height:100%">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">More</MudText>
+                    <ul class="wb-help-list">
+                        <li><MudLink Href="help/glossary">Glossary</MudLink><span class="mud-text-secondary"> · plain-English meanings of the terms Workbench uses</span></li>
+                        <li><MudLink Href="help/whats-new">What's new</MudLink><span class="mud-text-secondary"> · recent changes to Workbench</span></li>
+                        <li><MudLink Href="support">My support requests</MudLink><span class="mud-text-secondary"> · problems you've reported and their status</span></li>
+                    </ul>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+}
+
+@code {
+    [Parameter] public string? Slug { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+
+    [Inject] private IDialogService Dialogs { get; set; } = default!;
+
+    private HelpArticle? _article;
+    private string? _query;
+
+    protected override void OnParametersSet()
+    {
+        _article = HelpLibrary.Find(Slug);
+        _query ??= Query;
+    }
+
+    private Task ReportAsync() => Support.SupportDialogs.ReportAsync(Dialogs, Navigation);
+}

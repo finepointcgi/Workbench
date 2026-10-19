@@ -1,0 +1,101 @@
+.wb-markdown {
+    line-height: 1.6;
+    max-width: 72ch;
+}
+
+.wb-markdown ::deep h2,
+.wb-markdown ::deep h3,
+.wb-markdown ::deep h4,
+.wb-markdown ::deep h5 {
+    font-weight: 500;
+    line-height: 1.3;
+    margin: 1.5em 0 0.5em;
+    scroll-margin-top: 72px;
+}
+
+.wb-markdown ::deep h2 { font-size: 1.35rem; }
+.wb-markdown ::deep h3 { font-size: 1.15rem; }
+.wb-markdown ::deep h4,
+.wb-markdown ::deep h5 { font-size: 1rem; }
+
+.wb-markdown ::deep p,
+.wb-markdown ::deep ul,
+.wb-markdown ::deep ol,
+.wb-markdown ::deep blockquote {
+    margin: 0 0 0.9em;
+}
+
+.wb-markdown ::deep ul,
+.wb-markdown ::deep ol {
+    padding-left: 1.5em;
+}
+
+.wb-markdown ::deep li {
+    margin-bottom: 0.3em;
+}
+
+.wb-markdown ::deep a.wb-md-link {
+    color: var(--mud-palette-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.wb-markdown ::deep a.wb-md-link:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.wb-markdown ::deep code.wb-md-inline-code,
+.wb-markdown ::deep pre.wb-md-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    background: var(--mud-palette-background-gray);
+    border-radius: 4px;
+}
+
+.wb-markdown ::deep code.wb-md-inline-code {
+    padding: 0.1em 0.35em;
+}
+
+.wb-markdown ::deep pre.wb-md-code {
+    padding: 0.75em 1em;
+    overflow-x: auto;
+}
+
+.wb-markdown ::deep blockquote {
+    border-left: 4px solid var(--mud-palette-lines-default);
+    padding-left: 1em;
+}
+
+.wb-markdown ::deep .wb-md-table-wrap {
+    overflow-x: auto;
+    margin: 0 0 1em;
+}
+
+.wb-markdown ::deep table.wb-md-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.wb-markdown ::deep table.wb-md-table th,
+.wb-markdown ::deep table.wb-md-table td {
+    border: 1px solid var(--mud-palette-lines-default);
+    padding: 0.4em 0.6em;
+    text-align: left;
+    vertical-align: top;
+}
+
+.wb-markdown ::deep table.wb-md-table th {
+    background: var(--mud-palette-background-gray);
+    font-weight: 500;
+}
+
+.wb-markdown ::deep .wb-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}

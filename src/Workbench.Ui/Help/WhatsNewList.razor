@@ -1,0 +1,44 @@
+@* The What's new entries, newest first. *@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Support
+
+@if (HelpLibrary.WhatsNew.Count == 0)
+{
+    <MudText Class="mud-text-secondary">Nothing to show yet.</MudText>
+}
+@foreach (var entry in HelpLibrary.WhatsNew.Take(Max))
+{
+    <section class="mb-4" aria-label="@($"Version {entry.Version}")" data-testid="whats-new-entry">
+        <MudText Typo="@(HeadingLevel <= 2 ? Typo.h6 : Typo.subtitle1)" HtmlTag="@($"h{HeadingLevel}")">
+            @(entry.Date.Length > 0 ? entry.Date : entry.Version)
+            @if (entry.Date.Length > 0)
+            {
+                <span class="mud-text-secondary" style="font-size:0.8em;font-weight:400"> · version @entry.Version</span>
+            }
+        </MudText>
+        <HelpMarkdown Document="entry.Document" HeadingOffset="HeadingLevel" />
+    </section>
+}
+
+@code {
+    [Parameter] public int HeadingLevel { get; set; } = 3;
+
+    [Parameter] public int Max { get; set; } = 20;
+
+    /// <summary>Remembers (on the server) that the user has seen the newest entry. Never fails the page.</summary>
+    public static async Task MarkSeenAsync(IServiceProvider services)
+    {
+        if (HelpLibrary.LatestVersion is not { } latest || services.GetService<IHelpStateService>() is not { } state)
+        {
+            return;
+        }
+
+        try
+        {
+            await state.MarkWhatsNewSeenAsync(latest);
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+        }
+    }
+}

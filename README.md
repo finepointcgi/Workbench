@@ -95,6 +95,7 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Email:Mode`: `Pickup` (write `.eml` files to `Email:PickupFolder`, default `App_Data/mail`; Development default) or `Smtp`
   (`Email:Smtp:Host`, `Port`, `EnableSsl`, `UserName`, `Password`); `Email:From` sets the sender
 - `Notifications:PublicBaseUrl`: makes links in emails absolute; `Notifications:DigestHourLocal`: daily digest hour (default 7)
+- `Support:Email`: where in-app "Report a problem / Send feedback" requests are emailed (blank: stored only; admins see them at `/admin/support`)
 - `Billing:CompanyName`, `Billing:RemitToAddress`, `Billing:CageCode`, `Billing:Uei`: the contractor details printed on invoices (SF 1034 and commercial)
 - Timesheet periods are an organization setting (Admin, `/setup/organization`): Weekly with a start day, Biweekly with
   an anchor date, SemiMonthly (1st–15th, 16th–end) or Monthly, changed from the next period boundary. `Timekeeping:Cadence`
