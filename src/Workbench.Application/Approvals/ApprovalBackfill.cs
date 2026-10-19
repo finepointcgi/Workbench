@@ -32,7 +32,16 @@ public sealed class ApprovalBackfill(
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
         var semaphore = _gate.For(Tenancy.TenantScope.Key);
-        await semaphore.WaitAsync(cancellationToken);
+        if (!await semaphore.WaitAsync(0, cancellationToken))
+        {
+            // Another inbox (or the startup job) is routing right now: wait for it rather than queueing a run of our own,
+            // so many approvers opening their inboxes at once don't line up behind each other's identical scans. New
+            // submissions are routed when they're submitted; only pre-workflow documents (seeded, imported) need this.
+            await semaphore.WaitAsync(cancellationToken);
+            semaphore.Release();
+            return 0;
+        }
+
         try
         {
             return await RunCoreAsync(cancellationToken);

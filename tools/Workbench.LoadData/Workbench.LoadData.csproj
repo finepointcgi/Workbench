@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Fills a Workbench database with a mid-size contractor for load testing. See docs/operations/performance.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Workbench.Infrastructure\Workbench.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Migrations.PostgreSql\Workbench.Migrations.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Migrations.Sqlite\Workbench.Migrations.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
+  </ItemGroup>
+
+</Project>

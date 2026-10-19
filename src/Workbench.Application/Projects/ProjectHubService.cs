@@ -42,10 +42,20 @@ public sealed class ProjectHubService(
 
         var projects = (await query.ToListAsync(cancellationToken)).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
         var context = await LoadContextAsync(db, projects, cancellationToken);
+
+        // The financials behind each money column load a project's whole history: a few projects at a time, each on its own context.
+        var loaded = new System.Collections.Concurrent.ConcurrentDictionary<Guid, ProjectFinancialData>();
+        await Parallel.ForEachAsync(projects.Where(p => CanReadMoney(viewer, p)), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken },
+            async (project, token) =>
+            {
+                await using var own = await dbFactory.CreateAsync(token);
+                loaded[project.Id] = await FinancialsLoader.LoadProjectAsync(own, project.Id, null, null, Today, token);
+            });
+
         var rows = new List<ProjectHubRowDto>();
         foreach (var project in projects)
         {
-            var money = CanReadMoney(viewer, project) ? await MoneyAsync(db, project, context, cancellationToken) : null;
+            var money = loaded.TryGetValue(project.Id, out var data) ? await MoneyAsync(db, project, context, cancellationToken, data) : null;
             rows.Add(Row(viewer, project, context, charged, money is not null, money));
         }
 
@@ -183,9 +193,9 @@ public sealed class ProjectHubService(
             open, money);
     }
 
-    private async Task<ProjectMoneyDto> MoneyAsync(IWorkbenchDbContext db, Project project, HubContext context, CancellationToken ct)
+    private async Task<ProjectMoneyDto> MoneyAsync(IWorkbenchDbContext db, Project project, HubContext context, CancellationToken ct, ProjectFinancialData? loaded = null)
     {
-        var data = await FinancialsLoader.LoadProjectAsync(db, project.Id, null, null, Today, ct);
+        var data = loaded ?? await FinancialsLoader.LoadProjectAsync(db, project.Id, null, null, Today, ct);
         var totals = FinancialsCalculator.Compute(data.ToInputs()).Totals;
         ContractFundingDto? funding = null;
         if (data.Contract is { } contract && !context.Funding.TryGetValue(contract.Id, out funding))

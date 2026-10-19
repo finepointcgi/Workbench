@@ -228,6 +228,22 @@ public interface IProjectService
     /// elements of active projects that either don't require assignment or have a matching assignment.
     /// </summary>
     Task<IReadOnlyList<ChargeCodeDto>> ListChargeCodesAsync(Guid employeeId, DateOnly date, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="ListChargeCodesAsync"/> for several dates (a timesheet's week) at once, keyed by date. The same rules;
+    /// the server answers in one pass, other implementations ask date by date.
+    /// </summary>
+    async Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>> ListChargeCodesForDatesAsync(
+        Guid employeeId, IReadOnlyCollection<DateOnly> dates, CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>();
+        foreach (var date in dates.Distinct())
+        {
+            result[date] = await ListChargeCodesAsync(employeeId, date, cancellationToken);
+        }
+
+        return result;
+    }
 }
 
 // ---- Fiscal calendar ----

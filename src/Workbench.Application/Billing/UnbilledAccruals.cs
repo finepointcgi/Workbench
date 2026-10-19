@@ -14,40 +14,62 @@ namespace Workbench.Application.Billing;
 /// bill, counting only approved invoices as billed (drafts aren't billed yet). Fee withholds are left out; they're
 /// already in AR unbilled. FFP isn't accrued (it's earned at milestones).
 /// </summary>
-public sealed class UnbilledAccruals(InvoiceGenerator generator, BillingLedger ledger, AuditRecorder audit)
+public sealed class UnbilledAccruals(InvoiceGenerator generator, BillingLedger ledger, AuditRecorder audit, IWorkbenchDbContextFactory? dbFactory = null)
 {
     internal sealed record Accrual(FiscalPeriod Period, List<(BillingContext Ctx, DraftLine Line)> Lines, List<string> Notes);
 
     internal async Task<Accrual> ComputeAsync(IWorkbenchDbContext db, FiscalPeriod period, CancellationToken ct)
     {
+        var contractIds = await db.Set<Clin>().AsNoTracking().Select(c => c.ContractId).Distinct().ToListAsync(ct);
+        var perContract = new (List<(BillingContext, DraftLine)> Lines, List<string> Notes)[contractIds.Count];
+        if (dbFactory is null)
+        {
+            for (var i = 0; i < contractIds.Count; i++)
+            {
+                perContract[i] = await ContractAsync(db, contractIds[i], period, ct);
+            }
+        }
+        else
+        {
+            // Each contract is an invoice generation's worth of small queries: a few contracts at a time, each on its own context.
+            await Parallel.ForEachAsync(Enumerable.Range(0, contractIds.Count), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (i, token) =>
+            {
+                await using var own = await dbFactory.CreateAsync(token);
+                perContract[i] = await ContractAsync(own, contractIds[i], period, token);
+            });
+        }
+
+        var lines = perContract.SelectMany(c => c.Lines).ToList();
+        var notes = perContract.SelectMany(c => c.Notes).Distinct().ToList();
+        return new Accrual(period, lines, notes);
+    }
+
+    private async Task<(List<(BillingContext, DraftLine)> Lines, List<string> Notes)> ContractAsync(IWorkbenchDbContext db, Guid contractId, FiscalPeriod period, CancellationToken ct)
+    {
         var lines = new List<(BillingContext, DraftLine)>();
         var notes = new List<string>();
-        var contractIds = await db.Set<Clin>().AsNoTracking().Select(c => c.ContractId).Distinct().ToListAsync(ct);
-        foreach (var contractId in contractIds)
+        var ctx = await BillingContext.LoadAsync(db, contractId, ct);
+        if (ctx.Contract.Status == ContractStatus.Closed)
         {
-            var ctx = await BillingContext.LoadAsync(db, contractId, ct);
-            if (ctx.Contract.Status == ContractStatus.Closed)
+            return (lines, notes);
+        }
+
+        foreach (var type in new[] { InvoiceType.CostPlus, InvoiceType.TimeAndMaterials })
+        {
+            if (!ctx.Clins.Any(c => c.IsExercised && InvoiceGenerator.Bills(type, c.Pricing)))
             {
                 continue;
             }
 
-            foreach (var type in new[] { InvoiceType.CostPlus, InvoiceType.TimeAndMaterials })
+            var gen = await generator.GenerateAsync(db, ctx, type, period.Start, period.End, false, null, approvedOnly: true, ct);
+            lines.AddRange(gen.Lines.Where(l => l.Kind is not (InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease) && l.Amount != 0).Select(l => (ctx, l)));
+            if (gen.RateNote is { } note && !notes.Contains(note))
             {
-                if (!ctx.Clins.Any(c => c.IsExercised && InvoiceGenerator.Bills(type, c.Pricing)))
-                {
-                    continue;
-                }
-
-                var gen = await generator.GenerateAsync(db, ctx, type, period.Start, period.End, false, null, approvedOnly: true, ct);
-                lines.AddRange(gen.Lines.Where(l => l.Kind is not (InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease) && l.Amount != 0).Select(l => (ctx, l)));
-                if (gen.RateNote is { } note && !notes.Contains(note))
-                {
-                    notes.Add(note);
-                }
+                notes.Add(note);
             }
         }
 
-        return new Accrual(period, lines, notes);
+        return (lines, notes);
     }
 
     internal async Task<UnbilledAccrualDto> GetAsync(IWorkbenchDbContext db, Guid fiscalPeriodId, CancellationToken ct)
