@@ -1,0 +1,35 @@
+@* Put an order on hold (or clear it). A credit hold is Finance's call. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudSwitch T="bool" @bind-Value="_hold" Label="On hold (nothing is released, picked or shipped)" Color="Color.Warning" />
+            <MudSwitch T="bool" @bind-Value="_credit" Label="Credit hold" Color="Color.Error" Disabled="!CanCredit" />
+            @if (!CanCredit)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Only Finance puts orders on or off credit hold.</MudText>
+            }
+            <MudTextField T="string" @bind-Value="_reason" Label="Reason" Lines="2" MaxLength="500" Disabled="@(!_hold && !_credit)" data-testid="hold-reason" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@((_hold || _credit) && string.IsNullOrWhiteSpace(_reason))" OnClick="Save" data-testid="hold-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public bool OnHold { get; set; }
+    [Parameter] public bool OnCreditHold { get; set; }
+    [Parameter] public string? Reason { get; set; }
+    [Parameter] public bool CanCredit { get; set; }
+
+    private bool _hold;
+    private bool _credit;
+    private string? _reason;
+
+    protected override void OnInitialized() => (_hold, _credit, _reason) = (OnHold, OnCreditHold, Reason);
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SetHoldRequest(_hold, _credit, _hold || _credit ? _reason : null)));
+}

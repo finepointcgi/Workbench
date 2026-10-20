@@ -1,0 +1,153 @@
+@page "/materials/shipments/{ShipmentId:guid}/dd250"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@* The DD Form 250 Material Inspection and Receiving Report for a shipment: a printable preview, and the PDF. *@
+@inject IShippingService Shipping
+@inject IJSRuntime JS
+
+<PageTitle>DD250 @(_dd?.ShipmentNumber) · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"materials/shipments/{ShipmentId}")">← Back to the shipment</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="PrintAsync" data-testid="dd250-print">Print</button>
+    <button type="button" @onclick="PdfAsync" disabled="@_busy" data-testid="dd250-pdf">Download PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_dd is not { } d)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    <div class="page" data-testid="dd250">
+        @if (!d.IsConfirmed)
+        {
+            <div class="watermark">DRAFT</div>
+        }
+
+        @if (d.Warnings.Count > 0)
+        {
+            <ul class="warnings no-print" data-testid="dd250-warnings">@foreach (var w in d.Warnings) { <li>@w</li> }</ul>
+        }
+
+        <div class="title"><h1>Material Inspection and Receiving Report</h1><span class="small">DD Form 250</span></div>
+        <table class="form">
+            <tr>
+                <td colspan="2"><div class="label">1. Proc. instrument iden. (contract)</div><b data-testid="dd250-contract">@d.ContractNumber</b></td>
+                <td><div class="label">(Order) no.</div>@d.DeliveryOrder</td>
+                <td><div class="label">6. Invoice no./date</div>@d.InvoiceNumber @(d.InvoiceDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))</td>
+                <td><div class="label">7. Page / of</div>1 / 1</td>
+                <td><div class="label">8. Acceptance point</div>@SalesFormat.Point(d.AcceptancePoint)</td>
+            </tr>
+            <tr>
+                <td><div class="label">2. Shipment no.</div><b data-testid="dd250-shipment">@d.ShipmentNumber</b></td>
+                <td><div class="label">3. Date shipped</div>@(d.DateShipped?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))</td>
+                <td><div class="label">4. B/L · TCN</div>@d.BillOfLading</td>
+                <td><div class="label">5. Discount terms</div>@d.DiscountTerms</td>
+                <td colspan="2"><div class="label">Carrier · packages · weight</div>@(d.Carrier ?? "—") · @d.PackageCount · @MaterialsFormat.Qty(d.TotalWeight) lb</td>
+            </tr>
+            <tr>
+                <td colspan="3"><Dd250Party Label="9. Prime contractor" Party="d.PrimeContractor" /></td>
+                <td colspan="3"><Dd250Party Label="10. Administered by" Party="d.AdministeredBy" /></td>
+            </tr>
+            <tr>
+                <td colspan="3"><Dd250Party Label="11. Shipped from (if other than 9)" Party="d.ShippedFrom" /></td>
+                <td colspan="3"><Dd250Party Label="12. Payment will be made by" Party="d.PaymentBy" /></td>
+            </tr>
+            <tr>
+                <td colspan="3"><Dd250Party Label="13. Shipped to" Party="d.ShippedTo" /></td>
+                <td colspan="3"><Dd250Party Label="14. Marked for" Party="@(d.MarkedFor ?? new Dd250PartyDto(null, "", null))" /></td>
+            </tr>
+        </table>
+
+        <table class="items" data-testid="dd250-items">
+            <thead>
+                <tr><th>15. Item no.</th><th>16. Stock/part no. · description</th><th class="num">17. Quantity ship/rec'd</th><th>18. Unit</th><th class="num">19. Unit price</th><th class="num">20. Amount</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var i in d.Items)
+                {
+                    <tr>
+                        <td><b>@i.ItemNumber</b></td>
+                        <td>
+                            @if (i.StockNumber is { } nsn) { <span>NSN @nsn · </span> }<b>P/N @i.PartNumber</b>
+                            <div>@i.Description</div>
+                            @if (i.Lots.Count > 0) { <div class="small">Lot @string.Join(", ", i.Lots)</div> }
+                            @if (i.Serials.Count > 0) { <div class="small">Serial @string.Join(", ", i.Serials)</div> }
+                            @if (i.UidMarked) { <div class="small">UID-marked item (DFARS 252.211-7003)</div> }
+                            @if (i.GovernmentFurnished) { <div class="small">Includes government-furnished material</div> }
+                        </td>
+                        <td class="num">@MaterialsFormat.Qty(i.Quantity)</td>
+                        <td>@i.Unit</td>
+                        <td class="num">@MaterialsFormat.Cost(i.UnitPrice)</td>
+                        <td class="num">@MaterialsFormat.Amount(i.Amount)</td>
+                    </tr>
+                }
+                <tr class="total"><td></td><td>@(d.IsFinal ? "FINAL SHIPMENT" : "")</td><td></td><td></td><td class="num">Total</td><td class="num" data-testid="dd250-total">@MaterialsFormat.Amount(d.Total)</td></tr>
+            </tbody>
+        </table>
+
+        <table class="form sign">
+            <tr>
+                <td>
+                    <div class="label">21. Contract quality assurance — a. Origin</div>
+                    <p class="small">☐ CQA ☐ Acceptance of listed items has been made by me or under my supervision and they conform to contract, except as noted herein or on supporting documents.</p>
+                    <div class="line">Date · signature of authorized government representative</div>
+                </td>
+                <td>
+                    <div class="label">b. Destination</div>
+                    <p class="small">☐ CQA ☐ Acceptance of listed items has been made by me or under my supervision and they conform to contract, except as noted herein or on supporting documents.</p>
+                    <div class="line">Date · signature of authorized government representative</div>
+                </td>
+                <td>
+                    <div class="label">22. Receiver's use</div>
+                    <p class="small">Quantities shown in column 17 were received in apparent good condition except as noted.</p>
+                    <div class="line">Date received · signature</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ShipmentId { get; set; }
+
+    private Dd250Dto? _dd;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _dd = await Shipping.GetDd250Async(ShipmentId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _error = MaterialsFormat.IsForbidden(ex) ? "The DD250 is for the Materials role, Finance and administrators." : MaterialsFormat.Error(ex);
+        }
+    }
+
+    private Task PrintAsync() => SalesFormat.PrintAsync(JS);
+
+    private async Task PdfAsync()
+    {
+        _busy = true;
+        try
+        {
+            await SalesFormat.DownloadAsync(JS, await Shipping.GetDd250PdfAsync(ShipmentId));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _error = MaterialsFormat.Error(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

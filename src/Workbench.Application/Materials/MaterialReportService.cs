@@ -21,7 +21,8 @@ public static class MaterialCostActuals
     {
         var q = db.Set<InventoryTransaction>().AsNoTracking()
             .Where(t => t.ProjectId != null && t.WbsElementId != null && t.Amount != 0 && t.Date >= from && t.Date <= to
-                && (t.Type == InventoryTransactionType.IssueToProject || t.Type == InventoryTransactionType.IssueToWorkOrder || t.Type == InventoryTransactionType.ReturnFromWorkOrder));
+                && (t.Type == InventoryTransactionType.IssueToProject || t.Type == InventoryTransactionType.IssueToWorkOrder || t.Type == InventoryTransactionType.ReturnFromWorkOrder
+                    || t.Type == InventoryTransactionType.SalesShipment)); // Cost of goods shipped on a project's sales order.
         if (projectIds is not null)
         {
             var ids = projectIds.ToList();

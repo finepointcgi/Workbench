@@ -1,0 +1,37 @@
+@* Sales orders and shipping: the Materials role, Finance and administrators; Business development reads sales orders. Others get a
+   friendly 403; the server refuses their calls too. *@
+@inherits LayoutComponentBase
+@layout Workbench.Ui.Layout.MainLayout
+@inject ICurrentUserContext CurrentUser
+
+@if (_allowed is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_allowed.Value)
+{
+    <CascadingValue Value="_user" IsFixed="true">@Body</CascadingValue>
+}
+else
+{
+    <ForbiddenNotice Title="You don't have access to sales orders"
+                     Message="Sales orders and shipping are for the Materials role, Finance and administrators; Business development can look at sales orders. Ask an administrator if you need them." />
+}
+
+@code {
+    private bool? _allowed;
+    private CurrentUserInfo? _user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _user = await CurrentUser.GetAsync();
+            _allowed = _user.Roles.CanViewMaterials() || _user.Roles.IsBusinessDevelopment();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            _allowed = false;
+        }
+    }
+}

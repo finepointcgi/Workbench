@@ -174,6 +174,11 @@ public static class NavCatalog
         new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, a => a.IsMaterials, MatchAll: true, Keywords: "mobile receiving", InMenu: false),
         new(Materials, null, "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, a => a.CanViewMaterials, Keywords: "valuation aging gfm wip trace"),
         new(Materials, null, "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, a => a.IsMaterials, Keywords: "warehouses bins work centers"),
+        new(Materials, "Sales and shipping", "Sales orders", "materials/sales-orders", Icons.Material.Filled.ReceiptLong, a => a.CanViewMaterials || a.SeesPipeline, Detail: "Sales order", Keywords: "so customer order clin delivery"),
+        new(Materials, "Sales and shipping", "Shipping", "materials/shipping", Icons.Material.Filled.LocalShipping, a => a.IsMaterials, Keywords: "pick pack ship shipment dd250 wawf piee tracking"),
+        new(Materials, null, "Pick list", "materials/pick-lists", Icons.Material.Filled.PlaylistAddCheck, a => a.CanViewMaterials, Detail: "Pick list", InMenu: false),
+        new(Materials, null, "Shipment", "materials/shipments", Icons.Material.Filled.LocalShipping, a => a.CanViewMaterials, Detail: "Shipment", InMenu: false),
+        new(Materials, null, "Pick on a phone", "m/pick", Icons.Material.Filled.PhoneIphone, a => a.IsMaterials, MatchAll: true, Keywords: "mobile picking", InMenu: false),
 
         // Reports: one place for every report.
         new(Reports, null, "Report catalog", "reports", Icons.Material.Filled.LibraryBooks, Everyone, MatchAll: true, Keywords: "reports"),

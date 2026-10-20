@@ -1,0 +1,4 @@
+.party { min-height: 54px; }
+.party-head { display: flex; justify-content: space-between; }
+.label { font-size: 7pt; text-transform: uppercase; color: #333; }
+.code { font-size: 7pt; border: 1px solid #000; padding: 0 6px; }

@@ -1,0 +1,102 @@
+@page "/materials/shipping"
+@inject IShippingService Shipping
+
+<PageTitle>Shipping · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Shipping" Subtitle="Pick released sales order lines, pack them into shipments with packages and tracking, and ship: shipping issues the stock and makes the DD Form 250.">
+    <MudButton Variant="Variant.Outlined" Href="materials/sales-orders" StartIcon="@Icons.Material.Filled.ReceiptLong">Sales orders</MudButton>
+    <MudButton Variant="Variant.Outlined" Href="m/pick" StartIcon="@Icons.Material.Filled.PhoneIphone">Pick on a phone</MudButton>
+</MaterialsHeader>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_picks is null || _packing is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+        <MudTabPanel Text="@($"To pick ({_picks.Count})")">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (_picks.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">Nothing to pick. Open a released sales order and choose Pick open lines.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="pick-lists">
+                        <caption class="wb-sr-only">Pick lists to pick</caption>
+                        <thead><tr><th scope="col">Pick list</th><th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Picked</th><th scope="col">Created</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _picks)
+                            {
+                                <tr>
+                                    <td><MudLink Href="@($"materials/pick-lists/{p.Id}")">@p.Number</MudLink></td>
+                                    <td><MudLink Href="@($"materials/sales-orders/{p.SalesOrderId}")">@p.SalesOrderNumber</MudLink></td>
+                                    <td>@p.CustomerName</td>
+                                    <td>@p.PickedCount of @p.LineCount lines</td>
+                                    <td>@p.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+        <MudTabPanel Text="@($"Being packed ({_packing.Count})")">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (_packing.Count == 0) { <MudText Class="mud-text-secondary">No shipments are being packed.</MudText> }
+                else { <ShipmentsTable Shipments="_packing" /> }
+            </MudPaper>
+        </MudTabPanel>
+        <MudTabPanel Text="Shipment history">
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+                <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Label="Search shipments, orders, tracking" DebounceInterval="300" Immediate="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:260px" />
+            </MudStack>
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (_history is null || _history.Count == 0) { <MudText Class="mud-text-secondary">No shipments yet.</MudText> }
+                else { <ShipmentsTable Shipments="_history" /> }
+            </MudPaper>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<PickListSummaryDto>? _picks;
+    private IReadOnlyList<ShipmentSummaryDto>? _packing;
+    private IReadOnlyList<ShipmentSummaryDto>? _history;
+    private string? _search;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _picks = await Shipping.ListPickListsAsync();
+            _packing = await Shipping.ListShipmentsAsync(new ShipmentQuery(ShipmentState.Packing));
+            _history = await Shipping.ListShipmentsAsync(new ShipmentQuery(ShipmentState.Confirmed));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SearchAsync(string? value)
+    {
+        _search = value;
+        try
+        {
+            _history = await Shipping.ListShipmentsAsync(new ShipmentQuery(ShipmentState.Confirmed, Search: _search));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _error = MaterialsFormat.Error(ex);
+        }
+    }
+}

@@ -1,0 +1,11 @@
+@* A DD250 party block: its label, code and name/address. *@
+<div class="party">
+    <div class="party-head"><span class="label">@Label</span><span class="code">Code <b>@Party.Code</b></span></div>
+    <div><b>@Party.Name</b></div>
+    @if (Party.Address is { } a) { <div style="white-space:pre-line">@a</div> }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public Dd250PartyDto Party { get; set; } = default!;
+}
