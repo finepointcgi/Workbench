@@ -96,6 +96,7 @@ public static class DependencyInjection
         Materials.ShopFloorRegistration.AddWorkbenchShopFloor(services); // Kitting, backflush, landed cost, physical inventory, finite capacity scheduling; posts through MaterialsLedger; above AddWorkbenchIdentity.
         BankFiles.BankFilesRegistration.AddWorkbenchBankFiles(services); // Vendor ACH details (approved changes), NACHA and positive pay files from payment runs, remittance advice; above AddWorkbenchIdentity.
         SalesTax.SalesTaxRegistration.AddWorkbenchSalesTax(services); // Sales and use tax: rates, codes, exemptions, invoice tax at approval, use tax on posted bills, the return; above AddWorkbenchIdentity.
+        Integrations.IntegrationRegistration.AddWorkbenchIntegrations(services); // Webhooks (outbox + dispatcher), API keys and connectors (Teams, Slack, GL export, report export); Admin-only; above AddWorkbenchIdentity.
 
         services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator

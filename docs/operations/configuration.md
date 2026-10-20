@@ -193,6 +193,22 @@ Server-wide connections; each organization turns the assistant on and picks a co
 | `Assistant:MaxQuestionLength` / `:ConversationTurns` / `:MaxToolResultChars` | `2000` / `6` / `24000` | |
 | `Assistant:RequestTimeout` | `00:03:00` | |
 
+## Integrations (webhooks, API keys, connectors)
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Integrations:DispatcherEnabled` | `true` | Runs the dispatcher (webhook deliveries, Teams/Slack posts, scheduled exports) on this host. Safe on several hosts: every attempt is claimed first. |
+| `Integrations:DispatchIntervalSeconds` | `15` | How often the dispatcher runs (2 to 3600). |
+| `Integrations:MaxAttempts` | `12` | Tries per delivery (30 s, 1 min, 2 min … up to 6 h apart, about a day in all). |
+| `Integrations:UnhealthyAfterFailures` | `10` | Consecutive failed attempts before an endpoint is marked unhealthy and only probed hourly. |
+| `Integrations:RequestTimeoutSeconds` | `10` | Per request (connect and response). |
+| `Integrations:RetentionDays` | `30` | Sent events, deliveries, connector runs and their files are deleted after this. |
+| `Integrations:AllowHttp` | `false` (`true` in Development) | Lets endpoints use `http://`. Refused by the startup check outside Development. |
+| `Integrations:AllowPrivateNetworkTargets` | `false` (`true` in Development) | Lets endpoints, Teams/Slack URLs and SFTP servers resolve to loopback or private addresses. Refused by the startup check outside Development. |
+
+Outbound integration traffic goes straight from the web host (no proxy) to public addresses only. Allow egress on 443 (and the
+SFTP ports you use) from the web hosts. Signing secrets and connector secrets are encrypted with the Data Protection key ring.
+
 ## Public demo
 
 Only for the hosted demo with sample data (`docs/demo-hosting.md`); the `demo` image target sets these.

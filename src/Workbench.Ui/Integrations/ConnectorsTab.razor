@@ -1,0 +1,158 @@
+@inject IConnectorService Connectors
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Ready-made connections. Teams and Slack post the events you choose to a channel. The general ledger export writes a
+    company's journal as a QuickBooks file, and the report export sends saved reports as files, on a schedule or when you run them.
+</MudText>
+
+<MudStack Row="true" Spacing="2" Class="mb-3 flex-wrap">
+    @foreach (var kind in _kinds)
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => AddAsync(kind)" data-testid="@($"connector-add-{kind.Kind}")">@kind.Name</MudButton>
+    }
+</MudStack>
+
+<MudTable T="ConnectorDto" Items="_connectors" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="Connectors" data-testid="connectors-table">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Kind</MudTh>
+        <MudTh>When</MudTh>
+        <MudTh>Last run (UTC)</MudTh>
+        <MudTh>Last result</MudTh>
+        <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">
+            @context.Name
+            @if (!context.IsActive)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.PauseCircle" Class="ml-1">Off</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Kind">@context.KindName</MudTd>
+        <MudTd DataLabel="When">
+            @if (context.EventTypes.Count > 0)
+            {
+                <span title="@string.Join(", ", context.EventTypes.Select(IntegrationFormat.EventLabel))">On @context.EventTypes.Count event@(context.EventTypes.Count == 1 ? "" : "s")</span>
+            }
+            else
+            {
+                @IntegrationFormat.Schedule(context)
+                @if (context.NextRunAtUtc is { } next)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Next: @IntegrationFormat.When(next)</MudText>
+                }
+            }
+        </MudTd>
+        <MudTd DataLabel="Last run">@IntegrationFormat.When(context.LastRunAtUtc)</MudTd>
+        <MudTd DataLabel="Last result" Style="max-width: 28rem;">@(context.LastStatus ?? "—")</MudTd>
+        <MudTd>
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert" AriaLabel="@($"Actions for {context.Name}")" Dense="true">
+                <MudMenuItem OnClick="() => RunAsync(context)">@(context.EventTypes.Count > 0 ? "Post a test message" : "Run now")</MudMenuItem>
+                <MudMenuItem OnClick="() => RunsAsync(context)">Run log</MudMenuItem>
+                <MudMenuItem OnClick="() => EditAsync(context)">Edit</MudMenuItem>
+                <MudMenuItem OnClick="() => DeleteAsync(context)">Delete</MudMenuItem>
+            </MudMenu>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No connectors yet. Choose one above to set it up.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<ConnectorKindDto> _kinds = [];
+    private IReadOnlyList<ConnectorDto> _connectors = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _kinds = await Connectors.ListKindsAsync();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load connectors: {ex.Message}", Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _connectors = await Connectors.ListAsync();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load connectors: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AddAsync(ConnectorKindDto kind) => await OpenAsync(kind, null);
+
+    private async Task EditAsync(ConnectorDto connector)
+    {
+        if (_kinds.FirstOrDefault(k => k.Kind == connector.Kind) is { } kind)
+        {
+            await OpenAsync(kind, connector);
+        }
+    }
+
+    private async Task OpenAsync(ConnectorKindDto kind, ConnectorDto? connector)
+    {
+        var parameters = new DialogParameters<ConnectorDialog> { { d => d.Kind, kind }, { d => d.Connector, connector } };
+        var dialog = await Dialogs.ShowAsync<ConnectorDialog>(kind.Name, parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            Snackbar.Add("Connector saved.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task RunAsync(ConnectorDto connector)
+    {
+        try
+        {
+            var run = await Connectors.RunNowAsync(connector.Id);
+            Snackbar.Add(run.Message, run.Status == ConnectorRunState.Succeeded ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private Task RunsAsync(ConnectorDto connector) =>
+        Dialogs.ShowAsync<ConnectorRunsDialog>("Run log", new DialogParameters<ConnectorRunsDialog> { { d => d.Connector, connector } },
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+
+    private async Task DeleteAsync(ConnectorDto connector)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Delete connector?", $"{connector.Name} and its run log will be removed.", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Connectors.DeleteAsync(connector.Id);
+            Snackbar.Add($"{connector.Name} deleted.", Severity.Success);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,128 @@
+@inject IApiKeyService ApiKeys
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    API keys let a program (a data warehouse, a script, another system) call the Workbench REST API without a person signing in.
+    Each key is its own user with the roles you choose, limited to the areas you allow. Send it as <code>Authorization: Bearer wbk_…</code>.
+    Revoke a key the moment it's no longer needed or may have leaked.
+</MudText>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Class="mb-3" data-testid="apikey-add">Create API key</MudButton>
+
+<MudTable T="ApiKeyDto" Items="_keys" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="API keys" data-testid="apikeys-table">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Key starts with</MudTh>
+        <MudTh>Roles</MudTh>
+        <MudTh>Access</MudTh>
+        <MudTh>Last used (UTC)</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">
+            @context.Name
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Created by @context.CreatedBy, @IntegrationFormat.When(context.CreatedAtUtc)</MudText>
+        </MudTd>
+        <MudTd DataLabel="Key starts with"><code>@context.Prefix…</code></MudTd>
+        <MudTd DataLabel="Roles">@IntegrationFormat.Roles(context.Roles)</MudTd>
+        <MudTd DataLabel="Access">@string.Join("; ", context.Scopes.Select(IntegrationFormat.AreaLabel))</MudTd>
+        <MudTd DataLabel="Last used">
+            @IntegrationFormat.When(context.LastUsedAtUtc)
+            @if (context.LastUsedFrom is { } from)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">from @from</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Status">
+            @if (context.RevokedAtUtc is { } revoked)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Block">Revoked @revoked.ToString("yyyy-MM-dd")</MudChip>
+            }
+            else if (!context.IsActive)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.EventBusy">Expired</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                    Active@(context.ExpiresAtUtc is { } x ? $" until {x:yyyy-MM-dd}" : "")
+                </MudChip>
+            }
+        </MudTd>
+        <MudTd>
+            @if (context.RevokedAtUtc is null)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RevokeAsync(context)" aria-label="@($"Revoke {context.Name}")" data-testid="apikey-revoke">Revoke</MudButton>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No API keys yet.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<ApiKeyDto> _keys = [];
+    private bool _loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _keys = await ApiKeys.ListAsync();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load API keys: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<ApiKeyDialog>("Create API key", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ApiKeyCreatedDto created })
+        {
+            await Dialogs.ShowAsync<SecretShownDialog>("API key created", new DialogParameters<SecretShownDialog>
+            {
+                { d => d.Title, "API key created" },
+                { d => d.Label, "API key" },
+                { d => d.Explanation, $"Put this key in the configuration of {created.ApiKey.Name}. It sends it as Authorization: Bearer <key> (or the X-Api-Key header)." },
+                { d => d.Secret, created.Key },
+            }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false });
+            await LoadAsync();
+        }
+    }
+
+    private async Task RevokeAsync(ApiKeyDto key)
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Pages.Admin.SecurityReasonDialog>
+        {
+            { d => d.Message, $"Revoke {key.Name}? Anything using it stops working at once. This can't be undone; create a new key if it's needed again." },
+            { d => d.ConfirmText, "Revoke" },
+        };
+        var dialog = await Dialogs.ShowAsync<Workbench.Ui.Pages.Admin.SecurityReasonDialog>("Revoke API key", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return;
+        }
+
+        try
+        {
+            await ApiKeys.RevokeAsync(key.Id, new RevokeApiKeyRequest(reason));
+            Snackbar.Add($"{key.Name} revoked.", Severity.Success);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+}

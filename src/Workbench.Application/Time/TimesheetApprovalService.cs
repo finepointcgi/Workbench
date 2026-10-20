@@ -8,6 +8,7 @@ using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Time;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Time;
 
@@ -149,6 +150,11 @@ public sealed class TimesheetApprovalService(
         }
 
         audit.Record(db, TimesheetQueries.AuditEntityType, sheet.Id, approve ? "Approved" : "Rejected", before, sheet.Snapshot(), reason);
+        if (approve)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.TimesheetApproved, IntegrationEventPayloads.Timesheet(sheet, owner), currentUser.Email, now);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         await notifier.NotifyAsync(new TimesheetNotification(approve ? TimesheetEvent.Approved : TimesheetEvent.Rejected, sheet.Id, owner.DisplayName, owner.Email,
             [owner.Email], sheet.PeriodStart, sheet.Total(), reviewer?.DisplayName ?? currentUser.Email, reason), cancellationToken);

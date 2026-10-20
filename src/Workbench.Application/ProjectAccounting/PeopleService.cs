@@ -3,6 +3,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.ProjectAccounting;
 
@@ -40,6 +41,11 @@ public sealed class PeopleService(IWorkbenchDbContextFactory dbFactory, AuditRec
         await ApplyAsync(db, employee, request, cancellationToken);
         db.Set<Employee>().Add(employee);
         audit.Record(db, nameof(Employee), employee.Id, "Created", after: employee.ToDto());
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.EmployeeHired, IntegrationEventPayloads.Employee(employee), audit.Actor);
+        if (employee.TerminationDate is not null)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.EmployeeTerminated, IntegrationEventPayloads.Employee(employee), audit.Actor);
+        }
         await db.SaveChangesAsync(cancellationToken);
         return employee.ToDto();
     }
@@ -52,6 +58,10 @@ public sealed class PeopleService(IWorkbenchDbContextFactory dbFactory, AuditRec
         var before = employee.ToDto();
         await ApplyAsync(db, employee, request, cancellationToken);
         audit.Record(db, nameof(Employee), employee.Id, "Updated", before, employee.ToDto());
+        if (employee.TerminationDate is { } ended && ended != before.TerminationDate)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.EmployeeTerminated, IntegrationEventPayloads.Employee(employee), audit.Actor);
+        }
         await db.SaveChangesAsync(cancellationToken);
         return employee.ToDto();
     }

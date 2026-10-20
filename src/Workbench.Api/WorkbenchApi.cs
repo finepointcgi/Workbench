@@ -72,6 +72,7 @@ public static class WorkbenchApi
         v1.MapSourcingEndpoints();
         v1.MapBankFileEndpoints();
         v1.MapSalesTaxEndpoints();
+        v1.MapIntegrationEndpoints();
 
         return app;
     }

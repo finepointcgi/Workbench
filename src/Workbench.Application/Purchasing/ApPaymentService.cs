@@ -11,6 +11,7 @@ using Workbench.Contracts.Security;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Purchasing;
 
@@ -302,6 +303,10 @@ public sealed class ApPaymentService(
             payment.PaidBy = access.Email;
             payment.JournalEntryId = entry.Id;
             bill.PaidAmount += payment.Amount;
+            if (bill.Balance <= 0)
+            {
+                IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.BillPaid, IntegrationEventPayloads.Bill(bill), access.Email, UtcNow);
+            }
         }
 
         run.Status = PaymentRunStatus.Completed;
