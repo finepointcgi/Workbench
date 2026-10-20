@@ -1,0 +1,142 @@
+@page "/cash/accounts/{BankAccountId:guid}/payment-files"
+@using Workbench.Contracts.BankFiles
+@inject IPaymentFileService Files
+@inject ISnackbar Snackbar
+
+<PageTitle>Payment files · @(_settings?.BankAccountName ?? "Bank account") · Workbench</PageTitle>
+
+<CashHeader Title="@($"Payment files: {_settings?.BankAccountName ?? "bank account"}")" BackHref="cash" BackLabel="Bank accounts"
+            Subtitle="What your bank gave you for sending ACH (NACHA) files, and the positive pay layout it expects for checks. Ask the bank's treasury services team for these values." />
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)">@(_forbidden ? "Payment file settings are kept by Finance and administrators." : _error)</MudAlert>
+}
+else if (_settings is not { } s)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="ach-settings">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">ACH (NACHA) origination</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@s.BankName account @s.MaskedAccountNumber@(s.RoutingNumber is null ? "" : $", routing {s.RoutingNumber}"). Files use CCD+ entries with the invoices paid in the addenda.</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_destination" Label="Bank routing number (immediate destination)" MaxLength="9" InputMode="InputMode.numeric" Required="true" data-testid="ach-destination" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_destinationName" Label="Bank name" MaxLength="23" Required="true" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_origin" Label="Immediate origin" MaxLength="10" Required="true" HelperText="Ten characters, often 1 + your EIN" data-testid="ach-origin" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_originName" Label="Your company's name (file)" MaxLength="23" Required="true" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_companyId" Label="Company ID (batch)" MaxLength="10" Required="true" HelperText="Assigned by the bank" data-testid="ach-company-id" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_companyName" Label="Company name (batch)" MaxLength="16" Required="true" HelperText="Shows on the vendor's statement" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_description" Label="Entry description" MaxLength="10" HelperText="For example VENDOR PAY" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_dfi" Label="Originating DFI (optional)" MaxLength="8" InputMode="InputMode.numeric" HelperText="First eight digits of the bank routing number unless the bank says otherwise" /></MudItem>
+                    <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_balanced" Label="Balanced file: add an offsetting debit to this account (only if the bank asks for it)" /></MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4" data-testid="positive-pay-settings">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Positive pay</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">The file of issued and voided checks the bank matches before cashing one. @(s.HasFullAccountNumber ? "" : "Enter this account's full number on the Bank accounts page first.")</MudText>
+                <MudSelect T="Guid?" @bind-Value="_layoutId" Label="Layout" data-testid="positive-pay-layout">
+                    @foreach (var l in _layouts)
+                    {
+                        <MudSelectItem T="Guid?" Value="l.Id">@l.Name@(l.IsPreset ? " (built in)" : "")</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_layouts.FirstOrDefault(l => l.Id == _layoutId) is { } layout)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+                        @(layout.Format == PositivePayFileFormat.Csv ? "CSV" : "Fixed width"): @string.Join(", ", layout.Fields.Select(f => f.Width is { } w ? $"{Label(f.Field)} ({w})" : Label(f.Field))).
+                        Issued checks are marked "@(layout.IssueCode.Length == 0 ? "blank" : layout.IssueCode)", voids "@(layout.VoidCode)".
+                    </MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="save-bank-files">Save</MudButton>
+                @if (s.UpdatedBy is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Last changed by @s.UpdatedBy on @s.UpdatedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd").</MudText>
+                }
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid BankAccountId { get; set; }
+
+    private BankFileSettingsDto? _settings;
+    private IReadOnlyList<PositivePayLayoutDto> _layouts = [];
+    private string? _destination, _destinationName, _origin, _originName, _companyId, _companyName, _description, _dfi;
+    private bool _balanced;
+    private Guid? _layoutId;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _layouts = await Files.ListLayoutsAsync();
+            Load(await Files.GetSettingsAsync(BankAccountId));
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (CashFormat.Error(ex), CashFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Load(BankFileSettingsDto s)
+    {
+        _settings = s;
+        _destination = s.ImmediateDestination ?? s.RoutingNumber;
+        _destinationName = s.ImmediateDestinationName ?? s.BankName.ToUpperInvariant();
+        _origin = s.ImmediateOrigin;
+        _originName = s.ImmediateOriginName;
+        _companyId = s.CompanyIdentification;
+        _companyName = s.CompanyName;
+        _description = s.EntryDescription;
+        _dfi = s.OriginatingDfi;
+        _balanced = s.BalancedFile;
+        _layoutId = s.PositivePayLayoutId ?? _layouts.FirstOrDefault()?.Id;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Load(await Files.SaveSettingsAsync(BankAccountId, new SaveBankFileSettingsRequest(_destination ?? "", _destinationName ?? "", _origin ?? "", _originName ?? "",
+                _companyId ?? "", _companyName ?? "", _description ?? "", _dfi, _balanced, _layoutId)));
+            Snackbar.Add("Payment file settings saved.", Severity.Success);
+        }
+        catch (Exception ex) when (CashFormat.IsExpected(ex))
+        {
+            Snackbar.Add(CashFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Label(PositivePayField f) => f switch
+    {
+        PositivePayField.AccountNumber => "account",
+        PositivePayField.RoutingNumber => "routing",
+        PositivePayField.CheckNumber => "check number",
+        PositivePayField.IssueDate => "issue date",
+        PositivePayField.Amount => "amount",
+        PositivePayField.AmountCents => "amount in cents",
+        PositivePayField.Payee => "payee",
+        PositivePayField.IssueCode => "issue or void code",
+        PositivePayField.Literal => "fixed text",
+        _ => "blank",
+    };
+}

@@ -1,0 +1,73 @@
+@* Asks for new ACH bank details for a vendor. The change waits for someone else's approval before payments use it. *@
+@using Workbench.Contracts.BankFiles
+@inject IVendorBankService Banks
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                Changed bank details are a common payment fraud. Confirm them with the vendor at a phone number you already had on file,
+                not one from the request. Another Finance user approves the change before any payment uses it.
+            </MudAlert>
+            <MudTextField T="string" @bind-Value="_holder" Label="Name on the account" Required="true" MaxLength="200" data-testid="bank-holder" />
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                <MudTextField T="string" @bind-Value="_routing" Label="Routing number" Required="true" MaxLength="11" InputMode="InputMode.numeric"
+                              HelperText="Nine digits" Style="max-width:200px" autocomplete="off" data-testid="bank-routing" />
+                <MudTextField T="string" @bind-Value="_account" Label="Account number" Required="true" MaxLength="20" InputMode="InputMode.numeric"
+                              Style="max-width:240px" autocomplete="off" data-testid="bank-account" />
+                <MudSelect T="BankAccountType" @bind-Value="_type" Label="Account type" Style="max-width:160px">
+                    <MudSelectItem Value="BankAccountType.Checking">Checking</MudSelectItem>
+                    <MudSelectItem Value="BankAccountType.Savings">Savings</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_email" Label="Send remittance advice to (optional)" InputType="InputType.Email" MaxLength="320"
+                          HelperText="Leave empty to use the vendor's contact email." />
+            <MudTextField T="string" @bind-Value="_reason" Label="How you confirmed the details" Required="true" Lines="2" MaxLength="1000"
+                          HelperText="For example: Called Jan at 703-555-0100 (number from the 2025 W-9) on Oct 19." data-testid="bank-reason" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" data-testid="bank-error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="_busy" data-testid="bank-submit">Send for approval</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Guid VendorId { get; set; }
+    [Parameter] public string? HolderName { get; set; }
+
+    private string? _holder;
+    private string? _routing;
+    private string? _account;
+    private string? _email;
+    private string? _reason;
+    private BankAccountType _type = BankAccountType.Checking;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized() => _holder = HolderName;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var change = await Banks.RequestChangeAsync(VendorId, new RequestVendorBankChangeRequest(_holder ?? "", _routing ?? "", _account ?? "", _type, _reason ?? "", _email));
+            MudDialog.Close(DialogResult.Ok(change));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

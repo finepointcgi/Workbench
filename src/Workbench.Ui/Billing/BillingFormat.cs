@@ -41,6 +41,7 @@ public static class BillingFormat
         InvoiceLineType.FeeWithhold => "Fee withhold",
         InvoiceLineType.WithholdRelease => "Withhold release",
         InvoiceLineType.Odc => "ODC",
+        InvoiceLineType.SalesTax => "Sales tax",
         _ => k.ToString(),
     };
 

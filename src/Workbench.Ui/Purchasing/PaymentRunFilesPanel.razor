@@ -1,0 +1,179 @@
+@* Bank files for a payment run: the NACHA file (ACH runs) or positive pay (check runs), the download log and remittance advice.
+   Files are saved to this computer for upload to the bank; Workbench never sends them. *@
+@using Workbench.Contracts.BankFiles
+@inject IPaymentFileService Files
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="run-files">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Bank files</MudText>
+    @if (_error is not null)
+    {
+        <MudText Class="mud-text-secondary">@_error</MudText>
+    }
+    else if (_files is not { } f)
+    {
+        <MudProgressLinear aria-label="Loading bank files" Indeterminate="true" />
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            @(Run.Method == PaymentKind.Ach
+                ? "Download the NACHA file and upload it to your bank. Each vendor gets one ACH credit with the invoices it pays."
+                : "Download the positive pay file so the bank only cashes these checks. After voiding a check, download the void records.")
+            Every download is logged. Workbench never sends payment files anywhere.
+        </MudText>
+        @foreach (var problem in f.Problems)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@problem</MudAlert>
+        }
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+            <MudSelect T="Guid?" @bind-Value="_bankAccountId" Label="Pay from" Style="min-width:260px; max-width:340px" data-testid="file-bank-account">
+                @foreach (var a in f.BankAccounts)
+                {
+                    <MudSelectItem T="Guid?" Value="a.BankAccountId">@a.BankAccountName · @a.MaskedAccountNumber@(Run.Method == PaymentKind.Ach && !a.IsConfigured ? " (no ACH settings)" : "")</MudSelectItem>
+                }
+            </MudSelect>
+            @if (Run.Method == PaymentKind.Ach)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" OnClick="() => DownloadAsync(PaymentFileType.Nacha)"
+                           Disabled="@(_busy || _bankAccountId is null)" data-testid="download-nacha">Download NACHA file</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" OnClick="() => DownloadAsync(PaymentFileType.PositivePay)"
+                           Disabled="@(_busy || _bankAccountId is null)" data-testid="download-positive-pay">Download positive pay</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="() => DownloadAsync(PaymentFileType.PositivePayVoids)"
+                           Disabled="@(_busy || _bankAccountId is null || !Run.Payments.Any(p => p.Status == PaymentState.Void && p.Reference is not null))">Download void records</MudButton>
+            }
+            @if (_bankAccountId is { } id)
+            {
+                <MudLink Href="@($"cash/accounts/{id}/payment-files")" Typo="Typo.body2">Bank file settings</MudLink>
+            }
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Email" OnClick="SendRemittanceAsync"
+                       Disabled="@(_busy || Run.Status is PaymentRunState.Draft or PaymentRunState.Cancelled)" data-testid="send-remittance">Email remittance advice</MudButton>
+        </MudStack>
+
+        @if (f.Downloads.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3">Downloads</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" aria-label="Payment file downloads" data-testid="file-downloads">
+<caption class="wb-sr-only">Payment file downloads</caption>
+                <thead><tr><th scope="col">When</th><th scope="col">File</th><th scope="col">Bank account</th><th scope="col" style="text-align:right">Entries</th><th scope="col" style="text-align:right">Total</th><th scope="col">By</th><th scope="col">SHA-256</th></tr></thead>
+                <tbody>
+                    @foreach (var d in f.Downloads)
+                    {
+                        <tr>
+                            <td>@d.DownloadedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@d.FileName</td>
+                            <td>@d.BankAccountName</td>
+                            <td style="text-align:right">@d.EntryCount</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(d.TotalAmount)</td>
+                            <td>@d.DownloadedBy</td>
+                            <td style="font-family:monospace; font-size:0.75rem" title="@d.Sha256">@d.Sha256[..12]…</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3">Remittance advice</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" aria-label="Remittance advice">
+<caption class="wb-sr-only">Remittance advice</caption>
+            <thead><tr><th scope="col">Vendor</th><th scope="col">Sends to</th><th scope="col" style="text-align:right">Amount</th><th scope="col">Sent</th></tr></thead>
+            <tbody>
+                @foreach (var r in f.Remittances)
+                {
+                    <tr>
+                        <td>@r.VendorCode · @r.VendorName</td>
+                        <td>@(r.Email ?? "No email on file")</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(r.Amount)</td>
+                        <td>@(r.SentAtUtc is { } at ? $"{at.ToLocalTime():yyyy-MM-dd HH:mm} by {r.SentBy}" : "Not yet")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public PaymentRunDto Run { get; set; } = default!;
+
+    /// <summary>Raised after a NACHA download stamps the trace numbers on the payments.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private PaymentRunFilesDto? _files;
+    private Guid? _bankAccountId;
+    private string? _error;
+    private bool _busy;
+    private (Guid Id, PaymentRunState Status, int Voids)? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = (Run.Id, Run.Status, Run.Payments.Count(p => p.Status == PaymentState.Void));
+        if (_loadedFor != key)
+        {
+            _loadedFor = key;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _files = await Files.GetRunFilesAsync(Run.Id);
+            _bankAccountId ??= _files.DefaultBankAccountId;
+            _error = null;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.IsForbidden(ex) ? "Bank files are made by Finance and administrators." : PurchasingFormat.Error(ex);
+        }
+    }
+
+    private async Task DownloadAsync(PaymentFileType kind)
+    {
+        _busy = true;
+        try
+        {
+            var file = await Files.GenerateAsync(Run.Id, new GeneratePaymentFileRequest(_bankAccountId!.Value, kind));
+            await PurchasingFormat.DownloadAsync(JS, new PurchasingExportFile(file.FileName, file.ContentType, file.Content));
+            Snackbar.Add($"Downloaded {file.FileName}: {file.EntryCount} entr{(file.EntryCount == 1 ? "y" : "ies")}, {PurchasingFormat.Amount(file.TotalAmount)}.", Severity.Success);
+            await LoadAsync();
+            if (kind == PaymentFileType.Nacha)
+            {
+                await Changed.InvokeAsync();
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex) || ex is JSException)
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SendRemittanceAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Files.SendRemittanceAsync(Run.Id);
+            Snackbar.Add(result.Skipped.Count == 0 ? $"Emailed {result.Sent} remittance advice." : $"Emailed {result.Sent}; skipped {string.Join("; ", result.Skipped)}.",
+                result.Skipped.Count == 0 ? Severity.Success : Severity.Warning);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

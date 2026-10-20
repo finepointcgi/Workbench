@@ -1,0 +1,132 @@
+@* A bill's sales or use tax: the tax the vendor charged (already in the lines) and where the purchase is used. When the vendor
+   charged none on a taxable purchase, use tax accrues to the use tax liability when the bill posts. *@
+@using Workbench.Contracts.Purchasing
+@using Workbench.Contracts.SalesTax
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (Tax is not null)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="bill-tax">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Sales and use tax</MudText>
+        @if (_error is not null)
+        {
+            <MudText Class="mud-text-secondary">@_error</MudText>
+        }
+        else if (_tax is { } t)
+        {
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudSimpleTable Dense="true" Elevation="0" aria-label="Bill tax">
+<caption class="wb-sr-only">Bill tax</caption>
+                        <tbody>
+                            <tr><th scope="row" style="font-weight:normal">Used in</th><td>@(t.Jurisdiction ?? "No jurisdiction")</td></tr>
+                            <tr><th scope="row" style="font-weight:normal">Taxable purchases</th><td>@TaxFormat.Money(t.TaxableAmount) @(t.Rate == 0 ? "" : $"at {TaxFormat.Rate(t.Rate)}")</td></tr>
+                            <tr><th scope="row" style="font-weight:normal">Tax the vendor charged</th><td>@TaxFormat.Money(t.VendorChargedTax)</td></tr>
+                            <tr><th scope="row" style="font-weight:normal">Use tax accrued</th>
+                                <td data-testid="bill-use-tax"><strong>@TaxFormat.Money(t.UseTaxAmount)</strong>
+                                    @if (t.UseTaxJournalEntryId is { } je)
+                                    {
+                                        <span> · <MudLink Href="@($"accounting/journal/{je}")" Typo="Typo.body2">Entry</MudLink></span>
+                                    }
+                                </td>
+                            </tr>
+                        </tbody>
+                    </MudSimpleTable>
+                    @foreach (var note in t.Notes)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@note</MudText>
+                    }
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_jurisdictionId" Label="Where the purchase is used" Clearable="true" Dense="true" HelperText="Empty: the home jurisdiction (Setup › Sales tax)">
+                        @foreach (var j in _jurisdictions)
+                        {
+                            <MudSelectItem T="Guid?" Value="j.Id">@j.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudNumericField T="decimal" @bind-Value="_vendorTax" Label="Tax the vendor charged" Min="0" Format="N2" Margin="Margin.Dense" Class="mt-2"
+                                     HelperText="Already included in the lines above. Zero on a taxable purchase means use tax accrues." data-testid="vendor-tax" />
+                    <MudSelect T="Guid?" @bind-Value="_codeId" Label="Tax code for the whole bill (optional)" Clearable="true" Dense="true" Class="mt-2"
+                               HelperText="For example Resale or Exempt; empty uses each line's code">
+                        @foreach (var c in _codes.Where(c => c.IsActive))
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveAsync" Disabled="_busy" data-testid="save-bill-tax">Save tax</MudButton>
+                </MudItem>
+            </MudGrid>
+        }
+    </MudPaper>
+    
+}
+
+@code {
+    // Hosts without sales tax (component tests of the page around it) render nothing.
+    private ISalesTaxService? Tax => Services.GetService(typeof(ISalesTaxService)) as ISalesTaxService;
+
+    [Parameter, EditorRequired] public Guid BillId { get; set; }
+    [Parameter] public BillState Status { get; set; }
+
+    private BillTaxDto? _tax;
+    private IReadOnlyList<TaxJurisdictionDto> _jurisdictions = [];
+    private IReadOnlyList<TaxCodeDto> _codes = [];
+    private Guid? _jurisdictionId;
+    private Guid? _codeId;
+    private decimal _vendorTax;
+    private string? _error;
+    private bool _busy;
+    private BillState? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Tax is null)
+        {
+            return;
+        }
+
+        if (_loadedFor == Status)
+        {
+            return;
+        }
+
+        _loadedFor = Status;
+        try
+        {
+            _jurisdictions = await Tax!.ListJurisdictionsAsync(includeInactive: false);
+            _codes = await Tax!.ListTaxCodesAsync();
+            Load(await Tax!.GetBillTaxAsync(BillId));
+        }
+        catch (Exception ex) when (TaxFormat.IsExpected(ex))
+        {
+            _error = TaxFormat.Error(ex);
+        }
+    }
+
+    private void Load(BillTaxDto t)
+    {
+        _tax = t;
+        _vendorTax = t.VendorChargedTax;
+        _codeId = t.TaxCodeOverrideId;
+        _jurisdictionId = t.JurisdictionId is { } id && _jurisdictions.Any(j => j.Id == id) ? id : null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Load(await Tax!.SetBillTaxAsync(BillId, new SetBillTaxRequest(_jurisdictionId, _vendorTax, _codeId)));
+            Snackbar.Add(_tax!.IsPosted && _tax.UseTaxAmount > 0 ? $"Saved; {TaxFormat.Money(_tax.UseTaxAmount)} use tax accrued." : "Tax saved.", Severity.Success);
+        }
+        catch (Exception ex) when (TaxFormat.IsExpected(ex))
+        {
+            Snackbar.Add(TaxFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

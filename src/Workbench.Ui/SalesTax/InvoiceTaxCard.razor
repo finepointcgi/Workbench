@@ -1,0 +1,119 @@
+@* An invoice's sales tax: where it's taxed, what's taxable or exempt and why. On a draft Finance can pick another ship-to and
+   calculate now; approval always recalculates it. *@
+@using Workbench.Contracts.Billing
+@using Workbench.Contracts.SalesTax
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (Tax is not null)
+{
+    <div class="mt-3" data-testid="invoice-tax">
+        <MudText Typo="Typo.subtitle2" HtmlTag="h2">Sales tax</MudText>
+        @if (_error is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@_error</MudText>
+        }
+        else if (_tax is { } t)
+        {
+            <MudSimpleTable Dense="true" Elevation="0" aria-label="Sales tax">
+<caption class="wb-sr-only">Sales tax</caption>
+                <tbody>
+                    <tr><th scope="row" style="font-weight:normal">Ship to</th><td style="text-align:right">@(t.Jurisdiction ?? "Not set")</td></tr>
+                    @if (t.IsCalculated)
+                    {
+                        <tr><th scope="row" style="font-weight:normal">Taxable</th><td style="text-align:right">@TaxFormat.Money(t.TaxableAmount)</td></tr>
+                        <tr><th scope="row" style="font-weight:normal">Exempt or not taxed</th><td style="text-align:right">@TaxFormat.Money(t.ExemptAmount)</td></tr>
+                        <tr><th scope="row" style="font-weight:normal">Tax @(t.Rate == 0 ? "" : $"at {TaxFormat.Rate(t.Rate)}")</th><td style="text-align:right" data-testid="invoice-tax-amount"><strong>@TaxFormat.Money(t.TaxAmount)</strong></td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (t.ExemptionReason is not null)
+            {
+                <MudText Typo="Typo.caption" Class="d-block">@t.ExemptionReason</MudText>
+            }
+            @foreach (var note in t.Notes)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@note</MudText>
+            }
+            @if (t.IsDraft && Status == InvoiceState.Draft)
+            {
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-1">
+                    <MudSelect T="Guid?" Value="t.JurisdictionOverrideId" ValueChanged="OverrideAsync" Label="Ship-to for this invoice" Dense="true" Clearable="true" Disabled="_busy">
+                        @foreach (var j in _jurisdictions)
+                        {
+                            <MudSelectItem T="Guid?" Value="j.Id">@j.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="CalculateAsync" Disabled="_busy" data-testid="calculate-tax">Calculate tax</MudButton>
+                </MudStack>
+            }
+        }
+    </div>
+    
+}
+
+@code {
+    // Hosts without sales tax (component tests of the page around it) render nothing.
+    private ISalesTaxService? Tax => Services.GetService(typeof(ISalesTaxService)) as ISalesTaxService;
+
+    [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
+    [Parameter] public InvoiceState Status { get; set; }
+    [Parameter] public decimal Total { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private InvoiceTaxDto? _tax;
+    private IReadOnlyList<TaxJurisdictionDto> _jurisdictions = [];
+    private string? _error;
+    private bool _busy;
+    private (InvoiceState, decimal)? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Tax is null)
+        {
+            return;
+        }
+
+        if (_loadedFor == (Status, Total))
+        {
+            return;
+        }
+
+        _loadedFor = (Status, Total);
+        try
+        {
+            _tax = await Tax!.GetInvoiceTaxAsync(InvoiceId);
+            if (Status == InvoiceState.Draft && _jurisdictions.Count == 0)
+            {
+                _jurisdictions = await Tax!.ListJurisdictionsAsync(includeInactive: false);
+            }
+        }
+        catch (Exception ex) when (TaxFormat.IsExpected(ex))
+        {
+            _error = TaxFormat.Error(ex);
+        }
+    }
+
+    private Task CalculateAsync() => RunAsync(() => Tax!.CalculateInvoiceTaxAsync(InvoiceId));
+
+    private Task OverrideAsync(Guid? jurisdictionId) => RunAsync(() => Tax!.SetInvoiceTaxAsync(InvoiceId, new SetInvoiceTaxRequest(jurisdictionId)));
+
+    private async Task RunAsync(Func<Task<InvoiceTaxDto>> action)
+    {
+        _busy = true;
+        try
+        {
+            _tax = await action();
+            Snackbar.Add(_tax.TaxAmount == 0 ? "No sales tax on this invoice." : $"Sales tax {TaxFormat.Money(_tax.TaxAmount)} added as a line.", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (TaxFormat.IsExpected(ex))
+        {
+            Snackbar.Add(TaxFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

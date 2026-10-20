@@ -77,6 +77,11 @@ public static class ApprovalDefaults
                 WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
         ]),
 
+        // A vendor's ACH bank details: another Finance user (never the requester); administrators may decide.
+        ApprovalDocumentTypes.VendorBankChange => new([
+            new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 

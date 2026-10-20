@@ -17,7 +17,8 @@ public sealed partial class InvoiceService(
     InvoiceDocuments documents,
     UnbilledAccruals accruals,
     Security.SecurityEventLog? securityLog = null,
-    Approvals.ApprovalEngine? approvals = null) : IInvoiceService
+    Approvals.ApprovalEngine? approvals = null,
+    SalesTax.InvoiceTaxApplier? salesTax = null) : IInvoiceService
 {
     public const string AuditEntityType = nameof(Invoice);
 
@@ -277,6 +278,11 @@ public sealed partial class InvoiceService(
 
     public async Task<InvoiceDto> ApproveAsync(Guid invoiceId, ApproveInvoiceRequest request, CancellationToken cancellationToken = default)
     {
+        if (salesTax is not null)
+        {
+            await salesTax.EnsureAccountsAsync(cancellationToken); // Sales tax: the liability account must exist before the posting looks it up.
+        }
+
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var invoice = await LoadDraftAsync(db, invoiceId, cancellationToken);
         if (invoice.Lines.Count == 0 || invoice.Total == 0)
@@ -335,6 +341,11 @@ public sealed partial class InvoiceService(
                 await db.SaveChangesAsync(cancellationToken);
                 return await DetailAsync(db, invoice, cancellationToken);
             }
+        }
+
+        if (salesTax is not null)
+        {
+            await salesTax.ApplyAsync(db, invoice, cancellationToken); // Sales tax at the ship-to rate on the invoice date, as a sales tax line.
         }
 
         await Currencies.InvoiceCurrency.ApplyAsync(db, invoice, original, cancellationToken);

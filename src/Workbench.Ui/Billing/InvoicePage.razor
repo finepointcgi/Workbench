@@ -121,6 +121,10 @@ else
                     Created by @_invoice.CreatedBy@(_invoice.ApprovedBy is null ? "" : $"; approved by {_invoice.ApprovedBy} {_invoice.ApprovedAtUtc?.ToLocalTime():yyyy-MM-dd}")@(_invoice.SentAtUtc is null ? "" : $"; sent {_invoice.SentAtUtc?.ToLocalTime():yyyy-MM-dd}")
                 </MudText>
                 <Workbench.Ui.Currencies.InvoiceCurrencyCard Summary="s" CanEdit="_isFinance" Changed="ReloadAsync" />
+                @if (_isFinance)
+                {
+                    <Workbench.Ui.SalesTax.InvoiceTaxCard InvoiceId="s.Id" Status="s.Status" Total="s.Total" Changed="ReloadAsync" />
+                }
                 @if (_invoice.FundingOverrideReason is not null)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Approved past funding: @_invoice.FundingOverrideReason</MudAlert>

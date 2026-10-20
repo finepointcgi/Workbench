@@ -586,3 +586,35 @@ Checks:
 - A new company-owned record type gets a `CompanyColumnConfiguration<T>` and, if users list or open it, a company filter in
   `CompanyPermissionDecorators.cs` (`CompanyGuard.FilterAsync` / `EnsureAsync` / `StampNewAsync`).
 - Reports that add up ledger lines filter by `CompanyScope.VisibleCompanyIdsAsync()` (null = all companies).
+
+## Bank payment files and sales tax
+
+- Bank files (`Domain/Purchasing/VendorBanking.cs`, `Domain/Cash/PaymentFiles.cs`, `Contracts/BankFiles`, `Application/BankFiles`):
+  `IVendorBankService` and `IPaymentFileService`, Finance/Admin. A vendor's ACH routing and account numbers are Data Protection
+  ciphertext (`VendorBankProtector`, purposes `Workbench.Purchasing.VendorBank{Routing,Account}.v1`) with the last four digits in
+  clear; they change only through a `VendorBankChange` routed through the `vendor-bank-change` approval workflow, which its
+  requester can never decide (enforced in the service as well as the default workflow). Requesting, approving and revealing need
+  a recent sign-in (`SensitiveActions.BankDetails`) and are in the security log; audit rows hold masked numbers only.
+- Payment runs make files only for download, never sent anywhere: `NachaWriter` (CCD/CCD+, one credit per vendor, addenda
+  `RMR*IV*…`, optional balanced offset, file ID modifier A–Z then 0–9 per bank account per day, trace numbers stable per run and
+  stamped on the scheduled payments as their references) from `BankAchSettings` on the paying bank account; `PositivePayWriter`
+  from a built-in preset or a stored `PositivePayLayout`, issues and voids, or voids only. ACH is US dollars only. Every download
+  is a `PaymentFileDownload` row (counts, total, SHA-256), an audit row and an `export.payment_file` security event. Remittance
+  advice is a plain `IEmailSender` email per vendor (the approved remittance email, else the contact email), logged as
+  `RemittanceAdvice`. The old `IApPaymentService.ExportAchAsync`/`ExportPositivePayAsync` CSVs remain for the API but the UI uses
+  the bank files panel. Known-good sample: `samples/bank/nacha-ccd-sample.ach`.
+- Sales and use tax (`Domain/SalesTax`, `Contracts/SalesTax`, `Application/SalesTax`, Setup › Sales tax, Accounting › Sales and use
+  tax return): `ISalesTaxService`, Finance/Admin. Jurisdictions carry effective-dated, append-only state/county/city/district rates
+  (CSV import). Tax codes are Taxable, Exempt or Resale and are assigned to invoice line kinds, ODC types, GL accounts or parts;
+  unassigned lines use the default sales or purchase code (none = taxable). Calculation goes through `ISalesTaxEngine`
+  (`TableSalesTaxEngine` unless a host registers another first; nothing calls out); totals round half away from zero to the cent
+  and the levels add up to the total.
+- Invoices: `InvoiceTaxApplier` runs at approval (and on "Calculate tax" for a draft) and keeps one `InvoiceLineKind.SalesTax` line
+  plus an `InvoiceTax` record; `BillingLedger` credits sales tax lines to the sales tax payable account (default 2150), never
+  revenue. Ship-to is the customer's `CustomerTaxProfile` unless the invoice overrides it. Government customers (categories in the
+  settings) are exempt unless marked taxable; a current `TaxExemptionCertificate` for the state exempts the sale, an expired one is
+  noted and taxed. Credit memos aren't re-taxed. Sales tax lines carry no CLIN or project, so CLIN funding checks ignore them.
+- Bills: `ApBillTax` records the vendor-charged tax (already in the lines), where the purchase is used (else the home jurisdiction)
+  and an optional bill-wide code. `UseTaxAccrual` runs after a bill posts (never failing the posting) and when its tax is saved: no
+  vendor tax on a taxable purchase accrues use tax (debit 6250 use tax expense, credit 2160 use tax payable, GL source AP, source id =
+  the `ApBillTax` row); a change reverses the earlier accrual first. Accounts 2150/2160/6250 are added to the chart when first used.

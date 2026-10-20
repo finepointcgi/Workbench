@@ -194,6 +194,7 @@ public static class DatabaseInitializer
         await TotalTimeSeed.SeedAsync(db, cancellationToken); // Total time accounting: Robin Hale (E1050, exempt) with a 50-hour week on 1001 and 1002; the Hybrid labor cost method.
         await CurrencySeed.SeedAsync(db, services, cancellationToken); // Multicurrency: EUR and GBP with rates, a posted EUR vendor bill (BTG) and an approved GBP invoice (UKMOD).
         await CompanySeed.SeedAsync(db, services, cancellationToken); // Multicompany: subsidiary FED (contract, project 4001, Jordan Blake E1041) and two weeks of intercompany labor with MAIN.
+        await BankFilesTaxSeed.SeedAsync(db, services, cancellationToken); // Bank files and sales tax: ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice.
     }
 
     /// <summary>

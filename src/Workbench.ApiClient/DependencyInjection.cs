@@ -58,6 +58,8 @@ public static class DependencyInjection
         services.AddTotalTimeClients(serverBaseAddress);
         services.AddCurrencyClients(serverBaseAddress);
         services.AddCompanyClients(serverBaseAddress);
+        services.AddBankFileClients(serverBaseAddress);
+        services.AddSalesTaxClients(serverBaseAddress);
         return services;
     }
 }
