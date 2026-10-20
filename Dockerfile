@@ -10,7 +10,8 @@
 
 ARG DOTNET_VERSION=10.0
 
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+# The build stage runs natively (published output is portable), so cross-building linux/amd64 on Apple silicon is fast.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 ARG BUILD_CONFIGURATION=Release
 ARG VERSION=0.0.0
 WORKDIR /src
