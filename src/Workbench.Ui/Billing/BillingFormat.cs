@@ -45,6 +45,7 @@ public static class BillingFormat
         InvoiceLineType.Odc => "ODC",
         InvoiceLineType.ProgressPayment => "Progress payment",
         InvoiceLineType.PerformanceBasedPayment => "Performance-based payment",
+        InvoiceLineType.SalesTax => "Sales tax",
         _ => k.ToString(),
     };
 

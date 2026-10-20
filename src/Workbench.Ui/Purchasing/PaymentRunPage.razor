@@ -2,7 +2,6 @@
 @inject IApPaymentService Payments
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
-@inject IJSRuntime JS
 
 <PageTitle>@(_run?.Number ?? "Payment run") · Purchasing · Workbench</PageTitle>
 
@@ -19,11 +18,6 @@ else
 {
     <PurchasingHeader Title="@($"{run.Number} · {run.Method} · {PurchasingFormat.Date(run.PaymentDate)}")" BackHref="purchasing/payments" BackLabel="Payment runs">
         <MudChip T="string" Variant="Variant.Outlined" Color="@(run.Status == PaymentRunState.Completed ? Color.Success : run.Status == PaymentRunState.Approved ? Color.Info : Color.Default)">@run.Status</MudChip>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => ExportAsync(false))">ACH CSV</MudButton>
-        @if (run.Method == PaymentKind.Check)
-        {
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => ExportAsync(true))">Positive pay CSV</MudButton>
-        }
         @if (run.Status == PaymentRunState.Draft)
         {
             <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(() => Payments.ApproveRunAsync(run.Id), "Run approved."))" data-testid="approve-run">Approve</MudButton>
@@ -34,6 +28,8 @@ else
         }
     </PurchasingHeader>
     <MudText Class="mud-text-secondary mb-3">Created by @run.CreatedBy@(run.ApprovedBy is null ? "; needs approval by another Finance user." : $"; approved by {run.ApprovedBy}.") Total @PurchasingFormat.Amount(run.Total).</MudText>
+
+    <PaymentRunFilesPanel Run="run" Changed="ReloadAsync" />
 
     @if (run.Status == PaymentRunState.Approved)
     {
@@ -114,11 +110,21 @@ else
     {
         try
         {
-            _run = await Payments.GetRunAsync(RunId);
+            await ReloadAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
             (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    /// <summary>Reloads the run; scheduled payments that already carry a reference (an ACH trace number) start with it filled in.</summary>
+    private async Task ReloadAsync()
+    {
+        _run = await Payments.GetRunAsync(RunId);
+        foreach (var p in _run.Payments.Where(p => p.Status == PaymentState.Scheduled && p.Reference is not null && string.IsNullOrWhiteSpace(_refs.GetValueOrDefault(p.Id))))
+        {
+            _refs[p.Id] = p.Reference;
         }
     }
 
@@ -166,18 +172,6 @@ else
             Snackbar.Add("Payment voided.", Severity.Success);
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
-        {
-            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
-        }
-    }
-
-    private async Task ExportAsync(bool positivePay)
-    {
-        try
-        {
-            await PurchasingFormat.DownloadAsync(JS, positivePay ? await Payments.ExportPositivePayAsync(RunId) : await Payments.ExportAchAsync(RunId));
-        }
-        catch (Exception ex) when (PurchasingFormat.IsExpected(ex) || ex is JSException)
         {
             Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
         }

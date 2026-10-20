@@ -7,7 +7,7 @@ public enum InvoiceKind { TimeAndMaterials, CostPlus, FixedPriceMilestone, TrueU
 
 public enum InvoiceState { Draft, Approved, Sent, PartiallyPaid, Paid, Void }
 
-public enum InvoiceLineType { Labor, Odc, MaterialHandling, Burden, Fee, FeeWithhold, WithholdRelease, Milestone, Adjustment, ProgressPayment, PerformanceBasedPayment, Liquidation }
+public enum InvoiceLineType { Labor, Odc, MaterialHandling, Burden, Fee, FeeWithhold, WithholdRelease, Milestone, Adjustment, ProgressPayment, PerformanceBasedPayment, Liquidation, SalesTax }
 
 public enum FundingCheckLevel { Ok, OverFunded, OverCeiling }
 

@@ -105,6 +105,11 @@ else
         <BillLinesTable Lines="bill.Lines" CanCapitalize="@(_capitalizable.Count > 0 ? l => _capitalizable.Contains(l.Id) : null)" OnCapitalize="CapitalizeAsync" />
     </MudPaper>
 
+    @if (Access?.IsFinance == true && bill.Bill.Status is not (BillState.Void or BillState.Rejected))
+    {
+        <Workbench.Ui.SalesTax.BillTaxCard BillId="BillId" Status="bill.Bill.Status" />
+    }
+
     @if (bill.Payments.Count > 0)
     {
         <MudPaper Outlined="true" Class="pa-4">

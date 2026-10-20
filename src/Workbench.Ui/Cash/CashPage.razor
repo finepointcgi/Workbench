@@ -79,6 +79,7 @@ else
                             <td>@(a.UnmatchedBankItems == 0 ? "" : a.UnmatchedBankItems.ToString(CultureInfo.InvariantCulture))</td>
                             <td style="white-space:nowrap">
                                 <MudButton Size="Size.Small" Href="@($"cash/reconcile?account={a.Id}")">Reconcile</MudButton>
+                                <MudButton Size="Size.Small" Href="@($"cash/accounts/{a.Id}/payment-files")" aria-label="@($"Payment file settings for {a.Name}")">Payment files</MudButton>
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="() => EditAsync(a)" aria-label="Edit" />
                             </td>
                         </tr>

@@ -55,16 +55,19 @@ public sealed class BillingLedger(GeneralLedger ledger)
             return existing;
         }
 
+        // Sales tax lines are owed to the taxing jurisdiction, not earned: they credit the sales tax liability.
+        var salesTax = invoice.Lines.Any(l => l.Kind == InvoiceLineKind.SalesTax) ? await SalesTax.SalesTaxSupport.SalesTaxPayableNumberAsync(db, ct) : null;
         var credits = invoice.Lines.Select(l => (
             Account: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease
                 ? ArUnbilled
                 : IsFinancing(l.Kind)
                     ? ContractFinancing
+                    : l.Kind == InvoiceLineKind.SalesTax ? salesTax!
                     : RevenueAccount(clins.FirstOrDefault(c => c.Id == l.ClinId)?.Pricing, contract.Type),
             l.ProjectId,
             l.WbsElementId,
             Credit: l.Amount,
-            Memo: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease || IsFinancing(l.Kind) ? l.Description : null));
+            Memo: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease or InvoiceLineKind.SalesTax || IsFinancing(l.Kind) ? l.Description : null));
         var label = invoice.Type == InvoiceType.CreditMemo ? "Credit memo" : "Invoice";
         return await PostAsync(db, invoice.Id, invoice.InvoiceDate, $"{label} {invoice.Number} · {contract.ContractNumber}",
             (ArBilled, null, null, invoice.Total, $"{label} {invoice.Number}"), credits, ct, invoice.CompanyId,

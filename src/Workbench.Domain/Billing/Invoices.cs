@@ -72,6 +72,8 @@ public enum InvoiceLineKind
 
     /// <summary>Negative: progress or performance-based payments recouped from a delivery invoice.</summary>
     Liquidation,
+    /// <summary>Added by sales tax: the sales tax on the invoice (credited to the sales tax liability, never revenue).</summary>
+    SalesTax,
 }
 
 /// <summary>

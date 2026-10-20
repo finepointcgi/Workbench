@@ -200,6 +200,7 @@ public static class DatabaseInitializer
         await QualitySeed.SeedAsync(db, services, cancellationToken); // Quality: Morgan Lee (E1080) inspects; HSG-220 receiving plan, a rejected shipment returned to Digi-Parts (NCR, debit memo, SCAR), ECO adding a thermal pad to SNS-210.
         await ShopFloorSeed.SeedAsync(db, services, cancellationToken); // Shop floor: RES-KIT backflushed on a PCB build, freight allocated to receipt 1, CAGE frozen for a count, ASM overloaded next week.
         await SourcingSeed.SeedAsync(db, services, cancellationToken); // Sourcing: RFQ-000001 (three quotes, awarded to PRIMA on an issued PO), PRIMA's portal contact Jordan Reyes, DIGI as an EDI partner.
+        await BankFilesTaxSeed.SeedAsync(db, services, cancellationToken); // Bank files and sales tax: ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice.
     }
 
     /// <summary>

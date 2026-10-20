@@ -1,0 +1,176 @@
+@* A vendor's ACH bank details: masked, with the pending change (approve or reject it if it's waiting on you) and the history. *@
+@using Workbench.Contracts.BankFiles
+@inject IVendorBankService Banks
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="vendor-bank">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Bank details for ACH</MudText>
+    @if (_error is not null)
+    {
+        <MudText Class="mud-text-secondary">@_error</MudText>
+    }
+    else if (_details is not { } d)
+    {
+        <MudProgressLinear aria-label="Loading bank details" Indeterminate="true" />
+    }
+    else
+    {
+        @if (d.HasAccount)
+        {
+            <MudSimpleTable Dense="true" Elevation="0" aria-label="Bank details">
+<caption class="wb-sr-only">Bank details</caption>
+                <tbody>
+                    <tr><th scope="row" class="mud-text-secondary" style="font-weight:normal">Name on account</th><td>@d.AccountHolderName</td></tr>
+                    <tr><th scope="row" class="mud-text-secondary" style="font-weight:normal">Routing</th><td style="font-family:monospace" data-testid="bank-routing-masked">@(_revealed?.RoutingNumber ?? d.MaskedRouting)</td></tr>
+                    <tr><th scope="row" class="mud-text-secondary" style="font-weight:normal">Account</th><td style="font-family:monospace" data-testid="bank-account-masked">@(_revealed?.AccountNumber ?? d.MaskedAccount) · @d.AccountType</td></tr>
+                    <tr><th scope="row" class="mud-text-secondary" style="font-weight:normal">Remittance email</th><td>@(d.RemittanceEmail ?? "Vendor's contact email")</td></tr>
+                    <tr><th scope="row" class="mud-text-secondary" style="font-weight:normal">Approved</th><td>@d.ApprovedBy · @d.ApprovedAtUtc?.ToLocalTime().ToString("yyyy-MM-dd")</td></tr>
+                </tbody>
+            </MudSimpleTable>
+        }
+        else
+        {
+            <MudText Class="mud-text-secondary">No bank details on file, so this vendor can't be paid by ACH yet.</MudText>
+        }
+
+        @if (d.PendingChange is { } p)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2" data-testid="bank-pending">
+                <b>Change waiting for approval:</b> @p.AccountType.ToString().ToLowerInvariant() account @p.MaskedAccount, routing @p.MaskedRouting, asked for by @p.RequestedBy on @p.RequestedAtUtc.ToLocalTime().ToString("yyyy-MM-dd").
+                <br />Confirmed: @p.Reason
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    @if (p.CanDecide)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="() => ApproveAsync(p)" Disabled="_busy" data-testid="bank-approve">Approve</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="() => RejectAsync(p)" Disabled="_busy">Reject</MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">Another Finance user approves it.</MudText>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CancelAsync(p)" Disabled="_busy">Withdraw</MudButton>
+                    }
+                </MudStack>
+            </MudAlert>
+        }
+
+        <MudStack Row="true" Spacing="2" Class="mt-2" AlignItems="AlignItems.Center">
+            @if (d.HasAccount)
+            {
+                @if (_revealed is null)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" OnClick="RevealAsync" data-testid="bank-reveal">Reveal</MudButton>
+                }
+                else
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.VisibilityOff" OnClick="() => _revealed = null">Hide</MudButton>
+                }
+            }
+            <MudSpacer />
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="RequestAsync" Disabled="@(d.PendingChange is not null)" data-testid="bank-request">@(d.HasAccount ? "Change bank details" : "Add bank details")</MudButton>
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Numbers are encrypted; revealing them and every change are recorded in the security log.</MudText>
+
+        @if (d.History.Count(h => h.Status != BankChangeState.Pending) > 0)
+        {
+            <details class="mt-2">
+                <summary>Change history</summary>
+                <MudSimpleTable Dense="true" Elevation="0" aria-label="Bank details change history">
+<caption class="wb-sr-only">Bank details change history</caption>
+                    <thead><tr><th scope="col">Asked</th><th scope="col">Account</th><th scope="col">By</th><th scope="col">Outcome</th></tr></thead>
+                    <tbody>
+                        @foreach (var h in d.History.Where(h => h.Status != BankChangeState.Pending))
+                        {
+                            <tr>
+                                <td>@h.RequestedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td>@h.MaskedAccount</td>
+                                <td>@h.RequestedBy</td>
+                                <td>@h.Status@(h.DecidedBy is null ? "" : $" by {h.DecidedBy}")@(h.DecisionComment is null ? "" : $": {h.DecisionComment}")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </details>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public Guid VendorId { get; set; }
+    [Parameter] public string? VendorName { get; set; }
+
+    private VendorBankDetailsDto? _details;
+    private VendorBankRevealDto? _revealed;
+    private string? _error;
+    private bool _busy;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _details = await Banks.GetAsync(VendorId);
+            _error = null;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.IsForbidden(ex) ? "Bank details are visible to Finance and administrators." : PurchasingFormat.Error(ex);
+        }
+    }
+
+    private async Task RequestAsync()
+    {
+        var dialog = await DialogService.ShowAsync<VendorBankChangeDialog>(_details!.HasAccount ? "Change bank details" : "Add bank details",
+            new DialogParameters<VendorBankChangeDialog> { { x => x.VendorId, VendorId }, { x => x.HolderName, _details.AccountHolderName ?? VendorName } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            Snackbar.Add("Sent for approval. Payments keep using the current details until it's approved.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private Task ApproveAsync(VendorBankChangeDto change) => RunAsync(() => Banks.ApproveChangeAsync(change.Id, new DecideVendorBankChangeRequest()), "Approved. ACH payments use the new details from now on.");
+
+    private async Task RejectAsync(VendorBankChangeDto change)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, "Reject bank details change", "Reject", "The current details stay in place. Say why, for the requester.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Banks.RejectChangeAsync(change.Id, new DecideVendorBankChangeRequest(reason)), "Change rejected.");
+        }
+    }
+
+    private Task CancelAsync(VendorBankChangeDto change) => RunAsync(() => Banks.CancelChangeAsync(change.Id), "Change withdrawn.");
+
+    private async Task RevealAsync()
+    {
+        try
+        {
+            _revealed = await Banks.RevealAsync(VendorId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(success, Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

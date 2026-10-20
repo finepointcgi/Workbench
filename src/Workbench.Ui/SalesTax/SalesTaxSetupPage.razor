@@ -1,0 +1,533 @@
+@page "/setup/sales-tax"
+@layout Workbench.Ui.Layout.SetupLayout
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Odcs
+@using Workbench.Ui.Setup
+@inject ISalesTaxService Tax
+@inject ISnackbar Snackbar
+
+<PageTitle>Sales tax · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="Sales and use tax"
+             Subtitle="Where you charge sales tax and at what rates, which items are taxable, and which customers are exempt. Invoices are taxed by where the customer takes delivery; bills accrue use tax when a vendor didn't charge tax on a taxable purchase." />
+
+<MudStack Row="true" Spacing="2" Class="mb-3">
+    <MudButton Variant="Variant.Outlined" Href="accounting/sales-tax" StartIcon="@Icons.Material.Filled.Assessment" data-testid="tax-return-link">Sales and use tax return</MudButton>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" data-testid="load-error">@(_forbidden ? "Sales tax is set up by Finance and administrators." : _error)</MudAlert>
+}
+else if (_settings is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Jurisdictions and rates">
+            <MudSimpleTable Dense="true" Elevation="0" aria-label="Tax jurisdictions" data-testid="jurisdictions">
+<caption class="wb-sr-only">Tax jurisdictions</caption>
+                <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">State</th><th scope="col">County / city</th><th scope="col" style="text-align:right">Rate today</th><th scope="col">Rates on file</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var j in _jurisdictions)
+                    {
+                        <tr>
+                            <th scope="row">@j.Code</th>
+                            <td>@j.Name@(j.IsActive ? "" : " (inactive)")</td>
+                            <td>@j.State</td>
+                            <td>@string.Join(" / ", new[] { j.County, j.City }.Where(x => x is not null))</td>
+                            <td style="text-align:right">@(j.CurrentRate is { } r ? TaxFormat.Rate(r) : "None")</td>
+                            <td>@string.Join("; ", j.Rates.Take(3).Select(r => $"{TaxFormat.Rate(r.CombinedRate)} from {r.EffectiveDate:yyyy-MM-dd}"))@(j.Rates.Count > 3 ? "; …" : "")</td>
+                            <td style="white-space:nowrap">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditJurisdiction(j)" aria-label="@($"Edit {j.Code}")">Edit</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _rateFor = j.Id" aria-label="@($"Add a rate to {j.Code}")">Add rate</MudButton>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            <MudGrid Spacing="3" Class="mt-2">
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@(_jurisdictionId is null ? "Add a jurisdiction" : "Edit jurisdiction")</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6"><MudTextField T="string" @bind-Value="_jCode" Label="Code" MaxLength="64" HelperText="For example VA-FAIRFAX" data-testid="jurisdiction-code" /></MudItem>
+                        <MudItem xs="6"><MudTextField T="string" @bind-Value="_jName" Label="Name" MaxLength="200" data-testid="jurisdiction-name" /></MudItem>
+                        <MudItem xs="4"><MudTextField T="string" @bind-Value="_jState" Label="State" MaxLength="2" HelperText="Two letters" data-testid="jurisdiction-state" /></MudItem>
+                        <MudItem xs="4"><MudTextField T="string" @bind-Value="_jCounty" Label="County" MaxLength="100" /></MudItem>
+                        <MudItem xs="4"><MudTextField T="string" @bind-Value="_jCity" Label="City" MaxLength="100" /></MudItem>
+                        <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_jActive" Label="Active" /></MudItem>
+                    </MudGrid>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Outlined" OnClick="SaveJurisdictionAsync" Disabled="_busy" data-testid="save-jurisdiction">Save jurisdiction</MudButton>
+                        @if (_jurisdictionId is not null)
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="ClearJurisdiction">Add a new one instead</MudButton>
+                        }
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Add a rate</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Rates are kept by date and never overwritten: a correction is a new rate. Enter percents, for example 4.3 for 4.3%.</MudText>
+                    <MudSelect T="Guid?" @bind-Value="_rateFor" Label="Jurisdiction" data-testid="rate-jurisdiction">
+                        @foreach (var j in _jurisdictions)
+                        {
+                            <MudSelectItem T="Guid?" Value="j.Id">@j.Code · @j.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_rateDate" Label="Effective" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudNumericField T="decimal" @bind-Value="_stateRate" Label="State %" Min="0" Max="50" Step="0.1m" data-testid="rate-state" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudNumericField T="decimal" @bind-Value="_countyRate" Label="County %" Min="0" Max="50" Step="0.1m" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudNumericField T="decimal" @bind-Value="_cityRate" Label="City %" Min="0" Max="50" Step="0.1m" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudNumericField T="decimal" @bind-Value="_specialRate" Label="District %" Min="0" Max="50" Step="0.1m" /></MudItem>
+                    </MudGrid>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Combined: @((_stateRate + _countyRate + _cityRate + _specialRate).ToString("0.###", CultureInfo.InvariantCulture))%</MudText>
+                    <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="AddRateAsync" Disabled="@(_busy || _rateFor is null || _rateDate is null)" data-testid="add-rate">Add rate</MudButton>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Import a rate table</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                        A CSV with a header row: <code>Code,Name,State,County,City,EffectiveDate,StateRate,CountyRate,CityRate,SpecialRate</code>.
+                        Rates as percents with a % sign (6%) or fractions (0.06); dates yyyy-MM-dd. New codes become jurisdictions; a rate already on file for the same date is skipped.
+                    </MudText>
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".csv,.txt">
+                            <CustomContent>
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="@context.OpenFilePickerAsync">Choose file</MudButton>
+                            </CustomContent>
+                            <SelectedTemplate />
+                        </MudFileUpload>
+                        @if (_fileName is not null)
+                        {
+                            <MudText Typo="Typo.body2">@_fileName</MudText>
+                        }
+                    </MudStack>
+                    <MudTextField T="string" @bind-Value="_csv" Label="Or paste the rate table here" Lines="4" Variant="Variant.Outlined" Immediate="true" Style="font-family:monospace; font-size:12px" data-testid="tax-rates-csv" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ImportAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_csv))" data-testid="import-tax-rates">Import</MudButton>
+                    @if (_import is { } r)
+                    {
+                        <MudAlert Severity="@(r.Errors.Count == 0 ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2">
+                            @r.JurisdictionsCreated new jurisdiction(s), @r.RatesAdded rate(s) added, @r.RatesSkipped already on file.
+                            @foreach (var e in r.Errors.Take(10))
+                            {
+                                <div>@e</div>
+                            }
+                        </MudAlert>
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Tax codes">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="5">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Tax codes</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Taxable items are taxed; exempt ones never are. Resale items are taxed when you sell them but not when you buy them (you give the vendor a resale certificate).</MudText>
+                    <MudSimpleTable Dense="true" Elevation="0" aria-label="Tax codes" data-testid="tax-codes">
+<caption class="wb-sr-only">Tax codes</caption>
+                        <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Treatment</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _codes)
+                            {
+                                <tr>
+                                    <th scope="row">@c.Code</th>
+                                    <td>@c.Name@(c.IsActive ? "" : " (inactive)")</td>
+                                    <td>@c.Treatment</td>
+                                    <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditCode(c)" aria-label="@($"Edit {c.Code}")">Edit</MudButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudGrid Spacing="2" Class="mt-2">
+                        <MudItem xs="4"><MudTextField T="string" @bind-Value="_cCode" Label="Code" MaxLength="32" data-testid="tax-code" /></MudItem>
+                        <MudItem xs="8"><MudTextField T="string" @bind-Value="_cName" Label="Name" MaxLength="200" /></MudItem>
+                        <MudItem xs="6">
+                            <MudSelect T="TaxTreatmentKind" @bind-Value="_cTreatment" Label="Treatment">
+                                @foreach (var t in Enum.GetValues<TaxTreatmentKind>())
+                                {
+                                    <MudSelectItem Value="t">@t</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="6" Class="d-flex align-center"><MudCheckBox T="bool" @bind-Value="_cActive" Label="Active" /></MudItem>
+                    </MudGrid>
+                    <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveCodeAsync" Disabled="_busy" data-testid="save-tax-code">Save tax code</MudButton>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Which code applies</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Invoice lines use the code for their ODC type, else their kind, else the default sales code. Bill lines use the code for their GL account or ODC type, else the default purchase code.</MudText>
+                    <MudSimpleTable Dense="true" Elevation="0" aria-label="Tax code assignments" data-testid="tax-assignments">
+<caption class="wb-sr-only">Tax code assignments</caption>
+                        <thead><tr><th scope="col">Applies to</th><th scope="col">Code</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var a in _assignments)
+                            {
+                                <tr>
+                                    <td>@a.TargetLabel</td>
+                                    <td>@a.TaxCode</td>
+                                    <td><MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => AssignAsync(a.Target, a.TargetKey, null)" aria-label="@($"Remove {a.TargetLabel}")">Remove</MudButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudGrid Spacing="2" Class="mt-2">
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="TaxCodeTargetKind" @bind-Value="_aTarget" Label="Kind">
+                                <MudSelectItem Value="TaxCodeTargetKind.InvoiceLineKind">Invoice line kind</MudSelectItem>
+                                <MudSelectItem Value="TaxCodeTargetKind.OdcType">ODC type</MudSelectItem>
+                                <MudSelectItem Value="TaxCodeTargetKind.Account">GL account</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="string" @bind-Value="_aKey" Label="Which one" data-testid="assignment-key">
+                                @foreach (var (key, label) in TargetOptions())
+                                {
+                                    <MudSelectItem T="string" Value="key">@label</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="Guid?" @bind-Value="_aCode" Label="Tax code">
+                                @foreach (var c in _codes.Where(c => c.IsActive))
+                                {
+                                    <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    </MudGrid>
+                    <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="() => AssignAsync(_aTarget, _aKey, _aCode)" Disabled="@(_busy || _aKey is null || _aCode is null)" data-testid="save-assignment">Assign</MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Customers and exemptions">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                Customers in a government category (@string.Join(", ", _settings.GovernmentCategories)) are exempt unless you mark them taxable.
+                A current exemption certificate for the ship-to state also exempts a sale; an expired one doesn't, and the invoice says so.
+            </MudText>
+            <MudSimpleTable Dense="true" Elevation="0" aria-label="Customer sales tax" data-testid="tax-customers">
+<caption class="wb-sr-only">Customer sales tax</caption>
+                <thead><tr><th scope="col">Customer</th><th scope="col">Category</th><th scope="col" style="width:180px">Status</th><th scope="col" style="width:240px">Ship to</th><th scope="col">Exemption certificates</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _customers)
+                    {
+                        <tr>
+                            <th scope="row" style="font-weight:normal">@c.CustomerCode · @c.CustomerName</th>
+                            <td>@c.Category</td>
+                            <td>
+                                <MudSelect T="CustomerTaxState" Value="c.Status" ValueChanged="v => SaveCustomerAsync(c, v, c.ShipToJurisdictionId)" Dense="true" Margin="Margin.Dense" aria-label="@($"Tax status for {c.CustomerName}")">
+                                    <MudSelectItem Value="CustomerTaxState.Default">@(c.IsGovernment ? "Exempt (government)" : "Taxable (default)")</MudSelectItem>
+                                    <MudSelectItem Value="CustomerTaxState.Taxable">Taxable</MudSelectItem>
+                                    <MudSelectItem Value="CustomerTaxState.Exempt">Exempt</MudSelectItem>
+                                </MudSelect>
+                            </td>
+                            <td>
+                                <MudSelect T="Guid?" Value="c.ShipToJurisdictionId" ValueChanged="v => SaveCustomerAsync(c, c.Status, v)" Dense="true" Margin="Margin.Dense" Clearable="true" aria-label="@($"Ship-to for {c.CustomerName}")">
+                                    @foreach (var j in _jurisdictions.Where(j => j.IsActive))
+                                    {
+                                        <MudSelectItem T="Guid?" Value="j.Id">@j.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </td>
+                            <td>
+                                @foreach (var cert in c.Certificates)
+                                {
+                                    <div>
+                                        @cert.Number (@(cert.State ?? "all states"), @cert.Reason)
+                                        @if (cert.IsRevoked)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Block">Revoked</MudChip>
+                                        }
+                                        else if (cert.IsExpired)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.ErrorOutline">Expired @cert.ExpiresOn?.ToString("yyyy-MM-dd")</MudChip>
+                                        }
+                                        else if (cert.ExpiresSoon)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule">Expires @cert.ExpiresOn?.ToString("yyyy-MM-dd")</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <span class="mud-text-secondary">@(cert.ExpiresOn is { } e ? $"to {e:yyyy-MM-dd}" : "no expiry")</span>
+                                        }
+                                    </div>
+                                }
+                            </td>
+                            <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _certFor = c.CustomerId" aria-label="@($"Add a certificate for {c.CustomerName}")">Add certificate</MudButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (_customers.FirstOrDefault(c => c.CustomerId == _certFor) is { } forCustomer)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mt-3" data-testid="certificate-form">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2">New exemption certificate for @forCustomer.CustomerName</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_certNumber" Label="Certificate number" MaxLength="64" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudTextField T="string" @bind-Value="_certState" Label="State" MaxLength="2" HelperText="Empty: all states" /></MudItem>
+                        <MudItem xs="6" sm="3">
+                            <MudSelect T="string" @bind-Value="_certReason" Label="Reason">
+                                @foreach (var r in new[] { "Resale", "Government", "Nonprofit", "Manufacturing", "Other" })
+                                {
+                                    <MudSelectItem T="string" Value="r">@r</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="_certFrom" Label="Effective" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                        <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="_certTo" Label="Expires" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" /></MudItem>
+                    </MudGrid>
+                    <MudStack Row="true" Spacing="2" Class="mt-2">
+                        <MudButton Variant="Variant.Outlined" OnClick="() => SaveCertificateAsync(forCustomer)" Disabled="@(_busy || string.IsNullOrWhiteSpace(_certNumber) || _certFrom is null)">Save certificate</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="() => _certFor = null">Cancel</MudButton>
+                    </MudStack>
+                </MudPaper>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Accounts and defaults">
+            <MudGrid Spacing="2" Style="max-width:900px">
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_salesPayable" Label="Sales tax payable account" Clearable="true" HelperText="@($"Default: {_settings.SalesTaxPayableAccount}")">
+                        @foreach (var a in _accounts.Where(a => a.Type == "Liability"))
+                        {
+                            <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_usePayable" Label="Use tax payable account" Clearable="true" HelperText="@($"Default: {_settings.UseTaxPayableAccount}")">
+                        @foreach (var a in _accounts.Where(a => a.Type == "Liability"))
+                        {
+                            <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_useExpense" Label="Use tax expense account" Clearable="true" HelperText="@($"Default: {_settings.UseTaxExpenseAccount}")">
+                        @foreach (var a in _accounts.Where(a => a.Type == "Expense"))
+                        {
+                            <MudSelectItem T="Guid?" Value="a.Id">@a.Number @a.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_home" Label="Home jurisdiction (where purchases are used)" Clearable="true" HelperText="Use tax accrues here unless a bill says otherwise" data-testid="home-jurisdiction">
+                        @foreach (var j in _jurisdictions.Where(j => j.IsActive))
+                        {
+                            <MudSelectItem T="Guid?" Value="j.Id">@j.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_defaultSales" Label="Default code for invoice lines" Clearable="true" HelperText="Empty: taxable">
+                        @foreach (var c in _codes.Where(c => c.IsActive))
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_defaultPurchase" Label="Default code for bill lines" Clearable="true" HelperText="Empty: taxable">
+                        @foreach (var c in _codes.Where(c => c.IsActive))
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" @bind-Value="_government" Label="Government customer categories" HelperText="Comma-separated customer categories that are exempt by default" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="string" @bind-Value="_engine" Label="Tax engine" HelperText="Rate tables work out tax from the rates above; an external engine can be added by your administrator.">
+                        @foreach (var e in _settings.AvailableEngines)
+                        {
+                            <MudSelectItem T="string" Value="e">@e</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettingsAsync" Disabled="_busy" data-testid="save-tax-settings">Save</MudButton>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private SalesTaxSettingsDto? _settings;
+    private IReadOnlyList<TaxJurisdictionDto> _jurisdictions = [];
+    private IReadOnlyList<TaxCodeDto> _codes = [];
+    private IReadOnlyList<TaxCodeAssignmentDto> _assignments = [];
+    private IReadOnlyList<CustomerTaxDto> _customers = [];
+    private IReadOnlyList<TaxAccountOptionDto> _accounts = [];
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+    private int _tab;
+
+    private Guid? _jurisdictionId;
+    private string? _jCode, _jName, _jState, _jCounty, _jCity;
+    private bool _jActive = true;
+    private Guid? _rateFor;
+    private DateTime? _rateDate = DateTime.Today;
+    private decimal _stateRate, _countyRate, _cityRate, _specialRate;
+    private string? _csv, _fileName;
+    private TaxRateImportResultDto? _import;
+
+    private Guid? _codeId;
+    private string? _cCode, _cName;
+    private TaxTreatmentKind _cTreatment;
+    private bool _cActive = true;
+    private TaxCodeTargetKind _aTarget = TaxCodeTargetKind.InvoiceLineKind;
+    private string? _aKey;
+    private Guid? _aCode;
+
+    private Guid? _certFor;
+    private string? _certNumber, _certState;
+    private string _certReason = "Resale";
+    private DateTime? _certFrom = DateTime.Today, _certTo;
+
+    private Guid? _salesPayable, _usePayable, _useExpense, _home, _defaultSales, _defaultPurchase;
+    private string? _government;
+    private string _engine = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception ex) when (TaxFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (TaxFormat.Error(ex), TaxFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _jurisdictions = await Tax.ListJurisdictionsAsync();
+        _codes = await Tax.ListTaxCodesAsync();
+        _assignments = await Tax.ListAssignmentsAsync();
+        _customers = await Tax.ListCustomersAsync();
+        _accounts = await Tax.ListAccountsAsync();
+        LoadSettings(await Tax.GetSettingsAsync());
+    }
+
+    private void LoadSettings(SalesTaxSettingsDto s)
+    {
+        _settings = s;
+        (_salesPayable, _usePayable, _useExpense, _home, _defaultSales, _defaultPurchase) =
+            (s.SalesTaxPayableAccountId, s.UseTaxPayableAccountId, s.UseTaxExpenseAccountId, s.HomeJurisdictionId, s.DefaultSalesTaxCodeId, s.DefaultPurchaseTaxCodeId);
+        _government = string.Join(", ", s.GovernmentCategories);
+        _engine = s.Engine;
+    }
+
+    private IEnumerable<(string Key, string Label)> TargetOptions() => _aTarget switch
+    {
+        TaxCodeTargetKind.InvoiceLineKind => new[] { "Labor", "Odc", "MaterialHandling", "Burden", "Fee", "Milestone", "Adjustment" }.Select(k => (k, k)),
+        TaxCodeTargetKind.OdcType => Enum.GetNames<OdcCostType>().Select(n => (n, n)),
+        _ => _accounts.Select(a => (a.Id.ToString(), $"{a.Number} {a.Name}")),
+    };
+
+    private void EditJurisdiction(TaxJurisdictionDto j) =>
+        (_jurisdictionId, _jCode, _jName, _jState, _jCounty, _jCity, _jActive) = (j.Id, j.Code, j.Name, j.State, j.County, j.City, j.IsActive);
+
+    private void ClearJurisdiction() =>
+        (_jurisdictionId, _jCode, _jName, _jState, _jCounty, _jCity, _jActive) = (null, null, null, null, null, null, true);
+
+    private void EditCode(TaxCodeDto c) => (_codeId, _cCode, _cName, _cTreatment, _cActive) = (c.Id, c.Code, c.Name, c.Treatment, c.IsActive);
+
+    private Task SaveJurisdictionAsync() => RunAsync(async () =>
+    {
+        var saved = await Tax.SaveJurisdictionAsync(_jurisdictionId, new SaveTaxJurisdictionRequest(_jCode ?? "", _jName ?? "", _jState ?? "", _jCounty, _jCity, _jActive));
+        ClearJurisdiction();
+        _rateFor ??= saved.Id;
+        _jurisdictions = await Tax.ListJurisdictionsAsync();
+    }, "Jurisdiction saved.");
+
+    private Task AddRateAsync() => RunAsync(async () =>
+    {
+        await Tax.AddRateAsync(_rateFor!.Value, new AddTaxRateRequest(DateOnly.FromDateTime(_rateDate!.Value), _stateRate / 100m, _countyRate / 100m, _cityRate / 100m, _specialRate / 100m));
+        _jurisdictions = await Tax.ListJurisdictionsAsync();
+    }, "Rate added.");
+
+    private Task ImportAsync() => RunAsync(async () =>
+    {
+        _import = await Tax.ImportRatesAsync(new ImportTaxRatesRequest(_csv!));
+        _jurisdictions = await Tax.ListJurisdictionsAsync();
+    }, "Rate table imported.");
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _csv = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+            _import = null;
+        }
+        catch (IOException ex)
+        {
+            Snackbar.Add($"Couldn't read the file: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Task SaveCodeAsync() => RunAsync(async () =>
+    {
+        await Tax.SaveTaxCodeAsync(_codeId, new SaveTaxCodeRequest(_cCode ?? "", _cName ?? "", _cTreatment, _cActive));
+        (_codeId, _cCode, _cName, _cTreatment, _cActive) = (null, null, null, TaxTreatmentKind.Taxable, true);
+        _codes = await Tax.ListTaxCodesAsync();
+        _assignments = await Tax.ListAssignmentsAsync();
+    }, "Tax code saved.");
+
+    private Task AssignAsync(TaxCodeTargetKind target, string? key, Guid? code) => RunAsync(async () =>
+    {
+        _assignments = await Tax.SaveAssignmentAsync(new SaveTaxCodeAssignmentRequest(target, key ?? "", code));
+    }, code is null ? "Assignment removed." : "Tax code assigned.");
+
+    private Task SaveCustomerAsync(CustomerTaxDto customer, CustomerTaxState status, Guid? shipTo) => RunAsync(async () =>
+    {
+        var saved = await Tax.SaveCustomerAsync(customer.CustomerId, new SaveCustomerTaxRequest(status, shipTo));
+        _customers = _customers.Select(c => c.CustomerId == saved.CustomerId ? saved : c).ToList();
+    }, $"{customer.CustomerName} saved.");
+
+    private Task SaveCertificateAsync(CustomerTaxDto customer) => RunAsync(async () =>
+    {
+        var saved = await Tax.SaveCertificateAsync(customer.CustomerId, null, new SaveTaxExemptionCertificateRequest(_certNumber ?? "", _certState, _certReason,
+            DateOnly.FromDateTime(_certFrom!.Value), _certTo is { } to ? DateOnly.FromDateTime(to) : null));
+        _customers = _customers.Select(c => c.CustomerId == saved.CustomerId ? saved : c).ToList();
+        (_certFor, _certNumber, _certState, _certTo) = (null, null, null, null);
+    }, "Certificate saved.");
+
+    private Task SaveSettingsAsync() => RunAsync(async () =>
+    {
+        LoadSettings(await Tax.SaveSettingsAsync(new SaveSalesTaxSettingsRequest(_salesPayable, _usePayable, _useExpense, _home, _defaultSales, _defaultPurchase,
+            (_government ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), _engine)));
+        _customers = await Tax.ListCustomersAsync();
+    }, "Sales tax settings saved.");
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(success, Severity.Success);
+        }
+        catch (Exception ex) when (TaxFormat.IsExpected(ex))
+        {
+            Snackbar.Add(TaxFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
