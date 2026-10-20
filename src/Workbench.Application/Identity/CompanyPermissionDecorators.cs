@@ -736,7 +736,17 @@ public sealed class CompanyScopedAssetService(IAssetService inner, CompanyGuard 
     public async Task<AssetDto> TransferAsync(Guid assetId, TransferAssetRequest request, CancellationToken cancellationToken = default)
     {
         await guard.EnsureAsync<FixedAsset>(assetId, "Asset", cancellationToken);
+        if (request.CompanyId is { } target && !(await guard.ViewAsync(cancellationToken)).CanUse(target))
+        {
+            throw WorkbenchNotFoundException.For("Company", target);
+        }
+
         return await inner.TransferAsync(assetId, request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AssetTransferRowDto>> ListTransfersAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default)
+    {
+        return await guard.FilterAsync<FixedAsset, AssetTransferRowDto>(await inner.ListTransfersAsync(from, to, cancellationToken), t => t.AssetId, cancellationToken);
     }
 
     public async Task<AssetDto> DisposeAsync(Guid assetId, DisposeAssetRequest request, CancellationToken cancellationToken = default)

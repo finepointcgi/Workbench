@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddBankFileClients(serverBaseAddress);
         services.AddSalesTaxClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
+        services.AddComplianceClients(serverBaseAddress);
         return services;
     }
 }
