@@ -155,6 +155,11 @@ Details: [monitoring.md](monitoring.md).
 | `Purchasing:Form1099Threshold` | `600` | |
 | `Purchasing:RequisitionFinanceThreshold` | `10000` | |
 | `Purchasing:MatchPriceTolerancePercent` | `5` | |
+| `Purchasing:Sourcing:PriceWeight` / `:LeadTimeWeight` / `:DeliveryWeight` | `60` / `20` / `20` | How the RFQ comparison scores quotes (percent). |
+| `Purchasing:Sourcing:NoHistoryDeliveryScore` / `:PerformanceMonths` | `80` / `24` | Delivery score of a vendor with no measured receipts; how far back on-time delivery is measured. |
+| `Edi:InterchangeId` / `:InterchangeQualifier` / `:UsageIndicator` | `WORKBENCH` / `ZZ` / `P` | Our X12 identity (ISA06 out, ISA08 in); `T` marks files we send as test. |
+| `Edi:FileDropRoot` | `App_Data/edi` | Root of the per-tenant, per-partner `inbound`/`outbound` folders. Put it on persistent storage. |
+| `SupplierPortal:DemoContactPassword` | — | Development seed only: the password of the demo portal contact (jordan.reyes@primavera.example). Never set in production. |
 | `Assets:CapitalizationThreshold` / `:GainLossAccountNumber` / `:CashAccountNumber` | `5000` / `4900` / `1010` | |
 | `Materials:InventoryAccountNumber` / `:FinishedGoodsAccountNumber` / `:WipAccountNumber` / `:ReceivedNotInvoicedAccountNumber` / `:DirectMaterialAccountNumber` / `:PurchasePriceVarianceAccountNumber` / `:ManufacturingVarianceAccountNumber` / `:InventoryAdjustmentAccountNumber` / `:LaborAppliedAccountNumber` | `1410` / `1420` / `1450` / `1405` / `5120` / `6150` / `6151` / `6152` / `6195` | GL accounts materials posts to; created on first use when the chart lacks them |
 | `Materials:Sales:CostOfGoodsSoldAccountNumber` / `Materials:Sales:ShipmentNumberPrefix` | `5160` / `SHP` | Cost of goods sold for sales order shipments (created on first use); the three letters DD250 shipment numbers start with |

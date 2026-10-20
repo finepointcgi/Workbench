@@ -60,6 +60,7 @@ public static class AuthenticationSetup
             .AddPolicyScheme(SelectorScheme, null, o =>
                 o.ForwardDefaultSelector = context =>
                     context.Request.Path.StartsWithSegments(ScimEndpoints.BasePath) ? ScimAuthenticationHandler.SchemeName
+                    : Supplier.SupplierPortalAuthentication.IsPortalPath(context.Request.Path) ? Supplier.SupplierPortalAuthentication.Scheme
                     : oidc.IsConfigured && HasBearerToken(context.Request) ? JwtBearerDefaults.AuthenticationScheme
                     : CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(o =>

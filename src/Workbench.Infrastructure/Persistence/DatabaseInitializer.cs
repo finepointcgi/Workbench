@@ -199,6 +199,7 @@ public static class DatabaseInitializer
         await SalesShippingSeed.SeedAsync(db, services, cancellationToken); // Sales orders: SO-000001 (Army, project 3001 spares) released, half shipped on DD250 SHP0001, WAWF receiving report submitted.
         await QualitySeed.SeedAsync(db, services, cancellationToken); // Quality: Morgan Lee (E1080) inspects; HSG-220 receiving plan, a rejected shipment returned to Digi-Parts (NCR, debit memo, SCAR), ECO adding a thermal pad to SNS-210.
         await ShopFloorSeed.SeedAsync(db, services, cancellationToken); // Shop floor: RES-KIT backflushed on a PCB build, freight allocated to receipt 1, CAGE frozen for a count, ASM overloaded next week.
+        await SourcingSeed.SeedAsync(db, services, cancellationToken); // Sourcing: RFQ-000001 (three quotes, awarded to PRIMA on an issued PO), PRIMA's portal contact Jordan Reyes, DIGI as an EDI partner.
     }
 
     /// <summary>

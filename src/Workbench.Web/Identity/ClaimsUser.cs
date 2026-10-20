@@ -12,7 +12,7 @@ public static class ClaimsUser
     /// <summary>The lower-case email, or null when the principal is anonymous or has no email-like claim.</summary>
     public static string? EmailOf(ClaimsPrincipal? principal)
     {
-        if (principal?.Identity?.IsAuthenticated != true)
+        if (principal?.Identity?.IsAuthenticated != true || IsSupplier(principal))
         {
             return null;
         }
@@ -31,11 +31,15 @@ public static class ClaimsUser
 
     public static string? NameOf(ClaimsPrincipal? principal)
     {
-        if (principal?.Identity?.IsAuthenticated != true)
+        if (principal?.Identity?.IsAuthenticated != true || IsSupplier(principal))
         {
             return null;
         }
 
         return NameClaims.Select(t => principal.FindFirst(t)?.Value?.Trim()).FirstOrDefault(v => !string.IsNullOrEmpty(v));
     }
+
+    /// <summary>A supplier portal contact is never an internal user, whatever claims their cookie might carry.</summary>
+    private static bool IsSupplier(ClaimsPrincipal principal) =>
+        principal.Identities.Any(i => i.AuthenticationType == Supplier.SupplierPortalAuthentication.Scheme);
 }

@@ -1,0 +1,53 @@
+<PortalLayout View="View" Title="@(LinkToken is null ? "Sign in" : "Finish signing in")">
+    @if (LinkToken is { } token)
+    {
+        <section class="card narrow" aria-labelledby="continue-h">
+            <h2 id="continue-h">Continue to the supplier portal</h2>
+            <p>Select the button to finish signing in. The link works once.</p>
+            <form method="post" action="/supplier/signin/link">
+                <Antiforgery Token="View.Token" />
+                <input type="hidden" name="token" value="@token" />
+                <button type="submit" class="primary">Sign in</button>
+            </form>
+        </section>
+    }
+    else
+    {
+        <p class="lead">For our vendors: see requests for quote, acknowledge purchase orders, send ship notices and invoices, and check payments.</p>
+        <div class="cols">
+            <section class="card" aria-labelledby="link-h">
+                <h2 id="link-h">Email me a sign-in link</h2>
+                <form method="post" action="/supplier/signin/request">
+                    <Antiforgery Token="View.Token" />
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                    <label for="link-email">Your work email</label>
+                    <input id="link-email" name="email" type="email" autocomplete="email" required value="@Email" />
+                    <button type="submit" class="primary">Send link</button>
+                </form>
+            </section>
+            <section class="card" aria-labelledby="pw-h">
+                <h2 id="pw-h">Sign in with a password</h2>
+                <form method="post" action="/supplier/signin/password">
+                    <Antiforgery Token="View.Token" />
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                    <label for="pw-email">Your work email</label>
+                    <input id="pw-email" name="email" type="email" autocomplete="username" required value="@Email" />
+                    <label for="pw-password">Password</label>
+                    <input id="pw-password" name="password" type="password" autocomplete="current-password" required />
+                    <button type="submit" class="primary">Sign in</button>
+                </form>
+                <p class="hint">No password yet? Use the email link, then set one under Account.</p>
+            </section>
+        </div>
+        <p class="hint">Only people your buyer has invited can sign in. This isn't the sign-in for our own staff.</p>
+    }
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter] public string? ReturnUrl { get; set; }
+    [Parameter] public string? Email { get; set; }
+
+    /// <summary>Set on the page a sign-in link opens: a button posts the token (so link scanners don't use it up).</summary>
+    [Parameter] public string? LinkToken { get; set; }
+}

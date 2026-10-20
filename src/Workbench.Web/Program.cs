@@ -10,6 +10,7 @@ using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
 using Workbench.Web.Notifications;
 using Workbench.Web.Security;
+using Workbench.Web.Supplier;
 using Workbench.Web.Tenancy;
 
 // `Workbench.Web --health-check`: the container HEALTHCHECK probe (GET /health/live), without starting a host.
@@ -42,6 +43,7 @@ builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 
 // Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
 builder.AddWorkbenchAuthentication();
+builder.AddWorkbenchSupplierPortal(); // The supplier portal's own sign-in (cookie scheme SupplierPortal, /supplier only).
 builder.AddWorkbenchSecurity();
 builder.AddWorkbenchDemoReset();
 builder.AddWorkbenchTenancyHosting();
@@ -99,6 +101,7 @@ app.MapWorkbenchAccountEndpoints();
 app.MapWorkbenchHealthChecks();
 app.MapWorkbenchScim();
 app.MapWorkbenchApi();
+app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapRazorComponents<App>()

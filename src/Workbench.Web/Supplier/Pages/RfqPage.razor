@@ -1,0 +1,116 @@
+<PortalLayout View="View" Title="@($"{Rfq.Rfq.Number}: {Rfq.Rfq.Title}")">
+    <dl class="facts">
+        <div><dt>Status</dt><dd>@Rfq.Rfq.Status@(Rfq.Rfq.Outcome is { } o ? $" · {o}" : "")</dd></div>
+        <div><dt>Quotes due</dt><dd>@PortalFormat.Date(Rfq.Rfq.DueDate)</dd></div>
+        @if (Rfq.Terms is { } terms)
+        {
+            <div><dt>Terms asked for</dt><dd>@terms</dd></div>
+        }
+        @if (Rfq.ShipTo is { } shipTo)
+        {
+            <div><dt>Ship to</dt><dd>@shipTo</dd></div>
+        }
+    </dl>
+    @if (Rfq.Instructions is { } instructions)
+    {
+        <section class="card" aria-labelledby="instr-h"><h2 id="instr-h">Instructions</h2><p class="pre">@instructions</p></section>
+    }
+
+    @if (Rfq.Rfq.CanQuote)
+    {
+        <form method="post" action="/supplier/rfqs/@Rfq.Rfq.Id/quote" class="card" aria-labelledby="quote-h">
+            <Antiforgery Token="View.Token" />
+            <h2 id="quote-h">@(Quote is null ? "Your quote" : "Change your quote")</h2>
+            <p class="hint">Prices are per unit. Add up to three quantity price breaks per line. Leave a line's price blank, or tick "No bid", if you won't quote it. You can change your quote until the due date.</p>
+            <div class="scroll">
+                <table aria-label="Lines to quote">
+                    <thead>
+                        <tr>
+                            <th scope="col">Line</th><th scope="col">Item</th><th scope="col" class="num">Quantity</th><th scope="col">Needed by</th>
+                            <th scope="col">Unit price</th><th scope="col">Lead time (days)</th><th scope="col">Price breaks (from quantity: price)</th><th scope="col">No bid</th><th scope="col">Note</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in Rfq.Lines)
+                        {
+                            var q = Quote?.Lines.FirstOrDefault(x => x.RfqLineId == l.Id);
+                            var id = l.Id.ToString("N");
+                            <tr>
+                                <th scope="row">@l.LineNumber</th>
+                                <td>@l.Description@(l.PartNumber is { } p ? $" (part {p})" : "")</td>
+                                <td class="num">@PortalFormat.Quantity(l.Quantity) @l.UnitOfMeasure</td>
+                                <td>@PortalFormat.Date(l.NeededBy)</td>
+                                <td><input name="price_@id" inputmode="decimal" aria-label="@($"Line {l.LineNumber} unit price")" value="@(q is { NoBid: false } ? PortalFormat.Input(q.UnitPrice) : "")" size="10" /></td>
+                                <td><input name="lead_@id" inputmode="numeric" aria-label="@($"Line {l.LineNumber} lead time in days (blank: the quote's)")" value="@(q?.LeadTimeDays?.ToString(CultureInfo.InvariantCulture))" size="5" /></td>
+                                <td class="breaks">
+                                    @for (var i = 0; i < 3; i++)
+                                    {
+                                        var b = q?.PriceBreaks.ElementAtOrDefault(i);
+                                        <span class="break">
+                                            <input name="bq_@(id)_@i" inputmode="decimal" aria-label="@($"Line {l.LineNumber} price break {i + 1} from quantity")" value="@PortalFormat.Input(b?.MinimumQuantity)" size="6" />
+                                            <input name="bp_@(id)_@i" inputmode="decimal" aria-label="@($"Line {l.LineNumber} price break {i + 1} unit price")" value="@PortalFormat.Input(b?.UnitPrice)" size="8" />
+                                        </span>
+                                    }
+                                </td>
+                                <td><input type="checkbox" name="nobid_@id" value="true" aria-label="@($"No bid on line {l.LineNumber}")" checked="@(q?.NoBid == true)" /></td>
+                                <td><input name="note_@id" aria-label="@($"Line {l.LineNumber} note")" value="@q?.Note" maxlength="500" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="grid">
+                <label>Lead time from order, in days <input name="leadTimeDays" inputmode="numeric" required value="@(Quote?.LeadTimeDays.ToString(CultureInfo.InvariantCulture) ?? "")" /></label>
+                <label>Prices good through <input name="validUntil" type="date" value="@PortalFormat.Input(Quote?.ValidUntil)" /></label>
+                <label>Your quote number <input name="reference" maxlength="64" value="@Quote?.Reference" /></label>
+                <label>Your terms <input name="terms" maxlength="300" value="@Quote?.Terms" /></label>
+            </div>
+            <label>Notes for the buyer <textarea name="notes" maxlength="2000" rows="3">@Quote?.Notes</textarea></label>
+            <button type="submit" class="primary">@(Quote is null ? "Send quote" : "Send changed quote")</button>
+        </form>
+        @if (!Rfq.Rfq.Quoted)
+        {
+            <form method="post" action="/supplier/rfqs/@Rfq.Rfq.Id/decline" class="card" aria-labelledby="decline-h">
+                <Antiforgery Token="View.Token" />
+                <h2 id="decline-h">Not quoting?</h2>
+                <label>Reason (optional) <input name="reason" maxlength="1000" /></label>
+                <button type="submit">Decline this RFQ</button>
+            </form>
+        }
+    }
+    else
+    {
+        <section aria-labelledby="lines-h">
+            <h2 id="lines-h">Lines</h2>
+            <div class="scroll">
+                <table aria-label="RFQ lines">
+                    <thead><tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col" class="num">Quantity</th><th scope="col">Needed by</th><th scope="col" class="num">Your price</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in Rfq.Lines)
+                        {
+                            var q = Quote?.Lines.FirstOrDefault(x => x.RfqLineId == l.Id);
+                            <tr>
+                                <th scope="row">@l.LineNumber</th>
+                                <td>@l.Description</td>
+                                <td class="num">@PortalFormat.Quantity(l.Quantity) @l.UnitOfMeasure</td>
+                                <td>@PortalFormat.Date(l.NeededBy)</td>
+                                <td class="num">@(q is null ? "" : q.NoBid ? "No bid" : PortalFormat.Price(q.UnitPrice))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+    @if (Quote is { } sent)
+    {
+        <p class="hint">Quote sent @PortalFormat.When(sent.SubmittedAtUtc).</p>
+    }
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public SupplierRfqDto Rfq { get; set; } = default!;
+
+    private SupplierQuoteDto? Quote => Rfq.MyQuote;
+}

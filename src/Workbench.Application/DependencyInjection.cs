@@ -95,6 +95,7 @@ public static class DependencyInjection
         Quality.QualityRegistration.AddWorkbenchQuality(services); // Quality (inspection, NCRs/MRB with approval handler, CARs) and engineering change control; after materials, above AddWorkbenchIdentity.
         Materials.ShopFloorRegistration.AddWorkbenchShopFloor(services); // Kitting, backflush, landed cost, physical inventory, finite capacity scheduling; posts through MaterialsLedger; above AddWorkbenchIdentity.
 
+        services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();
