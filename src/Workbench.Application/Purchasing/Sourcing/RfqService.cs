@@ -378,6 +378,8 @@ public sealed class RfqService(
                 award.SoleSource,
                 Lines = awardLines.Select(l => new { l.LineNumber, l.VendorName, l.UnitPrice }),
             });
+            Integrations.IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.RfqAwarded, new Domain.Integrations.RfqAwardEventData(rfq.Id, rfq.Number,
+                rfq.Title, award.Id, award.VendorsInvited, award.QuotesReceived, award.SoleSource, award.AwardedTotal, award.PurchaseOrderNumbers), Me, UtcNow);
             await db.SaveChangesAsync(cancellationToken);
             awardId = award.Id;
         }
