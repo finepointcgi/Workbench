@@ -124,6 +124,8 @@ public sealed class MrpService(
             demands.Add(new MrpDemand(f.PartId, f.Date, f.Quantity, "Forecast"));
         }
 
+        demands.AddRange(await SalesOrderDemand.LoadAsync(db, ct)); // Released sales orders' open lines.
+
         foreach (var s in await MrpData.OpenPurchaseSupplyAsync(db, ct))
         {
             supplies.Add(new MrpSupply(s.PartId, s.Date, s.Quantity, s.Document));

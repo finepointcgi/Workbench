@@ -49,6 +49,7 @@ public static class MaterialsFormat
         InventoryMovement.CycleCount => "Cycle count",
         InventoryMovement.WorkOrderCompletion => "Completion to stock",
         InventoryMovement.WorkOrderShipment => "Delivered to project",
+        InventoryMovement.SalesShipment => "Shipped to customer",
         _ => m.ToString(),
     };
 

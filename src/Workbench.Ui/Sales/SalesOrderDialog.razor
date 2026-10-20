@@ -1,0 +1,185 @@
+@* Sales order entry: customer, contract or project, government shipping codes and the lines (lines only while it's a draft). *@
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" Value="_customerId" ValueChanged="CustomerChanged" Label="Customer" Dense="true" Required="true" Disabled="_released" data-testid="so-customer">
+                    @foreach (var c in Options.Customers) { <MudSelectItem T="Guid?" Value="c.Id">@c.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract (optional)" Dense="true" Clearable="true" Disabled="_released">
+                    @foreach (var c in Options.Contracts.Where(c => c.CustomerId == _customerId)) { <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project (optional)" Dense="true" Clearable="true" Disabled="_released">
+                    @foreach (var p in Options.Projects) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge cost-type shipments to" Dense="true" Clearable="true"
+                           HelperText="A direct WBS element of the project (needed for cost-type CLINs)">
+                    @foreach (var c in Options.ChargeCodes.Where(c => c.ProjectId == _projectId)) { <MudSelectItem T="Guid?" Value="c.WbsElementId">@c.ProjectCode @c.WbsCode · @c.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="4"><MudDatePicker @bind-Date="_orderDate" Label="Order date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6" sm="4"><MudTextField T="string" @bind-Value="_reference" Label="Customer order / delivery order" Margin="Margin.Dense" MaxLength="64" /></MudItem>
+
+            <MudItem xs="12"><MudText Typo="Typo.subtitle2" HtmlTag="h3">Ship to</MudText></MudItem>
+            <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_shipToName" Label="Name" Margin="Margin.Dense" MaxLength="200" /></MudItem>
+            <MudItem xs="12" sm="5"><MudTextField T="string" @bind-Value="_shipToAddress" Label="Address" Margin="Margin.Dense" Lines="2" MaxLength="500" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_shipToCode" Label="Ship-to DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
+
+            <MudItem xs="12"><MudText Typo="Typo.subtitle2" HtmlTag="h3">Government codes (DD250 and WAWF)</MudText></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_issuedBy" Label="Issued by DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_markFor" Label="Mark for" Margin="Margin.Dense" MaxLength="16" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_inspectBy" Label="Inspect by DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_acceptBy" Label="Accept by DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
+            <MudItem xs="6" sm="3">
+                <MudSelect T="GovernmentInspectionPoint" @bind-Value="_inspection" Label="Inspection" Dense="true">
+                    @foreach (var p in Enum.GetValues<GovernmentInspectionPoint>()) { <MudSelectItem T="GovernmentInspectionPoint" Value="p">@SalesFormat.Point(p)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudSelect T="GovernmentInspectionPoint" @bind-Value="_acceptance" Label="Acceptance" Dense="true">
+                    @foreach (var p in Enum.GetValues<GovernmentInspectionPoint>()) { <MudSelectItem T="GovernmentInspectionPoint" Value="p">@SalesFormat.Point(p)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_notes" Label="Notes" Margin="Margin.Dense" Lines="1" MaxLength="2000" /></MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3">Lines</MudText>
+                @if (_released)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">The order is released, so its lines can't change.</MudText>
+                }
+            </MudItem>
+            @if (!_released)
+            {
+                @foreach (var line in _lines)
+                {
+                    var l = line;
+                    var clins = Contract?.Clins ?? [];
+                    <MudItem xs="12" sm="3">
+                        <MudSelect T="Guid?" @bind-Value="l.PartId" Label="Part" Dense="true" Required="true" aria-label="Part">
+                            @foreach (var p in Options.Parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Number · @p.Description</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="2">
+                        <MudSelect T="Guid?" Value="l.ClinId" ValueChanged="v => ClinChanged(l, v)" Label="CLIN" Dense="true" Clearable="true" Disabled="clins.Count == 0">
+                            @foreach (var c in clins) { <MudSelectItem T="Guid?" Value="c.Id">@c.Number@(c.IsCostType ? " (cost type)" : "")</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="1"><MudNumericField T="decimal" @bind-Value="l.Quantity" Label="Qty" Min="0" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="6" sm="2"><MudNumericField T="decimal" @bind-Value="l.UnitPrice" Label="Unit price" Min="0" Margin="Margin.Dense" Format="0.00##" /></MudItem>
+                    <MudItem xs="6" sm="2"><MudDatePicker @bind-Date="l.NeedDate" Label="Need date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                    <MudItem xs="10" sm="1"><MudTextField T="string" @bind-Value="l.StockNumber" Label="NSN" Margin="Margin.Dense" MaxLength="32" /></MudItem>
+                    <MudItem xs="2" sm="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="Remove line" OnClick="() => _lines.Remove(l)" />
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="() => _lines.Add(new LineEdit())" data-testid="so-add-line">Add a line</MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!CanSave" OnClick="Save" data-testid="so-save">@(Existing is null ? "Create" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public SalesOptionsDto Options { get; set; } = default!;
+    [Parameter] public SalesOrderDto? Existing { get; set; }
+
+    private sealed class LineEdit
+    {
+        public Guid? PartId { get; set; }
+        public Guid? ClinId { get; set; }
+        public string? ItemNumber { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; } = 1;
+        public decimal UnitPrice { get; set; }
+        public DateTime? NeedDate { get; set; } = DateTime.Today.AddDays(30);
+        public string? StockNumber { get; set; }
+        public string? ShipToName { get; set; }
+        public string? ShipToAddress { get; set; }
+        public string? ShipToCode { get; set; }
+        public bool? UidRequired { get; set; }
+    }
+
+    private Guid? _customerId;
+    private Guid? _contractId;
+    private Guid? _projectId;
+    private Guid? _wbsId;
+    private DateTime? _orderDate = DateTime.Today;
+    private string? _reference;
+    private string? _shipToName;
+    private string? _shipToAddress;
+    private string? _shipToCode;
+    private string? _issuedBy;
+    private string? _markFor;
+    private string? _inspectBy;
+    private string? _acceptBy;
+    private GovernmentInspectionPoint _inspection;
+    private GovernmentInspectionPoint _acceptance;
+    private string? _notes;
+    private bool _released;
+    private readonly List<LineEdit> _lines = [];
+
+    private SalesContractOption? Contract => Options.Contracts.FirstOrDefault(c => c.Id == _contractId);
+
+    private bool CanSave => _customerId is not null && _orderDate is not null
+        && (_released || _lines.All(l => l.PartId is not null && l.Quantity > 0 && l.NeedDate is not null));
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not { } o)
+        {
+            _lines.Add(new LineEdit());
+            return;
+        }
+
+        var s = o.Summary;
+        (_customerId, _contractId, _projectId, _wbsId, _orderDate, _reference) = (s.CustomerId, s.ContractId, s.ProjectId, o.WbsElementId, s.OrderDate.ToDateTime(TimeOnly.MinValue), s.CustomerReference);
+        (_shipToName, _shipToAddress, _shipToCode, _issuedBy, _markFor, _inspectBy, _acceptBy) = (o.ShipToName, o.ShipToAddress, o.ShipToCode, o.IssuedByCode, o.MarkForCode, o.InspectByCode, o.AcceptByCode);
+        (_inspection, _acceptance, _notes) = (o.InspectionPoint, o.AcceptancePoint, o.Notes);
+        _released = s.Status != SalesOrderState.Draft;
+        _lines.AddRange(o.Lines.Select(l => new LineEdit
+        {
+            PartId = l.PartId, ClinId = l.ClinId, ItemNumber = l.ItemNumber, Description = l.Description, Quantity = l.QuantityOrdered, UnitPrice = l.UnitPrice,
+            NeedDate = l.NeedDate.ToDateTime(TimeOnly.MinValue), StockNumber = l.StockNumber, ShipToName = l.ShipToName, ShipToAddress = l.ShipToAddress, ShipToCode = l.ShipToCode,
+            UidRequired = l.UidRequired,
+        }));
+    }
+
+    private void CustomerChanged(Guid? id)
+    {
+        _customerId = id;
+        if (Contract is { } c && c.CustomerId != id)
+        {
+            _contractId = null;
+        }
+    }
+
+    private void ClinChanged(LineEdit line, Guid? clinId)
+    {
+        line.ClinId = clinId;
+        if (Contract?.Clins.FirstOrDefault(c => c.Id == clinId) is { } clin)
+        {
+            line.ItemNumber = clin.Number;
+            line.Description ??= clin.Description;
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveSalesOrderRequest(
+        _customerId!.Value, DateOnly.FromDateTime(_orderDate!.Value),
+        _lines.Select(l => new SaveSalesOrderLineRequest(l.PartId!.Value, l.Quantity, l.UnitPrice, DateOnly.FromDateTime(l.NeedDate!.Value), l.Description, l.ClinId,
+            l.ClinId is null ? null : l.ItemNumber, l.ShipToName, l.ShipToAddress, l.ShipToCode, l.StockNumber, l.UidRequired)).ToList(),
+        _contractId, _projectId, _wbsId, _reference, _shipToName, _shipToAddress, _shipToCode, _markFor, _issuedBy, _inspectBy, _acceptBy, _inspection, _acceptance, _notes)));
+}

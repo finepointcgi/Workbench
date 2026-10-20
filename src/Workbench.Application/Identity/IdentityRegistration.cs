@@ -97,6 +97,7 @@ public static class IdentityRegistration
         services.AddWorkbenchPlanningPermissions(); // Recurring journals, GL budgets, budget vs actual: Finance/Admin; planning cycles Finance/Admin, org unit owners their own budget.
         services.AddWorkbenchTotalTimePermissions(); // Total time accounting: method and reports Finance/Admin; a timesheet's hours summary whoever can see the timesheet.
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.
+        services.AddWorkbenchSalesShippingPermissions(); // Sales orders: Materials/Finance/Admin change, Business development reads; shipping Materials/Finance/Admin; delivery invoices Finance/Admin.
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         return services;

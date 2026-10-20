@@ -53,6 +53,9 @@ public enum InventoryTransactionType
 
     /// <summary>A standard cost change on stock already on hand (no quantity).</summary>
     Revaluation,
+
+    /// <summary>Shipped to a customer on a sales order: cost of goods sold (cost-type shipments are <see cref="IssueToProject"/>).</summary>
+    SalesShipment,
 }
 
 /// <summary>

@@ -1,0 +1,21 @@
+.toolbar { display: flex; gap: 16px; align-items: center; padding: 12px 24px; border-bottom: 1px solid #ddd; font-family: sans-serif; }
+.toolbar .spacer { flex: 1; }
+.toolbar button { padding: 6px 14px; }
+.page { position: relative; max-width: 8.5in; margin: 0 auto; padding: 0.4in; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; }
+.watermark { position: absolute; top: 35%; left: 20%; font-size: 72pt; color: rgba(200, 0, 0, 0.12); transform: rotate(-25deg); pointer-events: none; }
+.title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+h1 { margin: 0; font-size: 13pt; text-transform: uppercase; }
+.form, .items { width: 100%; border-collapse: collapse; }
+.form td, .items td, .items th { border: 1px solid #000; padding: 3px 5px; vertical-align: top; text-align: left; }
+.items { margin-top: -1px; }
+.items th { font-size: 7pt; font-weight: normal; text-transform: uppercase; }
+.num { text-align: right !important; }
+.label { font-size: 7pt; text-transform: uppercase; color: #333; }
+.small { font-size: 7.5pt; color: #333; margin: 2px 0; }
+.total td { font-weight: bold; }
+.sign { margin-top: 10px; }
+.sign td { width: 33%; height: 110px; }
+.line { border-top: 1px solid #000; margin-top: 36px; font-size: 7pt; padding-top: 2px; }
+.warnings { background: #fff8e1; border: 1px solid #f0c36d; padding: 8px 8px 8px 24px; margin: 0 0 10px; font-family: sans-serif; }
+.error { color: #b00; }
+@media print { .no-print { display: none; } .page { padding: 0; } }

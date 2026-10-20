@@ -1,0 +1,38 @@
+@* Shipments: number, DD250 shipment number, dates, tracking, value and invoice. *@
+<MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="shipments">
+    <caption class="wb-sr-only">Shipments</caption>
+    <thead>
+        <tr>
+            <th scope="col">Shipment</th><th scope="col">DD250 no.</th>
+            @if (ShowOrder) { <th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Contract</th> }
+            <th scope="col">Shipped</th><th scope="col">Carrier / tracking</th><th scope="col" style="text-align:right">Packages</th><th scope="col" style="text-align:right">Weight (lb)</th><th scope="col" style="text-align:right">Value</th><th scope="col">Invoice</th><th scope="col">Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var s in Shipments)
+        {
+            <tr>
+                <td><MudLink Href="@($"materials/shipments/{s.Id}")">@s.Number</MudLink></td>
+                <td>@(s.ShipmentNumber ?? "—")@(s.IsFinal ? " (final)" : "")</td>
+                @if (ShowOrder)
+                {
+                    <td><MudLink Href="@($"materials/sales-orders/{s.SalesOrderId}")">@s.SalesOrderNumber</MudLink></td>
+                    <td>@s.CustomerName</td>
+                    <td>@s.ContractNumber</td>
+                }
+                <td>@MaterialsFormat.Date(s.ShipDate)</td>
+                <td>@(string.Join(" · ", new[] { s.Carrier, s.TrackingNumber }.Where(x => x is not null)))</td>
+                <td style="text-align:right">@s.PackageCount</td>
+                <td style="text-align:right">@MaterialsFormat.Qty(s.TotalWeight)</td>
+                <td style="text-align:right">@MaterialsFormat.Amount(s.Value)</td>
+                <td>@if (s.InvoiceId is { } i) { <MudLink Href="@($"billing/invoices/{i}")">@s.InvoiceNumber</MudLink> }</td>
+                <td><MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(s.Status)" Class="my-0">@SalesFormat.Label(s.Status)</MudChip></td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ShipmentSummaryDto> Shipments { get; set; } = [];
+    [Parameter] public bool ShowOrder { get; set; } = true;
+}

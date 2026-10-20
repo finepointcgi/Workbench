@@ -1,0 +1,374 @@
+@page "/materials/shipments/{ShipmentId:guid}"
+@inject IShippingService Shipping
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_shipment?.Summary.Number ?? "Shipment") · Shipping · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Shipment" BackHref="materials/shipping" BackLabel="Shipping" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_shipment is not { } sh)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = sh.Summary;
+    var packing = s.Status == ShipmentState.Packing;
+    <MaterialsHeader Title="@($"{s.Number} · {s.SalesOrderNumber}")" BackHref="materials/shipping" BackLabel="Shipping"
+                     Subtitle="@($"{s.CustomerName}{(s.ContractNumber is { } c ? $" · contract {c}" : "")} · to {sh.ShipToName ?? "—"}{(sh.ShipToCode is { } code ? $" ({code})" : "")}")">
+        <MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(s.Status)" data-testid="shipment-status">@SalesFormat.Label(s.Status)</MudChip>
+        <MudButton Variant="Variant.Outlined" Href="@($"materials/sales-orders/{s.SalesOrderId}")">Sales order</MudButton>
+        @if (s.Status != ShipmentState.Cancelled)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description" Href="@($"materials/shipments/{s.Id}/dd250")" data-testid="dd250-preview">DD250</MudButton>
+        }
+        @if (packing)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.LocalShipping" Disabled="_busy" OnClick="ConfirmAsync" data-testid="shipment-confirm">Ship it</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="CancelAsync">Cancel shipment</MudButton>
+        }
+        @if (sh.CanInvoice && SalesFormat.IsFinance(User))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.RequestQuote" Disabled="_busy" OnClick="InvoiceAsync" data-testid="shipment-invoice">Create delivery invoice</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[]
+        {
+            ("DD250 shipment no.", s.ShipmentNumber ?? "On shipping"), ("Ship date", MaterialsFormat.Date(s.ShipDate)), ("Value", MaterialsFormat.Amount(s.Value)),
+            ("Cost", packing ? "On shipping" : MaterialsFormat.Amount(sh.Lines.Sum(l => l.CostAmount))), ("Packages", $"{s.PackageCount} · {MaterialsFormat.Qty(s.TotalWeight)} lb"),
+            ("Invoice", s.InvoiceNumber ?? "—"),
+        })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="p">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @if (packing)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Carrier and packages</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_shipDate" Label="Ship date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_carrier" Label="Carrier" Margin="Margin.Dense" MaxLength="100" /></MudItem>
+                <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_bol" Label="Bill of lading / TCN" Margin="Margin.Dense" MaxLength="64" /></MudItem>
+                <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_tracking" Label="Tracking number" Margin="Margin.Dense" MaxLength="64" /></MudItem>
+                <MudItem xs="12" sm="6"><MudCheckBox T="bool" @bind-Value="_final" Label="Final shipment on the contract's items (the DD250 number ends in Z)" Color="Color.Primary" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_notes" Label="Notes" Margin="Margin.Dense" MaxLength="2000" /></MudItem>
+            </MudGrid>
+            <MudSimpleTable Dense="true" Elevation="0" Class="mt-2" data-testid="packages">
+                <caption class="wb-sr-only">Packages</caption>
+                <thead><tr><th scope="col">Package</th><th scope="col">Weight (lb)</th><th scope="col">Length (in)</th><th scope="col">Width (in)</th><th scope="col">Height (in)</th><th scope="col">Tracking number</th><th scope="col"><span class="wb-sr-only">Remove</span></th></tr></thead>
+                <tbody>
+                    @foreach (var pk in _packages)
+                    {
+                        var p = pk;
+                        <tr>
+                            <td>@p.Number</td>
+                            <td><MudNumericField T="decimal" @bind-Value="p.Weight" Min="0" Margin="Margin.Dense" aria-label="@($"Package {p.Number} weight")" /></td>
+                            <td><MudNumericField T="decimal?" @bind-Value="p.Length" Min="0" Margin="Margin.Dense" aria-label="@($"Package {p.Number} length")" /></td>
+                            <td><MudNumericField T="decimal?" @bind-Value="p.Width" Min="0" Margin="Margin.Dense" aria-label="@($"Package {p.Number} width")" /></td>
+                            <td><MudNumericField T="decimal?" @bind-Value="p.Height" Min="0" Margin="Margin.Dense" aria-label="@($"Package {p.Number} height")" /></td>
+                            <td><MudTextField T="string" @bind-Value="p.Tracking" Margin="Margin.Dense" MaxLength="64" aria-label="@($"Package {p.Number} tracking number")" /></td>
+                            <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Disabled="@(_packages.Count == 1)" OnClick="() => _packages.Remove(p)" aria-label="@($"Remove package {p.Number}")" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudStack Row="true" Spacing="2" Class="mt-2">
+                <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddPackage" data-testid="add-package">Add a package</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync" data-testid="shipment-save">Save packing</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudText Class="mud-text-secondary mb-3">
+            @(s.Carrier ?? "No carrier")@(s.TrackingNumber is { } t ? $" · tracking {t}" : "")@(sh.BillOfLading is { } b ? $" · B/L {b}" : "")
+            @if (sh.ConfirmedBy is { } cb) { <span> · shipped by @cb</span> }
+            @if (sh.JournalEntryNumber is { } je) { <span> · journal entry @je</span> }
+            @if (sh.Notes is { } n) { <span> · @n</span> }
+        </MudText>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2 mb-3" Style="overflow-x:auto">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="px-2 pt-1">What's on it</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="shipment-lines">
+            <caption class="wb-sr-only">Shipment lines</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col">Part</th><th scope="col">From</th><th scope="col">Lot / serial</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Value</th><th scope="col">Package</th>@if (!packing) { <th scope="col" style="text-align:right">Cost</th><th scope="col">Cost went to</th><th scope="col">Transaction</th> }</tr></thead>
+            <tbody>
+                @foreach (var l in sh.Lines)
+                {
+                    var line = l;
+                    <tr>
+                        <td>@l.OrderLineNumber</td>
+                        <td>@l.ItemNumber</td>
+                        <td>@l.PartNumber <span class="mud-text-secondary">@l.PartDescription</span>@if (l.Ownership != StockOwnership.General) { <MudChip T="string" Size="Size.Small" Class="my-0 ml-1">@MaterialsFormat.Label(l.Ownership)</MudChip> }</td>
+                        <td>@l.Location</td>
+                        <td>@SalesFormat.Tracking(l.Lot, l.Serial)</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(l.Quantity) @l.UnitOfMeasure</td>
+                        <td style="text-align:right">@MaterialsFormat.Amount(l.Amount)</td>
+                        <td style="min-width:110px">
+                            @if (packing)
+                            {
+                                <MudSelect T="int?" Value="PackageOf(line)" ValueChanged="v => _linePackages[line.Id] = v" Dense="true" aria-label="@($"Package for line {line.OrderLineNumber} {line.Serial}")">
+                                    @foreach (var p in _packages) { <MudSelectItem T="int?" Value="p.Number">@p.Number</MudSelectItem> }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                @l.PackageNumber
+                            }
+                        </td>
+                        @if (!packing)
+                        {
+                            <td style="text-align:right">@MaterialsFormat.Amount(l.CostAmount)</td>
+                            <td>@(l.ChargedToWbs ? "Project WBS (cost type)" : "Cost of goods sold")</td>
+                            <td>@l.InventoryTransactionNumber</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (s.Status == ShipmentState.Confirmed)
+    {
+        <MudPaper Outlined="true" Class="pa-3" data-testid="wawf">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">WAWF receiving report</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                The file for PIEE (WAWF): the receiving report, or a Combo with the delivery invoice. Workbench doesn't send it; upload it in PIEE and record what the government does with it.
+            </MudText>
+            @if (sh.Wawf is { } w)
+            {
+                <MudAlert Severity="@(w.Status == WawfReportState.Rejected ? Severity.Error : w.Status == WawfReportState.Accepted ? Severity.Success : Severity.Info)" Class="mb-2" data-testid="wawf-status">
+                    @SalesFormat.Label(w.DocumentType): @w.Status.ToString().ToLowerInvariant()@(w.SubmittedBy is { } by ? $" by {by}" : $" (exported by {w.ExportedBy})")@(w.Reference is { } r ? $" · {r}" : "")@(w.Message is { } m ? $" · {m}" : "")
+                </MudAlert>
+            }
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                <MudSelect T="WawfDocument" Value="_wawfType" ValueChanged="TypeChangedAsync" Label="Document" Dense="true" Style="min-width:260px" data-testid="wawf-type">
+                    @foreach (var d in Enum.GetValues<WawfDocument>()) { <MudSelectItem T="WawfDocument" Value="d">@SalesFormat.Label(d)</MudSelectItem> }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" Disabled="@(_busy || _validation?.IsValid != true)" OnClick="ExportAsync" StartIcon="@Icons.Material.Filled.Download" data-testid="wawf-export">Download file</MudButton>
+                @if (sh.Wawf?.Status is null or WawfReportState.Exported or WawfReportState.Rejected)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _validation?.IsValid != true)" OnClick="SubmitAsync" data-testid="wawf-submit">Record as submitted</MudButton>
+                }
+                @if (sh.Wawf?.Status == WawfReportState.Submitted)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Success" Disabled="_busy" OnClick="@(() => StatusAsync(WawfReportState.Accepted))" data-testid="wawf-accepted">Accepted</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="@(() => StatusAsync(WawfReportState.Rejected))">Rejected</MudButton>
+                }
+            </MudStack>
+            @if (_validation is { } v)
+            {
+                @if (v.Errors.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="wawf-errors">
+                        <b>Fix these first:</b>
+                        <ul class="ml-4">@foreach (var e in v.Errors) { <li>@e</li> }</ul>
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Success" Class="mt-2" Dense="true" data-testid="wawf-valid">Ready for PIEE.</MudAlert>
+                }
+
+                @foreach (var warning in v.Warnings) { <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">@warning</MudText> }
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public Guid ShipmentId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private sealed class PackageEdit
+    {
+        public int Number { get; set; }
+        public decimal Weight { get; set; }
+        public decimal? Length { get; set; }
+        public decimal? Width { get; set; }
+        public decimal? Height { get; set; }
+        public string? Tracking { get; set; }
+    }
+
+    private ShipmentDto? _shipment;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+    private DateTime? _shipDate = DateTime.Today;
+    private string? _carrier;
+    private string? _bol;
+    private string? _tracking;
+    private bool _final;
+    private string? _notes;
+    private List<PackageEdit> _packages = [];
+    private readonly Dictionary<Guid, int?> _linePackages = [];
+    private WawfDocument _wawfType;
+    private WawfValidationDto? _validation;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Show(await Shipping.GetShipmentAsync(ShipmentId));
+            await ValidateAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Show(ShipmentDto shipment)
+    {
+        _shipment = shipment;
+        var s = shipment.Summary;
+        _shipDate = (s.ShipDate ?? MaterialsFormat.Today).ToDateTime(TimeOnly.MinValue);
+        (_carrier, _bol, _tracking, _final, _notes) = (s.Carrier, shipment.BillOfLading, s.TrackingNumber, s.IsFinal, shipment.Notes);
+        _packages = shipment.Packages.Select(p => new PackageEdit { Number = p.Number, Weight = p.Weight, Length = p.Length, Width = p.Width, Height = p.Height, Tracking = p.TrackingNumber }).ToList();
+        _linePackages.Clear();
+        if (shipment.Wawf is { } w)
+        {
+            _wawfType = w.DocumentType;
+        }
+    }
+
+    private int? PackageOf(ShipmentLineDto line) => _linePackages.TryGetValue(line.Id, out var n) ? n : line.PackageNumber;
+
+    private void AddPackage() => _packages.Add(new PackageEdit { Number = _packages.Count == 0 ? 1 : _packages.Max(p => p.Number) + 1 });
+
+    private SaveShipmentRequest Request() => new(
+        _shipDate is { } d ? DateOnly.FromDateTime(d) : null, _carrier, _bol, _tracking, _final,
+        _packages.Select(p => new SavePackageRequest(p.Number, p.Weight, p.Length, p.Width, p.Height, p.Tracking)).ToList(),
+        _shipment!.Lines.Select(l => new PackLineRequest(l.Id, PackageOf(l))).ToList(), _notes);
+
+    private async Task<bool> RunAsync(Func<Task<ShipmentDto>> action, string? done = null)
+    {
+        _busy = true;
+        try
+        {
+            Show(await action());
+            if (done is not null)
+            {
+                Snackbar.Add(done, Severity.Success);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task SaveAsync() => RunAsync(() => Shipping.SaveShipmentAsync(ShipmentId, Request()), "Packing saved.");
+
+    private async Task ConfirmAsync()
+    {
+        if (_shipDate is null)
+        {
+            Snackbar.Add("Enter the ship date.", Severity.Warning);
+            return;
+        }
+
+        if (await DialogService.ShowMessageBoxAsync("Ship it?", "Shipping issues the stock out of inventory (posting its cost), updates the sales order and numbers the DD250. It can't be undone.",
+                yesText: "Ship", cancelText: "Not yet") != true)
+        {
+            return;
+        }
+
+        if (await RunAsync(() => Shipping.SaveShipmentAsync(ShipmentId, Request()))
+            && await RunAsync(() => Shipping.ConfirmShipmentAsync(ShipmentId, new ConfirmShipmentRequest(DateOnly.FromDateTime(_shipDate.Value))), "Shipped."))
+        {
+            await ValidateAsync();
+        }
+    }
+
+    private Task CancelAsync() => RunAsync(() => Shipping.CancelShipmentAsync(ShipmentId), "Shipment cancelled; its pick lists are open again.");
+
+    private async Task InvoiceAsync()
+    {
+        if (await RunAsync(() => Shipping.CreateInvoiceAsync(ShipmentId), "Draft delivery invoice created in Billing."))
+        {
+            await ValidateAsync();
+        }
+    }
+
+    private async Task TypeChangedAsync(WawfDocument type)
+    {
+        _wawfType = type;
+        await ValidateAsync();
+    }
+
+    private async Task ValidateAsync()
+    {
+        if (_shipment?.Summary.Status != ShipmentState.Confirmed)
+        {
+            _validation = null;
+            return;
+        }
+
+        try
+        {
+            _validation = await Shipping.ValidateWawfAsync(ShipmentId, _wawfType);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        try
+        {
+            await SalesFormat.DownloadAsync(JS, await Shipping.ExportWawfAsync(ShipmentId, _wawfType));
+            Show(await Shipping.GetShipmentAsync(ShipmentId));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task SubmitAsync() => RunAsync(() => Shipping.SubmitWawfAsync(ShipmentId, _wawfType), "Recorded as submitted.");
+
+    private async Task StatusAsync(WawfReportState status)
+    {
+        string? message = null;
+        if (status == WawfReportState.Rejected)
+        {
+            message = await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, "Why was it rejected?", "Record rejection", color: Color.Error);
+            if (message is null)
+            {
+                return;
+            }
+        }
+
+        await RunAsync(() => Shipping.SetWawfStatusAsync(ShipmentId, new SetWawfStatusRequest(status, Message: message)), $"Recorded as {status.ToString().ToLowerInvariant()}.");
+    }
+}

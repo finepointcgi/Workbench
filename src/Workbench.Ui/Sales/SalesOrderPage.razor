@@ -1,0 +1,302 @@
+@page "/materials/sales-orders/{OrderId:guid}"
+@inject ISalesOrderService Orders
+@inject IShippingService Shipping
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_order?.Summary.Number ?? "Sales order") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Sales order" BackHref="materials/sales-orders" BackLabel="Sales orders" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_order is not { } o)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = o.Summary;
+    var shippable = s.Status is SalesOrderState.Released or SalesOrderState.PartlyShipped;
+    <MaterialsHeader Title="@($"{s.Number} · {s.CustomerName}")" BackHref="materials/sales-orders" BackLabel="Sales orders"
+                     Subtitle="@(string.Join(" · ", new[] { s.ContractNumber is { } c ? $"Contract {c}" : "No contract", s.ProjectCode is { } p ? $"project {p}" : null, s.CustomerReference is { } r ? $"customer ref. {r}" : null }.Where(x => x is not null)))">
+        <MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(s.Status)" data-testid="so-status">@SalesFormat.Label(s.Status)</MudChip>
+        @if (Editable)
+        {
+            @if (s.Status is not (SalesOrderState.Shipped or SalesOrderState.Closed or SalesOrderState.Cancelled))
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="EditAsync" Disabled="_options is null" data-testid="so-edit">Edit</MudButton>
+            }
+
+            @if (s.Status == SalesOrderState.Draft && s.ContractId is not null)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ClinLinesAsync" Disabled="_options is null" data-testid="so-clins">Add lines from CLINs</MudButton>
+            }
+
+            @if (s.Status == SalesOrderState.Draft)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(o.Lines.Count == 0 || s.OnHold || s.OnCreditHold)"
+                           OnClick="@(() => RunAsync(() => Orders.ReleaseAsync(s.Id), "Released: its lines are now planned by MRP and can be picked."))" data-testid="so-release">Release</MudButton>
+            }
+
+            @if (shippable)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlaylistAddCheck" OnClick="PickAsync"
+                           Disabled="@(s.OnHold || s.OnCreditHold || o.Lines.All(l => l.QuantityOpen - l.QuantityOnPickLists <= 0))" data-testid="so-pick">Pick open lines</MudButton>
+            }
+
+            @if (s.Status is not (SalesOrderState.Closed or SalesOrderState.Cancelled))
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="HoldAsync" data-testid="so-hold">@(s.OnHold || s.OnCreditHold ? "Change hold" : "Hold")</MudButton>
+            }
+
+            @if (s.Status is SalesOrderState.Released or SalesOrderState.PartlyShipped or SalesOrderState.Shipped)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="CloseAsync" data-testid="so-close">Close order</MudButton>
+            }
+
+            @if (s.Status is SalesOrderState.Draft or SalesOrderState.Released && o.Shipments.All(x => x.Status == ShipmentState.Cancelled))
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelAsync">Cancel order</MudButton>
+            }
+        }
+    </MaterialsHeader>
+
+    @if (s.OnHold || s.OnCreditHold)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="so-hold-banner">
+            @(s.OnCreditHold ? "Credit hold" : "On hold"): @o.HoldReason. Nothing is released, picked or shipped until the hold is cleared.
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[]
+        {
+            ("Order value", MaterialsFormat.Amount(s.Total)), ("Shipped", MaterialsFormat.Amount(s.ShippedValue)),
+            ("Open lines", o.Lines.Count(l => l.QuantityOpen > 0).ToString(CultureInfo.InvariantCulture)), ("Next due", MaterialsFormat.Date(s.NextNeedDate)),
+            ("Ordered", MaterialsFormat.Date(s.OrderDate)), ("Charges cost-type to", o.WbsCode is { } w ? $"{s.ProjectCode} {w}" : "—"),
+        })
+        {
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="p">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudText Class="mud-text-secondary mb-3">
+        Ship to @(o.ShipToName ?? "—")@(o.ShipToCode is { } st ? $" ({st})" : "")@(o.ShipToAddress is { } a ? $", {a}" : "")
+        · issued by @(o.IssuedByCode ?? "—") · mark for @(o.MarkForCode ?? "—") · inspection at @SalesFormat.Point(o.InspectionPoint).ToLowerInvariant()@(o.InspectByCode is { } ib ? $" ({ib})" : "")
+        · acceptance at @SalesFormat.Point(o.AcceptancePoint).ToLowerInvariant()@(o.AcceptByCode is { } ab ? $" ({ab})" : "")
+        @if (o.ReleasedBy is { } rb) { <span> · released by @rb</span> }
+        @if (o.CancelReason is { } cr) { <span> · cancelled: @cr</span> }
+    </MudText>
+
+    <MudPaper Outlined="true" Class="pa-2 mb-3" Style="overflow-x:auto">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="px-2 pt-1">Lines</MudText>
+        @if (o.Lines.Count == 0)
+        {
+            <MudText Class="mud-text-secondary pa-2">No lines yet. Edit the order or add lines from the contract's CLINs.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="so-lines">
+                <caption class="wb-sr-only">Order lines</caption>
+                <thead><tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col">Part</th><th scope="col" style="text-align:right">Ordered</th><th scope="col" style="text-align:right">Shipped</th><th scope="col" style="text-align:right">Picking</th><th scope="col" style="text-align:right">Open</th><th scope="col" style="text-align:right">Free stock</th><th scope="col" style="text-align:right">Unit price</th><th scope="col" style="text-align:right">Amount</th><th scope="col">Need date</th><th scope="col">Cost goes to</th></tr></thead>
+                <tbody>
+                    @foreach (var l in o.Lines)
+                    {
+                        <tr>
+                            <td>@l.LineNumber</td>
+                            <td>@l.ItemNumber</td>
+                            <td>
+                                @l.PartNumber <span class="mud-text-secondary">@l.Description</span>
+                                @if (l.UidRequired) { <MudChip T="string" Size="Size.Small" Class="my-0 ml-1">UID</MudChip> }
+                                @if (l.StockNumber is { } nsn) { <div class="mud-text-secondary">NSN @nsn</div> }
+                            </td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityOrdered) @l.UnitOfMeasure</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityShipped)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityOnPickLists)</td>
+                            <td style="text-align:right">@(l.IsClosed && l.QuantityShipped < l.QuantityOrdered ? "Closed" : MaterialsFormat.Qty(l.QuantityOpen))</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.Available)</td>
+                            <td style="text-align:right">@MaterialsFormat.Cost(l.UnitPrice)</td>
+                            <td style="text-align:right">@MaterialsFormat.Amount(l.Amount)</td>
+                            <td>@MaterialsFormat.Date(l.NeedDate)</td>
+                            <td>@(l.ChargesWbs ? "WBS (cost type)" : "Cost of goods sold")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="px-2 pt-1">Pick lists</MudText>
+                @if (o.PickLists.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary pa-2">None yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="so-picklists">
+                        <caption class="wb-sr-only">Pick lists</caption>
+                        <thead><tr><th scope="col">Pick list</th><th scope="col">Picked</th><th scope="col">Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in o.PickLists)
+                            {
+                                <tr>
+                                    <td><MudLink Href="@($"materials/pick-lists/{p.Id}")">@p.Number</MudLink></td>
+                                    <td>@p.PickedCount of @p.LineCount</td>
+                                    <td>@SalesFormat.Label(p.Status)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="px-2 pt-1">Shipments</MudText>
+                @if (o.Shipments.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary pa-2">None yet.</MudText>
+                }
+                else
+                {
+                    <ShipmentsTable Shipments="o.Shipments" ShowOrder="false" />
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid OrderId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private SalesOrderDto? _order;
+    private SalesOptionsDto? _options;
+    private string? _error;
+    private bool _forbidden;
+
+    private bool Editable => SalesFormat.CanEdit(User);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        if (Editable && _options is null && _error is null)
+        {
+            try
+            {
+                _options = await Orders.GetOptionsAsync();
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                _options = null;
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _order = await Orders.GetAsync(OrderId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<SalesOrderDto>> action, string done)
+    {
+        try
+        {
+            _order = await action();
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync()
+    {
+        var dialog = await DialogService.ShowAsync<SalesOrderDialog>($"Edit {_order!.Summary.Number}",
+            new DialogParameters<SalesOrderDialog> { { d => d.Options, _options }, { d => d.Existing, _order } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveSalesOrderRequest request })
+        {
+            await RunAsync(() => Orders.UpdateAsync(OrderId, request), "Saved.");
+        }
+    }
+
+    private async Task ClinLinesAsync()
+    {
+        if (_options?.Contracts.FirstOrDefault(c => c.Id == _order!.Summary.ContractId) is not { } contract)
+        {
+            Snackbar.Add("The order's contract isn't open.", Severity.Warning);
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<ClinLinesDialog>($"Add lines from {contract.Number}",
+            new DialogParameters<ClinLinesDialog> { { d => d.Contract, contract }, { d => d.Parts, _options.Parts } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: AddClinLinesRequest request })
+        {
+            await RunAsync(() => Orders.AddLinesFromClinsAsync(OrderId, request), "Lines added.");
+        }
+    }
+
+    private async Task HoldAsync()
+    {
+        var s = _order!.Summary;
+        var dialog = await DialogService.ShowAsync<HoldDialog>($"Hold {s.Number}",
+            new DialogParameters<HoldDialog> { { d => d.OnHold, s.OnHold }, { d => d.OnCreditHold, s.OnCreditHold }, { d => d.Reason, _order.HoldReason }, { d => d.CanCredit, SalesFormat.IsFinance(User) } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SetHoldRequest request })
+        {
+            await RunAsync(() => Orders.SetHoldAsync(OrderId, request), request.OnHold || request.OnCreditHold ? "On hold." : "Hold cleared.");
+        }
+    }
+
+    private async Task PickAsync()
+    {
+        try
+        {
+            var pick = await Shipping.CreatePickListAsync(OrderId, new CreatePickListRequest());
+            Snackbar.Add($"{pick.Summary.Number} is ready to pick.", Severity.Success);
+            Navigation.NavigateTo($"materials/pick-lists/{pick.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        var open = _order!.Lines.Sum(l => l.QuantityOpen);
+        if (await DialogService.ShowMessageBoxAsync($"Close {_order.Summary.Number}?",
+                open > 0 ? $"{MaterialsFormat.Qty(open)} still to ship will be short-closed, and open pick lists are cancelled." : "Nothing more can ship on it.",
+                yesText: "Close order", cancelText: "Keep it open") == true)
+        {
+            await RunAsync(() => Orders.CloseAsync(OrderId), "Closed.");
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, $"Cancel {_order!.Summary.Number}", "Cancel order", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Orders.CancelAsync(OrderId, new CancelSalesOrderRequest(reason)), "Cancelled.");
+        }
+    }
+}

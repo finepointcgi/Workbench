@@ -1,0 +1,144 @@
+@page "/materials/pick-lists/{PickListId:guid}"
+@inject IShippingService Shipping
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_pick?.Summary.Number ?? "Pick list") · Shipping · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Pick list" BackHref="materials/shipping" BackLabel="Shipping" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_pick is not { } p)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = p.Summary;
+    var open = s.Status == PickListState.Open;
+    <MaterialsHeader Title="@($"{s.Number} · {s.SalesOrderNumber}")" BackHref="materials/shipping" BackLabel="Shipping"
+                     Subtitle="@($"{s.CustomerName} · {s.PickedCount} of {s.LineCount} lines picked. Stock stays in its bin until the shipment is confirmed.")">
+        <MudChip T="string" Size="Size.Small">@SalesFormat.Label(s.Status)</MudChip>
+        <MudButton Variant="Variant.Outlined" Href="@($"materials/sales-orders/{s.SalesOrderId}")">Sales order</MudButton>
+        @if (open)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Inventory" Disabled="@(p.Lines.All(l => !l.IsPicked || l.QuantityPicked == 0) || _busy)"
+                       OnClick="PackAsync" data-testid="pick-pack">Pack into a shipment</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="CancelAsync">Cancel pick list</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="pick-lines">
+            <caption class="wb-sr-only">Lines to pick, by location</caption>
+            <thead><tr><th scope="col">Location</th><th scope="col">Order line</th><th scope="col">Part</th><th scope="col">Lot / serial</th><th scope="col">Owner</th><th scope="col" style="text-align:right">To pick</th><th scope="col">Picked</th></tr></thead>
+            <tbody>
+                @foreach (var l in p.Lines)
+                {
+                    var line = l;
+                    <tr>
+                        <td><b>@l.Warehouse / @l.Bin</b></td>
+                        <td>@l.OrderLineNumber</td>
+                        <td>@l.PartNumber <span class="mud-text-secondary">@l.PartDescription</span></td>
+                        <td>@SalesFormat.Tracking(l.Lot, l.Serial)</td>
+                        <td>@MaterialsFormat.Label(l.Ownership)@(l.OwnerProjectCode is { } op ? $" ({op})" : "")</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(l.Quantity) @l.UnitOfMeasure</td>
+                        <td style="min-width:220px">
+                            @if (open)
+                            {
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudNumericField T="decimal" Value="Qty(line)" ValueChanged="v => _quantities[line.Id] = v" Min="0" Max="line.Quantity" Margin="Margin.Dense" Style="max-width:100px"
+                                                     aria-label="@($"Quantity of {line.PartNumber} picked from {line.Bin}")" />
+                                    <MudButton Size="Size.Small" Variant="@(line.IsPicked ? Variant.Outlined : Variant.Filled)" Color="Color.Primary" Disabled="_busy"
+                                               OnClick="() => ConfirmAsync(line)" aria-label="@($"Confirm pick of {line.PartNumber} from {line.Bin}")">@(line.IsPicked ? "Update" : "Picked")</MudButton>
+                                    @if (line.IsPicked) { <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" aria-label="Picked" /> }
+                                </MudStack>
+                            }
+                            else
+                            {
+                                @(l.IsPicked ? $"{MaterialsFormat.Qty(l.QuantityPicked)} by {l.PickedBy}" : "—")
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid PickListId { get; set; }
+
+    private PickListDto? _pick;
+    private readonly Dictionary<Guid, decimal> _quantities = [];
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _pick = await Shipping.GetPickListAsync(PickListId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private decimal Qty(PickListLineDto l) => _quantities.TryGetValue(l.Id, out var q) ? q : l.IsPicked ? l.QuantityPicked : l.Quantity;
+
+    private async Task ConfirmAsync(PickListLineDto line)
+    {
+        _busy = true;
+        try
+        {
+            _pick = await Shipping.ConfirmPickAsync(line.Id, new ConfirmPickRequest(Qty(line)));
+            _quantities.Remove(line.Id);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PackAsync()
+    {
+        _busy = true;
+        try
+        {
+            var shipment = await Shipping.CreateShipmentAsync(new CreateShipmentRequest([PickListId]));
+            Navigation.NavigateTo($"materials/shipments/{shipment.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            _busy = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        _busy = true;
+        try
+        {
+            _pick = await Shipping.CancelPickListAsync(PickListId);
+            Snackbar.Add("Pick list cancelled; its stock is free again.", Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

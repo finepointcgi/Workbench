@@ -1,0 +1,141 @@
+@page "/m/pick"
+@page "/m/pick/{PickListId:guid}"
+@layout Workbench.Ui.Mobile.MobileLayout
+@* Picking on a phone: open pick lists, then each line in bin order. The picker confirms the quantity, and can scan or type
+   a different lot or serial from the same bin. Packing and shipping happen on the desktop Shipping pages. *@
+@inject IShippingService Shipping
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Pick · Workbench</PageTitle>
+
+<div class="wb-m-title"><h1>@(_pick is { } p ? p.Summary.Number : "Pick")</h1></div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" data-testid="error">@_error</MudAlert>
+}
+else if (PickListId is null)
+{
+    @if (_lists is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+    }
+    else if (_lists.Count == 0)
+    {
+        <div class="wb-m-card wb-m-muted">Nothing to pick.</div>
+    }
+    else
+    {
+        @foreach (var l in _lists)
+        {
+            <a class="wb-m-card" style="display:block;text-decoration:none;color:inherit" href="@($"m/pick/{l.Id}")" data-testid="@($"pick-list-{l.Number}")">
+                <b>@l.Number</b> <span class="wb-m-muted">@l.SalesOrderNumber · @l.CustomerName</span>
+                <div class="wb-m-muted">@l.PickedCount of @l.LineCount lines picked</div>
+            </a>
+        }
+    }
+}
+else if (_pick is not { } pick)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <div role="status" class="wb-sr-only">@_status</div>
+    <div class="wb-m-muted mb-2">@pick.Summary.SalesOrderNumber · @pick.Summary.CustomerName · @pick.Summary.PickedCount of @pick.Summary.LineCount picked</div>
+    @foreach (var l in pick.Lines)
+    {
+        var line = l;
+        <div class="wb-m-card" data-testid="@($"pick-line-{l.Id}")">
+            <div><b>@l.Warehouse / @l.Bin</b> @if (l.IsPicked) { <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" aria-label="Picked" /> }</div>
+            <div><b>@l.PartNumber</b> <span class="wb-m-muted">@l.PartDescription</span></div>
+            <div class="wb-m-muted">@MaterialsFormat.Qty(l.Quantity) @l.UnitOfMeasure · @(SalesFormat.Tracking(l.Lot, l.Serial) is { Length: > 0 } t ? t : "no lot or serial")@(l.Ownership != StockOwnership.General ? $" · {MaterialsFormat.Label(l.Ownership)}" : "")</div>
+            @if (pick.Summary.Status == PickListState.Open)
+            {
+                <div class="wb-m-row mt-1">
+                    <label class="wb-m-field"><span>Quantity</span><input class="wb-m-input" inputmode="decimal" @bind="_edits[line.Id].Quantity" aria-label="@($"Quantity of {line.PartNumber} picked")" /></label>
+                    @if (line.Serial.Length > 0)
+                    {
+                        <label class="wb-m-field"><span>Serial</span><input class="wb-m-input" @bind="_edits[line.Id].Serial" aria-label="@($"Serial of {line.PartNumber} picked")" /></label>
+                    }
+                    else if (line.Lot.Length > 0)
+                    {
+                        <label class="wb-m-field"><span>Lot</span><input class="wb-m-input" @bind="_edits[line.Id].Lot" aria-label="@($"Lot of {line.PartNumber} picked")" /></label>
+                    }
+                </div>
+                <MudButton Variant="@(line.IsPicked ? Variant.Outlined : Variant.Filled)" Color="Color.Primary" FullWidth="true" Disabled="_busy" OnClick="() => ConfirmAsync(line)"
+                           aria-label="@($"Confirm pick of {line.PartNumber} from {line.Bin}")">@(line.IsPicked ? "Update" : "Picked")</MudButton>
+            }
+        </div>
+    }
+    <MudButton Variant="Variant.Text" FullWidth="true" Href="m/pick">All pick lists</MudButton>
+}
+
+@code {
+    [Parameter] public Guid? PickListId { get; set; }
+
+    private sealed class Edit
+    {
+        public decimal Quantity { get; set; }
+        public string? Lot { get; set; }
+        public string? Serial { get; set; }
+    }
+
+    private IReadOnlyList<PickListSummaryDto>? _lists;
+    private PickListDto? _pick;
+    private readonly Dictionary<Guid, Edit> _edits = [];
+    private string? _error;
+    private string? _status;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (PickListId is { } id)
+            {
+                Show(await Shipping.GetPickListAsync(id));
+            }
+            else
+            {
+                _pick = null;
+                _lists = await Shipping.ListPickListsAsync();
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            _error = ex is UnauthorizedAccessException ? "Picking is for the Materials role." : ex.Message;
+        }
+    }
+
+    private void Show(PickListDto pick)
+    {
+        _pick = pick;
+        _edits.Clear();
+        foreach (var l in pick.Lines)
+        {
+            _edits[l.Id] = new Edit { Quantity = l.IsPicked ? l.QuantityPicked : l.Quantity, Lot = l.Lot, Serial = l.Serial };
+        }
+    }
+
+    private async Task ConfirmAsync(PickListLineDto line)
+    {
+        _busy = true;
+        try
+        {
+            var e = _edits[line.Id];
+            Show(await Shipping.ConfirmPickAsync(line.Id, new ConfirmPickRequest(e.Quantity, e.Lot, e.Serial)));
+            _status = $"Picked {MaterialsFormat.Qty(e.Quantity)} {line.PartNumber}.";
+            Snackbar.Add(_status, Severity.Success);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,132 @@
+@page "/materials/sales-orders"
+@inject ISalesOrderService Orders
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Sales orders · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Sales orders" Subtitle="Customer orders for parts, by contract CLIN or project. Released orders are planned by MRP and picked, packed and shipped from Shipping.">
+    @if (SalesFormat.CanEdit(User))
+    {
+        <MudButton Variant="Variant.Outlined" Href="materials/shipping" StartIcon="@Icons.Material.Filled.LocalShipping">Shipping</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_options is null" data-testid="new-order">New sales order</MudButton>
+    }
+</MaterialsHeader>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+        <MudSelect T="SalesOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:160px">
+            @foreach (var s in Enum.GetValues<SalesOrderState>()) { <MudSelectItem T="SalesOrderState?" Value="s">@SalesFormat.Label(s)</MudSelectItem> }
+        </MudSelect>
+        <MudSwitch T="bool" Value="_open" ValueChanged="v => SetAsync(() => _open = v)" Label="Open only" Color="Color.Primary" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (_orders is null)
+        {
+            <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+        }
+        else if (_orders.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No sales orders.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="sales-orders">
+                <caption class="wb-sr-only">Sales orders</caption>
+                <thead><tr><th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Contract / project</th><th scope="col">Customer ref.</th><th scope="col">Ordered</th><th scope="col">Next due</th><th scope="col" style="text-align:right">Value</th><th scope="col" style="text-align:right">Shipped</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var o in _orders)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/sales-orders/{o.Id}")">@o.Number</MudLink></td>
+                            <td>@o.CustomerName</td>
+                            <td>@(string.Join(" · ", new[] { o.ContractNumber, o.ProjectCode }.Where(x => x is not null)))</td>
+                            <td>@o.CustomerReference</td>
+                            <td>@MaterialsFormat.Date(o.OrderDate)</td>
+                            <td>@MaterialsFormat.Date(o.NextNeedDate)</td>
+                            <td style="text-align:right">@MaterialsFormat.Amount(o.Total)</td>
+                            <td style="text-align:right">@MaterialsFormat.Amount(o.ShippedValue)</td>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(o.Status)" Class="my-0">@SalesFormat.Label(o.Status)</MudChip>
+                                @if (o.OnCreditHold) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="my-0">Credit hold</MudChip> }
+                                else if (o.OnHold) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="my-0">On hold</MudChip> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<SalesOrderSummaryDto>? _orders;
+    private SalesOptionsDto? _options;
+    private string? _search;
+    private SalesOrderState? _status;
+    private bool _open = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (SalesFormat.CanEdit(User))
+        {
+            try
+            {
+                _options = await Orders.GetOptionsAsync();
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                _options = null;
+            }
+        }
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _orders = await Orders.ListAsync(new SalesOrderQuery(_status, OpenOnly: _open, Search: _search));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task NewAsync()
+    {
+        var dialog = await DialogService.ShowAsync<SalesOrderDialog>("New sales order",
+            new DialogParameters<SalesOrderDialog> { { d => d.Options, _options } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveSalesOrderRequest request })
+        {
+            try
+            {
+                var order = await Orders.CreateAsync(request);
+                Navigation.NavigateTo($"materials/sales-orders/{order.Summary.Id}");
+            }
+            catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+            {
+                Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+}

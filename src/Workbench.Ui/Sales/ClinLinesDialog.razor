@@ -1,0 +1,61 @@
+@* Lines from the contract's CLINs: tick the CLINs and say which part delivers each. The unit price defaults to the CLIN value ÷ quantity. *@
+<MudDialog>
+    <DialogContent>
+        @if (Contract.Clins.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">This contract has no exercised CLINs.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="clin-lines">
+                <caption class="wb-sr-only">CLINs of @Contract.Number</caption>
+                <thead><tr><th scope="col">Add</th><th scope="col">CLIN</th><th scope="col">Part</th><th scope="col">Quantity</th><th scope="col">Unit price (blank: CLIN value ÷ quantity)</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        var r = row;
+                        <tr>
+                            <td><MudCheckBox T="bool" @bind-Value="r.Selected" aria-label="@($"Add CLIN {r.Clin.Number}")" /></td>
+                            <td>@r.Clin.Number <span class="mud-text-secondary">@r.Clin.Description · @r.Clin.Pricing · @MaterialsFormat.Amount(r.Clin.CeilingValue)</span></td>
+                            <td style="min-width:200px">
+                                <MudSelect T="Guid?" @bind-Value="r.PartId" Dense="true" aria-label="@($"Part for CLIN {r.Clin.Number}")">
+                                    @foreach (var p in Parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Number · @p.Description</MudSelectItem> }
+                                </MudSelect>
+                            </td>
+                            <td style="width:100px"><MudNumericField T="decimal" @bind-Value="r.Quantity" Min="0" Margin="Margin.Dense" aria-label="Quantity" /></td>
+                            <td style="width:160px"><MudNumericField T="decimal?" @bind-Value="r.UnitPrice" Min="0" Margin="Margin.Dense" aria-label="Unit price" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!_rows.Any(r => r.Selected) || _rows.Any(r => r.Selected && (r.PartId is null || r.Quantity <= 0)))"
+                   OnClick="Save" data-testid="clin-lines-add">Add lines</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public SalesContractOption Contract { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<SalesPartOption> Parts { get; set; } = [];
+
+    private sealed class Row(SalesClinOption clin)
+    {
+        public SalesClinOption Clin { get; } = clin;
+        public bool Selected { get; set; }
+        public Guid? PartId { get; set; }
+        public decimal Quantity { get; set; } = 1;
+        public decimal? UnitPrice { get; set; }
+    }
+
+    private List<Row> _rows = [];
+
+    protected override void OnInitialized() => _rows = Contract.Clins.Select(c => new Row(c)).ToList();
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new AddClinLinesRequest(
+        _rows.Where(r => r.Selected).Select(r => new ClinLineRequest(r.Clin.Id, r.PartId!.Value, r.Quantity, r.UnitPrice)).ToList())));
+}
