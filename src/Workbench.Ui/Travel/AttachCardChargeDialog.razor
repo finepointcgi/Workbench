@@ -1,0 +1,84 @@
+@inject IExpenseReportService Reports
+@inject IProjectService Projects
+@inject Workbench.Contracts.Identity.ICurrentUserContext CurrentUser
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            @Charge.Merchant · @Charge.TransactionDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture) · <b>@TravelFormat.Money(Charge.Amount)</b>.
+            The amount and date come from the card statement and can't be changed.
+        </MudText>
+        <MudStack Spacing="3">
+            <MudSelect T="Guid?" @bind-Value="_reportId" Label="Expense report" Required="true"
+                       HelperText="@(_reports.Count == 0 ? "You have no draft expense reports. Start one on the Reports tab." : null)">
+                @foreach (var report in _reports)
+                {
+                    <MudSelectItem T="Guid?" Value="report.Id">@report.Title@(report.TripStart is { } s ? $" · {s:MMM d}" : "")</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge code" Required="true"
+                       HelperText="@(_codes.Count == 0 ? "You have no charge codes on the charge's date." : null)">
+                @foreach (var code in _codes)
+                {
+                    <MudSelectItem T="Guid?" Value="code.WbsElementId">@ChargeCodeText.Label(code)@(code.Kind == ChargeCodeKind.Direct ? $" · {code.ProjectName}" : "")</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="OdcCostType" @bind-Value="_type" Label="Type">
+                <MudSelectItem Value="OdcCostType.Travel">Travel</MudSelectItem>
+                <MudSelectItem Value="OdcCostType.Other">Other</MudSelectItem>
+            </MudSelect>
+            <MudTextField @bind-Value="_description" Label="Description" MaxLength="500" />
+            <MudCheckBox T="bool" @bind-Value="_unallowable" Label="Unallowable cost (FAR 31.205: alcohol, entertainment, …)" Color="Color.Warning" />
+            @if (_unallowable)
+            {
+                <MudTextField @bind-Value="_reason" Label="Why it's unallowable" Required="true" Immediate="true" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsValid" OnClick="Save" data-testid="attach-confirm">Add to report</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public CardTransactionDto Charge { get; set; } = default!;
+
+    private IReadOnlyList<ExpenseReportDto> _reports = [];
+    private IReadOnlyList<ChargeCodeDto> _codes = [];
+    private Guid? _reportId;
+    private Guid? _wbsId;
+    private OdcCostType _type = OdcCostType.Travel;
+    private string? _description;
+    private bool _unallowable;
+    private string? _reason;
+
+    private bool IsValid => _reportId is not null && _wbsId is not null && (!_unallowable || !string.IsNullOrWhiteSpace(_reason));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _description = Charge.Merchant;
+        _type = Charge.SuggestedCategory == TravelCategory.Other ? OdcCostType.Other : OdcCostType.Travel;
+        try
+        {
+            _reports = (await Reports.ListMyReportsAsync()).Where(r => r.IsEditable).ToList();
+
+            // The report whose trip covers the charge, else the newest draft.
+            _reportId = (_reports.FirstOrDefault(r => r.TripStart <= Charge.TransactionDate && Charge.TransactionDate <= (r.TripEnd ?? r.TripStart)) ?? _reports.FirstOrDefault())?.Id;
+            if ((await CurrentUser.GetAsync()).EmployeeId is { } me)
+            {
+                _codes = (await Projects.ListChargeCodesAsync(me, Charge.TransactionDate)).Where(c => c.Kind != ChargeCodeKind.Leave).ToList();
+                _wbsId = _codes.FirstOrDefault(c => c.Kind == ChargeCodeKind.Direct)?.WbsElementId;
+            }
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            _reports = [];
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new AttachCardChargeRequest(_reportId!.Value, _wbsId!.Value, _type, _description, _unallowable, _unallowable ? _reason : null)));
+}

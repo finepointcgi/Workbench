@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Color="@TravelFormat.StatusColor(Status)" Variant="Variant.Outlined" Class="my-0">@TravelFormat.StatusText(Status)</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public TravelAuthorizationState Status { get; set; }
+}

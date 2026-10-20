@@ -503,7 +503,8 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
         }
 
         var isExpense = IsEmployeeExpense(odc);
-        var credit = context.Rule(isExpense ? PostingRuleKind.AccruedReimbursement : PostingRuleKind.AccountsPayable, "");
+        // A company-paid corporate card charge is owed to the card issuer (the program's liability), not to the employee.
+        var credit = context.CardLiability(odc.Id) ?? context.Rule(isExpense ? PostingRuleKind.AccruedReimbursement : PostingRuleKind.AccountsPayable, "");
         if (credit is null)
         {
             return Plan.Failed(PostingContext.MissingRule(isExpense ? "Accrued employee reimbursements" : "Accounts payable"));
@@ -548,7 +549,8 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
             OrgUnitId = orgUnit,
             Debit = amount < 0 ? -amount : 0,
             Credit = amount > 0 ? amount : 0,
-            Memo = isExpense ? $"Reimbursement: {context.EmployeeName(odc.EmployeeId)}" : $"{odc.Vendor} {odc.InvoiceNumber}".Trim(),
+            Memo = context.CardLiability(odc.Id) is not null ? $"Corporate card: {context.EmployeeName(odc.EmployeeId)}, {odc.Vendor}".TrimEnd(',', ' ')
+                : isExpense ? $"Reimbursement: {context.EmployeeName(odc.EmployeeId)}" : $"{odc.Vendor} {odc.InvoiceNumber}".Trim(),
 
             // A vendor ODC from a foreign currency bill owes the vendor in that currency (multicurrency); employees are reimbursed in the functional currency.
             TransactionCurrency = isExpense || odc.TransactionAmount is null ? null : odc.CurrencyCode,
@@ -586,6 +588,7 @@ internal sealed class PostingContext
 {
     private Dictionary<(PostingRuleKind, string), Guid> _rules = [];
     private Dictionary<Guid, IndirectPool> _pools = [];
+    private Dictionary<Guid, Guid> _cardLiabilities = [];
 
     public Dictionary<Guid, WbsElement> Wbs { get; private set; } = [];
     public Dictionary<Guid, Employee> Employees { get; private set; } = [];
@@ -604,8 +607,12 @@ internal sealed class PostingContext
             Wbs = await db.Set<WbsElement>().AsNoTracking().ToDictionaryAsync(w => w.Id, ct),
             Employees = await db.Set<Employee>().AsNoTracking().ToDictionaryAsync(e => e.Id, ct),
             Periods = (await db.Set<FiscalPeriod>().AsNoTracking().ToListAsync(ct)).OrderBy(p => p.Start).ToList(),
+            _cardLiabilities = await Travel.CardSupport.CompanyPaidLiabilitiesAsync(db, ct),
         };
     }
+
+    /// <summary>The liability account of a company-paid card charge's expense line (null for anything else).</summary>
+    public Guid? CardLiability(Guid odcId) => _cardLiabilities.TryGetValue(odcId, out var account) ? account : null;
 
     public Guid? Rule(PostingRuleKind kind, string key) => _rules.TryGetValue((kind, key), out var id) ? id : null;
 
