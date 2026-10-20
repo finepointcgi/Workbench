@@ -639,3 +639,27 @@ Checks:
   date (at approval when due, hourly by `EngineeringChangeBackgroundService`, or "Apply due changes"): the new BOM/part revision activates and open work
   orders on the old revision are flagged for review. As-designed (the BOM revision the effective ECOs give a serial or lot) vs as-built (the work order's BOM
   and genealogy) is `IEngineeringChangeService.ConfigurationAsync`.
+
+## Shop floor: kits, backflush, landed cost, physical inventory, capacity scheduling
+
+- Entities in `Domain/Materials` (`Kitting.cs`: `Kit`/`KitLine`/`KitPick`, `BackflushSetting`, `BackflushShortage`; `LandedCost.cs`; `PhysicalInventory.cs`:
+  `PhysicalInventory`, `PhysicalInventoryBin`, `CountTag`; `CapacityScheduling.cs`: `WorkCenterCalendar`, `WorkCenterCapacityException`, `OperationSchedule`,
+  `OperationLoad`, `CapacityScheduleRun`). Contracts `Contracts/Materials/ShopFloorContracts.cs` (`IKittingService`, `IBackflushService`, `ILandedCostService`,
+  `IPhysicalInventoryService`, `ICapacitySchedulingService`). Reads Materials/Finance/Admin; changes Materials/Admin; landed cost drafts also Finance;
+  **posting** landed cost and physical inventory adjustments is Finance/Admin.
+- `StockEngine` knows two kinds of locked bins (loaded by `ShopFloorLocks`): open kits' staging bins are *reserved* (automatic picks skip them; a
+  kit's stock leaves only by its issue or cancel) and bins of a physical inventory being counted are *frozen* (every movement in or out is refused,
+  except that count's own posting). New stock movements get this for free through the engine; don't bypass it.
+- Backflush runs inside `ManufacturingService.CompleteAsync` / `ReportLaborAsync` (same unit of work and journal entry) through `Backflush.ApplyAsync`:
+  each backflushed component is issued up to its share of units done (an operation's completed units for components with an operation sequence,
+  else the order's), FIFO from its configured bin/warehouse. What can't be issued becomes an open `BackflushShortage`, never a silent skip.
+  BOM-level settings key on (BOM, component part) because saving a BOM replaces its component rows.
+- Landed cost splits with `Allocation.Split` (whole cents). Average-cost parts: the share of units still on hand raises `Part.InventoryValue`
+  (re-averaged); the share of units already gone follows the latest outgoing movements (project WBS → 5120 with segments, stock work orders → WIP
+  or the variance once closed, adjustments/counts → 6152, else cost of goods sold). Standard-cost parts take it all as PPV. Value movements are
+  `InventoryTransactionType.LandedCost` (quantity 0; the issued share is a + and − pair so `InventoryValue` stays the sum of amounts), and
+  `MaterialCostActuals` reads them, so project financials include landed cost on material they already received.
+- Physical inventory posts every difference through `InventoryService.CountDifference` (the cycle count posting) as `PhysicalCount` transactions in
+  one entry; government-furnished stock moves by quantity only.
+- Capacity scheduling is the pure `CapacityScheduler` (unit-test the math there) behind `CapacitySchedulingService`, which keeps queue positions and
+  planner pins between runs. Pinned operations load at the full daily rate whatever else is there, so they can overload a week; that's the point.

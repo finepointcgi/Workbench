@@ -300,7 +300,7 @@ public sealed class MobileWorkflowPageTests
         var pages = typeof(MobileLayout).Assembly.GetTypes()
             .Where(t => t.Namespace == typeof(MobileLayout).Namespace && t.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), false).Length > 0)
             .ToList();
-        Assert.Equal(7, pages.Count); // Today, timesheet, expenses (2), approvals, leave, receive.
+        Assert.Equal(8, pages.Count); // Today, timesheet, expenses (2), approvals, leave, receive, count.
         Assert.All(pages, p => Assert.Equal(typeof(MobileLayout),
             ((Microsoft.AspNetCore.Components.LayoutAttribute)p.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.LayoutAttribute), true).Single()).LayoutType));
     }
