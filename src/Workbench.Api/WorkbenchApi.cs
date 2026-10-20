@@ -67,6 +67,7 @@ public static class WorkbenchApi
         v1.MapGovernmentBillingEndpoints();
         v1.MapTravelEndpoints();
         v1.MapSalesShippingEndpoints();
+        v1.MapQualityEndpoints();
 
         return app;
     }
