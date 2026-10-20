@@ -57,6 +57,9 @@ public enum InvoiceLineKind
 
     /// <summary>A manual adjustment, true-up or credit.</summary>
     Adjustment,
+
+    /// <summary>Added by sales tax: the sales tax on the invoice (credited to the sales tax liability, never revenue).</summary>
+    SalesTax,
 }
 
 /// <summary>

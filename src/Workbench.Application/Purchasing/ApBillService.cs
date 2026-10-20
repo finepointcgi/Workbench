@@ -35,7 +35,8 @@ public sealed class ApBillService(
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
     ILogger<ApBillService> logger,
-    ApprovalEngine? approvals = null) : IApBillService
+    ApprovalEngine? approvals = null,
+    SalesTax.UseTaxAccrual? useTax = null) : IApBillService
 {
     private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
 
@@ -483,6 +484,11 @@ public sealed class ApBillService(
             }
 
             await db.SaveChangesAsync(ct);
+        }
+
+        if (problems.Count == 0 && useTax is not null)
+        {
+            await useTax.TryAccrueAsync(billId, ct); // Sales tax: use tax on taxable purchases the vendor didn't tax (never fails the posting).
         }
     }
 
