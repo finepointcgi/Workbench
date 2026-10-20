@@ -604,3 +604,18 @@ Checks:
   report goes. Posting: a company-paid program's lines credit the program's liability account (default `2030 Corporate card
   payable`) instead of accrued reimbursements (`PostingContext.CardLiability`). Charges older than the program's
   `UnsubmittedAlertDays` and not on a submitted report are overdue (home to-do `cards:overdue`, Finance aging at `/cards`).
+
+## Sales orders and shipping
+
+- `Domain/Materials/Sales.cs` (`SalesOrder` + lines, `PickList` + lines, `Shipment` + lines and packages, `WawfReceivingReport`); contracts
+  `ISalesOrderService`, `IShippingService` (`Contracts/Materials/SalesContracts.cs`); pages under `/materials/sales-orders`, `/materials/shipping`,
+  `/materials/pick-lists`, `/materials/shipments` (`Ui/Sales`, `SalesLayout`) and the phone pick screen `/m/pick`. Orders: Materials/Finance/Admin
+  change, Business development reads; fulfilment Materials/Finance/Admin; credit holds and the delivery invoice Finance/Admin.
+- A released (or partly shipped) order's open lines are MRP demand (`SalesOrderDemand`, one line in `MrpService.LoadAsync`).
+- Pick lists reserve stock by bin/lot/serial/owner (`SalesReservations`); nothing moves until the shipment is confirmed. Auto-picking takes the
+  order project's contract stock, then general stock; government-furnished material is only picked on purpose (and only the project's own).
+- Confirming a shipment issues through `StockEngine`: cost-type lines (non-FFP CLIN or contract) as `IssueToProject` to the order's WBS (5120),
+  everything else as `SalesShipment` to cost of goods sold (`Materials:Sales:CostOfGoodsSoldAccountNumber`, default 5160, added on first use),
+  with the project/WBS segments when the order has a WBS (then it also counts in `MaterialCostActuals`).
+- The delivery invoice goes through billing's public services (`ShipmentInvoicer`: a completed milestone per FFP CLIN, then the FFP milestone
+  draft), so liquidation and funding checks stay billing's. WAWF files go through `IWawfSubmitter` (default `ManualWawfSubmitter`, sends nothing).
