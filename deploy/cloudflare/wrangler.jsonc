@@ -1,0 +1,23 @@
+// The public Workbench demo on Cloudflare Containers. Cloudflare Workers Builds deploys it from GitHub (root directory deploy/cloudflare); ./deploy.sh deploys from a laptop (docs/demo-hosting.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "workbench-demo",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "WorkbenchDemo",
+      // The repository Dockerfile's last stage is the "demo" target.
+      "image": "../../Dockerfile",
+      "image_build_context": "../..",
+      // 4 GiB, half a vCPU: .NET starts much faster than on the 1/4 vCPU "basic" size.
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "WORKBENCH", "class_name": "WorkbenchDemo" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkbenchDemo"] }]
+}
