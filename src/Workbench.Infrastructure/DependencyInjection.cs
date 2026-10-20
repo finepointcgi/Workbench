@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddCollaborationInfrastructure(configuration);
         services.AddNotificationInfrastructure(configuration);
         Assistant.AssistantInfrastructure.AddAssistantInfrastructure(services, configuration); // AI assistant providers: Anthropic API and Amazon Bedrock (incl. GovCloud).
+        Integrations.IntegrationInfrastructure.AddIntegrationInfrastructure(services); // SFTP uploads for the GL and report export connectors (SSH.NET).
         return services;
     }
 }

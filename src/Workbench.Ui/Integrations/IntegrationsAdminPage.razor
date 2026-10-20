@@ -1,0 +1,86 @@
+@page "/admin/integrations"
+@inject IUserDirectory Users
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Integrations · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Integrations</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Connect Workbench to other systems: send events to your own services (webhooks), give programs access to the API with
+    keys, and set up ready-made connections to Teams, Slack, QuickBooks and SFTP.
+</MudText>
+
+@if (_me is null && _loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_me is not { IsAdmin: true })
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Only administrators can manage integrations.</MudAlert>
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4"
+             ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged" KeepPanelsAlive="false">
+        <MudTabPanel Text="Webhooks" Icon="@Icons.Material.Filled.Webhook">
+            <WebhooksTab ShowDeliveries="ShowDeliveries" />
+        </MudTabPanel>
+        <MudTabPanel Text="Deliveries" Icon="@Icons.Material.Filled.Outbox">
+            <DeliveriesTab EndpointId="_endpointFilter" />
+        </MudTabPanel>
+        <MudTabPanel Text="API keys" Icon="@Icons.Material.Filled.VpnKey">
+            <ApiKeysTab />
+        </MudTabPanel>
+        <MudTabPanel Text="Connectors" Icon="@Icons.Material.Filled.Hub">
+            <ConnectorsTab />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors"];
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabQuery { get; set; }
+
+    private UserDto? _me;
+    private bool _loading = true;
+    private int _tab;
+    private Guid? _endpointFilter;
+
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "webhooks"));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _me = await Users.GetMeAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load your account: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ShowDeliveries(Guid endpointId)
+    {
+        _endpointFilter = endpointId;
+        OnTabChanged(1);
+    }
+
+    private void OnTabChanged(int index)
+    {
+        if (index != 1 && _tab == 1)
+        {
+            _endpointFilter = null;
+        }
+
+        _tab = index;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", Tabs[index]), replace: true);
+    }
+}

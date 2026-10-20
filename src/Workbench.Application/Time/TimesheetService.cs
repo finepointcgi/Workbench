@@ -9,6 +9,7 @@ using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Time;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Time;
 
@@ -354,6 +355,7 @@ public sealed class TimesheetService(
         }
 
         audit.Record(db, TimesheetQueries.AuditEntityType, sheet.Id, "Submitted", before, sheet.Snapshot(), warnings.Count > 0 ? string.Join(" ", warnings) : null);
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.TimesheetSubmitted, IntegrationEventPayloads.Timesheet(sheet, me), audit.Actor, now);
 
         // The workflow (Setup › Approval workflows; by default the supervisor, or the administrators without one) routes it.
         var route = await _approvals.StartAsync(db, await ApprovalSubjects.TimesheetAsync(db, sheet, cancellationToken), cancellationToken);

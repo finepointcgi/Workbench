@@ -5,6 +5,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Billing;
 using Workbench.Domain.Billing;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Billing;
 
@@ -131,6 +132,10 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
             invoice.AmountPaid += a.Amount;
             invoice.UpdatePaymentStatus();
             invoice.UpdatedAtUtc = payment.CreatedAtUtc;
+            if (invoice.Status == InvoiceStatus.Paid)
+            {
+                IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.InvoicePaid, IntegrationEventPayloads.Invoice(invoice), audit.Actor, payment.CreatedAtUtc);
+            }
             payment.Applications.Add(new PaymentApplication { PaymentId = payment.Id, InvoiceId = invoice.Id, Amount = a.Amount });
         }
 
@@ -245,6 +250,10 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
             invoice.TransactionPaid += a.Amount;
             invoice.UpdatePaymentStatus();
             invoice.UpdatedAtUtc = payment.CreatedAtUtc;
+            if (invoice.Status == InvoiceStatus.Paid)
+            {
+                IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.InvoicePaid, IntegrationEventPayloads.Invoice(invoice), audit.Actor, payment.CreatedAtUtc);
+            }
             payment.Applications.Add(new PaymentApplication { PaymentId = payment.Id, InvoiceId = invoice.Id, Amount = relieved, TransactionAmount = a.Amount });
         }
 

@@ -1,0 +1,113 @@
+@* One delivery: what was sent (payload), every attempt's request and response, and "Redeliver". *@
+@inject IWebhookService Webhooks
+
+<MudDialog>
+    <TitleContent><MudText Typo="Typo.h6" HtmlTag="h2">@(_detail is null ? "Delivery" : $"{IntegrationFormat.EventLabel(_detail.Delivery.EventType)} to {_detail.Delivery.TargetName}")</MudText></TitleContent>
+    <DialogContent>
+        @if (_detail is null)
+        {
+            <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            var status = IntegrationFormat.Delivery(_detail.Delivery.Status);
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2 flex-wrap">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="status.Color" Icon="@status.Icon">@status.Text</MudChip>
+                <MudText Typo="Typo.body2">Event id <code>@_detail.Delivery.EventId</code></MudText>
+                <MudText Typo="Typo.body2">Delivery id <code>@_detail.Delivery.Id</code></MudText>
+            </MudStack>
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3">Payload</MudText>
+            <pre style="@IntegrationFormat.CodeStyle" tabindex="0" aria-label="Payload">@Pretty(_detail.PayloadJson)</pre>
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-3">Attempts</MudText>
+            @if (_detail.Attempts.Count == 0)
+            {
+                <MudText Typo="Typo.body2">Not tried yet.</MudText>
+            }
+            @foreach (var a in _detail.Attempts)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-2">
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h4">
+                        Attempt @a.AttemptNumber, @IntegrationFormat.When(a.AttemptedAtUtc) UTC: @(a.Succeeded ? "delivered" : "failed")
+                        @(a.ResponseStatusCode is { } code ? $"(HTTP {code})" : "") in @a.DurationMs ms
+                    </MudText>
+                    @if (a.Error is not null)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Error">@a.Error</MudText>
+                    }
+                    <MudText Typo="Typo.body2" Class="mt-1">POST @a.RequestUrl</MudText>
+                    <pre style="@IntegrationFormat.CodeStyle" tabindex="0" aria-label="@($"Request headers, attempt {a.AttemptNumber}")">@a.RequestHeaders</pre>
+                    @if (a.ResponseHeaders is not null || a.ResponseBody is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1">Response</MudText>
+                        <pre style="@IntegrationFormat.CodeStyle" tabindex="0" aria-label="@($"Response, attempt {a.AttemptNumber}")">@a.ResponseHeaders@("\n\n")@a.ResponseBody</pre>
+                    }
+                </MudPaper>
+            }
+            @if (_message is not null)
+            {
+                <MudAlert Severity="_messageSeverity" Dense="true" role="alert">@_message</MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close(DialogResult.Ok(_changed))">Close</MudButton>
+        @if (_detail is { Delivery.Status: not DeliveryState.Pending })
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Replay" OnClick="RedeliverAsync" Disabled="_busy" data-testid="dialog-redeliver">Redeliver</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid DeliveryId { get; set; }
+
+    private DeliveryDetailDto? _detail;
+    private bool _busy;
+    private bool _changed;
+    private string? _message;
+    private Severity _messageSeverity = Severity.Info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _detail = await Webhooks.GetDeliveryAsync(DeliveryId);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            (_message, _messageSeverity) = (ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task RedeliverAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Webhooks.RedeliverAsync(DeliveryId);
+            _changed = true;
+            (_message, _messageSeverity) = ("Queued to send again as a new delivery. It goes out within a few seconds.", Severity.Success);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            (_message, _messageSeverity) = (ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Pretty(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonDocument.Parse(json).RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return json;
+        }
+    }
+}

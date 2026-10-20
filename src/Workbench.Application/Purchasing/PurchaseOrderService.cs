@@ -7,6 +7,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Purchasing;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Purchasing;
 
@@ -213,6 +214,7 @@ public sealed class PurchaseOrderService(
         po.IssuedBy = Me;
         po.IssuedAtUtc = UtcNow;
         audit.Record(db, ProcurementSupport.OrderEntity, po.Id, "Issued", after: new { po.Total, Vendor = vendor.Code });
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.PurchaseOrderApproved, IntegrationEventPayloads.PurchaseOrder(po), Me, UtcNow);
         await db.SaveChangesAsync(cancellationToken);
 
         var reqLineIds = po.Lines.Where(l => l.RequisitionLineId != null).Select(l => l.RequisitionLineId!.Value).ToList();

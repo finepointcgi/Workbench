@@ -61,6 +61,7 @@ public static class AuthenticationSetup
                 o.ForwardDefaultSelector = context =>
                     context.Request.Path.StartsWithSegments(ScimEndpoints.BasePath) ? ScimAuthenticationHandler.SchemeName
                     : Supplier.SupplierPortalAuthentication.IsPortalPath(context.Request.Path) ? Supplier.SupplierPortalAuthentication.Scheme
+                    : context.Request.Path.StartsWithSegments("/api") && ApiKeyAuthenticationHandler.HasApiKey(context.Request) ? ApiKeyAuthenticationHandler.SchemeName
                     : oidc.IsConfigured && HasBearerToken(context.Request) ? JwtBearerDefaults.AuthenticationScheme
                     : CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(o =>
@@ -114,6 +115,9 @@ public static class AuthenticationSetup
         {
             auth.AddScheme<AuthenticationSchemeOptions, ScimAuthenticationHandler>(ScimAuthenticationHandler.SchemeName, null);
         }
+
+        // Integration API keys (Admin › Integrations): service users with chosen roles and scopes, for /api only.
+        auth.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null);
 
         // The organization's own IdP (per tenant, from Admin › Users and security › Sign-in), whatever the server config.
         auth.AddOrganizationSso(services);

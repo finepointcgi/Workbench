@@ -42,6 +42,7 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
         builder.UseSetting("DataProtection:CertificatePath", Operations.TestCertificates.SharedPfx);
         builder.UseSetting("DataProtection:CertificatePassword", Operations.TestCertificates.Password);
         builder.UseSetting("Retention:NightlyJobEnabled", "false");
+        builder.UseSetting("Integrations:DispatcherEnabled", "false"); // Tests run the dispatcher themselves, with a fake transport.
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
         {
             builder.UseSetting(key, value);
@@ -58,10 +59,16 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
             {
                 services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, HeaderAuthHandler>("Test", null);
                 services.PostConfigure<PolicySchemeOptions>(AuthenticationSetup.SelectorScheme, o =>
-                    o.ForwardDefaultSelector = context => context.Request.Headers.ContainsKey(UserHeader) ? "Test" : "Cookies");
+                    o.ForwardDefaultSelector = context => context.Request.Headers.ContainsKey(UserHeader) ? "Test"
+                        : context.Request.Path.StartsWithSegments("/api") && HasApiKey(context.Request) ? "ApiKey"
+                        : "Cookies");
             });
         }
     }
+
+    /// <summary>Integration API keys (Bearer wbk_… or X-Api-Key) still reach the real ApiKey handler under test auth.</summary>
+    private static bool HasApiKey(Microsoft.AspNetCore.Http.HttpRequest request) =>
+        request.Headers.Authorization.ToString().StartsWith("Bearer wbk_", StringComparison.Ordinal) || request.Headers.ContainsKey("X-Api-Key");
 
     public HttpClient CreateClientAs(string? email)
     {
