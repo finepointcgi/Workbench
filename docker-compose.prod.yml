@@ -13,6 +13,7 @@ x-workbench: &workbench
   image: ${WORKBENCH_IMAGE:-workbench:local}
   build:
     context: .
+    target: runtime # the production stage; the Dockerfile's last stage is the demo
     args:
       VERSION: ${WORKBENCH_VERSION:-0.0.0}
   environment: &workbench-env

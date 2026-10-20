@@ -38,6 +38,8 @@ RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
 # Mount points for the writable volumes, owned by the runtime user (a new named volume copies this ownership).
 RUN mkdir -p /data/blobs /data/mail
 
+# The production image. Build it with --target runtime (CI, deploy.yml and docker-compose.prod.yml do): the last stage
+# below is the demo, which Render and Fly build by default.
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-noble-chiseled-extra AS runtime
 ARG VERSION=0.0.0
 ARG REVISION=unknown
