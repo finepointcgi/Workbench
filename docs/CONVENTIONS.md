@@ -741,3 +741,17 @@ Checks:
   `ApiKeyWebTests.Every_api_path_belongs_to_a_key_area_or_is_deliberately_closed` fails until you do.
 - A connector is an `IConnector` registered with `AddScoped<IConnector, T>()`; event connectors post through the delivery queue,
   schedule connectors return a file (kept in the blob store and optionally sent over SFTP).
+
+## Tax books, CPSR and CAS disclosure
+
+- An asset's own depreciation (on `FixedAsset`) is the book (GAAP) book and the only one that posts. Federal, state and AMT
+  books are `AssetTaxBook` rows computed on demand by `Application/Assets/TaxDepreciation.cs` (MACRS GDS/ADS, 150% DB,
+  straight line; half-year, mid-quarter and mid-month; Section 179 then bonus). Tax years follow the asset's company fiscal year.
+- Asset transfers that change a contractor-owned asset's organization or company post a reclass through `GeneralLedger`
+  (the company move sets each side's line company; the ledger adds due to/due from). Disposals keep each tax book's gain or loss.
+- CPSR files (`ProcurementFile`, one per PO or subcontract) are scored by `CpsrScoring` against `CpsrOptions`
+  (`Compliance:Cpsr`). RFQ competition evidence comes from an `IProcurementCompetitionSource` registered by the procurement
+  module; compliance registers a no-op with `TryAdd`.
+- CAS disclosure statements are versioned (`DisclosureStatement`, answers per item); only drafts change. Items linked to the
+  setup (`DisclosureItems`, `DisclosureLink`) compare their answer with the live configuration, and
+  `ICasDisclosureService.CheckConsistencyAsync` flags CAS 401/402 differences. Add a link there when a new setting is disclosed.

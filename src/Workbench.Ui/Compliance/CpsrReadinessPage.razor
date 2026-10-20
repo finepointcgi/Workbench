@@ -1,0 +1,190 @@
+@page "/admin/cpsr-readiness"
+@inject ICpsrService Cpsr
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Purchasing system review · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Purchasing system review readiness</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    A contractor purchasing system review (CPSR) samples purchase orders and subcontracts and checks each file for competition, a price or
+    cost analysis, flowdown clauses, an exclusions check, small business reporting and approvals at the right dollar level. This page scores
+    a sample the same way and lists what's missing. Open a document to add its evidence.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" data-testid="load-error">@(_forbidden ? ComplianceFormat.AccessNote : _error)</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudDatePicker @bind-Date="_from" Label="From" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+        <MudDatePicker @bind-Date="_to" Label="To" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+        <MudNumericField T="int" @bind-Value="_size" Label="Sample size" Min="1" Max="500" Style="max-width:130px" />
+        <MudNumericField T="int" @bind-Value="_seed" Label="Sample number" Min="0" Style="max-width:140px" HelperText="Change for another sample" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" data-testid="cpsr-run">Score sample</MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_data is null" data-testid="cpsr-export">Export review file</MudButton>
+    </MudStack>
+
+    @if (_data is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+    }
+    else
+    {
+        var d = _data;
+        <MudGrid Spacing="2" Class="mb-3">
+            <MudItem xs="12" sm="4">
+                <MudPaper Outlined="true" Class="pa-3" data-testid="cpsr-score">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Readiness score</MudText>
+                    <MudText Typo="Typo.h4">@d.Score%</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="ComplianceFormat.ScoreColor(d.Score)">@d.Rating</MudChip>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Sample</MudText>
+                    <MudText Typo="Typo.h4">@d.SampleSize of @d.Population</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Everything above @ComplianceFormat.Amount(d.Settings.SimplifiedAcquisitionThreshold) is included</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Missing evidence</MudText>
+                    <MudText Typo="Typo.h4">@d.Missing.Count</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">items to fix</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By element</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="cpsr-elements">
+                <thead><tr><th>Element</th><th style="text-align:right">Applies to</th><th style="text-align:right">Met</th><th style="width:40%">Percent met</th></tr></thead>
+                <tbody>
+                    @foreach (var e in d.Elements)
+                    {
+                        <tr>
+                            <td>@e.Label</td>
+                            <td style="text-align:right">@e.Applicable</td>
+                            <td style="text-align:right">@e.Met</td>
+                            <td><MudProgressLinear Value="(double)e.PercentMet" Color="ComplianceFormat.ScoreColor((int)e.PercentMet)" aria-label="@($"{e.Label}: {e.PercentMet:0.#}% met")">@($"{e.PercentMet:0.#}%")</MudProgressLinear></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Thresholds: micro-purchase @ComplianceFormat.Amount(d.Settings.MicroPurchaseThreshold), simplified acquisition @ComplianceFormat.Amount(d.Settings.SimplifiedAcquisitionThreshold),
+                certified cost or pricing data @ComplianceFormat.Amount(d.Settings.CostOrPricingDataThreshold), exclusions check above @ComplianceFormat.Amount(d.Settings.DebarmentCheckThreshold); at least @d.Settings.MinimumQuotes quotes.
+            </MudText>
+        </MudPaper>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Sample</MudText>
+                    @if (d.Sample.Count == 0)
+                    {
+                        <MudText Class="mud-text-secondary">No issued purchase orders or active subcontracts in this range.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Elevation="0" data-testid="cpsr-sample">
+                            <thead><tr><th>Document</th><th>Vendor</th><th style="text-align:right">Value</th><th style="text-align:right">Score</th></tr></thead>
+                            <tbody>
+                                @foreach (var s in d.Sample)
+                                {
+                                    <tr>
+                                        <td><MudLink OnClick="() => OpenAsync(s.Kind, s.DocumentId)">@s.Number</MudLink><MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@ComplianceFormat.Label(s.Kind) · @ComplianceFormat.Date(s.Date)@(s.GovernmentFunded ? " · government" : "")</MudText></td>
+                                        <td>@s.VendorName</td>
+                                        <td style="text-align:right">@ComplianceFormat.Amount(s.Value)</td>
+                                        <td style="text-align:right"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ComplianceFormat.ScoreColor(s.Score)">@s.Score%</MudChip></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Missing evidence</MudText>
+                    @if (d.Missing.Count == 0)
+                    {
+                        <MudText Class="mud-text-secondary">Nothing missing in this sample.</MudText>
+                    }
+                    else
+                    {
+                        <MudList T="string" Dense="true" data-testid="cpsr-missing">
+                            @foreach (var m in d.Missing)
+                            {
+                                <MudListItem T="string" OnClick="() => OpenAsync(m.Kind, m.DocumentId)">
+                                    <MudText Typo="Typo.body2"><strong>@m.Number</strong> · @m.Label</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@m.Detail</MudText>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+}
+
+@code {
+    private DateTime? _from = DateTime.Today.AddYears(-1).AddDays(1);
+    private DateTime? _to = DateTime.Today;
+    private int _size = 25;
+    private int _seed;
+    private CpsrReadinessDto? _data;
+    private string? _error;
+    private bool _forbidden;
+
+    private CpsrReviewRequest Request => new(_from is { } f ? DateOnly.FromDateTime(f) : null, _to is { } t ? DateOnly.FromDateTime(t) : null, _size, _seed);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _data = await Cpsr.GetReadinessAsync(Request);
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            if (ComplianceFormat.IsForbidden(ex) || _data is null)
+            {
+                (_error, _forbidden) = (ComplianceFormat.Error(ex), ComplianceFormat.IsForbidden(ex));
+            }
+            else
+            {
+                Snackbar.Add(ComplianceFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenAsync(ProcurementDocumentKind kind, Guid id)
+    {
+        var dialog = await DialogService.ShowAsync<ProcurementFileDialog>("Procurement file",
+            new DialogParameters<ProcurementFileDialog> { { x => x.Kind, kind }, { x => x.DocumentId, id } }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: true })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            await ComplianceFormat.DownloadAsync(JS, await Cpsr.ExportReviewAsync(Request));
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ComplianceFormat.Error(ex), Severity.Error);
+        }
+    }
+}

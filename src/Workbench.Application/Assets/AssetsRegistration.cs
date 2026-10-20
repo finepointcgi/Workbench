@@ -8,7 +8,7 @@ namespace Workbench.Application.Assets;
 public static class AssetsRegistration
 {
     /// <summary>
-    /// Fixed assets: the register, capitalization, depreciation runs, disposals and reports, plus the "depreciation posted"
+    /// Fixed assets: the register, capitalization, depreciation runs, transfers, disposals, tax books and reports, plus the "depreciation posted"
     /// period-close check. Binds <see cref="AssetOptions"/> from config <c>Assets</c>. Call after AddWorkbenchAccounting and
     /// before AddWorkbenchIdentity, which adds the permission decorators (<c>AddWorkbenchAssetPermissions</c>).
     /// </summary>
@@ -19,6 +19,8 @@ public static class AssetsRegistration
         services.AddScoped<IDepreciationService, DepreciationService>();
         services.AddScoped<IAssetReportService, AssetReportService>();
         services.Decorate<IAssetReportService, SecurityLoggingAssetReportService>(); // export.assets events; the permission decorator wraps it.
+        services.AddScoped<IAssetTaxBookService, AssetTaxBookService>();
+        services.Decorate<IAssetTaxBookService, SecurityLoggingAssetTaxBookService>(); // export.assets events for tax report exports.
         services.AddScoped<IPeriodCloseCheck, DepreciationCloseCheck>();
         return services;
     }

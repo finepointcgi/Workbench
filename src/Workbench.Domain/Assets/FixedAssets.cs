@@ -126,6 +126,9 @@ public sealed class FixedAsset : Entity, Companies.ICompanyOwned
     public string? DisposalReason { get; set; }
     public Guid? DisposalEntryId { get; set; }
 
+    /// <summary>Sale, scrap or trade-in (null before disposal, and for disposals recorded before the kind was kept).</summary>
+    public AssetDisposalKind? DisposalKind { get; set; }
+
     public required string CreatedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 
@@ -155,7 +158,10 @@ public sealed class AssetDepreciation : Entity
     public decimal Amount { get; set; }
 }
 
-/// <summary>A move of an asset between locations, custodians, organizations or projects (append-only history).</summary>
+/// <summary>
+/// A move of an asset between locations, custodians, organizations, projects, contracts (government property) or companies
+/// (append-only history). Organization and company moves of contractor-owned assets post a reclass entry.
+/// </summary>
 public sealed class AssetTransfer : Entity
 {
     public Guid AssetId { get; set; }
@@ -168,6 +174,14 @@ public sealed class AssetTransfer : Entity
     public Guid? ToOrgUnitId { get; set; }
     public Guid? FromProjectId { get; set; }
     public Guid? ToProjectId { get; set; }
+    public Guid? FromContractId { get; set; }
+    public Guid? ToContractId { get; set; }
+    public Guid? FromCompanyId { get; set; }
+    public Guid? ToCompanyId { get; set; }
+
+    /// <summary>The reclass entry that moved cost and accumulated depreciation (organization or company changes).</summary>
+    public Guid? JournalEntryId { get; set; }
+
     public string? Reason { get; set; }
     public required string TransferredBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }

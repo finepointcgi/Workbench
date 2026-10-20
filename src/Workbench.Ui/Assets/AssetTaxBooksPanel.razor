@@ -1,0 +1,164 @@
+@* The asset's books side by side: its own (GAAP) book and each tax book, by tax year. *@
+@inject IAssetTaxBookService TaxBooks
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="asset-books">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Depreciation books</MudText>
+        <MudSpacer />
+        @if (CanEdit && _books is { } list && list.Books.Count < 3)
+        {
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="taxbook-add">Add tax book</MudButton>
+        }
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        The book (GAAP) depreciation is what posts to the ledger. Tax books are for tax returns and the tax provision only.
+        Years are tax years@(_books is { TaxYearStartMonth: not 1 } b ? $", which follow the company's fiscal year (starting {new DateTime(2000, b.TaxYearStartMonth, 1):MMMM})" : "").
+    </MudText>
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true">@_error</MudAlert>
+    }
+    else if (_books is { } books)
+    {
+        @if (books.Books.Count == 0)
+        {
+            <MudText Class="mud-text-secondary mb-2">No tax books yet. Add a federal book to report MACRS, Section 179 and bonus depreciation.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" Class="mb-3" data-testid="taxbook-list">
+                <thead><tr><th>Book</th><th>Method</th><th>Convention</th><th style="text-align:right">Basis</th><th style="text-align:right">Section 179</th><th style="text-align:right">Bonus</th><th style="text-align:right">Depreciation to date</th><th style="text-align:right">Adjusted basis</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in books.Books)
+                    {
+                        <tr>
+                            <td>@AssetFormat.Label(t.Book)</td>
+                            <td>@AssetFormat.Label(t.Method), @t.RecoveryYears.ToString("0.#") years</td>
+                            <td>@AssetFormat.Label(t.Convention)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(t.Basis)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(t.Section179Amount)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(t.BonusAmount) (@AssetFormat.Percent(t.BonusPercent))</td>
+                            <td style="text-align:right">@AssetFormat.Amount(t.DepreciationToDate)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(t.AdjustedBasis)</td>
+                            <td style="white-space:nowrap">
+                                @if (CanEdit)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Change the {AssetFormat.Label(t.Book)} book")" OnClick="() => EditAsync(t)" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove the {AssetFormat.Label(t.Book)} book")" OnClick="() => DeleteAsync(t)" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+
+        @if (books.Schedules.Count > 0)
+        {
+            var years = books.Schedules.SelectMany(s => s.Rows).Select(r => r.TaxYear).Distinct().Order().ToList();
+            <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Elevation="0" data-testid="taxbook-compare">
+                    <thead>
+                        <tr>
+                            <th>Tax year</th>
+                            @foreach (var s in books.Schedules)
+                            {
+                                <th style="text-align:right">@AssetFormat.Label(s.Book)</th>
+                            }
+                            @if (books.Schedules.Count > 1)
+                            {
+                                <th style="text-align:right">Federal − book</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var y in years)
+                        {
+                            var book = books.Schedules[0].Rows.FirstOrDefault(r => r.TaxYear == y)?.Total ?? 0;
+                            var federal = books.Schedules.FirstOrDefault(s => s.Book == AssetBookKind.Federal)?.Rows.FirstOrDefault(r => r.TaxYear == y)?.Total;
+                            <tr>
+                                <td style="white-space:nowrap">@AssetFormat.TaxYear(y, books.TaxYearStartMonth)</td>
+                                @foreach (var s in books.Schedules)
+                                {
+                                    var row = s.Rows.FirstOrDefault(r => r.TaxYear == y);
+                                    <td style="text-align:right" title="@(row is { Section179: > 0 } or { Bonus: > 0 } ? $"Section 179 {AssetFormat.Amount(row.Section179)}, bonus {AssetFormat.Amount(row.Bonus)}, MACRS {AssetFormat.Amount(row.Depreciation)}" : null)">@(row is null ? "" : AssetFormat.Amount(row.Total))</td>
+                                }
+                                @if (books.Schedules.Count > 1)
+                                {
+                                    <td style="text-align:right">@(federal is { } f && books.Schedules[0].Book == AssetBookKind.Book ? AssetFormat.Amount(f - book) : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+        }
+    }
+    else
+    {
+        <MudProgressLinear aria-label="Loading books" Indeterminate="true" />
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public AssetDto Asset { get; set; } = default!;
+
+    private AssetBooksDto? _books;
+    private string? _error;
+
+    private bool CanEdit => Asset.Asset.Status == AssetState.InService && !Asset.Asset.IsGovernmentFurnished && !Asset.Asset.IsContractorAcquired;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _books = await TaxBooks.GetBooksAsync(Asset.Asset.Id);
+            _error = null;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+    }
+
+    private async Task EditAsync(AssetTaxBookDto? existing)
+    {
+        var dialog = await DialogService.ShowAsync<TaxBookDialog>(existing is null ? "Add tax book" : $"Change the {AssetFormat.Label(existing.Book)} book",
+            new DialogParameters<TaxBookDialog> { { d => d.Asset, Asset }, { d => d.Existing, existing }, { d => d.Taken, _books?.Books.Select(b => b.Book).ToList() ?? [] } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveAssetTaxBookRequest request })
+        {
+            try
+            {
+                await TaxBooks.SaveBookAsync(Asset.Asset.Id, request);
+                Snackbar.Add($"{AssetFormat.Label(request.Book)} book saved.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+            {
+                Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteAsync(AssetTaxBookDto book)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Remove tax book", $"Remove the {AssetFormat.Label(book.Book)} book from {Asset.Asset.TagNumber}?", yesText: "Remove", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await TaxBooks.DeleteBookAsync(Asset.Asset.Id, book.Book);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

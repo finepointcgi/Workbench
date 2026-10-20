@@ -1,0 +1,25 @@
+@* Put a draft disclosure statement in force from a date. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">The revision in force now is superseded the day before. Effective revisions can't change; later changes go in a new revision.</MudText>
+        <MudDatePicker @bind-Date="_from" Label="In force from" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+        <MudTextField T="string" @bind-Value="_summary" Label="What changed" Lines="3" Margin="Margin.Dense" Class="mt-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_from is null" OnClick="Save" data-testid="effective-save">Make effective</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string? ChangeSummary { get; set; }
+
+    private DateTime? _from = DateTime.Today;
+    private string? _summary;
+
+    protected override void OnInitialized() => _summary = ChangeSummary;
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new MakeDisclosureEffectiveRequest(DateOnly.FromDateTime(_from!.Value), _summary)));
+}

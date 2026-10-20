@@ -1,0 +1,86 @@
+@* Add or change one tax book of an asset: method, recovery period, convention, Section 179 and bonus. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Tax books are for tax reporting only; nothing is posted to the ledger. Leave the basis and date empty to use the asset's cost and in-service date.</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="AssetBookKind" @bind-Value="_book" Label="Book" Disabled="Existing is not null" Dense="true" data-testid="taxbook-kind">
+                    @foreach (var b in new[] { AssetBookKind.Federal, AssetBookKind.State, AssetBookKind.Amt }.Where(k => Existing is not null || !Taken.Contains(k)))
+                    {
+                        <MudSelectItem Value="b">@AssetFormat.Label(b)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="TaxMethod" @bind-Value="_method" Label="Method" Dense="true">
+                    @foreach (var m in Enum.GetValues<TaxMethod>())
+                    {
+                        <MudSelectItem Value="m">@AssetFormat.Label(m)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudNumericField T="decimal" @bind-Value="_years" Label="Recovery period (years)" Format="0.#" Step="0.5m" Min="1" Max="50" HelperText="GDS: 3, 5, 7, 10, 15, 20, 27.5 or 39" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect T="TaxConventionKind" @bind-Value="_convention" Label="Convention" Dense="true">
+                    @foreach (var c in Enum.GetValues<TaxConventionKind>())
+                    {
+                        <MudSelectItem Value="c">@AssetFormat.Label(c)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_section179" Label="Section 179 expense" Format="N2" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_bonus" Label="Bonus depreciation (%)" Format="0.##" Min="0" Max="100" Margin="Margin.Dense" HelperText="Of the basis left after Section 179" /></MudItem>
+            <MudItem xs="6"><MudNumericField T="decimal?" @bind-Value="_basis" Label="Tax basis (optional)" Format="N2" Min="0" Margin="Margin.Dense" HelperText="@($"Asset cost {AssetFormat.Amount(Asset.Asset.Cost)}")" /></MudItem>
+            <MudItem xs="6"><MudDatePicker @bind-Date="_placed" Label="Placed in service (optional)" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" /></MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_notes" Label="Notes" Lines="2" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" data-testid="taxbook-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public AssetDto Asset { get; set; } = default!;
+    [Parameter] public AssetTaxBookDto? Existing { get; set; }
+
+    /// <summary>Books the asset already has (a new book is one of the others).</summary>
+    [Parameter] public IReadOnlyCollection<AssetBookKind> Taken { get; set; } = [];
+
+    private AssetBookKind _book = AssetBookKind.Federal;
+    private TaxMethod _method = TaxMethod.MacrsGds;
+    private decimal _years = 5;
+    private TaxConventionKind _convention = TaxConventionKind.HalfYear;
+    private decimal _section179;
+    private decimal _bonus;
+    private decimal? _basis;
+    private DateTime? _placed;
+    private string? _notes;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is { } b)
+        {
+            (_book, _method, _years, _convention, _section179, _bonus, _notes) = (b.Book, b.Method, b.RecoveryYears, b.Convention, b.Section179Amount, b.BonusPercent, b.Notes);
+            _basis = b.BasisIsAssetCost ? null : b.Basis;
+            _placed = b.PlacedInServiceDate == Asset.InServiceDate ? null : b.PlacedInServiceDate.ToDateTime(TimeOnly.MinValue);
+        }
+        else
+        {
+            _book = new[] { AssetBookKind.Federal, AssetBookKind.State, AssetBookKind.Amt }.FirstOrDefault(k => !Taken.Contains(k), AssetBookKind.Federal);
+            _years = Asset.MacrsRecoveryYears ?? _years;
+            if (_book == AssetBookKind.Amt)
+            {
+                _method = TaxMethod.Macrs150Db;
+            }
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveAssetTaxBookRequest(_book, _method, _years, _convention, _section179, _bonus, _basis,
+        _placed is { } p ? DateOnly.FromDateTime(p) : null, _notes)));
+}

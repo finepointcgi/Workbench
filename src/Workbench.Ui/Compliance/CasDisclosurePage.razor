@@ -1,0 +1,270 @@
+@page "/admin/cas-disclosure"
+@inject ICasDisclosureService Cas
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>CAS disclosure statement · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">CAS disclosure statement</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    The DS-1 describes your cost accounting practices, part by part. Items marked with a link show what Workbench is actually set up to do,
+    so you can see where the statement and the books differ. Each revision is kept with its effective dates. The consistency check compares
+    the disclosed practices and proposal pricing with the accounting setup (CAS 401 and 402).
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" data-testid="load-error">@(_forbidden ? ComplianceFormat.AccessNote : _error)</MudAlert>
+}
+else if (_versions is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        @if (_versions.Count > 0)
+        {
+            <MudSelect T="Guid" Value="_selectedId" ValueChanged="SelectAsync" Label="Revision" Dense="true" Style="min-width:320px;max-width:420px" data-testid="ds1-revision">
+                @foreach (var v in _versions)
+                {
+                    <MudSelectItem Value="v.Id">@($"Revision {v.Version} · {ComplianceFormat.Label(v.Status)}{(v.EffectiveFrom is { } f ? $" from {f:yyyy-MM-dd}" : "")} · {v.Answered}/{v.Total} answered")</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="NewRevisionAsync" Disabled="@(_busy || _versions.Any(v => v.Status == DisclosureState.Draft))" data-testid="ds1-new">New revision</MudButton>
+        @if (_statement is { Version.Status: DisclosureState.Draft })
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoFixHigh" OnClick="FillAsync" Disabled="_busy" data-testid="ds1-fill">Fill from setup</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Verified" OnClick="MakeEffectiveAsync" Disabled="_busy">Make effective</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteAsync" Disabled="_busy">Delete draft</MudButton>
+        }
+        <MudSpacer />
+        @if (_statement is not null)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="ds1-export">Export document</MudButton>
+        }
+    </MudStack>
+
+    <MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-4">
+        <MudTabPanel Text="Statement">
+            @if (_statement is not { } s)
+            {
+                <MudText Class="mud-text-secondary">No disclosure statement yet. Start the first revision; linked items can be filled from your setup.</MudText>
+            }
+            else
+            {
+                var editable = s.Version.Status == DisclosureState.Draft;
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">@s.Version.Title</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="ComplianceFormat.Color(s.Version.Status)">@ComplianceFormat.Label(s.Version.Status)</MudChip>
+                    @if (s.Version.EffectiveFrom is { } from)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">In force from @ComplianceFormat.Date(from)@(s.Version.EffectiveTo is { } to ? $" to {ComplianceFormat.Date(to)}" : "")</MudText>
+                    }
+                    <MudSpacer />
+                    @if (editable)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || _edits.Count == 0)" data-testid="ds1-save">Save @(_edits.Count == 0 ? "" : $"{_edits.Count} change{(_edits.Count == 1 ? "" : "s")}")</MudButton>
+                    }
+                </MudStack>
+                @if (s.Version.ChangeSummary is { } change)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-2"><strong>Changes:</strong> @change</MudText>
+                }
+                <MudExpansionPanels MultiExpansion="true" Outlined="true">
+                    @foreach (var part in s.Parts)
+                    {
+                        <MudExpansionPanel Text="@($"Part {part.Roman}: {part.Title} ({part.Answered} of {part.Items.Count} answered)")" Expanded="@(part.Number == 4)">
+                            @foreach (var item in part.Items)
+                            {
+                                var edit = Value(item);
+                                <div class="mb-4" data-testid="@($"ds1-item-{item.Key}")">
+                                    <MudText Typo="Typo.body2"><strong>@item.Key</strong> @item.Question</MudText>
+                                    @if (item.LinkedTo is { } link)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="d-block mb-1">
+                                            <MudIcon Icon="@(item.MatchesConfiguration switch { true => Icons.Material.Filled.CheckCircle, false => Icons.Material.Filled.Error, _ => Icons.Material.Filled.Link })"
+                                                     Color="@(item.MatchesConfiguration switch { true => Color.Success, false => Color.Error, _ => Color.Default })" Size="Size.Small" Style="vertical-align:middle" />
+                                            <span class="ml-1">@link: <strong>@(item.ConfiguredText ?? "not set up")</strong>@(item.MatchesConfiguration == false ? ". The answer differs from the setup." : "")</span>
+                                        </MudText>
+                                    }
+                                    <MudGrid Spacing="2">
+                                        @if (item.Choices.Count > 0)
+                                        {
+                                            <MudItem xs="12" sm="5">
+                                                <MudSelect T="string" Value="edit.Choice" ValueChanged="v => SetChoice(item, v)" Label="Answer" Dense="true" Clearable="true" ReadOnly="!editable">
+                                                    @foreach (var c in item.Choices) { <MudSelectItem Value="c.Code">@c.Label</MudSelectItem> }
+                                                </MudSelect>
+                                            </MudItem>
+                                        }
+                                        else if (item.LinkedTo is not null)
+                                        {
+                                            <MudItem xs="12" sm="5">
+                                                <MudTextField T="string" Value="edit.Choice" ValueChanged="v => SetChoice(item, v)" Label="Amount" Margin="Margin.Dense" ReadOnly="!editable" />
+                                            </MudItem>
+                                        }
+                                        <MudItem xs="12" sm="@(item.Choices.Count > 0 || item.LinkedTo is not null ? 7 : 12)">
+                                            <MudTextField T="string" Value="edit.Text" ValueChanged="v => SetText(item, v)" Label="@(item.Choices.Count > 0 || item.LinkedTo is not null ? "Description (optional)" : "Description")" Lines="2" Sizing="InputSizing.Auto" Margin="Margin.Dense" ReadOnly="!editable" />
+                                        </MudItem>
+                                    </MudGrid>
+                                </div>
+                            }
+                        </MudExpansionPanel>
+                    }
+                </MudExpansionPanels>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Consistency check (CAS 401/402)">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudText Class="mud-text-secondary">Compares @(_statement is { } st ? $"revision {st.Version.Version}" : "the disclosure statement") and open proposals with how the books are set up.</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CheckAsync" Disabled="_busy" data-testid="cas-check">Run check</MudButton>
+            </MudStack>
+            @if (_check is { } check)
+            {
+                <MudStack Row="true" Spacing="2" Class="mb-3">
+                    <MudChip T="string" Variant="Variant.Outlined" Color="Color.Error">@check.Problems problems</MudChip>
+                    <MudChip T="string" Variant="Variant.Outlined" Color="Color.Warning">@check.Warnings warnings</MudChip>
+                </MudStack>
+                @foreach (var f in check.Findings)
+                {
+                    <MudAlert Severity="ComplianceFormat.Severity(f.Severity)" Dense="true" Class="mb-2" data-testid="cas-finding">
+                        <strong>@f.Standard · @f.Area.</strong> @f.Finding
+                        @if (f.Estimating.Length > 0 || f.Accounting.Length > 0)
+                        {
+                            <div class="mt-1" style="font-size:.85rem">Estimating or disclosed: @f.Estimating. Accounting: @f.Accounting.@if (f.Link is { } l) { <MudLink Href="@l" Class="ml-1">Open</MudLink> }</div>
+                        }
+                    </MudAlert>
+                }
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<DisclosureVersionDto>? _versions;
+    private Guid _selectedId;
+    private DisclosureStatementDto? _statement;
+    private CasConsistencyDto? _check;
+    private readonly Dictionary<string, (string? Choice, string? Text)> _edits = new(StringComparer.Ordinal);
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync(null);
+
+    private async Task LoadAsync(Guid? select)
+    {
+        try
+        {
+            _versions = await Cas.ListVersionsAsync(DisclosureFormType.Ds1);
+            var pick = select is { } id && _versions.Any(v => v.Id == id) ? id
+                : _versions.FirstOrDefault(v => v.Status == DisclosureState.Draft)?.Id ?? _versions.FirstOrDefault(v => v.Status == DisclosureState.Effective)?.Id ?? _versions.FirstOrDefault()?.Id;
+            _statement = pick is { } p ? await Cas.GetAsync(p) : null;
+            _selectedId = pick ?? Guid.Empty;
+            _edits.Clear();
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (ComplianceFormat.Error(ex), ComplianceFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SelectAsync(Guid id)
+    {
+        if (_edits.Count > 0 && await DialogService.ShowMessageBoxAsync("Unsaved changes", "Discard your unsaved answers?", yesText: "Discard", cancelText: "Keep editing") != true)
+        {
+            return;
+        }
+
+        await LoadAsync(id);
+    }
+
+    private (string? Choice, string? Text) Value(DisclosureItemDto item) => _edits.TryGetValue(item.Key, out var e) ? e : (item.Choice, item.Text);
+
+    private void SetChoice(DisclosureItemDto item, string? choice) => _edits[item.Key] = (choice, Value(item).Text);
+
+    private void SetText(DisclosureItemDto item, string? text) => _edits[item.Key] = (Value(item).Choice, text);
+
+    private async Task SaveAsync()
+    {
+        var answers = _edits.Select(e => new SaveDisclosureAnswerRequest(e.Key, e.Value.Choice, e.Value.Text)).ToList();
+        await RunAsync(async () => _statement = await Cas.SaveAnswersAsync(_statement!.Version.Id, answers), "Answers saved.");
+    }
+
+    private Task FillAsync() => RunAsync(async () => _statement = await Cas.FillFromConfigurationAsync(_statement!.Version.Id), "Linked items filled from your setup.");
+
+    private async Task NewRevisionAsync()
+    {
+        DisclosureStatementDto? created = null;
+        await RunAsync(async () => created = await Cas.CreateVersionAsync(new CreateDisclosureVersionRequest()), "New revision started.");
+        if (created is not null)
+        {
+            await LoadAsync(created.Version.Id);
+        }
+    }
+
+    private async Task MakeEffectiveAsync()
+    {
+        var dialog = await DialogService.ShowAsync<EffectiveDialog>("Make effective", new DialogParameters<EffectiveDialog> { { d => d.ChangeSummary, _statement!.Version.ChangeSummary } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: MakeDisclosureEffectiveRequest request })
+        {
+            var id = _statement.Version.Id;
+            await RunAsync(async () => _statement = await Cas.MakeEffectiveAsync(id, request), "The revision is in force.");
+            await LoadAsync(id);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete draft", $"Delete revision {_statement!.Version.Version} and its answers?", yesText: "Delete", cancelText: "Cancel") == true)
+        {
+            await RunAsync(() => Cas.DeleteDraftAsync(_statement.Version.Id), "Draft deleted.");
+            await LoadAsync(null);
+        }
+    }
+
+    private Task CheckAsync() => RunAsync(async () => _check = await Cas.CheckConsistencyAsync(_statement?.Version.Id), null);
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            await ComplianceFormat.DownloadAsync(JS, await Cas.ExportAsync(_statement!.Version.Id));
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ComplianceFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string? message)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            _edits.Clear();
+            if (_statement is not null)
+            {
+                _versions = await Cas.ListVersionsAsync(DisclosureFormType.Ds1);
+            }
+
+            if (message is not null)
+            {
+                Snackbar.Add(message, Severity.Success);
+            }
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ComplianceFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

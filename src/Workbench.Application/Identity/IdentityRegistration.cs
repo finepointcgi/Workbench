@@ -103,6 +103,7 @@ public static class IdentityRegistration
         services.AddWorkbenchSourcingPermissions(); // RFQs, portal admin and EDI: Finance/Admin; the supplier portal: the signed-in vendor contact, own vendor's records only.
         services.AddWorkbenchBankFilePermissions(); // Bank payment files and vendor bank details: Finance or Admin; a vendor bank change is approved by someone other than its requester.
         services.AddWorkbenchSalesTaxPermissions(); // Sales and use tax: Finance or Admin.
+        services.AddWorkbenchCompliancePermissions(); // CPSR files and readiness, CAS disclosure statements and the 401/402 check: Finance or Admin.
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         services.AddWorkbenchIntegrationPermissions(); // Integrations: webhooks, API keys and connectors are Admin-only and closed to API keys themselves.

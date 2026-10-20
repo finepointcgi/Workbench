@@ -1,15 +1,34 @@
-@* Dispose of an asset: the gain or loss is proceeds less net book value. *@
+@* Dispose of an asset by sale, scrap or trade-in: the book gain or loss is proceeds less net book value; each tax book gets its own. *@
+@inject IChartOfAccountsService Accounts
+
 <MudDialog>
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-2">Net book value @AssetFormat.Amount(Asset.Asset.NetBookValue). Depreciation must be posted through the month before the disposal date.</MudText>
         <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudRadioGroup T="AssetDisposalType" @bind-Value="_kind" data-testid="dispose-kind">
+                    <MudRadio Value="AssetDisposalType.Sale" Color="Color.Primary">Sold</MudRadio>
+                    <MudRadio Value="AssetDisposalType.Scrap" Color="Color.Primary">Scrapped</MudRadio>
+                    <MudRadio Value="AssetDisposalType.TradeIn" Color="Color.Primary">Traded in</MudRadio>
+                </MudRadioGroup>
+            </MudItem>
             <MudItem xs="6"><MudDatePicker @bind-Date="_on" Label="Disposal date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
-            <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_proceeds" Label="Proceeds" Format="N2" Min="0" Margin="Margin.Dense" /></MudItem>
-            <MudItem xs="12"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Required="true" Margin="Margin.Dense" /></MudItem>
-            @if (!(Asset.Asset.IsGovernmentFurnished || Asset.Asset.IsContractorAcquired))
+            <MudItem xs="6">
+                <MudNumericField T="decimal" @bind-Value="_proceeds" Label="@(_kind switch { AssetDisposalType.TradeIn => "Trade-in allowance", AssetDisposalType.Scrap => "Scrap value", _ => "Sale proceeds" })" Format="N2" Min="0" Margin="Margin.Dense" />
+            </MudItem>
+            @if (_kind == AssetDisposalType.TradeIn && !Government)
             {
                 <MudItem xs="12">
-                    <MudText Typo="Typo.body2">@(_proceeds - Asset.Asset.NetBookValue >= 0 ? "Gain" : "Loss") on disposal: <b>@AssetFormat.Amount(Math.Abs(_proceeds - Asset.Asset.NetBookValue))</b></MudText>
+                    <MudSelect T="Guid?" @bind-Value="_accountId" Label="Account the allowance goes to" Dense="true" Clearable="true" HelperText="Usually the replacement's asset account, or accounts payable when the vendor's bill is reduced. Empty: this asset's asset account.">
+                        @foreach (var a in _accounts) { <MudSelectItem T="Guid?" Value="a.Id">@a.Number · @a.Name</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Required="true" Margin="Margin.Dense" /></MudItem>
+            @if (!Government)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2">Book @(_proceeds - Asset.Asset.NetBookValue >= 0 ? "gain" : "loss") on disposal: <b>@AssetFormat.Amount(Math.Abs(_proceeds - Asset.Asset.NetBookValue))</b>. Tax books work out their own gain or loss.</MudText>
                 </MudItem>
             }
         </MudGrid>
@@ -28,6 +47,23 @@
     private DateTime? _on = DateTime.Today;
     private decimal _proceeds;
     private string? _reason;
+    private AssetDisposalType _kind = AssetDisposalType.Sale;
+    private Guid? _accountId;
+    private IReadOnlyList<AccountDto> _accounts = [];
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(new DisposeAssetRequest(DateOnly.FromDateTime(_on!.Value), _proceeds, _reason!)));
+    private bool Government => Asset.Asset.IsGovernmentFurnished || Asset.Asset.IsContractorAcquired;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = (await Accounts.ListAccountsAsync(includeInactive: false)).Where(a => !a.HasChildren && a.Type is AccountKind.Asset or AccountKind.Liability).OrderBy(a => a.Number).ToList();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _accounts = [];
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new DisposeAssetRequest(DateOnly.FromDateTime(_on!.Value), _proceeds, _reason!, _kind, _kind == AssetDisposalType.TradeIn ? _accountId : null)));
 }
