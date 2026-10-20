@@ -176,12 +176,14 @@ public sealed class ContractDetailTests : IAsyncLifetime
         var category = await db.Set<LaborCategory>().Select(c => c.Id).FirstAsync();
         var now = DateTime.UtcNow;
         var day = _today.AddDays(-1);
-        foreach (var (status, hours, start) in new[] { (TimesheetStatus.Approved, 10m, day), (TimesheetStatus.Submitted, 2m, day.AddDays(-1)) })
+        var week = day.AddDays(-(int)day.DayOfWeek);
+        // Whole weeks, so the hours stay under the 40-hour standard whatever day the suite runs (an exempt employee's hours
+        // past the period's standard are uncompensated and cost nothing). One timesheet per employee and period start.
+        foreach (var (status, hours, start, workDate) in new[] { (TimesheetStatus.Approved, 10m, week, day), (TimesheetStatus.Submitted, 2m, week.AddDays(-7), day.AddDays(-7)) })
         {
-            // Different period starts: one timesheet per employee and period start (a unique index).
-            var sheet = new Timesheet { EmployeeId = _fx.AnalystId, PeriodStart = start, PeriodEnd = day, Status = status, CreatedAtUtc = now, UpdatedAtUtc = now };
+            var sheet = new Timesheet { EmployeeId = _fx.AnalystId, PeriodStart = start, PeriodEnd = start.AddDays(6), Status = status, CreatedAtUtc = now, UpdatedAtUtc = now };
             db.Set<Timesheet>().Add(sheet);
-            db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = _wbs, LaborCategoryId = category, WorkDate = day, Hours = hours, EnteredAtUtc = now, UpdatedAtUtc = now });
+            db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = _wbs, LaborCategoryId = category, WorkDate = workDate, Hours = hours, EnteredAtUtc = now, UpdatedAtUtc = now });
         }
 
         db.Set<OdcEntry>().AddRange(
