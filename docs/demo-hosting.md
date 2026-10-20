@@ -102,10 +102,19 @@ Demo mode is deliberately hard to switch on anywhere else (`DemoMode`, `Producti
   or deleted.
 - Invitations stay required: only the listed demo users can sign in; another email is refused.
 
+## Free alternative: Render
+
+`render.yaml` runs the same `demo` image on Render's free plan (512 MB, a fraction of a CPU), deployed from GitHub
+on every push to master. In the Render dashboard: **New → Blueprint**, pick this repository, apply. The link is
+`https://workbench-demo.onrender.com` (or the name Render assigns).
+
+Trade-offs: the service sleeps after 15 minutes without visitors and the next visitor waits about a minute while it
+starts; the free plan has no persistent disk, so every start (wake-up, deploy) seeds fresh demo data and testers'
+changes don't survive a quiet spell. The nightly reset still applies.
+
 ## Other hosts
 
 The `demo` image runs anywhere that keeps a container running with a persistent volume at `/data` and restarts it when
-it exits (the nightly reset relies on that): Render (a web service with a disk mounted at `/data`, about US$7.25 a
-month), Azure Container Apps (minimum replicas 1, but its Azure Files volumes don't suit SQLite's locking) or any
+it exits (the nightly reset relies on that): Render with a disk mounted at `/data` (about US$7.25 a month; see above for the free plan), Azure Container Apps (minimum replicas 1, but its Azure Files volumes don't suit SQLite's locking) or any
 Docker host (`docker run -d --restart always -p 80:8080 -v workbench-demo:/data workbench:demo` behind a TLS proxy).
 The workflow only targets Fly.io.

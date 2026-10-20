@@ -1,0 +1,23 @@
+# The public Workbench demo on Render's free plan (docs/demo-hosting.md). Render reads this Blueprint from the
+# repository root and redeploys on every push to master.
+services:
+  - type: web
+    name: workbench-demo
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: master
+    autoDeploy: true
+    # The Dockerfile's last stage is the "demo" target.
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    envVars:
+      # Only Render's proxy reaches the service, so trust the forwarding headers it sets (client IP and https).
+      - key: ForwardedHeaders__KnownNetworks__0
+        value: 0.0.0.0/0
+      - key: ForwardedHeaders__KnownNetworks__1
+        value: ::/0
+      # Keep the .NET heap small: the free plan has 512 MB of memory.
+      - key: DOTNET_GCConserveMemory
+        value: "7"
