@@ -128,6 +128,9 @@ fails the build if a sensitive-looking field is added.
 | `employee.terminated` | A termination date is set or changed (setup or HR offboarding). | same as above |
 | `opportunity.stage_changed` | An opportunity moves stage (gate decisions, won, lost, no bid, reopen). | `opportunityId`, `number`, `name`, `fromStage`, `toStage`, `estimatedValue`, `estimatedAwardDate` |
 | `period.closed` | A fiscal period is closed (period close or the fiscal calendar). | `fiscalPeriodId`, `fiscalYear`, `number`, `name`, `start`, `end`, `status` |
+| `shipment.shipped` | A sales order shipment is confirmed and its stock issued. | `shipmentId`, `number`, `shipmentNumber`, `companyId`, `salesOrderId`, `salesOrderNumber`, `customerId`, `contractId`, `shipDate`, `carrier`, `trackingNumber`, `isFinal`, `value` |
+| `rfq.awarded` | Lines of an RFQ are awarded into purchase orders. | `rfqId`, `number`, `title`, `awardId`, `vendorsInvited`, `quotesReceived`, `soleSource`, `awardedTotal`, `purchaseOrderNumbers` |
+| `ncr.dispositioned` | A nonconformance's approved disposition is carried out and the NCR closed. | `ncrId`, `number`, `partId`, `lot`, `serial`, `quantity`, `disposition`, `vendorId`, `workOrderId` |
 | `ping` | **Send a test** in the admin page. | `message`, `endpointId` |
 
 Example `invoice.paid`:

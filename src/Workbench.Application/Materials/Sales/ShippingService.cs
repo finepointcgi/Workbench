@@ -565,6 +565,9 @@ public sealed class ShippingService(
         {
             shipment.Number, ShipmentNumber = number, Date = date, Cost = shipment.Lines.Sum(l => l.CostAmount), Value = shipment.Lines.Sum(l => l.Amount),
         });
+        Integrations.IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.ShipmentShipped, new Domain.Integrations.ShipmentEventData(shipment.Id, shipment.Number,
+            number, shipment.CompanyId, order.Id, order.Number, order.CustomerId, order.ContractId, date, shipment.Carrier, shipment.TrackingNumber, shipment.IsFinal,
+            shipment.Lines.Sum(l => l.Amount)), audit.Actor, UtcNow);
         await db.SaveChangesAsync(cancellationToken);
         return await ShipmentAsync(db, shipment.Id, cancellationToken);
     }

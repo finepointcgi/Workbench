@@ -341,6 +341,8 @@ public sealed class NonconformanceService(
         ncr.UpdatedAtUtc = UtcNow;
         audit.Record(db, QualityRules.NcrEntity, ncr.Id, "Dispositioned", new { Status = nameof(NonconformanceStatus.PendingApproval) },
             new { Disposition = disposition.ToString(), Movements = moved.Select(t => t.Number).ToList(), Journal = entry?.Number }, comment);
+        Integrations.IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.NcrDispositioned, new Domain.Integrations.NcrEventData(ncr.Id, ncr.Number,
+            ncr.PartId, ncr.Lot, ncr.Serial, ncr.Quantity, disposition.ToString(), ncr.VendorId, ncr.WorkOrderId), actor, UtcNow);
     }
 
     private static InventoryBalance Nonconforming(StockEngine engine, Part part, NonconformanceItem item)
