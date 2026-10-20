@@ -139,6 +139,8 @@ public static class NavCatalog
         new(Finance, "Payables & purchasing", "Purchase orders", "purchasing/orders", Icons.Material.Filled.ShoppingBasket, FinanceOnly, Detail: "Purchase order", Keywords: "po"),
         new(Finance, "Payables & purchasing", "Receiving", "purchasing/receiving", Icons.Material.Filled.Inventory, FinanceOnly),
         new(Finance, "Payables & purchasing", "Match exceptions", "purchasing/match-exceptions", Icons.Material.Filled.CompareArrows, FinanceOnly, Keywords: "three way match"),
+        new(Finance, "Payables & purchasing", "Requests for quote", "purchasing/rfqs", Icons.Material.Filled.RequestQuote, FinanceOnly, Detail: "RFQ", Keywords: "rfq quotes sourcing competition bids award"),
+        new(Finance, "Payables & purchasing", "Supplier portal", "purchasing/supplier-portal", Icons.Material.Filled.Storefront, FinanceOnly, Keywords: "vendor portal contacts acknowledgements ship notices asn", InMenu: false), // Linked from Requests for quote.
 
         new(Finance, "Cash", "Cash and bank accounts", "cash", Icons.Material.Filled.AccountBalanceWallet, FinanceOnly, MatchAll: true),
         new(Finance, "Cash", "Import statements", "cash/import", Icons.Material.Filled.UploadFile, FinanceOnly, Keywords: "bank statement", InMenu: false),
@@ -194,6 +196,7 @@ public static class NavCatalog
         new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, FinanceOnly, Keywords: "employees cost rates supervisors"),
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
         new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, AdminOnly, Keywords: "ai claude assistant usage audit bedrock govcloud"),
+        new(Admin, "Integrations", "EDI", "admin/integrations/edi", Icons.Material.Filled.SwapHoriz, FinanceOnly, Keywords: "x12 850 855 856 810 edi trading partners vendors"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, FinanceOnly, Keywords: "history security"),
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, FinanceOnly, MatchAll: true),

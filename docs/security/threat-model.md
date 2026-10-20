@@ -137,6 +137,31 @@ Status: **M** = mitigated in the product, **P** = partly mitigated, **O** = the 
 | Repudiation | Host admin denies suspending a tenant | Host audit log in the catalog (append-only) | M |
 | — | SCIM and the Costpoint worker | Still single-tenant: SCIM is disabled in MultiTenant mode; run the worker per tenant database if needed | O |
 
+### Supplier portal (`/supplier`)
+
+Vendor contacts are outsiders: a separate sign-in kind, never an `AppUser`. Design notes: `docs/security/supplier-portal.md`.
+
+| Threat | Example | Mitigation | Status |
+| --- | --- | --- | --- |
+| Spoofing | Guessing or replaying a sign-in link | 256-bit single-use tokens, 15 minutes, only the SHA-256 stored; the link opens a page whose button posts the token (mail scanners can't use it up); at most 5 links per 15 minutes | M |
+| Spoofing | Password guessing | PBKDF2 (ASP.NET Core Identity hasher), 12+ characters, 5 wrong tries lock for 15 minutes, sign-in endpoints rate limited per IP, unknown emails answered like known ones | M |
+| Elevation | A vendor contact reaches internal pages or the API | Own cookie scheme and cookie (`.Workbench.Supplier`, path `/supplier`); the selector sends only `/supplier` requests to it; its claims carry no email, name or roles and `ClaimsUser` ignores that identity; tested end to end | M |
+| Info disclosure | Vendor A reads vendor B's RFQs, orders, bills or payments | The portal service never takes a vendor id; a vendor-scoped decorator resolves the contact on every call and answers "not found" for anything not theirs; queries filter by vendor again; tested per method | M |
+| Elevation | An internal user also acting as a vendor | A vendor contact's email can't be an internal user's | M |
+| Repudiation | A vendor denies a quote, acknowledgement or invoice | Every portal call (allowed, refused or failed) is a `SupplierPortalEvent` with IP; changes are audit rows attributed to the contact | M |
+| Tampering | Forged form posts | Antiforgery token on every form; SameSite=Lax cookie; CSP `form-action 'self'` | M |
+| Tampering | Malicious invoice upload | PDF only (extension and `%PDF-` header), size-capped by the file store, saved as the draft bill's copy, never rendered inline | M / O (AV scanning) |
+| Spoofing | A deactivated contact keeps a session | Each request re-checks the contact and vendor; deactivation and password changes bump a session version | M |
+| Spoofing | Replaying a portal cookie at another tenant | The cookie carries the tenant id and is rejected elsewhere | M |
+
+### EDI (X12 files)
+
+| Threat | Example | Mitigation | Status |
+| --- | --- | --- | --- |
+| Spoofing | A file claims to be from a vendor | The partner is found by ISA05/ISA06; documents must name that vendor's own issued orders; ISA08 must be our id. File drop folders and SFTP credentials are the trust boundary | M / O |
+| Tampering | Replayed files | Each (partner, ISA13/ST02) is applied once; repeats are logged as duplicates | M |
+| Tampering | Path traversal through a partner folder | Folder names are plain names (letters, digits, dashes); paths are built under the per-tenant root | M |
+
 ## Open items for the company
 
 1. Enforce MFA and conditional access at the identity provider.

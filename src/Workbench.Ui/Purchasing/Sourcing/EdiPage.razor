@@ -1,0 +1,284 @@
+@page "/admin/integrations/edi"
+@inject IEdiService Edi
+@inject IRequisitionService Requisitions
+@inject IPurchaseOrderService Orders
+@inject ISnackbar Snackbar
+
+<PageTitle>EDI · Integrations · Workbench</PageTitle>
+
+<PurchasingHeader Title="EDI" BackHref="purchasing/orders" BackLabel="Purchase orders"
+                  Subtitle="X12 with vendors: we send 850 purchase orders and take in 855 acknowledgements, 856 ship notices and 810 invoices. Files move through a drop folder per partner (or SFTP when the server has a client). Inbound documents follow the same rules as the supplier portal." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" TabPanelsClass="pa-4">
+        <MudTabPanel Text="Log">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudSelect T="EdiOutcome?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Outcome" Clearable="true" Dense="true" Style="min-width:160px">
+                    @foreach (var o in Enum.GetValues<EdiOutcome>())
+                    {
+                        <MudSelectItem T="EdiOutcome?" Value="o">@SourcingFormat.Label(o)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" Value="_set" ValueChanged="v => SetAsync(() => _set = v)" Label="Document" Clearable="true" Dense="true" Style="min-width:200px">
+                    @foreach (var s in new[] { "850", "855", "856", "810" })
+                    {
+                        <MudSelectItem T="string" Value="s">@SourcingFormat.TransactionName(s)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Sync" Disabled="_busy" OnClick="PollAsync" data-testid="edi-poll">Check for files now</MudButton>
+            </MudStack>
+            <MudTable Items="_log" Dense="true" Elevation="0" aria-label="EDI log" data-testid="edi-log">
+                <HeaderContent><MudTh>When (UTC)</MudTh><MudTh>Direction</MudTh><MudTh>Document</MudTh><MudTh>Vendor</MudTh><MudTh>Record</MudTh><MudTh>Outcome</MudTh><MudTh>Problem</MudTh><MudTh>File</MudTh><MudTh>Actions</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+                    <MudTd>@(context.Direction == EdiFlow.Outbound ? "Sent" : "Received")</MudTd>
+                    <MudTd>@SourcingFormat.TransactionName(context.TransactionSet)</MudTd>
+                    <MudTd>@context.VendorName</MudTd>
+                    <MudTd>@context.DocumentNumber</MudTd>
+                    <MudTd><MudChip T="string" Size="Size.Small" Color="SourcingFormat.Color(context.Status)">@SourcingFormat.Label(context.Status)</MudChip></MudTd>
+                    <MudTd Style="max-width:360px">@context.Error</MudTd>
+                    <MudTd><span style="font-family:monospace;font-size:12px">@context.FileName</span>@(context.ControlNumber is { } c ? $" #{c}" : "")</MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ShowAsync(context)" aria-label="@($"Show the X12 for {context.FileName}")">Show X12</MudButton>
+                        @if (context.Status == EdiOutcome.Failed)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busy" OnClick="() => RetryAsync(context)" aria-label="@($"Try {context.FileName} again")">Try again</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="pa-2">Nothing sent or received yet.</MudText></NoRecordsContent>
+            </MudTable>
+            @if (_shown is { } shown)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mt-3" data-testid="edi-content">
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.subtitle1" HtmlTag="h2">@shown.Message.FileName</MudText>
+                        <MudSpacer />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="Close the X12 view" OnClick="() => _shown = null" />
+                    </MudStack>
+                    <pre style="white-space:pre-wrap; font-size:12px; margin:0">@shown.Content</pre>
+                </MudPaper>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="@($"Partners ({_partners.Count})")">
+            <MudTable Items="_partners" Dense="true" Elevation="0" aria-label="EDI partners" Class="mb-4">
+                <HeaderContent><MudTh>Vendor</MudTh><MudTh>Interchange id</MudTh><MudTh>Transport</MudTh><MudTh>Sends 850s</MudTh><MudTh>Active</MudTh><MudTh>Edit</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.VendorCode · @context.VendorName</MudTd>
+                    <MudTd>@context.InterchangeQualifier/@context.InterchangeId</MudTd>
+                    <MudTd>@(context.Transport == EdiTransportType.FileDrop ? $"File drop: {context.Address}" : $"SFTP: {context.Address}")</MudTd>
+                    <MudTd>@(context.SendPurchaseOrders ? "When issued" : "By hand")</MudTd>
+                    <MudTd>@(context.IsActive ? "Yes" : "No")</MudTd>
+                    <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(context)" aria-label="@($"Edit EDI partner {context.VendorName}")">Edit</MudButton></MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="pa-2">No EDI partners yet.</MudText></NoRecordsContent>
+            </MudTable>
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_editing is null ? "Add a partner" : "Change the partner")</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4">
+                    <MudSelect T="Guid?" @bind-Value="_pVendor" Label="Vendor" Dense="true">
+                        @foreach (var v in _vendors)
+                        {
+                            <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="4" md="1"><MudTextField T="string" @bind-Value="_pQualifier" Label="Qualifier" MaxLength="2" /></MudItem>
+                <MudItem xs="8" md="3"><MudTextField T="string" @bind-Value="_pId" Label="Their interchange id" MaxLength="15" HelperText="ISA06 on their files" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="_pApp" Label="Their application code (optional)" MaxLength="15" HelperText="GS03 on our files; defaults to the id" /></MudItem>
+                <MudItem xs="12" md="3">
+                    <MudSelect T="EdiTransportType" @bind-Value="_pTransport" Label="Transport" Dense="true">
+                        <MudSelectItem T="EdiTransportType" Value="EdiTransportType.FileDrop">File drop folder</MudSelectItem>
+                        <MudSelectItem T="EdiTransportType" Value="EdiTransportType.Sftp">SFTP</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="_pAddress" Label="@(_pTransport == EdiTransportType.FileDrop ? "Folder name" : "SFTP host")" /></MudItem>
+                <MudItem xs="6" md="2"><MudCheckBox T="bool" @bind-Value="_pSend" Label="Send 850s when issued" /></MudItem>
+                <MudItem xs="6" md="2"><MudCheckBox T="bool" @bind-Value="_pActive" Label="Active" /></MudItem>
+                <MudItem xs="12">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_pVendor is null || _busy)" OnClick="SavePartnerAsync">Save partner</MudButton>
+                    @if (_editing is not null)
+                    {
+                        <MudButton Variant="Variant.Text" OnClick="() => Edit(null)">Add a new one instead</MudButton>
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Send and receive">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Send a purchase order (850)</MudText>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-4">
+                <MudSelect T="Guid?" @bind-Value="_sendPo" Label="Issued purchase order" Dense="true" Style="min-width:300px">
+                    @foreach (var o in _openOrders.Where(o => _partners.Any(p => p.VendorId == o.VendorId && p.IsActive)))
+                    {
+                        <MudSelectItem T="Guid?" Value="o.Id">@o.Number · @o.VendorName</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" Disabled="@(_sendPo is null || _busy)" OnClick="SendAsync">Send 850</MudButton>
+            </MudStack>
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Apply an X12 file by hand</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">For a file a vendor emailed: 855, 856 or 810, from a partner set up above. It's applied and logged like a file from the drop folder.</MudText>
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".x12,.edi,.txt">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="@context.OpenFilePickerAsync">Choose file</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate />
+                </MudFileUpload>
+                <MudText Typo="Typo.body2">@_fileName</MudText>
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_content" Label="Or paste the X12 here" Lines="8" Variant="Variant.Outlined" Immediate="true" Style="font-family:monospace;font-size:12px" data-testid="edi-paste" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="@(string.IsNullOrWhiteSpace(_content) || _busy)" OnClick="ImportAsync" data-testid="edi-import">Apply file</MudButton>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<EdiMessageDto> _log = [];
+    private IReadOnlyList<EdiPartnerDto> _partners = [];
+    private IReadOnlyList<RequisitionVendorOption> _vendors = [];
+    private IReadOnlyList<PurchaseOrderSummaryDto> _openOrders = [];
+    private EdiMessageDetailDto? _shown;
+    private EdiOutcome? _status;
+    private string? _set;
+    private EdiPartnerDto? _editing;
+    private Guid? _pVendor;
+    private string? _pQualifier = "ZZ";
+    private string? _pId;
+    private string? _pApp;
+    private EdiTransportType _pTransport = EdiTransportType.FileDrop;
+    private string? _pAddress;
+    private bool _pSend = true;
+    private bool _pActive = true;
+    private Guid? _sendPo;
+    private string? _fileName;
+    private string? _content;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _vendors = (await Requisitions.GetOptionsAsync()).Vendors;
+            _partners = await Edi.ListPartnersAsync();
+            _openOrders = await Orders.ListAsync(new PurchaseOrderQuery(OpenOnly: true));
+            await LoadLogAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadLogAsync() => _log = await Edi.ListLogAsync(new EdiLogQuery(null, _status, _set));
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadLogAsync();
+    }
+
+    private async Task RunAsync(Func<Task<string>> action)
+    {
+        _busy = true;
+        try
+        {
+            Snackbar.Add(await action(), Severity.Info);
+            _partners = await Edi.ListPartnersAsync();
+            await LoadLogAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task PollAsync() => RunAsync(async () =>
+    {
+        var r = await Edi.PollAsync();
+        return r.Files == 0 ? "No new files." : $"{r.Files} file(s): {r.Processed} applied, {r.Failed} failed, {r.Duplicates} already done.";
+    });
+
+    private async Task ShowAsync(EdiMessageDto message)
+    {
+        try
+        {
+            _shown = await Edi.GetMessageAsync(message.Id);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private Task RetryAsync(EdiMessageDto message) => RunAsync(async () => Summary(await Edi.RetryAsync(message.Id)));
+
+    private Task SendAsync() => RunAsync(async () =>
+    {
+        var m = await Edi.SendPurchaseOrderAsync(_sendPo!.Value);
+        return m.Status == EdiOutcome.Processed ? $"{m.DocumentNumber} sent as {m.FileName}." : $"Couldn't send: {m.Error}";
+    });
+
+    private Task ImportAsync() => RunAsync(async () =>
+    {
+        var result = Summary(await Edi.ImportAsync(_fileName ?? "pasted.x12", _content ?? ""));
+        (_content, _fileName) = (null, null);
+        return result;
+    });
+
+    private static string Summary(IReadOnlyList<EdiMessageDto> rows) =>
+        string.Join(" ", rows.Select(r => r.Status == EdiOutcome.Processed ? $"{SourcingFormat.TransactionName(r.TransactionSet)} applied ({r.DocumentNumber})."
+            : r.Status == EdiOutcome.Duplicate ? $"{SourcingFormat.TransactionName(r.TransactionSet)} was already applied." : $"{SourcingFormat.TransactionName(r.TransactionSet)} failed: {r.Error}"));
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(5 * 1024 * 1024));
+            _content = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+        }
+        catch (IOException)
+        {
+            Snackbar.Add("That file is too large (5 MB at most).", Severity.Error);
+        }
+    }
+
+    private void Edit(EdiPartnerDto? p)
+    {
+        _editing = p;
+        if (p is null)
+        {
+            (_pVendor, _pQualifier, _pId, _pApp, _pTransport, _pAddress, _pSend, _pActive) = ((Guid?)null, "ZZ", (string?)null, (string?)null, EdiTransportType.FileDrop, (string?)null, true, true);
+        }
+        else
+        {
+            (_pVendor, _pQualifier, _pId, _pApp, _pTransport, _pAddress, _pSend, _pActive) = (p.VendorId, p.InterchangeQualifier, p.InterchangeId, p.ApplicationCode, p.Transport, p.Address, p.SendPurchaseOrders, p.IsActive);
+        }
+    }
+
+    private Task SavePartnerAsync() => RunAsync(async () =>
+    {
+        var saved = await Edi.SavePartnerAsync(_editing?.Id, new SaveEdiPartnerRequest(_pVendor!.Value, _pId ?? "", _pAddress ?? "", _pQualifier ?? "ZZ", _pApp, _pTransport, _pSend, _pActive));
+        Edit(null);
+        return $"{saved.VendorName} saved.";
+    });
+}

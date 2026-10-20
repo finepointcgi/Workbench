@@ -91,6 +91,7 @@ public static class DependencyInjection
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
 
+        services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();

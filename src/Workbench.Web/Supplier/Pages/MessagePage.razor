@@ -1,0 +1,10 @@
+<PortalLayout View="View" Title="@Title">
+    <p>@Text</p>
+    <p><a href="@(View.Session is null ? "/supplier/signin" : "/supplier")">@(View.Session is null ? "Go to sign-in" : "Back to the portal home")</a></p>
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+}

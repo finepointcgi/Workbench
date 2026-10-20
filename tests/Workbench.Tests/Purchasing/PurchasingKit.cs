@@ -48,9 +48,9 @@ internal sealed class PurchasingKit : IAsyncDisposable
         return this;
     }
 
-    public static async Task<PurchasingKit> CreateAsync()
+    public static async Task<PurchasingKit> CreateAsync(Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? configure = null)
     {
-        var seeded = await SeededHost.CreateAsync();
+        var seeded = await SeededHost.CreateAsync(configure);
         var fx = await ProjectAccountingFixture.SeedAsync(seeded);
         var kit = new PurchasingKit(seeded, fx);
         kit.As(Finance);
