@@ -18,7 +18,10 @@ public static class ApprovalDocumentTypes
 
     public const string BudgetSubmission = "budget-submission";
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, BudgetSubmission];
+    public const string NcrDisposition = "ncr-disposition";
+    public const string EngineeringChange = "engineering-change";
+
+    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, BudgetSubmission, NcrDisposition, EngineeringChange];
 
     public static string Label(string documentType) => documentType switch
     {
@@ -34,6 +37,8 @@ public static class ApprovalDocumentTypes
         Compensation => "Compensation change",
         OpportunityGate => "Opportunity gate (go/no-go)",
         BudgetSubmission => "Org unit budget",
+        NcrDisposition => "NCR disposition (material review)",
+        EngineeringChange => "Engineering change",
         _ => documentType,
     };
 
