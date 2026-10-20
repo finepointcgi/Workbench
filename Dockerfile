@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # Workbench web host: multi-stage build, non-root, read-only-root friendly, health-checked.
 #
 #   docker build -t workbench:local .
@@ -10,8 +9,9 @@
 
 ARG DOTNET_VERSION=10.0
 
-# The build stage runs natively (published output is portable), so cross-building linux/amd64 on Apple silicon is fast.
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+# Plain Dockerfile syntax only (no --platform=$BUILDPLATFORM, no RUN --mount): Google Cloud Build's default builder
+# isn't BuildKit and rejects both. The restore layer is still cached until a project file changes.
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 ARG BUILD_CONFIGURATION=Release
 ARG VERSION=0.0.0
 WORKDIR /src
@@ -27,14 +27,14 @@ COPY src/Workbench.Costpoint/Workbench.Costpoint.csproj src/Workbench.Costpoint/
 COPY src/Workbench.Api/Workbench.Api.csproj src/Workbench.Api/
 COPY src/Workbench.Ui/Workbench.Ui.csproj src/Workbench.Ui/
 COPY src/Workbench.Web/Workbench.Web.csproj src/Workbench.Web/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
-    dotnet restore src/Workbench.Web/Workbench.Web.csproj
+RUN dotnet restore src/Workbench.Web/Workbench.Web.csproj
 COPY src/ src/
 # The sample GSA per diem table is an embedded resource of Workbench.Application.
 COPY samples/perdiem/ samples/perdiem/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
-    dotnet publish src/Workbench.Web/Workbench.Web.csproj --no-restore -c "$BUILD_CONFIGURATION" -o /app \
+RUN dotnet publish src/Workbench.Web/Workbench.Web.csproj --no-restore -c "$BUILD_CONFIGURATION" -o /app \
       -p:UseAppHost=false -p:Version="$VERSION" -p:DebugType=none
+# Root-owned and read-only for the app user in the final images (set here: the chiseled runtime image has no shell).
+RUN chmod -R 0755 /app
 # Mount points for the writable volumes, owned by the runtime user (a new named volume copies this ownership).
 RUN mkdir -p /data/blobs /data/mail
 
@@ -48,7 +48,7 @@ LABEL org.opencontainers.image.title="Workbench" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 WORKDIR /app
-COPY --from=build --chown=0:0 --chmod=0755 /app ./
+COPY --from=build --chown=0:0 /app ./
 COPY --from=build --chown=1654:1654 /data /data
 # Writable state lives on mounted volumes: blobs (attachments, receipts) and, in development only, the mail pickup
 # folder. Everything else (keys, data) is in PostgreSQL. Mount /tmp as tmpfs when the root filesystem is read-only.
@@ -78,9 +78,10 @@ LABEL org.opencontainers.image.title="Workbench demo" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 WORKDIR /app
-COPY --from=build --chown=0:0 --chmod=0755 /app ./
-COPY --chown=0:0 --chmod=0644 samples/costpoint/ /app/samples/costpoint/
-COPY --chown=0:0 --chmod=0755 deploy/demo/entrypoint.sh /usr/local/bin/workbench-demo
+COPY --from=build --chown=0:0 /app ./
+COPY --chown=0:0 samples/costpoint/ /app/samples/costpoint/
+COPY --chown=0:0 deploy/demo/entrypoint.sh /usr/local/bin/workbench-demo
+RUN chmod -R u=rwX,go=rX /app/samples/costpoint && chmod 0755 /usr/local/bin/workbench-demo
 # Demo mode takes both: the Demo environment (appsettings.Demo.json) and Demo:Enabled.
 ENV ASPNETCORE_ENVIRONMENT=Demo \
     Demo__Enabled=true \
