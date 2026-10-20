@@ -135,6 +135,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime # the production stage; the Dockerfile's last stage is the demo
           load: true
           tags: workbench:ci
           build-args: |
