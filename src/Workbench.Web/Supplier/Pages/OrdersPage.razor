@@ -1,0 +1,32 @@
+<PortalLayout View="View" Title="Purchase orders">
+    @if (Orders.Count == 0)
+    {
+        <p>No purchase orders yet.</p>
+    }
+    else
+    {
+        <div class="scroll">
+            <table aria-label="Purchase orders">
+                <thead><tr><th scope="col">Order</th><th scope="col">Date</th><th scope="col">Change</th><th scope="col" class="num">Total</th><th scope="col">Status</th><th scope="col">Your acknowledgement</th></tr></thead>
+                <tbody>
+                    @foreach (var o in Orders)
+                    {
+                        <tr>
+                            <th scope="row"><a href="/supplier/orders/@o.Id">@o.Number</a></th>
+                            <td>@PortalFormat.Date(o.OrderDate)</td>
+                            <td>@(o.Revision == 0 ? "Original" : $"Change {o.Revision}")</td>
+                            <td class="num">@PortalFormat.Money(o.Total)</td>
+                            <td>@o.Status</td>
+                            <td>@(o.Acknowledgement is { } a ? PortalFormat.Label(a) : o.NeedsAcknowledgement ? "Needed" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<SupplierOrderSummaryDto> Orders { get; set; } = [];
+}

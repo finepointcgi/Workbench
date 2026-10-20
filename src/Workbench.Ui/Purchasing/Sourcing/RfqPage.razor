@@ -1,0 +1,274 @@
+@page "/purchasing/rfqs/{Id:guid}"
+@inject IRfqService Rfqs
+@inject IRequisitionService Requisitions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_rfq?.Rfq.Number ?? "RFQ") · Purchasing · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Request for quote" BackHref="purchasing/rfqs" BackLabel="Requests for quote" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_rfq is { } rfq)
+{
+    var status = rfq.Rfq.Status;
+    <PurchasingHeader Title="@($"{rfq.Rfq.Number}: {rfq.Rfq.Title}")" BackHref="purchasing/rfqs" BackLabel="Requests for quote">
+        <MudChip T="string" Color="SourcingFormat.Color(status)" data-testid="rfq-status">@SourcingFormat.Label(status)</MudChip>
+        @if (status == RfqState.Draft)
+        {
+            <MudButton Variant="Variant.Outlined" Href="@($"purchasing/rfqs/{rfq.Rfq.Id}/edit")" StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="IssueAsync" Disabled="_busy" StartIcon="@Icons.Material.Filled.Send" data-testid="issue-rfq">Send to vendors</MudButton>
+        }
+        @if (status is RfqState.Open or RfqState.PartiallyAwarded)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="RecordQuoteAsync" StartIcon="@Icons.Material.Filled.PostAdd" data-testid="record-quote">Record a quote</MudButton>
+        }
+        @if (status != RfqState.Draft && rfq.Quotes.Count > 0)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"purchasing/rfqs/{rfq.Rfq.Id}/compare")" StartIcon="@Icons.Material.Filled.CompareArrows" data-testid="compare">Compare and award</MudButton>
+        }
+        @if (status is RfqState.Draft or RfqState.Open)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelAsync">Cancel RFQ</MudButton>
+        }
+    </PurchasingHeader>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudGrid Spacing="2">
+            <MudItem xs="6" md="2"><MudText Typo="Typo.caption" Class="mud-text-secondary">Quotes due</MudText><MudText>@PurchasingFormat.Date(rfq.Rfq.DueDate)</MudText></MudItem>
+            <MudItem xs="6" md="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">Terms asked for</MudText><MudText>@(rfq.Terms ?? "None given")</MudText></MudItem>
+            <MudItem xs="12" md="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">Ship to</MudText><MudText>@(rfq.ShipTo ?? "None given")</MudText></MudItem>
+            <MudItem xs="12" md="4"><MudText Typo="Typo.caption" Class="mud-text-secondary">Created</MudText><MudText>@rfq.CreatedBy@(rfq.IssuedAtUtc is { } at ? $"; sent {at:yyyy-MM-dd} by {rfq.IssuedBy}" : "")</MudText></MudItem>
+            @if (rfq.Instructions is { } instructions)
+            {
+                <MudItem xs="12"><MudText Typo="Typo.caption" Class="mud-text-secondary">Instructions to vendors</MudText><MudText Style="white-space:pre-wrap">@instructions</MudText></MudItem>
+            }
+            @if (rfq.CancelReason is { } reason)
+            {
+                <MudItem xs="12"><MudAlert Severity="Severity.Warning" Dense="true">Cancelled: @reason</MudAlert></MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Lines</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" aria-label="RFQ lines">
+            <thead><tr><th scope="col">#</th><th scope="col">Description</th><th scope="col" style="text-align:right">Qty</th><th scope="col">Needed by</th><th scope="col" style="text-align:right">Estimate</th><th scope="col">Charge to</th><th scope="col">From</th><th scope="col">Awarded to</th><th scope="col">Purchase order</th></tr></thead>
+            <tbody>
+                @foreach (var l in rfq.Lines)
+                {
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Description@(l.PartNumber is { } p ? $" (part {p})" : "")</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.Quantity) @l.UnitOfMeasure</td>
+                        <td>@PurchasingFormat.Date(l.NeededBy)</td>
+                        <td style="text-align:right">@(l.EstimatedUnitCost is { } e ? ProcurementFormat.Price(e) : "")</td>
+                        <td>@ProcurementFormat.Charge(l.ProjectCode, l.WbsCode, l.AccountNumber, l.OrgUnitCode)</td>
+                        <td>@l.RequisitionNumber</td>
+                        <td>@(l.AwardedVendorName is { } v ? $"{v} at {ProcurementFormat.Price(l.AwardedUnitPrice ?? 0)}" : "")</td>
+                        <td>@if (l.PurchaseOrderId is { } po) { <MudLink Href="@($"purchasing/orders/{po}")">@l.PurchaseOrderNumber</MudLink> }</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Vendors asked</MudText>
+            <MudSpacer />
+            @if (status is RfqState.Draft or RfqState.Open or RfqState.PartiallyAwarded && _vendors.Count > 0)
+            {
+                <MudSelect T="Guid?" @bind-Value="_inviteVendor" Label="Ask another vendor" Dense="true" Clearable="true" Style="min-width:240px">
+                    @foreach (var v in _vendors.Where(v => rfq.Vendors.All(x => x.VendorId != v.VendorId)))
+                    {
+                        <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" Disabled="@(_inviteVendor is null)" OnClick="InviteAsync">Invite</MudButton>
+            }
+        </MudStack>
+        <MudSimpleTable Dense="true" Elevation="0" aria-label="Vendors asked">
+            <thead><tr><th scope="col">Vendor</th><th scope="col">Response</th><th scope="col">How they're reached</th></tr></thead>
+            <tbody>
+                @foreach (var v in rfq.Vendors)
+                {
+                    <tr>
+                        <td>@v.VendorCode · @v.VendorName</td>
+                        <td>@SourcingFormat.Label(v.Status)@(v.DeclineReason is { } why ? $": {why}" : "")</td>
+                        <td>@(v.PortalContacts > 0 ? $"Supplier portal ({v.PortalContacts} contact{(v.PortalContacts == 1 ? "" : "s")})" : "No portal contact: record their quote here")@(v.HasEdi ? "; EDI" : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="quotes">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Quotes</MudText>
+        @if (rfq.Quotes.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No quotes yet. Vendors with portal contacts quote there; record emailed or phoned quotes with "Record a quote".</MudText>
+        }
+        @foreach (var q in rfq.Quotes)
+        {
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2">
+                @q.VendorName: @PurchasingFormat.Amount(q.Total)
+                <MudChip T="string" Size="Size.Small">@(q.Source == QuoteSource.Portal ? "From the portal" : "Entered by a buyer")</MudChip>
+                @if (q.IsExpired)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">Expired</MudChip>
+                }
+            </MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Lead time @q.LeadTimeDays days · good through @(q.ValidUntil is { } u ? PurchasingFormat.Date(u) : "(not stated)")@(q.Reference is { } r ? $" · their quote {r}" : "")@(q.Terms is { } t ? $" · {t}" : "") · sent by @q.SubmittedBy on @q.SubmittedAtUtc.ToString("yyyy-MM-dd")
+            </MudText>
+            <MudSimpleTable Dense="true" Elevation="0" aria-label="@($"Quote from {q.VendorName}")">
+                <thead><tr><th scope="col">#</th><th scope="col" style="text-align:right">Unit price</th><th scope="col">Price breaks</th><th scope="col" style="text-align:right">Price at RFQ qty</th><th scope="col" style="text-align:right">Extended</th><th scope="col" style="text-align:right">Lead (days)</th><th scope="col">Note</th></tr></thead>
+                <tbody>
+                    @foreach (var l in q.Lines)
+                    {
+                        <tr>
+                            <td>@l.LineNumber</td>
+                            @if (l.NoBid)
+                            {
+                                <td colspan="5">No bid</td>
+                            }
+                            else
+                            {
+                                <td style="text-align:right">@ProcurementFormat.Price(l.UnitPrice)</td>
+                                <td>@string.Join("; ", l.PriceBreaks.Select(b => $"{ProcurementFormat.Quantity(b.MinimumQuantity)}+ at {ProcurementFormat.Price(b.UnitPrice)}"))</td>
+                                <td style="text-align:right">@ProcurementFormat.Price(l.EffectiveUnitPrice)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(l.ExtendedPrice)</td>
+                                <td style="text-align:right">@l.LeadTimeDays</td>
+                            }
+                            <td>@l.Note</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (q.Notes is { } notes)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@notes</MudText>
+            }
+        }
+    </MudPaper>
+
+    @if (rfq.Awards.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="awards">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Competition record</MudText>
+            @foreach (var a in rfq.Awards)
+            {
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">Awarded @a.AwardedAtUtc.ToString("yyyy-MM-dd") by @a.AwardedBy: @PurchasingFormat.Amount(a.AwardedTotal) on @string.Join(", ", a.PurchaseOrderNumbers)</MudText>
+                <MudText Typo="Typo.body2">
+                    @a.VendorsInvited vendor@(a.VendorsInvited == 1 ? "" : "s") asked; @a.QuotesReceived responsive quote@(a.QuotesReceived == 1 ? "" : "s") on the thinnest line.
+                    @if (a.SoleSource)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Sole source</MudChip>
+                    }
+                </MudText>
+                <dl class="mt-2">
+                    <dt><MudText Typo="Typo.caption" Class="mud-text-secondary">Price reasonableness</MudText></dt><dd><MudText Typo="Typo.body2">@a.PriceReasonableness</MudText></dd>
+                    @if (a.SoleSourceJustification is { } j)
+                    {
+                        <dt><MudText Typo="Typo.caption" Class="mud-text-secondary">Sole-source justification</MudText></dt><dd><MudText Typo="Typo.body2">@j</MudText></dd>
+                    }
+                    @if (a.Rationale is { } why)
+                    {
+                        <dt><MudText Typo="Typo.caption" Class="mud-text-secondary">Award rationale</MudText></dt><dd><MudText Typo="Typo.body2">@why</MudText></dd>
+                    }
+                </dl>
+                <MudSimpleTable Dense="true" Elevation="0" aria-label="Awarded lines">
+                    <thead><tr><th scope="col">#</th><th scope="col">Description</th><th scope="col">Vendor</th><th scope="col" style="text-align:right">Unit price</th><th scope="col" style="text-align:right">Amount</th><th scope="col">Lowest price?</th><th scope="col" style="text-align:right">Quotes on line</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in a.Lines)
+                        {
+                            <tr>
+                                <td>@l.LineNumber</td><td>@l.Description</td><td>@l.VendorName</td>
+                                <td style="text-align:right">@ProcurementFormat.Price(l.UnitPrice)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(l.Amount)</td>
+                                <td>@(l.WasLowestPrice ? "Yes" : "No")</td>
+                                <td style="text-align:right">@l.QuotesOnLine</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+    }
+}
+else
+{
+    <MudProgressLinear Indeterminate="true" aria-label="Loading" />
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private RfqDto? _rfq;
+    private IReadOnlyList<RequisitionVendorOption> _vendors = [];
+    private Guid? _inviteVendor;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _rfq = await Rfqs.GetAsync(Id);
+            _vendors = (await Requisitions.GetOptionsAsync()).Vendors;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<RfqDto>> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            _rfq = await action();
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task IssueAsync() => RunAsync(() => Rfqs.IssueAsync(Id), "Sent. Vendors with portal contacts got an email.");
+
+    private async Task InviteAsync()
+    {
+        await RunAsync(() => Rfqs.InviteVendorAsync(Id, _inviteVendor!.Value), "Vendor invited.");
+        _inviteVendor = null;
+    }
+
+    private async Task RecordQuoteAsync()
+    {
+        var dialog = await DialogService.ShowAsync<QuoteDialog>("Record a quote", new DialogParameters<QuoteDialog> { { d => d.Rfq, _rfq! } },
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SaveQuoteRequest request })
+        {
+            await RunAsync(() => Rfqs.RecordQuoteAsync(Id, request), "Quote saved.");
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ReasonDialog>("Cancel this RFQ", new DialogParameters<ReasonDialog> { { d => d.Label, "Why it's cancelled" } });
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(() => Rfqs.CancelAsync(Id, new RfqReasonRequest(reason)), "RFQ cancelled.");
+        }
+    }
+}

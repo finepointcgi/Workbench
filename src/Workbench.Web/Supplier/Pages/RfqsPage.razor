@@ -1,0 +1,31 @@
+<PortalLayout View="View" Title="Requests for quote">
+    @if (Rfqs.Count == 0)
+    {
+        <p>You haven't been asked to quote on anything yet.</p>
+    }
+    else
+    {
+        <div class="scroll">
+            <table aria-label="Requests for quote">
+                <thead><tr><th scope="col">RFQ</th><th scope="col">Title</th><th scope="col">Quotes due</th><th scope="col">Status</th><th scope="col">Your response</th></tr></thead>
+                <tbody>
+                    @foreach (var r in Rfqs)
+                    {
+                        <tr>
+                            <th scope="row"><a href="/supplier/rfqs/@r.Id">@r.Number</a></th>
+                            <td>@r.Title</td>
+                            <td>@PortalFormat.Date(r.DueDate)</td>
+                            <td>@r.Status</td>
+                            <td>@(r.Outcome ?? (r.Declined ? "Declined" : r.Quoted ? "Quote sent" : r.CanQuote ? "Waiting for your quote" : "No quote"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<SupplierRfqSummaryDto> Rfqs { get; set; } = [];
+}

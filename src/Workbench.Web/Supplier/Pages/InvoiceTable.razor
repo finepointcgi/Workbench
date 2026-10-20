@@ -1,0 +1,26 @@
+<div class="scroll">
+    <table aria-label="@Label">
+        <thead><tr><th scope="col">Invoice</th><th scope="col">Date</th><th scope="col">Order</th><th scope="col" class="num">Amount</th><th scope="col" class="num">Paid</th><th scope="col" class="num">Balance</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">Last payment</th></tr></thead>
+        <tbody>
+            @foreach (var i in Invoices)
+            {
+                <tr>
+                    <th scope="row">@i.InvoiceNumber</th>
+                    <td>@PortalFormat.Date(i.InvoiceDate)</td>
+                    <td>@i.PurchaseOrderNumber</td>
+                    <td class="num">@PortalFormat.Money(i.Amount)</td>
+                    <td class="num">@PortalFormat.Money(i.Paid)</td>
+                    <td class="num">@PortalFormat.Money(i.Balance)</td>
+                    <td>@PortalFormat.Date(i.DueDate)</td>
+                    <td>@i.Status@(i.Note is { } n ? $": {n}" : "")</td>
+                    <td>@(i.LastPaidOn is { } d ? $"{PortalFormat.Date(d)}{(i.PaymentReference is { } r ? $", ref {r}" : "")}" : "")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SupplierInvoiceDto> Invoices { get; set; } = [];
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+}

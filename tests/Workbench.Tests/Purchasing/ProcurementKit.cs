@@ -14,9 +14,9 @@ namespace Workbench.Tests.Purchasing;
 /// </summary>
 internal static class ProcurementKit
 {
-    public static async Task<PurchasingKit> CreateAsync()
+    public static async Task<PurchasingKit> CreateAsync(Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? configure = null)
     {
-        var kit = await PurchasingKit.CreateAsync();
+        var kit = await PurchasingKit.CreateAsync(configure);
         await using var db = await kit.Factory.CreateAsync();
         var analyst = await db.Set<Employee>().FirstAsync(e => e.Id == kit.Fx.AnalystId);
         analyst.OrgUnitId = kit.OrgId;

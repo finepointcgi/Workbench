@@ -43,7 +43,7 @@ public static class RateLimiting
 
                 var path = http.Request.Path;
                 var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                if (path.StartsWithSegments("/account") || path.StartsWithSegments("/signin-oidc") || path.StartsWithSegments("/signout-callback-oidc") || path.StartsWithSegments("/signin-sso"))
+                if (path.StartsWithSegments("/account") || path.StartsWithSegments("/signin-oidc") || path.StartsWithSegments("/signout-callback-oidc") || path.StartsWithSegments("/signin-sso") || path.StartsWithSegments("/supplier/signin"))
                 {
                     return Window($"signin:{ip}", settings.SignInPerMinute);
                 }

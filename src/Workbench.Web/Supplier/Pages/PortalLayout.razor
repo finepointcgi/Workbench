@@ -1,0 +1,69 @@
+@* The supplier portal's page shell: plain server-rendered HTML (no Blazor circuit, no scripts), its own stylesheet,
+   landmarks, one h1 and announced messages. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>@Title · Supplier portal</title>
+    <link rel="stylesheet" href="/css/supplier-portal.css" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+</head>
+<body>
+    <a class="skip" href="#main">Skip to main content</a>
+    <header class="top">
+        <div class="brand">
+            <span class="product">Supplier portal</span>
+            @if (View.Session is { } s)
+            {
+                <span class="vendor">@s.VendorName</span>
+            }
+        </div>
+        @if (View.Session is { } me)
+        {
+            <nav aria-label="Supplier portal">
+                @foreach (var (key, label, href) in Links)
+                {
+                    <a href="@href" aria-current="@(View.Section == key ? "page" : null)">@label</a>
+                }
+            </nav>
+            <form method="post" action="/supplier/signout" class="signout">
+                <Antiforgery Token="View.Token" />
+                <span class="who">@me.ContactName</span>
+                <button type="submit" class="link">Sign out</button>
+            </form>
+        }
+    </header>
+    <main id="main" tabindex="-1">
+        <h1>@Title</h1>
+        @if (View.Notice is { } notice)
+        {
+            <p class="notice" role="status">@notice</p>
+        }
+        @if (View.Error is { } error)
+        {
+            <p class="error" role="alert">@error</p>
+        }
+        @ChildContent
+    </main>
+    <footer class="foot">
+        <p>Questions about an order or payment? Contact your buyer. Everything you do here is recorded.</p>
+    </footer>
+</body>
+</html>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private static readonly (string Key, string Label, string Href)[] Links =
+    [
+        ("home", "Home", "/supplier"),
+        ("rfqs", "Requests for quote", "/supplier/rfqs"),
+        ("orders", "Purchase orders", "/supplier/orders"),
+        ("invoices", "Invoices and payments", "/supplier/invoices"),
+        ("account", "Account", "/supplier/account"),
+    ];
+}

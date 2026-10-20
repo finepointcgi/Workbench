@@ -1,0 +1,75 @@
+@page "/purchasing/rfqs"
+@inject IRfqService Rfqs
+@inject NavigationManager Navigation
+
+<PageTitle>Requests for quote · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Requests for quote" BackHref="purchasing/orders" BackLabel="Purchase orders"
+                  Subtitle="Ask several vendors to quote on approved requisition lines (or anything you type in), compare their quotes on price, lead time and delivery record, and award each line into a purchase order. The award keeps the competition record for the purchasing file.">
+    <MudButton Variant="Variant.Outlined" Href="purchasing/supplier-portal" StartIcon="@Icons.Material.Filled.Storefront">Supplier portal</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="purchasing/rfqs/new" data-testid="new-rfq">New RFQ</MudButton>
+</PurchasingHeader>
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudSelect T="RfqState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
+            @foreach (var s in Enum.GetValues<RfqState>())
+            {
+                <MudSelectItem T="RfqState?" Value="s">@SourcingFormat.Label(s)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2">
+        <MudTable Items="_rfqs" Dense="true" Hover="true" Elevation="0" aria-label="Requests for quote" data-testid="rfq-table">
+            <HeaderContent>
+                <MudTh>RFQ</MudTh><MudTh>Title</MudTh><MudTh>Status</MudTh><MudTh>Quotes due</MudTh><MudTh Style="text-align:right">Lines</MudTh>
+                <MudTh Style="text-align:right">Quotes</MudTh><MudTh>Purchase orders</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd><MudLink Href="@($"purchasing/rfqs/{context.Id}")">@context.Number</MudLink></MudTd>
+                <MudTd>@context.Title</MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="SourcingFormat.Color(context.Status)">@SourcingFormat.Label(context.Status)</MudChip></MudTd>
+                <MudTd>@PurchasingFormat.Date(context.DueDate)</MudTd>
+                <MudTd Style="text-align:right">@context.LineCount</MudTd>
+                <MudTd Style="text-align:right">@context.QuotesReceived of @context.VendorsInvited</MudTd>
+                <MudTd>@string.Join(", ", context.PurchaseOrderNumbers)</MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-2">No requests for quote yet.</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<RfqSummaryDto> _rfqs = [];
+    private RfqState? _status;
+    private string? _search;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rfqs = await Rfqs.ListAsync(new RfqQuery(_status, _search));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+}
