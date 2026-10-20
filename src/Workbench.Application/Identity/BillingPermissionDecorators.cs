@@ -19,6 +19,7 @@ public static class BillingPermissionRegistration
         services.Decorate<IBillingMilestoneService, PermissionCheckingBillingMilestoneService>();
         services.Decorate<IPaymentService, PermissionCheckingPaymentService>();
         services.Decorate<IArReportService, PermissionCheckingArReportService>();
+        services.AddWorkbenchGovernmentBillingPermissions();
         return services;
     }
 }

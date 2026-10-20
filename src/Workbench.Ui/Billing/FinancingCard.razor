@@ -1,0 +1,66 @@
+@* Contract financing on the contract billing page: billed, liquidated by deliveries, and still outstanding. *@
+@inject IGovernmentBillingService Government
+
+@if (_position is { Financing: not FinancingKind.None } p)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="financing-card">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">@(p.Financing == FinancingKind.ProgressPayments ? "Progress payments" : "Performance-based payments")</MudText>
+            <MudSpacer />
+            @if (p.Financing == FinancingKind.ProgressPayments)
+            {
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@($"billing/contracts/{ContractId}/progress-payments")" data-testid="open-progress-payments">SF 1443 requests</MudButton>
+            }
+        </MudStack>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <tbody>
+                <tr><td>Financing billed (approved)</td><td style="text-align:right">@BillingFormat.Money(p.FinancingBilled)</td></tr>
+                <tr><td>Liquidated by deliveries</td><td style="text-align:right">@BillingFormat.Money(p.Liquidated)</td></tr>
+                <tr><td><strong>Still to liquidate</strong></td><td style="text-align:right" data-testid="unliquidated"><strong>@BillingFormat.Money(p.Unliquidated)</strong></td></tr>
+                <tr><td>Deliveries billed</td><td style="text-align:right">@BillingFormat.Money(p.DeliveriesBilled)</td></tr>
+                <tr><td>Liquidation rate</td><td style="text-align:right">@BillingFormat.Percent(p.LiquidationRate)</td></tr>
+                @if (p.DraftFinancing != 0 || p.DraftLiquidation != 0)
+                {
+                    <tr class="mud-text-secondary"><td>On drafts</td><td style="text-align:right">@BillingFormat.Money(p.DraftFinancing) billed, @BillingFormat.Money(p.DraftLiquidation) liquidated</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (p.Activity.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+                <thead><tr><th>Invoice</th><th>Date</th><th style="text-align:right">Financing</th><th style="text-align:right">Liquidated</th></tr></thead>
+                <tbody>
+                    @foreach (var a in p.Activity)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"billing/invoices/{a.InvoiceId}")">@a.InvoiceNumber</MudLink> <span class="mud-text-secondary">@BillingFormat.Label(a.Status)</span></td>
+                            <td>@BillingFormat.Date(a.InvoiceDate)</td>
+                            <td style="text-align:right">@BillingFormat.Blank(a.Financing)</td>
+                            <td style="text-align:right">@BillingFormat.Blank(a.Liquidated)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">Each FFP or T&amp;M invoice takes back the liquidation rate of its amount until nothing is left to liquidate.</MudText>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ContractId { get; set; }
+
+    private FinancingPositionDto? _position;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _position = await Government.GetFinancingAsync(ContractId);
+        }
+        catch (Exception)
+        {
+            _position = null; // The page shows access problems; financing is an extra.
+        }
+    }
+}

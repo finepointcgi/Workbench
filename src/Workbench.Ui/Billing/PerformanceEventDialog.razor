@@ -1,0 +1,49 @@
+@* Adds or changes a performance-based payment event. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_description" Label="Event" Required="true" Immediate="true" HelperText="What has to be accomplished" data-testid="event-description" />
+            <MudTextField @bind-Value="_criteria" Label="Completion criteria" Lines="2" HelperText="How the government will know it's done (optional)" />
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Format="N2" HideSpinButtons="true" Min="0" data-testid="event-amount" />
+            <MudDatePicker Label="Planned date" @bind-Date="_planned" DateFormat="yyyy-MM-dd" />
+            <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN (optional)" Clearable="true" HelperText="Leave blank for an event on the whole contract">
+                @foreach (var c in Clins)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
+                }
+            </MudSelect>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_description) || _amount <= 0 || _planned is null)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new SavePerformanceEventRequest(_description!.Trim(), _amount, DateOnly.FromDateTime(_planned!.Value), _criteria, _clinId)))"
+                   data-testid="event-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<BillingClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public PerformanceEventDto? Event { get; set; }
+
+    private string? _description;
+    private string? _criteria;
+    private decimal _amount;
+    private DateTime? _planned = DateTime.Today;
+    private Guid? _clinId;
+
+    protected override void OnInitialized()
+    {
+        _description = Event?.Description;
+        _criteria = Event?.Criteria;
+        _amount = Event?.Amount ?? 0;
+        _planned = Event?.PlannedDate.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today;
+        _clinId = Event?.ClinId;
+    }
+}

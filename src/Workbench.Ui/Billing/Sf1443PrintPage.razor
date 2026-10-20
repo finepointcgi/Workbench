@@ -1,0 +1,62 @@
+@page "/billing/progress-payments/{RequestId:guid}/sf1443"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@inject IProgressPaymentService ProgressPayments
+@inject IJSRuntime JS
+
+<PageTitle>SF 1443 no. @(_request?.Number.ToString() ?? "") · Print · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    @if (_request is not null)
+    {
+        <a href="@($"billing/contracts/{_request.ContractId}/progress-payments")">← Back to progress payments</a>
+        @if (_request.InvoiceId is { } inv)
+        {
+            <a href="@($"billing/invoices/{inv}")">Invoice @_request.InvoiceNumber</a>
+        }
+    }
+    <span class="spacer"></span>
+    <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+<div class="page">
+    @if (_error is not null)
+    {
+        <p class="error" data-testid="load-error">@_error</p>
+    }
+    else if (_request is null)
+    {
+        <p>Loading…</p>
+    }
+    else
+    {
+        <Sf1443View Form="_request.Form" ShowCertification="true" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid RequestId { get; set; }
+
+    private ProgressPaymentRequestDto? _request;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _request ??= await ProgressPayments.GetAsync(RequestId);
+        }
+        catch (Exception ex)
+        {
+            _error = BillingFormat.IsForbidden(ex)
+                ? "Progress payment requests are for Finance, administrators and the managers of the contract's projects."
+                : BillingFormat.Error(ex);
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/billing.js");
+        await module.InvokeVoidAsync("printPage");
+    }
+}

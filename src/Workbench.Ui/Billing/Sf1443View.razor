@@ -1,0 +1,119 @@
+@* The Contractor's Request for Progress Payment (SF 1443), every item computed. Used on screen and on the print page. *@
+<div class="sf1443" data-testid="sf1443">
+    <div class="head">
+        <div>
+            <div class="small">Standard Form 1443 (Rev. 10/2023) · FAR (48 CFR) 53.232</div>
+            <div class="title">Contractor's Request for Progress Payment</div>
+        </div>
+        @if (Draft)
+        {
+            <div class="preview-tag">Preview</div>
+        }
+    </div>
+
+    <h3>Section I – Identification information</h3>
+    <table class="boxes">
+        <tr><th>1. To</th><th>2. From</th></tr>
+        <tr><td>@Form.To</td><td>@Form.From</td></tr>
+    </table>
+    <table class="boxes">
+        <tr><th>3. Small business</th><th>4. Contract number</th><th>5. Contract price</th><th>6a. Progress payment rate</th><th>6b. Liquidation rate</th></tr>
+        <tr>
+            <td>@(Form.IsSmallBusiness ? "Yes" : "No")</td>
+            <td>@Form.ContractNumber</td>
+            <td class="num">@BillingFormat.Money(Form.ContractPrice)</td>
+            <td class="num">@BillingFormat.Percent(Form.ProgressPaymentRate)</td>
+            <td class="num">@BillingFormat.Percent(Form.LiquidationRate)</td>
+        </tr>
+        <tr><th>7. Date of initial award</th><th>8a. Request number</th><th>8b. Date of this request</th><th colspan="2">Costs through</th></tr>
+        <tr>
+            <td>@BillingFormat.Date(Form.InitialAwardDate)</td>
+            <td>@Form.RequestNumber</td>
+            <td>@BillingFormat.Date(Form.RequestDate)</td>
+            <td colspan="2">@BillingFormat.Date(Form.CostsThrough)</td>
+        </tr>
+    </table>
+
+    <h3>Section II – Statement of costs under this contract through @BillingFormat.Date(Form.CostsThrough)</h3>
+    <table class="lines">
+        <tbody>
+            @Row("9–10", "Reserved", null, $"Paid costs {BillingFormat.Amount(Form.PaidCosts)}; unpaid costs {BillingFormat.Amount(Form.UnpaidCosts)}")
+            @Row("11", "Total costs eligible for progress payments", Form.Line11EligibleCosts, Form.CostBasis == ProgressPaymentBasis.PaidCosts ? "Paid costs only" : "All costs incurred")
+            @Row("12a", "Total costs incurred to date", Form.Line12aIncurredToDate)
+            @Row("12b", "Estimated additional cost to complete", Form.Line12bEstimateToComplete)
+            @Row("13", "Item 11 multiplied by item 6a", Form.Line13, Form.LossRatioApplied ? "Loss ratio applied" : null)
+            @Row("14a", "Progress payments paid to subcontractors", Form.Line14aSubPaid)
+            @Row("14b", "Liquidated progress payments to subcontractors", Form.Line14bSubLiquidated)
+            @Row("14c", "Unliquidated progress payments to subcontractors (14a less 14b)", Form.Line14cSubUnliquidated)
+            @Row("14d", "Subcontractor progress billings approved for current payment", Form.Line14dSubApproved)
+            @Row("14e", "Eligible subcontractor progress payments (14c plus 14d)", Form.Line14eSubEligible)
+            @Row("15", "Total dollar amount (13 plus 14e)", Form.Line15)
+            @Row("16", "Item 5 multiplied by item 6b", Form.Line16)
+            @Row("17", "Lesser of item 15 or item 16", Form.Line17)
+            @Row("18", "Total amount of previous progress payments requested", Form.Line18PreviousRequested)
+            @Row("19", "Maximum balance eligible for progress payments (17 less 18)", Form.Line19MaximumEligible)
+        </tbody>
+    </table>
+
+    <h3>Section III – Computation of limits for outstanding progress payments</h3>
+    <table class="lines">
+        <tbody>
+            @Row("20a", "Costs applicable to items delivered, invoiced and accepted", Form.Line20aCostsDelivered)
+            @Row("20b", "Costs eligible for progress payments, undelivered items (11 less 20a)", Form.Line20bCostsUndelivered)
+            @Row("20c", "Item 20b multiplied by item 6a", Form.Line20c)
+            @Row("20d", "Eligible subcontractor progress payments (item 14e)", Form.Line20dSubEligible)
+            @Row("20e", "Limitation a(3)(i) or a(4)(i) (20c plus 20d)", Form.Line20eLimitation)
+            @Row("21a", "Contract price of items delivered, accepted and invoiced", Form.Line21aPriceDelivered)
+            @Row("21b", "Contract price of items not delivered, accepted and invoiced (5 less 21a)", Form.Line21bPriceUndelivered)
+            @Row("21c", "Item 21b multiplied by item 6b", Form.Line21c)
+            @Row("21d", "Unliquidated advance payments plus accrued interest", Form.Line21dUnliquidatedAdvances)
+            @Row("21e", "Limitation a(3)(ii) or a(4)(ii) (21c less 21d)", Form.Line21eLimitation)
+            @Row("22", "Maximum unliquidated progress payments (lesser of 20e or 21e)", Form.Line22MaximumUnliquidated)
+            @Row("23", "Total amount applied and to be applied to reduce progress payments", Form.Line23Liquidated)
+            @Row("24", "Unliquidated progress payments (18 less 23)", Form.Line24Unliquidated)
+            @Row("25", "Maximum permissible progress payments (22 less 24)", Form.Line25MaximumPermissible)
+        </tbody>
+    </table>
+
+    <h3>Section IV – Computation of amount of progress payment</h3>
+    <table class="lines">
+        <tbody>
+            <tr class="total"><td class="item">26</td><td>Amount of current invoice for progress payment (lesser of 25 or 19)</td><td class="num" data-testid="sf1443-amount">@BillingFormat.Money(Form.Line26Amount)</td><td></td></tr>
+        </tbody>
+    </table>
+
+    @foreach (var note in Form.Notes)
+    {
+        <p class="note">@note</p>
+    }
+
+    @if (ShowCertification)
+    {
+        <div class="certify">
+            <p>
+                Certification: I certify that the above statement (with attachments) has been prepared from the books of account and records of the
+                contractor in accordance with the contract and the instructions on the form, that to the best of my knowledge and belief it is correct,
+                and that the other statements in the SF 1443 certification block are true.
+            </p>
+            <div class="sign"><span>Name and title of contractor representative</span><span>Signature</span><span>Date</span></div>
+            <div class="sign"><span>Approved by the contracting officer: name and title</span><span>Signature</span><span>Date</span></div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Sf1443Dto Form { get; set; } = default!;
+
+    /// <summary>Shows a "Preview" tag (the request isn't saved yet).</summary>
+    [Parameter]
+    public bool Draft { get; set; }
+
+    [Parameter]
+    public bool ShowCertification { get; set; }
+
+    private static RenderFragment Row(string item, string label, decimal? amount, string? note = null) => __builder =>
+    {
+        <tr><td class="item">@item</td><td>@label</td><td class="num">@(amount is { } a ? BillingFormat.Amount(a) : "")</td><td class="note-cell">@note</td></tr>
+    };
+}

@@ -3,11 +3,11 @@ namespace Workbench.Contracts.Billing;
 // Billing and accounts receivable. Finance and administrators do everything here; a project manager can read the
 // invoices (and print them) for contracts their projects are on. Approving an invoice posts it to the general ledger.
 
-public enum InvoiceKind { TimeAndMaterials, CostPlus, FixedPriceMilestone, TrueUp, CreditMemo }
+public enum InvoiceKind { TimeAndMaterials, CostPlus, FixedPriceMilestone, TrueUp, CreditMemo, ProgressPayment, PerformanceBased }
 
 public enum InvoiceState { Draft, Approved, Sent, PartiallyPaid, Paid, Void }
 
-public enum InvoiceLineType { Labor, Odc, MaterialHandling, Burden, Fee, FeeWithhold, WithholdRelease, Milestone, Adjustment }
+public enum InvoiceLineType { Labor, Odc, MaterialHandling, Burden, Fee, FeeWithhold, WithholdRelease, Milestone, Adjustment, ProgressPayment, PerformanceBasedPayment, Liquidation }
 
 public enum FundingCheckLevel { Ok, OverFunded, OverCeiling }
 

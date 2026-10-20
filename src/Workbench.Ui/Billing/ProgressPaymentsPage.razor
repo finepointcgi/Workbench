@@ -1,0 +1,220 @@
+@page "/billing/contracts/{ContractId:guid}/progress-payments"
+@inject IProgressPaymentService ProgressPayments
+@inject IGovernmentBillingService Government
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Progress payments · @(_settings?.ContractNumber ?? "Contract") · Workbench</PageTitle>
+
+<BillingHeader Title="@($"Progress payments{(_settings is null ? "" : " · " + _settings.ContractNumber)}")"
+               Subtitle="Requests for progress payments based on cost (FAR 52.232-16) on SF 1443. Each request becomes an invoice; approving it bills the government.">
+    <MudButton Variant="Variant.Outlined" Href="@($"billing/contracts/{ContractId}")" StartIcon="@Icons.Material.Filled.ArrowBack">Contract billing</MudButton>
+</BillingHeader>
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_requests is null || _settings is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_settings.Financing != FinancingKind.ProgressPayments)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">This contract doesn't use progress payments. Finance can turn them on under Government billing on the <MudLink Href="@($"billing/contracts/{ContractId}")">contract billing page</MudLink>.</MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Requests</MudText>
+        <MudSimpleTable Dense="true" Hover="true" data-testid="pp-requests">
+            <thead><tr><th>No.</th><th>Costs through</th><th>Requested</th><th style="text-align:right">Amount (line 26)</th><th>Invoice</th><th></th></tr></thead>
+            <tbody>
+                @if (_requests.Count == 0)
+                {
+                    <tr><td colspan="6" class="mud-text-secondary">No requests yet.</td></tr>
+                }
+                @foreach (var r in _requests)
+                {
+                    <tr>
+                        <td>@r.Number</td>
+                        <td>@BillingFormat.Date(r.CostsThrough)</td>
+                        <td>@BillingFormat.Date(r.RequestDate)</td>
+                        <td style="text-align:right">@BillingFormat.Amount(r.Amount)</td>
+                        <td>
+                            @if (r.InvoiceId is { } inv)
+                            {
+                                <MudLink Href="@($"billing/invoices/{inv}")">@r.InvoiceNumber</MudLink>
+                                @if (r.InvoiceStatus is { } st)
+                                {
+                                    <span class="mud-text-secondary"> @BillingFormat.Label(st)</span>
+                                }
+                            }
+                        </td>
+                        <td style="white-space:nowrap">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/progress-payments/{r.Id}/sf1443")">SF 1443</MudButton>
+                            @if (_isFinance && r.InvoiceStatus is InvoiceState.Draft or InvoiceState.Void && r == _requests[0])
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete request" OnClick="() => DeleteAsync(r)" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (_isFinance && _settings.Financing == FinancingKind.ProgressPayments)
+    {
+        <MudGrid Spacing="3">
+            <MudItem xs="12" lg="5">
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">New request</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                        Costs come from the project ledger: approved hours and ODCs at provisional indirect rates, less what's still owed to vendors when only paid costs count.
+                        Leave a figure blank to use the computed one.
+                    </MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6"><MudDatePicker Label="Costs through" Date="_through" DateChanged="d => { _through = d; Stale(); }" DateFormat="yyyy-MM-dd" data-testid="pp-through" /></MudItem>
+                        <MudItem xs="6"><MudDatePicker Label="Request date (8b)" Date="_requestDate" DateChanged="d => { _requestDate = d; Stale(); }" DateFormat="yyyy-MM-dd" /></MudItem>
+                        <MudItem xs="6"><MudNumericField T="decimal?" Value="_etc" ValueChanged="v => { _etc = v; Stale(); }" Label="12b. Cost to complete" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="6"><MudNumericField T="decimal?" Value="_costsDelivered" ValueChanged="v => { _costsDelivered = v; Stale(); }" Label="20a. Costs of delivered items" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="6"><MudNumericField T="decimal?" Value="_priceDelivered" ValueChanged="v => { _priceDelivered = v; Stale(); }" Label="21a. Price of delivered items" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="6"><MudNumericField T="decimal?" Value="_liquidated" ValueChanged="v => { _liquidated = v; Stale(); }" Label="23. Liquidated to date" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="4"><MudNumericField T="decimal?" Value="_subPaid" ValueChanged="v => { _subPaid = v; Stale(); }" Label="14a. Paid to subs" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="4"><MudNumericField T="decimal?" Value="_subLiquidated" ValueChanged="v => { _subLiquidated = v; Stale(); }" Label="14b. Subs liquidated" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="4"><MudNumericField T="decimal?" Value="_subApproved" ValueChanged="v => { _subApproved = v; Stale(); }" Label="14d. Sub billings approved" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="12"><MudNumericField T="decimal?" Value="_advances" ValueChanged="v => { _advances = v; Stale(); }" Label="21d. Unliquidated advance payments" HideSpinButtons="true" Format="N2" /></MudItem>
+                        <MudItem xs="12"><MudTextField @bind-Value="_notes" Label="Notes (optional)" Lines="2" /></MudItem>
+                    </MudGrid>
+                    <MudStack Row="true" Spacing="2" Class="mt-3">
+                        <MudButton Variant="Variant.Outlined" OnClick="PreviewAsync" Disabled="@(_busy || _through is null)" data-testid="pp-preview">Preview SF 1443</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="@(_busy || _preview is null || _preview.Line26Amount <= 0)" data-testid="pp-create">
+                            Create request@(_preview is { Line26Amount: > 0 } p ? $" for {BillingFormat.Money(p.Line26Amount)}" : "")
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" lg="7">
+                @if (_preview is not null)
+                {
+                    <Sf1443View Form="_preview" Draft="true" />
+                }
+                else
+                {
+                    <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">Choose the date costs run through, then preview the SF 1443.</MudText></MudPaper>
+                }
+            </MudItem>
+        </MudGrid>
+    }
+}
+
+@code {
+    [CascadingParameter]
+    public FinanceAccess? Access { get; set; }
+
+    [Parameter]
+    public Guid ContractId { get; set; }
+
+    private bool _isFinance => Access?.IsFinance == true;
+    private GovernmentBillingSettingsDto? _settings;
+    private IReadOnlyList<ProgressPaymentRequestDto>? _requests;
+    private Sf1443Dto? _preview;
+    private DateTime? _through;
+    private DateTime? _requestDate = DateTime.Today;
+    private decimal? _etc;
+    private decimal? _costsDelivered;
+    private decimal? _priceDelivered;
+    private decimal? _liquidated;
+    private decimal? _subPaid;
+    private decimal? _subLiquidated;
+    private decimal? _subApproved;
+    private decimal? _advances;
+    private string? _notes;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _settings = await Government.GetSettingsAsync(ContractId);
+            _requests = await ProgressPayments.ListAsync(ContractId);
+            var lastMonth = BillingFormat.PreviousMonth(DateOnly.FromDateTime(DateTime.Today));
+            _through ??= lastMonth.To.ToDateTime(TimeOnly.MinValue);
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Stale() => _preview = null;
+
+    private ProgressPaymentPreviewRequest Request() => new(
+        ContractId,
+        DateOnly.FromDateTime(_through!.Value),
+        _requestDate is { } d ? DateOnly.FromDateTime(d) : null,
+        new Sf1443Overrides(_etc, _subPaid, _subLiquidated, _subApproved, _costsDelivered, _priceDelivered, _advances, _liquidated),
+        _notes);
+
+    private async Task PreviewAsync()
+    {
+        _busy = true;
+        try
+        {
+            _preview = await ProgressPayments.PreviewAsync(Request());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = await ProgressPayments.CreateAsync(Request());
+            Snackbar.Add($"Request {request.Number} saved with draft invoice {request.InvoiceNumber}. Approve the invoice to bill it.", Severity.Success);
+            Navigation.NavigateTo($"billing/invoices/{request.InvoiceId}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private async Task DeleteAsync(ProgressPaymentRequestDto r)
+    {
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, r.InvoiceStatus == InvoiceState.Draft ? $"Delete request {r.Number} and its draft invoice {r.InvoiceNumber}?" : $"Delete request {r.Number}? Its invoice {r.InvoiceNumber} is void." },
+            { d => d.AskText, false },
+            { d => d.ConfirmText, "Delete request" },
+            { d => d.ConfirmColor, Color.Error },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>($"Delete request {r.Number}", parameters);
+        if (await dialog.Result is { Canceled: false })
+        {
+            try
+            {
+                await ProgressPayments.DeleteAsync(r.Id);
+                _requests = await ProgressPayments.ListAsync(ContractId);
+                Snackbar.Add("Request deleted.", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+            }
+        }
+    }
+}

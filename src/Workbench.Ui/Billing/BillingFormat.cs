@@ -32,6 +32,8 @@ public static class BillingFormat
         InvoiceKind.CostPlus => "Cost-plus",
         InvoiceKind.FixedPriceMilestone => "FFP milestone",
         InvoiceKind.TrueUp => "Year-end true-up",
+        InvoiceKind.ProgressPayment => "Progress payment",
+        InvoiceKind.PerformanceBased => "Performance-based payment",
         _ => "Credit memo",
     };
 
@@ -41,8 +43,36 @@ public static class BillingFormat
         InvoiceLineType.FeeWithhold => "Fee withhold",
         InvoiceLineType.WithholdRelease => "Withhold release",
         InvoiceLineType.Odc => "ODC",
+        InvoiceLineType.ProgressPayment => "Progress payment",
+        InvoiceLineType.PerformanceBasedPayment => "Performance-based payment",
         _ => k.ToString(),
     };
+
+    public static string Label(FinancingKind f) => f switch
+    {
+        FinancingKind.ProgressPayments => "Progress payments (FAR 52.232-16)",
+        FinancingKind.PerformanceBased => "Performance-based payments (FAR 32.10)",
+        _ => "No contract financing",
+    };
+
+    public static string Label(VoucherFormat f) => f == VoucherFormat.Sf1034 ? "SF 1034 public voucher (with SF 1035 continuation)" : "Our own invoice layout";
+
+    public static string Label(PieeDocumentKind d) => d switch
+    {
+        PieeDocumentKind.TwoInOne => "2-in-1 (services)",
+        PieeDocumentKind.CostVoucher => "Cost Voucher",
+        PieeDocumentKind.Combo => "Combo (invoice and receiving report)",
+        PieeDocumentKind.ProgressPayment => "Progress Payment",
+        _ => "Performance Based Payment",
+    };
+
+    public static string Label(PieeState s) => s switch
+    {
+        PieeState.NotSubmitted => "Not submitted",
+        _ => s.ToString(),
+    };
+
+    public static bool IsFinancing(InvoiceKind k) => k is InvoiceKind.ProgressPayment or InvoiceKind.PerformanceBased;
 
     public static string Label(CashReceiptMethod m) => m == CashReceiptMethod.Eft ? "EFT" : m.ToString();
 
@@ -50,7 +80,7 @@ public static class BillingFormat
     public static string LineRate(InvoiceLineDto l) => l.Kind switch
     {
         InvoiceLineType.Labor when l.Rate != 0 => Money(l.Rate),
-        InvoiceLineType.Fee or InvoiceLineType.FeeWithhold or InvoiceLineType.MaterialHandling => Percent(l.Rate),
+        InvoiceLineType.Fee or InvoiceLineType.FeeWithhold or InvoiceLineType.MaterialHandling or InvoiceLineType.Liquidation => Percent(l.Rate),
         _ => "",
     };
 

@@ -1,0 +1,21 @@
+.toolbar {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 10px 24px;
+    border-bottom: 1px solid #ddd;
+    font: 14px system-ui, sans-serif;
+    background: #f7f7f7;
+}
+
+.toolbar .spacer { flex: 1; }
+.toolbar a { color: #1a4f8b; text-decoration: none; }
+.toolbar button { padding: 6px 14px; border: 1px solid #1a4f8b; background: #1a4f8b; color: #fff; border-radius: 4px; cursor: pointer; }
+
+.page { max-width: 8.5in; margin: 24px auto; padding: 0.4in; background: #fff; color: #000; box-shadow: 0 0 0 1px #ddd; }
+.error { color: #b00020; }
+
+@media print {
+    .no-print { display: none !important; }
+    .page { margin: 0; padding: 0; box-shadow: none; max-width: none; }
+}

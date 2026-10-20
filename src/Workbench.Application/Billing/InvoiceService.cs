@@ -77,6 +77,8 @@ public sealed partial class InvoiceService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var lookups = await BillingLookups.LoadAsync(db, cancellationToken);
         var billed = (await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).ToListAsync(cancellationToken)).Where(i => i.IsBilled).ToList();
+        var performanceBased = (await db.Set<ContractGovernmentBilling>().AsNoTracking().Where(g => g.Financing == ContractFinancing.PerformanceBased)
+            .Select(g => g.ContractId).ToListAsync(cancellationToken)).ToHashSet();
         return lookups.Contracts.Values
             .OrderBy(c => c.ContractNumber, StringComparer.Ordinal)
             .Select(c =>
@@ -85,6 +87,11 @@ public sealed partial class InvoiceService(
                 var dtos = clins.Select(x => ClinDto(x, billed)).ToList();
                 var types = new[] { InvoiceType.TimeAndMaterials, InvoiceType.CostPlus, InvoiceType.FixedPriceMilestone, InvoiceType.TrueUp }
                     .Where(t => clins.Any(x => InvoiceGenerator.Bills(t, x.Pricing))).Select(t => t.ToContract()).ToList();
+                if (performanceBased.Contains(c.Id))
+                {
+                    types.Add(InvoiceKind.PerformanceBased);
+                }
+
                 return new BillingContractDto(c.Id, c.ContractNumber, c.Name, c.CustomerId, lookups.Customers.GetValueOrDefault(c.CustomerId)?.Name ?? "",
                     BillingMapping.Label(c.Type), c.PeriodStart, c.PeriodEnd, dtos, types);
             })
@@ -100,6 +107,7 @@ public sealed partial class InvoiceService(
         var gen = await generator.GenerateAsync(db, ctx, request.Type.ToDomain(), request.PeriodFrom, request.PeriodTo, request.ReleaseWithhold,
             existing?.Id, approvedOnly: false, cancellationToken);
         var manual = existing?.Lines.Where(l => !l.IsGenerated).ToList() ?? [];
+        gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, request.Type.ToDomain(), gen, manual, existing?.Id, cancellationToken);
         var prior = await InvoiceGenerator.PriorInvoicesAsync(db, ctx.Contract.Id, existing?.Id, approvedOnly: true, cancellationToken);
         var funding = InvoiceGenerator.CheckFunding(ctx,
             gen.Lines.Select(l => (l.ClinId, l.Amount)).Concat(manual.Select(l => (l.ClinId, l.Amount))), prior);
@@ -161,6 +169,8 @@ public sealed partial class InvoiceService(
                 + (gen.Warnings.Count > 0 ? " " + string.Join(" ", gen.Warnings) : ""));
         }
 
+        gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, invoice.Type, gen, invoice.Lines.Where(l => !l.IsGenerated), isNew ? null : invoice.Id, cancellationToken);
+
         if (isNew)
         {
             db.Set<Invoice>().Add(invoice);
@@ -182,8 +192,14 @@ public sealed partial class InvoiceService(
             throw new InvalidOperationException("Credit memos have no generated lines.");
         }
 
+        if (invoice.Type == InvoiceType.ProgressPayment)
+        {
+            throw new InvalidOperationException("A progress payment invoice bills its SF 1443 request. Delete the draft and create a new request instead.");
+        }
+
         var ctx = await BillingContext.LoadAsync(db, invoice.ContractId, cancellationToken);
         var gen = await generator.GenerateAsync(db, ctx, invoice.Type, invoice.PeriodFrom, invoice.PeriodTo, invoice.ReleasesWithhold, invoice.Id, false, cancellationToken);
+        gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, invoice.Type, gen, invoice.Lines.Where(l => !l.IsGenerated), invoice.Id, cancellationToken);
         await ReplaceGeneratedLinesAsync(db, invoice, gen, cancellationToken);
         audit.Record(db, AuditEntityType, invoice.Id, "Regenerated", after: new { invoice.Total, Lines = invoice.Lines.Count });
         await db.SaveChangesAsync(cancellationToken);
@@ -270,6 +286,8 @@ public sealed partial class InvoiceService(
         await ReleaseMilestonesAsync(db, invoice.Lines.SelectMany(l => l.Sources), cancellationToken);
         db.Set<BilledSource>().RemoveRange(invoice.Lines.SelectMany(l => l.Sources));
         db.Set<InvoiceLine>().RemoveRange(invoice.Lines);
+        db.Set<ProgressPaymentRequest>().RemoveRange(await db.Set<ProgressPaymentRequest>().Where(r => r.InvoiceId == invoice.Id).ToListAsync(cancellationToken));
+        db.Set<PieeSubmission>().RemoveRange(await db.Set<PieeSubmission>().Where(p => p.InvoiceId == invoice.Id).ToListAsync(cancellationToken));
         db.Set<Invoice>().Remove(invoice);
         audit.Record(db, AuditEntityType, invoice.Id, "DraftDeleted", before: new { invoice.Number, invoice.Total });
         await db.SaveChangesAsync(cancellationToken);
@@ -301,6 +319,12 @@ public sealed partial class InvoiceService(
         }
 
         await EnsureSourcesUnbilledAsync(db, invoice, cancellationToken);
+        await ContractFinancingLedger.EnsureLiquidationWithinBalanceAsync(db, invoice, cancellationToken);
+        if (invoice.Lines.Any(l => BillingLedger.IsFinancing(l.Kind)))
+        {
+            await using var setup = await dbFactory.CreateAsync(cancellationToken);
+            await BillingLedger.EnsureFinancingAccountAsync(setup, UtcNow, cancellationToken);
+        }
 
         Invoice? original = null;
         if (invoice.Type == InvoiceType.CreditMemo)
@@ -398,6 +422,7 @@ public sealed partial class InvoiceService(
             throw new InvalidOperationException($"Void credit memo {credits[0].Number} against this invoice first.");
         }
 
+        await ContractFinancingLedger.EnsureFinancingCanBeVoidedAsync(db, invoice, cancellationToken);
         var before = invoice.Status;
         var reversal = await ledger.ReverseAsync(db, invoice.JournalEntryId, Today, $"Void of {invoice.Number}: {reason}", cancellationToken);
         foreach (var source in invoice.Lines.SelectMany(l => l.Sources))
@@ -639,6 +664,11 @@ public sealed partial class InvoiceService(
         {
             throw new ArgumentException("Credit memos are created from an approved invoice.");
         }
+
+        if (request.Type == InvoiceKind.ProgressPayment)
+        {
+            throw new ArgumentException("Progress payments are requested on an SF 1443 from the contract's progress payments page.");
+        }
     }
 
     private static async Task<Invoice?> FindDraftAsync(IWorkbenchDbContext db, GenerateInvoiceRequest request, bool tracking, CancellationToken ct)
@@ -675,7 +705,7 @@ public sealed partial class InvoiceService(
             : throw new InvalidOperationException($"Invoice {invoice.Number} is {invoice.Status}; only drafts can be changed.");
     }
 
-    private static async Task<(int Sequence, string Number)> NextNumberAsync(IWorkbenchDbContext db, BillingContext ctx, CancellationToken ct)
+    internal static async Task<(int Sequence, string Number)> NextNumberAsync(IWorkbenchDbContext db, BillingContext ctx, CancellationToken ct)
     {
         var prefix = ctx.Settings?.InvoicePrefix ?? DefaultPrefix(ctx.Contract.ContractNumber);
         var sequence = (await db.Set<Invoice>().Where(i => i.ContractId == ctx.Contract.Id).MaxAsync(i => (int?)i.Sequence, ct) ?? 0) + 1;
@@ -747,6 +777,12 @@ public sealed partial class InvoiceService(
             m.InvoiceId = invoice.Id;
         }
 
+        var eventIds = gen.Lines.SelectMany(l => l.Sources).Where(s => s.Kind == BilledSourceKind.PerformanceEvent).Select(s => s.SourceId).ToList();
+        foreach (var e in await db.Set<PerformanceBasedPaymentEvent>().Where(e => eventIds.Contains(e.Id)).ToListAsync(ct))
+        {
+            e.InvoiceId = invoice.Id;
+        }
+
         invoice.RateNote = gen.RateNote;
         invoice.GenerationWarnings = gen.Warnings.Count == 0 ? null : string.Join("\n", gen.Warnings);
         if (invoice.GenerationWarnings is { Length: > 4000 } w)
@@ -766,17 +802,26 @@ public sealed partial class InvoiceService(
         }
     }
 
+    /// <summary>Milestones and performance-based payment events billed by these sources become billable again.</summary>
     private static async Task ReleaseMilestonesAsync(IWorkbenchDbContext db, IEnumerable<BilledSource> sources, CancellationToken ct)
     {
-        var ids = sources.Where(s => s.Kind == BilledSourceKind.Milestone).Select(s => s.SourceId).ToList();
-        if (ids.Count == 0)
+        var list = sources.ToList();
+        var ids = list.Where(s => s.Kind == BilledSourceKind.Milestone).Select(s => s.SourceId).ToList();
+        if (ids.Count > 0)
         {
-            return;
+            foreach (var m in await db.Set<BillingMilestone>().Where(m => ids.Contains(m.Id)).ToListAsync(ct))
+            {
+                m.InvoiceId = null;
+            }
         }
 
-        foreach (var m in await db.Set<BillingMilestone>().Where(m => ids.Contains(m.Id)).ToListAsync(ct))
+        var eventIds = list.Where(s => s.Kind == BilledSourceKind.PerformanceEvent).Select(s => s.SourceId).ToList();
+        if (eventIds.Count > 0)
         {
-            m.InvoiceId = null;
+            foreach (var e in await db.Set<PerformanceBasedPaymentEvent>().Where(e => eventIds.Contains(e.Id)).ToListAsync(ct))
+            {
+                e.InvoiceId = null;
+            }
         }
     }
 

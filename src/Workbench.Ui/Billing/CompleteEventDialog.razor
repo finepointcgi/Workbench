@@ -1,0 +1,33 @@
+@* Completes a performance-based payment event: when, and the evidence that it was accomplished. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            @if (Event?.Criteria is { } criteria)
+            {
+                <MudText Typo="Typo.body2">Criteria: @criteria</MudText>
+            }
+            <MudDatePicker Label="Completed on" @bind-Date="_completed" DateFormat="yyyy-MM-dd" />
+            <MudTextField @bind-Value="_evidence" Label="Evidence" Required="true" Immediate="true" Lines="2" AutoFocus="true"
+                          HelperText="What shows it was done, for example the test report or the acceptance memo" data-testid="event-evidence" />
+            <MudTextField @bind-Value="_reference" Label="Document number or link (optional)" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_evidence) || _completed is null)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new CompletePerformanceEventRequest(DateOnly.FromDateTime(_completed!.Value), _evidence!.Trim(), _reference)))"
+                   data-testid="event-complete">Complete event</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public PerformanceEventDto? Event { get; set; }
+
+    private DateTime? _completed = DateTime.Today;
+    private string? _evidence;
+    private string? _reference;
+}

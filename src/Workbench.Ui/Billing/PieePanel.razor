@@ -1,0 +1,193 @@
+@* PIEE (WAWF) on the invoice page: the document type, what is missing, the import file, and the status recorded by hand. *@
+@inject IGovernmentBillingService Government
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="piee-panel">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2">PIEE (WAWF)</MudText>
+        @if (_status is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="StatusColor(_status.Status)" data-testid="piee-status">@BillingFormat.Label(_status.Status)</MudChip>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Sent as a @BillingFormat.Label(_status.DocumentType) document</MudText>
+        }
+        <MudSpacer />
+        @if (_status is not null)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="DownloadAsync" Disabled="@(_busy || !_status.IsValid)" data-testid="piee-download">Download PIEE file</MudButton>
+            @if (_status.Status is PieeState.NotSubmitted or PieeState.Rejected)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="SubmitAsync" Disabled="@(_busy || !_status.IsValid)" data-testid="piee-send">Send to PIEE</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="MarkSubmittedAsync" Disabled="@(_busy || !_status.IsValid)" data-testid="piee-mark-submitted">Mark submitted</MudButton>
+            }
+            else if (_status.Status == PieeState.Submitted)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="AcceptAsync" Disabled="_busy" data-testid="piee-accepted">Accepted</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" Disabled="_busy" data-testid="piee-rejected">Rejected</MudButton>
+            }
+        }
+    </MudStack>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+    }
+    else if (_status is null)
+    {
+        <MudProgressLinear aria-label="Loading PIEE status" Indeterminate="true" />
+    }
+    else
+    {
+        @if (_status.Issues.Count > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="piee-issues">
+                <div>Before this can go to PIEE:</div>
+                <ul class="mt-1 ml-4">
+                    @foreach (var issue in _status.Issues)
+                    {
+                        <li><strong>@issue.Field:</strong> @issue.Message</li>
+                    }
+                </ul>
+            </MudAlert>
+        }
+        <MudText Typo="Typo.body2">
+            @if (_status.Reference is not null)
+            {
+                <span>PIEE number @_status.Reference. </span>
+            }
+            @if (_status.SubmittedAtUtc is { } submitted)
+            {
+                <span>Submitted @submitted.ToLocalTime().ToString("yyyy-MM-dd") by @_status.SubmittedBy. </span>
+            }
+            @if (_status.ExportedAtUtc is { } exported)
+            {
+                <span>File @_status.FileName made @exported.ToLocalTime().ToString("yyyy-MM-dd HH:mm"). </span>
+            }
+        </MudText>
+        @if (_status.Status == PieeState.Rejected)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Rejected: @_status.RejectionReason</MudAlert>
+        }
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+            Sending uses @_status.SubmitterName: nothing goes to PIEE automatically. Upload the file in PIEE, then record what happened here.
+        </MudText>
+    }
+</MudPaper>
+
+@code {
+    [Inject]
+    private IDialogService DialogService { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid InvoiceId { get; set; }
+
+    /// <summary>The invoice's status: the panel reloads when it changes.</summary>
+    [Parameter]
+    public InvoiceState InvoiceStatus { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private PieeStatusDto? _status;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _status = await Government.GetPieeAsync(InvoiceId);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = BillingFormat.Error(ex);
+        }
+    }
+
+    private static Color StatusColor(PieeState s) => s switch
+    {
+        PieeState.Accepted => Color.Success,
+        PieeState.Rejected => Color.Error,
+        PieeState.Submitted => Color.Info,
+        _ => Color.Default,
+    };
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
+    private Task DownloadAsync() => RunAsync(async () =>
+    {
+        await BillingFormat.DownloadAsync(JS, await Government.ExportPieeAsync(InvoiceId));
+        _status = await Government.GetPieeAsync(InvoiceId);
+    });
+
+    private Task SubmitAsync() => RunAsync(async () =>
+    {
+        var result = await Government.SubmitPieeAsync(InvoiceId);
+        _status = result.Status;
+        if (!result.Transmitted)
+        {
+            await BillingFormat.DownloadAsync(JS, result.File);
+        }
+
+        Snackbar.Add(result.Message, result.Transmitted ? Severity.Success : Severity.Info);
+        if (result.Transmitted)
+        {
+            await Changed.InvokeAsync();
+        }
+    });
+
+    private async Task MarkSubmittedAsync()
+    {
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, "Record that you submitted this invoice in PIEE. It's also marked sent." },
+            { d => d.Label, "PIEE document or shipment number (optional)" },
+            { d => d.Required, false },
+            { d => d.ConfirmText, "Mark submitted" },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>("Submitted in PIEE", parameters);
+        if (await dialog.Result is { Canceled: false, Data: var data })
+        {
+            await SetAsync(new SetPieeStatusRequest(PieeState.Submitted, data as string), "Marked submitted in PIEE.");
+        }
+    }
+
+    private Task AcceptAsync() => SetAsync(new SetPieeStatusRequest(PieeState.Accepted), "Recorded: PIEE accepted the invoice.");
+
+    private async Task RejectAsync()
+    {
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, "Record why PIEE rejected the invoice. Fix the problem, then submit it again." },
+            { d => d.Label, "Reason PIEE gave" },
+            { d => d.ConfirmText, "Record rejection" },
+            { d => d.ConfirmColor, Color.Error },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>("Rejected in PIEE", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await SetAsync(new SetPieeStatusRequest(PieeState.Rejected, Reason: reason), "Rejection recorded.");
+        }
+    }
+
+    private Task SetAsync(SetPieeStatusRequest request, string done) => RunAsync(async () =>
+    {
+        _status = await Government.SetPieeStatusAsync(InvoiceId, request);
+        Snackbar.Add(done, Severity.Success);
+        await Changed.InvokeAsync();
+    });
+}

@@ -1,0 +1,132 @@
+@* Performance-based payment events on the contract billing page (FAR 32.1004). *@
+@inject IPerformanceBasedPaymentService Events
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="pbp-events">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Performance-based payment events</MudText>
+        <MudSpacer />
+        @if (IsFinance)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="add-event">Add event</MudButton>
+        }
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Events are paid when they're complete and the evidence is recorded. Together they can be at most 90% of the contract price.</MudText>
+    @if (_events is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th>#</th><th>Event and criteria</th><th>Planned</th><th>Completed</th><th style="text-align:right">Amount</th><th>Billed on</th><th></th></tr></thead>
+            <tbody>
+                @if (_events.Count == 0)
+                {
+                    <tr><td colspan="7" class="mud-text-secondary">No events yet.</td></tr>
+                }
+                @foreach (var e in _events)
+                {
+                    <tr>
+                        <td>@e.Order</td>
+                        <td>
+                            @e.Description@(e.ClinNumber is null ? "" : $" (CLIN {e.ClinNumber})")
+                            @if (e.Criteria is not null)
+                            {
+                                <div class="mud-text-secondary">Criteria: @e.Criteria</div>
+                            }
+                            @if (e.Evidence is not null)
+                            {
+                                <div class="mud-text-secondary">Evidence: @e.Evidence@(e.EvidenceReference is null ? "" : $" ({e.EvidenceReference})")</div>
+                            }
+                        </td>
+                        <td>@BillingFormat.Date(e.PlannedDate)</td>
+                        <td>@BillingFormat.Date(e.CompletedDate)</td>
+                        <td style="text-align:right">@BillingFormat.Amount(e.Amount)</td>
+                        <td>@if (e.InvoiceId is { } inv) { <MudLink Href="@($"billing/invoices/{inv}")">@e.InvoiceNumber</MudLink> }</td>
+                        <td style="white-space:nowrap">
+                            @if (IsFinance && !e.IsBilled)
+                            {
+                                @if (e.CompletedDate is null)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CompleteAsync(e)" data-testid="complete-event">Complete</MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ReopenAsync(e)">Reopen</MudButton>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit event" OnClick="() => EditAsync(e)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete event" OnClick="() => DeleteAsync(e)" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            @if (_events.Count > 0)
+            {
+                <tfoot><tr><td></td><td>Total</td><td></td><td></td><td style="text-align:right">@BillingFormat.Amount(_events.Sum(e => e.Amount))</td><td colspan="2"></td></tr></tfoot>
+            }
+        </MudSimpleTable>
+        @if (IsFinance && _events.Any(e => e.CompletedDate is not null && !e.IsBilled))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Href="@($"billing/new?contract={ContractId}&type=PerformanceBased")" data-testid="bill-events">Bill completed events</MudButton>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ContractId { get; set; }
+
+    [Parameter]
+    public bool IsFinance { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<BillingClinDto> Clins { get; set; } = [];
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<PerformanceEventDto>? _events;
+
+    protected override async Task OnParametersSetAsync() => _events = await Events.ListAsync(ContractId);
+
+    private async Task RunAsync(Func<Task> action, string done)
+    {
+        try
+        {
+            await action();
+            _events = await Events.ListAsync(ContractId);
+            Snackbar.Add(done, Severity.Success);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task EditAsync(PerformanceEventDto? e)
+    {
+        var dialog = await DialogService.ShowAsync<PerformanceEventDialog>(e is null ? "Add event" : "Edit event",
+            new DialogParameters<PerformanceEventDialog> { { d => d.Clins, Clins }, { d => d.Event, e } });
+        if (await dialog.Result is { Canceled: false, Data: SavePerformanceEventRequest request })
+        {
+            await RunAsync(() => e is null ? Events.CreateAsync(ContractId, request) : Events.UpdateAsync(e.Id, request), "Event saved.");
+        }
+    }
+
+    private async Task CompleteAsync(PerformanceEventDto e)
+    {
+        var dialog = await DialogService.ShowAsync<CompleteEventDialog>($"Complete \"{e.Description}\"", new DialogParameters<CompleteEventDialog> { { d => d.Event, e } });
+        if (await dialog.Result is { Canceled: false, Data: CompletePerformanceEventRequest request })
+        {
+            await RunAsync(() => Events.CompleteAsync(e.Id, request), $"\"{e.Description}\" completed; it's ready to bill.");
+        }
+    }
+
+    private Task ReopenAsync(PerformanceEventDto e) => RunAsync(() => Events.ReopenAsync(e.Id), "Event reopened.");
+
+    private Task DeleteAsync(PerformanceEventDto e) => RunAsync(() => Events.DeleteAsync(e.Id), "Event deleted.");
+}

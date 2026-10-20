@@ -1,0 +1,171 @@
+@* Government billing settings on the contract billing page: invoice format, contract financing and PIEE routing. Finance only. *@
+@inject IGovernmentBillingService Government
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="government-settings">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Government billing</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">How this contract's invoices print, how the government finances it before delivery, and where PIEE routes its invoices.</MudText>
+    @if (_settings is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+    }
+    else
+    {
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="VoucherFormat" @bind-Value="_format" Label="Invoice format" data-testid="invoice-format">
+                    @foreach (var f in Enum.GetValues<VoucherFormat>())
+                    {
+                        <MudSelectItem T="VoucherFormat" Value="f">@BillingFormat.Label(f)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="FinancingKind" Value="_financing" ValueChanged="FinancingChanged" Label="Contract financing" data-testid="financing-kind">
+                    @foreach (var f in Enum.GetValues<FinancingKind>())
+                    {
+                        <MudSelectItem T="FinancingKind" Value="f">@BillingFormat.Label(f)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (_financing == FinancingKind.ProgressPayments)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudSwitch T="bool" Value="_smallBusiness" ValueChanged="SmallBusinessChanged" Color="Color.Primary" Label="Small business" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="ProgressPaymentBasis" @bind-Value="_basis" Label="Costs that count">
+                        <MudSelectItem T="ProgressPaymentBasis" Value="ProgressPaymentBasis.PaidCosts">Paid costs only (large business)</MudSelectItem>
+                        <MudSelectItem T="ProgressPaymentBasis" Value="ProgressPaymentBasis.IncurredCosts">All costs incurred (small business)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_ratePercent" Label="Progress payment rate %" Min="0" Max="100" HideSpinButtons="true" HelperText="SF 1443 item 6a" data-testid="pp-rate" /></MudItem>
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_liquidationPercent" Label="Liquidation rate %" Min="0" Max="100" HideSpinButtons="true" HelperText="Item 6b" data-testid="liquidation-rate" /></MudItem>
+            }
+            else if (_financing == FinancingKind.PerformanceBased)
+            {
+                <MudItem xs="6" sm="3"><MudNumericField T="decimal" @bind-Value="_liquidationPercent" Label="Liquidation rate %" Min="0" Max="100" HideSpinButtons="true" HelperText="0: events total ÷ price" /></MudItem>
+            }
+            @if (_financing != FinancingKind.None)
+            {
+                <MudItem xs="6" sm="3">
+                    <MudNumericField T="decimal?" @bind-Value="_price" Label="Contract price" Min="0" HideSpinButtons="true" Format="N2"
+                                     HelperText="@($"Blank: the ceiling, {BillingFormat.Money(_settings.EffectiveContractPrice)}")" />
+                </MudItem>
+            }
+            <MudItem xs="12"><MudText Typo="Typo.subtitle2" Class="mt-2">PIEE routing</MudText></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField @bind-Value="_issueBy" Label="Issue-by DoDAAC" MaxLength="6" HelperText="Contracting office" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField @bind-Value="_adminBy" Label="Admin-by DoDAAC" MaxLength="6" HelperText="Often DCMA" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField @bind-Value="_payOffice" Label="Pay office DoDAAC" MaxLength="6" HelperText="Often DFAS" /></MudItem>
+            <MudItem xs="6" sm="3"><MudTextField @bind-Value="_shipTo" Label="Ship-to DoDAAC" MaxLength="6" HelperText="Combo only" /></MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="PieeDocumentKind" @bind-Value="_delivery" Label="Delivery invoices go to PIEE as">
+                    <MudSelectItem T="PieeDocumentKind" Value="PieeDocumentKind.TwoInOne">@BillingFormat.Label(PieeDocumentKind.TwoInOne)</MudSelectItem>
+                    <MudSelectItem T="PieeDocumentKind" Value="PieeDocumentKind.Combo">@BillingFormat.Label(PieeDocumentKind.Combo)</MudSelectItem>
+                    <MudSelectItem T="PieeDocumentKind" Value="PieeDocumentKind.CostVoucher">@BillingFormat.Label(PieeDocumentKind.CostVoucher)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">CAGE code: @(_settings.CageCode ?? "not set (Billing settings below)")</MudText>
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveAsync" Disabled="_busy" data-testid="save-government">Save government billing</MudButton>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ContractId { get; set; }
+
+    [Parameter]
+    public EventCallback<GovernmentBillingSettingsDto> Saved { get; set; }
+
+    private GovernmentBillingSettingsDto? _settings;
+    private VoucherFormat _format;
+    private FinancingKind _financing;
+    private bool _smallBusiness;
+    private ProgressPaymentBasis _basis;
+    private decimal _ratePercent;
+    private decimal _liquidationPercent;
+    private decimal? _price;
+    private string? _issueBy;
+    private string? _adminBy;
+    private string? _payOffice;
+    private string? _shipTo;
+    private PieeDocumentKind _delivery;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Apply(await Government.GetSettingsAsync(ContractId));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private void Apply(GovernmentBillingSettingsDto s)
+    {
+        _settings = s;
+        _format = s.Format;
+        _financing = s.Financing;
+        _smallBusiness = s.IsSmallBusiness;
+        _basis = s.CostBasis;
+        _ratePercent = s.ProgressPaymentRate * 100;
+        _liquidationPercent = s.LiquidationRate * 100;
+        _price = s.ContractPrice;
+        _issueBy = s.IssueByDodaac;
+        _adminBy = s.AdminByDodaac;
+        _payOffice = s.PayOfficeDodaac;
+        _shipTo = s.ShipToDodaac;
+        _delivery = s.DeliveryDocument;
+    }
+
+    /// <summary>Starting values for a newly chosen financing method; saved settings keep theirs.</summary>
+    private void FinancingChanged(FinancingKind financing)
+    {
+        _financing = financing;
+        if (financing == _settings?.Financing)
+        {
+            Apply(_settings);
+            return;
+        }
+
+        (_ratePercent, _liquidationPercent) = financing == FinancingKind.ProgressPayments ? (_smallBusiness ? 90m : 80m, _smallBusiness ? 90m : 80m) : (0m, 0m);
+    }
+
+    /// <summary>The customary rates and cost basis follow the business size (FAR 32.501-1): 90% and all costs for small business.</summary>
+    private void SmallBusinessChanged(bool small)
+    {
+        _smallBusiness = small;
+        _ratePercent = small ? 90 : 80;
+        _liquidationPercent = _ratePercent;
+        _basis = small ? ProgressPaymentBasis.IncurredCosts : ProgressPaymentBasis.PaidCosts;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var financed = _financing != FinancingKind.None;
+            var saved = await Government.SaveSettingsAsync(ContractId, new SaveGovernmentBillingSettingsRequest(
+                _format, _financing, _smallBusiness,
+                _financing == FinancingKind.ProgressPayments ? _ratePercent / 100 : 0,
+                financed ? _liquidationPercent / 100 : 0,
+                _basis, financed ? _price : null, _issueBy, _adminBy, _payOffice, _shipTo, _delivery));
+            Apply(saved);
+            Snackbar.Add("Government billing saved.", Severity.Success);
+            await Saved.InvokeAsync(saved);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+}

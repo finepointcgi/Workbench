@@ -142,9 +142,13 @@ else
     [SupplyParameterFromQuery]
     public Guid? Contract { get; set; }
 
+    /// <summary>An invoice type to start with (for example PerformanceBased), by name.</summary>
+    [SupplyParameterFromQuery]
+    public string? Type { get; set; }
+
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
-    private IEnumerable<InvoiceKind> Types => _contract?.SuggestedTypes.Count > 0 ? _contract.SuggestedTypes : Enum.GetValues<InvoiceKind>().Where(t => t != InvoiceKind.CreditMemo);
+    private IEnumerable<InvoiceKind> Types => _contract?.SuggestedTypes.Count > 0 ? _contract.SuggestedTypes : Enum.GetValues<InvoiceKind>().Where(t => t is not (InvoiceKind.CreditMemo or InvoiceKind.ProgressPayment));
 
     private bool CanPreview => _contractId is not null && _from is not null && _to is not null;
 
@@ -157,6 +161,10 @@ else
             if ((Contract is { } id && _contracts.Any(c => c.Id == id) ? id : _contracts.FirstOrDefault(c => c.Clins.Count > 0)?.Id) is { } pick)
             {
                 ContractChanged(pick);
+                if (Enum.TryParse<InvoiceKind>(Type, ignoreCase: true, out var type) && Types.Contains(type))
+                {
+                    TypeChanged(type);
+                }
             }
         }
         catch (Exception ex)

@@ -101,6 +101,8 @@ public static class DefaultChartOfAccounts
         // Multicompany: what affiliated companies owe each other, posted when an entry crosses companies (eliminated on consolidation).
         new("1180", "Due from affiliated companies", AccountType.Asset, "1000", Description: "Intercompany receivable: charges this company carried for an affiliate"),
         new("2180", "Due to affiliated companies", AccountType.Liability, "2000", Description: "Intercompany payable: charges an affiliate carried for this company"),
+        // Government billing: progress and performance-based payments received ahead of delivery, until liquidated.
+        new("2320", "Unliquidated contract financing", AccountType.Liability, "2000", Description: "Progress payments (FAR 52.232-16) and performance-based payments billed, less liquidations on deliveries"),
     ];
 
     private static readonly (PostingRuleKind Kind, string Key, string Account)[] Rules =
