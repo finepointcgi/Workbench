@@ -1,0 +1,30 @@
+@page "/materials/quality"
+@inject NavigationManager Navigation
+
+<PageTitle>Quality · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Quality" Subtitle="Inspect what arrives and what you build, review what fails, fix the causes, and see how each supplier is doing." />
+
+<MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-3" ActivePanelIndex="_tab" ActivePanelIndexChanged="TabChanged" data-testid="quality-tabs">
+    <MudTabPanel Text="Inspection queue"><InspectionQueueTab /></MudTabPanel>
+    <MudTabPanel Text="Nonconformances (NCRs)"><NcrListTab /></MudTabPanel>
+    <MudTabPanel Text="Corrective actions"><CarListTab /></MudTabPanel>
+    <MudTabPanel Text="Supplier quality"><SupplierQualityTab /></MudTabPanel>
+    <MudTabPanel Text="Inspection plans"><InspectionPlansTab /></MudTabPanel>
+</MudTabs>
+
+@code {
+    private static readonly string[] Tabs = ["inspections", "ncrs", "cars", "suppliers", "plans"];
+
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private int _tab;
+
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, Tab ?? ""));
+
+    private void TabChanged(int tab)
+    {
+        _tab = tab;
+        Navigation.NavigateTo($"materials/quality?tab={Tabs[tab]}", replace: true);
+    }
+}

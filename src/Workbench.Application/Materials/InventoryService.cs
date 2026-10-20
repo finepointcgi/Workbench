@@ -362,7 +362,7 @@ public sealed class InventoryService(
         }
         else
         {
-            var balance = engine.Balances(part.Id).FirstOrDefault(b => b.BinId == key.BinId && b.Lot == key.Lot && b.Serial == key.Serial && b.Ownership == key.Ownership && b.OwnerProjectId == key.OwnerProjectId)
+            var balance = engine.Balances(part.Id).FirstOrDefault(b => b.BinId == key.BinId && b.Lot == key.Lot && b.Serial == key.Serial && b.Ownership == key.Ownership && b.OwnerProjectId == key.OwnerProjectId && b.Status == key.Status)
                 ?? throw new ArgumentException($"There's no {part.Display} in that location to remove.");
             t = engine.Issue(part, balance, -change, type, date, engine.Accounts?.Adjustment, reason);
         }
@@ -393,7 +393,7 @@ public sealed class InventoryService(
         }
 
         var reason = "Cycle count" + (string.IsNullOrWhiteSpace(request.Note) ? "" : $": {PurchasingSupport.Optional(request.Note, "The note", 400)}");
-        var key = new StockKey(balance.PartId, balance.WarehouseId, balance.BinId, balance.Lot, balance.Serial, balance.Ownership, balance.OwnerProjectId);
+        var key = StockKey.Of(balance);
         InventoryTransaction t;
         if (diff > 0)
         {

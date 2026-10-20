@@ -619,3 +619,23 @@ Checks:
   with the project/WBS segments when the order has a WBS (then it also counts in `MaterialCostActuals`).
 - The delivery invoice goes through billing's public services (`ShipmentInvoicer`: a completed milestone per FFP CLIN, then the FFP milestone
   draft), so liquidation and funding checks stay billing's. WAWF files go through `IWawfSubmitter` (default `ManualWawfSubmitter`, sends nothing).
+
+## Quality and engineering change
+
+- `Domain/Quality` (`InspectionPlan`/`InspectionCharacteristic`, `Inspection` + items/results, `QualityAttachment`, `DefectCode`, `Nonconformance` + items,
+  `VendorDebitMemo`, `CorrectiveAction`, `EngineeringChange` + items and `EngineeringChangeWorkOrderReview`); contracts `IInspectionService`,
+  `INonconformanceService`, `ICorrectiveActionService`, `IQualityFileService`, `IEngineeringChangeService` (`Contracts/Quality`). No new role: reads are
+  Materials/Finance/Admin, changes Materials/Admin; dispositions and ECOs are decided by whoever their workflow routes them to.
+- Stock has a status (`InventoryBalance.Status`: Available, InspectionHold, Nonconforming; part of the balance key, `StockKey.Status`). Only available stock
+  is picked, issued, kitted, shown as available on work orders or netted by MRP; held stock is still costed and on the books. Moving between statuses is a
+  `StatusChange` pair (no GL), always through `StockEngine.ChangeStatus`. A new place that reads balances for availability must filter on `Status`.
+- Hooks (`Application/Quality/QualityHooks`): a part with an active receiving plan is received into hold with a pending inspection (any receipt path), a
+  stock completion with an active final plan likewise; release opens in-process inspections and completion refuses while one is pending; release picks the
+  BOM of an approved, date-effective ECO dated on or before the work order's start.
+- NCR dispositions (`ncr-disposition`) and ECOs (`engineering-change`) go through the approval engine; the last approval carries out the disposition in the
+  same unit of work (GL source `Inventory`, source id = the NCR): use as is (back to available), rework (a stock rework work order kitted with the material),
+  return to vendor (credit inventory, debit receiving clearing at the PO price, PPV for the difference, `VendorDebitMemo` for AP), scrap (to 6152, another
+  expense account, or a project WBS as direct material; on a work order through `ManufacturingService.ScrapCore`). An approved ECO becomes effective on its
+  date (at approval when due, hourly by `EngineeringChangeBackgroundService`, or "Apply due changes"): the new BOM/part revision activates and open work
+  orders on the old revision are flagged for review. As-designed (the BOM revision the effective ECOs give a serial or lot) vs as-built (the work order's BOM
+  and genealogy) is `IEngineeringChangeService.ConfigurationAsync`.

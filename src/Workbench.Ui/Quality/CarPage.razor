@@ -1,0 +1,180 @@
+@page "/materials/quality/cars/new"
+@page "/materials/quality/cars/{CarId:guid}"
+@inject ICorrectiveActionService Cars
+@inject INonconformanceService Ncrs
+@inject IPartService PartService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_car?.Summary.Number ?? "New corrective action") · Quality · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Corrective action" BackHref="materials/quality?tab=cars" BackLabel="Corrective actions" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (!_loaded)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var editable = MaterialsFormat.CanEdit(User) && _car?.Summary.Status is null or CarState.Open or CarState.Implemented;
+    <MaterialsHeader Title="@(_car is { } c ? $"{c.Summary.Number} · {c.Summary.Title}" : "New corrective action")" BackHref="materials/quality?tab=cars" BackLabel="Corrective actions"
+                     Subtitle="Find the root cause, fix it, then check that the fix worked.">
+        @if (_car is { } car)
+        {
+            <MudChip T="string" Size="Size.Small" Color="QualityFormat.Color(car.Summary.Status)">@QualityFormat.Label(car.Summary.Status)</MudChip>
+            @if (MaterialsFormat.CanEdit(User) && car.Summary.Status == CarState.Open)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ImplementedAsync" Disabled="_busy">Mark done</MudButton>
+            }
+            @if (MaterialsFormat.CanEdit(User) && car.Summary.Status == CarState.Implemented)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="() => VerifyAsync(true)" Disabled="_busy">Verified effective</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="() => VerifyAsync(false)" Disabled="_busy">Not effective</MudButton>
+            }
+        }
+    </MaterialsHeader>
+
+    <MudPaper Outlined="true" Class="pa-3" Style="max-width:900px">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_due" Label="Due" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_owner" Label="Owner (email)" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Supplier (a supplier corrective action)" Clearable="true" Dense="true" ReadOnly="!editable">
+                    @foreach (var v in _vendors) { <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            @if (_ncrNumber is not null) { <MudItem xs="12"><MudText Typo="Typo.body2">From <MudLink Href="@($"materials/quality/ncrs/{_ncrId}")">@_ncrNumber</MudLink></MudText></MudItem> }
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_problem" Label="Problem" Lines="3" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="RootCause" @bind-Value="_category" Label="Root cause category" Dense="true" ReadOnly="!editable">
+                    @foreach (var r in Enum.GetValues<RootCause>()) { <MudSelectItem T="RootCause" Value="r">@QualityFormat.Label(r)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_rootCause" Label="Root cause (why it happened)" Lines="2" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_action" Label="Corrective action (what fixes it)" Lines="2" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_preventive" Label="Preventive action (keeps it from happening elsewhere)" Lines="2" ReadOnly="!editable" /></MudItem>
+            @if (_car is { } done && (done.ImplementedOn is not null || done.VerifiedBy is not null))
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @(done.ImplementedOn is { } on ? $"Done on {MaterialsFormat.Date(on)}. " : "")@(done.VerifiedBy is { } by ? $"Verified by {by}. " : "")@done.VerificationNote
+                    </MudText>
+                </MudItem>
+            }
+        </MudGrid>
+        @if (editable)
+        {
+            <MudStack Row="true" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title) || string.IsNullOrWhiteSpace(_problem) || string.IsNullOrWhiteSpace(_owner) || _due is null)" data-testid="car-save">Save</MudButton>
+                @if (_car is { } c2 && c2.Summary.Status is CarState.Open)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelAsync" Disabled="_busy">Cancel this request</MudButton>
+                }
+            </MudStack>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [Parameter] public Guid? CarId { get; set; }
+    [SupplyParameterFromQuery(Name = "ncr")] public Guid? FromNcr { get; set; }
+
+    private CarDto? _car;
+    private IReadOnlyList<MaterialOption> _vendors = [];
+    private string? _title, _owner, _problem, _rootCause, _action, _preventive, _ncrNumber;
+    private DateTime? _due = DateTime.Today.AddDays(30);
+    private Guid? _vendorId, _partId, _ncrId;
+    private RootCause _category;
+    private bool _loaded, _busy, _forbidden;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _vendors = (await PartService.GetOptionsAsync()).Vendors;
+            if (CarId is { } id)
+            {
+                Show(await Cars.GetAsync(id));
+            }
+            else
+            {
+                _owner = User?.Email;
+                if (FromNcr is { } nid)
+                {
+                    var ncr = await Ncrs.GetAsync(nid);
+                    (_ncrId, _ncrNumber, _vendorId, _partId) = (nid, ncr.Summary.Number, ncr.VendorId, ncr.Summary.PartId);
+                    _title = $"{ncr.Summary.PartNumber}: {string.Join(", ", ncr.Summary.DefectCodes)}";
+                    _problem = $"{ncr.Summary.Number}: {ncr.Description}";
+                    _category = ncr.VendorId is null ? RootCause.NotDetermined : RootCause.Supplier;
+                }
+            }
+
+            _loaded = true;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Show(CarDto c)
+    {
+        _car = c;
+        (_title, _owner, _problem, _rootCause, _action, _preventive) = (c.Summary.Title, c.Summary.OwnerEmail, c.Problem, c.RootCause, c.Action, c.PreventiveAction);
+        (_vendorId, _partId, _ncrId, _ncrNumber, _category, _due) = (c.VendorId, c.PartId, c.NonconformanceId, c.Summary.NonconformanceNumber, c.RootCauseCategory, MaterialsFormat.ToDateTime(c.Summary.DueDate));
+    }
+
+    private async Task RunAsync(Func<Task<CarDto>> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            var saved = await action();
+            Snackbar.Add(done, Severity.Success);
+            if (CarId is null)
+            {
+                Navigation.NavigateTo($"materials/quality/cars/{saved.Summary.Id}");
+                return;
+            }
+
+            Show(saved);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task SaveAsync() => RunAsync(() => Cars.SaveAsync(CarId, new SaveCarRequest(_title!, _problem!, _owner!, DateOnly.FromDateTime(_due!.Value), _ncrId, _vendorId, _partId,
+        _category, _rootCause, _action, _preventive)), "Saved.");
+
+    private async Task ImplementedAsync()
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, "Mark the corrective action done", "What was done (optional)", "Mark done") is { } note)
+        {
+            await RunAsync(() => Cars.MarkImplementedAsync(CarId!.Value, new CompleteCarRequest(MaterialsFormat.Today, note)), "Waiting for verification.");
+        }
+    }
+
+    private async Task VerifyAsync(bool effective)
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, effective ? "Verified effective" : "Not effective", effective ? "How it was verified (optional)" : "Why not",
+                effective ? "Close it" : "Reopen", required: !effective) is { } note)
+        {
+            await RunAsync(() => Cars.VerifyAsync(CarId!.Value, new VerifyCarRequest(effective, note)), effective ? "Closed." : "Reopened.");
+        }
+    }
+
+    private Task CancelAsync() => RunAsync(() => Cars.CancelAsync(CarId!.Value), "Cancelled.");
+}

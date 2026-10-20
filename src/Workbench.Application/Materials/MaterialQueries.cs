@@ -64,7 +64,8 @@ internal static class MaterialQueries
                 var unit = b.Ownership == InventoryOwnership.GovernmentFurnished ? 0 : p.CurrentUnitCost;
                 return new InventoryBalanceDto(b.Id, p.Id, p.Number, p.Revision, p.Description, p.UnitOfMeasure, b.WarehouseId, warehouses.GetValueOrDefault(b.WarehouseId) ?? "",
                     b.BinId, bins.GetValueOrDefault(b.BinId) ?? "", b.Lot, b.Serial, b.Ownership.ToContract(), b.OwnerProjectId,
-                    b.OwnerProjectId is { } op ? projects.GetValueOrDefault(op) : null, b.Quantity, unit, Money.Round(b.Quantity * unit), b.ReceivedOn, b.GovernmentReference);
+                    b.OwnerProjectId is { } op ? projects.GetValueOrDefault(op) : null, b.Quantity, unit, Money.Round(b.Quantity * unit), b.ReceivedOn, b.GovernmentReference,
+                    (StockStatus)(int)b.Status);
             })
             .OrderBy(b => b.PartNumber, StringComparer.Ordinal).ThenBy(b => b.Warehouse, StringComparer.Ordinal).ThenBy(b => b.Bin, StringComparer.Ordinal)
             .ThenBy(b => b.Lot, StringComparer.Ordinal).ThenBy(b => b.Serial, StringComparer.Ordinal)

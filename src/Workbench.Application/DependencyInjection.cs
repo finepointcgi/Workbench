@@ -92,6 +92,7 @@ public static class DependencyInjection
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
         Travel.TravelRegistration.AddWorkbenchTravel(services); // Travel authorizations and corporate cards; decorates IExpenseReportService (after AddWorkbenchOdcs), card lines post to the card liability; above AddWorkbenchIdentity.
         Materials.SalesRegistration.AddWorkbenchSalesShipping(services); // Sales orders, pick/pack/ship, DD250, WAWF receiving reports, delivery invoices through billing; above AddWorkbenchIdentity.
+        Quality.QualityRegistration.AddWorkbenchQuality(services); // Quality (inspection, NCRs/MRB with approval handler, CARs) and engineering change control; after materials, above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

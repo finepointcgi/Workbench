@@ -1,0 +1,64 @@
+@* Corrective action requests: owner, due date, status. *@
+@inject ICorrectiveActionService Cars
+
+<MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+    <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => { _openOnly = v; return LoadAsync(); }" Label="Open only" Color="Color.Primary" />
+    <MudSpacer />
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Href="materials/quality/cars/new" data-testid="new-car">New corrective action</MudButton>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary">No corrective actions.</MudText>
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="cars">
+            <caption class="wb-sr-only">Corrective actions</caption>
+            <thead><tr><th scope="col">CAR</th><th scope="col">Title</th><th scope="col">Vendor</th><th scope="col">Part</th><th scope="col">NCR</th><th scope="col">Owner</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead>
+            <tbody>
+                @foreach (var c in _rows)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"materials/quality/cars/{c.Id}")">@c.Number</MudLink></td>
+                        <td>@c.Title</td><td>@c.Vendor</td><td>@c.PartNumber</td><td>@c.NonconformanceNumber</td><td>@c.OwnerEmail</td>
+                        <td style="white-space:nowrap">@MaterialsFormat.Date(c.DueDate)@if (c.IsOverdue) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="ml-1 my-0">Overdue</MudChip> }</td>
+                        <td><MudChip T="string" Size="Size.Small" Color="QualityFormat.Color(c.Status)" Class="my-0">@QualityFormat.Label(c.Status)</MudChip></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<CarSummaryDto> _rows = [];
+    private bool _openOnly = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = await Cars.ListAsync(new CarQuery(OpenOnly: _openOnly));
+            _error = null;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+}

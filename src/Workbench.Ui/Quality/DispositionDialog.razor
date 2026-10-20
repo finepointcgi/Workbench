@@ -1,0 +1,45 @@
+@* The material review board's disposition, sent for approval. *@
+<MudDialog>
+    <DialogContent>
+        <MudRadioGroup T="NcrDisposition" @bind-Value="_disposition">
+            @foreach (var d in Enum.GetValues<NcrDisposition>().Where(d => d != NcrDisposition.ReturnToVendor || CanReturn))
+            {
+                <MudRadio T="NcrDisposition" Value="d" Color="Color.Primary">
+                    <strong>@QualityFormat.Label(d)</strong> <span class="mud-text-secondary">— @QualityFormat.Explain(d)</span>
+                </MudRadio>
+            }
+        </MudRadioGroup>
+        @if (_disposition == NcrDisposition.Scrap)
+        {
+            <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge a project instead (direct material)" Clearable="true" Dense="true" Class="mt-2"
+                       HelperText="Leave empty to charge inventory adjustments and scrap.">
+                @foreach (var c in ChargeCodes) { <MudSelectItem T="Guid?" Value="c.WbsElementId">@c.ProjectCode @c.WbsCode · @c.Name</MudSelectItem> }
+            </MudSelect>
+        }
+        @if (_disposition == NcrDisposition.ReturnToVendor)
+        {
+            <MudTextField T="string" @bind-Value="_rma" Label="Vendor's return authorization (RMA), if any" Margin="Margin.Dense" Class="mt-2" />
+        }
+        <MudTextField T="string" @bind-Value="_note" Label="Why (for the approvers)" Lines="2" Margin="Margin.Dense" Class="mt-2" />
+        <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">Nothing moves until the disposition is approved. Material worth over the Finance threshold also goes to Finance.</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new ProposeDispositionRequest(_disposition, _note, null, _disposition == NcrDisposition.Scrap ? _wbsId : null, _rma)))">Send for approval</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public bool CanReturn { get; set; }
+    [Parameter] public IReadOnlyList<MaterialChargeOption> ChargeCodes { get; set; } = [];
+
+    private NcrDisposition _disposition = NcrDisposition.UseAsIs;
+    private Guid? _wbsId;
+    private string? _rma;
+    private string? _note;
+
+    protected override void OnInitialized() => _disposition = CanReturn ? NcrDisposition.ReturnToVendor : NcrDisposition.UseAsIs;
+}

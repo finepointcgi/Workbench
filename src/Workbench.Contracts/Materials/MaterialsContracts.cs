@@ -25,7 +25,13 @@ public enum InventoryMovement
     Scrap,
     Revaluation,
     SalesShipment,
+    StatusChange,
+    VendorReturn,
+    InventoryScrap,
 }
+
+/// <summary>Whether stock can be used (mirrors Domain InventoryStockStatus). Only available stock is issued or planned by MRP.</summary>
+public enum StockStatus { Available, InspectionHold, Nonconforming }
 
 public enum WorkOrderState { Planned, Released, InProgress, Completed, Closed, Cancelled }
 
@@ -188,7 +194,10 @@ public sealed record InventoryBalanceDto(
     decimal UnitCost,
     decimal Value,
     DateOnly ReceivedOn,
-    string? GovernmentReference)
+    string? GovernmentReference,
+
+    /// <summary>Added by quality: held and nonconforming stock is listed but can't be issued.</summary>
+    StockStatus Status = StockStatus.Available)
 {
     public string Location => $"{Warehouse} / {Bin}";
 }

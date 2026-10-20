@@ -1,0 +1,285 @@
+@page "/materials/engineering-changes/new"
+@page "/materials/engineering-changes/{EcoId:guid}"
+@inject IEngineeringChangeService Changes
+@inject IPartService PartService
+@inject IManufacturingService Manufacturing
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_eco?.Summary.Number ?? "New engineering change") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Engineering change" BackHref="materials/engineering-changes" BackLabel="Engineering changes" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (!_loaded)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var editable = MaterialsFormat.CanEdit(User) && (_eco is null || _eco.CanEdit);
+    <MaterialsHeader Title="@(_eco is { } e ? $"{e.Summary.Number} · {e.Summary.Title}" : "New engineering change")" BackHref="materials/engineering-changes" BackLabel="Engineering changes"
+                     Subtitle="@(_eco is { } e2 ? $"{QualityFormat.Label(e2.Summary.Reason)} · {QualityFormat.Effectivity(e2.Summary)}" : "Name the parts and the new revisions, why, and from when.")">
+        @if (_eco is { } eco)
+        {
+            <MudChip T="string" Size="Size.Small" Color="QualityFormat.Color(eco.Summary.Status)" data-testid="eco-status">@QualityFormat.Label(eco.Summary.Status)</MudChip>
+            @if (eco.CanEdit && MaterialsFormat.CanEdit(User))
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="_busy" data-testid="eco-submit">Send for approval</MudButton>
+            }
+            @if (eco.CanDecide)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ApproveAsync" Disabled="_busy" data-testid="eco-approve">Approve</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" Disabled="_busy">Send back</MudButton>
+            }
+            @if (MaterialsFormat.CanEdit(User) && eco.Summary.Status is EcoState.Draft or EcoState.PendingApproval or EcoState.Approved)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CancelAsync" Disabled="_busy">Cancel change</MudButton>
+            }
+        }
+    </MaterialsHeader>
+
+    @if (_eco is { } info && (info.DecisionComment is not null || info.SubmittedBy is not null))
+    {
+        <MudAlert Severity="@(info.Summary.Status == EcoState.Draft && info.DecisionComment is not null ? Severity.Warning : Severity.Info)" Dense="true" Class="mb-3">
+            @(info.SubmittedBy is { } sb ? $"Sent by {sb}" : "")@(info.DecidedBy is { } db ? $"; {(info.Summary.Status == EcoState.Draft ? "sent back" : "approved")} by {db}" : "")@(info.DecisionComment is { } dc ? $": “{dc}”" : ".")
+            @(info.Summary.EffectiveAtUtc is { } at ? $" Effective since {at.ToLocalTime():yyyy-MM-dd}." : "")
+        </MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-3 mb-3" Style="max-width:1100px">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="EcoReason" @bind-Value="_reason" Label="Reason" Dense="true" ReadOnly="!editable">
+                    @foreach (var r in Enum.GetValues<EcoReason>()) { <MudSelectItem T="EcoReason" Value="r">@QualityFormat.Label(r)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_description" Label="What changes and why" Lines="3" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Effectivity" @bind-Value="_effectivity" Label="Effective" Dense="true" ReadOnly="!editable">
+                    <MudSelectItem T="Effectivity" Value="Effectivity.Date">From a date</MudSelectItem>
+                    <MudSelectItem T="Effectivity" Value="Effectivity.SerialOrLot">From a serial or lot number</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                @if (_effectivity == Effectivity.Date)
+                {
+                    <MudDatePicker @bind-Date="_date" Label="Effective date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" ReadOnly="!editable" />
+                }
+                else
+                {
+                    <MudTextField T="string" @bind-Value="_serial" Label="First serial or lot built to it" ReadOnly="!editable" />
+                }
+            </MudItem>
+            <MudItem xs="12" sm="4"><MudNumericField T="decimal" @bind-Value="_cost" Label="Estimated cost impact ($)" Min="0" Format="N2" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="EcoStockDisposition" @bind-Value="_stock" Label="Existing stock" Dense="true" ReadOnly="!editable">
+                    @foreach (var d in Enum.GetValues<EcoStockDisposition>()) { <MudSelectItem T="EcoStockDisposition" Value="d">@QualityFormat.Label(d)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="EcoWorkOrderDisposition" @bind-Value="_orders" Label="Open work orders" Dense="true" ReadOnly="!editable" HelperText="They're flagged for review either way when the change takes effect.">
+                    @foreach (var d in Enum.GetValues<EcoWorkOrderDisposition>()) { <MudSelectItem T="EcoWorkOrderDisposition" Value="d">@QualityFormat.Label(d)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mt-4 mb-1">Affected parts</MudText>
+        @foreach (var row in _items)
+        {
+            <MudGrid Spacing="1" Class="mb-1">
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" Value="row.PartId" ValueChanged="v => PartChangedAsync(row, v)" Label="Part" Dense="true" ReadOnly="!editable">
+                        @foreach (var p in _parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+                    </MudSelect>
+                    @if (row.FromRevision is { } from) { <MudText Typo="Typo.caption" Class="mud-text-secondary">Now on BOM @from</MudText> }
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudSelect T="Guid?" @bind-Value="row.ToBomId" Label="New BOM revision" Dense="true" Clearable="true" ReadOnly="!editable">
+                        @foreach (var b in row.Boms.Where(b => !b.IsActive || b.Id == row.ToBomId)) { <MudSelectItem T="Guid?" Value="b.Id">@b.Revision@(b.PartRevision.Length > 0 ? $" (part rev {b.PartRevision})" : "")</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudSelect T="Guid?" @bind-Value="row.NewPartId" Label="New part revision" Dense="true" Clearable="true" ReadOnly="!editable">
+                        @foreach (var p in _allParts.Where(p => p.Number == row.Number && p.Id != row.PartId)) { <MudSelectItem T="Guid?" Value="p.Id">@(p.Revision.Length == 0 ? "—" : p.Revision)@(p.IsActive ? "" : " (not released)")</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="10" sm="3"><MudTextField T="string" @bind-Value="row.Note" Label="Note" Margin="Margin.Dense" ReadOnly="!editable" /></MudItem>
+                @if (editable)
+                {
+                    <MudItem xs="2" sm="1"><MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="Remove the part" OnClick="() => _items.Remove(row)" /></MudItem>
+                }
+            </MudGrid>
+        }
+        @if (editable)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Make the new BOM revision first (Bills of materials › copy to a new revision), then choose it here.</MudText>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _items.Add(new Row())">Add a part</MudButton>
+            <MudStack Row="true" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_title) || string.IsNullOrWhiteSpace(_description))" data-testid="eco-save">Save draft</MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+
+    @if (_eco is { } done && done.WorkOrderReviews.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-3" Style="max-width:1100px">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Open work orders flagged for review</MudText>
+            @foreach (var r in done.WorkOrderReviews)
+            {
+                <div>
+                    <MudLink Href="@($"materials/work-orders/{r.WorkOrderId}")">@r.WorkOrderNumber</MudLink> @r.PartNumber · @MaterialsFormat.Label(r.WorkOrderStatus) ·
+                    @(r.Status == WorkOrderReviewState.Reviewed ? $"reviewed by {r.ReviewedBy}{(r.Note is { } n ? $": {n}" : "")}" : "waiting for review")
+                </div>
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [Parameter] public Guid? EcoId { get; set; }
+
+    private sealed class Row
+    {
+        public Guid? PartId { get; set; }
+        public string? Number { get; set; }
+        public string? FromRevision { get; set; }
+        public Guid? ToBomId { get; set; }
+        public Guid? NewPartId { get; set; }
+        public string? Note { get; set; }
+        public IReadOnlyList<BomRow> Boms { get; set; } = [];
+    }
+
+    private sealed record BomRow(Guid Id, string Revision, string PartRevision, bool IsActive);
+
+    private EcoDto? _eco;
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private IReadOnlyList<PartSummaryDto> _allParts = [];
+    private readonly List<Row> _items = [new Row()];
+    private string? _title, _description, _serial;
+    private EcoReason _reason = EcoReason.DesignImprovement;
+    private Effectivity _effectivity;
+    private DateTime? _date = DateTime.Today;
+    private decimal _cost;
+    private EcoStockDisposition _stock;
+    private EcoWorkOrderDisposition _orders;
+    private bool _loaded, _busy, _forbidden;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _allParts = await PartService.ListAsync(new PartQuery(ActiveOnly: false));
+            _parts = _allParts.Where(p => p.IsActive).ToList();
+            if (EcoId is { } id)
+            {
+                await ShowAsync(await Changes.GetAsync(id));
+            }
+
+            _loaded = true;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task ShowAsync(EcoDto e)
+    {
+        _eco = e;
+        var s = e.Summary;
+        (_title, _description, _reason, _effectivity, _serial, _cost, _stock, _orders) =
+            (s.Title, e.Description, s.Reason, s.EffectivityKind, s.EffectiveSerialOrLot, e.CostImpact, e.StockDisposition, e.WorkOrderDisposition);
+        _date = s.EffectiveDate is { } d ? MaterialsFormat.ToDateTime(d) : null;
+        _items.Clear();
+        foreach (var i in e.Items)
+        {
+            var row = new Row { PartId = i.PartId, ToBomId = i.ToBomId, NewPartId = i.NewPartId, Note = i.Note, FromRevision = i.FromBomRevision };
+            await LoadBomsAsync(row);
+            _items.Add(row);
+        }
+    }
+
+    private async Task PartChangedAsync(Row row, Guid? id)
+    {
+        row.PartId = id;
+        row.ToBomId = null;
+        row.NewPartId = null;
+        await LoadBomsAsync(row);
+        row.FromRevision = row.Boms.FirstOrDefault(b => b.IsActive && b.PartRevision == (_allParts.FirstOrDefault(p => p.Id == id)?.Revision ?? ""))?.Revision;
+    }
+
+    private async Task LoadBomsAsync(Row row)
+    {
+        var part = _allParts.FirstOrDefault(p => p.Id == row.PartId);
+        row.Number = part?.Number;
+        if (part is null)
+        {
+            row.Boms = [];
+            return;
+        }
+
+        var boms = new List<BomRow>();
+        foreach (var p in _allParts.Where(p => p.Number == part.Number))
+        {
+            boms.AddRange((await Manufacturing.ListBomsAsync(p.Id)).Select(b => new BomRow(b.Id, b.Revision, b.PartRevision, b.IsActive)));
+        }
+
+        row.Boms = boms;
+    }
+
+    private async Task RunAsync(Func<Task<EcoDto>> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            var saved = await action();
+            Snackbar.Add(done, Severity.Success);
+            if (EcoId is null)
+            {
+                Navigation.NavigateTo($"materials/engineering-changes/{saved.Summary.Id}");
+                return;
+            }
+
+            await ShowAsync(saved);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task SaveAsync() => RunAsync(() => Changes.SaveAsync(EcoId, new SaveEcoRequest(_title!, _reason, _description!,
+        _items.Where(i => i.PartId is not null).Select(i => new SaveEcoItemRequest(i.PartId!.Value, i.ToBomId, i.NewPartId, i.Note)).ToList(),
+        _effectivity, PurchasingFormat.ToDateOnly(_date), _serial, _stock, _orders, _cost)), "Saved.");
+
+    private Task SubmitAsync() => RunAsync(() => Changes.SubmitAsync(EcoId!.Value), "Sent for approval.");
+
+    private async Task ApproveAsync()
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, "Approve the engineering change", "Comment (optional)", "Approve") is { } comment)
+        {
+            await RunAsync(() => Changes.ApproveAsync(EcoId!.Value, new DecideEcoRequest(comment)), "Approved.");
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, "Send the change back", "Reason", "Send back", required: true, color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Changes.RejectAsync(EcoId!.Value, new DecideEcoRequest(reason)), "Sent back to draft.");
+        }
+    }
+
+    private Task CancelAsync() => RunAsync(() => Changes.CancelAsync(EcoId!.Value), "Cancelled.");
+}

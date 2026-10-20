@@ -467,7 +467,7 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
         var compIds = wo.Components.Select(c => c.PartId).Distinct().ToList();
         var parts = await db.Set<Part>().AsNoTracking().Where(p => compIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
         var balances = await db.Set<InventoryBalance>().AsNoTracking().Where(b => compIds.Contains(b.PartId) && b.Quantity > 0).ToListAsync(ct);
-        decimal Available(Guid partId) => balances.Where(b => b.PartId == partId && (b.Ownership == InventoryOwnership.General || (wo.ProjectId is { } p && b.OwnerProjectId == p))).Sum(b => b.Quantity);
+        decimal Available(Guid partId) => balances.Where(b => b.PartId == partId && b.Status == InventoryStockStatus.Available && (b.Ownership == InventoryOwnership.General || (wo.ProjectId is { } p && b.OwnerProjectId == p))).Sum(b => b.Quantity);
         var centers = await db.Set<WorkCenter>().AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Code, ct);
         var categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Code, ct);
         var reports = await db.Set<WorkOrderLaborReport>().AsNoTracking().Where(r => r.WorkOrderId == id).OrderBy(r => r.WorkDate).ThenBy(r => r.CreatedAtUtc).ToListAsync(ct);
@@ -618,7 +618,9 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
             throw new InvalidOperationException($"{wo.Number} is already {wo.Status}.");
         }
 
-        var bom = await db.Set<BillOfMaterial>().AsNoTracking().Include(b => b.Components).FirstOrDefaultAsync(b => b.PartId == wo.PartId && b.IsActive, cancellationToken)
+        var effectiveBom = await Quality.QualityHooks.BomEffectiveOnAsync(db, wo.PartId, wo.StartDate, cancellationToken); // An approved engineering change dated on or before the start.
+        var bom = await db.Set<BillOfMaterial>().AsNoTracking().Include(b => b.Components)
+            .FirstOrDefaultAsync(b => effectiveBom != null ? b.Id == effectiveBom : b.PartId == wo.PartId && b.IsActive, cancellationToken)
             ?? throw new ArgumentException("The part has no active BOM; add or activate one before releasing.");
         var routing = await db.Set<Routing>().AsNoTracking().Include(r => r.Operations).FirstOrDefaultAsync(r => r.PartId == wo.PartId && r.IsActive, cancellationToken);
         wo.BomId = bom.Id;
@@ -652,6 +654,7 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
 
         wo.Status = WorkOrderStatus.Released;
         wo.ReleasedAtUtc = UtcNow;
+        await Quality.QualityHooks.OpenInProcessInspectionsAsync(db, wo, audit.Actor, UtcNow, cancellationToken);
         audit.Record(db, MaterialRules.WorkOrderEntity, wo.Id, "Released", new { Status = nameof(WorkOrderStatus.Planned) },
             new { Status = wo.Status.ToString(), Bom = bom.Revision, Routing = routing?.Revision, Components = wo.Components.Count });
         await db.SaveChangesAsync(cancellationToken);
@@ -775,7 +778,16 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
 
         var engine = await StockEngine.CreateAsync(db, ledger, cancellationToken);
         var part = await engine.LoadPartAsync(wo.PartId, cancellationToken);
-        var t = engine.NewTransaction(InventoryTransactionType.Scrap, request.Date, part);
+        var t = ScrapCore(engine, wo, part, quantity, request.Date, reason);
+        await engine.FlushAsync(JournalSource.Manufacturing, t.Id, request.Date, $"Scrap on {wo.Number} ({t.Number})", cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return await DetailAsync(db, wo.Id, cancellationToken);
+    }
+
+    /// <summary>Scraps open units of a work order (stock orders relieve WIP to adjustments); also used by an NCR's scrap disposition.</summary>
+    internal static InventoryTransaction ScrapCore(StockEngine engine, WorkOrder wo, Part part, decimal quantity, DateOnly date, string reason)
+    {
+        var t = engine.NewTransaction(InventoryTransactionType.Scrap, date, part);
         t.WorkOrderId = wo.Id;
         t.Quantity = quantity;
         t.Reason = reason;
@@ -794,18 +806,18 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
         }
 
         wo.QuantityScrapped += quantity;
-        MarkCompleted(wo);
-        await engine.FlushAsync(JournalSource.Manufacturing, t.Id, request.Date, $"Scrap on {wo.Number} ({t.Number})", cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
-        return await DetailAsync(db, wo.Id, cancellationToken);
+        MarkCompleted(wo, engine.UtcNow);
+        return t;
     }
 
-    private void MarkCompleted(WorkOrder wo)
+    private void MarkCompleted(WorkOrder wo) => MarkCompleted(wo, UtcNow);
+
+    private static void MarkCompleted(WorkOrder wo, DateTime utcNow)
     {
         if (wo.QuantityOpen == 0)
         {
             wo.Status = WorkOrderStatus.Completed;
-            wo.CompletedAtUtc = UtcNow;
+            wo.CompletedAtUtc = utcNow;
         }
     }
 
@@ -821,8 +833,10 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
             throw new ArgumentException($"Only {wo.QuantityOpen:0.####} is still open on {wo.Number}.");
         }
 
+        await Quality.QualityHooks.EnsureInProcessInspectedAsync(db, wo, cancellationToken);
         var engine = await StockEngine.CreateAsync(db, ledger, cancellationToken);
         var part = await engine.LoadPartAsync(wo.PartId, cancellationToken);
+        var finalPlan = wo.IsForProject ? null : await Quality.QualityHooks.ActivePlanAsync(db, part.Id, Domain.Quality.InspectionKind.Final, cancellationToken);
         var serials = await engine.SerialsAsync(part, quantity, request.Serials, cancellationToken);
         var created = new List<InventoryTransaction>();
         if (wo.IsForProject)
@@ -852,13 +866,17 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
                 var qty = s.Length > 0 ? 1 : quantity;
                 var value = i == serials.Count - 1 ? left : Money.Round(total / quantity * qty);
                 left -= value;
-                var key = new StockKey(part.Id, warehouse.Id, bin.Id, lot, s, InventoryOwnership.General, null);
+                var key = new StockKey(part.Id, warehouse.Id, bin.Id, lot, s, InventoryOwnership.General, null, Quality.QualityHooks.StatusFor(finalPlan));
                 var t = engine.Receive(part, key, qty, value, InventoryTransactionType.WorkOrderCompletion, request.Date, engine.Accounts?.Wip, engine.Accounts?.ManufacturingVariance, $"completed on {wo.Number}");
                 t.WorkOrderId = wo.Id;
                 created.Add(t);
             }
 
             wo.CompletedCost += total;
+            if (finalPlan is not null)
+            {
+                await Quality.QualityHooks.OpenInspectionAsync(db, finalPlan, part, created, request.Date, engine.Actor, engine.UtcNow, i => i.WorkOrderId = wo.Id, cancellationToken);
+            }
         }
 
         var traced = await db.Set<InventoryTransaction>().AsNoTracking()

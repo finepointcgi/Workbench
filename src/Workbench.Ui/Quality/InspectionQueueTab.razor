@@ -1,0 +1,86 @@
+@* Inspections waiting (received or built into inspection hold, or a work order operation to check) and the ones done. *@
+@inject IInspectionService Inspections
+
+<MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+        <MudButton Variant="@(_done ? Variant.Outlined : Variant.Filled)" Color="Color.Primary" OnClick="() => SetAsync(false)" data-testid="queue-waiting">Waiting</MudButton>
+        <MudButton Variant="@(_done ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" OnClick="() => SetAsync(true)" data-testid="queue-done">Done</MudButton>
+    </MudButtonGroup>
+    <MudSelect T="InspectionType?" Value="_kind" ValueChanged="v => { _kind = v; return LoadAsync(); }" Label="Kind" Clearable="true" Dense="true" Style="min-width:160px">
+        @foreach (var k in Enum.GetValues<InspectionType>()) { <MudSelectItem T="InspectionType?" Value="k">@QualityFormat.Label(k)</MudSelectItem> }
+    </MudSelect>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_rows.Count == 0)
+{
+    <MudText Class="mud-text-secondary">@(_done ? "No inspections done yet." : "Nothing is waiting for inspection.")</MudText>
+}
+else
+{
+    <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="inspection-queue">
+            <caption class="wb-sr-only">Inspections</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Inspection</th><th scope="col">Kind</th><th scope="col">Part</th><th scope="col" style="text-align:right">Quantity</th>
+                    <th scope="col" style="text-align:right">Sample</th><th scope="col">From</th><th scope="col">Ready</th>
+                    @if (_done) { <th scope="col" style="text-align:right">Accepted</th><th scope="col" style="text-align:right">Rejected</th><th scope="col">NCR</th><th scope="col">Inspector</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in _rows)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"materials/quality/inspections/{i.Id}")">@i.Number</MudLink></td>
+                        <td>@QualityFormat.Label(i.Kind)</td>
+                        <td>@i.PartNumber <span class="mud-text-secondary">@i.PartDescription</span></td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(i.Quantity) @i.UnitOfMeasure</td>
+                        <td style="text-align:right">@i.SampleSize</td>
+                        <td>@i.Source@(i.Vendor is { } v ? $" · {v}" : "")</td>
+                        <td style="white-space:nowrap">@MaterialsFormat.Date(i.ReadyOn)</td>
+                        @if (_done)
+                        {
+                            <td style="text-align:right">@MaterialsFormat.Qty(i.QuantityAccepted)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(i.QuantityRejected)</td>
+                            <td>@if (i.NonconformanceId is { } n) { <MudLink Href="@($"materials/quality/ncrs/{n}")">@i.NonconformanceNumber</MudLink> }</td>
+                            <td>@i.Inspector</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<InspectionSummaryDto> _rows = [];
+    private bool _done;
+    private InspectionType? _kind;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task SetAsync(bool done)
+    {
+        _done = done;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = await Inspections.ListAsync(new InspectionQuery(_done ? InspectionState.Completed : InspectionState.Pending, _kind));
+            _error = null;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+}

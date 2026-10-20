@@ -1,0 +1,152 @@
+@page "/materials/engineering-changes"
+@inject IEngineeringChangeService Changes
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Engineering changes · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Engineering changes" Subtitle="Change a design under control: what changes, why, from when, and what happens to stock and open work orders.">
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudButton Variant="Variant.Outlined" OnClick="ApplyDueAsync" StartIcon="@Icons.Material.Filled.Update">Apply due changes</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="materials/engineering-changes/new" data-testid="new-eco">New change</MudButton>
+    }
+</MaterialsHeader>
+
+<MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-3" ActivePanelIndex="_tab" ActivePanelIndexChanged="TabChanged">
+    <MudTabPanel Text="Changes">
+        <MudStack Row="true" Spacing="3" Class="mb-3" AlignItems="AlignItems.Center">
+            <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => { _openOnly = v; return LoadAsync(); }" Label="Open only" Color="Color.Primary" />
+        </MudStack>
+        @if (_error is not null)
+        {
+            <MaterialsError Message="@_error" Forbidden="_forbidden" />
+        }
+        else if (_rows.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No engineering changes.</MudText>
+        }
+        else
+        {
+            <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="ecos">
+                    <caption class="wb-sr-only">Engineering changes</caption>
+                    <thead><tr><th scope="col">Change</th><th scope="col">Title</th><th scope="col">Parts</th><th scope="col">Reason</th><th scope="col">Effectivity</th><th scope="col">Status</th><th scope="col" style="text-align:right">Work orders to review</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in _rows)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"materials/engineering-changes/{e.Id}")">@e.Number</MudLink></td>
+                                <td>@e.Title</td>
+                                <td>@string.Join(", ", e.Parts)</td>
+                                <td>@QualityFormat.Label(e.Reason)</td>
+                                <td>@QualityFormat.Effectivity(e)</td>
+                                <td><MudChip T="string" Size="Size.Small" Color="QualityFormat.Color(e.Status)" Class="my-0">@QualityFormat.Label(e.Status)</MudChip></td>
+                                <td style="text-align:right">@(e.OpenWorkOrderReviews == 0 ? "" : e.OpenWorkOrderReviews.ToString(CultureInfo.InvariantCulture))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+        }
+    </MudTabPanel>
+    <MudTabPanel Text="@($"Work orders to review{(_reviews.Count > 0 ? $" ({_reviews.Count})" : "")}")">
+        @if (_reviews.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No open work orders are waiting for an engineering change review.</MudText>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mb-2">These were open on an old revision when a change took effect. Decide what to do (finish, update or hold) and mark them reviewed.</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="wo-reviews">
+                <caption class="wb-sr-only">Work orders to review</caption>
+                <thead><tr><th scope="col">Work order</th><th scope="col">Part</th><th scope="col">Status</th><th scope="col">Flagged</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _reviews)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/work-orders/{r.WorkOrderId}")">@r.WorkOrderNumber</MudLink></td>
+                            <td>@r.PartNumber</td>
+                            <td>@MaterialsFormat.Label(r.WorkOrderStatus)</td>
+                            <td>@r.FlaggedAtUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                            <td>@if (MaterialsFormat.CanEdit(User)) { <MudButton Size="Size.Small" OnClick="() => ReviewedAsync(r)">Mark reviewed</MudButton> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudTabPanel>
+    <MudTabPanel Text="Configuration"><ConfigurationTab /></MudTabPanel>
+</MudTabs>
+
+@code {
+    private static readonly string[] Tabs = ["changes", "reviews", "configuration"];
+
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    [Inject] private IDialogService DialogService { get; set; } = default!;
+
+    private IReadOnlyList<EcoSummaryDto> _rows = [];
+    private IReadOnlyList<WorkOrderReviewDto> _reviews = [];
+    private bool _openOnly;
+    private int _tab;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, Tab ?? ""));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private void TabChanged(int tab)
+    {
+        _tab = tab;
+        Navigation.NavigateTo($"materials/engineering-changes?tab={Tabs[tab]}", replace: true);
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = await Changes.ListAsync(new EcoQuery(OpenOnly: _openOnly));
+            _reviews = await Changes.ListOpenWorkOrderReviewsAsync();
+            _error = null;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task ApplyDueAsync()
+    {
+        try
+        {
+            var count = await Changes.ApplyDueAsync();
+            Snackbar.Add(count == 0 ? "No approved changes are due." : $"{count} change{(count == 1 ? " is" : "s are")} now effective.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ReviewedAsync(WorkOrderReviewDto review)
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, $"Reviewed {review.WorkOrderNumber}", "What was decided (optional)", "Mark reviewed") is not { } note)
+        {
+            return;
+        }
+
+        try
+        {
+            await Changes.MarkWorkOrderReviewedAsync(review.Id, new ReviewWorkOrderRequest(note));
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}
