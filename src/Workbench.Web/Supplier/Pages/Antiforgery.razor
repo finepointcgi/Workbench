@@ -1,0 +1,6 @@
+@* The form token; every portal form posts it. *@
+<input type="hidden" name="@Token.FormFieldName" value="@Token.RequestToken" />
+
+@code {
+    [Parameter, EditorRequired] public AntiforgeryTokenSet Token { get; set; } = default!;
+}

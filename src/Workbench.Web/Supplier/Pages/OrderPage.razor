@@ -1,0 +1,202 @@
+<PortalLayout View="View" Title="@($"Purchase order {Order.Order.Number}")">
+    <dl class="facts">
+        <div><dt>Status</dt><dd>@Order.Order.Status</dd></div>
+        <div><dt>Ordered</dt><dd>@PortalFormat.Date(Order.Order.OrderDate)@(Order.Order.Revision > 0 ? $" (change {Order.Order.Revision})" : "")</dd></div>
+        <div><dt>Total</dt><dd>@PortalFormat.Money(Order.Order.Total)</dd></div>
+        @if (Order.Terms is { } terms)
+        {
+            <div><dt>Terms</dt><dd>@terms</dd></div>
+        }
+        @if (Order.ShipTo is { } shipTo)
+        {
+            <div><dt>Ship to</dt><dd>@shipTo</dd></div>
+        }
+        <div><dt>Acknowledgement</dt><dd>@(Order.Order.Acknowledgement is { } current ? PortalFormat.Label(current) : Order.Order.NeedsAcknowledgement ? "Please acknowledge this order" : "None")</dd></div>
+    </dl>
+
+    <section aria-labelledby="lines-h">
+        <h2 id="lines-h">Lines</h2>
+        <div class="scroll">
+            <table aria-label="Order lines">
+                <thead>
+                    <tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col" class="num">Quantity</th><th scope="col" class="num">Unit price</th><th scope="col" class="num">Amount</th>
+                        <th scope="col">Needed by</th><th scope="col">You promised</th><th scope="col" class="num">Shipped</th><th scope="col" class="num">Received</th><th scope="col" class="num">Invoiced</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in Order.Lines)
+                    {
+                        <tr>
+                            <th scope="row">@l.LineNumber</th>
+                            <td>@l.Description</td>
+                            <td class="num">@PortalFormat.Quantity(l.Quantity)</td>
+                            <td class="num">@PortalFormat.Price(l.UnitPrice)</td>
+                            <td class="num">@PortalFormat.Money(l.Amount)</td>
+                            <td>@PortalFormat.Date(l.NeededBy)</td>
+                            <td>@PortalFormat.Date(l.PromisedDate)</td>
+                            <td class="num">@PortalFormat.Quantity(l.QuantityShipped)</td>
+                            <td class="num">@PortalFormat.Quantity(l.QuantityReceived)</td>
+                            <td class="num">@PortalFormat.Quantity(l.QuantityInvoiced)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (Order.CanInvoice)
+    {
+        <details class="card" open="@Order.Order.NeedsAcknowledgement">
+            <summary><h2>Acknowledge the order</h2></summary>
+            <form method="post" action="/supplier/orders/@Order.Order.Id/acknowledge">
+                <Antiforgery Token="View.Token" />
+                <fieldset>
+                    <legend>Your answer</legend>
+                    <label class="inline"><input type="radio" name="status" value="Accepted" checked /> Accept as ordered</label>
+                    <label class="inline"><input type="radio" name="status" value="AcceptedWithChanges" /> Accept with changes</label>
+                    <label class="inline"><input type="radio" name="status" value="Rejected" /> Can't accept</label>
+                </fieldset>
+                <div class="scroll">
+                    <table aria-label="Promised dates and changes">
+                        <thead><tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col">Promised delivery</th><th scope="col">Different quantity</th><th scope="col">Different unit price</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in Order.Lines)
+                            {
+                                var id = l.Id.ToString("N");
+                                <tr>
+                                    <th scope="row">@l.LineNumber</th>
+                                    <td>@l.Description</td>
+                                    <td><input type="date" name="promised_@id" aria-label="@($"Line {l.LineNumber} promised delivery date")" value="@PortalFormat.Input(l.PromisedDate ?? l.NeededBy)" /></td>
+                                    <td><input name="qty_@id" inputmode="decimal" size="8" aria-label="@($"Line {l.LineNumber} different quantity")" /></td>
+                                    <td><input name="price_@id" inputmode="decimal" size="10" aria-label="@($"Line {l.LineNumber} different unit price")" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <label>Note to the buyer (needed if you can't accept) <textarea name="note" rows="2" maxlength="2000"></textarea></label>
+                <button type="submit" class="primary">Send acknowledgement</button>
+            </form>
+        </details>
+    }
+
+    @if (Order.CanShip)
+    {
+        <details class="card">
+            <summary><h2>Send a ship notice</h2></summary>
+            <form method="post" action="/supplier/orders/@Order.Order.Id/ship">
+                <Antiforgery Token="View.Token" />
+                <div class="grid">
+                    <label>Ship date <input type="date" name="shipDate" required value="@PortalFormat.Input(DateOnly.FromDateTime(DateTime.UtcNow))" /></label>
+                    <label>Expected delivery <input type="date" name="expectedDelivery" /></label>
+                    <label>Carrier <input name="carrier" maxlength="100" /></label>
+                    <label>Tracking number <input name="tracking" maxlength="100" /></label>
+                    <label>Your shipment id <input name="reference" maxlength="64" /></label>
+                </div>
+                <div class="scroll">
+                    <table aria-label="Quantities shipped">
+                        <thead><tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col" class="num">Not yet shipped</th><th scope="col">Shipping now</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in Order.Lines)
+                            {
+                                var open = Math.Max(0, l.Quantity - Math.Max(l.QuantityShipped, l.QuantityReceived));
+                                <tr>
+                                    <th scope="row">@l.LineNumber</th>
+                                    <td>@l.Description</td>
+                                    <td class="num">@PortalFormat.Quantity(open)</td>
+                                    <td><input name="ship_@l.Id.ToString("N")" inputmode="decimal" size="8" aria-label="@($"Line {l.LineNumber} quantity shipping now")" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <button type="submit" class="primary">Send ship notice</button>
+            </form>
+        </details>
+    }
+
+    @if (Order.CanInvoice)
+    {
+        <details class="card">
+            <summary><h2>Send an invoice</h2></summary>
+            <form method="post" action="/supplier/orders/@Order.Order.Id/invoice" enctype="multipart/form-data">
+                <Antiforgery Token="View.Token" />
+                <div class="grid">
+                    <label>Invoice number <input name="invoiceNumber" required maxlength="64" /></label>
+                    <label>Invoice date <input type="date" name="invoiceDate" required value="@PortalFormat.Input(DateOnly.FromDateTime(DateTime.UtcNow))" /></label>
+                    <label>Invoice total <input name="total" inputmode="decimal" required /></label>
+                    <label>Invoice PDF <input type="file" name="file" accept="application/pdf,.pdf" required /></label>
+                </div>
+                <div class="scroll">
+                    <table aria-label="Quantities invoiced">
+                        <thead><tr><th scope="col">Line</th><th scope="col">Item</th><th scope="col" class="num">Unit price</th><th scope="col" class="num">Not yet invoiced</th><th scope="col">Invoicing now</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in Order.Lines)
+                            {
+                                <tr>
+                                    <th scope="row">@l.LineNumber</th>
+                                    <td>@l.Description</td>
+                                    <td class="num">@PortalFormat.Price(l.UnitPrice)</td>
+                                    <td class="num">@PortalFormat.Quantity(Math.Max(0, l.Quantity - l.QuantityInvoiced))</td>
+                                    <td><input name="inv_@l.Id.ToString("N")" inputmode="decimal" size="8" aria-label="@($"Line {l.LineNumber} quantity invoiced now")" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="hint">Invoices are billed at the order's prices; our accounts payable team checks them against what we received.</p>
+                <button type="submit" class="primary">Send invoice</button>
+            </form>
+        </details>
+    }
+
+    @if (Order.ShipNotices.Count > 0)
+    {
+        <section aria-labelledby="asn-h">
+            <h2 id="asn-h">Ship notices</h2>
+            <div class="scroll">
+                <table aria-label="Ship notices">
+                    <thead><tr><th scope="col">Notice</th><th scope="col">Shipped</th><th scope="col">Expected</th><th scope="col">Carrier and tracking</th><th scope="col">Status</th><th scope="col">Sent by</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in Order.ShipNotices)
+                        {
+                            <tr>
+                                <th scope="row">@s.Number@(s.ShipmentReference is { } r ? $" ({r})" : "")</th>
+                                <td>@PortalFormat.Date(s.ShipDate)</td>
+                                <td>@PortalFormat.Date(s.ExpectedDelivery)</td>
+                                <td>@string.Join(" ", new[] { s.Carrier, s.TrackingNumber }.Where(x => x is not null))</td>
+                                <td>@PortalFormat.Label(s.Status)</td>
+                                <td>@(s.Channel == SupplierChannel.Edi ? "EDI" : "Portal")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
+    @if (Order.Invoices.Count > 0)
+    {
+        <section aria-labelledby="inv-h">
+            <h2 id="inv-h">Invoices on this order</h2>
+            <InvoiceTable Invoices="Order.Invoices" Label="Invoices on this order" />
+        </section>
+    }
+
+    @if (Order.Acknowledgements.Count > 0)
+    {
+        <section aria-labelledby="ack-h">
+            <h2 id="ack-h">Acknowledgements</h2>
+            <ul class="history">
+                @foreach (var a in Order.Acknowledgements)
+                {
+                    <li>@PortalFormat.Label(a.Status) (@(a.Revision == 0 ? "original" : $"change {a.Revision}")) by @a.AcknowledgedBy, @PortalFormat.When(a.AcknowledgedAtUtc)@(a.Note is { } n ? $": {n}" : "")</li>
+                }
+            </ul>
+        </section>
+    }
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public SupplierOrderDto Order { get; set; } = default!;
+}

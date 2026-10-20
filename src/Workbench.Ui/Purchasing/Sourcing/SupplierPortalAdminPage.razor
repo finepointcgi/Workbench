@@ -1,0 +1,201 @@
+@page "/purchasing/supplier-portal"
+@inject ISupplierPortalAdminService Portal
+@inject IRequisitionService Requisitions
+@inject ISnackbar Snackbar
+
+<PageTitle>Supplier portal · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="Supplier portal" BackHref="purchasing/rfqs" BackLabel="Requests for quote"
+                  Subtitle="Vendor contacts you invite sign in at /supplier with an emailed link or their own password. They see only their company's requests for quote, orders, ship notices, invoices and payments; everything they do is logged here." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" TabPanelsClass="pa-4" data-testid="portal-tabs">
+        <MudTabPanel Text="@($"Contacts ({_contacts.Count(c => c.IsActive)})")">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mb-3">
+                <MudSelect T="Guid?" @bind-Value="_newVendor" Label="Vendor" Dense="true" Style="min-width:220px" data-testid="contact-vendor">
+                    @foreach (var v in _vendors)
+                    {
+                        <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField T="string" @bind-Value="_newName" Label="Contact name" Margin="Margin.Dense" autocomplete="off" data-testid="contact-name" />
+                <MudTextField T="string" @bind-Value="_newEmail" Label="Contact email" Margin="Margin.Dense" InputType="InputType.Email" autocomplete="off" data-testid="contact-email" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_newVendor is null || string.IsNullOrWhiteSpace(_newEmail) || _busy)" OnClick="AddAsync" data-testid="contact-add">
+                    Invite and email a sign-in link
+                </MudButton>
+            </MudStack>
+            <MudTable Items="_contacts" Dense="true" Elevation="0" aria-label="Supplier portal contacts">
+                <HeaderContent><MudTh>Vendor</MudTh><MudTh>Name</MudTh><MudTh>Email</MudTh><MudTh>Status</MudTh><MudTh>Last sign-in</MudTh><MudTh>Invited by</MudTh><MudTh>Actions</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.VendorName</MudTd>
+                    <MudTd>@context.Name</MudTd>
+                    <MudTd>@context.Email</MudTd>
+                    <MudTd>@(context.IsActive ? context.IsLockedOut ? "Locked for a few minutes" : context.HasPassword ? "Active (password set)" : "Active (email link)" : "Access ended")</MudTd>
+                    <MudTd>@(context.LastSignInUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</MudTd>
+                    <MudTd>@context.InvitedBy</MudTd>
+                    <MudTd>
+                        @if (context.IsActive)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SendLinkAsync(context)" aria-label="@($"Send a sign-in link to {context.Name}")">Send link</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => EndAsync(context)" aria-label="@($"End portal access for {context.Name}")">End access</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => RestoreAsync(context)" aria-label="@($"Restore portal access for {context.Name}")">Restore access</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="pa-2">No portal contacts yet.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        <MudTabPanel Text="@($"Acknowledgements ({_acks.Count(a => a.Status != AcknowledgementState.Accepted && a.ReviewedBy is null)} to review)")">
+            <MudTable Items="_acks" Dense="true" Elevation="0" aria-label="Purchase order acknowledgements">
+                <HeaderContent><MudTh>Order</MudTh><MudTh>Vendor</MudTh><MudTh>Answer</MudTh><MudTh>Changes and promised dates</MudTh><MudTh>From</MudTh><MudTh>When</MudTh><MudTh>Reviewed</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd><MudLink Href="@($"purchasing/orders/{context.PurchaseOrderId}")">@context.PurchaseOrderNumber</MudLink>@(context.Revision > 0 ? $" (change {context.Revision})" : "")</MudTd>
+                    <MudTd>@context.VendorName</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@(context.Status == AcknowledgementState.Accepted ? Color.Success : context.Status == AcknowledgementState.Rejected ? Color.Error : Color.Warning)">@SourcingFormat.Label(context.Status)</MudChip>
+                        @context.Note
+                    </MudTd>
+                    <MudTd>
+                        @foreach (var l in context.Lines)
+                        {
+                            <div>Line @l.LineNumber: @(l.PromisedDate is { } p ? $"promised {PurchasingFormat.Date(p)}" : "")@(l.Quantity is { } q ? $", quantity {ProcurementFormat.Quantity(l.OrderedQuantity)} → {ProcurementFormat.Quantity(q)}" : "")@(l.UnitPrice is { } u ? $", price {ProcurementFormat.Price(l.OrderedUnitPrice)} → {ProcurementFormat.Price(u)}" : "")@(l.Note is { } n ? $" ({n})" : "")</div>
+                        }
+                    </MudTd>
+                    <MudTd>@SourcingFormat.Label(context.Channel): @context.AcknowledgedBy</MudTd>
+                    <MudTd>@context.AcknowledgedAtUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+                    <MudTd>
+                        @if (context.ReviewedBy is { } by)
+                        {
+                            @by
+                        }
+                        else if (context.Status != AcknowledgementState.Accepted)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ReviewAsync(context)" aria-label="@($"Mark the {context.PurchaseOrderNumber} acknowledgement reviewed")">Mark reviewed</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="pa-2">No acknowledgements yet.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        <MudTabPanel Text="@($"Ship notices ({_notices.Count(n => n.Status == ShipNoticeState.InTransit)} in transit)")">
+            <MudTable Items="_notices" Dense="true" Elevation="0" aria-label="Ship notices">
+                <HeaderContent><MudTh>Notice</MudTh><MudTh>Order</MudTh><MudTh>Vendor</MudTh><MudTh>Shipped</MudTh><MudTh>Expected</MudTh><MudTh>Carrier and tracking</MudTh><MudTh>Lines</MudTh><MudTh>Status</MudTh><MudTh>Receive</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Number@(context.ShipmentReference is { } r ? $" ({r})" : "") · @SourcingFormat.Label(context.Channel)</MudTd>
+                    <MudTd><MudLink Href="@($"purchasing/orders/{context.PurchaseOrderId}")">@context.PurchaseOrderNumber</MudLink></MudTd>
+                    <MudTd>@context.VendorName</MudTd>
+                    <MudTd>@PurchasingFormat.Date(context.ShipDate)</MudTd>
+                    <MudTd>@PurchasingFormat.Date(context.ExpectedDelivery)</MudTd>
+                    <MudTd>@string.Join(" ", new[] { context.Carrier, context.TrackingNumber }.Where(x => x is not null))</MudTd>
+                    <MudTd>@string.Join("; ", context.Lines.Select(l => $"{l.LineNumber}: {ProcurementFormat.Quantity(l.Quantity)}"))</MudTd>
+                    <MudTd>@SourcingFormat.Label(context.Status)@(context.ReceiptNumber is { } rc ? $" on {rc}" : "")</MudTd>
+                    <MudTd>
+                        @if (context.Status == ShipNoticeState.InTransit)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="() => ReceiveAsync(context)" aria-label="@($"Receive ship notice {context.Number} today")">Receive today</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="pa-2">No ship notices yet.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Activity">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Every sign-in, page view and change on the portal, newest first (the last 300).</MudText>
+            <MudTable Items="_activity" Dense="true" Elevation="0" aria-label="Supplier portal activity">
+                <HeaderContent><MudTh>When (UTC)</MudTh><MudTh>Who</MudTh><MudTh>Vendor</MudTh><MudTh>What</MudTh><MudTh>Record</MudTh><MudTh>Outcome</MudTh><MudTh>Detail</MudTh></HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+                    <MudTd>@context.Actor</MudTd>
+                    <MudTd>@context.VendorName</MudTd>
+                    <MudTd>@context.Action</MudTd>
+                    <MudTd>@context.Target</MudTd>
+                    <MudTd>@context.Outcome</MudTd>
+                    <MudTd>@context.Detail</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText Class="pa-2">Nothing yet.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private IReadOnlyList<SupplierContactDto> _contacts = [];
+    private IReadOnlyList<AcknowledgementDto> _acks = [];
+    private IReadOnlyList<ShipNoticeDto> _notices = [];
+    private IReadOnlyList<SupplierPortalEventDto> _activity = [];
+    private IReadOnlyList<RequisitionVendorOption> _vendors = [];
+    private Guid? _newVendor;
+    private string? _newName;
+    private string? _newEmail;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _vendors = (await Requisitions.GetOptionsAsync()).Vendors;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _contacts = await Portal.ListContactsAsync();
+        _acks = await Portal.ListAcknowledgementsAsync();
+        _notices = await Portal.ListShipNoticesAsync();
+        _activity = await Portal.ListActivityAsync(take: 300);
+    }
+
+    private async Task RunAsync(Func<Task> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            Snackbar.Add(done, Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        await RunAsync(() => Portal.AddContactAsync(new SaveSupplierContactRequest(_newVendor!.Value, _newEmail ?? "", _newName ?? "")), $"Invited {_newEmail}; they've been emailed a sign-in link.");
+        (_newName, _newEmail) = (null, null);
+    }
+
+    private Task SendLinkAsync(SupplierContactDto c) => RunAsync(() => Portal.SendSignInLinkAsync(c.Id), $"Sign-in link sent to {c.Email}.");
+
+    private Task EndAsync(SupplierContactDto c) => RunAsync(() => Portal.DeactivateContactAsync(c.Id), $"{c.Name}'s access ended.");
+
+    private Task RestoreAsync(SupplierContactDto c) => RunAsync(() => Portal.ReactivateContactAsync(c.Id), $"{c.Name} can sign in again.");
+
+    private Task ReviewAsync(AcknowledgementDto ack) => RunAsync(() => Portal.MarkAcknowledgementReviewedAsync(ack.Id), "Marked reviewed.");
+
+    private Task ReceiveAsync(ShipNoticeDto notice) =>
+        RunAsync(() => Portal.ReceiveShipNoticeAsync(notice.Id, DateOnly.FromDateTime(DateTime.Today)), $"{notice.Number} received against {notice.PurchaseOrderNumber}.");
+}

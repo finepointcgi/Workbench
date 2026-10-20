@@ -69,6 +69,7 @@ public static class WorkbenchApi
         v1.MapSalesShippingEndpoints();
         v1.MapQualityEndpoints();
         v1.MapShopFloorEndpoints();
+        v1.MapSourcingEndpoints();
 
         return app;
     }

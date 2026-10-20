@@ -1,0 +1,16 @@
+<PortalLayout View="View" Title="Invoices and payments">
+    @if (Invoices.Count == 0)
+    {
+        <p>No invoices yet. Send one from a purchase order.</p>
+    }
+    else
+    {
+        <InvoiceTable Invoices="Invoices" Label="Invoices and payments" />
+        <p class="hint">"Received" means our accounts payable team has your invoice and hasn't reviewed it yet.</p>
+    }
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<SupplierInvoiceDto> Invoices { get; set; } = [];
+}

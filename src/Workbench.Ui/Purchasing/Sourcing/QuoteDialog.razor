@@ -1,0 +1,79 @@
+@* A buyer types in a vendor's quote (from an email or a phone call). It replaces that vendor's earlier quote. *@
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2" Class="mb-2">
+            <MudItem xs="12" md="4">
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Vendor" Required="true" data-testid="quote-vendor">
+                    @foreach (var v in Rfq.Vendors)
+                    {
+                        <MudSelectItem T="Guid?" Value="v.VendorId">@v.VendorCode · @v.VendorName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2"><MudDatePicker @bind-Date="_quoteDate" Label="Quote date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudDatePicker @bind-Date="_validUntil" Label="Good through" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField T="int" @bind-Value="_leadTime" Label="Lead time (days)" Min="0" /></MudItem>
+            <MudItem xs="6" md="2"><MudTextField T="string" @bind-Value="_reference" Label="Their quote #" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_terms" Label="Their terms" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_notes" Label="Notes" /></MudItem>
+        </MudGrid>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" aria-label="Quoted lines">
+            <thead><tr><th scope="col">#</th><th scope="col">Item</th><th scope="col" style="text-align:right">Qty</th><th scope="col">Unit price</th><th scope="col">Lead (days)</th><th scope="col">Break from qty</th><th scope="col">Break price</th><th scope="col">No bid</th></tr></thead>
+            <tbody>
+                @foreach (var l in Rfq.Lines)
+                {
+                    var input = _inputs[l.Id];
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Description</td>
+                        <td style="text-align:right">@ProcurementFormat.Quantity(l.Quantity) @l.UnitOfMeasure</td>
+                        <td><MudNumericField T="decimal?" @bind-Value="input.Price" Min="0" Margin="Margin.Dense" aria-label="@($"Unit price, line {l.LineNumber}")" Disabled="input.NoBid" data-testid="quote-price" /></td>
+                        <td><MudNumericField T="int?" @bind-Value="input.Lead" Min="0" Margin="Margin.Dense" aria-label="@($"Lead time days, line {l.LineNumber}")" Disabled="input.NoBid" /></td>
+                        <td><MudNumericField T="decimal?" @bind-Value="input.BreakQty" Min="0" Margin="Margin.Dense" aria-label="@($"Price break quantity, line {l.LineNumber}")" Disabled="input.NoBid" /></td>
+                        <td><MudNumericField T="decimal?" @bind-Value="input.BreakPrice" Min="0" Margin="Margin.Dense" aria-label="@($"Price break price, line {l.LineNumber}")" Disabled="input.NoBid" /></td>
+                        <td><MudCheckBox T="bool" @bind-Value="input.NoBid" Dense="true" aria-label="@($"No bid on line {l.LineNumber}")" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_vendorId is null)" OnClick="Save" data-testid="quote-save">Save quote</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public RfqDto Rfq { get; set; } = default!;
+
+    private sealed class LineInput
+    {
+        public decimal? Price { get; set; }
+        public int? Lead { get; set; }
+        public decimal? BreakQty { get; set; }
+        public decimal? BreakPrice { get; set; }
+        public bool NoBid { get; set; }
+    }
+
+    private Dictionary<Guid, LineInput> _inputs = [];
+    private Guid? _vendorId;
+    private DateTime? _quoteDate = DateTime.Today;
+    private DateTime? _validUntil = DateTime.Today.AddDays(30);
+    private int _leadTime = 14;
+    private string? _reference;
+    private string? _terms;
+    private string? _notes;
+
+    protected override void OnInitialized() => _inputs = Rfq.Lines.ToDictionary(l => l.Id, _ => new LineInput());
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveQuoteRequest(_vendorId!.Value, DateOnly.FromDateTime(_quoteDate ?? DateTime.Today), _leadTime,
+        Rfq.Lines.Select(l =>
+        {
+            var i = _inputs[l.Id];
+            var noBid = i.NoBid || i.Price is null;
+            return new SaveQuoteLineRequest(l.Id, noBid ? 0 : i.Price!.Value,
+                i.BreakQty is { } q && i.BreakPrice is { } p && !noBid ? [new PriceBreakDto(q, p)] : null, i.Lead, noBid);
+        }).ToList(),
+        _validUntil is { } v ? DateOnly.FromDateTime(v) : null, _reference, _terms, _notes)));
+}

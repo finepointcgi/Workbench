@@ -1,0 +1,244 @@
+@page "/purchasing/rfqs/new"
+@page "/purchasing/rfqs/{Id:guid}/edit"
+@inject IRfqService Rfqs
+@inject IRequisitionService Requisitions
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(Id is null ? "New RFQ" : "Edit RFQ") · Purchasing · Workbench</PageTitle>
+
+<PurchasingHeader Title="@(Id is null ? "New request for quote" : $"Edit {_number}")" BackHref="purchasing/rfqs" BackLabel="Requests for quote"
+                  Subtitle="Pick approved requisition lines and add anything else to buy, choose the vendors to ask, and save it as a draft. Send it from the RFQ page." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_options is not null)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">About the RFQ</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" MaxLength="200" data-testid="rfq-title" /></MudItem>
+            <MudItem xs="12" sm="6" md="3"><MudDatePicker @bind-Date="_due" Label="Quotes due" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Required="true" /></MudItem>
+            <MudItem xs="12" sm="6" md="3"><MudTextField T="string" @bind-Value="_terms" Label="Terms asked for" HelperText="For example Net 30, FOB destination" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_shipTo" Label="Ship to" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_instructions" Label="Instructions to vendors" Lines="2" MaxLength="2000" /></MudItem>
+            <MudItem xs="12">
+                <MudSelect T="Guid" Label="Vendors to ask" MultiSelection="true" SelectedValues="_vendorIds" SelectedValuesChanged="@(v => _vendorIds = v.ToHashSet())"
+                           ToStringFunc="@(id => _options.Vendors.FirstOrDefault(x => x.VendorId == id) is { } v ? $"{v.Code} · {v.Name}" : "")" data-testid="rfq-vendors">
+                    @foreach (var v in _options.Vendors)
+                    {
+                        <MudSelectItem T="Guid" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_sourceable.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="sourceable">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Approved requisition lines</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" aria-label="Approved requisition lines">
+                <thead><tr><th scope="col">Include</th><th scope="col">Requisition</th><th scope="col">Description</th><th scope="col" style="text-align:right">Qty</th><th scope="col" style="text-align:right">Estimate</th><th scope="col">Needed by</th><th scope="col">Charge to</th></tr></thead>
+                <tbody>
+                    @foreach (var o in _sourceable)
+                    {
+                        <tr>
+                            <td><MudCheckBox T="bool" Value="_picked.Contains(o.Line.Id)" ValueChanged="@(v => Pick(o.Line.Id, v))" Dense="true" aria-label="@($"Include {o.RequisitionNumber} line {o.Line.LineNumber}")" /></td>
+                            <td>@o.RequisitionNumber</td>
+                            <td>@o.Line.Description</td>
+                            <td style="text-align:right">@ProcurementFormat.Quantity(o.Line.Quantity)</td>
+                            <td style="text-align:right">@ProcurementFormat.Price(o.Line.UnitCost)</td>
+                            <td>@PurchasingFormat.Date(o.Line.NeededBy)</td>
+                            <td>@ProcurementFormat.Charge(o.Line.ProjectCode, o.Line.WbsCode, o.Line.AccountNumber, o.Line.OrgUnitCode)</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Other lines</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine" data-testid="add-line">Add a line</MudButton>
+        </MudStack>
+        @if (_lines.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Lines you type in need a project WBS element or a GL account, as on a purchase order.</MudText>
+        }
+        @foreach (var line in _lines)
+        {
+            var n = _lines.IndexOf(line) + 1;
+            <MudGrid Spacing="2" Class="mb-2">
+                <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="line.Description" Label="@($"Line {n}: description")" /></MudItem>
+                <MudItem xs="6" md="1"><MudNumericField T="decimal" @bind-Value="line.Quantity" Label="Quantity" Min="0" /></MudItem>
+                <MudItem xs="6" md="1"><MudTextField T="string" @bind-Value="line.Unit" Label="Unit" MaxLength="8" /></MudItem>
+                <MudItem xs="6" md="2"><MudDatePicker @bind-Date="line.NeededBy" Label="Needed by" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                <MudItem xs="6" md="1"><MudNumericField T="decimal?" @bind-Value="line.Estimate" Label="Estimate" Min="0" /></MudItem>
+                <MudItem xs="12" md="3">
+                    <MudSelect T="string" @bind-Value="line.Charge" Label="@($"Line {n}: charge to")">
+                        @foreach (var c in _options.ChargeCodes)
+                        {
+                            <MudSelectItem T="string" Value="@($"w:{c.WbsElementId}")">@c.ProjectCode @c.WbsCode · @c.Name</MudSelectItem>
+                        }
+                        @foreach (var a in _options.Accounts)
+                        {
+                            <MudSelectItem T="string" Value="@($"a:{a.AccountId}")">Account @a.Number · @a.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                @if (line.Charge?.StartsWith("a:") == true)
+                {
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="Guid?" @bind-Value="line.OrgUnitId" Label="@($"Line {n}: organization")" Clearable="true">
+                            @foreach (var o in _options.Orgs)
+                            {
+                                <MudSelectItem T="Guid?" Value="o.OrgUnitId">@o.Code · @o.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                }
+                <MudItem xs="12" md="1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="@($"Remove line {n}")" OnClick="() => _lines.Remove(line)" />
+                </MudItem>
+            </MudGrid>
+        }
+    </MudPaper>
+
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="save-rfq">Save draft</MudButton>
+        <MudButton Variant="Variant.Text" Href="@(Id is { } id ? $"purchasing/rfqs/{id}" : "purchasing/rfqs")">Cancel</MudButton>
+    </MudStack>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery(Name = "requisition")] public Guid? RequisitionQuery { get; set; }
+
+    private sealed class LineInput
+    {
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; } = 1;
+        public string? Unit { get; set; } = "EA";
+        public DateTime? NeededBy { get; set; }
+        public decimal? Estimate { get; set; }
+        public string? Charge { get; set; }
+        public Guid? OrgUnitId { get; set; }
+    }
+
+    private RequisitionOptionsDto? _options;
+    private IReadOnlyList<OrderableRequisitionLineDto> _sourceable = [];
+    private readonly HashSet<Guid> _picked = [];
+    private readonly List<LineInput> _lines = [];
+    private IReadOnlyCollection<Guid> _vendorIds = new HashSet<Guid>();
+    private string? _number;
+    private string? _title;
+    private DateTime? _due = DateTime.Today.AddDays(10);
+    private string? _terms;
+    private string? _shipTo;
+    private string? _instructions;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _options = await Requisitions.GetOptionsAsync();
+            var sourceable = (await Rfqs.ListSourceableRequisitionLinesAsync()).ToList();
+            if (Id is { } id)
+            {
+                var rfq = await Rfqs.GetAsync(id);
+                _number = rfq.Rfq.Number;
+                (_title, _due, _terms, _shipTo, _instructions) = (rfq.Rfq.Title, rfq.Rfq.DueDate.ToDateTime(TimeOnly.MinValue), rfq.Terms, rfq.ShipTo, rfq.Instructions);
+                _vendorIds = rfq.Vendors.Select(v => v.VendorId).ToHashSet();
+                foreach (var l in rfq.Lines)
+                {
+                    if (l.RequisitionLineId is { } rl)
+                    {
+                        _picked.Add(rl);
+                        if (sourceable.All(s => s.Line.Id != rl))
+                        {
+                            sourceable.Add(new OrderableRequisitionLineDto(Guid.Empty, l.RequisitionNumber ?? "", "", new RequisitionLineDto(rl, l.LineNumber, l.Description, l.Quantity,
+                                l.EstimatedUnitCost ?? 0, 0, l.ProjectId, l.ProjectCode, l.WbsElementId, l.WbsCode, l.OdcType, l.AccountId, l.AccountNumber, l.OrgUnitId, l.OrgUnitCode,
+                                l.NeededBy, null, null, null, null, null, null)));
+                        }
+                    }
+                    else
+                    {
+                        _lines.Add(new LineInput
+                        {
+                            Description = l.Description, Quantity = l.Quantity, Unit = l.UnitOfMeasure, NeededBy = l.NeededBy?.ToDateTime(TimeOnly.MinValue),
+                            Estimate = l.EstimatedUnitCost, Charge = l.WbsElementId is { } w ? $"w:{w}" : $"a:{l.AccountId}", OrgUnitId = l.OrgUnitId,
+                        });
+                    }
+                }
+            }
+            else
+            {
+                foreach (var o in sourceable.Where(o => o.RequisitionId == RequisitionQuery))
+                {
+                    Pick(o.Line.Id, true);
+                }
+            }
+
+            _sourceable = sourceable;
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Pick(Guid lineId, bool on)
+    {
+        if (on)
+        {
+            _picked.Add(lineId);
+            if (_sourceable.FirstOrDefault(s => s.Line.Id == lineId)?.Line.SuggestedVendorId is { } v && !_vendorIds.Contains(v))
+            {
+                _vendorIds = _vendorIds.Append(v).ToHashSet();
+            }
+
+            _title ??= _sourceable.FirstOrDefault(s => s.Line.Id == lineId)?.Line.Description;
+        }
+        else
+        {
+            _picked.Remove(lineId);
+        }
+    }
+
+    private void AddLine() => _lines.Add(new LineInput { OrgUnitId = _options?.DefaultOrgUnitId });
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var lines = _sourceable.Where(s => _picked.Contains(s.Line.Id)).Select(s => new SaveRfqLineRequest(s.Line.Description, s.Line.Quantity, RequisitionLineId: s.Line.Id))
+                .Concat(_lines.Select(l => new SaveRfqLineRequest(l.Description ?? "", l.Quantity, l.Unit, l.NeededBy is { } d ? DateOnly.FromDateTime(d) : null, l.Estimate,
+                    WbsElementId: l.Charge?.StartsWith("w:") == true ? Guid.Parse(l.Charge[2..]) : null,
+                    AccountId: l.Charge?.StartsWith("a:") == true ? Guid.Parse(l.Charge[2..]) : null,
+                    OrgUnitId: l.Charge?.StartsWith("a:") == true ? l.OrgUnitId : null)))
+                .ToList();
+            var request = new SaveRfqRequest(_title ?? "", _due is { } due ? DateOnly.FromDateTime(due) : DateOnly.FromDateTime(DateTime.Today), lines, _vendorIds.ToList(),
+                _terms, _shipTo, _instructions);
+            var rfq = Id is { } id ? await Rfqs.UpdateAsync(id, request) : await Rfqs.CreateAsync(request);
+            Snackbar.Add($"{rfq.Rfq.Number} saved as a draft.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/rfqs/{rfq.Rfq.Id}");
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

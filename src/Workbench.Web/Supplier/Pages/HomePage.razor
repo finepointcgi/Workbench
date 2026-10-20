@@ -1,0 +1,15 @@
+<PortalLayout View="View" Title="@($"Welcome, {Home.Me.ContactName}")">
+    <ul class="tiles" aria-label="Summary">
+        <li><a href="/supplier/rfqs"><span class="num">@Home.OpenRfqs</span> requests for quote open to you</a></li>
+        <li><a href="/supplier/orders"><span class="num">@Home.OrdersToAcknowledge</span> purchase orders to acknowledge</a></li>
+        <li><a href="/supplier/orders"><span class="num">@Home.OpenOrders</span> open purchase orders</a></li>
+        <li><a href="/supplier/invoices"><span class="num">@Home.InvoicesInReview</span> invoices in review</a></li>
+        <li><a href="/supplier/invoices"><span class="num">@PortalFormat.Money(Home.AmountDue)</span> approved and not yet paid</a></li>
+    </ul>
+    <p class="hint">You're signed in for @Home.Me.VendorName (@Home.Me.VendorCode) as @Home.Me.Email.</p>
+</PortalLayout>
+
+@code {
+    [Parameter, EditorRequired] public PortalView View { get; set; } = default!;
+    [Parameter, EditorRequired] public SupplierHomeDto Home { get; set; } = default!;
+}

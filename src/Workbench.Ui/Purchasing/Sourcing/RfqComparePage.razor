@@ -1,0 +1,225 @@
+@page "/purchasing/rfqs/{Id:guid}/compare"
+@inject IRfqService Rfqs
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Compare quotes · @(_cmp?.Number ?? "RFQ") · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <PurchasingHeader Title="Compare quotes" BackHref="purchasing/rfqs" BackLabel="Requests for quote" />
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_cmp is { } cmp)
+{
+    var canAward = cmp.Status is RfqState.Open or RfqState.PartiallyAwarded;
+    <PurchasingHeader Title="@($"Compare quotes: {cmp.Number}")" BackHref="@($"purchasing/rfqs/{cmp.RfqId}")" BackLabel="@cmp.Number"
+                      Subtitle="@($"Each quote line scores 0–100: price {cmp.Weights.Price}%, lead time {cmp.Weights.LeadTime}%, on-time delivery {cmp.Weights.Delivery}%. The highest score is suggested; you choose. Expired and no-bid quotes can't be awarded.")" />
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Vendors</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" aria-label="Vendors and delivery records">
+            <thead><tr><th scope="col">Vendor</th><th scope="col" style="text-align:right">Quote total</th><th scope="col">Good through</th><th scope="col" style="text-align:right">On-time delivery</th><th scope="col">Receipts measured</th></tr></thead>
+            <tbody>
+                @foreach (var v in cmp.Vendors)
+                {
+                    <tr>
+                        <td>
+                            @v.VendorCode · @v.VendorName
+                            @if (v.IsOnHold)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Block">On hold</MudChip>
+                            }
+                        </td>
+                        <td style="text-align:right">@(v.QuoteTotal is { } t ? PurchasingFormat.Amount(t) : "No quote")</td>
+                        <td>@(v.IsExpired ? $"Expired {PurchasingFormat.Date(v.ValidUntil)}" : PurchasingFormat.Date(v.ValidUntil))</td>
+                        <td style="text-align:right">@(v.OnTimePercent is { } p ? $"{p:0.#}%" : "No history")</td>
+                        <td>@v.OnTimeReceipts of @v.ReceiptsMeasured on time</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="comparison">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By line</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" Style="overflow-x:auto" aria-label="Quotes by line">
+            <thead>
+                <tr>
+                    <th scope="col">Line</th>
+                    @foreach (var v in cmp.Vendors)
+                    {
+                        <th scope="col">@v.VendorCode</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in cmp.Lines)
+                {
+                    <tr>
+                        <th scope="row" style="min-width:200px">
+                            @line.LineNumber. @line.Description
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block">
+                                @ProcurementFormat.Quantity(line.Quantity) @line.UnitOfMeasure@(line.NeededBy is { } need ? $", needed {PurchasingFormat.Date(need)}" : "")@(line.EstimatedUnitCost is { } est ? $", estimate {ProcurementFormat.Price(est)}" : "")
+                                · @line.ResponsiveQuotes quote@(line.ResponsiveQuotes == 1 ? "" : "s")
+                            </MudText>
+                        </th>
+                        @foreach (var cell in line.Cells)
+                        {
+                            var vendor = cmp.Vendors.First(v => v.VendorId == cell.VendorId);
+                            <td style="min-width:170px; vertical-align:top">
+                                @if (!cell.Quoted)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No quote</MudText>
+                                }
+                                else if (cell.NoBid)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No bid</MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2"><strong>@ProcurementFormat.Price(cell.UnitPrice ?? 0)</strong> each · @PurchasingFormat.Amount(cell.Extended ?? 0)</MudText>
+                                    <MudText Typo="Typo.caption" Style="display:block">@cell.LeadTimeDays days lead@(cell.Score is { } s ? $" · score {s:0.0}" : "")</MudText>
+                                    <div>
+                                        @if (cell.IsRecommended)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Star">Suggested</MudChip>
+                                        }
+                                        @if (cell.IsLowestPrice)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.ArrowDownward">Lowest price</MudChip>
+                                        }
+                                        @if (cell.LateForNeedDate)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule">Late for need date</MudChip>
+                                        }
+                                        @if (cell.IsExpired)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">Expired</MudChip>
+                                        }
+                                    </div>
+                                    @if (line.AwardedQuoteLineId == cell.QuoteLineId)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.CheckCircle">Awarded</MudChip>
+                                    }
+                                    else if (canAward && line.AwardedQuoteLineId is null && !cell.IsExpired && !vendor.IsOnHold)
+                                    {
+                                        <MudCheckBox T="bool" Value="@(_picks.GetValueOrDefault(line.RfqLineId) == cell.QuoteLineId)" ValueChanged="@(on => Pick(line.RfqLineId, on ? cell.QuoteLineId : null))"
+                                                     Label="Award" Dense="true" aria-label="@($"Award line {line.LineNumber} to {vendor.VendorName}")" data-testid="award-pick" />
+                                    }
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (canAward)
+    {
+        var picked = cmp.Lines.Where(l => _picks.ContainsKey(l.RfqLineId)).ToList();
+        var soleSource = picked.Any(l => l.ResponsiveQuotes < 2);
+        var notLowest = picked.Where(l => l.Cells.First(c => c.QuoteLineId == _picks[l.RfqLineId]).IsLowestPrice == false).ToList();
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="award-form">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Award</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                @picked.Count of @cmp.Lines.Count(l => l.AwardedQuoteLineId is null) open line@(cmp.Lines.Count == 1 ? "" : "s") chosen. Awarding creates one purchase order per vendor at the quoted prices and keeps this comparison with the RFQ.
+            </MudText>
+            <MudTextField T="string" @bind-Value="_reasonableness" Label="Why the prices are fair and reasonable" Required="true" Lines="2" MaxLength="4000"
+                          HelperText="For example: adequate competition (three quotes, award to the lowest), compared with the estimate or past prices." data-testid="award-reasonableness" />
+            @if (soleSource)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">Only one quote came in for line @string.Join(", ", picked.Where(l => l.ResponsiveQuotes < 2).Select(l => l.LineNumber)). Explain why competition wasn't possible or practical.</MudAlert>
+                <MudTextField T="string" @bind-Value="_soleSource" Label="Sole-source justification" Required="true" Lines="2" MaxLength="4000" data-testid="award-sole-source" />
+            }
+            @if (notLowest.Count > 0)
+            {
+                <MudTextField T="string" @bind-Value="_rationale" Label="@($"Why line {string.Join(", ", notLowest.Select(l => l.LineNumber))} isn't going to the lowest price")" Required="true" Lines="2" MaxLength="4000" Class="mt-2" data-testid="award-rationale" />
+            }
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_orderDate" Label="Order date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" /></MudItem>
+                <MudItem xs="12" sm="5"><MudTextField T="string" @bind-Value="_receivers" Label="Receivers (emails, optional)" /></MudItem>
+                <MudItem xs="12" sm="3"><MudCheckBox T="bool" @bind-Value="_issue" Label="Issue the orders now" /></MudItem>
+            </MudGrid>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="@(_busy || picked.Count == 0)" OnClick="AwardAsync" data-testid="award">
+                Award @picked.Count line@(picked.Count == 1 ? "" : "s")
+            </MudButton>
+        </MudPaper>
+    }
+}
+else
+{
+    <MudProgressLinear Indeterminate="true" aria-label="Loading" />
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private RfqComparisonDto? _cmp;
+    private readonly Dictionary<Guid, Guid?> _picks = [];
+    private string? _reasonableness;
+    private string? _soleSource;
+    private string? _rationale;
+    private string? _receivers;
+    private DateTime? _orderDate = DateTime.Today;
+    private bool _issue;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _cmp = await Rfqs.GetComparisonAsync(Id);
+
+            // Start from the suggestion on each open line.
+            foreach (var line in _cmp.Lines.Where(l => l.AwardedQuoteLineId is null))
+            {
+                if (line.Cells.FirstOrDefault(c => c.IsRecommended) is { } best && _cmp.Vendors.First(v => v.VendorId == best.VendorId) is { IsOnHold: false })
+                {
+                    _picks[line.RfqLineId] = best.QuoteLineId;
+                }
+            }
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Pick(Guid lineId, Guid? quoteLineId)
+    {
+        if (quoteLineId is null)
+        {
+            _picks.Remove(lineId);
+        }
+        else
+        {
+            _picks[lineId] = quoteLineId;
+        }
+    }
+
+    private async Task AwardAsync()
+    {
+        _busy = true;
+        try
+        {
+            var rfq = await Rfqs.AwardAsync(Id, new AwardRfqRequest(
+                _picks.Where(p => p.Value is not null).Select(p => new AwardLineRequest(p.Key, p.Value!.Value)).ToList(),
+                _reasonableness ?? "", _soleSource, _rationale, _orderDate is { } d ? DateOnly.FromDateTime(d) : null,
+                (_receivers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), _issue));
+            Snackbar.Add($"Awarded: {string.Join(", ", rfq.Awards.Last().PurchaseOrderNumbers)} created.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/rfqs/{Id}");
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

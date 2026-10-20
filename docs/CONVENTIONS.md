@@ -663,3 +663,28 @@ Checks:
   one entry; government-furnished stock moves by quantity only.
 - Capacity scheduling is the pure `CapacityScheduler` (unit-test the math there) behind `CapacitySchedulingService`, which keeps queue positions and
   planner pins between runs. Pinned operations load at the full daily rate whatever else is there, so they can overload a week; that's the point.
+
+## Sourcing, supplier portal and EDI
+
+- Domain `Domain/Purchasing/Sourcing.cs` (`Rfq`, `RfqLine`, `RfqVendor`, `VendorQuote`(`Line`, `PriceBreak`), `RfqAward`),
+  `SupplierPortal.cs` (`SupplierContact`, `SupplierSignInToken`, `SupplierPortalEvent`, `PurchaseOrderAcknowledgement`(`Line`),
+  `ShipNotice`(`Line`), `SupplierInvoice`), `Edi.cs` (`EdiPartner`, `EdiMessage`). Contracts `Contracts/Purchasing/SourcingContracts.cs`
+  (`IRfqService`), `SupplierPortalContracts.cs` (`ISupplierPortalService` for vendors, `ISupplierPortalAdminService` for buyers),
+  `EdiContracts.cs` (`IEdiService`). Pages: Purchasing › Requests for quote (`/purchasing/rfqs`, compare at `/{id}/compare`),
+  Purchasing › Supplier portal (`/purchasing/supplier-portal`), Admin › Integrations › EDI (`/admin/integrations/edi`). Buyers are Finance/Admin.
+- An award (`IRfqService.AwardAsync`) creates one PO per vendor through `IPurchaseOrderService` (ceilings and permissions apply;
+  a failure cancels the ones made), marks sourced requisition lines ordered, and freezes the comparison in `RfqAward`
+  (quotes received, sole source, price reasonableness, rationale). Rules: a price reasonableness note always; a sole-source
+  justification when an awarded line had fewer than two responsive quotes; a rationale when a line isn't awarded to its
+  lowest price; expired and no-bid quote lines can't be awarded. Scoring weights: `Purchasing:Sourcing`.
+- The supplier portal is a separate sign-in kind (`docs/security/supplier-portal.md`): cookie scheme `SupplierPortal`, plain
+  server-rendered pages under `/supplier` in `Workbench.Web/Supplier` (no Blazor circuit). Don't add vendor-facing code
+  elsewhere, and never give `ISupplierPortalService` a vendor id parameter: the vendor is `SupplierCaller`'s, set by the
+  `VendorScopedSupplierPortalService` decorator. Every portal call is logged (`SupplierPortalLog`).
+- Vendor documents (portal and EDI alike) go through `Application/Purchasing/SupplierDocuments`: acknowledgements, ship notices
+  (`ASN-` numbers; receive one with `ISupplierPortalAdminService.ReceiveShipNoticeAsync`, an ordinary receipt) and invoices,
+  which land as **draft** AP bills on the PO lines (EnteredBy "… (supplier portal)" or "EDI (CODE)") for AP to submit and match.
+- EDI: `Application/Purchasing/Edi` (`X12` reader/writer, `X12Documents` for 850/855/856/810, `IEdiTransport` with
+  `FileDropEdiTransport` and `SftpEdiTransport`, which needs a host-registered `ISftpEdiClient`). Issuing a PO (or a change
+  order) to a vendor with an active partner that takes 850s sends one (`EdiSendingPurchaseOrderService`); failures are log rows,
+  never errors. Inbound sets are applied once per partner and ISA13/ST02. Samples: `samples/edi/`.
