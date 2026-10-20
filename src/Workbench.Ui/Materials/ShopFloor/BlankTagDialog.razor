@@ -1,0 +1,54 @@
+@* Stock found during a physical inventory that has no tag: bin, part, lot or serial, owner and the count. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudSelect T="Guid?" @bind-Value="_binId" Label="Bin" Dense="true">
+                @foreach (var b in Bins) { <MudSelectItem T="Guid?" Value="b.Id">@b.Code</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_partId" Label="Part" Dense="true">
+                @foreach (var p in Parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+            </MudSelect>
+            @if (Part is { Tracking: not PartTracking.None })
+            {
+                <MudTextField T="string" @bind-Value="_lot" Label="Lot" />
+            }
+            @if (Part is { Tracking: PartTracking.Serial })
+            {
+                <MudTextField T="string" @bind-Value="_serial" Label="Serial number" />
+            }
+            <MudSelect T="StockOwnership" @bind-Value="_ownership" Label="Owner" Dense="true">
+                @foreach (var o in Enum.GetValues<StockOwnership>()) { <MudSelectItem T="StockOwnership" Value="o">@MaterialsFormat.Label(o)</MudSelectItem> }
+            </MudSelect>
+            @if (_ownership != StockOwnership.General)
+            {
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Dense="true">
+                    @foreach (var p in Projects) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code @p.Name</MudSelectItem> }
+                </MudSelect>
+            }
+            <MudNumericField T="decimal" @bind-Value="_quantity" Label="Count" Min="0" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_binId is null || _partId is null || (_ownership != StockOwnership.General && _projectId is null))" OnClick="Save">Add tag</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public IReadOnlyList<BinDto> Bins { get; set; } = [];
+    [Parameter] public IReadOnlyList<PartSummaryDto> Parts { get; set; } = [];
+    [Parameter] public IReadOnlyList<MaterialOption> Projects { get; set; } = [];
+
+    private Guid? _binId;
+    private Guid? _partId;
+    private string? _lot;
+    private string? _serial;
+    private StockOwnership _ownership;
+    private Guid? _projectId;
+    private decimal _quantity = 1;
+
+    private PartSummaryDto? Part => Parts.FirstOrDefault(p => p.Id == _partId);
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new AddCountTagRequest(_binId!.Value, _partId!.Value, _quantity, _lot, _serial, _ownership, _projectId)));
+}

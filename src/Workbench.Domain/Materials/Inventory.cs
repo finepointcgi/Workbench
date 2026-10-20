@@ -53,6 +53,12 @@ public enum InventoryTransactionType
 
     /// <summary>A standard cost change on stock already on hand (no quantity).</summary>
     Revaluation,
+
+    /// <summary>Freight, duty or handling added to received stock (no quantity); issued shares carry the project or work order.</summary>
+    LandedCost,
+
+    /// <summary>The difference between a physical inventory count and the quantity on record.</summary>
+    PhysicalCount,
 }
 
 /// <summary>

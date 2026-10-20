@@ -24,6 +24,8 @@ public enum InventoryMovement
     WorkOrderShipment,
     Scrap,
     Revaluation,
+    LandedCost,
+    PhysicalCount,
 }
 
 public enum WorkOrderState { Planned, Released, InProgress, Completed, Closed, Cancelled }

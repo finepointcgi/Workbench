@@ -1,0 +1,196 @@
+@page "/materials/backflush"
+@inject IBackflushService Backflush
+@inject IPartService PartService
+@inject ISnackbar Snackbar
+
+<PageTitle>Backflush · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Backflush" Subtitle="Components set to backflush are issued automatically when finished units or operation labor are reported, oldest stock first, from the location you choose." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Open shortages</MudText>
+    <MudPaper Outlined="true" Class="pa-2 mb-4" Style="overflow-x:auto" data-testid="backflush-shortages">
+        @if (_shortages.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No shortages. Every backflush issued everything it needed.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+                <caption class="wb-sr-only">Open backflush shortages</caption>
+                <thead><tr><th scope="col">Work order</th><th scope="col">Component</th><th scope="col" style="text-align:right">Short</th><th scope="col">When</th><th scope="col">Why</th></tr></thead>
+                <tbody>
+                    @foreach (var x in _shortages)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/work-orders/{x.WorkOrderId}")">@x.WorkOrderNumber</MudLink></td>
+                            <td>@x.PartNumber <span class="mud-text-secondary">@x.PartDescription</span></td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(x.QuantityShort)</td>
+                            <td>@(x.Trigger == BackflushWhen.Operation ? "Operation labor" : "Completion") · @MaterialsFormat.Date(x.Date)</td>
+                            <td>@x.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    @if (MaterialsFormat.CanEdit(User) && _options is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-4">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Set backflush for a part</MudText>
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                <MudSelect T="Guid?" Value="_partId" ValueChanged="PartChanged" Label="Component part" Dense="true" Style="min-width:240px">
+                    @foreach (var p in _parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_bomId" Label="Applies to" Dense="true" Style="min-width:220px">
+                    <MudSelectItem T="Guid?" Value="null">Every BOM (the part's default)</MudSelectItem>
+                    @foreach (var b in _components.Where(c => c.ComponentPartId == _partId).DistinctBy(c => c.BomId))
+                    {
+                        <MudSelectItem T="Guid?" Value="b.BomId">Only @b.ParentPartNumber BOM @b.BomRevision</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSwitch T="bool" @bind-Value="_on" Label="@(_on ? "Backflush" : "Kit by hand")" Color="Color.Primary" />
+                <BinSelect Options="_options" @bind-Value="_binId" Label="Take from (optional)" Clearable="true" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_partId is null" OnClick="SaveAsync" data-testid="backflush-save">Save</MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">With no location, backflush takes the oldest stock anywhere it may be used. A BOM setting overrides the part's default for that BOM only.</MudText>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Settings</MudText>
+    <MudPaper Outlined="true" Class="pa-2 mb-4" Style="overflow-x:auto" data-testid="backflush-settings">
+        @if (_settings.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No backflush settings: every component is kitted by hand.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+                <caption class="wb-sr-only">Backflush settings</caption>
+                <thead><tr><th scope="col">Component</th><th scope="col">Applies to</th><th scope="col">Issued</th><th scope="col">Takes from</th>@if (MaterialsFormat.CanEdit(User)) { <th scope="col"><span class="wb-sr-only">Actions</span></th> }</tr></thead>
+                <tbody>
+                    @foreach (var x in _settings)
+                    {
+                        <tr>
+                            <td>@x.PartNumber <span class="mud-text-secondary">@x.PartDescription</span></td>
+                            <td>@(x.BomId is null ? "Every BOM" : $"{x.ParentPartNumber} BOM {x.BomRevision}")</td>
+                            <td>@(x.IsBackflushed ? "Backflushed" : "Kitted by hand")</td>
+                            <td>@(x.Location ?? "Oldest stock anywhere")</td>
+                            @if (MaterialsFormat.CanEdit(User))
+                            {
+                                <td><MudButton Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(x)" aria-label="@($"Remove the setting for {x.PartNumber}")">Remove</MudButton></td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Active BOMs</MudText>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto" data-testid="backflush-components">
+        <MudSimpleTable Dense="true" Elevation="0">
+            <caption class="wb-sr-only">How each component of the active BOMs is issued</caption>
+            <thead><tr><th scope="col">Assembly</th><th scope="col">Component</th><th scope="col">Operation</th><th scope="col">Issued</th><th scope="col">From setting</th><th scope="col">Takes from</th></tr></thead>
+            <tbody>
+                @foreach (var c in _components)
+                {
+                    <tr>
+                        <td>@c.ParentPartNumber <span class="mud-text-secondary">BOM @c.BomRevision</span></td>
+                        <td>@c.PartNumber <span class="mud-text-secondary">@c.PartDescription</span></td>
+                        <td>@(c.OperationSequence?.ToString(CultureInfo.InvariantCulture) ?? "At completion")</td>
+                        <td>@if (c.IsBackflushed) { <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="my-0">Backflushed</MudChip> } else { <span>Kitted by hand</span> }</td>
+                        <td>@c.Source</td>
+                        <td>@(c.IsBackflushed ? c.Location ?? "Oldest stock anywhere" : "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<BackflushShortageDto> _shortages = [];
+    private IReadOnlyList<BackflushSettingDto> _settings = [];
+    private IReadOnlyList<BackflushComponentDto> _components = [];
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private MaterialsOptionsDto? _options;
+    private Guid? _partId;
+    private Guid? _bomId;
+    private Guid? _binId;
+    private bool _on = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            _options = await PartService.GetOptionsAsync();
+            _parts = await PartService.ListAsync(new PartQuery());
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _options = null;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _shortages = await Backflush.ListShortagesAsync();
+            _settings = await Backflush.ListSettingsAsync();
+            _components = await Backflush.ListComponentsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void PartChanged(Guid? partId)
+    {
+        _partId = partId;
+        _bomId = null;
+        var current = _settings.FirstOrDefault(s => s.PartId == partId && s.BomId is null);
+        (_on, _binId) = (current?.IsBackflushed ?? true, current?.BinId);
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await Backflush.SaveSettingAsync(new SaveBackflushSettingRequest(_partId!.Value, _on, _bomId, null, _binId));
+            Snackbar.Add("Saved.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(BackflushSettingDto setting)
+    {
+        try
+        {
+            await Backflush.DeleteSettingAsync(setting.Id);
+            Snackbar.Add(setting.BomId is null ? "Removed: the part is kitted by hand." : "Removed: that BOM follows the part's default.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

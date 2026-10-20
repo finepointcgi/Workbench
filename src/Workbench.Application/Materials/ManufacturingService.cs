@@ -713,6 +713,7 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
             ?? (await EmployeeLinks.FindForUserAsync(db, audit.Actor, cancellationToken))?.Id
             ?? throw new ArgumentException("Choose the employee who did the work.");
         var employee = await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Id == employeeId, cancellationToken) ?? throw WorkbenchNotFoundException.For("Employee", employeeId);
+        var engine = await StockEngine.CreateAsync(db, ledger, cancellationToken);
         var rate = await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => r.EmployeeId == employee.Id && r.EffectiveFrom <= request.WorkDate)
             .OrderByDescending(r => r.EffectiveFrom).Select(r => (decimal?)r.HourlyCost).FirstOrDefaultAsync(cancellationToken) ?? 0m;
         var report = new WorkOrderLaborReport
@@ -733,15 +734,15 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
         op.QuantityCompleted += report.QuantityCompleted;
         wo.LaborCost += report.Cost;
         wo.Status = WorkOrderStatus.InProgress;
-        if (!wo.IsForProject && report.Cost != 0)
+        var backflushed = await Backflush.ApplyAsync(engine, wo, wo.QuantityCompleted, request.WorkDate, cancellationToken); // Components consumed at this operation.
+        if (!wo.IsForProject && report.Cost != 0 && engine.Accounts is { } a)
         {
-            var engine = await StockEngine.CreateAsync(db, ledger, cancellationToken);
-            if (engine.Accounts is { } a)
-            {
-                engine.AddLedger(new LedgerAmount(a.Wip, report.Cost, $"{wo.Number} op {op.Sequence} labor"), new LedgerAmount(a.LaborApplied, -report.Cost, $"{wo.Number} op {op.Sequence} labor applied"));
-                report.JournalEntryId = (await engine.FlushAsync(JournalSource.Manufacturing, report.Id, request.WorkDate, $"Shop labor applied to {wo.Number}", cancellationToken))?.Id;
-            }
+            engine.AddLedger(new LedgerAmount(a.Wip, report.Cost, $"{wo.Number} op {op.Sequence} labor"), new LedgerAmount(a.LaborApplied, -report.Cost, $"{wo.Number} op {op.Sequence} labor applied"));
         }
+
+        var entry = await engine.FlushAsync(JournalSource.Manufacturing, report.Id, request.WorkDate,
+            backflushed.Issued.Count > 0 ? $"Shop labor and backflush on {wo.Number}" : $"Shop labor applied to {wo.Number}", cancellationToken);
+        report.JournalEntryId = !wo.IsForProject && report.Cost != 0 ? entry?.Id : null;
 
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, wo.Id, cancellationToken);
@@ -824,6 +825,7 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
         var engine = await StockEngine.CreateAsync(db, ledger, cancellationToken);
         var part = await engine.LoadPartAsync(wo.PartId, cancellationToken);
         var serials = await engine.SerialsAsync(part, quantity, request.Serials, cancellationToken);
+        var backflushed = await Backflush.ApplyAsync(engine, wo, wo.QuantityCompleted + quantity, request.Date, cancellationToken); // Before relief: WIP includes it.
         var created = new List<InventoryTransaction>();
         if (wo.IsForProject)
         {
@@ -863,6 +865,7 @@ public sealed class ManufacturingService(IWorkbenchDbContextFactory dbFactory, M
 
         var traced = await db.Set<InventoryTransaction>().AsNoTracking()
             .Where(t => t.WorkOrderId == wo.Id && t.Type == InventoryTransactionType.IssueToWorkOrder && (t.Lot != "" || t.Serial != "")).Select(t => t.Id).ToListAsync(cancellationToken);
+        traced.AddRange(backflushed.Issued.Where(t => t.Lot != "" || t.Serial != "").Select(t => t.Id));
         foreach (var completion in created)
         {
             foreach (var component in traced)

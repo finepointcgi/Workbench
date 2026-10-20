@@ -1,0 +1,139 @@
+@page "/materials/kits"
+@inject IKittingService Kitting
+@inject IPartService PartService
+@inject IManufacturingService Manufacturing
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Kits · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Kits" Subtitle="Pick a work order's components (or a project's material) into a kit location, see what's short, then issue the whole kit in one step." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    @if (MaterialsFormat.CanEdit(User) && _options is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Build a kit</MudText>
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                <MudRadioGroup T="bool" @bind-Value="_forProject">
+                    <MudRadio T="bool" Value="false">For a work order</MudRadio>
+                    <MudRadio T="bool" Value="true">For a project</MudRadio>
+                </MudRadioGroup>
+                @if (_forProject)
+                {
+                    <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Dense="true" Style="min-width:220px">
+                        @foreach (var p in _options.Projects) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code @p.Name</MudSelectItem> }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudSelect T="Guid?" @bind-Value="_workOrderId" Label="Work order" Dense="true" Style="min-width:260px">
+                        @foreach (var w in _orders) { <MudSelectItem T="Guid?" Value="w.Id">@w.Number · @w.PartNumber · due @MaterialsFormat.Date(w.DueDate)</MudSelectItem> }
+                    </MudSelect>
+                }
+                <BinSelect Options="_options" @bind-Value="_binId" Label="Kit location" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_binId is null || (_forProject ? _projectId is null : _workOrderId is null))" OnClick="CreateAsync" data-testid="kit-create">Build kit</MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Use a bin set aside for kits. Stock staged there is held for its kit until it's issued or the kit is cancelled.</MudText>
+        </MudPaper>
+    }
+
+    <MudStack Row="true" Spacing="3" Class="mb-2" AlignItems="AlignItems.Center">
+        <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => SetAsync(() => _openOnly = v)" Label="Open kits only" Color="Color.Primary" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (_kits.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No kits.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="kits">
+                <caption class="wb-sr-only">Kits</caption>
+                <thead><tr><th scope="col">Kit</th><th scope="col">For</th><th scope="col">Kit location</th><th scope="col">Needed by</th><th scope="col" style="text-align:right">Lines</th><th scope="col" style="text-align:right">Lines short</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var k in _kits)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/kits/{k.Id}")">@k.Number</MudLink></td>
+                            <td>@(k.WorkOrderNumber ?? $"Project {k.ProjectCode} {k.WbsCode}")</td>
+                            <td>@k.StagingLocation</td>
+                            <td>@MaterialsFormat.Date(k.NeededBy)</td>
+                            <td style="text-align:right">@k.LineCount</td>
+                            <td style="text-align:right">@(k.ShortLines > 0 ? k.ShortLines.ToString(CultureInfo.InvariantCulture) : "—")</td>
+                            <td><MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(k.Status)" Class="my-0">@ShopFloorFormat.Label(k.Status)</MudChip></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<KitSummaryDto> _kits = [];
+    private IReadOnlyList<WorkOrderSummaryDto> _orders = [];
+    private MaterialsOptionsDto? _options;
+    private bool _openOnly = true;
+    private bool _forProject;
+    private Guid? _workOrderId;
+    private Guid? _projectId;
+    private Guid? _binId;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            _options = await PartService.GetOptionsAsync();
+            _orders = (await Manufacturing.ListWorkOrdersAsync(new WorkOrderQuery(OpenOnly: true)))
+                .Where(w => w.Status is WorkOrderState.Released or WorkOrderState.InProgress).OrderBy(w => w.DueDate).ToList();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _options = null;
+        }
+    }
+
+    private async Task SetAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _kits = await Kitting.ListAsync(new KitQuery(_openOnly));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            var kit = _forProject
+                ? await Kitting.CreateForProjectAsync(new CreateProjectKitRequest(_projectId!.Value, _binId!.Value))
+                : await Kitting.CreateForWorkOrderAsync(new CreateWorkOrderKitRequest(_workOrderId!.Value, _binId!.Value));
+            Navigation.NavigateTo($"materials/kits/{kit.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

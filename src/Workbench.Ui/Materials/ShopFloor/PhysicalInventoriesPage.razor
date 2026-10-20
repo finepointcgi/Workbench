@@ -1,0 +1,110 @@
+@page "/materials/physical-inventory"
+@inject IPhysicalInventoryService Counts
+@inject IPartService PartService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Physical inventory · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Physical inventory" Subtitle="Freeze a warehouse or some of its bins, count every tag, recount what's off, then post the differences. Cycle counts stay on the Transactions page." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    @if (MaterialsFormat.CanEdit(User) && _warehouses is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Start a count</MudText>
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                <MudSelect T="Guid?" Value="_warehouseId" ValueChanged="v => { _warehouseId = v; _bins = []; }" Label="Warehouse" Dense="true" Style="min-width:200px">
+                    @foreach (var w in _warehouses.Where(w => w.IsActive)) { <MudSelectItem T="Guid?" Value="w.Id">@w.Code @w.Name</MudSelectItem> }
+                </MudSelect>
+                @if (_warehouseId is { } wid)
+                {
+                    <MudSelect T="Guid" MultiSelection="true" SelectedValues="_bins" SelectedValuesChanged="v => _bins = v.ToList()" Label="Bins (none = the whole warehouse)" Dense="true" Style="min-width:260px"
+                               ToStringFunc="@(id => _warehouses.SelectMany(w => w.Bins).FirstOrDefault(b => b.Id == id)?.Code ?? "")">
+                        @foreach (var b in _warehouses.Single(w => w.Id == wid).Bins.Where(b => b.IsActive)) { <MudSelectItem T="Guid" Value="b.Id">@b.Code</MudSelectItem> }
+                    </MudSelect>
+                }
+                <MudDatePicker @bind-Date="_date" Label="Count date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:160px" />
+                <MudNumericField T="decimal" @bind-Value="_percent" Label="Recount if off by more than (%)" Min="0" Style="max-width:200px" />
+                <MudNumericField T="decimal" @bind-Value="_value" Label="… or by more than ($)" Min="0" Style="max-width:170px" />
+                <MudSwitch T="bool" @bind-Value="_blind" Label="Blind count" Color="Color.Primary" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_warehouseId is null || _date is null)" OnClick="CreateAsync" data-testid="pi-create">Freeze and write tags</MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Nothing can be received, issued, moved or adjusted in frozen bins until the count is posted or cancelled. A blind count hides the quantity on record from counters.</MudText>
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (_list.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No physical inventories yet.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="physical-inventories">
+                <caption class="wb-sr-only">Physical inventories</caption>
+                <thead><tr><th scope="col">Count</th><th scope="col">Warehouse</th><th scope="col">Scope</th><th scope="col">Count date</th><th scope="col" style="text-align:right">Tags</th><th scope="col" style="text-align:right">Counted</th><th scope="col" style="text-align:right">Recounts</th><th scope="col" style="text-align:right">Difference</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                    @foreach (var p in _list)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/physical-inventory/{p.Id}")">@p.Number</MudLink></td>
+                            <td>@p.Warehouse</td><td>@p.Scope</td><td>@MaterialsFormat.Date(p.CountDate)</td>
+                            <td style="text-align:right">@p.TagCount</td><td style="text-align:right">@p.CountedCount</td>
+                            <td style="text-align:right">@(p.RecountsNeeded > 0 ? p.RecountsNeeded.ToString(CultureInfo.InvariantCulture) : "—")</td>
+                            <td style="text-align:right">@MaterialsFormat.Amount(p.VarianceValue)</td>
+                            <td><MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(p.Status)" Class="my-0">@ShopFloorFormat.Label(p.Status)</MudChip></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<PhysicalInventorySummaryDto> _list = [];
+    private IReadOnlyList<WarehouseDto>? _warehouses;
+    private Guid? _warehouseId;
+    private IReadOnlyList<Guid> _bins = [];
+    private DateTime? _date = DateTime.Today;
+    private decimal _percent = 5;
+    private decimal _value = 100;
+    private bool _blind = true;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _list = await Counts.ListAsync();
+            _warehouses = await PartService.ListWarehousesAsync();
+            _warehouseId = _warehouses.FirstOrDefault(w => w.IsActive)?.Id;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            var pi = await Counts.CreateAsync(new CreatePhysicalInventoryRequest(_warehouseId!.Value, DateOnly.FromDateTime(_date!.Value), _bins.Count == 0 ? null : _bins, _percent, _value, _blind));
+            Navigation.NavigateTo($"materials/physical-inventory/{pi.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

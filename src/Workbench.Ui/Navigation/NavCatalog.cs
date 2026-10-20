@@ -174,6 +174,12 @@ public static class NavCatalog
         new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, a => a.IsMaterials, MatchAll: true, Keywords: "mobile receiving", InMenu: false),
         new(Materials, null, "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, a => a.CanViewMaterials, Keywords: "valuation aging gfm wip trace"),
         new(Materials, null, "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, a => a.IsMaterials, Keywords: "warehouses bins work centers"),
+        new(Materials, "Manufacturing", "Kits", "materials/kits", Icons.Material.Filled.Inventory, a => a.IsMaterials, Detail: "Kit", Keywords: "kitting pick list stage shortages"),
+        new(Materials, "Manufacturing", "Backflush", "materials/backflush", Icons.Material.Filled.AutoMode, a => a.IsMaterials, Keywords: "issue on completion backflushing shortages"),
+        new(Materials, "Manufacturing", "Capacity schedule", "materials/capacity", Icons.Material.Filled.ViewTimeline, a => a.IsMaterials, Keywords: "finite capacity scheduling load chart work center calendar queue"),
+        new(Materials, null, "Physical inventory", "materials/physical-inventory", Icons.Material.Filled.FactCheck, a => a.IsMaterials, Detail: "Physical inventory", Keywords: "wall to wall count tags freeze recount"),
+        new(Materials, null, "Landed cost", "materials/landed-cost", Icons.Material.Filled.LocalShipping, a => a.IsMaterials, Detail: "Landed cost", Keywords: "freight duty handling allocation receipts"), // Finance: linked from Inventory reports (its menu is at its link budget).
+        new(Materials, null, "Count on a phone", "m/count", Icons.Material.Filled.PhoneIphone, a => a.IsMaterials, MatchAll: true, Keywords: "mobile physical inventory count tags", InMenu: false),
 
         // Reports: one place for every report.
         new(Reports, null, "Report catalog", "reports", Icons.Material.Filled.LibraryBooks, Everyone, MatchAll: true, Keywords: "reports"),

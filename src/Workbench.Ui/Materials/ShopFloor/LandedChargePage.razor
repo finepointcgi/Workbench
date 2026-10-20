@@ -1,0 +1,123 @@
+@page "/materials/landed-cost/{ChargeId:guid}"
+@inject ILandedCostService LandedCost
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_charge?.Summary.Number ?? "Landed cost") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Landed cost" BackHref="materials/landed-cost" BackLabel="Landed cost" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_charge is not { } c)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = c.Summary;
+    var draft = s.Status == LandedChargeState.Draft;
+    <MaterialsHeader Title="@($"{s.Number} · {ShopFloorFormat.Label(s.Kind)}")" BackHref="materials/landed-cost" BackLabel="Landed cost" Subtitle="@s.Description">
+        <MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(s.Status)">@ShopFloorFormat.Label(s.Status)</MudChip>
+        @if (draft && ShopFloorFormat.CanDraftLandedCost(User))
+        {
+            <MudButton Variant="Variant.Outlined" Href="@($"materials/landed-cost/{ChargeId}/edit")">Edit</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelAsync" Disabled="_busy">Cancel charge</MudButton>
+        }
+        @if (draft && ShopFloorFormat.CanPost(User))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PostAsync" Disabled="_busy" data-testid="landed-post">Post</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[]
+        {
+            ("Amount", MaterialsFormat.Amount(s.Amount)), ("To stock on hand", MaterialsFormat.Amount(c.Lines.Sum(l => l.ToInventory))),
+            ("To units already used", MaterialsFormat.Amount(c.Lines.Sum(l => l.ToIssued))), ("Price variance", MaterialsFormat.Amount(c.Lines.Sum(l => l.ToVariance))),
+        })
+        {
+            <MudItem xs="6" sm="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="p">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    <MudText Class="mud-text-secondary mb-2">
+        @MaterialsFormat.Date(s.Date) · @ShopFloorFormat.Label(s.Method) · @(s.BillNumber is { } b ? $"from bill {b}" : "entered by hand")@(s.Vendor is { } v ? $" · {v}" : "")
+        · credits @s.CreditAccount@(s.JournalEntryNumber is { } je ? $" · journal entry {je}" : "")
+    </MudText>
+    @foreach (var note in c.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="landed-lines">
+            <caption class="wb-sr-only">Allocation by receipt line</caption>
+            <thead><tr><th scope="col">Receipt</th><th scope="col">Part</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Value</th>@if (s.Method == LandedCostBasis.Weight) { <th scope="col" style="text-align:right">Weight</th> }<th scope="col" style="text-align:right">Share</th><th scope="col" style="text-align:right">To stock</th><th scope="col" style="text-align:right">To units used</th><th scope="col" style="text-align:right">Variance</th></tr></thead>
+            <tbody>
+                @foreach (var l in c.Lines)
+                {
+                    <tr>
+                        <td>@l.Receipt.ReceiptNumber <span class="mud-text-secondary">@l.Receipt.PurchaseOrderNumber · @MaterialsFormat.Date(l.Receipt.ReceivedOn)</span></td>
+                        <td><MudLink Href="@($"materials/parts/{l.Receipt.PartId}")">@l.Receipt.PartNumber</MudLink> <span class="mud-text-secondary">@MaterialsFormat.Label(l.Receipt.CostMethod)</span></td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(l.Receipt.Quantity)</td>
+                        <td style="text-align:right">@MaterialsFormat.Amount(l.Receipt.Value)</td>
+                        @if (s.Method == LandedCostBasis.Weight) { <td style="text-align:right">@(l.Weight is { } w ? MaterialsFormat.Qty(w) : "—")</td> }
+                        <td style="text-align:right">@MaterialsFormat.Amount(l.Amount)</td>
+                        <td style="text-align:right">@MaterialsFormat.Amount(l.ToInventory)</td>
+                        <td style="text-align:right">@MaterialsFormat.Amount(l.ToIssued)</td>
+                        <td style="text-align:right">@MaterialsFormat.Amount(l.ToVariance)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid ChargeId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private LandedChargeDto? _charge;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _charge = await LandedCost.GetAsync(ChargeId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<LandedChargeDto>> action, string message)
+    {
+        _busy = true;
+        try
+        {
+            _charge = await action();
+            Snackbar.Add(message, Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task PostAsync() => RunAsync(() => LandedCost.PostAsync(ChargeId), "Posted. Inventory value and the GL are updated.");
+
+    private Task CancelAsync() => RunAsync(() => LandedCost.CancelAsync(ChargeId), "Charge cancelled.");
+}

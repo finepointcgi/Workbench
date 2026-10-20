@@ -1,0 +1,180 @@
+@* A work order's kits, backflush shortages and scheduled operations (a tab on the work order page). *@
+@inject IKittingService Kitting
+@inject IBackflushService Backflush
+@inject ICapacitySchedulingService Capacity
+@inject IPartService PartService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@{
+    var s = WorkOrder.Summary;
+    var open = s.Status is WorkOrderState.Released or WorkOrderState.InProgress;
+}
+
+<MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="wo-shortages">
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Backflush shortages</MudText>
+    @if (_shortages.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">None. Backflushed components were issued in full when work was reported.</MudText>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+            Some backflushed components couldn't be issued. Put stock in their backflush location, then backflush again.
+        </MudAlert>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <caption class="wb-sr-only">Backflush shortages</caption>
+            <thead><tr><th scope="col">Component</th><th scope="col" style="text-align:right">Short</th><th scope="col">When</th><th scope="col">Why</th></tr></thead>
+            <tbody>
+                @foreach (var x in _shortages)
+                {
+                    <tr>
+                        <td>@x.PartNumber <span class="mud-text-secondary">@x.PartDescription</span></td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(x.QuantityShort)</td>
+                        <td>@(x.Trigger == BackflushWhen.Operation ? "Operation labor" : "Completion") · @MaterialsFormat.Date(x.Date)</td>
+                        <td>@x.Message</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (Editable)
+        {
+            <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="RetryAsync" Disabled="_busy" data-testid="wo-backflush-retry">Backflush again</MudButton>
+        }
+    }
+</MudPaper>
+
+<MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="wo-kits">
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Kits</MudText>
+    @if (_kits.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No kits yet.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Elevation="0">
+            <caption class="wb-sr-only">Kits for this work order</caption>
+            <thead><tr><th scope="col">Kit</th><th scope="col">Status</th><th scope="col">Kit location</th><th scope="col" style="text-align:right">Still short</th></tr></thead>
+            <tbody>
+                @foreach (var k in _kits)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"materials/kits/{k.Id}")">@k.Number</MudLink></td>
+                        <td>@ShopFloorFormat.Label(k.Status)</td>
+                        <td>@k.StagingLocation</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(k.QuantityShort)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+    @if (Editable && open && _options is not null && !_kits.Any(k => k.Status is KitState.Open or KitState.Staged))
+    {
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-2" Wrap="Wrap.Wrap">
+            <BinSelect Options="_options" @bind-Value="_kitBin" Label="Kit location" />
+            <MudButton Variant="Variant.Outlined" Disabled="@(_kitBin is null || _busy)" OnClick="BuildKitAsync" data-testid="wo-build-kit">Build a kit</MudButton>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Use a bin set aside for kits: stock staged there is held for its kit.</MudText>
+        </MudStack>
+    }
+</MudPaper>
+
+<MudPaper Outlined="true" Class="pa-3" data-testid="wo-schedule">
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Schedule</MudText>
+    @if (_schedule.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">Not scheduled. Open operations are placed against work center capacity on the <MudLink Href="materials/capacity">capacity schedule</MudLink>.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Elevation="0">
+            <caption class="wb-sr-only">Scheduled operations</caption>
+            <thead><tr><th scope="col">Operation</th><th scope="col">Work center</th><th scope="col">Start</th><th scope="col">End</th><th scope="col" style="text-align:right">Open hours</th></tr></thead>
+            <tbody>
+                @foreach (var o in _schedule)
+                {
+                    <tr>
+                        <td>@o.Sequence @o.Description</td>
+                        <td>@o.WorkCenter</td>
+                        <td>@MaterialsFormat.Date(o.Start)@if (o.IsPinned) { <span class="mud-text-secondary"> (set by planner)</span> }</td>
+                        <td>@MaterialsFormat.Date(o.End)@if (o.IsLate) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1 my-0">Late</MudChip> }</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(o.Hours)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public WorkOrderDto WorkOrder { get; set; } = default!;
+    [Parameter] public bool Editable { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<BackflushShortageDto> _shortages = [];
+    private IReadOnlyList<KitSummaryDto> _kits = [];
+    private IReadOnlyList<ScheduledOperationDto> _schedule = [];
+    private MaterialsOptionsDto? _options;
+    private Guid? _kitBin;
+    private bool _busy;
+    private WorkOrderDto? _loadedFor;
+
+    /// <summary>Reloads whenever the page shows a new copy of the work order (after a completion, labor or an issue).</summary>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ReferenceEquals(_loadedFor, WorkOrder))
+        {
+            return;
+        }
+
+        _loadedFor = WorkOrder;
+        try
+        {
+            _shortages = await Backflush.ListShortagesAsync(WorkOrder.Summary.Id);
+            _kits = await Kitting.ListAsync(new KitQuery(false, WorkOrder.Summary.Id));
+            _schedule = (await Capacity.GetAsync()).Operations.Where(o => o.WorkOrderId == WorkOrder.Summary.Id).OrderBy(o => o.Sequence).ToList();
+            _options ??= await PartService.GetOptionsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            // The rest of the work order page still works.
+        }
+    }
+
+    private async Task RetryAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Backflush.RetryAsync(WorkOrder.Summary.Id, MaterialsFormat.Today);
+            Snackbar.Add(result.Shortages.Count == 0 ? "Backflushed. No shortages left." : $"Backflushed what was there; {result.Shortages.Count} still short.",
+                result.Shortages.Count == 0 ? Severity.Success : Severity.Warning);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task BuildKitAsync()
+    {
+        _busy = true;
+        try
+        {
+            var kit = await Kitting.CreateForWorkOrderAsync(new CreateWorkOrderKitRequest(WorkOrder.Summary.Id, _kitBin!.Value));
+            Navigation.NavigateTo($"materials/kits/{kit.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

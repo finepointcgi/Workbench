@@ -129,7 +129,8 @@ public sealed class MaterialsLedger(GeneralLedger ledger, IOptions<MaterialsOpti
     /// dropped). Returns null when nothing is left to post. The entry must balance.
     /// </summary>
     internal async Task<JournalEntry?> PostAsync(
-        IWorkbenchDbContext db, JournalSource source, Guid sourceId, DateOnly date, string description, IEnumerable<LedgerAmount> amounts, CancellationToken ct)
+        IWorkbenchDbContext db, JournalSource source, Guid sourceId, DateOnly date, string description, IEnumerable<LedgerAmount> amounts, CancellationToken ct,
+        Guid? companyId = null)
     {
         var lines = amounts
             .GroupBy(a => (a.AccountId, a.ProjectId, a.WbsElementId))
@@ -150,6 +151,11 @@ public sealed class MaterialsLedger(GeneralLedger ledger, IOptions<MaterialsOpti
             CreatedBy = ledger.Actor,
             CreatedAtUtc = ledger.UtcNow,
         };
+        if (companyId is { } company)
+        {
+            entry.CompanyId = company;
+        }
+
         var n = 0;
         foreach (var l in lines.OrderByDescending(l => l.Amount > 0))
         {

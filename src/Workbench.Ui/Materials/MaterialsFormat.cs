@@ -49,6 +49,8 @@ public static class MaterialsFormat
         InventoryMovement.CycleCount => "Cycle count",
         InventoryMovement.WorkOrderCompletion => "Completion to stock",
         InventoryMovement.WorkOrderShipment => "Delivered to project",
+        InventoryMovement.LandedCost => "Landed cost",
+        InventoryMovement.PhysicalCount => "Physical inventory",
         _ => m.ToString(),
     };
 

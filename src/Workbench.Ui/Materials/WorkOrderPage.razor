@@ -193,6 +193,7 @@ else
                 </MudPaper>
             </MudTabPanel>
         }
+        <MudTabPanel Text="Kits, backflush and schedule"><Workbench.Ui.Materials.ShopFloor.WorkOrderShopFloorPanel WorkOrder="wo" Editable="Editable" Changed="OnParametersSetAsync" /></MudTabPanel>
         <MudTabPanel Text="Transactions">
             <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto"><TransactionsTable Transactions="wo.Transactions" ShowPart="true" Caption="Work order transactions" /></MudPaper>
         </MudTabPanel>

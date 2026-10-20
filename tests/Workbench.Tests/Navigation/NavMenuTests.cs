@@ -51,7 +51,8 @@ public sealed class NavMenuTests
 
         var links = Links(nav);
         Assert.Equal(["home", "my-work", "projects", "people", "sheets", "materials", "reports"], Sections(nav));
-        foreach (var page in new[] { "materials", "materials/inventory", "materials/receiving", "materials/boms", "materials/work-orders", "materials/mrp", "materials/reports" })
+        foreach (var page in new[] { "materials", "materials/inventory", "materials/receiving", "materials/boms", "materials/work-orders", "materials/mrp", "materials/reports",
+                     "materials/kits", "materials/backflush", "materials/capacity", "materials/physical-inventory", "materials/landed-cost" })
         {
             Assert.Contains(page, links);
         }
