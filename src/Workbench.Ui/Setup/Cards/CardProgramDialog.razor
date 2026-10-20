@@ -1,0 +1,81 @@
+@using Workbench.Contracts.Accounting
+@using Workbench.Contracts.Purchasing
+@using Workbench.Contracts.Travel
+@inject IChartOfAccountsService Accounts
+@inject IVendorService Vendors
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Label="Program name" Required="true" Immediate="true" MaxLength="200" HelperText="For example: Citi corporate card." />
+            <MudTextField @bind-Value="_issuer" Label="Card issuer (bank)" Required="true" Immediate="true" MaxLength="200" />
+            <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Issuer as a vendor (optional)" Clearable="true">
+                @foreach (var vendor in _vendors)
+                {
+                    <MudSelectItem T="Guid?" Value="vendor.Id">@vendor.Code · @vendor.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudRadioGroup T="CardPaymentKind" @bind-Value="_payment">
+                <MudRadio Value="CardPaymentKind.CompanyPaid" Color="Color.Primary">The company pays the issuer (central bill): charges post to the card liability</MudRadio>
+                <MudRadio Value="CardPaymentKind.EmployeePaid" Color="Color.Primary">The employee pays the issuer (individual bill): charges are reimbursed</MudRadio>
+            </MudRadioGroup>
+            @if (_payment == CardPaymentKind.CompanyPaid)
+            {
+                <MudSelect T="Guid?" @bind-Value="_accountId" Label="Liability account" Clearable="true"
+                           HelperText="Leave empty to use 2030 Corporate card payable (added to the chart if it's missing).">
+                    @foreach (var account in _accounts)
+                    {
+                        <MudSelectItem T="Guid?" Value="account.Id">@account.Number @account.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudNumericField T="int" @bind-Value="_days" Label="Charges are overdue after (days)" Min="1" Max="365"
+                             HelperText="Charges not on a submitted expense report by then show as overdue to the cardholder and on the aging." />
+            <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="Active" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_issuer))"
+                   OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public CardProgramDto? Existing { get; set; }
+
+    private string? _name;
+    private string? _issuer;
+    private Guid? _vendorId;
+    private CardPaymentKind _payment = CardPaymentKind.CompanyPaid;
+    private Guid? _accountId;
+    private int _days = 30;
+    private bool _active = true;
+    private IReadOnlyList<AccountDto> _accounts = [];
+    private IReadOnlyList<VendorDto> _vendors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } p)
+        {
+            (_name, _issuer, _vendorId, _payment, _accountId, _days, _active) =
+                (p.Name, p.Issuer, p.VendorId, p.PaymentResponsibility, p.LiabilityAccountId, p.UnsubmittedAlertDays, p.IsActive);
+        }
+
+        try
+        {
+            _accounts = (await Accounts.ListAccountsAsync(includeInactive: false)).Where(a => a.Type == AccountKind.Liability && !a.HasChildren).ToList();
+            _vendors = await Vendors.ListAsync(includeInactive: false);
+        }
+        catch (Exception ex) when (Workbench.Ui.Travel.TravelFormat.IsExpected(ex))
+        {
+            // The pickers stay empty; the program still saves with the default liability account.
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveCardProgramRequest(_name!.Trim(), _issuer!.Trim(), _payment, _vendorId,
+        _payment == CardPaymentKind.CompanyPaid ? _accountId : null, _days, _active)));
+}

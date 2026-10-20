@@ -1,0 +1,34 @@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Record the cash advance paid to the traveler. Their expense report deducts it from what they're reimbursed.
+            @if (Requested > 0)
+            {
+                <text> They asked for @TravelFormat.Money(Requested).</text>
+            }
+        </MudText>
+        <MudStack Spacing="3">
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" Immediate="true" />
+            <MudDatePicker @bind-Date="_on" Label="Paid on" DateFormat="yyyy-MM-dd" AutoClose="true" Editable="true" />
+            <MudTextField @bind-Value="_reference" Label="Reference (check or ACH number)" MaxLength="100" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_amount <= 0 || _on is null)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new RecordTravelAdvanceRequest(_amount, DateOnly.FromDateTime(_on!.Value), _reference)))">Record advance</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public decimal Requested { get; set; }
+
+    private decimal _amount;
+    private DateTime? _on = DateTime.Today;
+    private string? _reference;
+
+    protected override void OnInitialized() => _amount = Requested;
+}

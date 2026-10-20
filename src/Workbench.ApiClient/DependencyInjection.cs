@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddCurrencyClients(serverBaseAddress);
         services.AddCompanyClients(serverBaseAddress);
         services.AddGovernmentBillingClients(serverBaseAddress);
+        services.AddTravelClients(serverBaseAddress);
         return services;
     }
 }

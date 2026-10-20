@@ -1,0 +1,25 @@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">@Charge.Merchant · @TravelFormat.Money(Charge.Amount). No card in the program ends in @(Charge.CardLast4.Length == 0 ? "the statement's digits" : Charge.CardLast4).</MudText>
+        <MudSelect T="Guid?" @bind-Value="_cardId" Label="Card">
+            @foreach (var card in Cards)
+            {
+                <MudSelectItem T="Guid?" Value="card.Id">@card.EmployeeName ••@card.Last4</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_cardId is null)" OnClick="() => MudDialog.Close(DialogResult.Ok(_cardId!.Value))">Assign</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public CardTransactionDto Charge { get; set; } = default!;
+    [Parameter] public IReadOnlyList<CorporateCardDto> Cards { get; set; } = [];
+
+    private Guid? _cardId;
+}

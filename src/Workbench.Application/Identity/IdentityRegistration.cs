@@ -98,6 +98,7 @@ public static class IdentityRegistration
         services.AddWorkbenchTotalTimePermissions(); // Total time accounting: method and reports Finance/Admin; a timesheet's hours summary whoever can see the timesheet.
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
+        services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         return services;
     }
 

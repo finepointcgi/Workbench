@@ -130,6 +130,7 @@ else
         <MudText Typo="Typo.caption" Class="mud-text-secondary d-block px-2 pb-1">Receipts are required for lines of @OdcFormat.Money(_threshold) or more.</MudText>
     </MudPaper>
     <Workbench.Ui.PerDiem.PerDiemPanel ReportId="ReportId" EmployeeId="report.EmployeeId" Editable="report.IsEditable" TripStart="report.TripStart" TripEnd="report.TripEnd" Changed="LoadAsync" />
+    <Workbench.Ui.Travel.TravelReportPanel ReportId="ReportId" Editable="report.IsEditable" Version="_version" />
 }
 
 @code {
@@ -139,6 +140,7 @@ else
     private decimal _threshold = 75m;
     private bool _loading = true;
     private bool _busy;
+    private int _version;
     private List<BreadcrumbItem> _crumbs = [new("Expenses", "expenses")];
 
     protected override async Task OnParametersSetAsync()
@@ -159,6 +161,7 @@ else
         try
         {
             _detail = await Reports.GetReportAsync(ReportId);
+            _version++;
             _crumbs = [new("Expenses", "expenses"), new(_detail.Report.Title, null, disabled: true)];
         }
         catch (Exception ex) when (OdcFormat.IsExpected(ex))

@@ -1,0 +1,100 @@
+@page "/travel"
+@inject ITravelAuthorizationService Travel
+@inject Workbench.Contracts.Identity.ICurrentUserContext CurrentUser
+@inject ISnackbar Snackbar
+
+<PageTitle>Travel · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Travel</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FlightTakeoff" Href="travel/new" data-testid="request-trip">Request a trip</MudButton>
+</MudStack>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Ask for approval before you travel. Once your supervisor and the project manager approve the trip, it becomes the budget for its expense report.
+</MudText>
+
+@if (_awaiting.Count > 0)
+{
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Waiting for your approval</MudText>
+    @Table(_awaiting, showTraveler: true, "trips-awaiting")
+}
+
+<MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
+    <MudTabPanel Text="My trips">
+        @Table(_mine, showTraveler: false, "trips-mine")
+    </MudTabPanel>
+    @if (_isFinance)
+    {
+        <MudTabPanel Text="Everyone's trips">
+            @Table(_all, showTraveler: true, "trips-all")
+        </MudTabPanel>
+    }
+</MudTabs>
+
+@code {
+    private IReadOnlyList<TravelAuthorizationDto> _mine = [];
+    private IReadOnlyList<TravelAuthorizationDto> _awaiting = [];
+    private IReadOnlyList<TravelAuthorizationDto> _all = [];
+    private bool _isFinance;
+    private bool _loading = true;
+    private int _tab;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _mine = await Travel.ListMineAsync();
+            _awaiting = await Travel.ListAwaitingMeAsync();
+            _isFinance = (await CurrentUser.GetAsync()).IsFinance;
+            if (_isFinance)
+            {
+                _all = await Travel.ListAllAsync();
+            }
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load trips: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private RenderFragment Table(IReadOnlyList<TravelAuthorizationDto> rows, bool showTraveler, string testId) =>
+        @<MudTable T="TravelAuthorizationDto" Items="rows" Loading="_loading" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" data-testid="@testId" Class="mb-4">
+            <HeaderContent>
+                <MudTh>Trip</MudTh>
+                @if (showTraveler)
+                {
+                    <MudTh>Traveler</MudTh>
+                }
+                <MudTh>Where and when</MudTh>
+                <MudTh>Charge code</MudTh>
+                <MudTh Style="text-align:right">Authorized</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Expense report</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Trip"><MudLink Href="@($"travel/{context.Id}")">@context.Title</MudLink> <span class="mud-text-secondary">@context.Number</span></MudTd>
+                @if (showTraveler)
+                {
+                    <MudTd DataLabel="Traveler">@context.EmployeeName</MudTd>
+                }
+                <MudTd DataLabel="Where and when">@context.Destinations · @TravelFormat.Dates(context.TripStart, context.TripEnd)</MudTd>
+                <MudTd DataLabel="Charge code">@ChargeCodeText.Label(context.WbsCode, context.WbsName)</MudTd>
+                <MudTd DataLabel="Authorized" Style="text-align:right">@TravelFormat.Money(context.EstimatedTotal)</MudTd>
+                <MudTd DataLabel="Status"><TravelStatusChip Status="context.Status" /></MudTd>
+                <MudTd DataLabel="Expense report">
+                    @if (context.ExpenseReportId is { } reportId)
+                    {
+                        <MudLink Href="@($"expenses/{reportId}")">@(context.ExpenseReportStatus is { } s ? s.ToString() : "Open")</MudLink>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No trips here yet.</MudText>
+            </NoRecordsContent>
+        </MudTable>;
+}

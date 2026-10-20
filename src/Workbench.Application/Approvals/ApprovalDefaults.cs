@@ -77,6 +77,14 @@ public static class ApprovalDefaults
                 WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
         ]),
 
+        // A trip: the traveler's supervisor (administrators when there's none) and, in parallel, the charged project's
+        // manager (skipped when the traveler manages it). Nobody approves their own trip.
+        ApprovalDocumentTypes.TravelAuthorization => new([
+            new("Supervisor", 1, new(ApproverRuleKind.Supervisor), Fallback: new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Admin),
+                WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
+            new("Project manager", 1, new(ApproverRuleKind.ProjectManager), WhenSubmitterIsApprover: SelfApprovalPolicy.Skip),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 

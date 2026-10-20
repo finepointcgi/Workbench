@@ -1,0 +1,146 @@
+@* The cardholder's corporate card charges: add each to an expense report (the line's amount is locked to the charge). *@
+@inject ICardChargeService Cards
+@inject IExpenseReportService Reports
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+@if (!_loading && _cards.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="no-cards">You don't have a corporate card. Finance assigns cards under Setup › Card programs.</MudText>
+}
+else
+{
+    @if (_summary is { Overdue: > 0 } s)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="cards-overdue">
+            @(s.Overdue == 1 ? "1 charge is" : $"{s.Overdue} charges are") more than @s.AlertDays days old and not on a submitted expense report. Add them to a report and submit it.
+        </MudAlert>
+    }
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Your cards: @string.Join(", ", _cards.Select(c => $"{c.ProgramName} ••{c.Last4}"))
+        </MudText>
+        <MudSpacer />
+        <MudSwitch T="bool" Value="_showAll" ValueChanged="ToggleAsync" Color="Color.Primary" Label="Show charges already on reports" />
+    </MudStack>
+
+    <MudTable T="CardTransactionDto" Items="_charges" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" data-testid="card-charges">
+        <HeaderContent>
+            <MudTh>Date</MudTh>
+            <MudTh>Merchant</MudTh>
+            <MudTh>Card</MudTh>
+            <MudTh Style="text-align:right">Amount</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Date">@context.TransactionDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</MudTd>
+            <MudTd DataLabel="Merchant">
+                @context.Merchant
+                <span class="mud-text-secondary"> · @TravelLabels.Category(context.SuggestedCategory)</span>
+            </MudTd>
+            <MudTd DataLabel="Card">••@context.CardLast4</MudTd>
+            <MudTd DataLabel="Amount" Style="text-align:right">@TravelFormat.Money(context.Amount)</MudTd>
+            <MudTd DataLabel="Status">
+                @{ var (text, color) = TravelFormat.Charge(context.State); }
+                <MudChip T="string" Size="Size.Small" Color="color" Variant="Variant.Outlined" Class="my-0">@text</MudChip>
+                @if (context.IsOverdue)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="my-0">@context.AgeDays days old</MudChip>
+                }
+            </MudTd>
+            <MudTd Style="white-space:nowrap">
+                @if (context.State == CardChargeState.Unassigned && context.Amount > 0)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PostAdd"
+                               OnClick="() => AttachAsync(context)" data-testid="attach-charge">Add to report</MudButton>
+                }
+                else if (context.State == CardChargeState.Unassigned)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Credit: Finance matches it</MudText>
+                }
+                else if (context.ExpenseReportId is { } reportId)
+                {
+                    <MudLink Href="@($"expenses/{reportId}")" Typo="Typo.body2">@context.ExpenseReportTitle</MudLink>
+                    @if (context.State == CardChargeState.OnDraftReport)
+                    {
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.RemoveCircleOutline" OnClick="() => DetachAsync(context)" aria-label="Take it off the report" title="Take it off the report" />
+                    }
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">No card charges waiting. New charges show here when Finance imports the card statement.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<CorporateCardDto> _cards = [];
+    private IReadOnlyList<CardTransactionDto> _charges = [];
+    private CardChargeSummaryDto? _summary;
+    private bool _showAll;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _cards = await Cards.ListMyCardsAsync();
+            _charges = await Cards.ListMyChargesAsync(_showAll);
+            _summary = await Cards.GetMySummaryAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load card charges: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ToggleAsync(bool value)
+    {
+        _showAll = value;
+        await LoadAsync();
+    }
+
+    private async Task AttachAsync(CardTransactionDto charge)
+    {
+        var parameters = new DialogParameters<AttachCardChargeDialog> { { d => d.Charge, charge } };
+        var dialog = await DialogService.ShowAsync<AttachCardChargeDialog>("Add the charge to an expense report", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: AttachCardChargeRequest request })
+        {
+            try
+            {
+                await Cards.AttachToReportAsync(charge.Id, request);
+                Snackbar.Add($"Added {charge.Merchant} to the report.", Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (TravelFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private async Task DetachAsync(CardTransactionDto charge)
+    {
+        try
+        {
+            await Cards.DetachAsync(charge.Id);
+            Snackbar.Add($"{charge.Merchant} is off the report.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (TravelFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
