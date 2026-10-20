@@ -1,0 +1,76 @@
+@* A connector's run log, newest first, with downloads for the files it produced. *@
+@inject IConnectorService Connectors
+@inject IJSRuntime JS
+
+<MudDialog>
+    <TitleContent><MudText Typo="Typo.h6" HtmlTag="h2">Run log: @Connector.Name</MudText></TitleContent>
+    <DialogContent>
+        <MudTable T="ConnectorRunDto" Items="_runs" Loading="_loading" Dense="true" Breakpoint="Breakpoint.Sm" aria-label="@($"Runs of {Connector.Name}")" data-testid="connector-runs">
+            <HeaderContent>
+                <MudTh>Started (UTC)</MudTh>
+                <MudTh>Why</MudTh>
+                <MudTh>Result</MudTh>
+                <MudTh>What happened</MudTh>
+                <MudTh>File</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                @{ var status = IntegrationFormat.Run(context.Status); }
+                <MudTd DataLabel="Started">@IntegrationFormat.When(context.StartedAtUtc)</MudTd>
+                <MudTd DataLabel="Why">@(context.Trigger switch { ConnectorRunTrigger.Schedule => "Schedule", ConnectorRunTrigger.Event => IntegrationFormat.EventLabel(context.EventType ?? "event"), _ => $"Run by {context.RequestedBy}" })</MudTd>
+                <MudTd DataLabel="Result"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="status.Color" Icon="@status.Icon">@status.Text</MudChip></MudTd>
+                <MudTd DataLabel="What happened">@context.Message</MudTd>
+                <MudTd DataLabel="File">
+                    @if (context.OutputFileName is { } name)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" OnClick="() => DownloadAsync(context)" aria-label="@($"Download {name}")">@name</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>No runs yet.</MudText></NoRecordsContent>
+        </MudTable>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" role="alert" Class="mt-2">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ConnectorDto Connector { get; set; } = null!;
+
+    private IReadOnlyList<ConnectorRunDto> _runs = [];
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _runs = await Connectors.ListRunsAsync(Connector.Id, 100);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DownloadAsync(ConnectorRunDto run)
+    {
+        try
+        {
+            await IntegrationFormat.DownloadAsync(JS, await Connectors.GetRunFileAsync(run.Id));
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex) || ex is JSException)
+        {
+            _error = ex.Message;
+        }
+    }
+}

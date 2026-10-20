@@ -1,0 +1,98 @@
+@* Add or edit a webhook endpoint: name, HTTPS URL, the events it receives and whether it's on. *@
+
+<MudDialog>
+    <TitleContent><MudText Typo="Typo.h6" HtmlTag="h2">@(Endpoint is null ? "Add webhook endpoint" : $"Edit {Endpoint.Name}")</MudText></TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Immediate="true" Label="Name" HelperText="What receives these events, such as Data warehouse." autocomplete="off"
+                          Variant="Variant.Outlined" MaxLength="200" AutoFocus="true" data-testid="webhook-name" />
+            <MudTextField @bind-Value="_url" Immediate="true" Label="URL" HelperText="Must start with https:// and be reachable from the internet." autocomplete="off"
+                          InputType="InputType.Url" Variant="Variant.Outlined" MaxLength="2000" data-testid="webhook-url" />
+            <MudTextField @bind-Value="_description" Label="Description (optional)" autocomplete="off" Variant="Variant.Outlined" Lines="2" MaxLength="1000" />
+            <MudSwitch T="bool" @bind-Value="_active" Label="On (send events)" Color="Color.Primary" />
+            <fieldset style="border: none; padding: 0; margin: 0;">
+                <legend><MudText Typo="Typo.subtitle1" HtmlTag="span">Events to send</MudText></legend>
+                @foreach (var group in WebhookEventCatalog.All.GroupBy(e => e.Group))
+                {
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">@group.Key</MudText>
+                    @foreach (var e in group)
+                    {
+                        <MudCheckBox T="bool" Value="_events.Contains(e.Key)" ValueChanged="on => Toggle(e.Key, on)" Dense="true" Color="Color.Primary"
+                                     Label="@($"{e.Label}: {e.Description}")" data-testid="@($"webhook-event-{e.Key}")" />
+                    }
+                }
+            </fieldset>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" role="alert">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy || !CanSave" data-testid="webhook-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public WebhookEndpointDto? Endpoint { get; set; }
+    [Inject] private IWebhookService Webhooks { get; set; } = null!;
+
+    private string? _name;
+    private string? _url;
+    private string? _description;
+    private bool _active = true;
+    private readonly HashSet<string> _events = [];
+    private bool _busy;
+    private string? _error;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && !string.IsNullOrWhiteSpace(_url) && _events.Count > 0;
+
+    protected override void OnInitialized()
+    {
+        if (Endpoint is { } e)
+        {
+            (_name, _url, _description, _active) = (e.Name, e.Url, e.Description, e.IsActive);
+            _events.UnionWith(e.EventTypes);
+        }
+    }
+
+    private void Toggle(string key, bool on)
+    {
+        if (on)
+        {
+            _events.Add(key);
+        }
+        else
+        {
+            _events.Remove(key);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var request = new SaveWebhookEndpointRequest(_name!, _url!, _events.ToList(), _active, _description);
+            if (Endpoint is null)
+            {
+                MudDialog.Close(DialogResult.Ok<object>(await Webhooks.CreateEndpointAsync(request)));
+            }
+            else
+            {
+                MudDialog.Close(DialogResult.Ok<object>(await Webhooks.UpdateEndpointAsync(Endpoint.Id, request)));
+            }
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

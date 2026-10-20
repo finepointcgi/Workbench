@@ -1,0 +1,136 @@
+@inject IWebhookService Webhooks
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Every event sent to a webhook or a Teams or Slack connector, with each attempt's request and response. Open one to see
+    exactly what was sent, or send it again.
+</MudText>
+
+<MudStack Row="true" Spacing="2" Class="mb-3 flex-wrap" AlignItems="AlignItems.Center">
+    <MudSelect T="Guid?" Value="_endpointId" ValueChanged="SetEndpointAsync" Label="Endpoint" Dense="true" Variant="Variant.Outlined" Style="min-width: 220px;" data-testid="deliveries-endpoint">
+        <MudSelectItem T="Guid?" Value="null">All endpoints and connectors</MudSelectItem>
+        @foreach (var e in _endpoints)
+        {
+            <MudSelectItem T="Guid?" Value="e.Id">@e.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="DeliveryState?" Value="_status" ValueChanged="SetStatusAsync" Label="Status" Dense="true" Variant="Variant.Outlined" Style="min-width: 180px;">
+        <MudSelectItem T="DeliveryState?" Value="null">Any status</MudSelectItem>
+        @foreach (var s in Enum.GetValues<DeliveryState>())
+        {
+            <MudSelectItem T="DeliveryState?" Value="s">@IntegrationFormat.Delivery(s).Text</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh</MudButton>
+</MudStack>
+
+<MudTable T="DeliverySummaryDto" Items="_deliveries" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="Deliveries" data-testid="deliveries-table">
+    <HeaderContent>
+        <MudTh>Created (UTC)</MudTh>
+        <MudTh>Event</MudTh>
+        <MudTh>Sent to</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Attempts</MudTh>
+        <MudTh>Last answer</MudTh>
+        <MudTh>Next try (UTC)</MudTh>
+        <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        @{ var status = IntegrationFormat.Delivery(context.Status); }
+        <MudTd DataLabel="Created">@IntegrationFormat.When(context.CreatedAtUtc)</MudTd>
+        <MudTd DataLabel="Event">@IntegrationFormat.EventLabel(context.EventType)@(context.RedeliveryOfId is null ? "" : " (sent again)")</MudTd>
+        <MudTd DataLabel="Sent to">@context.TargetName</MudTd>
+        <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="status.Color" Icon="@status.Icon">@status.Text</MudChip></MudTd>
+        <MudTd DataLabel="Attempts">@context.AttemptCount</MudTd>
+        <MudTd DataLabel="Last answer">@(context.LastStatusCode?.ToString() ?? context.LastError ?? "—")</MudTd>
+        <MudTd DataLabel="Next try">@IntegrationFormat.When(context.NextAttemptAtUtc)</MudTd>
+        <MudTd>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => OpenAsync(context)" aria-label="@($"Details of {IntegrationFormat.EventLabel(context.EventType)} to {context.TargetName}")">Details</MudButton>
+            @if (context.Status != DeliveryState.Pending)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="() => RedeliverAsync(context)"
+                           aria-label="@($"Redeliver {IntegrationFormat.EventLabel(context.EventType)} to {context.TargetName}")" data-testid="redeliver">Redeliver</MudButton>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>Nothing sent yet. Events show here once an endpoint or connector subscribes to them.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter] public Guid? EndpointId { get; set; }
+
+    private IReadOnlyList<WebhookEndpointDto> _endpoints = [];
+    private IReadOnlyList<DeliverySummaryDto> _deliveries = [];
+    private Guid? _endpointId;
+    private DeliveryState? _status;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _endpointId = EndpointId;
+        try
+        {
+            _endpoints = await Webhooks.ListEndpointsAsync();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load endpoints: {ex.Message}", Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task SetEndpointAsync(Guid? id)
+    {
+        _endpointId = id;
+        await LoadAsync();
+    }
+
+    private async Task SetStatusAsync(DeliveryState? status)
+    {
+        _status = status;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _deliveries = await Webhooks.ListDeliveriesAsync(new DeliveryQuery(_endpointId, null, _status, null, 200));
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load deliveries: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenAsync(DeliverySummaryDto delivery)
+    {
+        var parameters = new DialogParameters<DeliveryDialog> { { d => d.DeliveryId, delivery.Id } };
+        var dialog = await Dialogs.ShowAsync<DeliveryDialog>("Delivery", parameters, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task RedeliverAsync(DeliverySummaryDto delivery)
+    {
+        try
+        {
+            await Webhooks.RedeliverAsync(delivery.Id);
+            Snackbar.Add("Queued to send again. It goes out within a few seconds.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

@@ -4,6 +4,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Accounting;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Accounting;
 
@@ -43,6 +44,8 @@ public sealed class PeriodCloseService(IWorkbenchDbContextFactory dbFactory, Pos
         }
 
         period.Status = PeriodStatus.Closed;
+        var fiscalYear = await db.Set<FiscalYear>().AsNoTracking().Where(y => y.Id == period.FiscalYearId).Select(y => y.Year).FirstOrDefaultAsync(cancellationToken);
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.PeriodClosed, IntegrationEventPayloads.Period(period, fiscalYear), audit.Actor);
         audit.Record(db, nameof(FiscalPeriod), period.Id, "Closed",
             new { Status = nameof(PeriodStatus.Open) }, new { Status = nameof(PeriodStatus.Closed), Checklist = checklist.Checks.Select(c => c.Summary) }, reason);
         await db.SaveChangesAsync(cancellationToken);

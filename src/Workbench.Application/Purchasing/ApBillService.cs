@@ -16,6 +16,7 @@ using Workbench.Domain.Accounting;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Purchasing;
 
@@ -276,6 +277,7 @@ public sealed class ApBillService(
             if (complete)
             {
                 bill.Status = ApBillStatus.Approved;
+                IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.BillApproved, IntegrationEventPayloads.Bill(bill), Me, UtcNow);
             }
 
             audit.Record(db, PurchasingSupport.BillEntity, bill.Id, complete ? "Approved" : "LinesApproved", after: new { Lines = lines.Select(l => l.LineNumber) });

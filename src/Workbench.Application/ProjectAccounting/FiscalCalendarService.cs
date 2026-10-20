@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.ProjectAccounting;
 
@@ -81,6 +82,10 @@ public sealed class FiscalCalendarService(IWorkbenchDbContextFactory dbFactory, 
         var before = period.ToDto(year.Year);
         period.Status = (PeriodStatus)(int)status;
         audit.Record(db, nameof(FiscalPeriod), period.Id, status == FiscalPeriodState.Closed ? "Closed" : "Reopened", before, period.ToDto(year.Year), why);
+        if (period.Status == PeriodStatus.Closed && before.Status != FiscalPeriodState.Closed)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.PeriodClosed, IntegrationEventPayloads.Period(period, year.Year), audit.Actor);
+        }
         await db.SaveChangesAsync(cancellationToken);
         return period.ToDto(year.Year);
     }

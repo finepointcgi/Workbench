@@ -74,6 +74,7 @@ public static class NotificationsHosting
         Workbench.Application.Ceilings.CeilingsRegistration.AddWorkbenchCeilingsHosting(services); // Hourly ceiling threshold alerts.
         Workbench.Application.Crm.CrmRegistration.AddWorkbenchCrmHosting(services); // Daily saved SAM.gov searches (only with SamGov:ApiKey).
         Workbench.Application.Planning.PlanningRegistration.AddWorkbenchPlanningHosting(services); // Recurring journal entries every six hours, when turned on.
+        Workbench.Application.Integrations.IntegrationRegistration.AddWorkbenchIntegrationsHosting(services); // Webhook deliveries and scheduled connectors (Integrations:DispatchIntervalSeconds).
         return services;
     }
 

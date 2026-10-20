@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.ProjectAccounting;
 
@@ -37,6 +38,7 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         db.Set<Project>().Add(project);
         var dto = await ToDtoAsync(db, project, cancellationToken);
         audit.Record(db, nameof(Project), project.Id, "Created", after: dto);
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.ProjectCreated, IntegrationEventPayloads.Project(project), audit.Actor);
         await db.SaveChangesAsync(cancellationToken);
         return dto;
     }

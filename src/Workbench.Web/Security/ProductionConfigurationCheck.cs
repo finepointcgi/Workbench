@@ -99,7 +99,22 @@ public static class ProductionConfigurationCheck
         }
 
         problems.AddRange(AssistantProblems(configuration, allowFakeProvider: demo));
+        problems.AddRange(IntegrationProblems(configuration));
         return problems;
+    }
+
+    /// <summary>Webhooks and connectors must use https and public addresses outside Development (the SSRF guard).</summary>
+    public static IEnumerable<string> IntegrationProblems(IConfiguration configuration)
+    {
+        if (configuration.GetValue($"{Application.Integrations.IntegrationOptions.Section}:{nameof(Application.Integrations.IntegrationOptions.AllowHttp)}", false))
+        {
+            yield return "Integrations:AllowHttp is true. Webhooks and connectors must use https:// outside Development.";
+        }
+
+        if (configuration.GetValue($"{Application.Integrations.IntegrationOptions.Section}:{nameof(Application.Integrations.IntegrationOptions.AllowPrivateNetworkTargets)}", false))
+        {
+            yield return "Integrations:AllowPrivateNetworkTargets is true. Webhooks and connectors may not reach private or internal addresses outside Development.";
+        }
     }
 
     /// <summary>
