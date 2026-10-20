@@ -9,10 +9,10 @@
 
 <a class="wb-skip-link" href="@SkipHref" @onclick="SkipToMainAsync" @onclick:preventDefault>Skip to main content</a>
 <MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
+    <MudAppBar Elevation="0" Dense="true">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        OnClick="ToggleDrawer" aria-label="Toggle navigation" aria-expanded="@(_drawerOpen ? "true" : "false")" />
-        <MudText Typo="Typo.h6" HtmlTag="span" Class="ml-2">Workbench</MudText>
+        <span class="wb-brand"><span class="wb-brand-mark" aria-hidden="true">W</span>Workbench</span>
         <MudSpacer />
         <Workbench.Ui.Companies.CompanySwitcher />
         <CommandPalette Access="_access" Ask="AskAssistantAsync" />
@@ -23,7 +23,7 @@
         <MudIconButton Icon="@(_darkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" aria-pressed="@(_darkMode ? "true" : "false")" />
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Breakpoint="Breakpoint.Md">
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Breakpoint="Breakpoint.Md">
         <NavMenu AccessLoaded="OnAccessLoaded" />
     </MudDrawer>
     <MudMainContent>

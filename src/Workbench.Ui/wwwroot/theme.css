@@ -1,0 +1,192 @@
+/* Workbench surface styling on top of MudBlazor (the palette, type scale, radius and shadows are in Theme/WorkbenchTheme.cs).
+   Loaded after MudBlazor.min.css and before a11y.css, so the accessibility rules (focus rings, underlined links, contrast
+   fixes) still win. Colors come from the theme's CSS variables, so light and dark mode both follow. */
+
+html, body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* ---- App bar: a light bar with a hairline instead of a drop shadow ---- */
+.mud-appbar.mud-appbar-fixed-top {
+    box-shadow: none;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.wb-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 4px;
+    font-weight: 700;
+    font-size: 1.0625rem;
+    letter-spacing: -0.01em;
+    color: var(--mud-palette-appbar-text);
+}
+
+.wb-brand-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--mud-palette-primary) 0%, var(--mud-palette-primary-darken) 100%);
+    color: var(--mud-palette-primary-text);
+    font-size: 0.9375rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+/* ---- Drawer: hairline edge, rounded nav items, a tinted pill for the current page ---- */
+.mud-drawer.mud-drawer-pos-left,
+.mud-drawer.mud-drawer-pos-start {
+    box-shadow: none;
+    border-right: 1px solid var(--mud-palette-lines-default);
+}
+
+.mud-drawer .mud-navmenu {
+    padding: 8px;
+}
+
+.mud-drawer .mud-nav-link {
+    border-radius: 8px;
+    margin: 1px 0;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.mud-drawer .mud-nav-link:hover:not(.mud-nav-link-disabled) {
+    background-color: var(--mud-palette-action-default-hover);
+}
+
+.mud-drawer .mud-nav-link.active:not(.mud-nav-link-disabled) {
+    background-color: var(--mud-palette-primary-lighten);
+    color: var(--mud-palette-primary-darken);
+    font-weight: 600;
+}
+
+.mud-drawer .mud-nav-link.active:not(.mud-nav-link-disabled) .mud-nav-link-icon {
+    color: var(--mud-palette-primary-darken);
+}
+
+.mud-drawer .mud-nav-group > .mud-nav-link {
+    font-weight: 600;
+}
+
+/* ---- Surfaces: white cards with a hairline and a soft shadow ---- */
+.mud-main-content {
+    background: var(--mud-palette-background);
+}
+
+.mud-card,
+.mud-paper.mud-elevation-1,
+.mud-paper.mud-elevation-2,
+.mud-paper.mud-paper-outlined {
+    border-radius: 12px;
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+.mud-paper.mud-paper-outlined {
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.mud-card-header {
+    padding-bottom: 8px;
+}
+
+/* Dialogs and menus float a little higher and rounder. */
+.mud-dialog {
+    border-radius: 14px;
+}
+
+.mud-popover.mud-paper {
+    border-radius: 10px;
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* ---- Buttons and inputs ---- */
+.mud-button-root.mud-button {
+    border-radius: 8px;
+}
+
+.mud-button-filled {
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+.mud-button-filled:hover {
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.14);
+}
+
+.mud-input.mud-input-outlined .mud-input-outlined-border {
+    border-radius: 8px;
+}
+
+.mud-chip {
+    border-radius: 999px;
+    font-weight: 500;
+}
+
+/* ---- Tables: a quiet header row, roomier rows ---- */
+.mud-table {
+    border-radius: 12px;
+}
+
+.mud-table-head .mud-table-cell {
+    background: var(--mud-palette-table-striped);
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    border-bottom: 1px solid var(--mud-palette-table-lines);
+}
+
+.mud-table-body .mud-table-cell {
+    border-bottom-color: var(--mud-palette-table-lines);
+}
+
+.mud-table-container {
+    border-radius: inherit;
+}
+
+/* ---- Links: still underlined (WCAG 1.4.1, a11y.css), but a lighter, offset underline that darkens on hover. "html body"
+   outranks a11y.css's text-decoration shorthand, which would otherwise reset the color and thickness. ---- */
+html body a.mud-link,
+html body .mud-table-cell a:not(.mud-button-root):not(.mud-chip),
+html body .mud-typography a:not(.mud-button-root):not(.mud-chip) {
+    text-decoration-line: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+    font-weight: 500;
+}
+
+html body a.mud-link:hover,
+html body .mud-table-cell a:not(.mud-button-root):not(.mud-chip):hover,
+html body .mud-typography a:not(.mud-button-root):not(.mud-chip):hover {
+    text-decoration-color: currentColor;
+}
+
+/* ---- Page rhythm ---- */
+.wb-main > .mud-typography-h4:first-child,
+.wb-main h1.mud-typography-h4 {
+    margin-bottom: 4px;
+}
+
+.mud-breadcrumbs {
+    padding: 0 0 8px;
+    font-size: 0.8125rem;
+}
+
+.mud-alert {
+    border-radius: 10px;
+}
+
+/* Tabs: sentence case with a firmer active indicator. */
+.mud-tab {
+    text-transform: none;
+    font-weight: 600;
+    letter-spacing: normal;
+}
