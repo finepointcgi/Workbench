@@ -94,7 +94,9 @@ internal sealed class InventoryBalanceConfiguration : IEntityTypeConfiguration<I
         b.Property(x => x.Ownership).HasConversion<string>().HasMaxLength(24);
         b.Property(x => x.Quantity).Quantity();
         b.Property(x => x.GovernmentReference).HasMaxLength(100);
+        b.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).HasDefaultValue(InventoryStockStatus.Available); // Existing rows are available stock.
         b.HasIndex(x => new { x.PartId, x.BinId });
+        b.HasIndex(x => x.Status);
         b.HasIndex(x => new { x.Lot, x.Serial });
         b.HasOne<Part>().WithMany().HasForeignKey(x => x.PartId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
@@ -118,6 +120,7 @@ internal sealed class InventoryTransactionConfiguration : IEntityTypeConfigurati
         b.Property(t => t.Variance).Money();
         b.Property(t => t.Reason).HasMaxLength(500);
         b.Property(t => t.Reference).HasMaxLength(100);
+        b.Property(t => t.Status).HasConversion<string>().HasMaxLength(16).HasDefaultValue(InventoryStockStatus.Available);
         b.Property(t => t.CreatedBy).HasMaxLength(320);
         b.HasIndex(t => t.Number).IsUnique();
         b.HasIndex(t => new { t.PartId, t.Date });

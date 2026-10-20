@@ -1,0 +1,194 @@
+@page "/materials/quality/ncrs/{NcrId:guid}"
+@inject INonconformanceService Ncrs
+@inject IQualityFileService Files
+@inject IPartService PartService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_n?.Summary.Number ?? "NCR") · Quality · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="NCR" BackHref="materials/quality?tab=ncrs" BackLabel="NCRs" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_n is not { } n)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = n.Summary;
+    var edit = MaterialsFormat.CanEdit(User);
+    <MaterialsHeader Title="@($"{s.Number} · {s.PartNumber}")" BackHref="materials/quality?tab=ncrs" BackLabel="NCRs"
+                     Subtitle="@($"{MaterialsFormat.Qty(s.Quantity)} {s.UnitOfMeasure} {s.PartDescription} · {QualityFormat.Label(s.Source)}{(s.Vendor is { } v ? $" · {v}" : "")}")">
+        <MudChip T="string" Size="Size.Small" Color="QualityFormat.Color(s.Status)" data-testid="ncr-status">@QualityFormat.Label(s.Status)</MudChip>
+        @if (s.Status == NcrState.Open && edit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ProposeAsync" Disabled="_busy" data-testid="ncr-propose">Propose disposition</MudButton>
+        }
+        @if (n.CanDecide)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ApproveAsync" Disabled="_busy" data-testid="ncr-approve">Approve</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" Disabled="_busy">Send back</MudButton>
+        }
+        @if (n.CanWithdraw && edit)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="WithdrawAsync" Disabled="_busy">Withdraw</MudButton>
+        }
+        @if (edit)
+        {
+            <MudButton Variant="Variant.Text" Href="@($"materials/quality/cars/new?ncr={s.Id}")">Request corrective action</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">What's wrong</MudText>
+                <MudStack Row="true" Spacing="1" Class="my-1">@foreach (var c in s.DefectCodes) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">@c</MudChip> }</MudStack>
+                <MudText Style="white-space:pre-line">@n.Description</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2 mud-text-secondary">
+                    @(n.InspectionNumber is { } ins ? $"From inspection {ins}. " : "")@(n.PurchaseOrderNumber is { } po ? $"PO {po}. " : "")@(n.WorkOrderNumber is { } wo ? $"Work order {wo}. " : "")
+                </MudText>
+                @if (n.InspectionId is { } iid) { <MudLink Href="@($"materials/quality/inspections/{iid}")">Open the inspection</MudLink> }
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Where it is</MudText>
+                @if (n.Items.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">Still on the work order (not in stock).</MudText>
+                }
+                @foreach (var i in n.Items)
+                {
+                    <MudText Typo="Typo.body2">@i.Location @(i.Lot.Length > 0 ? $"· lot {i.Lot}" : "") @(i.Serial.Length > 0 ? $"· S/N {i.Serial}" : "") · @MaterialsFormat.Qty(i.Quantity)</MudText>
+                }
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Photos and documents</MudText>
+                @foreach (var f in n.Files) { <div><MudLink Href="@Files.GetUrl(f.Id)" download="@f.FileName">@f.Kind: @f.FileName</MudLink></div> }
+                @if (n.Files.Count == 0) { <MudText Typo="Typo.body2" Class="mud-text-secondary">None yet.</MudText> }
+                @if (edit) { <ReceiptUpload Label="Add a photo" OnUpload="AttachAsync" /> }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="ncr-disposition">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Material review board</MudText>
+                @if (s.Disposition is { } d)
+                {
+                    <MudText><strong>@QualityFormat.Label(d)</strong> · @MaterialsFormat.Amount(s.ValueAtCost) at cost</MudText>
+                    @if (n.DispositionNote is { } note) { <MudText Typo="Typo.body2">@note</MudText> }
+                    @if (n.ScrapChargeCode is { } cc) { <MudText Typo="Typo.body2">Charged to @cc</MudText> }
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Proposed by @n.SubmittedBy@(n.DecidedBy is { } by ? $"; {(s.Status == NcrState.Closed ? "approved" : "decided")} by {by}" : "")</MudText>
+                    @if (n.DecisionComment is { } dc) { <MudText Typo="Typo.body2">“@dc”</MudText> }
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No disposition yet.</MudText>
+                }
+                @if (n.ReworkWorkOrderId is { } rw) { <div class="mt-2">Rework: <MudLink Href="@($"materials/work-orders/{rw}")">@n.ReworkWorkOrderNumber</MudLink></div> }
+                @if (n.DebitMemo is { } m)
+                {
+                    <div class="mt-2">Debit memo @m.Number: @MaterialsFormat.Amount(m.Amount) from @m.Vendor (@m.Status@(m.ReturnAuthorization is { } r ? $", RMA {r}" : ""))</div>
+                }
+                @if (n.JournalEntryNumber is { } je) { <MudText Typo="Typo.body2" Class="mt-1 mud-text-secondary">Posted as journal entry @je.</MudText> }
+            </MudPaper>
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Corrective actions</MudText>
+                @foreach (var c in n.CorrectiveActions)
+                {
+                    <div><MudLink Href="@($"materials/quality/cars/{c.Id}")">@c.Number</MudLink> @c.Title · @QualityFormat.Label(c.Status)</div>
+                }
+                @if (n.CorrectiveActions.Count == 0) { <MudText Typo="Typo.body2" Class="mud-text-secondary">None.</MudText> }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [Parameter] public Guid NcrId { get; set; }
+
+    private NcrDto? _n;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _n = await Ncrs.GetAsync(NcrId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<NcrDto>> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            _n = await action();
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ProposeAsync()
+    {
+        IReadOnlyList<MaterialChargeOption> charges = [];
+        try
+        {
+            charges = (await PartService.GetOptionsAsync()).ChargeCodes;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+        }
+
+        var dialog = await DialogService.ShowAsync<DispositionDialog>($"Disposition for {_n!.Summary.Number}", new DialogParameters<DispositionDialog>
+        {
+            { d => d.CanReturn, _n.VendorId is not null && _n.Items.Count > 0 }, { d => d.ChargeCodes, charges },
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ProposeDispositionRequest request })
+        {
+            await RunAsync(() => Ncrs.ProposeDispositionAsync(NcrId, request), "Sent for approval.");
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, $"Approve {QualityFormat.Label(_n!.Summary.Disposition!.Value).ToLowerInvariant()}", "Comment (optional)", "Approve") is { } comment)
+        {
+            await RunAsync(() => Ncrs.ApproveAsync(NcrId, new DecideNcrRequest(comment)), "Approved.");
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        if (await QualityPromptDialog.AskAsync(DialogService, "Send the disposition back", "Reason", "Send back", required: true, color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Ncrs.RejectAsync(NcrId, new DecideNcrRequest(reason)), "Sent back.");
+        }
+    }
+
+    private Task WithdrawAsync() => RunAsync(() => Ncrs.WithdrawDispositionAsync(NcrId), "Withdrawn.");
+
+    private async Task AttachAsync(string fileName, Stream content)
+    {
+        await Files.AttachAsync(QualityFileOwner.Nonconformance, NcrId, "Photo", fileName, content);
+        _n = await Ncrs.GetAsync(NcrId);
+        Snackbar.Add($"Attached {fileName}.", Severity.Success);
+    }
+}

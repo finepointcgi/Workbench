@@ -77,6 +77,23 @@ public static class ApprovalDefaults
                 WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
         ]),
 
+        // Material review: another member of Materials (quality and engineering) decides the disposition, then Finance
+        // when the material at cost is over Quality:NcrFinanceThreshold. Administrators may decide.
+        ApprovalDocumentTypes.NcrDisposition => new([
+            new("Material review board", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Materials),
+                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
+            new("Finance", 2, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
+                Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
+        ]),
+
+        // Change control: another member of Materials, then Finance when the cost impact is over Quality:EcoFinanceThreshold.
+        ApprovalDocumentTypes.EngineeringChange => new([
+            new("Change control board", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Materials),
+                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
+            new("Finance", 2, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
+                Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 

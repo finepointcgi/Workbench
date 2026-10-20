@@ -53,6 +53,15 @@ public enum InventoryTransactionType
 
     /// <summary>A standard cost change on stock already on hand (no quantity).</summary>
     Revaluation,
+
+    /// <summary>Stock moved between available, inspection hold and nonconforming (a pair, like a transfer; no GL).</summary>
+    StatusChange,
+
+    /// <summary>Nonconforming stock shipped back to the vendor (an NCR disposition; credits inventory against the receiving clearing account).</summary>
+    VendorReturn,
+
+    /// <summary>Stock scrapped from inventory (an NCR disposition), charged to an expense account or a project.</summary>
+    InventoryScrap,
 }
 
 /// <summary>
@@ -83,6 +92,9 @@ public sealed class InventoryBalance : Entity
     public string? GovernmentReference { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }
+
+    /// <summary>Added by quality: stock on inspection hold or nonconforming is costed but never picked, issued or planned by MRP.</summary>
+    public InventoryStockStatus Status { get; set; }
 }
 
 /// <summary>
@@ -136,6 +148,9 @@ public sealed class InventoryTransaction : Entity
     public Guid? JournalEntryId { get; set; }
     public required string CreatedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+
+    /// <summary>Added by quality: the stock status of the location side of the movement.</summary>
+    public InventoryStockStatus Status { get; set; }
 }
 
 /// <summary>

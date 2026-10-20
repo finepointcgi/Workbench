@@ -105,16 +105,30 @@ public sealed class InventoryReceivingPurchaseOrderService(
             var (warehouse, bin) = await engine.LocationAsync(p.WarehouseId, p.BinId, part, ct);
             var memo = $"{order.Number} line {p.Line.LineNumber} ({receipt.Number})";
             var serials = await engine.SerialsAsync(part, p.Quantity, p.Serials, ct);
+            var plan = await Quality.QualityHooks.ActivePlanAsync(db, part.Id, Domain.Quality.InspectionKind.Receiving, ct); // Received into inspection hold.
+            var lineCreated = new List<InventoryTransaction>();
             foreach (var serial in serials)
             {
                 var (lot, s) = StockEngine.Tracking(part, p.Lot, serial.Length > 0 ? serial : null);
                 var qty = s.Length > 0 ? 1 : p.Quantity;
-                var key = new StockKey(part.Id, warehouse.Id, bin.Id, lot, s, p.Link.Ownership, p.Link.OwnerProjectId);
+                var key = new StockKey(part.Id, warehouse.Id, bin.Id, lot, s, p.Link.Ownership, p.Link.OwnerProjectId, Quality.QualityHooks.StatusFor(plan));
                 var t = engine.Receive(part, key, qty, Money.Round(qty * p.Line.UnitPrice), InventoryTransactionType.PurchaseReceipt, date,
                     engine.Accounts?.ReceivedNotInvoiced, engine.Accounts?.PriceVariance, memo);
                 t.PurchaseOrderLineId = p.Line.Id;
                 t.PurchaseReceiptId = receipt.Id;
                 created.Add(t);
+                lineCreated.Add(t);
+            }
+
+            if (plan is not null)
+            {
+                await Quality.QualityHooks.OpenInspectionAsync(db, plan, part, lineCreated, date, engine.Actor, engine.UtcNow, i =>
+                {
+                    i.VendorId = order.VendorId;
+                    i.PurchaseOrderId = order.Id;
+                    i.PurchaseOrderLineId = p.Line.Id;
+                    i.PurchaseReceiptId = receipt.Id;
+                }, ct);
             }
         }
 

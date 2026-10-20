@@ -1,0 +1,36 @@
+@* Reports nonconforming stock found in inventory: the quantity moves to nonconforming stock on a new NCR. *@
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudSelect T="Guid?" @bind-Value="_balanceId" Label="Stock" Dense="true" Required="true">
+                    @foreach (var b in Stock) { <MudSelectItem T="Guid?" Value="b.Id">@b.PartNumber · @b.Location@(b.Lot.Length > 0 ? $" · lot {b.Lot}" : "")@(b.Serial.Length > 0 ? $" · S/N {b.Serial}" : "") · @MaterialsFormat.Qty(b.Quantity) @b.UnitOfMeasure</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4"><MudNumericField T="decimal" @bind-Value="_quantity" Label="Quantity" Min="0" Margin="Margin.Dense" /></MudItem>
+            <MudItem xs="12" sm="8">
+                <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_codes" Label="Defect codes" Dense="true">
+                    @foreach (var c in DefectCodes) { <MudSelectItem T="string" Value="c.Code">@c.Code · @c.Description</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_description" Label="What's wrong" Lines="3" Required="true" Margin="Margin.Dense" /></MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_balanceId is null || _quantity <= 0 || !_codes.Any() || string.IsNullOrWhiteSpace(_description))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new CreateNcrRequest(_balanceId!.Value, _quantity, _codes.ToList(), _description!)))">Open NCR</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<InventoryBalanceDto> Stock { get; set; } = [];
+    [Parameter] public IReadOnlyList<DefectCodeDto> DefectCodes { get; set; } = [];
+
+    private Guid? _balanceId;
+    private decimal _quantity = 1;
+    private IReadOnlyCollection<string> _codes = [];
+    private string? _description;
+}

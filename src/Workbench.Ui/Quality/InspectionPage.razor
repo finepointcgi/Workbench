@@ -1,0 +1,251 @@
+@page "/materials/quality/inspections/{InspectionId:guid}"
+@* Built to work on a phone at the receiving dock or the bench: one column of large controls, results first. *@
+@inject IInspectionService Inspections
+@inject IQualityFileService Files
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_i?.Summary.Number ?? "Inspection") · Quality · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Inspection" BackHref="materials/quality" BackLabel="Quality" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_i is not { } i)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = i.Summary;
+    var pending = s.Status == InspectionState.Pending && MaterialsFormat.CanEdit(User);
+    <MaterialsHeader Title="@($"{s.Number} · {s.PartNumber}")" BackHref="materials/quality" BackLabel="Quality"
+                     Subtitle="@($"{QualityFormat.Label(s.Kind)} inspection of {MaterialsFormat.Qty(s.Quantity)} {s.UnitOfMeasure} {s.PartDescription}{(s.Source is { } src ? $" from {src}" : "")}{(s.Vendor is { } v ? $" ({v})" : "")}")">
+        <MudChip T="string" Size="Size.Small" Color="@(s.Status == InspectionState.Pending ? Color.Warning : Color.Success)">@(s.Status == InspectionState.Pending ? "Waiting" : "Done")</MudChip>
+    </MaterialsHeader>
+
+    <MudStack Spacing="3" Style="max-width:720px">
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">How many to check</MudText>
+            <MudText>Inspect <strong>@s.SampleSize</strong> of @MaterialsFormat.Qty(s.Quantity) @s.UnitOfMeasure@(i.AcceptNumber > 0 ? $"; the lot passes with at most {i.AcceptNumber} defective in the sample" : s.SampleSize < s.Quantity ? "; any defective unit in the sample rejects the lot" : "").</MudText>
+            @if (i.Instructions is { } ins) { <MudText Typo="Typo.body2" Class="mt-2" Style="white-space:pre-line">@ins</MudText> }
+        </MudPaper>
+
+        @if (pending)
+        {
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Results</MudText>
+                @foreach (var c in i.Characteristics)
+                {
+                    var r = _results[c.Id];
+                    <MudStack Class="mb-3" Spacing="1">
+                        <MudText><strong>@c.Name</strong>@(c.IsCritical ? " (critical)" : "") <span class="mud-text-secondary">· @c.Limits</span></MudText>
+                        @if (c.Kind == CharacteristicType.Measured)
+                        {
+                            <MudNumericField T="decimal?" @bind-Value="r.Value" Label="@($"Measured{(c.Unit is { } u ? $" ({u})" : "")}")" Variant="Variant.Outlined" Immediate="true"
+                                             HideSpinButtons="true" Error="@(r.Value is { } x && !Within(c, x))" ErrorText="Outside the limits" />
+                        }
+                        else
+                        {
+                            <MudToggleGroup T="bool?" @bind-Value="r.Passed" Color="Color.Primary" Size="Size.Large" FixedContent="true" aria-label="@($"{c.Name} result")">
+                                <MudToggleItem T="bool?" Value="true" Text="Pass" />
+                                <MudToggleItem T="bool?" Value="false" Text="Fail" />
+                            </MudToggleGroup>
+                        }
+                        <MudTextField T="string" @bind-Value="r.Note" Label="Note (optional)" Margin="Margin.Dense" />
+                    </MudStack>
+                }
+            </MudPaper>
+        }
+        else if (i.Results.Count > 0)
+        {
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Results</MudText>
+                @foreach (var r in i.Results)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@(r.Passed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" Color="@(r.Passed ? Color.Success : Color.Error)" Size="Size.Small" aria-label="@(r.Passed ? "Passed" : "Failed")" />
+                        <MudText>@r.Name@(r.MeasuredValue is { } m ? $": {m:0.######}" : "")@(r.Note is { } n ? $" — {n}" : "")</MudText>
+                    </MudStack>
+                }
+                <MudText Typo="Typo.body2" Class="mt-2 mud-text-secondary">@MaterialsFormat.Qty(s.QuantityAccepted) accepted, @MaterialsFormat.Qty(s.QuantityRejected) rejected by @s.Inspector on @MaterialsFormat.Date(s.InspectedOn).</MudText>
+                @if (s.NonconformanceId is { } ncr) { <MudLink Href="@($"materials/quality/ncrs/{ncr}")">@s.NonconformanceNumber</MudLink> }
+                @if (i.Notes is { } notes) { <MudText Typo="Typo.body2" Class="mt-1">@notes</MudText> }
+            </MudPaper>
+        }
+
+        <MudPaper Outlined="true" Class="pa-3">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Documents</MudText>
+            @foreach (var d in i.RequiredDocuments)
+            {
+                var have = i.Files.Any(f => string.Equals(f.Kind, d, StringComparison.OrdinalIgnoreCase));
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-1">
+                    <MudIcon Icon="@(have ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)" Color="@(have ? Color.Success : Color.Default)" Size="Size.Small" aria-hidden="true" />
+                    <MudText>@d@(have ? "" : " (required)")</MudText>
+                    @if (pending && !have) { <ReceiptUpload Label="Attach" OnUpload="(name, stream) => AttachAsync(d, name, stream)" /> }
+                </MudStack>
+            }
+            @foreach (var f in i.Files)
+            {
+                <div><MudLink Href="@Files.GetUrl(f.Id)" download="@f.FileName">@f.Kind: @f.FileName</MudLink></div>
+            }
+            @if (pending)
+            {
+                <ReceiptUpload Label="Attach a photo or report" OnUpload="AttachOtherAsync" />
+            }
+        </MudPaper>
+
+        @if (pending)
+        {
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Decision</MudText>
+                @if (i.Items.Count > 1)
+                {
+                    @foreach (var item in i.Items)
+                    {
+                        <MudNumericField T="decimal" Value="_accepted[item.Id]" ValueChanged="v => _accepted[item.Id] = v" Min="0" Max="item.Quantity" Variant="Variant.Outlined" Class="mb-2"
+                                         Label="@($"Accept of {MaterialsFormat.Qty(item.Quantity)}{(item.Serial.Length > 0 ? $" · S/N {item.Serial}" : item.Lot.Length > 0 ? $" · lot {item.Lot}" : "")}{(item.Location is { } loc ? $" · {loc}" : "")}")" />
+                    }
+                }
+                else
+                {
+                    <MudNumericField T="decimal" @bind-Value="_acceptAll" Label="@($"Quantity accepted (of {MaterialsFormat.Qty(s.Quantity)})")" Min="0" Max="s.Quantity" Variant="Variant.Outlined" Class="mb-2" />
+                }
+                @if (s.SampleSize < s.Quantity || i.AcceptNumber > 0)
+                {
+                    <MudNumericField T="int" @bind-Value="_defects" Label="Defective units in the sample" Min="0" Variant="Variant.Outlined" Class="mb-2" />
+                }
+                @if (Rejected > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@MaterialsFormat.Qty(Rejected) will go to nonconforming stock on a new NCR for the material review board.</MudAlert>
+                    <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_codes" Label="Defect codes" Variant="Variant.Outlined" Class="mb-2">
+                        @foreach (var c in _defectCodes) { <MudSelectItem T="string" Value="c.Code">@c.Code · @c.Description</MudSelectItem> }
+                    </MudSelect>
+                    <MudTextField T="string" @bind-Value="_ncrText" Label="What's wrong" Lines="3" Variant="Variant.Outlined" Class="mb-2" />
+                }
+                <MudTextField T="string" @bind-Value="_notes" Label="Notes (optional)" Variant="Variant.Outlined" Class="mb-3" />
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" OnClick="CompleteAsync" Disabled="_busy" data-testid="complete-inspection">
+                        @(Rejected == 0 ? "Pass and release to stock" : Rejected == s.Quantity ? "Reject and open an NCR" : "Accept part, reject the rest")
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Large" FullWidth="true" OnClick="RejectAll" Disabled="_busy">Reject everything</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+
+        @if (i.Items.Count > 0 && !pending)
+        {
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">Stock</MudText>
+                @foreach (var item in i.Items)
+                {
+                    <MudText Typo="Typo.body2">@item.Location @(item.Lot.Length > 0 ? $"lot {item.Lot}" : "") @(item.Serial.Length > 0 ? $"S/N {item.Serial}" : "") · @MaterialsFormat.Qty(item.Quantity) (@MaterialsFormat.Qty(item.QuantityAccepted) accepted, @MaterialsFormat.Qty(item.QuantityRejected) rejected)</MudText>
+                }
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [Parameter] public Guid InspectionId { get; set; }
+
+    private sealed class Result
+    {
+        public decimal? Value { get; set; }
+        public bool? Passed { get; set; }
+        public string? Note { get; set; }
+    }
+
+    private InspectionDto? _i;
+    private readonly Dictionary<Guid, Result> _results = [];
+    private readonly Dictionary<Guid, decimal> _accepted = [];
+    private IReadOnlyList<DefectCodeDto> _defectCodes = [];
+    private IReadOnlyCollection<string> _codes = [];
+    private decimal _acceptAll;
+    private int _defects;
+    private string? _ncrText;
+    private string? _notes;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+
+    private decimal Rejected => _i is null ? 0 : _i.Items.Count > 1 ? _i.Items.Sum(x => x.Quantity - _accepted.GetValueOrDefault(x.Id)) : _i.Summary.Quantity - _acceptAll;
+
+    private static bool Within(CharacteristicDto c, decimal v) => (c.LowerLimit is null || v >= c.LowerLimit) && (c.UpperLimit is null || v <= c.UpperLimit);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Show(await Inspections.GetAsync(InspectionId));
+            _defectCodes = await Inspections.ListDefectCodesAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Show(InspectionDto i)
+    {
+        _i = i;
+        foreach (var c in i.Characteristics)
+        {
+            _results.TryAdd(c.Id, new Result());
+        }
+
+        foreach (var item in i.Items)
+        {
+            _accepted.TryAdd(item.Id, item.Quantity);
+        }
+
+        if (i.Items.Count <= 1 && _acceptAll == 0 && i.Summary.Status == InspectionState.Pending)
+        {
+            _acceptAll = i.Summary.Quantity;
+        }
+    }
+
+    private void RejectAll()
+    {
+        _acceptAll = 0;
+        foreach (var id in _accepted.Keys.ToList())
+        {
+            _accepted[id] = 0;
+        }
+    }
+
+    private async Task AttachAsync(string kind, string fileName, Stream content)
+    {
+        await Files.AttachAsync(QualityFileOwner.Inspection, InspectionId, kind, fileName, content);
+        Snackbar.Add($"Attached {fileName}.", Severity.Success);
+        Show(await Inspections.GetAsync(InspectionId));
+    }
+
+    private Task AttachOtherAsync(string fileName, Stream content) =>
+        AttachAsync(fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "Test report" : "Photo", fileName, content);
+
+    private async Task CompleteAsync()
+    {
+        var i = _i!;
+        _busy = true;
+        try
+        {
+            var results = i.Characteristics.Select(c => new RecordResultRequest(c.Id, _results[c.Id].Value, _results[c.Id].Passed, _results[c.Id].Note)).ToList();
+            var request = new CompleteInspectionRequest(MaterialsFormat.Today, results,
+                QuantityAccepted: i.Items.Count > 1 ? null : _acceptAll,
+                Items: i.Items.Count > 1 ? i.Items.Select(x => new ItemDecisionRequest(x.Id, _accepted[x.Id])).ToList() : null,
+                DefectsFound: _defects, DefectCodes: _codes.ToList(), NonconformanceDescription: _ncrText, Notes: _notes);
+            Show(await Inspections.CompleteAsync(InspectionId, request));
+            Snackbar.Add(_i!.Summary.NonconformanceNumber is { } n ? $"Done. {n} opened for the rejected quantity." : "Done. Released to stock.", Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

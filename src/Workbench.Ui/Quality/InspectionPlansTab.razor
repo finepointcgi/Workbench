@@ -1,0 +1,101 @@
+@* Inspection plans (what to check, when and how many) and the defect codes NCRs use. *@
+@inject IInspectionService Inspections
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Class="mb-3" AlignItems="AlignItems.Center">
+    <MudText Class="mud-text-secondary">A part with an active receiving or final plan goes into inspection hold when it's received or built; an in-process plan stops its work orders from completing until the operation is inspected.</MudText>
+    <MudSpacer />
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Href="materials/quality/plans/new" data-testid="new-plan">New plan</MudButton>
+    }
+</MudStack>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    @if (_plans.Count == 0)
+    {
+        <MudText Class="mud-text-secondary mb-4">No inspection plans.</MudText>
+    }
+    else
+    {
+        <div style="overflow-x:auto" class="mb-6">
+            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="plans">
+                <caption class="wb-sr-only">Inspection plans</caption>
+                <thead><tr><th scope="col">Plan</th><th scope="col">Part</th><th scope="col">Kind</th><th scope="col">Sampling</th><th scope="col" style="text-align:right">Checks</th><th scope="col">Documents</th><th scope="col">Active</th></tr></thead>
+                <tbody>
+                    @foreach (var p in _plans)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"materials/quality/plans/{p.Id}")">@p.Code</MudLink> <span class="mud-text-secondary">@p.Name</span></td>
+                            <td>@p.PartNumber</td>
+                            <td>@QualityFormat.Label(p.Kind)@(p.OperationSequence is { } op ? $" (op {op})" : "")</td>
+                            <td>@QualityFormat.Label(p.Sampling)@(p.Sampling == Sampling.FixedSample ? $" of {p.SampleSize}" : "")@(p.Sampling != Sampling.Full ? $", accept ≤ {p.AcceptNumber}" : "")</td>
+                            <td style="text-align:right">@p.Characteristics.Count</td>
+                            <td>@string.Join(", ", p.RequiredDocuments)</td>
+                            <td>@(p.IsActive ? "Yes" : "No")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+    }
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Defect codes</MudText>
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+        @foreach (var c in _codes)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@c.Code · @c.Description</MudChip>
+        }
+    </MudStack>
+    @if (MaterialsFormat.CanEdit(User))
+    {
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudTextField T="string" @bind-Value="_newCode" Label="New code" Margin="Margin.Dense" Style="max-width:120px" />
+            <MudTextField T="string" @bind-Value="_newDescription" Label="Description" Margin="Margin.Dense" Style="min-width:260px" />
+            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="AddCodeAsync" Disabled="@(string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newDescription))">Add code</MudButton>
+        </MudStack>
+    }
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<InspectionPlanDto> _plans = [];
+    private IReadOnlyList<DefectCodeDto> _codes = [];
+    private string? _newCode;
+    private string? _newDescription;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _plans = await Inspections.ListPlansAsync();
+            _codes = await Inspections.ListDefectCodesAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task AddCodeAsync()
+    {
+        try
+        {
+            await Inspections.SaveDefectCodeAsync(null, new SaveDefectCodeRequest(_newCode!, _newDescription!));
+            (_newCode, _newDescription) = (null, null);
+            _codes = await Inspections.ListDefectCodesAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

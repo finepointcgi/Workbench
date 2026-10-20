@@ -75,7 +75,7 @@ public sealed class MrpService(
     {
         var messages = new List<string>();
         var parts = await db.Set<Part>().AsNoTracking().Where(p => p.IsActive).ToListAsync(ct);
-        var onHand = await db.Set<InventoryBalance>().AsNoTracking().Where(b => b.Ownership != InventoryOwnership.GovernmentFurnished)
+        var onHand = await db.Set<InventoryBalance>().AsNoTracking().Where(b => b.Ownership != InventoryOwnership.GovernmentFurnished && b.Status == InventoryStockStatus.Available)
             .GroupBy(b => b.PartId).Select(g => new { g.Key, Qty = g.Sum(b => b.Quantity) }).ToDictionaryAsync(x => x.Key, x => x.Qty, ct);
         var boms = await db.Set<BillOfMaterial>().AsNoTracking().Include(b => b.Components).Where(b => b.IsActive).ToListAsync(ct);
         var bomParts = boms.Select(b => b.PartId).ToHashSet();

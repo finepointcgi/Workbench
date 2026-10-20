@@ -1,0 +1,212 @@
+@page "/materials/quality/plans/new"
+@page "/materials/quality/plans/{PlanId:guid}"
+@inject IInspectionService Inspections
+@inject IPartService PartService
+@inject IManufacturingService Manufacturing
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_plan?.Code ?? "New inspection plan") · Quality · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Inspection plan" BackHref="materials/quality?tab=plans" BackLabel="Inspection plans" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (!_loaded)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var editable = MaterialsFormat.CanEdit(User);
+    var part = _parts.FirstOrDefault(p => p.Id == _partId);
+    <MaterialsHeader Title="@(_plan is { } p ? $"{p.Code} · {p.Name}" : "New inspection plan")" BackHref="materials/quality?tab=plans" BackLabel="Inspection plans"
+                     Subtitle="What to check on a part, when, and how many." />
+    <MudPaper Outlined="true" Class="pa-3" Style="max-width:1000px">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="3"><MudTextField T="string" @bind-Value="_code" Label="Code" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="5"><MudTextField T="string" @bind-Value="_name" Label="Name" Required="true" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" Value="_partId" ValueChanged="PartChangedAsync" Label="Part" Required="true" Dense="true" ReadOnly="!editable">
+                    @foreach (var x in _parts) { <MudSelectItem T="Guid?" Value="x.Id">@x.Display · @x.Description</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="InspectionType" @bind-Value="_kind" Label="When" Dense="true" ReadOnly="!editable">
+                    <MudSelectItem T="InspectionType" Value="InspectionType.Receiving">On receipt (receiving inspection)</MudSelectItem>
+                    @if (part?.Source == PartSourceKind.Make)
+                    {
+                        <MudSelectItem T="InspectionType" Value="InspectionType.InProcess">At a routing operation (in-process)</MudSelectItem>
+                        <MudSelectItem T="InspectionType" Value="InspectionType.Final">On completion (final inspection)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (_kind == InspectionType.InProcess)
+            {
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="int?" @bind-Value="_operation" Label="After operation" Dense="true" ReadOnly="!editable">
+                        @foreach (var o in _operations) { <MudSelectItem T="int?" Value="o.Sequence">@o.Sequence · @o.Description</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Sampling" @bind-Value="_sampling" Label="How many" Dense="true" ReadOnly="!editable">
+                    @foreach (var s in Enum.GetValues<Sampling>()) { <MudSelectItem T="Sampling" Value="s">@QualityFormat.Label(s)</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            @if (_sampling == Sampling.FixedSample)
+            {
+                <MudItem xs="6" sm="2"><MudNumericField T="int" @bind-Value="_sampleSize" Label="Sample size" Min="1" ReadOnly="!editable" /></MudItem>
+            }
+            @if (_sampling != Sampling.Full)
+            {
+                <MudItem xs="6" sm="2"><MudNumericField T="int" @bind-Value="_acceptNumber" Label="Accept with at most (defective)" Min="0" ReadOnly="!editable" /></MudItem>
+                <MudItem xs="6" sm="2"><MudNumericField T="decimal?" @bind-Value="_aql" Label="AQL (reference)" Min="0" ReadOnly="!editable" /></MudItem>
+            }
+            <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_documents" Label="Required documents (one per line)" Lines="2" ReadOnly="!editable" HelperText="For example: Certificate of conformance" /></MudItem>
+            <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_instructions" Label="Instructions for the inspector" Lines="2" ReadOnly="!editable" /></MudItem>
+            <MudItem xs="12"><MudSwitch T="bool" @bind-Value="_active" Label="Active" Color="Color.Primary" ReadOnly="!editable" /></MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mt-3 mb-1">Characteristics</MudText>
+        @foreach (var c in _characteristics)
+        {
+            <MudGrid Spacing="1" Class="mb-1">
+                <MudItem xs="12" sm="3"><MudTextField T="string" @bind-Value="c.Name" Label="Check" Margin="Margin.Dense" ReadOnly="!editable" /></MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudSelect T="CharacteristicType" @bind-Value="c.Kind" Label="Type" Dense="true" ReadOnly="!editable">
+                        <MudSelectItem T="CharacteristicType" Value="CharacteristicType.PassFail">Pass / fail</MudSelectItem>
+                        <MudSelectItem T="CharacteristicType" Value="CharacteristicType.Measured">Measured</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                @if (c.Kind == CharacteristicType.Measured)
+                {
+                    <MudItem xs="6" sm="1"><MudNumericField T="decimal?" @bind-Value="c.Nominal" Label="Nominal" Margin="Margin.Dense" HideSpinButtons="true" ReadOnly="!editable" /></MudItem>
+                    <MudItem xs="4" sm="1"><MudNumericField T="decimal?" @bind-Value="c.Lower" Label="Min" Margin="Margin.Dense" HideSpinButtons="true" ReadOnly="!editable" /></MudItem>
+                    <MudItem xs="4" sm="1"><MudNumericField T="decimal?" @bind-Value="c.Upper" Label="Max" Margin="Margin.Dense" HideSpinButtons="true" ReadOnly="!editable" /></MudItem>
+                    <MudItem xs="4" sm="1"><MudTextField T="string" @bind-Value="c.Unit" Label="Unit" Margin="Margin.Dense" ReadOnly="!editable" /></MudItem>
+                }
+                else
+                {
+                    <MudItem xs="6" sm="4" />
+                }
+                <MudItem xs="8" sm="2"><MudCheckBox T="bool" @bind-Value="c.Critical" Label="Critical" Color="Color.Primary" ReadOnly="!editable" /></MudItem>
+                @if (editable)
+                {
+                    <MudItem xs="4" sm="1"><MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="@($"Remove {c.Name}")" OnClick="() => _characteristics.Remove(c)" /></MudItem>
+                }
+            </MudGrid>
+        }
+        @if (editable)
+        {
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _characteristics.Add(new Row())">Add a check</MudButton>
+            <MudStack Row="true" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || _partId is null || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))" data-testid="plan-save">Save plan</MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+    [Parameter] public Guid? PlanId { get; set; }
+
+    private sealed class Row
+    {
+        public string? Name { get; set; }
+        public CharacteristicType Kind { get; set; } = CharacteristicType.PassFail;
+        public decimal? Nominal { get; set; }
+        public decimal? Lower { get; set; }
+        public decimal? Upper { get; set; }
+        public string? Unit { get; set; }
+        public bool Critical { get; set; }
+    }
+
+    private InspectionPlanDto? _plan;
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private IReadOnlyList<RoutingOperationDto> _operations = [];
+    private readonly List<Row> _characteristics = [new Row()];
+    private string? _code, _name, _documents, _instructions;
+    private Guid? _partId;
+    private InspectionType _kind;
+    private int? _operation;
+    private Sampling _sampling;
+    private int _sampleSize = 5, _acceptNumber;
+    private decimal? _aql;
+    private bool _active = true, _loaded, _busy, _forbidden;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _parts = await PartService.ListAsync(new PartQuery());
+            if (PlanId is { } id)
+            {
+                var p = await Inspections.GetPlanAsync(id);
+                _plan = p;
+                (_code, _name, _partId, _kind, _operation, _sampling, _acceptNumber, _aql, _active) = (p.Code, p.Name, p.PartId, p.Kind, p.OperationSequence, p.Sampling, p.AcceptNumber, p.Aql, p.IsActive);
+                _sampleSize = p.SampleSize == 0 ? 5 : p.SampleSize;
+                (_documents, _instructions) = (string.Join("\n", p.RequiredDocuments), p.Instructions);
+                _characteristics.Clear();
+                _characteristics.AddRange(p.Characteristics.Select(c => new Row { Name = c.Name, Kind = c.Kind, Nominal = c.Nominal, Lower = c.LowerLimit, Upper = c.UpperLimit, Unit = c.Unit, Critical = c.IsCritical }));
+                await LoadOperationsAsync();
+            }
+            else
+            {
+                _documents = "Certificate of conformance";
+            }
+
+            _loaded = true;
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task PartChangedAsync(Guid? id)
+    {
+        _partId = id;
+        if (_parts.FirstOrDefault(p => p.Id == id)?.Source != PartSourceKind.Make)
+        {
+            _kind = InspectionType.Receiving;
+        }
+
+        await LoadOperationsAsync();
+    }
+
+    private async Task LoadOperationsAsync()
+    {
+        _operations = _partId is { } pid && _parts.FirstOrDefault(p => p.Id == pid)?.Source == PartSourceKind.Make
+            ? (await Manufacturing.ListRoutingsAsync(pid)).Where(r => r.IsActive).SelectMany(r => r.Operations).ToList()
+            : [];
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = new SaveInspectionPlanRequest(_code!, _name!, _partId!.Value, _kind,
+                _characteristics.Where(c => !string.IsNullOrWhiteSpace(c.Name)).Select(c => new SaveCharacteristicRequest(c.Name!, c.Kind, c.Nominal, c.Lower, c.Upper, c.Unit, c.Critical)).ToList(),
+                _sampling, _sampleSize, _acceptNumber, _aql, _kind == InspectionType.InProcess ? _operation : null,
+                (_documents ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), _instructions, _active);
+            var saved = await Inspections.SavePlanAsync(PlanId, request);
+            Snackbar.Add($"Saved {saved.Code}.", Severity.Success);
+            if (PlanId is null)
+            {
+                Navigation.NavigateTo($"materials/quality/plans/{saved.Id}");
+            }
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

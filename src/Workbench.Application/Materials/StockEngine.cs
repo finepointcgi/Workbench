@@ -7,8 +7,13 @@ using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Materials;
 
-/// <summary>Where stock sits and whose it is: a balance is unique by these.</summary>
-internal readonly record struct StockKey(Guid PartId, Guid WarehouseId, Guid BinId, string Lot, string Serial, InventoryOwnership Ownership, Guid? OwnerProjectId);
+/// <summary>Where stock sits, whose it is and whether it can be used: a balance is unique by these.</summary>
+internal readonly record struct StockKey(
+    Guid PartId, Guid WarehouseId, Guid BinId, string Lot, string Serial, InventoryOwnership Ownership, Guid? OwnerProjectId,
+    InventoryStockStatus Status = InventoryStockStatus.Available)
+{
+    public static StockKey Of(InventoryBalance b) => new(b.PartId, b.WarehouseId, b.BinId, b.Lot, b.Serial, b.Ownership, b.OwnerProjectId, b.Status);
+}
 
 /// <summary>
 /// Stock movements and their costing for one unit of work: balances, moving-average and standard costing, the part's
@@ -157,7 +162,7 @@ internal sealed class StockEngine
     private InventoryBalance AddStock(StockKey key, decimal quantity, DateOnly date, string? reference)
     {
         var balance = Db.Set<InventoryBalance>().Local.FirstOrDefault(b => b.PartId == key.PartId && b.BinId == key.BinId && b.Lot == key.Lot && b.Serial == key.Serial
-            && b.Ownership == key.Ownership && b.OwnerProjectId == key.OwnerProjectId);
+            && b.Ownership == key.Ownership && b.OwnerProjectId == key.OwnerProjectId && b.Status == key.Status);
         if (balance is null)
         {
             balance = new InventoryBalance
@@ -171,6 +176,7 @@ internal sealed class StockEngine
                 OwnerProjectId = key.OwnerProjectId,
                 ReceivedOn = date,
                 GovernmentReference = reference,
+                Status = key.Status,
             };
             Db.Set<InventoryBalance>().Add(balance);
         }
@@ -210,6 +216,7 @@ internal sealed class StockEngine
         t.Serial = key.Serial;
         t.Ownership = key.Ownership;
         t.OwnerProjectId = key.OwnerProjectId;
+        t.Status = key.Status;
     }
 
     /// <summary>
@@ -287,7 +294,7 @@ internal sealed class StockEngine
             throw new ArgumentException("The quantity must be more than zero.");
         }
 
-        var key = new StockKey(balance.PartId, balance.WarehouseId, balance.BinId, balance.Lot, balance.Serial, balance.Ownership, balance.OwnerProjectId);
+        var key = StockKey.Of(balance);
         var t = NewTransaction(type, date, part);
         Stamp(t, key);
         t.Quantity = -quantity;
@@ -328,7 +335,7 @@ internal sealed class StockEngine
             throw new ArgumentException("The stock is already in that bin.");
         }
 
-        var fromKey = new StockKey(balance.PartId, balance.WarehouseId, balance.BinId, balance.Lot, balance.Serial, balance.Ownership, balance.OwnerProjectId);
+        var fromKey = StockKey.Of(balance);
         var toKey = fromKey with { WarehouseId = toWarehouseId, BinId = toBinId };
         var receivedOn = balance.ReceivedOn;
         var value = balance.Ownership == InventoryOwnership.GovernmentFurnished ? 0 : Money.Round(quantity * part.CurrentUnitCost);
@@ -354,6 +361,51 @@ internal sealed class StockEngine
         i.Amount = value;
         i.TransferGroupId = group;
         i.Reason = note;
+        return (o, i);
+    }
+
+    /// <summary>
+    /// Moves stock between available, inspection hold and nonconforming in the same location (a pair of status change
+    /// movements at cost, like a transfer; no GL: the stock stays in the same account).
+    /// </summary>
+    public (InventoryTransaction Out, InventoryTransaction In) ChangeStatus(Part part, InventoryBalance balance, decimal quantity, InventoryStockStatus status, DateOnly date, string reason)
+    {
+        if (quantity <= 0)
+        {
+            throw new ArgumentException("The quantity must be more than zero.");
+        }
+
+        if (balance.Status == status)
+        {
+            throw new ArgumentException("The stock already has that status.");
+        }
+
+        var fromKey = StockKey.Of(balance);
+        var toKey = fromKey with { Status = status };
+        var receivedOn = balance.ReceivedOn;
+        var value = balance.Ownership == InventoryOwnership.GovernmentFurnished ? 0 : Money.Round(quantity * part.CurrentUnitCost);
+        var group = Guid.CreateVersion7();
+        RemoveStock(balance, part, quantity);
+        var target = AddStock(toKey, quantity, receivedOn, balance.GovernmentReference);
+        if (target.ReceivedOn > receivedOn)
+        {
+            target.ReceivedOn = receivedOn;
+        }
+
+        var o = NewTransaction(InventoryTransactionType.StatusChange, date, part);
+        Stamp(o, fromKey);
+        o.Quantity = -quantity;
+        o.UnitCost = value == 0 ? 0 : part.CurrentUnitCost;
+        o.Amount = -value;
+        o.TransferGroupId = group;
+        o.Reason = reason;
+        var i = NewTransaction(InventoryTransactionType.StatusChange, date, part);
+        Stamp(i, toKey);
+        i.Quantity = quantity;
+        i.UnitCost = o.UnitCost;
+        i.Amount = value;
+        i.TransferGroupId = group;
+        i.Reason = reason;
         return (o, i);
     }
 
@@ -460,10 +512,17 @@ internal sealed class StockEngine
     public decimal Available(Guid partId, Guid? destinationProjectId) => Balances(partId).Where(b => Usable(b, destinationProjectId)).Sum(b => b.Quantity);
 
     private static bool Usable(InventoryBalance b, Guid? project) =>
-        b.Ownership == InventoryOwnership.General || (project is { } p && b.OwnerProjectId == p);
+        b.Status == InventoryStockStatus.Available && (b.Ownership == InventoryOwnership.General || (project is { } p && b.OwnerProjectId == p));
 
     public static void EnsureUsableFor(InventoryBalance b, Guid? project)
     {
+        if (b.Status != InventoryStockStatus.Available)
+        {
+            throw new ArgumentException(b.Status == InventoryStockStatus.InspectionHold
+                ? "That stock is on inspection hold; it can be used once it passes inspection."
+                : "That stock is nonconforming; it can be used only if the material review board releases it.");
+        }
+
         if (!Usable(b, project))
         {
             throw new ArgumentException(b.Ownership == InventoryOwnership.GovernmentFurnished

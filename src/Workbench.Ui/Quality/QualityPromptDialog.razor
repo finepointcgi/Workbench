@@ -1,0 +1,35 @@
+@* Asks for one line of text: a reason, a comment, a reference. *@
+<MudDialog>
+    <DialogContent>
+        @if (Message is not null) { <MudText Typo="Typo.body2" Class="mb-3">@Message</MudText> }
+        <MudTextField T="string" @bind-Value="_text" Label="@Label" Lines="@Lines" Required="Required" Immediate="true" AutoFocus="true" Margin="Margin.Dense" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="@ButtonColor" Variant="Variant.Filled" Disabled="@(Required && string.IsNullOrWhiteSpace(_text))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_text?.Trim() ?? string.Empty))">@ButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string Label { get; set; } = "Comment";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public int Lines { get; set; } = 2;
+    [Parameter] public string ButtonText { get; set; } = "OK";
+    [Parameter] public Color ButtonColor { get; set; } = Color.Primary;
+
+    private string? _text;
+
+    /// <summary>Shows the prompt; null when cancelled.</summary>
+    public static async Task<string?> AskAsync(IDialogService dialogs, string title, string label, string button, bool required = false, string? message = null, Color? color = null)
+    {
+        var dialog = await dialogs.ShowAsync<QualityPromptDialog>(title, new DialogParameters<QualityPromptDialog>
+        {
+            { d => d.Label, label }, { d => d.ButtonText, button }, { d => d.Required, required }, { d => d.Message, message }, { d => d.ButtonColor, color ?? Color.Primary },
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        return await dialog.Result is { Canceled: false, Data: string text } ? text : null;
+    }
+}

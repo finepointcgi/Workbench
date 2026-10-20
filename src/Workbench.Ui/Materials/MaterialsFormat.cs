@@ -49,7 +49,17 @@ public static class MaterialsFormat
         InventoryMovement.CycleCount => "Cycle count",
         InventoryMovement.WorkOrderCompletion => "Completion to stock",
         InventoryMovement.WorkOrderShipment => "Delivered to project",
+        InventoryMovement.StatusChange => "Status change",
+        InventoryMovement.VendorReturn => "Return to vendor",
+        InventoryMovement.InventoryScrap => "Scrapped from stock",
         _ => m.ToString(),
+    };
+
+    public static string Label(StockStatus s) => s switch
+    {
+        StockStatus.InspectionHold => "Inspection hold",
+        StockStatus.Nonconforming => "Nonconforming",
+        _ => "Available",
     };
 
     public static string Label(WorkOrderState s) => s switch

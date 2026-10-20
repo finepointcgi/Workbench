@@ -171,6 +171,8 @@ public static class NavCatalog
         new(Materials, "Manufacturing", "Bills of materials", "materials/boms", Icons.Material.Filled.AccountTree, a => a.IsMaterials, Detail: "BOM", Keywords: "bom routing where used"),
         new(Materials, "Manufacturing", "Work orders", "materials/work-orders", Icons.Material.Filled.Build, a => a.IsMaterials, Detail: "Work order", Keywords: "wo shop floor kit wip"),
         new(Materials, "Manufacturing", "MRP", "materials/mrp", Icons.Material.Filled.EventNote, a => a.IsMaterials, Keywords: "material requirements planning planned orders forecast"),
+        new(Materials, "Quality & engineering", "Quality", "materials/quality", Icons.Material.Filled.VerifiedUser, a => a.IsMaterials, Detail: "Quality record", Keywords: "inspection queue ncr mrb nonconformance disposition corrective action car supplier quality aql coc"),
+        new(Materials, "Quality & engineering", "Engineering changes", "materials/engineering-changes", Icons.Material.Filled.ChangeCircle, a => a.IsMaterials, Detail: "Engineering change", Keywords: "eco ecn revision effectivity configuration as built as designed"),
         new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, a => a.IsMaterials, MatchAll: true, Keywords: "mobile receiving", InMenu: false),
         new(Materials, null, "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, a => a.CanViewMaterials, Keywords: "valuation aging gfm wip trace"),
         new(Materials, null, "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, a => a.IsMaterials, Keywords: "warehouses bins work centers"),

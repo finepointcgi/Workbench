@@ -1,0 +1,135 @@
+@* Configuration management: a part's revision history, and for each serial or lot built, as designed against as built. *@
+@inject IEngineeringChangeService Changes
+@inject IPartService PartService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
+    <MudSelect T="Guid?" Value="_partId" ValueChanged="PartChangedAsync" Label="Part" Dense="true" Style="min-width:280px" data-testid="config-part">
+        @foreach (var p in _parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Display · @p.Description</MudSelectItem> }
+    </MudSelect>
+</MudStack>
+
+@if (_history is { } h)
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Revision history</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2 mud-text-secondary">Active BOM revision: @(h.ActiveBomRevision ?? "none")</MudText>
+            <MudTimeline TimelinePosition="TimelinePosition.Start" Class="pt-0">
+                @foreach (var e in h.Events)
+                {
+                    <MudTimelineItem Size="Size.Small" Color="@(e.IsCurrent ? Color.Success : e.EngineeringChangeId is null ? Color.Default : Color.Info)">
+                        <MudText Typo="Typo.body2"><strong>@e.Kind @e.Revision</strong> · @e.AtUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</MudText>
+                        <MudText Typo="Typo.body2">
+                            @if (e.EngineeringChangeId is { } id) { <MudLink Href="@($"materials/engineering-changes/{id}")">@e.EngineeringChangeNumber</MudLink><span>: </span> }
+                            @e.Description
+                        </MudText>
+                    </MudTimelineItem>
+                }
+            </MudTimeline>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Units built</MudText>
+            @if (_units.Count == 0)
+            {
+                <MudText Class="mud-text-secondary">No serial- or lot-numbered units of this part have been built.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="config-units">
+                    <caption class="wb-sr-only">Units built</caption>
+                    <thead><tr><th scope="col">Serial / lot</th><th scope="col">Work order</th><th scope="col">Built</th><th scope="col">As built</th><th scope="col">As designed</th><th scope="col">Matches</th></tr></thead>
+                    <tbody>
+                        @foreach (var u in _units)
+                        {
+                            <tr>
+                                <td><MudLink OnClick="() => ShowAsync(u)">@(u.Serial.Length > 0 ? u.Serial : u.Lot)</MudLink></td>
+                                <td>@u.WorkOrderNumber</td><td>@MaterialsFormat.Date(u.BuiltOn)</td><td>@u.AsBuiltBomRevision</td><td>@u.AsDesignedBomRevision</td>
+                                <td>@if (u.Matches) { <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" aria-label="Matches" /> } else { <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" aria-label="Differs" /> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+
+            @if (_config is { } c)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mt-3" data-testid="config-detail">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h3">@c.PartNumber @(c.Serial.Length > 0 ? $"S/N {c.Serial}" : $"lot {c.Lot}")</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2">
+                        Built on @c.WorkOrderNumber (@MaterialsFormat.Date(c.BuiltOn)) to BOM @c.AsBuiltBomRevision; designed to BOM @c.AsDesignedBomRevision@(c.AsDesignedBy is { } by ? $" ({by})" : "").
+                    </MudText>
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <caption class="wb-sr-only">As designed against as built</caption>
+                        <thead><tr><th scope="col">Component</th><th scope="col" style="text-align:right">Designed</th><th scope="col" style="text-align:right">Built</th><th scope="col">Lots / serials</th><th scope="col">Result</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in c.Lines)
+                            {
+                                <tr>
+                                    <td>@l.PartNumber <span class="mud-text-secondary">@l.PartDescription</span></td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(l.DesignedQuantity)</td>
+                                    <td style="text-align:right">@MaterialsFormat.Qty(l.BuiltQuantity)</td>
+                                    <td>@string.Join(", ", l.LotsAndSerials)</td>
+                                    <td>@l.Status</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private IReadOnlyList<PartSummaryDto> _parts = [];
+    private Guid? _partId;
+    private RevisionHistoryDto? _history;
+    private IReadOnlyList<ConfigurationUnitDto> _units = [];
+    private ConfigurationDto? _config;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _parts = await PartService.ListAsync(new PartQuery(Source: PartSourceKind.Make));
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task PartChangedAsync(Guid? id)
+    {
+        _partId = id;
+        _config = null;
+        if (id is not { } pid)
+        {
+            _history = null;
+            return;
+        }
+
+        try
+        {
+            _history = await Changes.RevisionHistoryAsync(pid);
+            _units = await Changes.ListUnitsAsync(pid);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task ShowAsync(ConfigurationUnitDto unit)
+    {
+        try
+        {
+            _config = await Changes.ConfigurationAsync(_partId!.Value, unit.Serial.Length > 0 ? unit.Serial : null, unit.Serial.Length > 0 ? null : unit.Lot);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}
