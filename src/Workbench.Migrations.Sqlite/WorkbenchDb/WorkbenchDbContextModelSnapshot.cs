@@ -23,6 +23,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("CostClass")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -62,6 +65,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -113,6 +118,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<int>("CascadeOrder")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<string>("CostClasses")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -146,6 +156,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("AbsorbedAccountId");
 
                     b.HasIndex("AppliedAccountId");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("Pool")
                         .IsUnique();
@@ -217,6 +229,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -279,6 +296,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("Date");
 
                     b.HasIndex("ReversalOfId");
@@ -304,12 +323,24 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("AccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<decimal>("Credit")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Debit")
                         .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("IntercompanyCompanyId")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("JournalEntryId")
@@ -328,6 +359,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("TransactionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TransactionCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("WbsElementId")
                         .HasColumnType("TEXT");
 
@@ -335,11 +374,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.HasIndex("AccountId");
 
+                    b.HasIndex("IntercompanyCompanyId");
+
                     b.HasIndex("JournalEntryId");
 
                     b.HasIndex("OrgUnitId");
 
                     b.HasIndex("WbsElementId");
+
+                    b.HasIndex("CompanyId", "AccountId");
 
                     b.HasIndex("ProjectId", "WbsElementId");
 
@@ -965,6 +1008,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("TEXT");
 
@@ -1087,6 +1135,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("CapitalizationEntryId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("ContractId");
 
@@ -1663,6 +1713,81 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("ContractBillingSettings");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Billing.ContractGovernmentBilling", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdminByDodaac")
+                        .HasMaxLength(6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ContractPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CostBasis")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeliveryDocument")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Financing")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsSmallBusiness")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IssueByDodaac")
+                        .HasMaxLength(6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LiquidationRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayOfficeDodaac")
+                        .HasMaxLength(6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ProgressPaymentRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShipToDodaac")
+                        .HasMaxLength(6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId")
+                        .IsUnique();
+
+                    b.ToTable("ContractGovernmentBilling");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.CustomerBillingProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1671,6 +1796,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.Property<string>("BillingAddress")
                         .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("CustomerId")
@@ -1719,6 +1848,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<Guid>("ContractId")
                         .HasColumnType("TEXT");
 
@@ -1733,10 +1867,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("CreditOfInvoiceId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 8)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("FundingOverrideReason")
@@ -1797,6 +1939,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("TransactionCredited")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionPaid")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -1822,7 +1976,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("CreditOfInvoiceId");
+
+                    b.HasIndex("CurrencyCode");
 
                     b.HasIndex("JournalEntryId");
 
@@ -1894,6 +2052,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 4)
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("TransactionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("WbsElementId")
                         .HasColumnType("TEXT");
 
@@ -1922,6 +2084,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -1930,7 +2097,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 8)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsVoid")
@@ -1948,11 +2123,19 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("RealizedGainLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateOnly>("ReceivedOn")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Reference")
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("VoidReason")
@@ -1967,6 +2150,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("JournalEntryId");
 
@@ -1991,6 +2176,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("PaymentId")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("TransactionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
@@ -1998,6 +2187,241 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("PaymentId");
 
                     b.ToTable("PaymentApplication");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.PerformanceBasedPaymentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ClinId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("CompletedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Criteria")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("PlannedDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClinId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("ContractId", "Order");
+
+                    b.ToTable("PerformanceBasedPaymentEvent");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.PieeSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExportedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StatusChangedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StatusChangedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("PieeSubmission");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.ProgressPaymentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ContractPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CostBasis")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CostsOfDelivered")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("CostsThrough")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimateToComplete")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("IncurredToDate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsSmallBusiness")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("LiquidatedToDate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LiquidationRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("PaidCosts")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PreviousRequested")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PriceOfDelivered")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ProgressPaymentRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("RequestDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("SubcontractorApproved")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("SubcontractorLiquidated")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("SubcontractorPaid")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnliquidatedAdvances")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnpaidCosts")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("ContractId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("ProgressPaymentRequest");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Billing.UnbilledAccrual", b =>
@@ -2051,6 +2475,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -2095,6 +2524,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("GlAccountId");
 
@@ -2987,6 +3418,190 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("SheetId");
 
                     b.ToTable("Columns");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.Company", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Ein")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FiscalYearStartMonth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HomeCurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Companies", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0000-00000000c001"),
+                            Code = "MAIN",
+                            CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FiscalYearStartMonth = 10,
+                            HomeCurrencyCode = "USD",
+                            IsActive = true,
+                            LegalName = "Main company"
+                        });
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.CompanyPeriodClose", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.HasIndex("CompanyId", "FiscalPeriodId")
+                        .IsUnique();
+
+                    b.ToTable("CompanyPeriodCloses", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.IntercompanyAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CounterpartyCompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DueFromAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DueToAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CounterpartyCompanyId");
+
+                    b.HasIndex("DueFromAccountId");
+
+                    b.HasIndex("DueToAccountId");
+
+                    b.HasIndex("CompanyId", "CounterpartyCompanyId")
+                        .IsUnique();
+
+                    b.ToTable("IntercompanyAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.UserCompanyAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId", "CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("UserCompanyAccess", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.UserCompanySelection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("UserCompanySelections", (string)null);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Costpoint.CpActual", b =>
@@ -4135,6 +4750,227 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasKey("Id");
 
                     b.ToTable("SavedLeadSearch");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.Currency", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Decimals")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Currencies", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencyRevaluation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("NetGainLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("PostedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PostedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("RateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId")
+                        .IsUnique();
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("ReversalEntryId");
+
+                    b.ToTable("CurrencyRevaluations", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencyRevaluationLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CarryingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("GainLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RevaluationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("RevaluedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("RevaluationId");
+
+                    b.ToTable("CurrencyRevaluationLines", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencySettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FunctionalCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RealizedGainLossAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("UnrealizedGainLossAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RealizedGainLossAccountId");
+
+                    b.HasIndex("UnrealizedGainLossAccountId");
+
+                    b.ToTable("CurrencySettings", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.ExchangeRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RateType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromCurrency", "ToCurrency", "RateType", "EffectiveDate")
+                        .IsUnique();
+
+                    b.ToTable("ExchangeRates", (string)null);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Dashboards.Dashboard", b =>
@@ -8838,6 +9674,466 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("TravelPerDiem");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Planning.BudgetSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DecidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DecisionComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OwnerEmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("OwnerEmployeeId");
+
+                    b.HasIndex("CycleId", "OrgUnitId")
+                        .IsUnique();
+
+                    b.ToTable("GlBudgetSubmissions", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.BudgetSubmissionLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.HasIndex("SubmissionId", "AccountId", "FiscalPeriodId")
+                        .IsUnique();
+
+                    b.ToTable("GlBudgetSubmissionLines", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.GlBudgetLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("VersionId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("VersionId", "FiscalPeriodId");
+
+                    b.HasIndex("VersionId", "AccountId", "OrgUnitId", "FiscalPeriodId")
+                        .IsUnique();
+
+                    b.ToTable("GlBudgetLines", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.GlBudgetVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AdoptedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdoptedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalYearId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceVersionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceVersionId");
+
+                    b.HasIndex("FiscalYearId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("GlBudgetVersions", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.PlanningCycle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AdoptedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdoptedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FiscalYearId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Instructions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("OpenedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OpenedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("VersionId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalYearId");
+
+                    b.HasIndex("VersionId");
+
+                    b.ToTable("GlPlanningCycles", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("FiscalPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GeneratedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Occurrence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ReversalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ScheduledDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalPeriodId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("ReversalEntryId");
+
+                    b.HasIndex("TemplateId", "Occurrence")
+                        .IsUnique();
+
+                    b.ToTable("GlRecurringRuns", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AutoGenerate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastAutoRunSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastAutoRunUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GlRecurringSettings", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AmountMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AutoReverse")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Occurrences")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PostAutomatically")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PostingDay")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("GlRecurringTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalTemplateLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Side")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("OrgUnitId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TemplateId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("GlRecurringTemplateLines", (string)null);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Pricing.PriceClin", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9622,6 +10918,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<string>("ContractNumber")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -9659,6 +10960,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("ContractNumber")
                         .IsUnique();
@@ -9833,6 +11136,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<Guid?>("DefaultLaborCategoryId")
                         .HasColumnType("TEXT");
 
@@ -9871,6 +11179,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("DefaultLaborCategoryId");
 
@@ -10115,6 +11425,40 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("LaborCategory");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.LaborCostPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveFrom");
+
+                    b.ToTable("LaborCostPolicy");
+                });
+
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.OdcEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10135,12 +11479,20 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(18, 8)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("ExpenseReportId")
@@ -10187,6 +11539,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<string>("SubmittedBy")
                         .IsRequired()
                         .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("TransactionAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Type")
@@ -10267,6 +11623,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<Guid?>("ContractId")
                         .HasColumnType("TEXT");
 
@@ -10296,6 +11657,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("ContractId");
 
@@ -10627,7 +11990,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("AttachmentFileId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
@@ -10644,6 +12016,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<string>("EnteredBy")
                         .IsRequired()
                         .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 8)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("FundingOverrideBy")
@@ -10697,6 +12073,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<DateTime?>("SubmittedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("TransactionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionPaid")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionRetainage")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("VendorId")
                         .HasColumnType("TEXT");
 
@@ -10707,6 +12095,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasKey("Id");
 
                     b.HasIndex("AttachmentFileId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CurrencyCode");
 
                     b.HasIndex("JournalEntryId");
 
@@ -10807,6 +12199,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("SubcontractId")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("TransactionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal?>("UnitPrice")
                         .HasPrecision(18, 4)
                         .HasColumnType("TEXT");
@@ -10848,6 +12244,18 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("BillId")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("CashAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("TEXT");
 
@@ -10863,6 +12271,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<DateOnly?>("PaidOn")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("RealizedGainLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Reference")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -10873,6 +12285,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TransactionAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("VendorId")
@@ -10915,6 +12331,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -10945,6 +12366,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("Number")
                         .IsUnique();
@@ -11596,6 +13019,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Form1099Box")
@@ -12821,6 +14248,457 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("ItemAssignee");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Travel.CardProgram", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LiabilityAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PaymentResponsibility")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UnsubmittedAlertDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiabilityAccountId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("CardProgram");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.CardStatementImport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DuplicateCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ImportedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("ImportedTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProgramId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UnmatchedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProgramId", "ImportedAtUtc");
+
+                    b.ToTable("CardStatementImport");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.CardTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AttachedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AttachedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CardId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CardLast4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DedupeKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExcludedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExcludedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExcludedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsExcluded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Merchant")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MerchantCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("OdcEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PostedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProgramId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TransactionDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardId");
+
+                    b.HasIndex("ImportId");
+
+                    b.HasIndex("OdcEntryId");
+
+                    b.HasIndex("EmployeeId", "TransactionDate");
+
+                    b.HasIndex("ProgramId", "DedupeKey")
+                        .IsUnique();
+
+                    b.ToTable("CardTransaction");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.CorporateCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Last4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NameOnCard")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProgramId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("ProgramId", "Last4");
+
+                    b.ToTable("CorporateCard");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelAuthorization", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("AdvanceIssuedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdvanceIssuedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("AdvanceIssuedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdvanceReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AdvanceRequested")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimatedAirfare")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimatedLodging")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimatedMie")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimatedOther")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EstimatedRentalCar")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ExpenseReportId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OtherDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RejectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TripEnd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("TripStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseReportId")
+                        .IsUnique();
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.HasIndex("EmployeeId", "Status");
+
+                    b.ToTable("TravelAuthorization");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelAuthorizationDestination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ArriveOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("DepartOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TravelAuthorizationId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TravelAuthorizationId", "Order");
+
+                    b.ToTable("TravelAuthorizationDestination");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelLineCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OdcEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OdcEntryId")
+                        .IsUnique();
+
+                    b.ToTable("TravelLineCategory");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Workspace", b =>
                 {
                     b.Property<Guid>("Id")
@@ -12839,6 +14717,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.Accounting.Account", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.Accounting.Account", null)
                         .WithMany()
                         .HasForeignKey("ParentId")
@@ -12873,10 +14756,22 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("AppliedAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Accounting.JournalEntry", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
                         .WithMany()
                         .HasForeignKey("FiscalPeriodId")
@@ -12896,6 +14791,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("IntercompanyCompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
                         .WithMany("Lines")
@@ -13078,6 +14984,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
                         .WithMany()
                         .HasForeignKey("ContractId")
@@ -13205,6 +15117,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Billing.ContractGovernmentBilling", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.CustomerBillingProfile", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.Customer", null)
@@ -13216,6 +15137,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.Billing.Invoice", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
                         .WithMany()
                         .HasForeignKey("ContractId")
@@ -13270,6 +15197,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.Billing.Payment", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.Customer", null)
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -13297,6 +15230,48 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Billing.PerformanceBasedPaymentEvent", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Clin", null)
+                        .WithMany()
+                        .HasForeignKey("ClinId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.PieeSubmission", b =>
+                {
+                    b.HasOne("Workbench.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.ProgressPaymentRequest", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.UnbilledAccrual", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
@@ -13308,6 +15283,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.Cash.BankAccount", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.Accounting.Account", null)
                         .WithMany()
                         .HasForeignKey("GlAccountId")
@@ -13492,6 +15473,77 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Companies.CompanyPeriodClose", b =>
+                {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.IntercompanyAccount", b =>
+                {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CounterpartyCompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DueFromAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DueToAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.UserCompanyAccess", b =>
+                {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Companies.UserCompanySelection", b =>
+                {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Crm.CrmAccount", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.Customer", null)
@@ -13654,6 +15706,54 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("OpportunityId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencyRevaluation", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReversalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencyRevaluationLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Currencies.CurrencyRevaluation", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("RevaluationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencySettings", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RealizedGainLossAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("UnrealizedGainLossAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Dashboards.Widget", b =>
@@ -14691,6 +16791,158 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Planning.BudgetSubmission", b =>
+                {
+                    b.HasOne("Workbench.Domain.Planning.PlanningCycle", null)
+                        .WithMany()
+                        .HasForeignKey("CycleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.BudgetSubmissionLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Planning.BudgetSubmission", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.GlBudgetLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Planning.GlBudgetVersion", null)
+                        .WithMany()
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.GlBudgetVersion", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalYear", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Planning.GlBudgetVersion", null)
+                        .WithMany()
+                        .HasForeignKey("SourceVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.PlanningCycle", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalYear", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Planning.GlBudgetVersion", null)
+                        .WithMany()
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalRun", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.FiscalPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("FiscalPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReversalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Planning.RecurringJournalTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalTemplateLine", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Planning.RecurringJournalTemplate", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Pricing.PriceClin", b =>
                 {
                     b.HasOne("Workbench.Domain.Pricing.PriceModel", null)
@@ -14863,6 +17115,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.Contract", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.Customer", null)
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -14905,6 +17163,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.Employee", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.LaborCategory", null)
                         .WithMany()
                         .HasForeignKey("DefaultLaborCategoryId")
@@ -15013,6 +17277,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.Project", b =>
                 {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
                         .WithMany()
                         .HasForeignKey("ContractId")
@@ -15110,6 +17380,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("AttachmentFileId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
@@ -15188,6 +17464,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
                         .WithMany()
                         .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApPaymentRun", b =>
+                {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -15562,6 +17847,117 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Travel.CardProgram", b =>
+                {
+                    b.HasOne("Workbench.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.CardStatementImport", b =>
+                {
+                    b.HasOne("Workbench.Domain.Travel.CardProgram", null)
+                        .WithMany()
+                        .HasForeignKey("ProgramId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.CardTransaction", b =>
+                {
+                    b.HasOne("Workbench.Domain.Travel.CorporateCard", null)
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Travel.CardStatementImport", null)
+                        .WithMany()
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OdcEntry", null)
+                        .WithMany()
+                        .HasForeignKey("OdcEntryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Workbench.Domain.Travel.CardProgram", null)
+                        .WithMany()
+                        .HasForeignKey("ProgramId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.CorporateCard", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Travel.CardProgram", null)
+                        .WithMany()
+                        .HasForeignKey("ProgramId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelAuthorization", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.ExpenseReport", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseReportId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelAuthorizationDestination", b =>
+                {
+                    b.HasOne("Workbench.Domain.Travel.TravelAuthorization", null)
+                        .WithMany("Destinations")
+                        .HasForeignKey("TravelAuthorizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelLineCategory", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OdcEntry", null)
+                        .WithMany()
+                        .HasForeignKey("OdcEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Accounting.IndirectPoolSetup", b =>
                 {
                     b.Navigation("Accounts");
@@ -15600,6 +17996,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityGateReview", b =>
                 {
                     b.Navigation("Scores");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Currencies.CurrencyRevaluation", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Dashboards.Dashboard", b =>
@@ -15691,6 +18092,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Navigation("Destinations");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Planning.BudgetSubmission", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Planning.RecurringJournalTemplate", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Pricing.PriceLaborLine", b =>
                 {
                     b.Navigation("Hours");
@@ -15761,6 +18172,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Navigation("Columns");
 
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Travel.TravelAuthorization", b =>
+                {
+                    b.Navigation("Destinations");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Workspace", b =>
