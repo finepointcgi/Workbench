@@ -1,0 +1,179 @@
+@inject IWebhookService Webhooks
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Workbench sends a signed HTTPS POST to each endpoint when the events it subscribes to happen, and retries for about a day
+    if the endpoint doesn't answer. Payloads carry ids and summary fields only, never pay rates, bank details or restricted columns.
+</MudText>
+
+<MudExpansionPanels Class="mb-3" Outlined="true" Elevation="0">
+    <MudExpansionPanel Text="How the receiver checks a request came from Workbench">
+        <MudText Typo="Typo.body2" Class="mb-1">Each request has a <code>Workbench-Signature</code> header like <code>t=1760000000,v1=5f2c…</code>. To check it:</MudText>
+        <ol class="mud-typography-body2 ml-6">
+            <li>Join the <code>t</code> value, a period and the raw request body: <code>1760000000.{"id":…}</code>.</li>
+            <li>Compute HMAC-SHA256 of that text with the endpoint's signing secret as the key, as lower-case hex.</li>
+            <li>Compare it with <code>v1</code> using a constant-time comparison, and refuse <code>t</code> values more than 5 minutes old.</li>
+            <li>Use the payload's <code>id</code> to ignore an event you already handled (a retry can repeat it).</li>
+        </ol>
+        <MudText Typo="Typo.body2" Class="mt-1">Answer with any 2xx status within 10 seconds. Workbench retries other answers and timeouts with growing gaps (30 seconds up to 6 hours, 12 tries).</MudText>
+    </MudExpansionPanel>
+</MudExpansionPanels>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync" Class="mb-3" data-testid="webhook-add">Add endpoint</MudButton>
+
+<MudTable T="WebhookEndpointDto" Items="_endpoints" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="Webhook endpoints" data-testid="webhooks-table">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>URL</MudTh>
+        <MudTh>Events</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Last delivered (UTC)</MudTh>
+        <MudTh>Secret ends in</MudTh>
+        <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+        <MudTd DataLabel="URL" Style="word-break: break-all;">@context.Url</MudTd>
+        <MudTd DataLabel="Events">
+            <span title="@string.Join(", ", context.EventTypes.Select(IntegrationFormat.EventLabel))">@context.EventTypes.Count event@(context.EventTypes.Count == 1 ? "" : "s")</span>
+        </MudTd>
+        <MudTd DataLabel="Status">
+            @if (!context.IsActive)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.PauseCircle">Off</MudChip>
+            }
+            else if (context.Health == WebhookHealthState.Unhealthy)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Icon="@Icons.Material.Filled.Error">Not accepting (@context.ConsecutiveFailures failures)</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">Working</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Last delivered">@IntegrationFormat.When(context.LastSuccessAtUtc)</MudTd>
+        <MudTd DataLabel="Secret ends in"><code>…@context.SecretHint</code></MudTd>
+        <MudTd>
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert" AriaLabel="@($"Actions for {context.Name}")" Dense="true">
+                <MudMenuItem OnClick="() => EditAsync(context)">Edit</MudMenuItem>
+                <MudMenuItem OnClick="() => TestAsync(context)">Send a test</MudMenuItem>
+                <MudMenuItem OnClick="() => ShowDeliveries.InvokeAsync(context.Id)">Show deliveries</MudMenuItem>
+                @if (context.Health == WebhookHealthState.Unhealthy)
+                {
+                    <MudMenuItem OnClick="() => ResumeAsync(context)">Resume</MudMenuItem>
+                }
+                <MudMenuItem OnClick="() => RotateAsync(context)">Replace signing secret</MudMenuItem>
+                <MudMenuItem OnClick="() => DeleteAsync(context)">Delete</MudMenuItem>
+            </MudMenu>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No endpoints yet. Add one to start sending events.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter] public EventCallback<Guid> ShowDeliveries { get; set; }
+
+    private IReadOnlyList<WebhookEndpointDto> _endpoints = [];
+    private bool _loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _endpoints = await Webhooks.ListEndpointsAsync();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load endpoints: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<WebhookEndpointDialog>("Add webhook endpoint", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: WebhookSecretDto created })
+        {
+            await ShowSecretAsync(created, "Endpoint added");
+            await LoadAsync();
+        }
+    }
+
+    private async Task EditAsync(WebhookEndpointDto endpoint)
+    {
+        var parameters = new DialogParameters<WebhookEndpointDialog> { { d => d.Endpoint, endpoint } };
+        var dialog = await Dialogs.ShowAsync<WebhookEndpointDialog>($"Edit {endpoint.Name}", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            Snackbar.Add("Endpoint saved.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private Task ShowSecretAsync(WebhookSecretDto created, string title) =>
+        Dialogs.ShowAsync<SecretShownDialog>(title, new DialogParameters<SecretShownDialog>
+        {
+            { d => d.Title, title },
+            { d => d.Label, "Signing secret" },
+            { d => d.Explanation, $"Give this secret to the system behind {created.Endpoint.Url}. It uses it to check that each request really came from Workbench (the Workbench-Signature header)." },
+            { d => d.Secret, created.SigningSecret },
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false });
+
+    private async Task TestAsync(WebhookEndpointDto endpoint) => await GuardAsync(async () =>
+    {
+        await Webhooks.SendTestAsync(endpoint.Id);
+        Snackbar.Add($"Test queued for {endpoint.Name}. It goes out within a few seconds; check Deliveries.", Severity.Info);
+    });
+
+    private async Task ResumeAsync(WebhookEndpointDto endpoint) => await GuardAsync(async () =>
+    {
+        await Webhooks.ResetHealthAsync(endpoint.Id);
+        Snackbar.Add($"{endpoint.Name} resumed. Waiting deliveries go out now.", Severity.Success);
+        await LoadAsync();
+    });
+
+    private async Task RotateAsync(WebhookEndpointDto endpoint)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Replace signing secret?", $"Requests to {endpoint.Name} are signed with the new secret at once, so update the receiver right away.", yesText: "Replace", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await GuardAsync(async () => await ShowSecretAsync(await Webhooks.RotateSecretAsync(endpoint.Id), "New signing secret"));
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(WebhookEndpointDto endpoint)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Delete endpoint?", $"{endpoint.Name} and its delivery log will be removed. Turning it off instead keeps the log.", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await GuardAsync(async () =>
+        {
+            await Webhooks.DeleteEndpointAsync(endpoint.Id);
+            Snackbar.Add($"{endpoint.Name} deleted.", Severity.Success);
+        });
+        await LoadAsync();
+    }
+
+    private async Task GuardAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

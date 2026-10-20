@@ -7,6 +7,7 @@ using Workbench.Contracts.Crm;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.ProjectAccounting;
 using D = Workbench.Domain.Crm;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Crm;
 
@@ -357,6 +358,10 @@ public sealed class OpportunityService(
             OpportunityId = opportunity.Id, From = from, To = to, ChangedBy = actor, ChangedAtUtc = now, Note = CrmMapping.Clip(note, 1000),
         });
         audit.Record(db, AuditEntityType, opportunity.Id, "StageChanged", new { Stage = from.ToString() }, new { Stage = to.ToString() }, CrmMapping.Clip(note, 1000));
+        if (from != to)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.OpportunityStageChanged, IntegrationEventPayloads.OpportunityStage(opportunity, from), actor, now);
+        }
         string? warning = null;
         if (to >= D.OpportunityStage.Capture && to < D.OpportunityStage.Won)
         {
@@ -590,6 +595,7 @@ public sealed class OpportunityService(
         db.Set<Project>().Add(project);
         audit.Record(db, nameof(Project), project.Id, "Created", after: new { project.Code, project.Name, Status = project.Status.ToString(), project.ContractId },
             reason: $"Won opportunity {opportunity.Number}");
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.ProjectCreated, IntegrationEventPayloads.Project(project), audit.Actor, UtcNow);
 
         opportunity.CustomerId = customer.Id;
         opportunity.ContractId = contract.Id;

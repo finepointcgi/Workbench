@@ -586,3 +586,24 @@ Checks:
 - A new company-owned record type gets a `CompanyColumnConfiguration<T>` and, if users list or open it, a company filter in
   `CompanyPermissionDecorators.cs` (`CompanyGuard.FilterAsync` / `EnsureAsync` / `StampNewAsync`).
 - Reports that add up ledger lines filter by `CompanyScope.VisibleCompanyIdsAsync()` (null = all companies).
+
+## Integrations (webhooks, API keys, connectors)
+
+- `Domain/Integrations`, `Contracts/Integrations`, `Application/Integrations`; Admin › Integrations (`/admin/integrations`). Guides:
+  `docs/integrations/webhooks.md` (payload schema, signatures), `api-keys.md`, `connectors.md`. All three services are Admin-only and
+  closed to API key service users (`IntegrationPermissionDecorators.cs`).
+- **Raising an event:** call `IntegrationOutbox.Raise(db, IntegrationEventType.X, IntegrationEventPayloads.X(entity), actor)` next to the
+  audit row, before `SaveChangesAsync`, so the event is in the same transaction as the change. A new event type is a domain
+  `IntegrationEventType` + data record (ids and summary fields only: never rates, pay, bank, tax, EEO or sheet cell values; the
+  redaction test enforces it), the same key in `WebhookEventCatalog`, a payload builder, and a row in `docs/integrations/webhooks.md`.
+- The background `IntegrationDispatcher` fans events out to deliveries, sends them (signed, retried with backoff, endpoints marked
+  unhealthy after repeated failures) and runs scheduled connectors, per tenant. Tests call `RunOnceAsync` themselves; the web test
+  factory turns the hosted dispatcher off.
+- **Outbound calls** go only through `IOutboundTransport` (HTTP) and `ISftpUploader`, behind `OutboundUrlGuard` (https, public addresses
+  only, rechecked at connect time). Tests register fakes; never call a third party from a test.
+- **API keys** (`Authorization: Bearer wbk_…`) authenticate as a service `AppUser` with the key's org roles, so permission decorators
+  apply unchanged; `ApiKeyScopeEnforcement` then limits them to `ApiKeyScopes.Areas` by the first path segment after `/api/v1/`.
+  A new top-level API path is closed to keys until you add it to an area (or to the test's closed list):
+  `ApiKeyWebTests.Every_api_path_belongs_to_a_key_area_or_is_deliberately_closed` fails until you do.
+- A connector is an `IConnector` registered with `AddScoped<IConnector, T>()`; event connectors post through the delivery queue,
+  schedule connectors return a file (kept in the blob store and optionally sent over SFTP).

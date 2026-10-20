@@ -1,0 +1,182 @@
+@* Add or edit a connector: its own settings (secrets are write-only), and either the events it posts or its schedule. *@
+@inject IConnectorService Connectors
+
+<MudDialog>
+    <TitleContent><MudText Typo="Typo.h6" HtmlTag="h2">@(Connector is null ? $"Add {Kind.Name}" : $"Edit {Connector.Name}")</MudText></TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@Kind.Description</MudText>
+            <MudTextField @bind-Value="_name" Immediate="true" Label="Name" autocomplete="off" Variant="Variant.Outlined" MaxLength="200" AutoFocus="true" data-testid="connector-name" />
+            @foreach (var field in Kind.Fields)
+            {
+                var key = field.Key;
+                var label = field.Required ? field.Label : $"{field.Label} (optional)";
+                switch (field.Kind)
+                {
+                    case ConnectorFieldKind.Secret:
+                        var isSet = Connector?.SecretsSet.Contains(key) == true;
+                        <MudTextField T="string" Value="@_secrets.GetValueOrDefault(key)" ValueChanged="v => _secrets[key] = v" Label="@label" InputType="InputType.Password" autocomplete="off"
+                                      Variant="Variant.Outlined" HelperText="@(isSet ? "A value is saved. Leave blank to keep it." : field.Help)" Lines="1" data-testid="@($"connector-{key}")" />
+                        break;
+                    case ConnectorFieldKind.Select:
+                        <MudSelect T="string" Value="@_settings.GetValueOrDefault(key)" ValueChanged="v => _settings[key] = v" Label="@label" HelperText="@field.Help" Variant="Variant.Outlined" data-testid="@($"connector-{key}")">
+                            @foreach (var o in field.Options ?? [])
+                            {
+                                <MudSelectItem T="string" Value="@o.Value">@o.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                        break;
+                    case ConnectorFieldKind.MultiSelect:
+                        <fieldset style="border: none; padding: 0; margin: 0;">
+                            <legend><MudText Typo="Typo.subtitle2" HtmlTag="span">@label</MudText></legend>
+                            @if (field.Help is { } help)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@help</MudText>
+                            }
+                            @if ((field.Options ?? []).Count == 0)
+                            {
+                                <MudText Typo="Typo.body2">Nothing to choose yet.</MudText>
+                            }
+                            @foreach (var o in field.Options ?? [])
+                            {
+                                var value = o.Value;
+                                <MudCheckBox T="bool" Value="Selected(key).Contains(value)" ValueChanged="on => ToggleMulti(key, value, on)" Label="@o.Label" Dense="true" Color="Color.Primary" />
+                            }
+                        </fieldset>
+                        break;
+                    default:
+                        <MudTextField T="string" Value="@_settings.GetValueOrDefault(key)" ValueChanged="v => _settings[key] = v" Label="@label" HelperText="@field.Help" autocomplete="off"
+                                      InputType="@(field.Kind == ConnectorFieldKind.Number ? InputType.Number : InputType.Text)" Variant="Variant.Outlined" data-testid="@($"connector-{key}")" />
+                        break;
+                }
+            }
+
+            @if (Kind.Mode == ConnectorMode.Events)
+            {
+                <fieldset style="border: none; padding: 0; margin: 0;">
+                    <legend><MudText Typo="Typo.subtitle1" HtmlTag="span">Events to post</MudText></legend>
+                    @foreach (var e in WebhookEventCatalog.All)
+                    {
+                        <MudCheckBox T="bool" Value="_events.Contains(e.Key)" ValueChanged="on => { if (on) _events.Add(e.Key); else _events.Remove(e.Key); }" Label="@e.Label" Dense="true" Color="Color.Primary"
+                                     data-testid="@($"connector-event-{e.Key}")" />
+                    }
+                </fieldset>
+            }
+            else
+            {
+                <MudSelect T="ConnectorScheduleKind" @bind-Value="_schedule" Label="Run" Variant="Variant.Outlined">
+                    <MudSelectItem T="ConnectorScheduleKind" Value="ConnectorScheduleKind.Manual">Only when I choose Run now</MudSelectItem>
+                    <MudSelectItem T="ConnectorScheduleKind" Value="ConnectorScheduleKind.Daily">Every day</MudSelectItem>
+                    <MudSelectItem T="ConnectorScheduleKind" Value="ConnectorScheduleKind.Weekly">Every week</MudSelectItem>
+                    <MudSelectItem T="ConnectorScheduleKind" Value="ConnectorScheduleKind.Monthly">Every month</MudSelectItem>
+                </MudSelect>
+                @if (_schedule != ConnectorScheduleKind.Manual)
+                {
+                    <MudNumericField T="int" @bind-Value="_hour" Label="At hour (UTC, 0 to 23)" Min="0" Max="23" Variant="Variant.Outlined" />
+                    @if (_schedule == ConnectorScheduleKind.Weekly)
+                    {
+                        <MudSelect T="int" @bind-Value="_day" Label="On" Variant="Variant.Outlined">
+                            @foreach (var d in Enum.GetValues<DayOfWeek>())
+                            {
+                                <MudSelectItem T="int" Value="(int)d">@d</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else if (_schedule == ConnectorScheduleKind.Monthly)
+                    {
+                        <MudNumericField T="int" @bind-Value="_day" Label="On day of the month (1 to 28)" Min="1" Max="28" Variant="Variant.Outlined" />
+                    }
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Scheduled runs act as you; they stop if your account is deactivated.</MudText>
+                }
+            }
+            <MudSwitch T="bool" @bind-Value="_active" Label="On" Color="Color.Primary" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" role="alert">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_name)" data-testid="connector-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public ConnectorKindDto Kind { get; set; } = null!;
+    [Parameter] public ConnectorDto? Connector { get; set; }
+
+    private string? _name;
+    private readonly Dictionary<string, string> _settings = [];
+    private readonly Dictionary<string, string?> _secrets = [];
+    private readonly HashSet<string> _events = [];
+    private ConnectorScheduleKind _schedule = ConnectorScheduleKind.Manual;
+    private int _hour = 6;
+    private int _day = 1;
+    private bool _active = true;
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        foreach (var f in Kind.Fields.Where(f => f.DefaultValue is not null))
+        {
+            _settings[f.Key] = f.DefaultValue!;
+        }
+
+        if (Connector is { } c)
+        {
+            _name = c.Name;
+            foreach (var (k, v) in c.Settings)
+            {
+                _settings[k] = v;
+            }
+
+            _events.UnionWith(c.EventTypes);
+            (_schedule, _hour, _day, _active) = (c.Schedule, c.RunAtHourUtc, c.RunOnDay, c.IsActive);
+        }
+        else
+        {
+            _name = Kind.Name;
+        }
+    }
+
+    private HashSet<string> Selected(string key) =>
+        (_settings.GetValueOrDefault(key) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+
+    private void ToggleMulti(string key, string value, bool on)
+    {
+        var set = Selected(key);
+        if (on)
+        {
+            set.Add(value);
+        }
+        else
+        {
+            set.Remove(value);
+        }
+
+        _settings[key] = string.Join(',', set);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var secrets = _secrets.Where(s => !string.IsNullOrEmpty(s.Value)).ToDictionary(s => s.Key, s => s.Value);
+            var request = new SaveConnectorRequest(Kind.Kind, _name!, _settings, secrets, _events.ToList(), _schedule, _hour, _day, _active);
+            MudDialog.Close(DialogResult.Ok(Connector is null ? await Connectors.CreateAsync(request) : await Connectors.UpdateAsync(Connector.Id, request)));
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

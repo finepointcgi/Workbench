@@ -5,6 +5,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Billing;
 using Workbench.Domain.Billing;
 using Workbench.Domain.ProjectAccounting;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Billing;
 
@@ -356,6 +357,7 @@ public sealed partial class InvoiceService(
             new { Status = nameof(InvoiceStatus.Draft) },
             new { Status = invoice.Status.ToString(), invoice.Total, Journal = entry.Number, Funding = overFunded.Select(f => f.ClinNumber) },
             overFunded.Count > 0 ? $"Funding override: {reason}" : null);
+        IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.InvoiceApproved, IntegrationEventPayloads.Invoice(invoice), audit.Actor, UtcNow);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, invoice, cancellationToken);
     }
@@ -369,10 +371,15 @@ public sealed partial class InvoiceService(
             throw new InvalidOperationException(invoice.Status == InvoiceStatus.Draft ? "Approve the invoice before sending it." : "A void invoice can't be sent.");
         }
 
+        var firstSend = invoice.SentAtUtc is null;
         invoice.SentAtUtc ??= UtcNow;
         invoice.SentBy ??= audit.Actor;
         invoice.UpdatePaymentStatus();
         audit.Record(db, AuditEntityType, invoice.Id, "Sent", after: new { Status = invoice.Status.ToString() });
+        if (firstSend)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.InvoiceSent, IntegrationEventPayloads.Invoice(invoice), audit.Actor, UtcNow);
+        }
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, invoice, cancellationToken);
     }

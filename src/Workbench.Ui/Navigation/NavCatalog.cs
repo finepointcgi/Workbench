@@ -194,6 +194,7 @@ public static class NavCatalog
         new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, FinanceOnly, Keywords: "employees cost rates supervisors"),
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
         new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, AdminOnly, Keywords: "ai claude assistant usage audit bedrock govcloud"),
+        new(Admin, null, "Integrations", "admin/integrations", Icons.Material.Filled.Hub, AdminOnly, Keywords: "webhooks api keys teams slack quickbooks sftp export connector"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, FinanceOnly, Keywords: "history security"),
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, FinanceOnly, MatchAll: true),

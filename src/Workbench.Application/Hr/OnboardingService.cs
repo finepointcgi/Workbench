@@ -15,6 +15,7 @@ using Workbench.Domain.Identity;
 using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
 using D = Workbench.Domain.Hr;
+using Workbench.Application.Integrations;
 
 namespace Workbench.Application.Hr;
 
@@ -148,6 +149,10 @@ public sealed class OnboardingService(
         profile.UpdatedAtUtc = UtcNow;
         profile.UpdatedBy = viewer.Email;
         audit.Record(db, "Employee", employee.Id, "Termination date set", before, new { employee.TerminationDate, Reason = request.Reason.ToString() }, HrText.Clean(request.Note, 500, "The note"));
+        if (employee.TerminationDate != before.TerminationDate)
+        {
+            IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.EmployeeTerminated, IntegrationEventPayloads.Employee(employee), viewer.Email, UtcNow);
+        }
 
         var checklist = New(employee, D.ChecklistKind.Offboarding, request.LastDay, template?.Id, viewer.Email);
         checklist.TerminationReason = (D.TerminationReason)(int)request.Reason;

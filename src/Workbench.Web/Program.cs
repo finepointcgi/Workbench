@@ -89,6 +89,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseWorkbenchDenialLogging();
+app.UseWorkbenchApiKeyScopes();
 app.UseAuthorization();
 app.UseAntiforgery();
 

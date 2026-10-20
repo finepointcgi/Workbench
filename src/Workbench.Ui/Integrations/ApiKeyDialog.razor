@@ -1,0 +1,92 @@
+@* Create an API key: what uses it, the roles its service user has, and which API areas it may read or write. *@
+@inject IApiKeyService ApiKeys
+
+<MudDialog>
+    <TitleContent><MudText Typo="Typo.h6" HtmlTag="h2">Create API key</MudText></TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Immediate="true" Label="Name" HelperText="What uses this key, such as Power BI refresh." autocomplete="off"
+                          Variant="Variant.Outlined" MaxLength="200" AutoFocus="true" data-testid="apikey-name" />
+            <MudTextField @bind-Value="_description" Label="Description (optional)" autocomplete="off" Variant="Variant.Outlined" Lines="2" MaxLength="1000" />
+            <fieldset style="border: none; padding: 0; margin: 0;">
+                <legend><MudText Typo="Typo.subtitle1" HtmlTag="span">Roles</MudText></legend>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">The key acts as its own user with these roles; the same permission checks apply as for a person. Give it only what it needs.</MudText>
+                <div class="d-flex flex-wrap">
+                    @foreach (var role in OrgRoleChecks.All)
+                    {
+                        <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@OrgRoleChecks.Label(role)" Dense="true" Color="Color.Primary" />
+                    }
+                </div>
+                @if (_roles.IsAdmin())
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined">An Admin key can do anything in the areas you allow below. Prefer a narrower role.</MudAlert>
+                }
+            </fieldset>
+            <MudSimpleTable Dense="true" Outlined="true" aria-label="API areas this key may use">
+                <thead><tr><th scope="col">Area</th><th scope="col">Access</th></tr></thead>
+                <tbody>
+                    @foreach (var area in ApiKeyScopes.Areas)
+                    {
+                        <tr>
+                            <th scope="row" style="font-weight: normal;">
+                                <MudText Typo="Typo.body2">@area.Label</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@area.Description</MudText>
+                            </th>
+                            <td>
+                                <MudSelect T="string" Value="@_access.GetValueOrDefault(area.Key, "")" ValueChanged="v => _access[area.Key] = v" Dense="true" Margin="Margin.Dense"
+                                           Variant="Variant.Outlined" aria-label="@($"Access to {area.Label}")" data-testid="@($"apikey-area-{area.Key}")">
+                                    <MudSelectItem T="string" Value="@("")">None</MudSelectItem>
+                                    <MudSelectItem T="string" Value="@ApiKeyScopes.Read">Read</MudSelectItem>
+                                    <MudSelectItem T="string" Value="@ApiKeyScopes.Write">Read and write</MudSelectItem>
+                                </MudSelect>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudDatePicker @bind-Date="_expires" Label="Expires (optional)" HelperText="Leave empty for no expiry. You can revoke a key at any time." Variant="Variant.Outlined"
+                           MinDate="DateTime.Today.AddDays(1)" MaxDate="DateTime.Today.AddYears(3)" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" role="alert">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_name) || Scopes.Count == 0" data-testid="apikey-create">Create key</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string? _name;
+    private string? _description;
+    private OrgRoles _roles;
+    private readonly Dictionary<string, string> _access = [];
+    private DateTime? _expires;
+    private bool _busy;
+    private string? _error;
+
+    private List<string> Scopes => _access.Where(a => a.Value.Length > 0).Select(a => ApiKeyScopes.Scope(a.Key, a.Value)).ToList();
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var expires = _expires is { } d ? DateTime.SpecifyKind(d.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc) : (DateTime?)null;
+            MudDialog.Close(DialogResult.Ok(await ApiKeys.CreateAsync(new CreateApiKeyRequest(_name!, _roles, Scopes, expires, _description))));
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
