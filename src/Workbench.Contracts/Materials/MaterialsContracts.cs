@@ -28,6 +28,8 @@ public enum InventoryMovement
     StatusChange,
     VendorReturn,
     InventoryScrap,
+    LandedCost,
+    PhysicalCount,
 }
 
 /// <summary>Whether stock can be used (mirrors Domain InventoryStockStatus). Only available stock is issued or planned by MRP.</summary>

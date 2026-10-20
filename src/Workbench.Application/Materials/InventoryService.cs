@@ -394,21 +394,31 @@ public sealed class InventoryService(
 
         var reason = "Cycle count" + (string.IsNullOrWhiteSpace(request.Note) ? "" : $": {PurchasingSupport.Optional(request.Note, "The note", 400)}");
         var key = StockKey.Of(balance);
-        InventoryTransaction t;
-        if (diff > 0)
-        {
-            t = engine.Receive(part, key, diff, Money.Round(diff * part.CurrentUnitCost), InventoryTransactionType.CycleCount, request.Date,
-                engine.Accounts?.Adjustment, engine.Accounts?.Adjustment, reason);
-        }
-        else
-        {
-            t = engine.Issue(part, balance, -diff, InventoryTransactionType.CycleCount, request.Date, engine.Accounts?.Adjustment, reason);
-        }
-
-        t.Reason = reason;
+        var t = CountDifference(engine, part, key, balance, diff, InventoryTransactionType.CycleCount, request.Date, reason);
         await engine.FlushAsync(JournalSource.Inventory, t.Id, request.Date, $"Cycle count {t.Number}: {part.Display}", cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return (await MaterialQueries.TransactionsAsync(db, [t], cancellationToken))[0];
+    }
+
+    /// <summary>
+    /// Posts a counted difference (cycle counts and physical inventory): more found comes in at the current unit cost, less
+    /// goes out at cost, both against the inventory adjustment account. Government-furnished stock moves by quantity only.
+    /// </summary>
+    internal static InventoryTransaction CountDifference(
+        StockEngine engine, Part part, StockKey key, InventoryBalance? balance, decimal diff, InventoryTransactionType type, DateOnly date, string reason)
+    {
+        InventoryTransaction t;
+        if (diff > 0)
+        {
+            t = engine.Receive(part, key, diff, Money.Round(diff * part.CurrentUnitCost), type, date, engine.Accounts?.Adjustment, engine.Accounts?.Adjustment, reason);
+        }
+        else
+        {
+            t = engine.Issue(part, balance ?? throw new ArgumentException($"There's no {part.Display} on record there to count out."), -diff, type, date, engine.Accounts?.Adjustment, reason);
+        }
+
+        t.Reason = reason;
+        return t;
     }
 
     public async Task<InventoryTransactionDto> ChangeStandardCostAsync(Guid partId, ChangeStandardCostRequest request, CancellationToken cancellationToken = default)

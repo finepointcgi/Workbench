@@ -49,8 +49,29 @@ internal sealed class StockEngine
         var accounts = await ledger.AccountsAsync(db, ct);
         var last = await db.Set<InventoryTransaction>().OrderByDescending(t => t.Number).Select(t => t.Number).FirstOrDefaultAsync(ct);
         var next = last is not null && last.StartsWith("IT-", StringComparison.Ordinal) && int.TryParse(last[3..], out var n) ? n : 0;
-        return new StockEngine(db, ledger, accounts, next);
+        var engine = new StockEngine(db, ledger, accounts, next);
+        await ShopFloorLocks.LoadAsync(engine, ct);
+        return engine;
     }
+
+    /// <summary>Bins holding staged kits (open kits): normal picks skip them; the stock is reserved for its kit.</summary>
+    public HashSet<Guid> ReservedBins { get; } = [];
+
+    /// <summary>Bins frozen by a physical inventory being counted, with its number: nothing moves in or out of them.</summary>
+    public Dictionary<Guid, string> FrozenBins { get; } = [];
+
+    /// <summary>Set while a physical inventory posts its adjustments into its own frozen bins.</summary>
+    public string? PostingPhysicalInventory { get; set; }
+
+    private void EnsureNotFrozen(Guid binId)
+    {
+        if (FrozenBins.TryGetValue(binId, out var number) && number != PostingPhysicalInventory)
+        {
+            throw new ArgumentException($"That bin is frozen for physical inventory {number}; nothing moves in or out of it until the count is posted or cancelled.");
+        }
+    }
+
+    private bool Pickable(InventoryBalance b) => !ReservedBins.Contains(b.BinId) && !FrozenBins.ContainsKey(b.BinId);
 
     public Guid? InventoryAccount(Part part) => Accounts is null ? null : part.Source == PartSource.Make ? Accounts.FinishedGoods : Accounts.Inventory;
 
@@ -161,6 +182,7 @@ internal sealed class StockEngine
 
     private InventoryBalance AddStock(StockKey key, decimal quantity, DateOnly date, string? reference)
     {
+        EnsureNotFrozen(key.BinId);
         var balance = Db.Set<InventoryBalance>().Local.FirstOrDefault(b => b.PartId == key.PartId && b.BinId == key.BinId && b.Lot == key.Lot && b.Serial == key.Serial
             && b.Ownership == key.Ownership && b.OwnerProjectId == key.OwnerProjectId && b.Status == key.Status);
         if (balance is null)
@@ -192,6 +214,7 @@ internal sealed class StockEngine
 
     private void RemoveStock(InventoryBalance balance, Part part, decimal quantity)
     {
+        EnsureNotFrozen(balance.BinId);
         if (quantity > balance.Quantity)
         {
             throw new ArgumentException($"Only {balance.Quantity:0.####} {part.UnitOfMeasure} of {part.Display} is in that location{Describe(balance)}.");
@@ -441,12 +464,12 @@ internal sealed class StockEngine
     }
 
     /// <summary>Posts the pending amounts as one entry and links it to this flush's transactions. Clears the pending lists.</summary>
-    public async Task<JournalEntry?> FlushAsync(JournalSource source, Guid sourceId, DateOnly date, string description, CancellationToken ct)
+    public async Task<JournalEntry?> FlushAsync(JournalSource source, Guid sourceId, DateOnly date, string description, CancellationToken ct, Guid? companyId = null)
     {
         JournalEntry? entry = null;
         if (Accounts is not null && _pending.Count > 0)
         {
-            entry = await _ledger.PostAsync(Db, source, sourceId, date, description, _pending, ct);
+            entry = await _ledger.PostAsync(Db, source, sourceId, date, description, _pending, ct, companyId);
         }
 
         foreach (var t in _pendingTransactions)
@@ -483,7 +506,7 @@ internal sealed class StockEngine
             return [(balance, quantity)];
         }
 
-        var eligible = Balances(part.Id).Where(b => Usable(b, destinationProjectId))
+        var eligible = Balances(part.Id).Where(b => Usable(b, destinationProjectId) && Pickable(b))
             .OrderBy(b => b.Ownership switch { InventoryOwnership.GovernmentFurnished => 0, InventoryOwnership.Contract => 1, _ => 2 })
             .ThenBy(b => b.ReceivedOn).ThenBy(b => b.Lot, StringComparer.Ordinal).ThenBy(b => b.Serial, StringComparer.Ordinal)
             .ToList();
@@ -509,7 +532,18 @@ internal sealed class StockEngine
         return picks;
     }
 
-    public decimal Available(Guid partId, Guid? destinationProjectId) => Balances(partId).Where(b => Usable(b, destinationProjectId)).Sum(b => b.Quantity);
+    public decimal Available(Guid partId, Guid? destinationProjectId) => Balances(partId).Where(b => Usable(b, destinationProjectId) && Pickable(b)).Sum(b => b.Quantity);
+
+    /// <summary>
+    /// Stock that may be taken for <paramref name="destinationProjectId"/> outside kits and frozen bins, in pick order: the
+    /// project's government-furnished, then its contract, then general stock; oldest first (FIFO), then lot and serial.
+    /// </summary>
+    public IEnumerable<InventoryBalance> PickOrder(Guid partId, Guid? destinationProjectId) =>
+        Balances(partId).Where(b => Usable(b, destinationProjectId) && Pickable(b))
+            .OrderBy(b => b.Ownership switch { InventoryOwnership.GovernmentFurnished => 0, InventoryOwnership.Contract => 1, _ => 2 })
+            .ThenBy(b => b.ReceivedOn).ThenBy(b => b.Lot, StringComparer.Ordinal).ThenBy(b => b.Serial, StringComparer.Ordinal);
+
+    public static bool UsableFor(InventoryBalance b, Guid? project) => Usable(b, project);
 
     private static bool Usable(InventoryBalance b, Guid? project) =>
         b.Status == InventoryStockStatus.Available && (b.Ownership == InventoryOwnership.General || (project is { } p && b.OwnerProjectId == p));

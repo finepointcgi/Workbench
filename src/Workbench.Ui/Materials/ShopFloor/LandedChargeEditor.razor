@@ -1,0 +1,198 @@
+@page "/materials/landed-cost/new"
+@page "/materials/landed-cost/{ChargeId:guid}/edit"
+@inject ILandedCostService LandedCost
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(ChargeId is null ? "New landed cost" : "Edit landed cost") · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="@(ChargeId is null ? "New landed cost" : "Edit landed cost")" BackHref="materials/landed-cost" BackLabel="Landed cost"
+                 Subtitle="Choose where the charge comes from, how to spread it, and the receipt lines it covers. Nothing posts until Finance posts it." />
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_options is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-3">
+        <MudRadioGroup T="bool" @bind-Value="_fromBill" Class="mb-2">
+            <MudRadio T="bool" Value="true">From an AP bill line</MudRadio>
+            <MudRadio T="bool" Value="false">Entered by hand</MudRadio>
+        </MudRadioGroup>
+        @if (_fromBill)
+        {
+            <MudSelect T="Guid?" @bind-Value="_billLineId" Label="Bill line" Dense="true" FullWidth="true" HelperText="Approved or posted bills. Freight bills are usually coded to the landed cost clearing account.">
+                @foreach (var b in _billLines)
+                {
+                    <MudSelectItem T="Guid?" Value="b.ApBillLineId">@b.BillNumber line @b.LineNumber · @b.Vendor · @b.Description · @MaterialsFormat.Amount(b.Amount) · @b.Account@(b.OnClearingAccount ? "" : " (not the clearing account)")</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else
+        {
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Min="0" Format="N2" Style="max-width:160px" />
+                <MudSelect T="Guid?" @bind-Value="_accountId" Label="Credit account" Dense="true" Style="min-width:260px" HelperText="Usually the landed cost clearing account, cleared later by the bill.">
+                    @foreach (var a in _options.Accounts) { <MudSelectItem T="Guid?" Value="a.Id">@a.Code @a.Name</MudSelectItem> }
+                </MudSelect>
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Vendor (optional)" Dense="true" Clearable="true" Style="min-width:220px">
+                    @foreach (var v in _options.Vendors) { <MudSelectItem T="Guid?" Value="v.Id">@v.Code @v.Name</MudSelectItem> }
+                </MudSelect>
+            </MudStack>
+        }
+        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mt-2">
+            <MudSelect T="LandedChargeType" @bind-Value="_kind" Label="Type" Dense="true" Style="min-width:140px">
+                @foreach (var k in Enum.GetValues<LandedChargeType>()) { <MudSelectItem T="LandedChargeType" Value="k">@ShopFloorFormat.Label(k)</MudSelectItem> }
+            </MudSelect>
+            <MudTextField T="string" @bind-Value="_description" Label="Description" Style="min-width:280px" />
+            <MudDatePicker @bind-Date="_date" Label="Date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:160px" />
+            <MudSelect T="LandedCostBasis" @bind-Value="_method" Label="Spread" Dense="true" Style="min-width:160px">
+                @foreach (var m in Enum.GetValues<LandedCostBasis>()) { <MudSelectItem T="LandedCostBasis" Value="m">@ShopFloorFormat.Label(m)</MudSelectItem> }
+            </MudSelect>
+        </MudStack>
+    </MudPaper>
+
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Receipt lines (@_selected.Count chosen)</MudText>
+        <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Label="Search part, receipt or PO" DebounceInterval="300" Immediate="true" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:320px" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2 mb-3" Style="overflow-x:auto">
+        @if (_lines.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">No receipt lines found.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="landed-receipt-lines">
+                <caption class="wb-sr-only">Receipt lines the charge can cover</caption>
+                <thead><tr><th scope="col">Include</th><th scope="col">Receipt</th><th scope="col">Part</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Value</th><th scope="col" style="text-align:right">Landed so far</th>@if (_method == LandedCostBasis.Weight) { <th scope="col">Weight</th> }</tr></thead>
+                <tbody>
+                    @foreach (var l in _lines)
+                    {
+                        <tr>
+                            <td><MudCheckBox T="bool" Value="_selected.Contains(l.ReceiptTransactionId)" ValueChanged="v => Pick(l.ReceiptTransactionId, v)" aria-label="@($"Include {l.ReceiptNumber} {l.PartNumber}")" /></td>
+                            <td>@l.ReceiptNumber <span class="mud-text-secondary">@l.PurchaseOrderNumber · @MaterialsFormat.Date(l.ReceivedOn)</span></td>
+                            <td>@l.PartNumber <span class="mud-text-secondary">@l.PartDescription</span></td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(l.Quantity)</td>
+                            <td style="text-align:right">@MaterialsFormat.Amount(l.Value)</td>
+                            <td style="text-align:right">@(l.LandedCost == 0 ? "—" : MaterialsFormat.Amount(l.LandedCost))</td>
+                            @if (_method == LandedCostBasis.Weight)
+                            {
+                                <td><MudNumericField T="decimal?" Value="_weights.GetValueOrDefault(l.ReceiptTransactionId)" ValueChanged="v => _weights[l.ReceiptTransactionId] = v" Min="0" Margin="Margin.Dense"
+                                                     Disabled="!_selected.Contains(l.ReceiptTransactionId)" Style="max-width:110px" aria-label="@($"Weight of {l.ReceiptNumber} {l.PartNumber}")" /></td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || _selected.Count == 0 || string.IsNullOrWhiteSpace(_description) || _date is null)" data-testid="landed-save">Save draft</MudButton>
+}
+
+@code {
+    [Parameter] public Guid? ChargeId { get; set; }
+
+    private LandedCostOptionsDto? _options;
+    private IReadOnlyList<LandedBillLineDto> _billLines = [];
+    private IReadOnlyList<LandedReceiptLineDto> _lines = [];
+    private readonly HashSet<Guid> _selected = [];
+    private readonly Dictionary<Guid, decimal?> _weights = [];
+    private bool _fromBill = true;
+    private Guid? _billLineId;
+    private decimal _amount;
+    private Guid? _accountId;
+    private Guid? _vendorId;
+    private LandedChargeType _kind = LandedChargeType.Freight;
+    private string? _description;
+    private DateTime? _date = DateTime.Today;
+    private LandedCostBasis _method = LandedCostBasis.Value;
+    private string? _search;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _options = await LandedCost.GetOptionsAsync();
+            _accountId ??= _options.ClearingAccountId;
+            _billLines = await LandedCost.ListBillLinesAsync();
+            _lines = await LandedCost.ListReceiptLinesAsync();
+            _fromBill = _billLines.Count > 0;
+            if (ChargeId is { } id)
+            {
+                var c = await LandedCost.GetAsync(id);
+                (_kind, _description, _date, _method) = (c.Summary.Kind, c.Summary.Description, MaterialsFormat.ToDateTime(c.Summary.Date), c.Summary.Method);
+                (_fromBill, _billLineId, _amount, _accountId, _vendorId) = (c.ApBillLineId is not null, c.ApBillLineId, c.Summary.Amount, c.CreditAccountId, c.VendorId);
+                if (c.ApBillLineId is { } bl && _billLines.All(b => b.ApBillLineId != bl))
+                {
+                    _fromBill = false; // The bill line is in use by this draft; keep the numbers as they are.
+                }
+
+                foreach (var l in c.Lines)
+                {
+                    _selected.Add(l.Receipt.ReceiptTransactionId);
+                    _weights[l.Receipt.ReceiptTransactionId] = l.Weight;
+                }
+            }
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task SearchAsync(string? search)
+    {
+        _search = search;
+        try
+        {
+            _lines = await LandedCost.ListReceiptLinesAsync(null, search);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private void Pick(Guid id, bool on)
+    {
+        if (on)
+        {
+            _selected.Add(id);
+        }
+        else
+        {
+            _selected.Remove(id);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var lines = _selected.Select(id => new LandedChargeTargetRequest(id, _method == LandedCostBasis.Weight ? _weights.GetValueOrDefault(id) : null)).ToList();
+            var request = new SaveLandedChargeRequest(_kind, _description!, DateOnly.FromDateTime(_date!.Value), _method, lines,
+                _fromBill ? _billLineId : null, _fromBill ? null : _amount, _fromBill ? null : _accountId, _fromBill ? null : _vendorId);
+            var charge = ChargeId is { } id ? await LandedCost.UpdateAsync(id, request) : await LandedCost.CreateAsync(request);
+            Navigation.NavigateTo($"materials/landed-cost/{charge.Summary.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

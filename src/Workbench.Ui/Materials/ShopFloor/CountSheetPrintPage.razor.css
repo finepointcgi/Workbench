@@ -1,0 +1,17 @@
+.toolbar { display: flex; gap: 16px; align-items: center; padding: 12px 24px; border-bottom: 1px solid #ddd; font-family: sans-serif; }
+.toolbar .spacer { flex: 1; }
+.toolbar button { padding: 6px 14px; }
+.page { max-width: 10in; margin: 0 auto; padding: 0.4in; font-family: sans-serif; font-size: 10pt; }
+h1 { margin: 0 0 4px; font-size: 18pt; }
+.meta { color: #444; margin-bottom: 16px; }
+.lines { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.lines th, .lines td { border-bottom: 1px solid #bbb; padding: 6px 4px; text-align: left; vertical-align: top; }
+.lines .num { text-align: right; }
+.write { min-width: 80px; border-bottom: 1px solid #000; }
+.tags { display: flex; flex-wrap: wrap; gap: 12px; }
+.tag { width: 3.3in; border: 1px dashed #000; padding: 8px; page-break-inside: avoid; break-inside: avoid; }
+.tag .no { font-size: 20pt; font-weight: bold; }
+.tag .field { margin-top: 10px; border-bottom: 1px solid #000; height: 18px; }
+.break { page-break-before: always; break-before: page; }
+.error { color: #b00; }
+@media print { .no-print { display: none; } .page { padding: 0; } }

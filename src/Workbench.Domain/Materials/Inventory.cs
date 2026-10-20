@@ -64,6 +64,11 @@ public enum InventoryTransactionType
 
     /// <summary>Stock scrapped from inventory (an NCR disposition), charged to an expense account or a project.</summary>
     InventoryScrap,
+    /// <summary>Freight, duty or handling added to received stock (no quantity); issued shares carry the project or work order.</summary>
+    LandedCost,
+
+    /// <summary>The difference between a physical inventory count and the quantity on record.</summary>
+    PhysicalCount,
 }
 
 /// <summary>

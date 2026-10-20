@@ -1,0 +1,96 @@
+@page "/materials/physical-inventory/{PhysicalInventoryId:guid}/print"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@using Microsoft.JSInterop
+@inject IPhysicalInventoryService Counts
+@inject IJSRuntime JS
+
+<PageTitle>@(_pi?.Summary.Number ?? "Physical inventory") count sheets · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"materials/physical-inventory/{PhysicalInventoryId}")">← Back to the count</a>
+    <label><input type="checkbox" @bind="_tags" /> Tags (one per balance) instead of sheets</label>
+    <span class="spacer"></span>
+    <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_pi is not { } pi)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var tags = pi.Tags.Where(t => t.Status != CountTagState.Void).ToList();
+    <div class="page" data-testid="count-print-view">
+        <h1>Physical inventory @pi.Summary.Number</h1>
+        <div class="meta">@pi.Summary.Warehouse · @pi.Summary.Scope · count as of @MaterialsFormat.Date(pi.Summary.CountDate)@(pi.BlindCount ? " · blind count" : "")</div>
+        @if (_tags)
+        {
+            <div class="tags">
+                @foreach (var t in tags)
+                {
+                    <div class="tag">
+                        <div class="no">Tag @t.TagNumber</div>
+                        <div>@pi.Summary.Warehouse / @t.Bin</div>
+                        <div><b>@t.PartNumber</b> @t.PartDescription</div>
+                        <div>@(t.Lot.Length > 0 ? $"Lot {t.Lot} " : "")@(t.Serial.Length > 0 ? $"Serial {t.Serial} " : "")@(t.Ownership == StockOwnership.General ? "" : $"{MaterialsFormat.Label(t.Ownership)} {t.OwnerProjectCode}")</div>
+                        @if (!pi.BlindCount) { <div>On record: @MaterialsFormat.Qty(t.FrozenQuantity) @t.UnitOfMeasure</div> }
+                        <div class="field">Count (@t.UnitOfMeasure):</div>
+                        <div class="field">Counted by:</div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            @foreach (var bin in tags.GroupBy(t => t.Bin))
+            {
+                <h2>Bin @bin.Key</h2>
+                <table class="lines">
+                    <thead><tr><th>Tag</th><th>Part</th><th>Description</th><th>Lot</th><th>Serial</th><th>Owner</th>@if (!pi.BlindCount) { <th class="num">On record</th> }<th>Unit</th><th>Count</th><th>Counted by</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in bin)
+                        {
+                            <tr>
+                                <td>@t.TagNumber</td><td>@t.PartNumber</td><td>@t.PartDescription</td><td>@t.Lot</td><td>@t.Serial</td>
+                                <td>@(t.Ownership == StockOwnership.General ? "General" : $"{MaterialsFormat.Label(t.Ownership)} {t.OwnerProjectCode}")</td>
+                                @if (!pi.BlindCount) { <td class="num">@MaterialsFormat.Qty(t.FrozenQuantity)</td> }
+                                <td>@t.UnitOfMeasure</td><td class="write"></td><td class="write"></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <p>Found something with no tag? Write it on a blank line with its bin, part, lot or serial and quantity; it's entered as a blank tag.</p>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid PhysicalInventoryId { get; set; }
+
+    private PhysicalInventoryDto? _pi;
+    private string? _error;
+    private bool _tags;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _pi = await Counts.GetAsync(PhysicalInventoryId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _error = MaterialsFormat.Error(ex);
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/billing.js");
+        await module.InvokeVoidAsync("printPage");
+    }
+}

@@ -198,6 +198,7 @@ public static class DatabaseInitializer
         await TravelSeed.SeedAsync(db, cancellationToken); // Travel: analyst@'s approved DC trip TA-000001 on its expense report; Citi corporate card ••4417 with imported charges.
         await SalesShippingSeed.SeedAsync(db, services, cancellationToken); // Sales orders: SO-000001 (Army, project 3001 spares) released, half shipped on DD250 SHP0001, WAWF receiving report submitted.
         await QualitySeed.SeedAsync(db, services, cancellationToken); // Quality: Morgan Lee (E1080) inspects; HSG-220 receiving plan, a rejected shipment returned to Digi-Parts (NCR, debit memo, SCAR), ECO adding a thermal pad to SNS-210.
+        await ShopFloorSeed.SeedAsync(db, services, cancellationToken); // Shop floor: RES-KIT backflushed on a PCB build, freight allocated to receipt 1, CAGE frozen for a count, ASM overloaded next week.
     }
 
     /// <summary>

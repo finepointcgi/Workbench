@@ -1,0 +1,109 @@
+@page "/m/count"
+@layout MobileLayout
+@* Physical inventory counts on a phone: pick the open count, then enter tag and quantity. Counts are blind: the
+   quantity on record isn't shown, and a count that's off by more than the thresholds asks for a recount. *@
+@using Workbench.Contracts.Materials
+@inject IPhysicalInventoryService Counts
+@inject ISnackbar Snackbar
+
+<PageTitle>Count · Workbench</PageTitle>
+
+<div class="wb-m-title"><h1>Count</h1></div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" data-testid="error">@_error</MudAlert>
+}
+else if (_open is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else if (_open.Count == 0)
+{
+    <div class="wb-m-card wb-m-muted">No physical inventory is being counted.</div>
+}
+else
+{
+    <div role="status" class="wb-sr-only">@_status</div>
+    <div class="wb-m-card">
+        @if (_open.Count > 1)
+        {
+            <label class="wb-m-field">
+                <span>Count</span>
+                <select class="wb-m-input" @bind="_selected" aria-label="Physical inventory">
+                    @foreach (var p in _open) { <option value="@p.Id">@p.Number · @p.Warehouse</option> }
+                </select>
+            </label>
+        }
+        else
+        {
+            <b>@_open[0].Number</b> <span class="wb-m-muted">@_open[0].Warehouse · @_open[0].Scope</span>
+        }
+        <div class="wb-m-muted">@Current?.CountedCount of @Current?.TagCount tags counted@(Current is { RecountsNeeded: > 0 } c ? $" · {c.RecountsNeeded} to recount" : "")</div>
+        <div class="wb-m-row mt-2">
+            <label class="wb-m-field"><span>Tag</span><input class="wb-m-input" inputmode="numeric" @bind="_tag" aria-label="Tag number" data-testid="count-tag" /></label>
+            <label class="wb-m-field"><span>Quantity</span><input class="wb-m-input" inputmode="decimal" @bind="_quantity" aria-label="Quantity counted" data-testid="count-qty" /></label>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-2" Disabled="@(_busy || _tag is null || _quantity is null)" OnClick="SaveAsync" data-testid="count-save">Save count</MudButton>
+        @if (_last is { } last)
+        {
+            <div class="mt-2 @(last.Status == CountTagState.RecountNeeded ? "" : "wb-m-muted")" data-testid="count-result">@last.Message</div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<PhysicalInventorySummaryDto>? _open;
+    private Guid _selected;
+    private int? _tag;
+    private decimal? _quantity;
+    private CountResultDto? _last;
+    private string? _error;
+    private string? _status;
+    private bool _busy;
+
+    private PhysicalInventorySummaryDto? Current => _open?.FirstOrDefault(p => p.Id == _selected);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _open = await Counts.ListAsync(openOnly: true);
+            if (_open.All(p => p.Id != _selected))
+            {
+                _selected = _open.FirstOrDefault()?.Id ?? Guid.Empty;
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or HttpRequestException)
+        {
+            _error = ex is UnauthorizedAccessException ? "Counting is for the Materials role." : ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            _last = await Counts.EnterCountAsync(_selected, new EnterCountRequest(_tag!.Value, _quantity!.Value));
+            _status = _last.Message;
+            Snackbar.Add(_last.Message, _last.Status == CountTagState.RecountNeeded ? Severity.Warning : Severity.Success);
+            if (_last.Status != CountTagState.RecountNeeded)
+            {
+                (_tag, _quantity) = (_tag + 1, null);
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException or InvalidOperationException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

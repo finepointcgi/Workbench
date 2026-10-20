@@ -1,0 +1,83 @@
+@page "/materials/kits/{KitId:guid}/print"
+@layout Workbench.Ui.Layout.BillingPrintLayout
+@using Microsoft.JSInterop
+@inject IKittingService Kitting
+@inject IJSRuntime JS
+
+<PageTitle>@(_kit?.Summary.Number ?? "Kit") pick list · Workbench</PageTitle>
+
+<div class="toolbar no-print">
+    <a href="@($"materials/kits/{KitId}")">← Back to the kit</a>
+    <span class="spacer"></span>
+    <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="page"><p class="error" data-testid="load-error">@_error</p></div>
+}
+else if (_kit is not { } kit)
+{
+    <div class="page"><p>Loading…</p></div>
+}
+else
+{
+    var s = kit.Summary;
+    var parts = kit.Lines.ToDictionary(l => l.Id);
+    <div class="page" data-testid="kit-print-view">
+        <h1>Pick list @s.Number</h1>
+        <div class="meta">
+            For @(s.WorkOrderNumber is { } wo ? $"work order {wo}" : $"project {s.ProjectCode}") · stage to @s.StagingLocation · needed by @MaterialsFormat.Date(s.NeededBy)
+        </div>
+        <table class="lines">
+            <thead><tr><th>Part</th><th>Description</th><th>From</th><th>Lot</th><th>Serial</th><th class="num">Quantity</th><th>Picked by</th></tr></thead>
+            <tbody>
+                @foreach (var p in kit.Picks.Where(p => !p.IsIssued))
+                {
+                    <tr>
+                        <td>@p.PartNumber</td><td>@parts[p.KitLineId].PartDescription</td><td>@p.FromLocation</td><td>@p.Lot</td><td>@p.Serial</td>
+                        <td class="num">@MaterialsFormat.Qty(p.Quantity) @parts[p.KitLineId].UnitOfMeasure</td><td class="write"></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (kit.Lines.Any(l => l.QuantityShort > 0))
+        {
+            <h2>Short</h2>
+            <table class="lines">
+                <thead><tr><th>Part</th><th>Description</th><th class="num">Still needed</th></tr></thead>
+                <tbody>
+                    @foreach (var l in kit.Lines.Where(l => l.QuantityShort > 0))
+                    {
+                        <tr><td>@l.PartNumber</td><td>@l.PartDescription</td><td class="num">@MaterialsFormat.Qty(l.QuantityShort) @l.UnitOfMeasure</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid KitId { get; set; }
+
+    private KitDto? _kit;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _kit = await Kitting.GetAsync(KitId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            _error = MaterialsFormat.Error(ex);
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/billing.js");
+        await module.InvokeVoidAsync("printPage");
+    }
+}

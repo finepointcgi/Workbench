@@ -1,0 +1,210 @@
+@page "/materials/physical-inventory/{PhysicalInventoryId:guid}"
+@using Microsoft.JSInterop
+@inject IPhysicalInventoryService Counts
+@inject IPartService PartService
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_pi?.Summary.Number ?? "Physical inventory") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Physical inventory" BackHref="materials/physical-inventory" BackLabel="Physical inventory" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_pi is not { } pi)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = pi.Summary;
+    var counting = s.Status == PhysicalInventoryState.Counting;
+    <MaterialsHeader Title="@($"{s.Number} · {s.Warehouse}")" BackHref="materials/physical-inventory" BackLabel="Physical inventory"
+                     Subtitle="@($"{s.Scope} · count date {MaterialsFormat.Date(s.CountDate)} · recount when off by more than {MaterialsFormat.Qty(pi.RecountPercent)}% or {MaterialsFormat.Amount(pi.RecountValue)}")">
+        <MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(s.Status)">@ShopFloorFormat.Label(s.Status)</MudChip>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Print" Href="@($"materials/physical-inventory/{PhysicalInventoryId}/print")">Print sheets or tags</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="pi-export">Export CSV</MudButton>
+        @if (counting && Editable)
+        {
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PhoneIphone" Href="m/count">Count on a phone</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelAsync" Disabled="_busy">Cancel count</MudButton>
+        }
+        @if (counting && ShopFloorFormat.CanPost(User))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PostAsync" Disabled="@(_busy || s.CountedCount < s.TagCount || s.RecountsNeeded > 0)" data-testid="pi-post">Post adjustments</MudButton>
+        }
+    </MaterialsHeader>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        @foreach (var (label, value) in new[]
+        {
+            ("Tags", s.TagCount.ToString(CultureInfo.InvariantCulture)), ("Counted", s.CountedCount.ToString(CultureInfo.InvariantCulture)),
+            ("Recounts needed", s.RecountsNeeded.ToString(CultureInfo.InvariantCulture)), ("Difference at cost", MaterialsFormat.Amount(s.VarianceValue)),
+        })
+        {
+            <MudItem xs="6" sm="3">
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="p">@value</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    @if (counting)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Frozen bins: @string.Join(", ", pi.Bins). Posting needs every tag counted and every recount done; Finance posts. Government-furnished stock is adjusted by quantity only, at no value.
+        </MudAlert>
+    }
+    else if (pi.JournalEntryNumber is { } je)
+    {
+        <MudText Class="mud-text-secondary mb-2">Posted to the inventory adjustment account in journal entry @je.</MudText>
+    }
+
+    @if (counting && Editable)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                <MudNumericField T="int?" @bind-Value="_tag" Label="Tag number" Min="1" Style="max-width:140px" />
+                <MudNumericField T="decimal?" @bind-Value="_qty" Label="Count" Min="0" Style="max-width:140px" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_tag is null || _qty is null || _busy)" OnClick="CountAsync" data-testid="pi-count">Enter count</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="BlankTagAsync" Disabled="_busy">Add a blank tag</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="pi-tags">
+            <caption class="wb-sr-only">Count tags</caption>
+            <thead><tr><th scope="col">Tag</th><th scope="col">Bin</th><th scope="col">Part</th><th scope="col">Lot / serial</th><th scope="col">Owner</th><th scope="col" style="text-align:right">On record</th><th scope="col" style="text-align:right">Count</th><th scope="col" style="text-align:right">Recount</th><th scope="col" style="text-align:right">Difference</th><th scope="col" style="text-align:right">At cost</th><th scope="col">Status</th></tr></thead>
+            <tbody>
+                @foreach (var t in pi.Tags)
+                {
+                    <tr>
+                        <td>@t.TagNumber@if (t.IsBlankTag) { <span class="mud-text-secondary"> (blank)</span> }</td>
+                        <td>@t.Bin</td>
+                        <td>@t.PartNumber <span class="mud-text-secondary">@t.PartDescription</span></td>
+                        <td>@(string.Join(" ", new[] { t.Lot, t.Serial }.Where(x => x.Length > 0)))</td>
+                        <td>@(t.Ownership == StockOwnership.General ? "General" : $"{MaterialsFormat.Label(t.Ownership)} {t.OwnerProjectCode}")</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(t.FrozenQuantity)</td>
+                        <td style="text-align:right">@(t.CountedQuantity is { } c ? MaterialsFormat.Qty(c) : "—")</td>
+                        <td style="text-align:right">@(t.RecountQuantity is { } r ? MaterialsFormat.Qty(r) : "—")</td>
+                        <td style="text-align:right">@(t.Variance is { } v && v != 0 ? MaterialsFormat.Qty(v) : "—")</td>
+                        <td style="text-align:right">@(t.VarianceValue is { } vv && vv != 0 ? MaterialsFormat.Amount(vv) : "—")</td>
+                        <td>
+                            <MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(t.Status)" Class="my-0">@ShopFloorFormat.Label(t.Status)</MudChip>
+                            @if (counting && Editable && t.IsBlankTag && t.Status != CountTagState.Void)
+                            {
+                                <MudButton Size="Size.Small" OnClick="() => VoidAsync(t.TagNumber)" aria-label="@($"Void tag {t.TagNumber}")">Void</MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid PhysicalInventoryId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private PhysicalInventoryDto? _pi;
+    private int? _tag;
+    private decimal? _qty;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    private bool Editable => MaterialsFormat.CanEdit(User);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _pi = await Counts.GetAsync(PhysicalInventoryId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action, string? message = null)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            if (message is not null)
+            {
+                Snackbar.Add(message, Severity.Success);
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CountAsync() => RunAsync(async () =>
+    {
+        var result = await Counts.EnterCountAsync(PhysicalInventoryId, new EnterCountRequest(_tag!.Value, _qty!.Value));
+        Snackbar.Add(result.Message, result.Status == CountTagState.RecountNeeded ? Severity.Warning : Severity.Success);
+        (_tag, _qty) = (_tag + 1, null);
+    });
+
+    private Task VoidAsync(int tag) => RunAsync(() => Counts.VoidTagAsync(PhysicalInventoryId, tag), $"Tag {tag} voided.");
+
+    private Task PostAsync() => RunAsync(() => Counts.PostAsync(PhysicalInventoryId), "Posted. Differences adjusted and the bins are open again.");
+
+    private async Task CancelAsync()
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, $"Cancel {_pi!.Summary.Number}", "Cancel count", "Counts are discarded and the bins open again.", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Counts.CancelAsync(PhysicalInventoryId, reason), "Count cancelled.");
+        }
+    }
+
+    private async Task BlankTagAsync()
+    {
+        var options = await PartService.GetOptionsAsync();
+        var parts = await PartService.ListAsync(new PartQuery());
+        var bins = options.Warehouses.Where(w => w.Id == _pi!.Summary.WarehouseId).SelectMany(w => w.Bins).Where(b => _pi!.Bins.Contains(b.Code)).ToList();
+        var dialog = await DialogService.ShowAsync<BlankTagDialog>("Add a blank tag",
+            new DialogParameters<BlankTagDialog> { { d => d.Bins, bins }, { d => d.Parts, parts }, { d => d.Projects, options.Projects } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: AddCountTagRequest request })
+        {
+            await RunAsync(async () =>
+            {
+                var result = await Counts.AddTagAsync(PhysicalInventoryId, request);
+                Snackbar.Add($"Tag {result.TagNumber} added. {result.Message}", result.Status == CountTagState.RecountNeeded ? Severity.Warning : Severity.Success);
+            });
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            var file = await Counts.ExportCountSheetAsync(PhysicalInventoryId);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/financials.js");
+            await module.InvokeVoidAsync("downloadText", file.FileName, file.ContentType, file.Content);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
+}

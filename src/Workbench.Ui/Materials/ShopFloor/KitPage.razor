@@ -1,0 +1,145 @@
+@page "/materials/kits/{KitId:guid}"
+@inject IKittingService Kitting
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_kit?.Summary.Number ?? "Kit") · Materials · Workbench</PageTitle>
+
+@if (_error is not null)
+{
+    <MaterialsHeader Title="Kit" BackHref="materials/kits" BackLabel="Kits" />
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_kit is not { } kit)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var s = kit.Summary;
+    var open = s.Status is KitState.Open or KitState.Staged;
+    <MaterialsHeader Title="@($"{s.Number} · {(s.WorkOrderNumber ?? $"project {s.ProjectCode}")}")" BackHref="materials/kits" BackLabel="Kits"
+                     Subtitle="@($"Kit location {s.StagingLocation} · needed by {MaterialsFormat.Date(s.NeededBy)}")">
+        <MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(s.Status)">@ShopFloorFormat.Label(s.Status)</MudChip>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Print" Href="@($"materials/kits/{KitId}/print")">Print pick list</MudButton>
+        @if (Editable && open)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="StageAsync" Disabled="@(_busy || kit.Lines.All(l => l.QuantityShort == 0))" data-testid="kit-stage">Stage what's available</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="IssueAsync" Disabled="@(_busy || kit.Picks.All(p => p.IsIssued))" data-testid="kit-issue">Issue kit</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelAsync" Disabled="_busy">Cancel kit</MudButton>
+        }
+    </MaterialsHeader>
+
+    @if (s.WorkOrderId is { } wo)
+    {
+        <MudText Class="mb-2">Work order <MudLink Href="@($"materials/work-orders/{wo}")">@s.WorkOrderNumber</MudLink></MudText>
+    }
+    @if (open && s.ShortLines > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3" data-testid="kit-short">
+            @s.ShortLines @(s.ShortLines == 1 ? "line is" : "lines are") short. Stage again when stock arrives, or issue what's staged now: the rest stays open on the @(s.WorkOrderNumber is null ? "project's requirements" : "work order").
+        </MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-2 mb-3" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Elevation="0" data-testid="kit-lines">
+            <caption class="wb-sr-only">Kit lines</caption>
+            <thead><tr><th scope="col">Part</th>@if (s.WorkOrderId is null) { <th scope="col">WBS</th> }<th scope="col" style="text-align:right">Required</th><th scope="col" style="text-align:right">Staged</th><th scope="col" style="text-align:right">Issued</th><th scope="col" style="text-align:right">Short</th><th scope="col" style="text-align:right">Available to pick</th></tr></thead>
+            <tbody>
+                @foreach (var l in kit.Lines)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"materials/parts/{l.PartId}")">@l.PartNumber</MudLink> <span class="mud-text-secondary">@l.PartDescription</span></td>
+                        @if (s.WorkOrderId is null) { <td>@l.WbsCode</td> }
+                        <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityRequired) @l.UnitOfMeasure</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityStaged)</td>
+                        <td style="text-align:right">@MaterialsFormat.Qty(l.QuantityIssued)</td>
+                        <td style="text-align:right">@if (l.QuantityShort > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="my-0">@MaterialsFormat.Qty(l.QuantityShort)</MudChip> } else { <span>—</span> }</td>
+                        <td style="text-align:right">@(open ? MaterialsFormat.Qty(l.Available) : "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-1">Pick list</MudText>
+    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+        @if (kit.Picks.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">Nothing staged yet. "Stage what's available" picks the oldest stock first and moves it to @s.StagingLocation.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="kit-picks">
+                <caption class="wb-sr-only">Staged stock</caption>
+                <thead><tr><th scope="col">Part</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Lot</th><th scope="col">Serial</th><th scope="col">Owner</th><th scope="col" style="text-align:right">Quantity</th><th scope="col">Done</th></tr></thead>
+                <tbody>
+                    @foreach (var p in kit.Picks)
+                    {
+                        <tr>
+                            <td>@p.PartNumber</td><td>@p.FromLocation</td><td>@s.StagingLocation</td><td>@p.Lot</td><td>@p.Serial</td><td>@MaterialsFormat.Label(p.Ownership)</td>
+                            <td style="text-align:right">@MaterialsFormat.Qty(p.Quantity)</td>
+                            <td>@(p.IsIssued ? (s.Status == KitState.Cancelled ? "Returned" : "Issued") : "Staged")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid KitId { get; set; }
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private KitDto? _kit;
+    private string? _error;
+    private bool _forbidden;
+    private bool _busy;
+
+    private bool Editable => MaterialsFormat.CanEdit(User);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _kit = await Kitting.GetAsync(KitId);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task RunAsync(Func<Task<KitDto>> action, Func<KitDto, string> message)
+    {
+        _busy = true;
+        try
+        {
+            _kit = await action();
+            Snackbar.Add(message(_kit), Severity.Success);
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task StageAsync() => RunAsync(() => Kitting.StageAsync(KitId, new StageKitRequest(MaterialsFormat.Today)),
+        k => k.Summary.ShortLines == 0 ? "Everything is staged." : $"Staged what was available; {k.Summary.ShortLines} short.");
+
+    private Task IssueAsync() => RunAsync(() => Kitting.IssueAsync(KitId, new IssueKitRequest(MaterialsFormat.Today)),
+        k => $"Kit issued to {k.Summary.WorkOrderNumber ?? "the project"}.");
+
+    private async Task CancelAsync()
+    {
+        if (await Workbench.Ui.Odcs.ReasonDialog.AskAsync(DialogService, $"Cancel {_kit!.Summary.Number}", "Cancel kit", color: Color.Error) is { } reason)
+        {
+            await RunAsync(() => Kitting.CancelAsync(KitId, new CancelKitRequest(MaterialsFormat.Today, reason)), _ => "Kit cancelled; staged stock went back.");
+        }
+    }
+}

@@ -22,7 +22,8 @@ public static class MaterialCostActuals
         var q = db.Set<InventoryTransaction>().AsNoTracking()
             .Where(t => t.ProjectId != null && t.WbsElementId != null && t.Amount != 0 && t.Date >= from && t.Date <= to
                 && (t.Type == InventoryTransactionType.IssueToProject || t.Type == InventoryTransactionType.IssueToWorkOrder || t.Type == InventoryTransactionType.ReturnFromWorkOrder
-                    || t.Type == InventoryTransactionType.SalesShipment)); // Cost of goods shipped on a project's sales order.
+                    || t.Type == InventoryTransactionType.SalesShipment // Cost of goods shipped on a project's sales order.
+                    || t.Type == InventoryTransactionType.LandedCost)); // Landed cost that followed units already issued to the project.
         if (projectIds is not null)
         {
             var ids = projectIds.ToList();
@@ -144,7 +145,8 @@ public sealed class MaterialReportService(IWorkbenchDbContextFactory dbFactory, 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var project = await db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken) ?? throw WorkbenchNotFoundException.For("Project", projectId);
         var txns = await db.Set<InventoryTransaction>().AsNoTracking()
-            .Where(t => t.ProjectId == projectId && (t.Type == InventoryTransactionType.IssueToProject || t.Type == InventoryTransactionType.IssueToWorkOrder || t.Type == InventoryTransactionType.ReturnFromWorkOrder))
+            .Where(t => t.ProjectId == projectId && (t.Type == InventoryTransactionType.IssueToProject || t.Type == InventoryTransactionType.IssueToWorkOrder || t.Type == InventoryTransactionType.ReturnFromWorkOrder
+                || t.Type == InventoryTransactionType.LandedCost))
             .ToListAsync(cancellationToken);
         var partIds = txns.Select(t => t.PartId).Distinct().ToList();
         var parts = await db.Set<Part>().AsNoTracking().Where(p => partIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, cancellationToken);

@@ -53,6 +53,8 @@ public static class MaterialsFormat
         InventoryMovement.StatusChange => "Status change",
         InventoryMovement.VendorReturn => "Return to vendor",
         InventoryMovement.InventoryScrap => "Scrapped from stock",
+        InventoryMovement.LandedCost => "Landed cost",
+        InventoryMovement.PhysicalCount => "Physical inventory",
         _ => m.ToString(),
     };
 

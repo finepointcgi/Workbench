@@ -1,0 +1,141 @@
+@page "/materials/landed-cost"
+@inject ILandedCostService LandedCost
+
+<PageTitle>Landed cost · Materials · Workbench</PageTitle>
+
+<MaterialsHeader Title="Landed cost" Subtitle="Freight, duty and handling added to the cost of what was received. Stock still on hand is revalued; units already used carry their share where they went.">
+    @if (ShopFloorFormat.CanDraftLandedCost(User))
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="materials/landed-cost/new" data-testid="landed-new">New charge</MudButton>
+    }
+</MaterialsHeader>
+
+@if (_error is not null)
+{
+    <MaterialsError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+        <MudTabPanel Text="Charges">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (_charges.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No landed cost charges yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="landed-charges">
+                        <caption class="wb-sr-only">Landed cost charges</caption>
+                        <thead><tr><th scope="col">Charge</th><th scope="col">Type</th><th scope="col">Description</th><th scope="col">Date</th><th scope="col">From</th><th scope="col">Spread</th><th scope="col" style="text-align:right">Lines</th><th scope="col" style="text-align:right">Amount</th><th scope="col">Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _charges)
+                            {
+                                <tr>
+                                    <td><MudLink Href="@($"materials/landed-cost/{c.Id}")">@c.Number</MudLink></td>
+                                    <td>@ShopFloorFormat.Label(c.Kind)</td>
+                                    <td>@c.Description</td>
+                                    <td>@MaterialsFormat.Date(c.Date)</td>
+                                    <td>@(c.BillNumber is { } b ? $"Bill {b}" : "Entered by hand")@if (c.Vendor is { } v) { <span class="mud-text-secondary"> · @v</span> }</td>
+                                    <td>@ShopFloorFormat.Label(c.Method)</td>
+                                    <td style="text-align:right">@c.LineCount</td>
+                                    <td style="text-align:right">@MaterialsFormat.Amount(c.Amount)</td>
+                                    <td><MudChip T="string" Size="Size.Small" Color="ShopFloorFormat.Color(c.Status)" Class="my-0">@ShopFloorFormat.Label(c.Status)</MudChip></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+        <MudTabPanel Text="Receipts">
+            <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
+                @if (_receipts.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No receipts into inventory in the last six months.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="landed-receipts">
+                        <caption class="wb-sr-only">Receipts and their landed cost</caption>
+                        <thead><tr><th scope="col">Receipt</th><th scope="col">Purchase order</th><th scope="col">Vendor</th><th scope="col">Received</th><th scope="col" style="text-align:right">Received value</th><th scope="col" style="text-align:right">Landed cost</th><th scope="col" style="text-align:right">Total</th><th scope="col"><span class="wb-sr-only">Lines</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _receipts)
+                            {
+                                <tr>
+                                    <td>@r.ReceiptNumber</td><td>@r.PurchaseOrderNumber</td><td>@r.Vendor</td><td>@MaterialsFormat.Date(r.ReceivedOn)</td>
+                                    <td style="text-align:right">@MaterialsFormat.Amount(r.ReceivedValue)</td>
+                                    <td style="text-align:right">@(r.LandedCost == 0 ? "—" : MaterialsFormat.Amount(r.LandedCost))</td>
+                                    <td style="text-align:right">@MaterialsFormat.Amount(r.ReceivedValue + r.LandedCost)</td>
+                                    <td>
+                                        <MudButton Size="Size.Small" OnClick="() => Toggle(r.PurchaseReceiptId)" aria-expanded="@(_open.Contains(r.PurchaseReceiptId) ? "true" : "false")"
+                                                   aria-label="@($"Lines of {r.ReceiptNumber}")">@(_open.Contains(r.PurchaseReceiptId) ? "Hide lines" : "Lines")</MudButton>
+                                    </td>
+                                </tr>
+                                @if (_open.Contains(r.PurchaseReceiptId))
+                                {
+                                    <tr>
+                                        <td colspan="8">
+                                            <MudSimpleTable Dense="true" Elevation="0">
+                                                <caption class="wb-sr-only">Lines of @r.ReceiptNumber</caption>
+                                                <thead><tr><th scope="col">Part</th><th scope="col">Lot / serial</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Value</th><th scope="col" style="text-align:right">Landed cost</th><th scope="col" style="text-align:right">Landed unit cost</th></tr></thead>
+                                                <tbody>
+                                                    @foreach (var l in r.Lines)
+                                                    {
+                                                        <tr>
+                                                            <td>@l.PartNumber <span class="mud-text-secondary">@l.PartDescription</span></td>
+                                                            <td>@(string.Join(" ", new[] { l.Lot, l.Serial }.Where(x => x.Length > 0)))</td>
+                                                            <td style="text-align:right">@MaterialsFormat.Qty(l.Quantity)</td>
+                                                            <td style="text-align:right">@MaterialsFormat.Amount(l.Value)</td>
+                                                            <td style="text-align:right">@MaterialsFormat.Amount(l.LandedCost)</td>
+                                                            <td style="text-align:right">@(l.Quantity > 0 ? MaterialsFormat.Cost(Math.Round((l.Value + l.LandedCost) / l.Quantity, 4)) : "—")</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </MudSimpleTable>
+                                            @foreach (var c in r.Charges)
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block"><MudLink Href="@($"materials/landed-cost/{c.Id}")" Typo="Typo.caption">@c.Number</MudLink> @ShopFloorFormat.Label(c.Kind): @c.Description (@ShopFloorFormat.Label(c.Status))</MudText>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [CascadingParameter] public CurrentUserInfo? User { get; set; }
+
+    private IReadOnlyList<LandedChargeSummaryDto> _charges = [];
+    private IReadOnlyList<ReceiptLandedCostDto> _receipts = [];
+    private readonly HashSet<Guid> _open = [];
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _charges = await LandedCost.ListAsync();
+            _receipts = await LandedCost.ListReceiptsAsync();
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (MaterialsFormat.Error(ex), MaterialsFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!_open.Remove(id))
+        {
+            _open.Add(id);
+        }
+    }
+}

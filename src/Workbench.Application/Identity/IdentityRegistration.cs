@@ -99,6 +99,7 @@ public static class IdentityRegistration
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.
         services.AddWorkbenchSalesShippingPermissions(); // Sales orders: Materials/Finance/Admin change, Business development reads; shipping Materials/Finance/Admin; delivery invoices Finance/Admin.
         services.AddWorkbenchQualityPermissions(); // Quality and engineering changes: read Materials/Finance/Admin, change Materials/Admin; dispositions and ECOs decided by their workflow.
+        services.AddWorkbenchShopFloorPermissions(); // Kits, backflush, landed cost, physical inventory, capacity schedule: read Materials/Finance/Admin, change Materials/Admin; landed cost and count postings Finance/Admin.
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         return services;

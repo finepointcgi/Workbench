@@ -527,7 +527,7 @@ public sealed class ShippingService(
             var ol = orderLines[line.SalesOrderLineId];
             var part = await engine.LoadPartAsync(line.PartId, cancellationToken);
             var balance = engine.Balances(part.Id).FirstOrDefault(b => b.BinId == line.BinId && b.Lot == line.Lot && b.Serial == line.Serial && b.Ownership == line.Ownership
-                && b.OwnerProjectId == line.OwnerProjectId) ?? throw new ArgumentException($"{part.Display} {SalesRules.Describe(line.Lot, line.Serial)} is no longer in its bin.");
+                && b.OwnerProjectId == line.OwnerProjectId && b.Status == InventoryStockStatus.Available) ?? throw new ArgumentException($"{part.Display} {SalesRules.Describe(line.Lot, line.Serial)} is no longer in its bin.");
             StockEngine.EnsureUsableFor(balance, order.ProjectId);
             InventoryTransaction t;
             line.ChargedToWbs = SalesRules.ChargesWbs(ol, ol.ClinId is { } c ? clins.GetValueOrDefault(c) : null, contract);
