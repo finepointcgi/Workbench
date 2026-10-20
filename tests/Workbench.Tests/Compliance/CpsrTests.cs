@@ -192,7 +192,7 @@ public sealed class CpsrTests
     public async Task The_RFQ_module_feeds_competition_through_the_competition_source()
     {
         await using var kit = await PurchasingKit.CreateAsync();
-        Assert.IsType<NoCompetitionSource>(kit.Get<IProcurementCompetitionSource>());
+        Assert.IsType<Workbench.Application.Purchasing.RfqCompetitionSource>(kit.Get<IProcurementCompetitionSource>()); // The RFQ module replaces the no-op default.
         var po = await OrderAsync(kit, "PO-900010", 60_000m, government: true);
         var service = new CpsrService(kit.Factory, kit.Get<AuditRecorder>(), new FakeRfqSource(po.Id), Options.Create(new CpsrOptions()), TimeProvider.System);
         var file = await service.GetFileAsync(ProcurementDocumentKind.PurchaseOrder, po.Id);
