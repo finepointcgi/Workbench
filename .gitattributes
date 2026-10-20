@@ -1,0 +1,2 @@
+# NACHA files are CRLF-terminated 94-character records; keep them byte for byte.
+*.ach -text

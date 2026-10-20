@@ -21,8 +21,9 @@ public static class ApprovalDocumentTypes
 
     public const string NcrDisposition = "ncr-disposition";
     public const string EngineeringChange = "engineering-change";
+    public const string VendorBankChange = "vendor-bank-change";
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, BudgetSubmission, TravelAuthorization, NcrDisposition, EngineeringChange];
+    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, BudgetSubmission, TravelAuthorization, NcrDisposition, EngineeringChange, VendorBankChange];
 
     public static string Label(string documentType) => documentType switch
     {
@@ -41,6 +42,7 @@ public static class ApprovalDocumentTypes
         TravelAuthorization => "Travel authorization",
         NcrDisposition => "NCR disposition (material review)",
         EngineeringChange => "Engineering change",
+        VendorBankChange => "Vendor bank details change",
         _ => documentType,
     };
 

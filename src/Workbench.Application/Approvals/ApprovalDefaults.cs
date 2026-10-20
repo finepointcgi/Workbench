@@ -103,6 +103,11 @@ public static class ApprovalDefaults
                 Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
         ]),
 
+        // A vendor's ACH bank details: another Finance user (never the requester); administrators may decide.
+        ApprovalDocumentTypes.VendorBankChange => new([
+            new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
+        ]),
+
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 
