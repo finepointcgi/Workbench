@@ -90,6 +90,7 @@ public static class DependencyInjection
         TotalTime.TotalTimeRegistration.AddWorkbenchTotalTime(services); // Total time accounting: labor cost method (Standard/TTA/Hybrid) and uncompensated overtime reports; above AddWorkbenchIdentity.
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
+        Materials.ShopFloorRegistration.AddWorkbenchShopFloor(services); // Kitting, backflush, landed cost, physical inventory, finite capacity scheduling; posts through MaterialsLedger; above AddWorkbenchIdentity.
 
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.

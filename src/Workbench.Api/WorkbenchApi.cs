@@ -64,6 +64,7 @@ public static class WorkbenchApi
         v1.MapTotalTimeEndpoints();
         v1.MapCurrencyEndpoints();
         v1.MapCompanyEndpoints();
+        v1.MapShopFloorEndpoints();
 
         return app;
     }
