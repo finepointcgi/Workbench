@@ -28,6 +28,7 @@ public static class SourcingRegistration
         services.AddScoped<SupplierSignIn>();
         services.AddScoped<SupplierDocuments>();
         services.AddScoped<IRfqService, RfqService>();
+        services.AddScoped<Contracts.Compliance.IProcurementCompetitionSource, RfqCompetitionSource>(); // CPSR files read RFQ competition (wins over the compliance default).
         services.AddScoped<ISupplierPortalService, SupplierPortalService>();
         services.AddScoped<ISupplierPortalAdminService, SupplierPortalAdminService>();
         services.AddScoped<IEdiTransport, FileDropEdiTransport>();
