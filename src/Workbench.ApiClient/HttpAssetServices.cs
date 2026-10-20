@@ -34,6 +34,9 @@ public sealed class HttpAssetService(HttpClient http) : IAssetService
     public async Task<AssetDto> TransferAsync(Guid assetId, TransferAssetRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"{Base}/{assetId}/transfer", request, cancellationToken)).ReadLedgerAsync<AssetDto>(cancellationToken);
 
+    public async Task<IReadOnlyList<AssetTransferRowDto>> ListTransfersAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(LedgerUrls.With($"{Base}/transfers", ("from", from), ("to", to)), cancellationToken)).ReadLedgerAsync<List<AssetTransferRowDto>>(cancellationToken);
+
     public async Task<AssetDto> DisposeAsync(Guid assetId, DisposeAssetRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"{Base}/{assetId}/dispose", request, cancellationToken)).ReadLedgerAsync<AssetDto>(cancellationToken);
 
@@ -103,6 +106,44 @@ public sealed class HttpAssetReportService(HttpClient http) : IAssetReportServic
         await (await http.GetAsync($"{Base}/government-property/export", cancellationToken)).ReadLedgerAsync<AssetExportFile>(cancellationToken);
 }
 
+public sealed class HttpAssetTaxBookService(HttpClient http) : IAssetTaxBookService
+{
+    private const string Base = "api/v1/assets";
+
+    private static string Report(string path, TaxReportQuery q) =>
+        LedgerUrls.With($"{Base}/tax/{path}", ("taxYear", q.TaxYear), ("book", q.Book), ("companyId", q.CompanyId));
+
+    public async Task<AssetBooksDto> GetBooksAsync(Guid assetId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{assetId}/books", cancellationToken)).ReadLedgerAsync<AssetBooksDto>(cancellationToken);
+
+    public async Task<AssetTaxBookDto> SaveBookAsync(Guid assetId, SaveAssetTaxBookRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/{assetId}/books", request, cancellationToken)).ReadLedgerAsync<AssetTaxBookDto>(cancellationToken);
+
+    public async Task DeleteBookAsync(Guid assetId, AssetBookKind book, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Base}/{assetId}/books/{book}", cancellationToken)).EnsureLedgerOkAsync(cancellationToken);
+
+    public async Task<TaxSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/tax/settings", cancellationToken)).ReadLedgerAsync<TaxSettingsDto>(cancellationToken);
+
+    public async Task<TaxDepreciationReportDto> GetDepreciationReportAsync(TaxReportQuery query, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Report("depreciation", query), cancellationToken)).ReadLedgerAsync<TaxDepreciationReportDto>(cancellationToken);
+
+    public async Task<BookTaxDifferenceDto> GetBookTaxDifferenceAsync(TaxReportQuery query, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Report("book-to-tax", query), cancellationToken)).ReadLedgerAsync<BookTaxDifferenceDto>(cancellationToken);
+
+    public async Task<Form4562SummaryDto> GetForm4562Async(TaxReportQuery query, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Report("form-4562", query), cancellationToken)).ReadLedgerAsync<Form4562SummaryDto>(cancellationToken);
+
+    public async Task<MidQuarterTestDto> GetMidQuarterTestAsync(TaxReportQuery query, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Report("mid-quarter", query), cancellationToken)).ReadLedgerAsync<MidQuarterTestDto>(cancellationToken);
+
+    public async Task<AssetExportFile> ExportDepreciationReportCsvAsync(TaxReportQuery query, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Report("depreciation/export", query), cancellationToken)).ReadLedgerAsync<AssetExportFile>(cancellationToken);
+
+    public async Task<AssetExportFile> ExportBookTaxDifferenceCsvAsync(TaxReportQuery query, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Report("book-to-tax/export", query), cancellationToken)).ReadLedgerAsync<AssetExportFile>(cancellationToken);
+}
+
 public static class AssetClientRegistration
 {
     public static IServiceCollection AddAssetClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -110,6 +151,7 @@ public static class AssetClientRegistration
         services.AddHttpClient<IAssetService, HttpAssetService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IDepreciationService, HttpDepreciationService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IAssetReportService, HttpAssetReportService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IAssetTaxBookService, HttpAssetTaxBookService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

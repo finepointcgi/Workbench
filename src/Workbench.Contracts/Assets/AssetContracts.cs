@@ -82,7 +82,18 @@ public sealed record AssetTransferDto(
     string? FromProject,
     string? ToProject,
     string? Reason,
-    string TransferredBy);
+    string TransferredBy,
+    string? FromContract = null,
+    string? ToContract = null,
+    string? FromCompany = null,
+    string? ToCompany = null,
+    Guid? JournalEntryId = null);
+
+/// <summary>A row of the transfer history across assets.</summary>
+public sealed record AssetTransferRowDto(Guid AssetId, string TagNumber, string Description, AssetTransferDto Transfer);
+
+/// <summary>An asset's gain or loss on disposal in one book: proceeds less that book's adjusted basis (net book value) at the disposal date.</summary>
+public sealed record AssetBookDisposalDto(AssetBookKind Book, decimal Proceeds, decimal AdjustedBasis, decimal GainLoss, decimal DisposalYearDepreciation);
 
 public sealed record AssetDto(
     AssetSummaryDto Asset,
@@ -119,7 +130,13 @@ public sealed record AssetDto(
     DateTime CreatedAtUtc,
     AssetDepreciationConvention Convention = AssetDepreciationConvention.FullMonth,
     DateOnly? OpeningBalanceDate = null,
-    decimal OpeningAccumulatedDepreciation = 0);
+    decimal OpeningAccumulatedDepreciation = 0,
+    AssetDisposalType? DisposalKind = null,
+
+    /// <summary>The gain or loss per book (the GAAP book first) once disposed of.</summary>
+    IReadOnlyList<AssetBookDisposalDto>? BookDisposals = null,
+    Guid CompanyId = default,
+    string? CompanyCode = null);
 
 /// <summary>
 /// An asset. Accounts default from the category; method and life too when omitted. Government-furnished and
@@ -194,9 +211,23 @@ public sealed record TransferAssetRequest(
     string? Reason,
 
     /// <summary>Transfers it out (to the government or another contract): status Transferred, no further depreciation.</summary>
-    bool TransferOut = false);
+    bool TransferOut = false,
 
-public sealed record DisposeAssetRequest(DateOnly DisposedOn, decimal Proceeds, string Reason);
+    /// <summary>
+    /// Moves it to another company (null keeps it). Contractor-owned assets need depreciation posted through the month
+    /// before; cost and accumulated depreciation move in one entry and the ledger adds the intercompany due to/due from.
+    /// </summary>
+    Guid? CompanyId = null,
+
+    /// <summary>Government property: the contract it's now accountable to (null keeps it).</summary>
+    Guid? ContractId = null);
+
+/// <summary>
+/// A disposal. A sale debits cash with the proceeds; a scrap takes the scrap value (often zero) to cash; a trade-in
+/// debits <see cref="ProceedsAccountId"/> (the replacement's asset account, or accounts payable when the allowance reduces
+/// the vendor's bill), defaulting to the asset's own asset account.
+/// </summary>
+public sealed record DisposeAssetRequest(DateOnly DisposedOn, decimal Proceeds, string Reason, AssetDisposalType Kind = AssetDisposalType.Sale, Guid? ProceedsAccountId = null);
 
 public sealed record AssetQuery(AssetState? Status = null, Guid? CategoryId = null, string? Search = null, bool GovernmentPropertyOnly = false);
 
@@ -224,11 +255,19 @@ public interface IAssetService
     /// </summary>
     Task<AssetDto> CapitalizeAsync(CapitalizeBillLineRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Moves it. An organization or company change of a contractor-owned asset posts a reclass of its cost and accumulated
+    /// depreciation (a cross-company move goes through the intercompany accounts); other changes are recorded in the history only.
+    /// </summary>
     Task<AssetDto> TransferAsync(Guid assetId, TransferAssetRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Every transfer, newest first, optionally within a date range.</summary>
+    Task<IReadOnlyList<AssetTransferRowDto>> ListTransfersAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default);
+
     /// <summary>
-    /// Disposes of it: removes cost and accumulated depreciation, debits cash for the proceeds and books the gain or loss.
-    /// Depreciation must be posted through the month before the disposal date.
+    /// Disposes of it: removes cost and accumulated depreciation, debits cash (or the trade-in account) for the proceeds and
+    /// books the gain or loss. Depreciation must be posted through the month before the disposal date. Each tax book gets
+    /// its disposal-year depreciation and its own gain or loss (proceeds less its adjusted basis); only the GAAP book posts.
     /// </summary>
     Task<AssetDto> DisposeAsync(Guid assetId, DisposeAssetRequest request, CancellationToken cancellationToken = default);
 

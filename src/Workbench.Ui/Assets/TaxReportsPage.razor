@@ -1,0 +1,228 @@
+@page "/assets/tax"
+@inject IAssetTaxBookService TaxBooks
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Tax depreciation · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Tax depreciation" Subtitle="Reports from the assets' tax books: the depreciation schedule, book-to-tax differences for the tax provision, Form 4562 figures and the mid-quarter test. Tax books never post to the ledger; add them on each asset's page." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudSelect T="int" Value="_year" ValueChanged="v => SetAsync(() => _year = v)" Label="Tax year" Dense="true" Style="max-width:260px" data-testid="tax-year">
+            @foreach (var y in Enumerable.Range(DateTime.Today.Year - 5, 8).Reverse())
+            {
+                <MudSelectItem Value="y">@AssetFormat.TaxYear(y, _startMonth)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="AssetBookKind" Value="_book" ValueChanged="v => SetAsync(() => _book = v)" Label="Book" Dense="true" Style="max-width:200px">
+            @foreach (var b in new[] { AssetBookKind.Federal, AssetBookKind.State, AssetBookKind.Amt })
+            {
+                <MudSelectItem Value="b">@AssetFormat.Label(b)</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_schedule is { } range)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@AssetFormat.Date(range.Start) to @AssetFormat.Date(range.End)</MudText>
+        }
+    </MudStack>
+
+    <MudTabs Outlined="true" Rounded="true" TabPanelsClass="pa-4">
+        <MudTabPanel Text="Depreciation schedule">
+            <MudStack Row="true" Class="mb-2">
+                <MudText Class="mud-text-secondary">Every asset with this tax book that was in service during the year.</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => DownloadAsync(() => TaxBooks.ExportDepreciationReportCsvAsync(Query)))">Export CSV</MudButton>
+            </MudStack>
+            @if (_schedule is { } s)
+            {
+                @if (s.Rows.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">No assets have a @AssetFormat.Label(_book).ToLowerInvariant() book for this year.</MudText>
+                }
+                else
+                {
+                    <div style="overflow-x:auto">
+                        <MudSimpleTable Dense="true" Elevation="0" data-testid="tax-schedule">
+                            <thead><tr><th>Asset</th><th>Placed in service</th><th>Method</th><th style="text-align:right">Basis</th><th style="text-align:right">Prior years</th><th style="text-align:right">Section 179</th><th style="text-align:right">Bonus</th><th style="text-align:right">MACRS</th><th style="text-align:right">Accumulated</th><th style="text-align:right">Ending basis</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in s.Rows.Append(s.Totals))
+                                {
+                                    var total = r == s.Totals;
+                                    <tr style="@(total ? "font-weight:bold" : "")">
+                                        <td>@if (total) { @r.Description } else { <MudLink Href="@($"assets/{r.AssetId}")">@r.TagNumber</MudLink> @($" {r.Description}") @(r.Disposed ? " (disposed)" : "") }</td>
+                                        <td>@(total ? "" : AssetFormat.Date(r.PlacedInService))</td>
+                                        <td>@r.Method</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.Basis)</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.PriorDepreciation)</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.Section179)</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.Bonus)</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.CurrentDepreciation)</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.AccumulatedDepreciation)</td>
+                                        <td style="text-align:right">@AssetFormat.Amount(r.EndingBasis)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </div>
+                }
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Book to tax">
+            <MudStack Row="true" Class="mb-2">
+                <MudText Class="mud-text-secondary">This year's depreciation difference (a Schedule M adjustment) and the cumulative temporary difference, with deferred tax at @(_diff is { } d0 ? d0.TaxRate.ToString("P1") : "the tax rate"). Positive is a deferred tax liability.</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => DownloadAsync(() => TaxBooks.ExportBookTaxDifferenceCsvAsync(Query)))">Export CSV</MudButton>
+            </MudStack>
+            @if (_diff is { } diff)
+            {
+                <div style="overflow-x:auto">
+                    <MudSimpleTable Dense="true" Elevation="0" data-testid="book-to-tax">
+                        <thead><tr><th>Asset</th><th style="text-align:right">Book depreciation</th><th style="text-align:right">Tax depreciation</th><th style="text-align:right">Difference</th><th style="text-align:right">Book net value</th><th style="text-align:right">Tax basis</th><th style="text-align:right">Temporary difference</th><th style="text-align:right">Deferred tax</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in diff.Rows.Append(diff.Totals))
+                            {
+                                var total = r == diff.Totals;
+                                <tr style="@(total ? "font-weight:bold" : "")">
+                                    <td>@if (total) { @r.Description } else { <MudLink Href="@($"assets/{r.AssetId}")">@r.TagNumber</MudLink> @($" {r.Description}") }</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.BookDepreciation)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.TaxDepreciation)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.Difference)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.BookNetValue)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.TaxBasis)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.TemporaryDifference)</td>
+                                    <td style="text-align:right">@AssetFormat.Amount(r.DeferredTax)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </div>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Form 4562">
+            @if (_form is { } f)
+            {
+                <MudText Class="mud-text-secondary mb-2">Figures for Form 4562 from the federal book. Listed property (Part V) and amortization (Part VI) aren't covered, and line 11 (the business income limit) is up to your tax preparer.</MudText>
+                @if (f.MidQuarterRequired)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">The mid-quarter convention applies this year; see the mid-quarter test.</MudAlert>
+                }
+                <MudSimpleTable Dense="true" Elevation="0" Class="mb-3" data-testid="form-4562">
+                    <tbody>
+                        <tr><th colspan="2">Part I: Section 179</th></tr>
+                        <tr><td>1 Maximum amount</td><td style="text-align:right">@AssetFormat.Amount(f.Line1MaximumAmount)</td></tr>
+                        <tr><td>2 Total cost of Section 179 property placed in service</td><td style="text-align:right">@AssetFormat.Amount(f.Line2TotalCost)</td></tr>
+                        <tr><td>3 Threshold cost before reduction</td><td style="text-align:right">@AssetFormat.Amount(f.Line3Threshold)</td></tr>
+                        <tr><td>4 Reduction in limitation</td><td style="text-align:right">@AssetFormat.Amount(f.Line4Reduction)</td></tr>
+                        <tr><td>5 Dollar limitation for the year</td><td style="text-align:right">@AssetFormat.Amount(f.Line5DollarLimitation)</td></tr>
+                        <tr><td>8 Total elected cost</td><td style="text-align:right">@AssetFormat.Amount(f.Line8ElectedCost)</td></tr>
+                        <tr><td>12 Section 179 expense deduction</td><td style="text-align:right">@AssetFormat.Amount(f.Line12Section179Deduction)</td></tr>
+                        <tr><th colspan="2">Part II: Special depreciation allowance</th></tr>
+                        <tr><td>14 Bonus depreciation for property placed in service this year</td><td style="text-align:right">@AssetFormat.Amount(f.Line14SpecialAllowance)</td></tr>
+                        <tr><th colspan="2">Part III: MACRS</th></tr>
+                        <tr><td>17 MACRS for assets placed in service in earlier years</td><td style="text-align:right">@AssetFormat.Amount(f.Line17PriorYearMacrs)</td></tr>
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mb-1">Lines 19 and 20: assets placed in service this year</MudText>
+                <MudSimpleTable Dense="true" Elevation="0" Class="mb-3">
+                    <thead><tr><th>Line</th><th>Property</th><th style="text-align:right">Basis for depreciation</th><th>Convention</th><th>Method</th><th style="text-align:right">Deduction</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in f.Line19Gds.Concat(f.Line20Ads))
+                        {
+                            <tr><td>@r.Line</td><td>@r.Label</td><td style="text-align:right">@AssetFormat.Amount(r.Basis)</td><td>@r.Convention</td><td>@r.Method</td><td style="text-align:right">@AssetFormat.Amount(r.Deduction)</td></tr>
+                        }
+                        @if (f.Line19Gds.Count + f.Line20Ads.Count == 0)
+                        {
+                            <tr><td colspan="6" class="mud-text-secondary">None.</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.h6">Line 22 total: @AssetFormat.Amount(f.Line22Total)</MudText>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="Mid-quarter test">
+            @if (_test is { } t)
+            {
+                <MudText Class="mud-text-secondary mb-2">When more than 40% of the year's personal property basis (after Section 179) is placed in service in the last three months, every such asset uses the mid-quarter convention. Real property and assets disposed of in the same year are left out.</MudText>
+                <MudAlert Severity="@(t.MidQuarterRequired ? Severity.Warning : Severity.Success)" Dense="true" Class="mb-3" data-testid="mid-quarter-result">
+                    @AssetFormat.Percent(t.LastQuarterPercent) of @AssetFormat.Amount(t.Total) was placed in service in the last quarter: @(t.MidQuarterRequired ? "the mid-quarter convention applies." : "the half-year convention applies.")
+                </MudAlert>
+                <MudSimpleTable Dense="true" Elevation="0" Class="mb-3">
+                    <thead><tr>@for (var q = 1; q <= 4; q++) { <th style="text-align:right">Quarter @q</th> }</tr></thead>
+                    <tbody><tr>@foreach (var v in t.BasisByQuarter) { <td style="text-align:right">@AssetFormat.Amount(v)</td> }</tr></tbody>
+                </MudSimpleTable>
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <thead><tr><th>Asset</th><th>Placed in service</th><th>Quarter</th><th style="text-align:right">Basis</th><th>Convention used</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in t.Assets)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"assets/{a.AssetId}")">@a.TagNumber</MudLink> @a.Description</td>
+                                <td>@AssetFormat.Date(a.PlacedInService)</td>
+                                <td>@a.Quarter</td>
+                                <td style="text-align:right">@AssetFormat.Amount(a.Basis)</td>
+                                <td>@AssetFormat.Label(a.Convention)</td>
+                                <td>@if (!a.ConventionMatches) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Change to @(t.MidQuarterRequired ? "mid-quarter" : "half-year")</MudChip> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private int _year = DateTime.Today.Month >= 10 ? DateTime.Today.Year : DateTime.Today.Year - 1;
+    private int _startMonth = 10;
+    private AssetBookKind _book = AssetBookKind.Federal;
+    private TaxDepreciationReportDto? _schedule;
+    private BookTaxDifferenceDto? _diff;
+    private Form4562SummaryDto? _form;
+    private MidQuarterTestDto? _test;
+    private string? _error;
+    private bool _forbidden;
+
+    private TaxReportQuery Query => new(_year, _book);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task SetAsync(Action change)
+    {
+        change();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _schedule = await TaxBooks.GetDepreciationReportAsync(Query);
+            _startMonth = _schedule.Start.Month;
+            _diff = await TaxBooks.GetBookTaxDifferenceAsync(Query);
+            _form = await TaxBooks.GetForm4562Async(Query with { Book = AssetBookKind.Federal });
+            _test = await TaxBooks.GetMidQuarterTestAsync(Query);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task DownloadAsync(Func<Task<AssetExportFile>> export)
+    {
+        try
+        {
+            await AssetFormat.DownloadAsync(JS, await export());
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

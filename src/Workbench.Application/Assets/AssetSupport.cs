@@ -20,6 +20,15 @@ public sealed class AssetOptions
 
     /// <summary>Debited with disposal proceeds.</summary>
     public string CashAccountNumber { get; set; } = "1010";
+
+    /// <summary>Form 4562 line 1: the Section 179 dollar limit for the tax year.</summary>
+    public decimal Section179Limit { get; set; } = 2_500_000m;
+
+    /// <summary>Form 4562 line 3: Section 179 property cost above which the limit phases out dollar for dollar.</summary>
+    public decimal Section179PhaseOutThreshold { get; set; } = 4_000_000m;
+
+    /// <summary>The tax rate for deferred tax on book-to-tax differences (0.21 = 21%).</summary>
+    public decimal TaxRate { get; set; } = 0.21m;
 }
 
 internal static class AssetSupport
@@ -148,6 +157,15 @@ internal static class AssetSupport
 
     public static DepreciationConvention ToDomain(this AssetDepreciationConvention c) => (DepreciationConvention)(int)c;
     public static AssetDepreciationConvention ToContract(this DepreciationConvention c) => (AssetDepreciationConvention)(int)c;
+
+    /// <summary>Tax years follow the company's fiscal year (the default company's when its row is missing, as in an unmigrated test database).</summary>
+    public static async Task<int> TaxYearStartMonthAsync(IWorkbenchDbContext db, Guid companyId, CancellationToken ct) =>
+        await db.Set<Workbench.Domain.Companies.Company>().AsNoTracking().Where(c => c.Id == companyId).Select(c => (int?)c.FiscalYearStartMonth).FirstOrDefaultAsync(ct) ?? 10;
+
+    /// <summary>A tax book's terms: its own basis and date, or the asset's cost and in-service date.</summary>
+    public static TaxBookTerms Terms(FixedAsset asset, AssetTaxBook book, int startMonth) => new(
+        book.Basis ?? asset.Cost, book.PlacedInServiceDate ?? asset.InServiceDate, book.Method, book.RecoveryYears, book.Convention,
+        book.Section179Amount, book.BonusPercent, startMonth);
 
     public static string Truncate(string text, int max) => text.Length > max ? text[..max] : text;
 }

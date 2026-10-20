@@ -67,11 +67,43 @@ else
                 }
                 @if (asset.DisposedOn is { } d)
                 {
-                    <tr><th>@(a.Status == AssetState.Transferred ? "Transferred out" : "Disposed")</th><td>@AssetFormat.Date(d)@(asset.DisposalProceeds is { } p ? $", proceeds {AssetFormat.Amount(p)}" : "")</td><th>Reason</th><td>@asset.DisposalReason @if (asset.DisposalEntryId is { } de) { <MudLink Href="@($"accounting/journal/{de}")">(journal entry)</MudLink> }</td></tr>
+                    <tr><th>@(a.Status == AssetState.Transferred ? "Transferred out" : asset.DisposalKind is { } kind ? AssetFormat.Label(kind) : "Disposed")</th><td>@AssetFormat.Date(d)@(asset.DisposalProceeds is { } p ? $", {(asset.DisposalKind == AssetDisposalType.TradeIn ? "trade-in allowance" : "proceeds")} {AssetFormat.Amount(p)}" : "")</td><th>Reason</th><td>@asset.DisposalReason @if (asset.DisposalEntryId is { } de) { <MudLink Href="@($"accounting/journal/{de}")">(journal entry)</MudLink> }</td></tr>
+                }
+                @if (asset.CompanyCode is { } company)
+                {
+                    <tr><th>Company</th><td colspan="3">@company</td></tr>
                 }
             </tbody>
         </MudSimpleTable>
     </MudPaper>
+
+    @if (asset.BookDisposals is { Count: > 0 } disposals)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Gain or loss by book</MudText>
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="asset-book-disposals">
+                <thead><tr><th>Book</th><th style="text-align:right">Proceeds</th><th style="text-align:right">Book value at disposal</th><th style="text-align:right">Gain (loss)</th><th style="text-align:right">Disposal-year depreciation</th></tr></thead>
+                <tbody>
+                    @foreach (var b in disposals)
+                    {
+                        <tr>
+                            <td>@AssetFormat.Label(b.Book)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(b.Proceeds)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(b.AdjustedBasis)</td>
+                            <td style="text-align:right">@AssetFormat.Amount(b.GainLoss)</td>
+                            <td style="text-align:right">@(b.Book == AssetBookKind.Book ? "Posted monthly" : AssetFormat.Amount(b.DisposalYearDepreciation))</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Only the book (GAAP) gain or loss is posted; tax gains and losses are for the tax return.</MudText>
+        </MudPaper>
+    }
+
+    @if (!gov)
+    {
+        <AssetTaxBooksPanel Asset="asset" />
+    }
 
     <MudGrid Spacing="3">
         <MudItem xs="12" md="7">
@@ -135,8 +167,12 @@ else
                 {
                     <MudText Typo="Typo.body2" Class="mb-1" data-testid="asset-transfer-row">
                         <b>@AssetFormat.Date(t.TransferredOn)</b> by @t.TransferredBy:
-                        @string.Join("; ", new[] { Change("location", t.FromLocation, t.ToLocation), Change("custodian", t.FromCustodian, t.ToCustodian), Change("org", t.FromOrgUnit, t.ToOrgUnit), Change("project", t.FromProject, t.ToProject) }.Where(x => x is not null))
+                        @string.Join("; ", new[] { Change("location", t.FromLocation, t.ToLocation), Change("custodian", t.FromCustodian, t.ToCustodian), Change("org", t.FromOrgUnit, t.ToOrgUnit), Change("project", t.FromProject, t.ToProject), Change("contract", t.FromContract, t.ToContract), Change("company", t.FromCompany, t.ToCompany) }.Where(x => x is not null))
                         @(t.Reason is null ? "" : $" ({t.Reason})")
+                        @if (t.JournalEntryId is { } je)
+                        {
+                            <MudLink Href="@($"accounting/journal/{je}")" Class="ml-1">(journal entry)</MudLink>
+                        }
                     </MudText>
                 }
             </MudPaper>

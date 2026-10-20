@@ -7,6 +7,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Assets;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Assets;
+using Workbench.Domain.Companies;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -146,6 +147,7 @@ public sealed class AssetService(
 
     public async Task<AssetDto> TransferAsync(Guid assetId, TransferAssetRequest request, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var asset = await AssetSupport.FindAsync(db, assetId, cancellationToken);
         if (asset.Status != AssetStatus.InService)
@@ -158,10 +160,27 @@ public sealed class AssetService(
             throw new ArgumentException("Only government property is transferred out; dispose of contractor-owned assets instead.");
         }
 
+        if (request.TransferredOn < asset.AcquisitionDate)
+        {
+            throw new ArgumentException("The transfer date is before the acquisition date.");
+        }
+
         var location = PurchasingSupport.Optional(request.Location, "Location", 200);
         await EnsureExistsAsync<Employee>(db, request.CustodianEmployeeId, "Custodian", cancellationToken);
         await EnsureExistsAsync<OrgUnit>(db, request.OrgUnitId, "Organization", cancellationToken);
         await EnsureExistsAsync<Project>(db, request.ProjectId, "Project", cancellationToken);
+        await EnsureExistsAsync<Contract>(db, request.ContractId, "Contract", cancellationToken);
+        var toCompany = request.CompanyId ?? asset.CompanyId;
+        if (toCompany != asset.CompanyId)
+        {
+            var company = await db.Set<Company>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == toCompany, cancellationToken)
+                ?? throw WorkbenchNotFoundException.For("Company", toCompany);
+            if (!company.IsActive)
+            {
+                throw new ArgumentException($"Company {company.Code} is inactive.");
+            }
+        }
+
         var transfer = new AssetTransfer
         {
             AssetId = asset.Id,
@@ -174,14 +193,25 @@ public sealed class AssetService(
             ToOrgUnitId = request.OrgUnitId,
             FromProjectId = asset.ProjectId,
             ToProjectId = request.ProjectId,
+            FromContractId = asset.ContractId,
+            ToContractId = request.ContractId ?? asset.ContractId,
+            FromCompanyId = asset.CompanyId,
+            ToCompanyId = toCompany,
             Reason = PurchasingSupport.Optional(request.Reason, "Reason", 1000),
             TransferredBy = audit.Actor,
             CreatedAtUtc = UtcNow,
         };
         if (transfer.FromLocation == transfer.ToLocation && transfer.FromCustodianEmployeeId == transfer.ToCustodianEmployeeId
-            && transfer.FromOrgUnitId == transfer.ToOrgUnitId && transfer.FromProjectId == transfer.ToProjectId && !request.TransferOut)
+            && transfer.FromOrgUnitId == transfer.ToOrgUnitId && transfer.FromProjectId == transfer.ToProjectId
+            && transfer.FromContractId == transfer.ToContractId && transfer.FromCompanyId == transfer.ToCompanyId && !request.TransferOut)
         {
-            throw new ArgumentException("The transfer doesn't change the location, custodian, organization or project.");
+            throw new ArgumentException("The transfer doesn't change the location, custodian, organization, project, contract or company.");
+        }
+
+        var companyChanged = transfer.FromCompanyId != transfer.ToCompanyId;
+        if (!asset.IsGovernmentProperty && (companyChanged || transfer.FromOrgUnitId != transfer.ToOrgUnitId))
+        {
+            transfer.JournalEntryId = await PostTransferAsync(db, asset, transfer, companyChanged, cancellationToken);
         }
 
         if (asset.ProjectId != request.ProjectId)
@@ -193,6 +223,8 @@ public sealed class AssetService(
         asset.CustodianEmployeeId = request.CustodianEmployeeId;
         asset.OrgUnitId = request.OrgUnitId;
         asset.ProjectId = request.ProjectId;
+        asset.ContractId = transfer.ToContractId;
+        asset.CompanyId = toCompany;
         if (request.TransferOut)
         {
             asset.Status = AssetStatus.Transferred;
@@ -202,16 +234,93 @@ public sealed class AssetService(
 
         db.Set<AssetTransfer>().Add(transfer);
         audit.Record(db, AssetSupport.AssetEntity, asset.Id, request.TransferOut ? "TransferredOut" : "Transferred",
-            new { transfer.FromLocation, transfer.FromCustodianEmployeeId, transfer.FromOrgUnitId, transfer.FromProjectId },
-            new { transfer.ToLocation, transfer.ToCustodianEmployeeId, transfer.ToOrgUnitId, transfer.ToProjectId }, transfer.Reason);
+            new { transfer.FromLocation, transfer.FromCustodianEmployeeId, transfer.FromOrgUnitId, transfer.FromProjectId, transfer.FromContractId, transfer.FromCompanyId },
+            new { transfer.ToLocation, transfer.ToCustodianEmployeeId, transfer.ToOrgUnitId, transfer.ToProjectId, transfer.ToContractId, transfer.ToCompanyId, transfer.JournalEntryId }, transfer.Reason);
         await db.SaveChangesAsync(cancellationToken);
         return await AssetQueries.DetailAsync(db, asset.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Moves cost and accumulated depreciation from the old organization (and company) to the new one in one entry dated the
+    /// transfer date. Across companies the ledger adds the intercompany due to/due from for the net book value, so each
+    /// company balances. Depreciation must be posted through the month before a company move, so each company keeps its own months.
+    /// </summary>
+    private async Task<Guid?> PostTransferAsync(IWorkbenchDbContext db, FixedAsset asset, AssetTransfer t, bool companyChanged, CancellationToken ct)
+    {
+        if (asset.Cost == 0)
+        {
+            return null;
+        }
+
+        if (companyChanged)
+        {
+            var expected = AssetSupport.ExpectedThrough(asset, t.TransferredOn.AddMonths(-1));
+            if (asset.AccumulatedDepreciation < expected)
+            {
+                throw new ArgumentException($"Run depreciation through the month before {t.TransferredOn:yyyy-MM-dd} first: {asset.AccumulatedDepreciation:N2} posted of {expected:N2} scheduled.");
+            }
+        }
+
+        var period = await GeneralLedger.OpenPeriodForAsync(db, t.TransferredOn, ct);
+        var entry = NewEntry(t.TransferredOn, JournalSource.Asset, asset.Id, $"Transfer asset {asset.TagNumber}: {asset.Description}");
+        entry.CompanyId = asset.CompanyId;
+        entry.FiscalPeriodId = period.Id;
+        var memo = $"{asset.TagNumber} transfer";
+        void Line(Guid account, decimal debit, decimal credit, Guid? org, Guid company)
+        {
+            AddLine(entry, account, debit, credit, memo, org);
+            entry.Lines[^1].CompanyId = company;
+        }
+
+        Line(asset.AssetAccountId, 0, asset.Cost, t.FromOrgUnitId, t.FromCompanyId!.Value);
+        if (asset.AccumulatedDepreciation > 0)
+        {
+            Line(asset.AccumulatedDepreciationAccountId, asset.AccumulatedDepreciation, 0, t.FromOrgUnitId, t.FromCompanyId!.Value);
+        }
+
+        Line(asset.AssetAccountId, asset.Cost, 0, t.ToOrgUnitId, t.ToCompanyId!.Value);
+        if (asset.AccumulatedDepreciation > 0)
+        {
+            Line(asset.AccumulatedDepreciationAccountId, 0, asset.AccumulatedDepreciation, t.ToOrgUnitId, t.ToCompanyId!.Value);
+        }
+
+        db.Set<JournalEntry>().Add(entry);
+        await ledger.PostAsync(db, entry, ct);
+        return entry.Id;
+    }
+
+    public async Task<IReadOnlyList<AssetTransferRowDto>> ListTransfersAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var q = db.Set<AssetTransfer>().AsNoTracking();
+        if (from is { } f)
+        {
+            q = q.Where(t => t.TransferredOn >= f);
+        }
+
+        if (to is { } e)
+        {
+            q = q.Where(t => t.TransferredOn <= e);
+        }
+
+        var transfers = (await q.ToListAsync(cancellationToken)).OrderByDescending(t => t.TransferredOn).ThenByDescending(t => t.CreatedAtUtc).ToList();
+        var assetIds = transfers.Select(t => t.AssetId).Distinct().ToList();
+        var assets = await db.Set<FixedAsset>().AsNoTracking().Where(a => assetIds.Contains(a.Id)).ToListAsync(cancellationToken);
+        var names = await AssetQueries.Names.LoadAsync(db, assets, cancellationToken, transfers);
+        var byId = assets.ToDictionary(a => a.Id);
+        return transfers.Select(t => new AssetTransferRowDto(t.AssetId, byId[t.AssetId].TagNumber, byId[t.AssetId].Description, AssetQueries.Transfer(t, names))).ToList();
     }
 
     public async Task<AssetDto> DisposeAsync(Guid assetId, DisposeAssetRequest request, CancellationToken cancellationToken = default)
     {
         var reason = PurchasingSupport.Required(request?.Reason, "A reason", 1000);
         var proceeds = PurchasingSupport.Money(request!.Proceeds, "Proceeds", allowZero: true);
+        if (!Enum.IsDefined(request.Kind))
+        {
+            throw new ArgumentException("Unknown disposal kind.");
+        }
+
+        var kind = (AssetDisposalKind)(int)request.Kind;
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         await AssetSupport.EnsureSetupAsync(db, UtcNow, cancellationToken);
         var asset = await AssetSupport.FindAsync(db, assetId, cancellationToken);
@@ -225,6 +334,12 @@ public sealed class AssetService(
             throw new ArgumentException("The disposal date is before the acquisition date.");
         }
 
+        if (kind == AssetDisposalKind.TradeIn && proceeds == 0)
+        {
+            throw new ArgumentException("A trade-in needs the allowance the vendor gave for it.");
+        }
+
+        var bookGain = proceeds - asset.NetBookValue;
         if (!asset.IsGovernmentProperty)
         {
             // Depreciation must be current through the month before disposal, so the gain or loss is right.
@@ -235,9 +350,14 @@ public sealed class AssetService(
             }
 
             var period = await GeneralLedger.OpenPeriodForAsync(db, request.DisposedOn, cancellationToken);
-            var cash = await AssetSupport.AccountByNumberAsync(db, options.Value.CashAccountNumber, "cash", cancellationToken);
             var gainLoss = await AssetSupport.AccountByNumberAsync(db, options.Value.GainLossAccountNumber, "gain/loss on disposal", cancellationToken);
-            var entry = NewEntry(request.DisposedOn, JournalSource.Asset, asset.Id, $"Dispose of asset {asset.TagNumber}: {asset.Description}");
+            var proceedsAccount = kind == AssetDisposalKind.TradeIn
+                ? request.ProceedsAccountId is { } chosen
+                    ? (await db.Set<Account>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == chosen && a.IsActive, cancellationToken) ?? throw WorkbenchNotFoundException.For("Account", chosen)).Id
+                    : asset.AssetAccountId
+                : (await AssetSupport.AccountByNumberAsync(db, options.Value.CashAccountNumber, "cash", cancellationToken)).Id;
+            var verb = kind switch { AssetDisposalKind.Scrap => "Scrap", AssetDisposalKind.TradeIn => "Trade in", _ => "Dispose of" };
+            var entry = NewEntry(request.DisposedOn, JournalSource.Asset, asset.Id, $"{verb} asset {asset.TagNumber}: {asset.Description}");
             entry.CompanyId = asset.CompanyId;
             entry.FiscalPeriodId = period.Id;
             var memo = $"{asset.TagNumber} disposal";
@@ -248,19 +368,18 @@ public sealed class AssetService(
 
             if (proceeds > 0)
             {
-                AddLine(entry, cash.Id, proceeds, 0, $"{memo}: proceeds", asset.OrgUnitId);
+                AddLine(entry, proceedsAccount, proceeds, 0, kind == AssetDisposalKind.TradeIn ? $"{memo}: trade-in allowance" : $"{memo}: proceeds", asset.OrgUnitId);
             }
 
-            var gain = proceeds - asset.NetBookValue;
-            if (gain < 0)
+            if (bookGain < 0)
             {
-                AddLine(entry, gainLoss.Id, -gain, 0, $"{memo}: loss", asset.OrgUnitId);
+                AddLine(entry, gainLoss.Id, -bookGain, 0, $"{memo}: loss", asset.OrgUnitId);
             }
 
             AddLine(entry, asset.AssetAccountId, 0, asset.Cost, $"{memo}: cost", asset.OrgUnitId);
-            if (gain > 0)
+            if (bookGain > 0)
             {
-                AddLine(entry, gainLoss.Id, 0, gain, $"{memo}: gain", asset.OrgUnitId);
+                AddLine(entry, gainLoss.Id, 0, bookGain, $"{memo}: gain", asset.OrgUnitId);
             }
 
             db.Set<JournalEntry>().Add(entry);
@@ -268,12 +387,28 @@ public sealed class AssetService(
             asset.DisposalEntryId = entry.Id;
         }
 
+        // Each tax book: its disposal-year depreciation, adjusted basis and gain or loss (reporting only, nothing posts).
+        var startMonth = await AssetSupport.TaxYearStartMonthAsync(db, asset.CompanyId, cancellationToken);
+        var taxGains = new Dictionary<string, decimal>();
+        foreach (var book in await db.Set<AssetTaxBook>().Where(b => b.AssetId == asset.Id).ToListAsync(cancellationToken))
+        {
+            var schedule = TaxDepreciation.Schedule(AssetSupport.Terms(asset, book, startMonth), request.DisposedOn);
+            var year = TaxDepreciation.TaxYearOf(request.DisposedOn, startMonth);
+            book.DisposalDepreciation = schedule.For(year)?.Total ?? 0;
+            book.DisposalAdjustedBasis = schedule.BasisAfter(year);
+            book.DisposalGainLoss = proceeds - book.DisposalAdjustedBasis;
+            book.UpdatedBy = audit.Actor;
+            book.UpdatedAtUtc = UtcNow;
+            taxGains[book.Book.ToString()] = book.DisposalGainLoss.Value;
+        }
+
         asset.Status = AssetStatus.Disposed;
         asset.DisposedOn = request.DisposedOn;
         asset.DisposalProceeds = proceeds;
         asset.DisposalReason = reason;
+        asset.DisposalKind = kind;
         audit.Record(db, AssetSupport.AssetEntity, asset.Id, "Disposed", new { Status = nameof(AssetStatus.InService), asset.Cost, asset.AccumulatedDepreciation },
-            new { Status = nameof(AssetStatus.Disposed), Proceeds = proceeds, GainLoss = proceeds - asset.NetBookValue, asset.DisposalEntryId }, reason);
+            new { Status = nameof(AssetStatus.Disposed), Kind = kind.ToString(), Proceeds = proceeds, GainLoss = bookGain, TaxGainLoss = taxGains, asset.DisposalEntryId }, reason);
         await db.SaveChangesAsync(cancellationToken);
         return await AssetQueries.DetailAsync(db, asset.Id, cancellationToken);
     }

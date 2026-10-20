@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Assets;
+using Workbench.Domain.Companies;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -41,6 +42,7 @@ internal sealed class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAs
         b.Property(a => a.SerialNumber).HasMaxLength(100);
         b.Property(a => a.GovernmentPropertyNumber).HasMaxLength(64);
         b.Property(a => a.DisposalReason).HasMaxLength(1000);
+        b.Property(a => a.DisposalKind).HasConversion<string>().HasMaxLength(16);
         b.Property(a => a.CreatedBy).HasMaxLength(320);
         b.Ignore(a => a.IsGovernmentProperty);
         b.Ignore(a => a.NetBookValue);
@@ -97,6 +99,33 @@ internal sealed class AssetTransferConfiguration : IEntityTypeConfiguration<Asse
         b.Property(t => t.Reason).HasMaxLength(1000);
         b.Property(t => t.TransferredBy).HasMaxLength(320);
         b.HasIndex(t => t.AssetId);
+        b.HasOne<FixedAsset>().WithMany().HasForeignKey(t => t.AssetId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Contract>().WithMany().HasForeignKey(t => t.FromContractId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Contract>().WithMany().HasForeignKey(t => t.ToContractId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Company>().WithMany().HasForeignKey(t => t.FromCompanyId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Company>().WithMany().HasForeignKey(t => t.ToCompanyId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<JournalEntry>().WithMany().HasForeignKey(t => t.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class AssetTaxBookConfiguration : IEntityTypeConfiguration<AssetTaxBook>
+{
+    public void Configure(EntityTypeBuilder<AssetTaxBook> b)
+    {
+        b.ToTable("AssetTaxBooks");
+        b.Property(t => t.Book).HasConversion<string>().HasMaxLength(16);
+        b.Property(t => t.Method).HasConversion<string>().HasMaxLength(24);
+        b.Property(t => t.Convention).HasConversion<string>().HasMaxLength(16);
+        b.Property(t => t.RecoveryYears).HasPrecision(5, 1);
+        b.Property(t => t.Basis).HasPrecision(18, 2);
+        b.Property(t => t.Section179Amount).Money();
+        b.Property(t => t.BonusPercent).HasPrecision(5, 2);
+        b.Property(t => t.Notes).HasMaxLength(1000);
+        b.Property(t => t.DisposalDepreciation).HasPrecision(18, 2);
+        b.Property(t => t.DisposalAdjustedBasis).HasPrecision(18, 2);
+        b.Property(t => t.DisposalGainLoss).HasPrecision(18, 2);
+        b.Property(t => t.UpdatedBy).HasMaxLength(320);
+        b.HasIndex(t => new { t.AssetId, t.Book }).IsUnique();
         b.HasOne<FixedAsset>().WithMany().HasForeignKey(t => t.AssetId).OnDelete(DeleteBehavior.Restrict);
     }
 }

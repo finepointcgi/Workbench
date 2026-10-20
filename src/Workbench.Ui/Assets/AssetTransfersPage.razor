@@ -1,0 +1,88 @@
+@page "/assets/transfers"
+@inject IAssetService AssetService
+
+<PageTitle>Asset transfers · Fixed assets · Workbench</PageTitle>
+
+<AssetHeader Title="Asset transfers" Subtitle="Every move of an asset between locations, custodians, organizations, projects, contracts and companies. Start a transfer from the asset's page." />
+
+@if (_error is not null)
+{
+    <PurchasingError Message="@_error" Forbidden="_forbidden" />
+}
+else
+{
+    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3">
+        <MudDatePicker Date="_from" DateChanged="v => SetAsync(() => _from = v)" Label="From" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" />
+        <MudDatePicker Date="_to" DateChanged="v => SetAsync(() => _to = v)" Label="To" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" />
+    </MudStack>
+    @if (_rows is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+    }
+    else if (_rows.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No transfers in this range.</MudText>
+    }
+    else
+    {
+        <div style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Elevation="0" data-testid="asset-transfers">
+                <thead><tr><th>Date</th><th>Asset</th><th>What changed</th><th>Reason</th><th>By</th><th>Entry</th></tr></thead>
+                <tbody>
+                    @foreach (var r in _rows)
+                    {
+                        var t = r.Transfer;
+                        <tr>
+                            <td style="white-space:nowrap">@AssetFormat.Date(t.TransferredOn)</td>
+                            <td><MudLink Href="@($"assets/{r.AssetId}")">@r.TagNumber</MudLink> @r.Description</td>
+                            <td>@string.Join("; ", Changes(t))</td>
+                            <td>@t.Reason</td>
+                            <td>@t.TransferredBy</td>
+                            <td>@if (t.JournalEntryId is { } je) { <MudLink Href="@($"accounting/journal/{je}")">View</MudLink> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+    }
+}
+
+@code {
+    private DateTime? _from;
+    private DateTime? _to;
+    private IReadOnlyList<AssetTransferRowDto>? _rows;
+    private string? _error;
+    private bool _forbidden;
+
+    private static IEnumerable<string> Changes(AssetTransferDto t)
+    {
+        foreach (var (what, from, to) in new[] { ("Location", t.FromLocation, t.ToLocation), ("Custodian", t.FromCustodian, t.ToCustodian), ("Organization", t.FromOrgUnit, t.ToOrgUnit),
+            ("Project", t.FromProject, t.ToProject), ("Contract", t.FromContract, t.ToContract), ("Company", t.FromCompany, t.ToCompany) })
+        {
+            if (from != to)
+            {
+                yield return $"{what} {from ?? "none"} → {to ?? "none"}";
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task SetAsync(Action change)
+    {
+        change();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _rows = await AssetService.ListTransfersAsync(_from is { } f ? DateOnly.FromDateTime(f) : null, _to is { } t ? DateOnly.FromDateTime(t) : null);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PurchasingFormat.Error(ex), PurchasingFormat.IsForbidden(ex));
+        }
+    }
+}

@@ -1,6 +1,8 @@
-@* Move an asset to another location, custodian, organization or project (kept in its history), or transfer government property out. *@
+@* Move an asset to another location, custodian, organization, project, contract or company (kept in its history), or transfer government property out. *@
 @inject IPeopleService People
 @inject IProjectService Projects
+@inject IContractService Contracts
+@inject Workbench.Contracts.Companies.ICompanyService Companies
 
 <MudDialog>
     <DialogContent>
@@ -22,10 +24,41 @@
                     @foreach (var p in _projects) { <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem> }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="6"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Margin="Margin.Dense" /></MudItem>
-            @if (Asset.Asset.IsGovernmentFurnished || Asset.Asset.IsContractorAcquired)
+            @if (Government)
             {
-                <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_out" Label="Transfer out (returned to the government or another contract)" Dense="true" /></MudItem>
+                <MudItem xs="6">
+                    <MudSelect T="Guid?" @bind-Value="_contractId" Label="Accountable contract" Dense="true">
+                        @foreach (var c in _contracts) { <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+            }
+            @if (_companies.Count > 1)
+            {
+                <MudItem xs="6">
+                    <MudSelect T="Guid" @bind-Value="_companyId" Label="Company" Dense="true" data-testid="transfer-company">
+                        @foreach (var c in _companies) { <MudSelectItem T="Guid" Value="c.Id">@c.Code · @c.LegalName</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12"><MudTextField T="string" @bind-Value="_reason" Label="Reason" Margin="Margin.Dense" /></MudItem>
+            @if (Government)
+            {
+                <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_out" Label="Transfer out (returned to the government or another contractor)" Dense="true" /></MudItem>
+            }
+            @if (!Government && (_orgId != Asset.OrgUnitId || _companyId != Asset.CompanyId))
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        @if (_companyId != Asset.CompanyId)
+                        {
+                            <text>Moving to another company posts the cost and accumulated depreciation to it, with an intercompany due to and due from for the book value. Depreciation must be posted through the month before the transfer.</text>
+                        }
+                        else
+                        {
+                            <text>Changing the organization posts a reclass of the cost and accumulated depreciation to the new organization.</text>
+                        }
+                    </MudAlert>
+                </MudItem>
             }
         </MudGrid>
     </DialogContent>
@@ -43,22 +76,34 @@
     private IReadOnlyList<EmployeeDto> _employees = [];
     private IReadOnlyList<OrgUnitDto> _orgs = [];
     private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private IReadOnlyList<Workbench.Contracts.Companies.CompanyDto> _companies = [];
     private DateTime? _on = DateTime.Today;
     private string? _location;
     private Guid? _custodianId;
     private Guid? _orgId;
     private Guid? _projectId;
+    private Guid? _contractId;
+    private Guid _companyId;
     private string? _reason;
     private bool _out;
 
+    private bool Government => Asset.Asset.IsGovernmentFurnished || Asset.Asset.IsContractorAcquired;
+
     protected override async Task OnInitializedAsync()
     {
-        (_location, _custodianId, _orgId, _projectId) = (Asset.Asset.Location, Asset.CustodianEmployeeId, Asset.OrgUnitId, Asset.ProjectId);
+        (_location, _custodianId, _orgId, _projectId, _contractId, _companyId) = (Asset.Asset.Location, Asset.CustodianEmployeeId, Asset.OrgUnitId, Asset.ProjectId, Asset.ContractId, Asset.CompanyId);
         try
         {
             _employees = await People.ListEmployeesAsync();
             _orgs = await People.ListOrgUnitsAsync();
             _projects = await Projects.ListProjectsAsync();
+            if (Government)
+            {
+                _contracts = await Contracts.ListContractsAsync();
+            }
+
+            _companies = (await Companies.ListAsync(includeInactive: false)).ToList();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
@@ -66,5 +111,6 @@
         }
     }
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(new TransferAssetRequest(DateOnly.FromDateTime(_on!.Value), _location, _custodianId, _orgId, _projectId, _reason, _out)));
+    private void Save() => MudDialog.Close(DialogResult.Ok(new TransferAssetRequest(DateOnly.FromDateTime(_on!.Value), _location, _custodianId, _orgId, _projectId, _reason, _out,
+        _companyId == Asset.CompanyId || _companyId == Guid.Empty ? null : _companyId, Government && _contractId != Asset.ContractId ? _contractId : null)));
 }

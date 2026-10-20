@@ -29,6 +29,29 @@ internal static class AssetEndpoints
         a.MapPut("/{id:guid}", (Guid id, SaveAssetRequest r, IAssetService s, CancellationToken ct) => s.UpdateAsync(id, r, ct));
         a.MapPost("/{id:guid}/transfer", (Guid id, TransferAssetRequest r, IAssetService s, CancellationToken ct) => s.TransferAsync(id, r, ct));
         a.MapPost("/{id:guid}/dispose", (Guid id, DisposeAssetRequest r, IAssetService s, CancellationToken ct) => s.DisposeAsync(id, r, ct));
+        a.MapGet("/transfers", (DateOnly? from, DateOnly? to, IAssetService s, CancellationToken ct) => s.ListTransfersAsync(from, to, ct));
+
+        // Tax books
+        a.MapGet("/{id:guid}/books", (Guid id, IAssetTaxBookService s, CancellationToken ct) => s.GetBooksAsync(id, ct));
+        a.MapPut("/{id:guid}/books", (Guid id, SaveAssetTaxBookRequest r, IAssetTaxBookService s, CancellationToken ct) => s.SaveBookAsync(id, r, ct));
+        a.MapDelete("/{id:guid}/books/{book}", async (Guid id, AssetBookKind book, IAssetTaxBookService s, CancellationToken ct) =>
+        {
+            await s.DeleteBookAsync(id, book, ct);
+            return Results.NoContent();
+        });
+        a.MapGet("/tax/settings", (IAssetTaxBookService s, CancellationToken ct) => s.GetSettingsAsync(ct));
+        a.MapGet("/tax/depreciation", (int taxYear, AssetBookKind? book, Guid? companyId, IAssetTaxBookService s, CancellationToken ct) =>
+            s.GetDepreciationReportAsync(new TaxReportQuery(taxYear, book ?? AssetBookKind.Federal, companyId), ct));
+        a.MapGet("/tax/depreciation/export", (int taxYear, AssetBookKind? book, Guid? companyId, IAssetTaxBookService s, CancellationToken ct) =>
+            s.ExportDepreciationReportCsvAsync(new TaxReportQuery(taxYear, book ?? AssetBookKind.Federal, companyId), ct));
+        a.MapGet("/tax/book-to-tax", (int taxYear, AssetBookKind? book, Guid? companyId, IAssetTaxBookService s, CancellationToken ct) =>
+            s.GetBookTaxDifferenceAsync(new TaxReportQuery(taxYear, book ?? AssetBookKind.Federal, companyId), ct));
+        a.MapGet("/tax/book-to-tax/export", (int taxYear, AssetBookKind? book, Guid? companyId, IAssetTaxBookService s, CancellationToken ct) =>
+            s.ExportBookTaxDifferenceCsvAsync(new TaxReportQuery(taxYear, book ?? AssetBookKind.Federal, companyId), ct));
+        a.MapGet("/tax/form-4562", (int taxYear, Guid? companyId, IAssetTaxBookService s, CancellationToken ct) =>
+            s.GetForm4562Async(new TaxReportQuery(taxYear, AssetBookKind.Federal, companyId), ct));
+        a.MapGet("/tax/mid-quarter", (int taxYear, AssetBookKind? book, Guid? companyId, IAssetTaxBookService s, CancellationToken ct) =>
+            s.GetMidQuarterTestAsync(new TaxReportQuery(taxYear, book ?? AssetBookKind.Federal, companyId), ct));
 
         // Depreciation
         a.MapGet("/depreciation/runs", (IDepreciationService s, CancellationToken ct) => s.ListRunsAsync(ct));

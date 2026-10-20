@@ -1,0 +1,164 @@
+@* One purchase order's or subcontract's procurement file: the evidence a purchasing system review checks, its score and sign-offs. *@
+@inject ICpsrService Cpsr
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_file is not { } f)
+        {
+            <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+        }
+        else
+        {
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+                <MudText Typo="Typo.body2">@ComplianceFormat.Label(f.Kind) @f.Number · @f.VendorName · @ComplianceFormat.Date(f.Date) · @ComplianceFormat.Amount(f.Value)</MudText>
+                <MudSpacer />
+                <MudChip T="string" Size="Size.Small" Color="ComplianceFormat.ScoreColor(f.Score)" data-testid="file-score">@f.Score%</MudChip>
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                @(f.GovernmentFunded ? $"Charged to government contract {f.PrimeContractNumber ?? ""}." : "Not charged to a government contract.")
+                Vendor business size: @(f.VendorSize ?? "not recorded").
+            </MudText>
+
+            <MudSimpleTable Dense="true" Elevation="0" Class="mb-3" data-testid="file-elements">
+                <tbody>
+                    @foreach (var e in f.Elements)
+                    {
+                        <tr>
+                            <td style="width:190px">@e.Label</td>
+                            <td style="width:120px"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ComplianceFormat.Color(e.Status)">@ComplianceFormat.Label(e.Status)</MudChip></td>
+                            <td>@e.Detail</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            @if (f.RfqEvidence is { } rfq)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">From @rfq.Reference: @rfq.QuotesReceived of @rfq.QuotesSolicited quotes received@(rfq.AwardBasis is { } b ? $"; awarded on {b}" : "").</MudAlert>
+            }
+
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mb-1">Evidence</MudText>
+            <MudGrid Spacing="2" Class="mb-3">
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="CompetitionType" @bind-Value="_competition" Label="Competition" Dense="true">
+                        @foreach (var c in Enum.GetValues<CompetitionType>()) { <MudSelectItem Value="c">@ComplianceFormat.Label(c)</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField T="int?" @bind-Value="_solicited" Label="Quotes asked for" Min="0" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField T="int?" @bind-Value="_received" Label="Quotes received" Min="0" Margin="Margin.Dense" /></MudItem>
+                @if (_competition == CompetitionType.SoleSource)
+                {
+                    <MudItem xs="12"><MudTextField T="string" @bind-Value="_justification" Label="Sole-source justification" Lines="2" Margin="Margin.Dense" /></MudItem>
+                }
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="PriceAnalysisType" @bind-Value="_analysis" Label="Price or cost analysis" Dense="true">
+                        @foreach (var p in Enum.GetValues<PriceAnalysisType>()) { <MudSelectItem Value="p">@ComplianceFormat.Label(p)</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_analysisNotes" Label="What the price was compared with" Lines="2" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string" @bind-Value="_clauses" Label="Flowdown clauses (comma separated)" Margin="Margin.Dense"
+                                  HelperText="@(f.RequiredClauses.Count == 0 ? "None required." : $"Required: {string.Join(", ", f.RequiredClauses)}")" />
+                </MudItem>
+                <MudItem xs="6" sm="4"><MudDatePicker @bind-Date="_debarmentOn" Label="SAM.gov exclusions checked on" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" /></MudItem>
+                <MudItem xs="6" sm="8"><MudTextField T="string" @bind-Value="_debarmentResult" Label="Result" Margin="Margin.Dense" Placeholder="No exclusions found" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_reportPeriod" Label="Small business report (ISR/SSR) it's counted in" Margin="Margin.Dense" Placeholder="FY2026 ISR (Mar)" /></MudItem>
+                <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_notes" Label="Notes" Margin="Margin.Dense" /></MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mb-1">Approvals</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1">This value needs: @string.Join(", ", f.RequiredApprovals.Select(l => l.Name)).</MudText>
+            @foreach (var a in f.Approvals)
+            {
+                <MudText Typo="Typo.body2">@a.LevelName: @a.ApprovedBy on @a.ApprovedAtUtc.ToString("yyyy-MM-dd")@(a.Comment is { } c ? $" ({c})" : "")</MudText>
+            }
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-2">
+                <MudSelect T="int" @bind-Value="_level" Label="Sign off as" Dense="true" Style="max-width:240px">
+                    @foreach (var l in _levels) { <MudSelectItem Value="l.Level">@l.Name</MudSelectItem> }
+                </MudSelect>
+                <MudTextField T="string" @bind-Value="_comment" Label="Comment" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Outlined" OnClick="ApproveAsync" Disabled="_busy || f.Approvals.Any(a => a.Level == _level)" data-testid="file-approve">Approve</MudButton>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close(DialogResult.Ok(_changed))">Close</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy || _file is null" data-testid="file-save">Save evidence</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public ProcurementDocumentKind Kind { get; set; }
+    [Parameter, EditorRequired] public Guid DocumentId { get; set; }
+
+    private ProcurementFileDto? _file;
+    private IReadOnlyList<CpsrApprovalLevelDto> _levels = [];
+    private CompetitionType _competition;
+    private int? _solicited;
+    private int? _received;
+    private string? _justification;
+    private PriceAnalysisType _analysis;
+    private string? _analysisNotes;
+    private string? _clauses;
+    private DateTime? _debarmentOn;
+    private string? _debarmentResult;
+    private string? _reportPeriod;
+    private string? _notes;
+    private int _level = 1;
+    private string? _comment;
+    private bool _busy;
+    private bool _changed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _levels = (await Cpsr.GetSettingsAsync()).ApprovalLevels;
+            Show(await Cpsr.GetFileAsync(Kind, DocumentId));
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ComplianceFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private void Show(ProcurementFileDto f)
+    {
+        _file = f;
+        (_competition, _solicited, _received, _justification, _analysis, _analysisNotes) = (f.Competition, f.QuotesSolicited, f.QuotesReceived, f.SoleSourceJustification, f.PriceAnalysis, f.PriceAnalysisNotes);
+        (_clauses, _debarmentResult, _reportPeriod, _notes) = (string.Join(", ", f.FlowdownClauses), f.DebarmentResult, f.SmallBusinessReportPeriod, f.Notes);
+        _debarmentOn = f.DebarmentCheckedOn?.ToDateTime(TimeOnly.MinValue);
+        _level = f.RequiredApprovals.Select(l => l.Level).FirstOrDefault(l => f.Approvals.All(a => a.Level != l), f.RequiredApprovals.Max(l => l.Level));
+    }
+
+    private async Task SaveAsync()
+    {
+        await RunAsync(() => Cpsr.SaveFileAsync(Kind, DocumentId, new SaveProcurementFileRequest(_competition, _solicited, _received, _justification, _analysis, _analysisNotes,
+            string.IsNullOrWhiteSpace(_clauses) ? [] : [_clauses], _debarmentOn is { } d ? DateOnly.FromDateTime(d) : null, _debarmentResult, _reportPeriod, _notes)), "Evidence saved.");
+    }
+
+    private Task ApproveAsync() => RunAsync(() => Cpsr.ApproveAsync(Kind, DocumentId, new ApproveProcurementFileRequest(_level, _comment)), "Approved.");
+
+    private async Task RunAsync(Func<Task<ProcurementFileDto>> action, string message)
+    {
+        _busy = true;
+        try
+        {
+            Show(await action());
+            _changed = true;
+            _comment = null;
+            Snackbar.Add(message, Severity.Success);
+        }
+        catch (Exception ex) when (ComplianceFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ComplianceFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

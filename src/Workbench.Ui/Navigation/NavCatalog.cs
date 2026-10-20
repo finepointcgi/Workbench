@@ -150,6 +150,8 @@ public static class NavCatalog
         new(Finance, "Assets", "Capitalize", "assets/capitalize", Icons.Material.Filled.AddBox, FinanceOnly, InMenu: false),
         new(Finance, "Assets", "Depreciation", "assets/depreciation", Icons.Material.Filled.TrendingDown, FinanceOnly),
         new(Finance, "Assets", "Asset categories", "assets/categories", Icons.Material.Filled.Category, FinanceOnly, Keywords: "fixed asset classes useful life depreciation method"),
+        new(Finance, "Assets", "Tax depreciation", "assets/tax", Icons.Material.Filled.RequestQuote, FinanceOnly, Keywords: "tax books macrs section 179 bonus form 4562 mid-quarter book to tax deferred tax federal state amt"),
+        new(Finance, "Assets", "Asset transfers", "assets/transfers", Icons.Material.Filled.SwapHoriz, FinanceOnly, Keywords: "move asset location custodian organization company intercompany history", InMenu: false),
 
         new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, FinanceOnly, Detail: "Payroll run", Keywords: "paylocity pay runs"),
 
@@ -195,6 +197,8 @@ public static class NavCatalog
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
         new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, AdminOnly, Keywords: "ai claude assistant usage audit bedrock govcloud"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
+        new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, FinanceOnly, Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),
+        new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, FinanceOnly, Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency"),
         new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, FinanceOnly, Keywords: "history security"),
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, FinanceOnly, MatchAll: true),
         new(Admin, "Setup", "Org units", "setup/org-units", Icons.Material.Filled.AccountTree, FinanceOnly, Keywords: "departments"),

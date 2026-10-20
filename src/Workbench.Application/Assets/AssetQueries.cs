@@ -74,9 +74,33 @@ internal static class AssetQueries
             a.OrgUnitId, a.ProjectId, a.WbsElementId, wbs, a.ContractId, contract, a.VendorId, vendor, a.SourceBillLineId, bill, a.CapitalizationEntryId,
             a.DisposedOn, a.DisposalProceeds, a.DisposalReason, a.DisposalEntryId,
             depreciation.OrderBy(x => x.d.PeriodStart).Select(x => new AssetDepreciationDto(x.d.FiscalPeriodId, x.Name, x.d.PeriodStart, x.d.Amount)).ToList(),
-            transfers.Select(t => new AssetTransferDto(t.TransferredOn, t.FromLocation, t.ToLocation, names.Employee(t.FromCustodianEmployeeId), names.Employee(t.ToCustodianEmployeeId),
-                names.Org(t.FromOrgUnitId), names.Org(t.ToOrgUnitId), names.Project(t.FromProjectId), names.Project(t.ToProjectId), t.Reason, t.TransferredBy)).ToList(),
-            a.CreatedBy, a.CreatedAtUtc, a.Convention.ToContract(), a.OpeningBalanceDate, a.OpeningAccumulatedDepreciation);
+            transfers.Select(t => Transfer(t, names)).ToList(),
+            a.CreatedBy, a.CreatedAtUtc, a.Convention.ToContract(), a.OpeningBalanceDate, a.OpeningAccumulatedDepreciation,
+            a.DisposalKind is { } kind ? (AssetDisposalType)(int)kind : null,
+            a.Status == AssetStatus.Disposed ? await BookDisposalsAsync(db, a, ct) : null,
+            a.CompanyId, names.Company(a.CompanyId));
+    }
+
+    public static AssetTransferDto Transfer(AssetTransfer t, Names names) => new(t.TransferredOn, t.FromLocation, t.ToLocation,
+        names.Employee(t.FromCustodianEmployeeId), names.Employee(t.ToCustodianEmployeeId), names.Org(t.FromOrgUnitId), names.Org(t.ToOrgUnitId),
+        names.Project(t.FromProjectId), names.Project(t.ToProjectId), t.Reason, t.TransferredBy, names.Contract(t.FromContractId), names.Contract(t.ToContractId),
+        names.Company(t.FromCompanyId), names.Company(t.ToCompanyId), t.JournalEntryId);
+
+    /// <summary>The GAAP book's gain or loss (proceeds less net book value), then each tax book's as kept at disposal.</summary>
+    private static async Task<IReadOnlyList<AssetBookDisposalDto>> BookDisposalsAsync(IWorkbenchDbContext db, FixedAsset a, CancellationToken ct)
+    {
+        var proceeds = a.DisposalProceeds ?? 0;
+        var result = new List<AssetBookDisposalDto>();
+        if (!a.IsGovernmentProperty)
+        {
+            var book = a.Cost - a.AccumulatedDepreciation;
+            result.Add(new AssetBookDisposalDto(AssetBookKind.Book, proceeds, book, proceeds - book, 0));
+        }
+
+        var books = await db.Set<AssetTaxBook>().AsNoTracking().Where(b => b.AssetId == a.Id && b.DisposalGainLoss != null).ToListAsync(ct);
+        result.AddRange(books.OrderBy(b => b.Book).Select(b => new AssetBookDisposalDto(
+            (AssetBookKind)((int)b.Book + 1), proceeds, b.DisposalAdjustedBasis ?? 0, b.DisposalGainLoss ?? 0, b.DisposalDepreciation ?? 0)));
+        return result;
     }
 
     public static async Task<IReadOnlyList<AssetCategoryDto>> CategoriesAsync(IWorkbenchDbContext db, CancellationToken ct)
@@ -99,6 +123,7 @@ internal static class AssetQueries
         public Dictionary<Guid, string> Orgs { get; private init; } = [];
         public Dictionary<Guid, string> Projects { get; private init; } = [];
         public Dictionary<Guid, string> Contracts { get; private init; } = [];
+        public Dictionary<Guid, string> Companies { get; private init; } = [];
 
         public static async Task<Names> LoadAsync(IWorkbenchDbContext db, IReadOnlyList<FixedAsset> assets, CancellationToken ct, IReadOnlyList<AssetTransfer>? transfers = null)
         {
@@ -109,7 +134,8 @@ internal static class AssetQueries
                 .Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
             var projects = assets.Select(a => a.ProjectId).Concat(transfers.SelectMany(t => new[] { t.FromProjectId, t.ToProjectId }))
                 .Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
-            var contracts = assets.Where(a => a.ContractId != null).Select(a => a.ContractId!.Value).Distinct().ToList();
+            var contracts = assets.Select(a => a.ContractId).Concat(transfers.SelectMany(t => new[] { t.FromContractId, t.ToContractId }))
+                .Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
             return new Names
             {
                 Categories = await db.Set<AssetCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, ct),
@@ -117,6 +143,7 @@ internal static class AssetQueries
                 Orgs = await db.Set<OrgUnit>().AsNoTracking().Where(o => orgs.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Code, ct),
                 Projects = await db.Set<Project>().AsNoTracking().Where(p => projects.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Code, ct),
                 Contracts = await db.Set<Contract>().AsNoTracking().Where(c => contracts.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.ContractNumber, ct),
+                Companies = await db.Set<Workbench.Domain.Companies.Company>().AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Code, ct),
             };
         }
 
@@ -124,5 +151,6 @@ internal static class AssetQueries
         public string? Org(Guid? id) => id is { } i ? Orgs.GetValueOrDefault(i) : null;
         public string? Project(Guid? id) => id is { } i ? Projects.GetValueOrDefault(i) : null;
         public string? Contract(Guid? id) => id is { } i ? Contracts.GetValueOrDefault(i) : null;
+        public string? Company(Guid? id) => id is { } i ? Companies.GetValueOrDefault(i) ?? (i == Workbench.Domain.Companies.Company.DefaultId ? "MAIN" : null) : null;
     }
 }
