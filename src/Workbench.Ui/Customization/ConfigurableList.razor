@@ -349,7 +349,7 @@
         var v => v,
     };
 
-    private static ListColumnKind KindOf(string fieldType) => fieldType switch
+    private static ListColumnKind KindOf(string fieldType) => FormFieldTypes.Of(fieldType) switch
     {
         "Number" => ListColumnKind.Number,
         "Money" => ListColumnKind.Money,

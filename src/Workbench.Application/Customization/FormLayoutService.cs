@@ -33,7 +33,7 @@ public sealed class FormLayoutService(
             return builtIn;
         }
 
-        var custom = (await catalog.GetFieldsAsync(entityType, ct)).Where(f => f.IsCustom);
+        var custom = (await catalog.GetFieldsAsync(entityType, ct)).Where(f => f.IsCustom).Select(f => f with { FieldType = FormFieldTypes.Of(f.FieldType) });
         return [.. builtIn, .. custom];
     }
 
