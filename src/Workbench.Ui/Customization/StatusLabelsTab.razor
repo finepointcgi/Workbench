@@ -1,0 +1,95 @@
+@* Status labels: rename what built-in statuses are called and add sub-statuses where the set takes them. The values and
+   every rule that depends on them stay as they are. *@
+@inject ICustomListService Lists
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Renaming a status changes only what people see. Approvals, charging, billing and reports keep working on the built-in status.
+</MudText>
+
+<MudExpansionPanels MultiExpansion="true" Outlined="true">
+    @foreach (var set in _sets)
+    {
+        var edit = _edits[set.Key];
+        <MudExpansionPanel Text="@set.Name" data-testid="@($"status-set-{set.Key}")">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">@set.Description</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Built-in status</th><th>Label people see</th>@if (set.AllowsSubStatuses) { <th>Sub-statuses (code = label, one per line)</th> }</tr></thead>
+                <tbody>
+                    @foreach (var v in set.Values)
+                    {
+                        <tr>
+                            <td class="mud-text-secondary">@v.DefaultLabel <code>@v.Value</code></td>
+                            <td><MudTextField T="string" @bind-Value="edit.Labels[v.Value]" Margin="Margin.Dense" MaxLength="100" Placeholder="@v.DefaultLabel" aria-label="@($"Label for {v.DefaultLabel}")"
+                                              data-testid="@($"label-{set.Key}-{v.Value}")" /></td>
+                            @if (set.AllowsSubStatuses)
+                            {
+                                <td><MudTextField T="string" @bind-Value="edit.SubStatuses[v.Value]" Margin="Margin.Dense" Lines="2" Sizing="InputSizing.Auto" aria-label="@($"Sub-statuses of {v.DefaultLabel}")"
+                                                  Placeholder="awaiting_funding = Awaiting funding" /></td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveAsync(set)" data-testid="@($"save-{set.Key}")">Save</MudButton>
+            </MudStack>
+        </MudExpansionPanel>
+    }
+</MudExpansionPanels>
+
+@code {
+    private sealed class SetEdit
+    {
+        public Dictionary<string, string?> Labels { get; } = [];
+        public Dictionary<string, string?> SubStatuses { get; } = [];
+    }
+
+    private IReadOnlyList<StatusSetDto> _sets = [];
+    private readonly Dictionary<string, SetEdit> _edits = [];
+
+    protected override async Task OnInitializedAsync() => Load(await Lists.ListStatusSetsAsync());
+
+    private void Load(IReadOnlyList<StatusSetDto> sets)
+    {
+        _sets = sets;
+        _edits.Clear();
+        foreach (var set in sets)
+        {
+            var edit = new SetEdit();
+            foreach (var v in set.Values)
+            {
+                edit.Labels[v.Value] = v.Label == v.DefaultLabel ? null : v.Label;
+                edit.SubStatuses[v.Value] = string.Join("\n", v.SubStatuses.Select(s => $"{s.Code} = {s.Label}{(s.IsActive ? "" : " (off)")}"));
+            }
+
+            _edits[set.Key] = edit;
+        }
+    }
+
+    private async Task SaveAsync(StatusSetDto set)
+    {
+        var edit = _edits[set.Key];
+        try
+        {
+            var values = set.Values.Select(v => new SaveStatusValue(v.Value, edit.Labels[v.Value],
+                set.AllowsSubStatuses ? ParseSubs(edit.SubStatuses[v.Value]) : null)).ToList();
+            var saved = await Lists.SaveStatusSetAsync(set.Key, new SaveStatusSetRequest(values));
+            Load(_sets.Select(s => s.Key == saved.Key ? saved : s).ToList());
+            Snackbar.Add($"{set.Name} saved.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static List<SaveValueListItem> ParseSubs(string? text) =>
+        (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(line =>
+        {
+            var off = line.EndsWith("(off)", StringComparison.OrdinalIgnoreCase);
+            var body = off ? line[..^5].Trim() : line;
+            var parts = body.Split('=', 2, StringSplitOptions.TrimEntries);
+            return new SaveValueListItem(parts[0], parts.Length > 1 ? parts[1] : parts[0], !off);
+        }).ToList();
+}

@@ -1,0 +1,157 @@
+@* Value lists: the built-in ones that used to be hard-coded dropdowns, and the organization's own for picklist fields. *@
+@inject ICustomListService Lists
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudText Class="mud-text-secondary">Codes are what records store; labels are what people see and can change any time. Codes in use can be turned off, not removed.</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="New" data-testid="add-list">New list</MudButton>
+</MudStack>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudPaper Outlined="true">
+            <MudList T="string" SelectedValue="_selectedKey" SelectedValueChanged="Select" Dense="true">
+                @foreach (var l in _lists)
+                {
+                    <MudListItem T="string" Value="@l.Key" Text="@l.Name" SecondaryText="@(l.IsSystem ? $"Built in · {string.Join(", ", l.UsedBy)}" : string.Join(", ", l.UsedBy))"
+                                 Icon="@(l.IsSystem ? Icons.Material.Filled.Lock : Icons.Material.Filled.List)" />
+                }
+            </MudList>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="8">
+        @if (_edit is { } e)
+        {
+            <MudPaper Outlined="true" Class="pa-4" data-testid="list-editor">
+                <MudStack Spacing="3">
+                    <MudStack Row="true" Spacing="2">
+                        <MudTextField T="string" @bind-Value="e.Name" Label="Name" Variant="Variant.Outlined" MaxLength="100" />
+                        <MudTextField T="string" @bind-Value="e.Key" Label="Key" Variant="Variant.Outlined" ReadOnly="@(!e.IsNew)" HelperText="e.g. program-offices" MaxLength="64" data-testid="list-key" />
+                    </MudStack>
+                    <MudTextField T="string" @bind-Value="e.Description" Label="Description" Variant="Variant.Outlined" MaxLength="500" />
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <thead><tr><th>Code</th><th>Label</th><th>Offered</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var item in e.Items)
+                            {
+                                <tr>
+                                    <td><MudTextField T="string" @bind-Value="item.Code" Margin="Margin.Dense" ReadOnly="@(!item.IsNew)" MaxLength="100" aria-label="Code" /></td>
+                                    <td><MudTextField T="string" @bind-Value="item.Label" Margin="Margin.Dense" MaxLength="200" aria-label="Label" /></td>
+                                    <td><MudSwitch T="bool" @bind-Value="item.IsActive" Color="Color.Primary" aria-label="Offered" /></td>
+                                    <td style="white-space:nowrap">
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="Move up" OnClick="() => Move(item, -1)" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" aria-label="Move down" OnClick="() => Move(item, 1)" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove" OnClick="() => e.Items.Remove(item)" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => e.Items.Add(new ItemRow { IsNew = true })" data-testid="add-item">Add value</MudButton>
+                        <MudSpacer />
+                        @if (!e.IsNew)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteAsync">@(e.IsSystem ? "Reset to defaults" : "Delete list")</MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" data-testid="save-list">Save</MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+        else
+        {
+            <MudText Class="mud-text-secondary">Choose a list to edit it.</MudText>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private sealed class ItemRow
+    {
+        public string? Code { get; set; }
+        public string? Label { get; set; }
+        public bool IsActive { get; set; } = true;
+        public bool IsNew { get; init; }
+    }
+
+    private sealed class ListEdit
+    {
+        public string? Key { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public bool IsNew { get; init; }
+        public bool IsSystem { get; init; }
+        public List<ItemRow> Items { get; } = [];
+    }
+
+    private IReadOnlyList<ValueListDto> _lists = [];
+    private string? _selectedKey;
+    private ListEdit? _edit;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _lists = await Lists.ListAsync();
+
+    private void Select(string? key)
+    {
+        _selectedKey = key;
+        if (_lists.FirstOrDefault(l => l.Key == key) is not { } list)
+        {
+            _edit = null;
+            return;
+        }
+
+        _edit = new ListEdit { Key = list.Key, Name = list.Name, Description = list.Description, IsSystem = list.IsSystem };
+        _edit.Items.AddRange(list.Items.Select(i => new ItemRow { Code = i.Code, Label = i.Label, IsActive = i.IsActive }));
+    }
+
+    private void New()
+    {
+        _selectedKey = null;
+        _edit = new ListEdit { IsNew = true };
+        _edit.Items.Add(new ItemRow { IsNew = true });
+    }
+
+    private void Move(ItemRow item, int by)
+    {
+        var items = _edit!.Items;
+        var i = items.IndexOf(item);
+        items.RemoveAt(i);
+        items.Insert(Math.Clamp(i + by, 0, items.Count), item);
+    }
+
+    private async Task SaveAsync()
+    {
+        var e = _edit!;
+        try
+        {
+            var saved = await Lists.SaveAsync(new SaveValueListRequest(e.Key ?? "", e.Name ?? "", e.Description,
+                e.Items.Where(i => !string.IsNullOrWhiteSpace(i.Code)).Select(i => new SaveValueListItem(i.Code!, i.Label ?? i.Code!, i.IsActive)).ToList()));
+            Snackbar.Add($"{saved.Name} saved.", Severity.Success);
+            await LoadAsync();
+            Select(saved.Key);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var e = _edit!;
+        try
+        {
+            await Lists.DeleteAsync(e.Key!);
+            Snackbar.Add(e.IsSystem ? "Back to the built-in values." : "List deleted.", Severity.Success);
+            await LoadAsync();
+            Select(e.IsSystem ? e.Key : null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

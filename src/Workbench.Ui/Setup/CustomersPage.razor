@@ -21,6 +21,8 @@
         </TemplateColumn>
         <TemplateColumn Sortable="false" CellStyle="text-align:right">
             <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Tune" Size="Size.Small" aria-label="@($"Details of {context.Item.Code}")"
+                               OnClick="() => DetailsAsync(context.Item)" />
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {context.Item.Code}")"
                                OnClick="() => EditAsync(context.Item)" />
             </CellTemplate>
@@ -30,6 +32,11 @@
 </MudDataGrid>
 
 @code {
+    private async Task DetailsAsync(CustomerDto customer) =>
+        await DialogService.ShowAsync<CustomFieldsDialog>($"{customer.Code} · {customer.Name}",
+            new DialogParameters<CustomFieldsDialog> { { d => d.EntityType, CustomizableEntityTypes.Customer }, { d => d.RecordId, customer.Id } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+
     private IReadOnlyList<CustomerDto> _customers = [];
     private IReadOnlyList<ContractDto> _contracts = [];
     private bool _loading = true;

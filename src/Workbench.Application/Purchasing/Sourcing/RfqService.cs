@@ -22,8 +22,11 @@ public sealed class RfqService(
     IPurchaseOrderService orders,
     SupplierPortalMail mail,
     IOptions<SourcingOptions> options,
-    TimeProvider clock) : IRfqService
+    TimeProvider clock,
+    Customization.DocumentNumbers? documentNumbers = null) : IRfqService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
@@ -69,10 +72,9 @@ public sealed class RfqService(
     public async Task<RfqDto> CreateAsync(SaveRfqRequest request, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var numbers = await db.Set<Rfq>().Select(r => r.Number).ToListAsync(cancellationToken);
         var rfq = new Rfq
         {
-            Number = PurchasingSupport.NextNumber(numbers, "RFQ"),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.Rfq, cancellationToken: cancellationToken),
             Title = "",
             CreatedBy = Me,
             CreatedAtUtc = UtcNow,

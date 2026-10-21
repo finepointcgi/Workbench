@@ -5,13 +5,18 @@ using Workbench.Contracts.Reports;
 namespace Workbench.Application.Reports;
 
 /// <summary>Runs report-writer definitions over the curated <see cref="ReportSource"/>s with the caller's permissions.</summary>
-public sealed class ReportWriterService(IWorkbenchDbContextFactory dbFactory, ReportAccess access, TimekeepingClock clock) : IReportWriterService
+public sealed class ReportWriterService(IWorkbenchDbContextFactory dbFactory, ReportAccess access, TimekeepingClock clock, Customization.CustomFieldService? customFields = null) : IReportWriterService
 {
     public async Task<IReadOnlyList<ReportDataSourceDto>> ListSourcesAsync(CancellationToken cancellationToken = default)
     {
         var context = await access.GetAsync(cancellationToken);
-        return ReportSource.All
-            .Where(s => s.Unavailable(context) is null)
+        var sources = new List<ReportSource>();
+        foreach (var s in ReportSource.All.Where(s => s.Unavailable(context) is null))
+        {
+            sources.Add(await CustomFieldReportSource.WithCustomFieldsAsync(s, customFields, cancellationToken));
+        }
+
+        return sources
             .Select(s => new ReportDataSourceDto(s.Key, s.Name, s.Description, s.DateField,
                 s.Fields.Where(f => s.CanSee(f, context)).Select(f => new ReportFieldDto(f.Key, f.Label, f.Type, f.Restriction != FieldRestriction.None, f.Description)).ToList()))
             .ToList();
@@ -21,6 +26,7 @@ public sealed class ReportWriterService(IWorkbenchDbContextFactory dbFactory, Re
     {
         ArgumentNullException.ThrowIfNull(definition);
         var source = ReportSource.Find(definition.Source ?? "") ?? throw new ArgumentException($"Unknown data source '{definition.Source}'.");
+        source = await CustomFieldReportSource.WithCustomFieldsAsync(source, customFields, cancellationToken);
         if (definition.Columns is null || definition.Columns.Count == 0)
         {
             throw new ArgumentException("Choose at least one column.");

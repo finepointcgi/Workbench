@@ -25,6 +25,10 @@
                 </MudText>
             </MudStack>
         </MudForm>
+        @if (Element?.Id is { } cfRecordId)
+        {
+            <CustomFieldsEditor @ref="_custom" EntityType="@CustomizableEntityTypes.WbsElement" RecordId="cfRecordId" />
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
@@ -82,7 +86,16 @@
         await _form.ValidateAsync();
         if (_form.IsValid)
         {
+            if (!await CustomFieldsSavedAsync())
+            {
+                return;
+            }
+
             MudDialog.Close(DialogResult.Ok(new SaveWbsElementRequest(Parent?.Id, _code!.Trim(), _name!.Trim(), _kind, _chargeable, _open, _requiresAssignment)));
         }
     }
+    // Custom fields of an existing record are checked and saved here; a new record's are set on its page once it exists.
+    private CustomFieldsEditor? _custom;
+
+    private async Task<bool> CustomFieldsSavedAsync() => _custom is null || Element?.Id is not { } id || (await _custom.ValidateAsync() && await _custom.SaveAsync(id));
 }

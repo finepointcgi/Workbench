@@ -100,6 +100,7 @@ public static class DependencyInjection
         Compliance.ComplianceRegistration.AddWorkbenchCompliance(services); // CPSR procurement files and readiness, CAS disclosure statements (DS-1) and the 401/402 check; above AddWorkbenchIdentity.
 
         services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.
+        Customization.CustomizationRegistration.AddWorkbenchCustomization(services); // Custom fields, value lists, status labels, numbering; above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();

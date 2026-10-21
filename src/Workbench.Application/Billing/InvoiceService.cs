@@ -132,7 +132,7 @@ public sealed partial class InvoiceService(
         if (invoice is null)
         {
             var date = request.InvoiceDate ?? Today;
-            var (sequence, number) = await NextNumberAsync(db, ctx, cancellationToken);
+            var (sequence, number) = await NextNumberAsync(db, ctx, cancellationToken, date);
             invoice = new Invoice
             {
                 CompanyId = ctx.Contract.CompanyId,
@@ -496,7 +496,7 @@ public sealed partial class InvoiceService(
         }
 
         var date = request.InvoiceDate ?? Today;
-        var (sequence, number) = await NextNumberAsync(db, ctx, cancellationToken);
+        var (sequence, number) = await NextNumberAsync(db, ctx, cancellationToken, date);
         var memo = new Invoice
         {
             CompanyId = original.CompanyId,
@@ -723,16 +723,12 @@ public sealed partial class InvoiceService(
             : throw new InvalidOperationException($"Invoice {invoice.Number} is {invoice.Status}; only drafts can be changed.");
     }
 
-    internal static async Task<(int Sequence, string Number)> NextNumberAsync(IWorkbenchDbContext db, BillingContext ctx, CancellationToken ct)
+    internal static async Task<(int Sequence, string Number)> NextNumberAsync(IWorkbenchDbContext db, BillingContext ctx, CancellationToken ct, DateOnly? date = null)
     {
+        // In the invoice's own unit of work, so invoice numbers are gapless (a failed save allocates nothing).
         var prefix = ctx.Settings?.InvoicePrefix ?? DefaultPrefix(ctx.Contract.ContractNumber);
-        var sequence = (await db.Set<Invoice>().Where(i => i.ContractId == ctx.Contract.Id).MaxAsync(i => (int?)i.Sequence, ct) ?? 0) + 1;
-        while (await db.Set<Invoice>().AnyAsync(i => i.Number == $"{prefix}-{sequence:D4}", ct))
-        {
-            sequence++;
-        }
-
-        return (sequence, $"{prefix}-{sequence:D4}");
+        var allocated = await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Invoice, new(ctx.Contract.CompanyId, date, prefix), date ?? DateOnly.FromDateTime(DateTime.UtcNow), ct);
+        return ((int)allocated.Sequence, allocated.Number);
     }
 
     /// <summary>The contract number without punctuation, at most 16 characters (so the invoice number fits WAWF's 22).</summary>

@@ -149,10 +149,9 @@ public sealed class SupplierDocuments(FileStorage files, INotificationPublisher 
         }
 
         var shipped = await ShippedAsync(db, po.Id, ct);
-        var numbers = await db.Set<ShipNotice>().Select(s => s.Number).ToListAsync(ct);
         var notice = new ShipNotice
         {
-            Number = PurchasingSupport.NextNumber(numbers, "ASN"),
+            Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.ShipNotice, null, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime), ct)).Number,
             PurchaseOrderId = po.Id,
             VendorId = vendorId,
             ShipmentReference = reference,
@@ -246,10 +245,9 @@ public sealed class SupplierDocuments(FileStorage files, INotificationPublisher 
             .Where(x => x.Status is not (ApBillStatus.Rejected or ApBillStatus.Void))
             .GroupBy(x => x.PoLine).ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity ?? 0));
 
-        var numbers = await db.Set<ApBill>().Select(b => b.Number).ToListAsync(ct);
         var bill = new ApBill
         {
-            Number = PurchasingSupport.NextNumber(numbers, "V"),
+            Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.ApBill, null, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime), ct)).Number,
             VendorId = vendor.Id,
             InvoiceNumber = invoiceNumber,
             InvoiceDate = input.InvoiceDate,
