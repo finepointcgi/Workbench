@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Workbench.Application;
 using Workbench.Application.Assistant;
+using Workbench.Application.Identity;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts;
 using Workbench.Contracts.Approvals;
 using Workbench.Domain.Assistant;
@@ -293,11 +295,10 @@ public sealed class ProjectVisibilityTests
     private static async Task AddRoleUsersAsync(SeededHost seeded)
     {
         await using var db = await seeded.Host.Get<IWorkbenchDbContextFactory>().CreateAsync();
-        db.Set<AppUser>().AddRange(
-            new AppUser { Email = ResourceManager, DisplayName = "Rae", IsResourceManager = true },
-            new AppUser { Email = BusinessDevelopment, DisplayName = "Bea", IsBusinessDevelopment = true },
-            new AppUser { Email = Pricing, DisplayName = "Pri", IsPricing = true },
-            new AppUser { Email = Hr, DisplayName = "Har", IsHr = true });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = ResourceManager, DisplayName = "Rae" }, OrgRoles.ResourceManager);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = BusinessDevelopment, DisplayName = "Bea" }, OrgRoles.BusinessDevelopment);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Pricing, DisplayName = "Pri" }, OrgRoles.Pricing);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Hr, DisplayName = "Har" }, OrgRoles.Hr);
         await db.SaveChangesAsync();
     }
 }

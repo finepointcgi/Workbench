@@ -36,6 +36,7 @@ public static class Permission
     public const string AdminAssistant = "admin.assistant";
     public const string AdminSupport = "admin.support";
     public const string AdminOrganization = "admin.organization";
+    public const string AdminCustomization = "admin.customization";
     public const string AdminAllWorkspaces = "admin.all_workspaces";
 
     // Approvals
@@ -198,6 +199,7 @@ public static class PermissionCatalog
         new(Permission.AdminAssistant, AreaAdministration, "Administer the assistant", "AI assistant settings, usage and audit.", A),
         new(Permission.AdminSupport, AreaAdministration, "Handle support requests", "See and answer everyone's support requests, and hear about new ones.", A),
         new(Permission.AdminOrganization, AreaAdministration, "Change organization settings", "Organization-wide settings such as the timesheet cadence.", A),
+        new(Permission.AdminCustomization, AreaAdministration, "Manage customization", "Custom fields, picklists, status labels and document numbering (Admin › Customization).", A),
         new(Permission.AdminAllWorkspaces, AreaAdministration, "Own every workspace", "Owner access to every workspace and sheet, and the right to change anyone's dashboards, saved reports and schedules.", A),
 
         new(Permission.ApprovalWorkflowsView, AreaApprovals, "View approval workflows", "See approval workflows and the approvers set for each org unit.", F),
