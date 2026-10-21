@@ -160,7 +160,7 @@ public sealed class PermissionCheckingOdcService(IOdcService inner, ProjectAcces
 {
     public async Task<OdcListDto> ListProjectOdcsAsync(Guid projectId, OdcListQuery? query = null, CancellationToken cancellationToken = default)
     {
-        projects.Access.RequireSignedIn();
+        await projects.Visibility.RequireVisibleAsync(projectId, cancellationToken);
         var list = await inner.ListProjectOdcsAsync(projectId, query, cancellationToken);
         if (await projects.CanReadProjectFinancialsAsync(projectId, cancellationToken))
         {
@@ -178,10 +178,10 @@ public sealed class PermissionCheckingOdcService(IOdcService inner, ProjectAcces
         return entry is null || await CanSeeAsync(entry, cancellationToken) ? entry : throw Hidden(odcId);
     }
 
-    public Task<OdcEntryDto> CreateVendorOdcAsync(Guid projectId, SaveVendorOdcRequest request, CancellationToken cancellationToken = default)
+    public async Task<OdcEntryDto> CreateVendorOdcAsync(Guid projectId, SaveVendorOdcRequest request, CancellationToken cancellationToken = default)
     {
-        projects.Access.RequireSignedIn();
-        return inner.CreateVendorOdcAsync(projectId, request, cancellationToken);
+        await projects.Visibility.RequireVisibleAsync(projectId, cancellationToken);
+        return await inner.CreateVendorOdcAsync(projectId, request, cancellationToken);
     }
 
     public async Task<OdcEntryDto> UpdateVendorOdcAsync(Guid odcId, SaveVendorOdcRequest request, CancellationToken cancellationToken = default)

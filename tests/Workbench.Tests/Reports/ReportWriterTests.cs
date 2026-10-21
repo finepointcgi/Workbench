@@ -110,7 +110,7 @@ public sealed class ReportWriterTests
         var projects = new ReportDefinition(ReportSourceKeys.ProjectsWbs, [new("project"), new("contract_ceiling")]);
         var pm = await kit.As(Owner).Writer.RunAsync(projects);
         Assert.Equal("1000000", pm.Details().First(r => r.Values[0] == "1001").Values[1]?.Split('.')[0]);
-        Assert.Null(pm.Details().First(r => r.Values[0] == "2002").Values[1]);
+        Assert.DoesNotContain(pm.Details(), r => r.Values[0] == "2002"); // not on 2002: not listed at all
         var viewer = await kit.As(Viewer).Writer.RunAsync(projects);
         Assert.Equal(["project"], viewer.Columns.Select(c => c.Key));
 

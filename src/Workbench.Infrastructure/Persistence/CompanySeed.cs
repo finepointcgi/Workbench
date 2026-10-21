@@ -87,7 +87,7 @@ internal static class CompanySeed
         var project = new Project { CompanyId = fed.Id, Code = "4001", Name = "Cyber Readiness Assessments", ContractId = contract.Id, Start = contract.PeriodStart, Finish = contract.PeriodEnd };
         db.Add(project);
         var fedRoot = new WbsElement { ProjectId = project.Id, Code = "4001.01", Name = "Assessments", IsChargeable = false };
-        var fedWork = new WbsElement { ProjectId = project.Id, ParentId = fedRoot.Id, Code = "4001.01.01", Name = "Site assessments", RequiresAssignment = false };
+        var fedWork = new WbsElement { ProjectId = project.Id, ParentId = fedRoot.Id, Code = "4001.01.01", Name = "Site assessments" };
         db.AddRange(fedRoot, fedWork);
 
         var jordan = new Employee
@@ -101,6 +101,9 @@ internal static class CompanySeed
             OrgUnitId = engineering?.Id, DefaultLaborCategoryId = category.Id, HireDate = fyStart.AddYears(-1),
         };
         db.AddRange(jordan, casey);
+
+        // Only the assessors charge it, so only they (and Finance) see the project (ProjectVisibility).
+        db.AddRange(new ChargeAssignment { WbsElementId = fedWork.Id, EmployeeId = jordan.Id }, new ChargeAssignment { WbsElementId = fedWork.Id, EmployeeId = casey.Id });
         db.AddRange(
             new EmployeeCostRate { EmployeeId = jordan.Id, EffectiveFrom = jordan.HireDate, HourlyCost = 58m },
             new EmployeeCostRate { EmployeeId = casey.Id, EffectiveFrom = casey.HireDate, HourlyCost = 61m });

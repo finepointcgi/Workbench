@@ -23,8 +23,9 @@ public sealed class IndirectRatePermissionTests
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => rates.SaveRateAsync(new SaveIndirectRateRequest(Contracts.Accounting.CostPool.Fringe, 2027, RateBasis.Provisional, 0.3m)));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => rates.PostAllocationAsync(Guid.NewGuid()));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => rates.GetTrueUpAsync(2027));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IBurdenedCostService>().GetProjectCostAsync(Guid.NewGuid(), new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), RateBasis.Provisional));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IBurdenedFinancialsService>().GetProjectAsync(Guid.NewGuid()));
+        // A project nobody can see (here: none at all) is not found before the financials rule is asked.
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IBurdenedCostService>().GetProjectCostAsync(Guid.NewGuid(), new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), RateBasis.Provisional));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IBurdenedFinancialsService>().GetProjectAsync(Guid.NewGuid()));
     }
 
     [Theory]

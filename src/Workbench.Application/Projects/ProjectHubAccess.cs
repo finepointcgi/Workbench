@@ -7,13 +7,15 @@ using Workbench.Domain.Resourcing;
 namespace Workbench.Application.Projects;
 
 /// <summary>
-/// Who is on which project, for the Projects hub: Finance and administrators see every project; others see the projects
-/// they manage or charge to (time recorded, a charge assignment or a resource allocation), and the project page also opens
-/// for members of its plan sheet. Money follows <see cref="ProjectAccess.CanReadProjectFinancialsAsync"/>.
+/// The Projects hub's view of the user. Which projects it lists and opens is <see cref="ProjectVisibility"/> (the one rule
+/// for every project read path); <see cref="ChargedProjectIdsAsync"/> only marks the rows the user works on. Money
+/// follows <see cref="ProjectAccess.CanReadProjectFinancialsAsync"/>.
 /// </summary>
-public sealed class ProjectHubAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access)
+public sealed class ProjectHubAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access, ProjectVisibility? visibility = null)
 {
     public AccessControl Access => access;
+
+    public ProjectVisibility Visibility { get; } = visibility ?? new ProjectVisibility(dbFactory, access);
 
     public sealed record Viewer(bool IsFinance, bool IsAdmin, Guid? EmployeeId, bool IsProjectManager = false);
 
@@ -48,27 +50,10 @@ public sealed class ProjectHubAccess(IWorkbenchDbContextFactory dbFactory, Acces
         return [.. fromWbs, .. allocated];
     }
 
-    /// <summary>True when the user may open the project page.</summary>
-    public async Task<bool> CanSeeProjectAsync(Guid projectId, CancellationToken ct)
+    /// <summary>True when the user may open the project page (<see cref="ProjectVisibility"/>).</summary>
+    public Task<bool> CanSeeProjectAsync(Guid projectId, CancellationToken ct)
     {
-        var viewer = await GetViewerAsync(ct);
-        await using var db = await dbFactory.CreateAsync(ct);
-        var project = await db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, ct);
-        if (project is null)
-        {
-            return false;
-        }
-
-        if (viewer.IsFinance || (viewer.EmployeeId is { } me && project.ProjectManagerId == me))
-        {
-            return true;
-        }
-
-        if ((await ChargedProjectIdsAsync(db, viewer.EmployeeId, ct)).Contains(projectId))
-        {
-            return true;
-        }
-
-        return project.SheetId is { } sheetId && await access.GetSheetRoleAsync(sheetId, ct) is not null;
+        access.RequireSignedIn();
+        return Visibility.CanSeeAsync(projectId, ct);
     }
 }

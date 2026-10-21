@@ -100,10 +100,15 @@ public sealed class PermissionCheckingTravelPerDiemService(ITravelPerDiemService
 public sealed class PermissionCheckingResourceAllocationService(IResourceAllocationService inner, ResourcingAccess rules, IWorkbenchDbContextFactory dbFactory)
     : IResourceAllocationService
 {
-    public Task<IReadOnlyList<AllocationDto>> ListAsync(AllocationQuery query, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AllocationDto>> ListAsync(AllocationQuery query, CancellationToken cancellationToken = default)
     {
         rules.Access.RequireSignedIn();
-        return inner.ListAsync(query, cancellationToken);
+        if (query.ProjectId is { } projectId)
+        {
+            await rules.Visibility.RequireVisibleAsync(projectId, cancellationToken);
+        }
+
+        return await rules.Visibility.FilterAsync(await inner.ListAsync(query, cancellationToken), a => a.ProjectId, cancellationToken);
     }
 
     public Task<IReadOnlyList<AllocationDto>> ListMineAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
@@ -156,10 +161,15 @@ public sealed class PermissionCheckingResourcePlanningService(IResourcePlanningS
         return inner.GetCapacityAsync(from, to, employeeIds, cancellationToken);
     }
 
-    public Task<HeatMapDto> GetHeatMapAsync(HeatMapQuery query, CancellationToken cancellationToken = default)
+    public async Task<HeatMapDto> GetHeatMapAsync(HeatMapQuery query, CancellationToken cancellationToken = default)
     {
         rules.Access.RequireSignedIn();
-        return inner.GetHeatMapAsync(query, cancellationToken);
+        if (query.ProjectId is { } projectId)
+        {
+            await rules.Visibility.RequireVisibleAsync(projectId, cancellationToken); // Who's on a project is the project's data.
+        }
+
+        return await inner.GetHeatMapAsync(query, cancellationToken);
     }
 
     public async Task<ProjectStaffingDto> GetProjectStaffingAsync(Guid projectId, CancellationToken cancellationToken = default)
@@ -182,7 +192,7 @@ public sealed class PermissionCheckingResourcePlanningService(IResourcePlanningS
             await rules.RequireReadProjectAsync(id, cancellationToken);
         }
 
-        return await inner.ListOpenDemandAsync(projectId, cancellationToken);
+        return await rules.Visibility.FilterAsync(await inner.ListOpenDemandAsync(projectId, cancellationToken), d => d.ProjectId, cancellationToken);
     }
 
     public Task<IReadOnlyList<AvailablePersonDto>> FindAvailablePeopleAsync(FindPeopleQuery query, CancellationToken cancellationToken = default)

@@ -21,18 +21,19 @@ public sealed class RevenuePermissionTests
     }
 
     [Theory]
-    [InlineData(Viewer)]
-    [InlineData(Timekeeper)]
-    [InlineData(Outsider)]
-    public async Task Revenue_is_closed_to_everyone_outside_finance_who_manages_no_project(string email)
+    [InlineData(Viewer, true)] // on 1001 (its plan workspace): forbidden its revenue
+    [InlineData(Timekeeper, false)] // not on 1001 at all: not found
+    [InlineData(Outsider, false)]
+    public async Task Revenue_is_closed_to_everyone_outside_finance_who_manages_no_project(string email, bool onProject1)
     {
         var (seeded, fx, period) = await CreateAsync();
         await using var _ = seeded;
         var host = seeded.As(email).Host;
 
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IRevenueSetupService>().ListProjectsAsync());
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IRevenueSetupService>().GetProjectAsync(fx.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IRevenueSetupService>().SubmitEstimateAsync(new SubmitEstimateRequest(fx.Project1, ProjectAccountingFixture.Day, 100, 120)));
+        var refused = onProject1 ? typeof(WorkbenchForbiddenException) : typeof(WorkbenchNotFoundException);
+        await Assert.ThrowsAsync(refused, () => host.Get<IRevenueSetupService>().GetProjectAsync(fx.Project1));
+        await Assert.ThrowsAsync(refused, () => host.Get<IRevenueSetupService>().SubmitEstimateAsync(new SubmitEstimateRequest(fx.Project1, ProjectAccountingFixture.Day, 100, 120)));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IRevenueRunService>().PreviewAsync(period));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IRevenueReportService>().GetRevenueVsBillingsAsync(period));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IRevenueReportService>().GetBacklogAsync(period));
@@ -52,8 +53,8 @@ public sealed class RevenuePermissionTests
         Assert.Equal(EstimateState.Submitted, estimate.Status);
         await setup.RecordDeliveryAsync(new RecordDeliveryRequest(fx.Project1, ProjectAccountingFixture.Day, 1, "Unit 1"));
 
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => setup.GetProjectAsync(fx.Project2));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => setup.SubmitEstimateAsync(new SubmitEstimateRequest(fx.Project2, ProjectAccountingFixture.Day, 1, 1)));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => setup.GetProjectAsync(fx.Project2)); // not on 2002
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => setup.SubmitEstimateAsync(new SubmitEstimateRequest(fx.Project2, ProjectAccountingFixture.Day, 1, 1)));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => setup.ApproveEstimateAsync(estimate.Id, new DecideEstimateRequest()));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => setup.SaveSetupAsync(new SaveRevenueSetupRequest(fx.Project1, RevenueMethodKind.CostPlusFee)));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => setup.ListEstimatesAsync());

@@ -10,7 +10,8 @@ namespace Workbench.Application.Reports;
 /// What the current user may see, worked out once per report run from the same rules the rest of project accounting
 /// uses (<see cref="ProjectAccess"/>): Finance and Admin see everything; a project manager sees their projects'
 /// financials and the contracts those projects are on; hours follow the timekeeping-report rule (Timekeeper/Finance/Admin
-/// everyone, supervisors their direct reports, otherwise yourself).
+/// everyone, supervisors their direct reports, otherwise yourself). Projects the user can't see at all
+/// (<see cref="ProjectVisibility"/>) are left out of project lists and not found as a report parameter.
 /// </summary>
 public sealed record ReportAccessContext(
     string Email,
@@ -24,8 +25,13 @@ public sealed record ReportAccessContext(
     IReadOnlySet<Guid>? FinancialProjects,
 
     /// <summary>Contracts whose values and invoices the user may read; null = every contract.</summary>
-    IReadOnlySet<Guid>? FinancialContracts)
+    IReadOnlySet<Guid>? FinancialContracts,
+
+    /// <summary>Projects the user may see at all (<see cref="ProjectVisibility"/>); null = every project.</summary>
+    IReadOnlySet<Guid>? VisibleProjects = null)
 {
+    public bool CanSeeProject(Guid projectId) => VisibleProjects is null || VisibleProjects.Contains(projectId);
+
     public bool IsFinance => Roles.IsFinance();
 
     public bool IsAdmin => Roles.IsAdmin();
@@ -66,7 +72,7 @@ public sealed class ReportAccess(ProjectAccess projects, IWorkbenchDbContextFact
             }
         }
 
-        return new ReportAccessContext(access.Email, roles, me, visible, managedProjects, contracts);
+        return new ReportAccessContext(access.Email, roles, me, visible, managedProjects, contracts, await projects.Visibility.VisibleProjectIdsAsync(ct));
     }
 
     public static WorkbenchForbiddenException Forbidden(string message) => new(message);

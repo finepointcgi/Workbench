@@ -76,6 +76,7 @@ public sealed partial class StandardReportService(
     public async Task<ReportResultDto> RunAsync(string reportKey, ReportParameters parameters, CancellationToken cancellationToken = default)
     {
         var (entry, context) = await AuthorizeAsync(reportKey, cancellationToken);
+        RequireVisibleProject(context, parameters);
         parameters ??= new ReportParameters();
         var builder = new ReportBuilder(entry.Name);
         switch (entry.Key)
@@ -95,8 +96,14 @@ public sealed partial class StandardReportService(
     public async Task<ReportResultDto> DrillAsync(string reportKey, ReportParameters parameters, string drillKey, CancellationToken cancellationToken = default)
     {
         var (entry, context) = await AuthorizeAsync(reportKey, cancellationToken);
+        RequireVisibleProject(context, parameters);
         parameters ??= new ReportParameters();
         var key = DrillKey.Parse(drillKey);
+        if (key.Id("project") is { } drilled && !context.CanSeeProject(drilled))
+        {
+            throw WorkbenchNotFoundException.For("Project", drilled);
+        }
+
         var builder = new ReportBuilder($"{entry.Name}: detail");
         switch (entry.Key)
         {
@@ -125,6 +132,15 @@ public sealed partial class StandardReportService(
         }
 
         return (entry, context);
+    }
+
+    /// <summary>A project parameter must be a project the user can see: a hidden one is not found.</summary>
+    private static void RequireVisibleProject(ReportAccessContext context, ReportParameters? parameters)
+    {
+        if (parameters?.ProjectId is { } projectId && !context.CanSeeProject(projectId))
+        {
+            throw WorkbenchNotFoundException.For("Project", projectId);
+        }
     }
 
     /// <summary>The report's date range: the parameters' range or dates, else <paramref name="fallback"/>; never past today when <paramref name="capAtToday"/>.</summary>

@@ -9,11 +9,17 @@ namespace Workbench.Application.Identity;
 /// <summary>
 /// Project-accounting access rules that depend on who manages or supervises what, on top of <see cref="AccessControl"/>'s
 /// organization roles. Finance and Admin pass every check here; a project manager reads their own projects' financials
-/// and the funding of contracts their projects are on; a supervisor sees their direct reports' time.
+/// and the funding of contracts their projects are on; a supervisor sees their direct reports' time. A project the user
+/// can't see at all (<see cref="ProjectVisibility"/>) is not found here, before any of these rules says forbidden.
 /// </summary>
-public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access) : IFinancialAccessService
+public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access, ProjectVisibility? visibility = null) : IFinancialAccessService
 {
+    private readonly ProjectVisibility _visibility = visibility ?? new ProjectVisibility(dbFactory, access);
+
     public AccessControl Access => access;
+
+    /// <summary>Who may see which project at all.</summary>
+    public ProjectVisibility Visibility => _visibility;
 
     public async Task<bool> CanReadProjectFinancialsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
@@ -48,10 +54,13 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
         return managed is null || managed.Contains(contractId);
     }
 
-    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless the user is Finance, Admin or the project's manager.</summary>
+    /// <summary>
+    /// Throws <see cref="WorkbenchNotFoundException"/> when the user can't see the project, and
+    /// <see cref="WorkbenchForbiddenException"/> unless they are Finance, Admin or the project's manager.
+    /// </summary>
     public async Task RequireProjectFinancialsAsync(Guid projectId, string what, CancellationToken cancellationToken = default)
     {
-        access.RequireSignedIn();
+        await _visibility.RequireVisibleAsync(projectId, cancellationToken);
         if (!await CanReadProjectFinancialsAsync(projectId, cancellationToken))
         {
             throw new WorkbenchForbiddenException($"Only Finance, administrators and the project's manager can {what}.");
@@ -121,7 +130,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless <see cref="CanSetUpProjectAsync"/>.</summary>
     public async Task RequireProjectSetupAsync(Guid projectId, string what, CancellationToken cancellationToken = default)
     {
-        access.RequireSignedIn();
+        await _visibility.RequireVisibleAsync(projectId, cancellationToken);
         if (!await CanSetUpProjectAsync(projectId, cancellationToken))
         {
             throw new WorkbenchForbiddenException($"Only Finance, administrators and the project's manager (with the Project manager role) can {what}.");
