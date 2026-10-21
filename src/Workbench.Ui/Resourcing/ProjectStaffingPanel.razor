@@ -164,13 +164,13 @@ else
             @foreach (var s in slots)
             {
                 <tr data-slot="@($"{s.WbsCode ?? "project"}|{s.LaborCategory}")">
-                    <td>
+                    <td style="min-width: 150px">
                         <div>@s.WbsLabel</div>
                         <div class="mud-text-secondary" style="font-size: 0.8rem">@s.LaborCategory</div>
                     </td>
                     <td style="text-align: right">@ResourcingFormat.Hours(s.LeftHours)</td>
                     <td style="text-align: right">@ResourcingFormat.Hours(s.StaffedHours)</td>
-                    <td class="@GapClass(s.Status)" style="white-space: nowrap">@SlotGapText(s)</td>
+                    <td class="@GapClass(s.Status)">@SlotGapText(s)</td>
                     <td>
                         @if (s.People.Count == 0)
                         {
@@ -178,8 +178,9 @@ else
                         }
                         @foreach (var p in s.People)
                         {
-                            var label = $"{p.Name} · {ResourcingFormat.Hours(p.Hours)} h{(p.Through is { } t ? $" to {t:MMM d}" : "")}";
-                            <MudTooltip Text="@(p.Qualifies ? $"Bills as {s.LaborCategory}" : $"Doesn't bill as {s.LaborCategory}. Check they qualify.")">
+                            var label = $"{p.Name} · {ResourcingFormat.Hours(p.Hours)} h";
+                            var through = p.Through is { } t ? $" Staffed through {t:MMM d}." : "";
+                            <MudTooltip Text="@(p.Qualifies ? $"Bills as {s.LaborCategory}.{through}" : $"Doesn't bill as {s.LaborCategory}. Check they qualify.{through}")">
                                 @if (_canManage)
                                 {
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(p.Qualifies ? Color.Default : Color.Warning)"

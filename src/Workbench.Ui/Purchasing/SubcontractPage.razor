@@ -128,7 +128,7 @@ else
                 else
                 {
                     <MudSimpleTable Dense="true" Elevation="0" data-testid="sub-invoices">
-                        <thead><tr><th>Voucher</th><th>Invoice</th><th>Date</th><th style="text-align:right">Amount</th><th style="text-align:right"><Term Key="retainage">Retainage</Term></th><th>Status</th></tr></thead>
+                        <thead><tr><th><Term Key="voucher">Bill #</Term></th><th>Invoice</th><th>Date</th><th style="text-align:right">Amount</th><th style="text-align:right"><Term Key="retainage">Retainage</Term></th><th>Status</th></tr></thead>
                         <tbody>
                             @foreach (var i in d.Invoices)
                             {

@@ -19,14 +19,30 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
             return [];
         }
 
-        var items = new List<MyTodoItem>();
+        var plans = new List<ProjectStaffingPlanDto>();
         foreach (var project in await context.ManagedProjectsAsync(cancellationToken))
         {
-            items.AddRange(For(await staffing.GetPlanAsync(project.Id, cancellationToken)));
+            plans.Add(await staffing.GetPlanAsync(project.Id, cancellationToken));
+        }
+
+        var unbudgeted = plans.Where(p => !p.HasLaborBudget).ToList();
+        var items = plans.Where(p => p.HasLaborBudget || unbudgeted.Count == 1).SelectMany(For).ToList();
+        if (unbudgeted.Count > 1)
+        {
+            // One item for all of them, so several new projects don't crowd out everything else.
+            var codes = unbudgeted.Select(p => p.ProjectCode).ToList();
+            items.Add(new MyTodoItem(
+                $"staffing:budget:{string.Join(",", codes)}", TodoCategories.Project,
+                $"Budget {codes.Count} projects by labor category",
+                $"{Join(codes)} have no labor budget yet. Say how many hours of each labor category each WBS element may use, then staff people into those hours.",
+                TodoUrgency.ThisWeek, null, $"projects/{unbudgeted[0].ProjectId}/budgets", $"Start with {codes[0]}", Priority: 5));
         }
 
         return items;
     }
+
+    private static string Join(IReadOnlyList<string> codes) =>
+        codes.Count <= 4 ? string.Join(", ", codes.Take(codes.Count - 1)) + " and " + codes[^1] : $"{string.Join(", ", codes.Take(4))} and {codes.Count - 4} more";
 
     public static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan)
     {

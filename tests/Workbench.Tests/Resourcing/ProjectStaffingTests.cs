@@ -267,4 +267,22 @@ public sealed class ProjectStaffingTests
         var todo = Assert.Single(StaffingTodoProvider.For(plan));
         Assert.Equal(("Budget 1001 by labor category", $"projects/{host.Project1}/budgets"), (todo.Title, todo.Link));
     }
+
+    [Fact]
+    public async Task Several_projects_without_a_budget_make_one_to_do()
+    {
+        await using var host = await CreateAsync();
+        await using (var db = await host.Db.CreateAsync())
+        {
+            var p2 = await db.Set<Project>().FindAsync(host.Project2);
+            p2!.ProjectManagerId = host.PmId;
+            await db.SaveChangesAsync();
+        }
+
+        var todos = await host.As(Pm).Get<IMyTodoService>().GetAsync();
+
+        var item = Assert.Single(todos.Items, t => t.Key.StartsWith("staffing:", StringComparison.Ordinal));
+        Assert.Equal(("Budget 2 projects by labor category", "Start with 1001"), (item.Title, item.LinkLabel));
+        Assert.StartsWith("1001 and 2002 have no labor budget yet.", item.Reason, StringComparison.Ordinal);
+    }
 }

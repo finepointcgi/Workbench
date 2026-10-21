@@ -95,6 +95,7 @@ public static class Glossary
         new("capitalize", "Capitalize", "Capitalize", "Record a purchase as a fixed asset and spread its cost over its useful life (depreciation) instead of expensing it all at once."),
         new("depreciation", "Depreciation", "Depreciation", "Spreading a fixed asset's cost over the years it's used."),
         new("subcontract", "Subcontract", "Subcontract", "Work on your contract done by another company, paid through their invoices."),
+        new("voucher", "Bill #", "Voucher number", "The number Workbench gives a vendor bill when it's entered (Costpoint calls it a voucher). The vendor's own number is the Invoice."),
         new("ap", "AP", "Accounts payable", "Bills from vendors the company owes and hasn't paid yet."),
 
         // Resourcing

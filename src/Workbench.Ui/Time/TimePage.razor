@@ -49,7 +49,7 @@ else
     }
 
     <MudPaper Outlined="true" Class="pa-3">
-        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
+        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" StaffedWbs="_staffed" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
     </MudPaper>
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap" Spacing="2">
@@ -85,6 +85,8 @@ else
     [SupplyParameterFromQuery(Name = "date")]
     public string? Date { get; set; }
 
+    private IReadOnlyCollection<Guid> _staffed = [];
+
     private bool NextDisabled => _detail is null || _detail.Timesheet.PeriodEnd >= DateOnly.FromDateTime(DateTime.Now);
 
     protected override Task OnParametersSetAsync() => LoadAsync();
@@ -97,6 +99,7 @@ else
             _error = null;
             var detail = await Timesheets.GetOrCreateMyTimesheetAsync(date);
             _leave = await LeaveFor(detail);
+            _staffed = await StaffedWbsFor(detail);
             _detail = detail;
             _waitingOn = await WaitingOnAsync(detail.Timesheet);
         }
@@ -252,6 +255,25 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    /// <summary>WBS elements the employee is staffed on in the period, so the week starts with those rows (empty). Fails soft.</summary>
+    private async Task<IReadOnlyCollection<Guid>> StaffedWbsFor(TimesheetDetailDto detail)
+    {
+        if (Services.GetService(typeof(Workbench.Contracts.Resourcing.IResourceAllocationService)) is not Workbench.Contracts.Resourcing.IResourceAllocationService allocations)
+        {
+            return [];
+        }
+
+        try
+        {
+            var mine = await allocations.ListMineAsync(detail.Timesheet.PeriodStart, detail.Timesheet.PeriodEnd);
+            return mine.Where(a => a.WbsElementId is not null && a.Hours > 0).Select(a => a.WbsElementId!.Value).ToHashSet();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            return [];
         }
     }
 
