@@ -8,11 +8,15 @@
 
 <PageTitle>Expenses · Workbench</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1">
     <MudText Typo="Typo.h4" HtmlTag="h1">My expense reports</MudText>
     <MudSpacer />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">New report</MudButton>
 </MudStack>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Put what you spent on a trip or for a project in one report, add the receipts and submit it. Your supervisor approves it, then you're reimbursed.
+    Corporate card charges wait under Card charges until you add them to a report.
+</MudText>
 
 <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
     <MudTabPanel Text="Reports">

@@ -66,6 +66,13 @@ else
                                 }
                             </ul>
                         }
+                        @if (!check.Passed && FixFor(check.Kind) is { } fix)
+                        {
+                            <div class="mt-1">
+                                <MudButton Href="@fix.Href" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward"
+                                           data-testid="@($"close-fix-{check.Kind}")">@fix.Label</MudButton>
+                            </div>
+                        }
                     </MudStack>
                 </MudStack>
                 <MudDivider />
@@ -104,6 +111,20 @@ else
     private IReadOnlyList<FiscalPeriodDto> _periods = [];
     private Guid? _periodId;
     private PeriodCloseChecklistDto? _checklist;
+
+    /// <summary>Where each failing check is fixed, so the checklist links there instead of naming a menu path.</summary>
+    private static (string Href, string Label)? FixFor(CloseCheckKind kind) => kind switch
+    {
+        CloseCheckKind.TimesheetsApproved or CloseCheckKind.OdcsDecided => ("approvals", "Open approvals"),
+        CloseCheckKind.TrialBalanceBalanced => ("accounting/journal", "Open journal entries"),
+        CloseCheckKind.AllocationPosted => ("accounting/indirect-rates", "Open indirect rates"),
+        CloseCheckKind.UnbilledAccrual => ("billing/accrual", "Open unbilled accrual"),
+        CloseCheckKind.DepreciationPosted => ("assets/depreciation", "Open depreciation"),
+        CloseCheckKind.BankReconciled => ("cash/reconcile", "Reconcile"),
+        CloseCheckKind.RevenueRecognized => ("accounting/revenue", "Open revenue"),
+        CloseCheckKind.CurrencyRevalued => ("accounting/revaluation", "Open currency revaluation"),
+        _ => null,
+    };
     private IReadOnlyList<UnpostedItemDto> _unposted = [];
     private bool _busy;
     private string? _error;

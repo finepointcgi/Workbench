@@ -128,6 +128,9 @@
     /// </summary>
     [Parameter] public IReadOnlyList<Workbench.Contracts.Leave.LeavePrefillDto>? Prefill { get; set; }
 
+    /// <summary>WBS elements the employee is staffed on this period: they start as rows (without hours), like recently used codes.</summary>
+    [Parameter] public IReadOnlyCollection<Guid>? StaffedWbs { get; set; }
+
     private readonly Dictionary<(Guid WbsElementId, DateOnly Date), decimal> _planned = [];
 
     /// <summary>The day to highlight as today; defaults to the local date.</summary>
@@ -178,10 +181,11 @@
             _rows.Add(row);
         }
 
-        // Remember recently used charge codes so the week starts with the usual rows.
+        // Remember recently used charge codes, and the ones the employee is staffed on, so the week starts with the usual rows.
         if (!Locked)
         {
-            foreach (var recent in Detail.ChargeCodes.Where(c => c.RecentlyUsed && _rows.All(r => r.Code.WbsElementId != c.ChargeCode.WbsElementId)))
+            var staffed = StaffedWbs ?? [];
+            foreach (var recent in Detail.ChargeCodes.Where(c => (c.RecentlyUsed || staffed.Contains(c.ChargeCode.WbsElementId)) && _rows.All(r => r.Code.WbsElementId != c.ChargeCode.WbsElementId)))
             {
                 _rows.Add(Row.For(recent));
             }
