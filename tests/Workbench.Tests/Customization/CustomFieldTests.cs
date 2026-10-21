@@ -277,7 +277,8 @@ public sealed class CustomFieldTests
         await Fields(host).SaveValuesAsync(E.Project, projectId, Values(("program_office", "PEO EIS"))); // Finance manages projects.
         host.As(SeededHost.Viewer);
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => Fields(host).ExportCsvAsync(E.Project));
-        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() => Fields(host).SaveValuesAsync(E.Project, projectId, Values(("program_office", "X"))));
+        // The viewer isn't on the project, so to them it doesn't exist.
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => Fields(host).SaveValuesAsync(E.Project, projectId, Values(("program_office", "X"))));
         await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => Fields(host).GetValuesAsync(E.Project, Guid.NewGuid()));
     }
 

@@ -17,9 +17,13 @@ public sealed class BuiltInEntityFieldCatalog : IEntityFieldCatalog
     public IReadOnlyList<string> EntityTypes { get; } = [.. BuiltInForms.All.Select(f => f.EntityType), .. BuiltInForms.ListOnly];
 
     public Task<IReadOnlyList<EntityFieldDto>> GetFieldsAsync(string entityType, CancellationToken ct = default) =>
-        Task.FromResult(Fields.TryGetValue(entityType, out var fields)
+        Task.FromResult(For(entityType));
+
+    /// <summary>The built-in form (or list) fields of an entity type.</summary>
+    public static IReadOnlyList<EntityFieldDto> For(string entityType) =>
+        Fields.TryGetValue(entityType, out var fields)
             ? fields
-            : throw new ArgumentException($"Unknown entity type \"{entityType}\".", nameof(entityType)));
+            : throw new ArgumentException($"Unknown entity type \"{entityType}\".", nameof(entityType));
 
     public async Task<object?> GetValueAsync(string entityType, Guid recordId, string fieldKey, CancellationToken ct = default)
     {

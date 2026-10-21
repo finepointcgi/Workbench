@@ -367,7 +367,11 @@ public sealed class AutomationExecutor(
                         return Step(AutomationStepOutcome.WouldDo, $"Would set {field} to \"{value}\".");
                     }
 
-                    var catalog = services.GetRequiredService<IEntityFieldCatalog>();
+                    // Built-in fields follow the automation entity's rules (checked above for the principal); custom fields go
+                    // through the custom-fields catalog, which validates, audits and checks the field's own permission.
+                    var catalog = field.StartsWith(CustomFieldValues.CatalogPrefix, StringComparison.Ordinal)
+                        ? services.GetRequiredService<IEntityFieldCatalog>()
+                        : ActivatorUtilities.CreateInstance<BuiltInEntityFieldCatalog>(services);
                     await catalog.SetValueAsync(entity.Key, scope.RecordId!.Value, field, value, ct);
                     return Step(AutomationStepOutcome.Done, $"Set {field} to \"{value}\".");
                 }

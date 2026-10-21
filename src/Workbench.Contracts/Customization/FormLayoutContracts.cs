@@ -6,22 +6,25 @@ namespace Workbench.Contracts.Customization;
 // Layouts never relax a rule: a field the domain needs can't be hidden or made optional, and the server checks fields a
 // layout makes required when the record is saved.
 
-/// <summary>Entity type keys shared by layouts, list views and the field catalog.</summary>
+/// <summary>
+/// Entity type keys shared by layouts, list views and the field catalog: the custom-field keys
+/// (<see cref="CustomizableEntityTypes"/>), plus sales orders, which have a list but no custom fields.
+/// </summary>
 public static class CustomizableEntities
 {
-    public const string Project = "Project";
-    public const string Contract = "Contract";
-    public const string Employee = "Employee";
-    public const string Vendor = "Vendor";
-    public const string Customer = "Customer";
-    public const string PurchaseOrder = "PurchaseOrder";
-    public const string ApBill = "ApBill";
-    public const string Invoice = "Invoice";
-    public const string ExpenseReport = "ExpenseReport";
-    public const string Part = "Part";
-    public const string Opportunity = "Opportunity";
-    public const string Timesheet = "Timesheet";
-    public const string SalesOrder = "SalesOrder";
+    public const string Project = CustomizableEntityTypes.Project;
+    public const string Contract = CustomizableEntityTypes.Contract;
+    public const string Employee = CustomizableEntityTypes.Employee;
+    public const string Vendor = CustomizableEntityTypes.Vendor;
+    public const string Customer = CustomizableEntityTypes.Customer;
+    public const string PurchaseOrder = CustomizableEntityTypes.PurchaseOrder;
+    public const string ApBill = CustomizableEntityTypes.ApBill;
+    public const string Invoice = CustomizableEntityTypes.Invoice;
+    public const string ExpenseReport = CustomizableEntityTypes.ExpenseReport;
+    public const string Part = CustomizableEntityTypes.Part;
+    public const string Opportunity = CustomizableEntityTypes.Opportunity;
+    public const string Timesheet = CustomizableEntityTypes.Timesheet;
+    public const string SalesOrder = "sales-order";
 }
 
 /// <summary>One field's place in a section. <see cref="Required"/> adds a requirement; it never removes one.</summary>
