@@ -1,0 +1,19 @@
+@* A record's Details (custom fields) in a dialog, for records without a page of their own (customers). *@
+
+<MudDialog>
+    <DialogContent>
+        <CustomFieldsSection EntityType="@EntityType" RecordId="RecordId" StatusSet="@StatusSet" Title="@Title" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string EntityType { get; set; } = "";
+    [Parameter] public Guid RecordId { get; set; }
+    [Parameter] public string? StatusSet { get; set; }
+    [Parameter] public string Title { get; set; } = "Details";
+}

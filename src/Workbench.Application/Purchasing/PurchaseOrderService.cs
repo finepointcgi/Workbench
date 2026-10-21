@@ -21,8 +21,11 @@ public sealed class PurchaseOrderService(
     AuditRecorder audit,
     AccessControl access,
     INotificationPublisher notifications,
-    TimeProvider clock) : IPurchaseOrderService
+    TimeProvider clock,
+    Customization.DocumentNumbers? documentNumbers = null) : IPurchaseOrderService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
     private string Me => access.Email;
@@ -375,10 +378,9 @@ public sealed class PurchaseOrderService(
             throw new ArgumentException("The receipt date can't be in the future.");
         }
 
-        var numbers = await db.Set<PurchaseReceipt>().Select(r => r.Number).ToListAsync(cancellationToken);
         var receipt = new PurchaseReceipt
         {
-            Number = PurchasingSupport.NextNumber(numbers, "RCV"),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.Receipt, new(Date: request.ReceivedOn), cancellationToken),
             PurchaseOrderId = po.Id,
             ReceivedOn = request.ReceivedOn,
             ReceivedBy = Me,
@@ -461,10 +463,9 @@ public sealed class PurchaseOrderService(
     {
         var vendor = await PurchasingSupport.FindVendorAsync(db, vendorId, ct);
         PurchasingSupport.EnsureVendorCanTransact(vendor, "ordering");
-        var numbers = await db.Set<PurchaseOrder>().Select(o => o.Number).ToListAsync(ct);
         return new PurchaseOrder
         {
-            Number = PurchasingSupport.NextNumber(numbers, "PO"),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.PurchaseOrder, cancellationToken: ct),
             VendorId = vendor.Id,
             OrderDate = orderDate,
             Terms = PurchasingSupport.Optional(terms, "Terms", 300) ?? $"Net {vendor.PaymentTermsDays}",

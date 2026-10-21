@@ -1,0 +1,141 @@
+@* One custom field's editor, chosen by type. Values are invariant text (see CustomFieldValues): the server validates. *@
+@using System.Globalization
+@inject IServiceProvider Services
+
+@switch (Field.FieldType)
+{
+    case CustomFieldType.LongText:
+        <MudTextField T="string" Value="Value" ValueChanged="SetAsync" Label="@Field.Label" HelperText="@Field.HelpText" Required="@Field.IsRequired"
+                      ReadOnly="@Field.IsReadOnly" Lines="3" Sizing="InputSizing.Auto" MaxLength="4000" Variant="Variant.Outlined" data-testid="@TestId" />
+        break;
+    case CustomFieldType.Number:
+    case CustomFieldType.Currency:
+        <MudNumericField T="decimal?" Value="Number" ValueChanged="SetNumberAsync" Label="@Field.Label" HelperText="@Field.HelpText" Required="@Field.IsRequired"
+                         ReadOnly="@Field.IsReadOnly" HideSpinButtons="true" Format="@(Field.FieldType == CustomFieldType.Currency ? "N2" : null)"
+                         Adornment="@(Field.FieldType == CustomFieldType.Currency ? Adornment.Start : Adornment.None)" AdornmentText="$" Variant="Variant.Outlined" data-testid="@TestId" />
+        break;
+    case CustomFieldType.Date:
+        <MudDatePicker Date="Date" DateChanged="SetDateAsync" Label="@Field.Label" HelperText="@Field.HelpText" Required="@Field.IsRequired" ReadOnly="@Field.IsReadOnly"
+                       DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="@(!Field.IsRequired)" Variant="Variant.Outlined" data-testid="@TestId" />
+        break;
+    case CustomFieldType.YesNo:
+        <MudSelect T="string" Value="Value" ValueChanged="SetAsync" Label="@Field.Label" HelperText="@Field.HelpText" Required="@Field.IsRequired"
+                   ReadOnly="@Field.IsReadOnly" Clearable="@(!Field.IsRequired)" Variant="Variant.Outlined" data-testid="@TestId">
+            <MudSelectItem T="string" Value="@("true")">Yes</MudSelectItem>
+            <MudSelectItem T="string" Value="@("false")">No</MudSelectItem>
+        </MudSelect>
+        break;
+    case CustomFieldType.Picklist:
+        <MudSelect T="string" Value="Value" ValueChanged="SetAsync" Label="@Field.Label" HelperText="@Field.HelpText" Required="@Field.IsRequired"
+                   ReadOnly="@Field.IsReadOnly" Clearable="@(!Field.IsRequired)" Variant="Variant.Outlined" data-testid="@TestId">
+            @foreach (var o in Field.Options ?? [])
+            {
+                <MudSelectItem T="string" Value="@o.Code">@o.Label</MudSelectItem>
+            }
+        </MudSelect>
+        break;
+    case CustomFieldType.MultiPicklist:
+        <MudSelect T="string" MultiSelection="true" SelectedValues="Selected" SelectedValuesChanged="SetSelectedAsync" Label="@Field.Label" HelperText="@Field.HelpText"
+                   Required="@Field.IsRequired" ReadOnly="@Field.IsReadOnly" Variant="Variant.Outlined" ToStringFunc="OptionLabel" data-testid="@TestId">
+            @foreach (var o in Field.Options ?? [])
+            {
+                <MudSelectItem T="string" Value="@o.Code">@o.Label</MudSelectItem>
+            }
+        </MudSelect>
+        break;
+    case CustomFieldType.Person:
+        <MudAutocomplete T="string" Value="Value" ValueChanged="SetAsync" SearchFunc="SearchPeopleAsync" Label="@Field.Label" HelperText="@(Field.HelpText ?? "A Workbench user's email")"
+                         Required="@Field.IsRequired" ReadOnly="@Field.IsReadOnly" Clearable="true" CoerceValue="true" ResetValueOnEmptyText="true" MaxItems="10"
+                         Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.Person" data-testid="@TestId" />
+        break;
+    case CustomFieldType.RecordLink:
+        <MudAutocomplete T="string" Value="Value" ValueChanged="SetAsync" SearchFunc="SearchRecordsAsync" ToStringFunc="RecordLabel" Label="@Field.Label" HelperText="@Field.HelpText"
+                         Required="@Field.IsRequired" ReadOnly="@Field.IsReadOnly" Clearable="true" ResetValueOnEmptyText="true" MaxItems="20"
+                         Variant="Variant.Outlined" AdornmentIcon="@Icons.Material.Filled.Link" data-testid="@TestId" />
+        break;
+    case CustomFieldType.Url:
+        <MudTextField T="string" Value="Value" ValueChanged="SetAsync" Label="@Field.Label" HelperText="@(Field.HelpText ?? "https://…")" Required="@Field.IsRequired"
+                      ReadOnly="@Field.IsReadOnly" InputType="InputType.Url" MaxLength="2000" Variant="Variant.Outlined" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Language" data-testid="@TestId" />
+        break;
+    default:
+        <MudTextField T="string" Value="Value" ValueChanged="SetAsync" Label="@Field.Label" HelperText="@Field.HelpText" Required="@Field.IsRequired"
+                      ReadOnly="@Field.IsReadOnly" MaxLength="500" Variant="Variant.Outlined" data-testid="@TestId" />
+        break;
+}
+
+@code {
+    private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
+    private readonly Dictionary<string, string> _recordLabels = [];
+
+    [Parameter, EditorRequired] public CustomFieldValueDto Field { get; set; } = default!;
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private string TestId => $"cf-{Field.Key}";
+
+    private decimal? Number => decimal.TryParse(Value, NumberStyles.Number, Invariant, out var n) ? n : null;
+
+    private DateTime? Date => DateOnly.TryParseExact(Value, "yyyy-MM-dd", Invariant, DateTimeStyles.None, out var d) ? d.ToDateTime(TimeOnly.MinValue) : null;
+
+    private IReadOnlyCollection<string> Selected => (Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    protected override void OnParametersSet()
+    {
+        if (Field.FieldType == CustomFieldType.RecordLink && Value is { } id && Field.Display is { } display)
+        {
+            _recordLabels.TryAdd(id, display);
+        }
+    }
+
+    private Task SetAsync(string? value) => ValueChanged.InvokeAsync(string.IsNullOrWhiteSpace(value) ? null : value);
+
+    private Task SetNumberAsync(decimal? value) => SetAsync(value?.ToString(Invariant));
+
+    private Task SetDateAsync(DateTime? value) => SetAsync(value is { } d ? DateOnly.FromDateTime(d).ToString("yyyy-MM-dd", Invariant) : null);
+
+    private Task SetSelectedAsync(IReadOnlyCollection<string>? values) => SetAsync(values is null ? null : string.Join(",", values));
+
+    private string OptionLabel(string? code) => Field.Options?.FirstOrDefault(o => o.Code == code)?.Label ?? code ?? "";
+
+    private string RecordLabel(string? id) => id is null ? "" : _recordLabels.GetValueOrDefault(id, id);
+
+    private async Task<IEnumerable<string>> SearchPeopleAsync(string? text, CancellationToken ct)
+    {
+        if (Services.GetService(typeof(IUserDirectory)) is not IUserDirectory users)
+        {
+            return [];
+        }
+
+        try
+        {
+            return (await users.SearchAsync(text, 10, ct)).Select(u => u.Email);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchRecordsAsync(string? text, CancellationToken ct)
+    {
+        if (Field.LinkEntityType is null || Services.GetService(typeof(ICustomFieldService)) is not ICustomFieldService fields)
+        {
+            return [];
+        }
+
+        try
+        {
+            var found = await fields.LookupRecordsAsync(Field.LinkEntityType, text, 20, ct);
+            foreach (var r in found)
+            {
+                _recordLabels[r.Code] = r.Label;
+            }
+
+            return found.Select(r => r.Code);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            return [];
+        }
+    }
+}

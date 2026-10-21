@@ -791,3 +791,21 @@ Checks:
   gaps; images and scans go to the provider only then. `LodgingRateChecker` compares each night with the per diem tables
   (the report's per diem or trip destination first, else the folio's city). Values are suggestions; the UI never saves them
   without the person. Sample folios: `tests/Workbench.Tests/Receipts/Samples`.
+
+## Customization (custom fields, picklists, status labels, numbering)
+
+- Guide: `docs/customization.md`. Contracts `Contracts/Customization` (`ICustomFieldService`, `ICustomListService`, `INumberingService`,
+  and the shared `IEntityFieldCatalog`); services `Application/Customization`; decorators `Identity/CustomizationPermissionDecorators.cs`;
+  Admin › Customization (`/admin/customization`).
+- Custom field values live in one shared table (`CustomFieldValue`), never in entity columns. A record type opts in with one
+  `services.AddCustomizableEntity(new CustomizableEntity<T> { ... })` line in `CustomizationRegistration`, then shows
+  `<CustomFieldsSection EntityType="..." RecordId="..." />` on its page (and `CustomFieldsEditor` in its edit dialog: `ValidateAsync`
+  before saving the record, `SaveAsync(id)` after). Entity type keys are kebab-case (`CustomizableEntityTypes`).
+- Sensitive fields go through `ICustomFieldAccessPolicy` (default Finance/Admin); the custom roles catalog replaces it. Don't read
+  `CustomFieldValue` rows directly: go through the service so masking applies.
+- A new dropdown that's just a list of words belongs in a value list (`ValueListCatalog` for built-in ones, read with
+  `ValueLists.ItemsAsync`); a fixed set with behavior stays an enum and gets a label set in `StatusSetCatalog` (pages show
+  `StatusLabels.Label(set, value, fallback)`).
+- New document numbers: add a `DocumentNumberType` (default pattern = the current format) and allocate with an injected
+  `DocumentNumbers.NextAsync` (optional constructor parameter, so hand-built services still work) or, from static code,
+  `DocumentNumbers.NextInUnitOfWorkAsync(db, ...)`. Never compute "max + 1" yourself.

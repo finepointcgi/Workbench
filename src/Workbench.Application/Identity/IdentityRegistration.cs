@@ -110,6 +110,7 @@ public static class IdentityRegistration
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         services.AddWorkbenchIntegrationPermissions(); // Integrations: webhooks, API keys and connectors are Admin-only and closed to API keys themselves.
         services.AddWorkbenchReceiptPermissions(); // Receipt library: your own files; others' files only through a line you can see (approvers, Finance, the PM).
+        services.AddWorkbenchCustomizationPermissions(); // Customization: definitions Admin; record values follow the record (sensitive fields through ICustomFieldAccessPolicy).
         return services;
     }
 

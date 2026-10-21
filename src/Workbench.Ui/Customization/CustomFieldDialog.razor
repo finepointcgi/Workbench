@@ -1,0 +1,109 @@
+@inject ICustomFieldService Fields
+@inject ICustomListService Lists
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_error</MudAlert>
+        }
+        <MudStack Spacing="3">
+            <MudTextField T="string" @bind-Value="_label" Label="Label" Required="true" MaxLength="100" Variant="Variant.Outlined" Immediate="true" data-testid="field-label" />
+            <MudSelect T="CustomFieldType" @bind-Value="_type" Label="Type" Variant="Variant.Outlined" Disabled="@(Field is { ValueCount: > 0 })" data-testid="field-type"
+                       HelperText="@(Field is { ValueCount: > 0 } ? "The type is fixed once records have values." : null)">
+                @foreach (var t in Enum.GetValues<CustomFieldType>())
+                {
+                    <MudSelectItem T="CustomFieldType" Value="t">@CustomizationFormat.TypeName(t)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_type is CustomFieldType.Picklist or CustomFieldType.MultiPicklist)
+            {
+                <MudSelect T="string" @bind-Value="_list" Label="Value list" Variant="Variant.Outlined" Required="true" HelperText="Manage lists on the Picklists tab." data-testid="field-list">
+                    @foreach (var l in _lists)
+                    {
+                        <MudSelectItem T="string" Value="@l.Key">@l.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            @if (_type == CustomFieldType.RecordLink)
+            {
+                <MudSelect T="string" @bind-Value="_link" Label="Links to" Variant="Variant.Outlined" Required="true">
+                    @foreach (var e in Entities)
+                    {
+                        <MudSelectItem T="string" Value="@e.EntityType">@e.LabelPlural</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField T="string" @bind-Value="_help" Label="Help text" MaxLength="500" Variant="Variant.Outlined" Lines="2" HelperText="Shown next to the field." />
+            <MudTextField T="string" @bind-Value="_default" Label="Default value" Variant="Variant.Outlined" HelperText="@($"For new records. {CustomFieldValues.FormatHelp}")" />
+            <MudCheckBox T="bool" @bind-Value="_required" Label="Required: records can't be saved without it" Color="Color.Primary" />
+            @if (Entities.FirstOrDefault(e => e.EntityType == EntityType)?.HasApproval == true)
+            {
+                <MudCheckBox T="bool" @bind-Value="_lockAfterApproval" Label="Read-only once the record is approved" Color="Color.Primary" />
+            }
+            <MudCheckBox T="bool" @bind-Value="_sensitive" Label="Sensitive: only Finance and administrators see the value" Color="Color.Primary" data-testid="field-sensitive" />
+            @if (Field is not null)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Key <code>@Field.Key</code> (used by the API, reports and automations; it never changes)@(Field.PermissionKey is { } p ? $" · permission {p}" : "")</MudText>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_saving || string.IsNullOrWhiteSpace(_label))" data-testid="save-field">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string? EntityType { get; set; }
+    [Parameter] public CustomFieldDefinitionDto? Field { get; set; }
+    [Parameter] public IReadOnlyList<CustomizableEntityDto> Entities { get; set; } = [];
+
+    private IReadOnlyList<ValueListDto> _lists = [];
+    private string? _label;
+    private CustomFieldType _type = CustomFieldType.Text;
+    private string? _list;
+    private string? _link;
+    private string? _help;
+    private string? _default;
+    private bool _required;
+    private bool _lockAfterApproval;
+    private bool _sensitive;
+    private bool _saving;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Field is { } f)
+        {
+            (_label, _type, _list, _link, _help, _default) = (f.Label, f.FieldType, f.ValueListKey, f.LinkEntityType, f.HelpText, f.DefaultValue);
+            (_required, _lockAfterApproval, _sensitive) = (f.IsRequired, f.ReadOnlyAfterApproval, f.IsSensitive);
+        }
+
+        _lists = await Lists.ListAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var request = new SaveCustomFieldRequest(EntityType!, _label!, _type, Field?.Key, _help, _required, _default, _lockAfterApproval, _sensitive, _list, _link, Field?.IsActive ?? true);
+            var saved = await Fields.SaveDefinitionAsync(Field?.Id, request);
+            Snackbar.Add($"{saved.Label} saved.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

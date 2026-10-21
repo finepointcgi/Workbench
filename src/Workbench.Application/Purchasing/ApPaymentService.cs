@@ -26,8 +26,11 @@ public sealed class ApPaymentService(
     AccessControl access,
     SecurityEventLog securityLog,
     IOptions<PurchasingOptions> options,
-    TimeProvider clock) : IApPaymentService
+    TimeProvider clock,
+    Customization.DocumentNumbers? documentNumbers = null) : IApPaymentService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private static readonly PaymentRunStatus[] OpenRuns = [PaymentRunStatus.Draft, PaymentRunStatus.Approved];
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
@@ -85,10 +88,9 @@ public sealed class ApPaymentService(
         var vendors = await db.Set<Vendor>().AsNoTracking().Where(v => vendorIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, cancellationToken);
         var scheduled = await ScheduledAsync(db, ids, null, cancellationToken);
         var scheduledTx = await ScheduledTransactionAsync(db, ids, cancellationToken);
-        var numbers = await db.Set<ApPaymentRun>().Select(r => r.Number).ToListAsync(cancellationToken);
         var run = new ApPaymentRun
         {
-            Number = PurchasingSupport.NextNumber(numbers, "PR"),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.PaymentRun, new(Date: request.PaymentDate), cancellationToken),
             PaymentDate = request.PaymentDate,
             Method = request.Method.ToDomain(),
             CreatedBy = access.Email,

@@ -216,6 +216,7 @@ public static class NavCatalog
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, AdminOnly, Keywords: "sign in accounts security invite deactivate"),
         new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, AdminOnly, Keywords: "ai claude assistant usage audit bedrock govcloud"),
         new(Admin, "Integrations", "EDI", "admin/integrations/edi", Icons.Material.Filled.SwapHoriz, FinanceOnly, Keywords: "x12 850 855 856 810 edi trading partners vendors"),
+        new(Admin, "People and access", "Customization", "admin/customization", Icons.Material.Filled.Tune, AdminOnly, Keywords: "custom fields picklists lists dropdowns status labels sub-status numbering document numbers"),
         new(Admin, null, "Integrations", "admin/integrations", Icons.Material.Filled.Hub, AdminOnly, Keywords: "webhooks api keys teams slack quickbooks sftp export connector"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, FinanceOnly, Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),

@@ -1,0 +1,107 @@
+@* Document numbering patterns. Tokens: {YYYY} {YY} {MM} {FY} {company} {contract} (invoices) and one {seq:N}. *@
+@inject INumberingService Numbering
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Patterns combine text with tokens: <code>{YYYY}</code> <code>{YY}</code> <code>{MM}</code> year and month of the document date,
+    <code>{FY}</code> fiscal year, <code>{company}</code> company code, <code>{contract}</code> (invoices) and exactly one sequence
+    <code>{seq:6}</code> padded to that many digits. A new sequence continues after the highest number already used.
+</MudText>
+
+<MudTable T="NumberingSchemeDto" Items="_schemes" Dense="true" Hover="true" Elevation="0" Outlined="true" data-testid="numbering-table">
+    <HeaderContent>
+        <MudTh>Document</MudTh>
+        <MudTh>Pattern</MudTh>
+        <MudTh>Sequence</MudTh>
+        <MudTh>Next looks like</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        @{ var edit = _edits[context.DocumentType]; }
+        <MudTd DataLabel="Document">@context.Name</MudTd>
+        <MudTd DataLabel="Pattern" Style="min-width:220px">
+            <MudTextField T="string" Value="edit.Pattern" ValueChanged="v => ChangedAsync(context, v)" Margin="Margin.Dense" MaxLength="60" Immediate="true" DebounceInterval="300"
+                          aria-label="@($"Pattern for {context.Name}")" Placeholder="@context.DefaultPattern" Error="@(edit.Error is not null)" ErrorText="@edit.Error"
+                          data-testid="@($"pattern-{context.DocumentType}")" />
+        </MudTd>
+        <MudTd DataLabel="Sequence" Style="white-space:nowrap">
+            <MudCheckBox T="bool" Value="edit.PerCompany" ValueChanged="v => { edit.PerCompany = v; return PreviewAsync(context); }" Label="Per company" Dense="true" />
+            <MudCheckBox T="bool" Value="edit.ResetEachYear" ValueChanged="v => { edit.ResetEachYear = v; return PreviewAsync(context); }" Label="Restart each year" Dense="true" />
+        </MudTd>
+        <MudTd DataLabel="Next looks like" Style="white-space:nowrap"><code>@(edit.Example ?? context.Example)</code></MudTd>
+        <MudTd>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveAsync(context)" Disabled="@(edit.Error is not null)">Save</MudButton>
+                @if (context.IsCustomized)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ResetAsync(context)">Default</MudButton>
+                }
+            </MudStack>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private sealed class Edit
+    {
+        public string? Pattern { get; set; }
+        public bool PerCompany { get; set; }
+        public bool ResetEachYear { get; set; }
+        public string? Example { get; set; }
+        public string? Error { get; set; }
+    }
+
+    private List<NumberingSchemeDto> _schemes = [];
+    private readonly Dictionary<string, Edit> _edits = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _schemes = (await Numbering.ListAsync()).ToList();
+        foreach (var s in _schemes)
+        {
+            Reset(s);
+        }
+    }
+
+    private void Reset(NumberingSchemeDto s) => _edits[s.DocumentType] = new Edit { Pattern = s.Pattern, PerCompany = s.PerCompany, ResetEachYear = s.ResetEachYear, Example = s.Example };
+
+    private async Task ChangedAsync(NumberingSchemeDto scheme, string? pattern)
+    {
+        _edits[scheme.DocumentType].Pattern = pattern;
+        await PreviewAsync(scheme);
+    }
+
+    private async Task PreviewAsync(NumberingSchemeDto scheme)
+    {
+        var edit = _edits[scheme.DocumentType];
+        var preview = await Numbering.PreviewAsync(scheme.DocumentType, new SaveNumberingSchemeRequest(edit.Pattern ?? "", edit.PerCompany, edit.ResetEachYear));
+        (edit.Example, edit.Error) = (preview.Error is null ? preview.Example : null, preview.Error);
+    }
+
+    private async Task SaveAsync(NumberingSchemeDto scheme)
+    {
+        var edit = _edits[scheme.DocumentType];
+        try
+        {
+            var saved = await Numbering.SaveAsync(scheme.DocumentType, new SaveNumberingSchemeRequest(edit.Pattern ?? "", edit.PerCompany, edit.ResetEachYear));
+            Replace(saved);
+            Snackbar.Add($"{saved.Name} will be numbered like {saved.Example}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            edit.Error = ex.Message;
+        }
+    }
+
+    private async Task ResetAsync(NumberingSchemeDto scheme)
+    {
+        Replace(await Numbering.ResetAsync(scheme.DocumentType));
+        Snackbar.Add($"{scheme.Name} use the built-in pattern again.", Severity.Success);
+    }
+
+    private void Replace(NumberingSchemeDto saved)
+    {
+        _schemes[_schemes.FindIndex(s => s.DocumentType == saved.DocumentType)] = saved;
+        Reset(saved);
+    }
+}
