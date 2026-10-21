@@ -30,6 +30,16 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
                 ApprovalDefaults.Deserialize(version.DefinitionJson).Steps.Count, workflow.UpdatedAtUtc, inFlight));
         }
 
+        // Record approval workflows (automations' "require approval"), after the built-in document types.
+        foreach (var workflow in await db.Set<ApprovalWorkflow>().AsNoTracking().Where(w => w.DocumentType.StartsWith(ApprovalDocumentTypes.CustomPrefix))
+                     .OrderBy(w => w.Name).ToListAsync(cancellationToken))
+        {
+            var (_, version) = await engine.CurrentAsync(db, workflow.DocumentType, access.Email, cancellationToken);
+            var inFlight = await db.Set<ApprovalInstance>().CountAsync(i => i.DocumentType == workflow.DocumentType && i.Status == ApprovalInstanceStatus.Pending, cancellationToken);
+            result.Add(new ApprovalWorkflowSummaryDto(workflow.DocumentType, workflow.Name, workflow.Name, version.Version,
+                ApprovalDefaults.Deserialize(version.DefinitionJson).Steps.Count, workflow.UpdatedAtUtc, inFlight));
+        }
+
         await db.SaveChangesAsync(cancellationToken); // Built-in defaults created on first look.
         return result;
     }
@@ -38,6 +48,7 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
     {
         RequireType(documentType);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        await RequireRecordWorkflowAsync(db, documentType, cancellationToken);
         var dto = await DetailAsync(db, documentType, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return dto;
@@ -74,12 +85,13 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         foreach (var (step, index) in definition.Steps.Select((s, i) => (s, i)))
         {
-            foreach (var rule in new[] { step.Approver, step.Fallback }.OfType<ApproverRule>().Where(r => r.Kind == ApproverRuleKind.OrgRole && r.CustomRoleId is not null))
+            foreach (var rule in new[] { step.Approver, step.Fallback, step.EscalateTo }.OfType<ApproverRule>().Where(r => r.Kind == ApproverRuleKind.OrgRole && r.CustomRoleId is not null))
             {
                 await ApproverRoles.RequireExistsAsync(db, rule.CustomRoleId!.Value, $"Step {index + 1}", cancellationToken);
             }
         }
 
+        await RequireRecordWorkflowAsync(db, documentType, cancellationToken);
         await PublishAsync(db, documentType, name, definition, note, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, documentType, cancellationToken);
@@ -89,9 +101,43 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
     {
         RequireType(documentType);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        await RequireRecordWorkflowAsync(db, documentType, cancellationToken);
         await PublishAsync(db, documentType, ApprovalDefaults.Name(documentType), ApprovalDefaults.For(documentType), "Reset to the built-in default", cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, documentType, cancellationToken);
+    }
+
+    public async Task<ApprovalWorkflowDto> CreateRecordWorkflowAsync(CreateRecordApprovalWorkflowRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var name = string.IsNullOrWhiteSpace(request.Name) ? throw new ArgumentException("Give the workflow a name.") : request.Name.Trim();
+        if (name.Length > 200)
+        {
+            throw new ArgumentException("The name can be at most 200 characters.");
+        }
+
+        var slug = new string(name.ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray());
+        slug = string.Join('-', slug.Split('-', StringSplitOptions.RemoveEmptyEntries));
+        slug = slug.Length == 0 ? "record" : slug[..Math.Min(slug.Length, 40)].Trim('-');
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var key = ApprovalDocumentTypes.CustomPrefix + slug;
+        for (var n = 2; await db.Set<ApprovalWorkflow>().AnyAsync(w => w.DocumentType == key, cancellationToken); n++)
+        {
+            key = $"{ApprovalDocumentTypes.CustomPrefix}{slug}-{n}";
+        }
+
+        await PublishAsync(db, key, name, ApprovalDefaults.Record, "Created", cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return await DetailAsync(db, key, cancellationToken);
+    }
+
+    /// <summary>A record approval workflow must exist (built-in types are created on first look; record ones only by an admin).</summary>
+    private static async Task RequireRecordWorkflowAsync(IWorkbenchDbContext db, string documentType, CancellationToken ct)
+    {
+        if (ApprovalDocumentTypes.IsCustom(documentType) && !await db.Set<ApprovalWorkflow>().AnyAsync(w => w.DocumentType == documentType, ct))
+        {
+            throw new WorkbenchNotFoundException($"There's no approval workflow for \"{documentType}\".");
+        }
     }
 
     public async Task<IReadOnlyList<OrgUnitApproverDto>> ListOrgUnitApproversAsync(CancellationToken cancellationToken = default)
@@ -176,12 +222,23 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
                 throw new ArgumentException($"{where}: set the reminder days to escalate to the approver's supervisor.");
             }
 
+            if (step.EscalateTo is not null && step.RemindAfterBusinessDays is null)
+            {
+                throw new ArgumentException($"{where}: set the days after which the step escalates.");
+            }
+
+            if (step.EscalateTo is { Kind: not (ApproverRuleKind.OrgRole or ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf) })
+            {
+                throw new ArgumentException($"{where}: escalate to an org role or named people.");
+            }
+
             var conditions = (step.Conditions ?? []).Select(c => Condition(c, where)).ToList();
             result.Add(step with
             {
                 Name = step.Name.Trim(),
                 Approver = Rule(step.Approver, where, fallback: false),
                 Fallback = step.Fallback is null ? null : Rule(step.Fallback, $"{where} fallback", fallback: true),
+                EscalateTo = step.EscalateTo is null ? null : Rule(step.EscalateTo, $"{where} escalation", fallback: true),
                 Conditions = conditions,
             });
         }
@@ -237,9 +294,9 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
         ApprovalConditionKind.AmountOver or ApprovalConditionKind.AmountAtMost => c.Amount is { } a && a >= 0 && decimal.Round(a, 2) == a
             ? c with { Ids = null, Values = null }
             : throw new ArgumentException($"{where}: give an amount (0 or more, at most two decimals)."),
-        ApprovalConditionKind.ProjectIn or ApprovalConditionKind.ContractIn or ApprovalConditionKind.OrgUnitIn => c.Ids is { Count: > 0 }
+        ApprovalConditionKind.ProjectIn or ApprovalConditionKind.ContractIn or ApprovalConditionKind.OrgUnitIn or ApprovalConditionKind.CompanyIn => c.Ids is { Count: > 0 }
             ? c with { Amount = null, Values = null }
-            : throw new ArgumentException($"{where}: choose at least one {c.Kind switch { ApprovalConditionKind.ProjectIn => "project", ApprovalConditionKind.ContractIn => "contract", _ => "org unit" }}."),
+            : throw new ArgumentException($"{where}: choose at least one {c.Kind switch { ApprovalConditionKind.ProjectIn => "project", ApprovalConditionKind.ContractIn => "contract", ApprovalConditionKind.CompanyIn => "company", _ => "org unit" }}."),
         ApprovalConditionKind.CostTypeIn => c.Values?.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v.Trim()).ToList() is { Count: > 0 } values
             ? c with { Amount = null, Ids = null, Values = values }
             : throw new ArgumentException($"{where}: list at least one cost type."),
@@ -248,7 +305,7 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
 
     private static void RequireType(string documentType)
     {
-        if (!ApprovalDocumentTypes.All.Contains(documentType))
+        if (!ApprovalDocumentTypes.All.Contains(documentType) && !ApprovalDocumentTypes.IsCustom(documentType))
         {
             throw new WorkbenchNotFoundException($"There's no approval workflow for \"{documentType}\".");
         }
@@ -286,7 +343,7 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
                 .GroupBy(i => i.WorkflowVersionId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct))
             .ToDictionary(x => x.Key, x => x.Count);
         var canEdit = await access.HasAsync(Permission.ApprovalWorkflowsManage, ct);
-        return new ApprovalWorkflowDto(documentType, ApprovalDocumentTypes.Label(documentType), workflow.Name, current.Version,
+        return new ApprovalWorkflowDto(documentType, ApprovalDocumentTypes.IsCustom(documentType) ? workflow.Name : ApprovalDocumentTypes.Label(documentType), workflow.Name, current.Version,
             ApprovalDefaults.Deserialize(current.DefinitionJson),
             versions.Select(v => new ApprovalWorkflowVersionDto(v.Id, v.Version, v.CreatedBy, v.CreatedAtUtc, v.Note, v.Id == current.Id, inFlight.GetValueOrDefault(v.Id))).ToList(),
             canEdit);
@@ -324,6 +381,12 @@ public sealed class PermissionCheckingApprovalWorkflowService(IApprovalWorkflowS
     {
         await access.RequireAsync(Permission.ApprovalWorkflowsManage, "change approval workflows", cancellationToken);
         return await inner.ResetToDefaultAsync(documentType, cancellationToken);
+    }
+
+    public async Task<ApprovalWorkflowDto> CreateRecordWorkflowAsync(CreateRecordApprovalWorkflowRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAdminAsync(cancellationToken);
+        return await inner.CreateRecordWorkflowAsync(request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<OrgUnitApproverDto>> ListOrgUnitApproversAsync(CancellationToken cancellationToken = default)

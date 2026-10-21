@@ -1,0 +1,135 @@
+@* One AND/OR group of conditions, with nested groups (recursive). *@
+
+<MudPaper Outlined="true" Class="@($"pa-3 {(Depth > 0 ? "mt-2" : "")}")" Style="@(Depth > 0 ? "border-left: 3px solid var(--mud-palette-primary);" : "")" data-testid="condition-group">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.body2">Match</MudText>
+        <MudSelect T="GroupLogic" @bind-Value="Group.Logic" Dense="true" Style="max-width:120px" aria-label="Match all or any" ReadOnly="ReadOnly">
+            <MudSelectItem Value="GroupLogic.All">all (AND)</MudSelectItem>
+            <MudSelectItem Value="GroupLogic.Any">any (OR)</MudSelectItem>
+        </MudSelect>
+        <MudText Typo="Typo.body2">of these</MudText>
+        <MudSpacer />
+        @if (Depth > 0 && !ReadOnly)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Remove group" title="Remove group" OnClick="OnRemove" />
+        }
+    </MudStack>
+
+    @foreach (var (condition, index) in Group.Conditions.Select((c, i) => (c, i)))
+    {
+        <MudGrid Spacing="2" Class="mt-1" data-testid="condition">
+            <MudItem xs="12" sm="3">
+                <MudSelect T="ConditionSubject" Value="condition.Subject" ValueChanged="v => SetSubject(condition, v)" Dense="true" Label="Check" ReadOnly="ReadOnly">
+                    @foreach (var subject in Enum.GetValues<ConditionSubject>())
+                    {
+                        <MudSelectItem Value="subject">@AutomationUi.Subject(subject)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (condition.Subject == ConditionSubject.Field)
+            {
+                <MudItem xs="12" sm="3">
+                    <MudSelect T="string" @bind-Value="condition.FieldKey" Dense="true" Label="Field" ReadOnly="ReadOnly" data-testid="condition-field" ToStringFunc="@(key => Fields.FirstOrDefault(f => f.Key == key)?.Label ?? key)">
+                        @foreach (var field in Fields)
+                        {
+                            <MudSelectItem Value="field.Key">@field.Label@(field.IsCustom ? " (custom)" : "")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12" sm="@(condition.Subject == ConditionSubject.Field ? 2 : 3)">
+                <MudSelect T="ConditionOperator" @bind-Value="condition.Operator" Dense="true" Label="Is" ReadOnly="ReadOnly">
+                    @foreach (var op in Operators(condition))
+                    {
+                        <MudSelectItem Value="op">@AutomationUi.Operator(op)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="10" sm="@(condition.Subject == ConditionSubject.Field ? 3 : 5)">
+                @if (condition.Operator is not (ConditionOperator.IsEmpty or ConditionOperator.IsNotEmpty))
+                {
+                    @if (condition.Subject == ConditionSubject.Field)
+                    {
+                        var field = Fields.FirstOrDefault(f => f.Key == condition.FieldKey);
+                        @if (field?.Options is { Count: > 0 } options)
+                        {
+                            <MudSelect T="string" @bind-Value="condition.Value" Dense="true" Label="Value" ReadOnly="ReadOnly">
+                                @foreach (var option in options)
+                                {
+                                    <MudSelectItem Value="option">@option</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <MudTextField @bind-Value="condition.Value" Margin="Margin.Dense" Label="Value" ReadOnly="ReadOnly"
+                                          Placeholder="@(field?.FieldType switch { "date" => "yyyy-mm-dd", "boolean" => "true or false", "money" or "number" => "1234.5", _ => "" })" />
+                        }
+                    }
+                    else
+                    {
+                        <MudSelect T="string" MultiSelection="true" SelectedValues="condition.Values" SelectedValuesChanged="v => condition.Values = v.ToList()" Dense="true" Label="Values" ReadOnly="ReadOnly"
+                                   ToStringFunc="@(id => OptionsFor(condition.Subject).FirstOrDefault(o => o.Id == id)?.Label ?? id)">
+                            @foreach (var option in OptionsFor(condition.Subject))
+                            {
+                                <MudSelectItem Value="option.Id">@option.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                }
+            </MudItem>
+            <MudItem xs="2" sm="1" Class="d-flex align-center">
+                @if (!ReadOnly)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove condition" title="Remove condition" OnClick="() => Group.Conditions.RemoveAt(index)" />
+                }
+            </MudItem>
+        </MudGrid>
+    }
+
+    @foreach (var child in Group.Groups.ToList())
+    {
+        <ConditionGroupEditor Group="child" Fields="Fields" Catalog="Catalog" Depth="Depth + 1" ReadOnly="ReadOnly" OnRemove="() => Group.Groups.Remove(child)" />
+    }
+
+    @if (!ReadOnly)
+    {
+        <MudStack Row="true" Spacing="1" Class="mt-2">
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddCondition" data-testid="add-condition">Condition</MudButton>
+            @if (Depth < 3)
+            {
+                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.AccountTree" OnClick="() => Group.Groups.Add(new GroupModel { Logic = Group.Logic == GroupLogic.All ? GroupLogic.Any : GroupLogic.All })">Group</MudButton>
+            }
+        </MudStack>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public GroupModel Group { get; set; } = default!;
+    [Parameter] public IReadOnlyList<EntityFieldDto> Fields { get; set; } = [];
+    [Parameter, EditorRequired] public AutomationCatalogDto Catalog { get; set; } = default!;
+    [Parameter] public int Depth { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private void AddCondition() => Group.Conditions.Add(new ConditionModel { FieldKey = Fields.FirstOrDefault()?.Key });
+
+    private static void SetSubject(ConditionModel condition, ConditionSubject subject)
+    {
+        condition.Subject = subject;
+        condition.Values = [];
+        condition.Operator = subject == ConditionSubject.Field ? ConditionOperator.Equals : ConditionOperator.In;
+    }
+
+    private static IEnumerable<ConditionOperator> Operators(ConditionModel condition) => condition.Subject == ConditionSubject.Field
+        ? Enum.GetValues<ConditionOperator>()
+        : [ConditionOperator.In, ConditionOperator.NotIn, ConditionOperator.IsEmpty, ConditionOperator.IsNotEmpty];
+
+    private IReadOnlyList<AutomationOptionDto> OptionsFor(ConditionSubject subject) => subject switch
+    {
+        ConditionSubject.ActorRole => Catalog.Roles.Select(r => new AutomationOptionDto(r, r)).ToList(),
+        ConditionSubject.Company => Catalog.Companies,
+        ConditionSubject.OrgUnit => Catalog.OrgUnits,
+        _ => Catalog.Projects,
+    };
+}

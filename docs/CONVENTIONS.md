@@ -820,3 +820,28 @@ Checks:
 - New document numbers: add a `DocumentNumberType` (default pattern = the current format) and allocate with an injected
   `DocumentNumbers.NextAsync` (optional constructor parameter, so hand-built services still work) or, from static code,
   `DocumentNumbers.NextInUnitOfWorkAsync(db, ...)`. Never compute "max + 1" yourself.
+
+## Automation (cross-module, Admin › Automation)
+
+- `Domain/Automations`, `Contracts/Automations`, `Application/Automations`, `Ui/AutomationBuilder` (`/admin/automation`); sheet rules
+  stay in `*/Automation` (`IRuleService`). Guide: `docs/automation.md`.
+- **Record events come from audit rows.** `AuditRecorder.Record` hands every row to `AutomationCapture` in the module's unit of work:
+  a record type it knows (`AutomationEntities`, matched by the audit entity type = the class name) with an enabled automation
+  listening queues an `AutomationQueueItem` saved with the change, and a validation automation (a Block action) is checked right
+  there and throws `AutomationBlockedException` (an `ArgumentException`, so 400). So: **audit your state changes with
+  `before`/`after` objects that include the fields that changed** (camelCase JSON, `Status` as a string) and use the actions
+  `Created`, `Updated`, `Submitted`, `Approved`, `Rejected`, `Deleted` where they apply; that's all a module needs to do.
+- To make a new record type available, add an `AutomationEntity` to `AutomationEntities.All` (key, class, link, company/org unit/
+  project/employee properties, the descriptive fields automations may set, who may change and read it). Built-in fields come from
+  its scalar properties; add `ComputedField`s for figures (totals, percentages). Custom fields come from `IEntityFieldCatalog`.
+- Integration events (`IntegrationOutbox.Raise`) reach automations through `AutomationProcessor.PumpEventsAsync`, which reads the
+  outbox with its own cursor. Schedules, date fields and thresholds are `AutomationScheduler`. Tests call
+  `AutomationProcessor.RunOnceAsync` / `AutomationScheduler.RunAsync` themselves; the web test factory turns the hosted service off.
+- An automation acts as a principal (the actor, or a service user) with that user's roles only: every action checks it
+  (`AutomationEntity.CanWrite`/`CanReadAll`, ownership, field permission keys via `IAutomationPermissions`). Don't add actions that
+  bypass this. Changes an action makes are audited like any other, and queue the next level of the chain (loop protection:
+  chain depth, a chain revisiting the same automation and record, per-record hourly limit).
+- Permissions: `IAutomationPermissions` (`automations.manage`, `automations.run[:id]`, and field keys such as `finance`) is the seam
+  for the permission catalog; the default allows administrators. Record approval workflows (`ApprovalDocumentTypes.CustomPrefix`,
+  `custom-…`) are created in Setup › Approval workflows and decided through `RecordApprovalHandler`.
+

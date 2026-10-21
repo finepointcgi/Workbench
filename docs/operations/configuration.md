@@ -209,6 +209,14 @@ Server-wide connections; each organization turns the assistant on and picks a co
 Outbound integration traffic goes straight from the web host (no proxy) to public addresses only. Allow egress on 443 (and the
 SFTP ports you use) from the web hosts. Signing secrets and connector secrets are encrypted with the Data Protection key ring.
 
+## Automation (Admin › Automation)
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `Automations:BackgroundEnabled` | `true` | Runs queued automations (every few seconds), schedules and thresholds (every five minutes) on this host, for every tenant. Safe on several hosts: queue items are claimed first. Validation rules (refuse a change) run in the request regardless. |
+
+Limits (chain depth, runs per record per hour) and the "pause every automation" switch are tenant settings on the Automation page, not configuration.
+
 ## Public demo
 
 Only for the hosted demo with sample data (`docs/demo-hosting.md`); the `demo` image target sets these.

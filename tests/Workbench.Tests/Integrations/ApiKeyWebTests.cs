@@ -99,7 +99,7 @@ public sealed class ApiKeyWebTests
     // or here if keys must never reach it.
     private static readonly string[] ClosedToKeys =
         ["admin", "host", "users", "workspaces-admin", "integrations", "imports", "migration", "assistant", "me", "support", "help", "costpoint", "timesheet-flags",
-         "vendor-bank", "bank-files", "compliance"]; // bank details, payment files and CPSR/CAS stay out of reach of integration keys
+         "vendor-bank", "bank-files", "compliance", "automations"]; // bank details, payment files, CPSR/CAS and automations stay out of reach of integration keys
 
     [Fact]
     public async Task Every_api_path_belongs_to_a_key_area_or_is_deliberately_closed()

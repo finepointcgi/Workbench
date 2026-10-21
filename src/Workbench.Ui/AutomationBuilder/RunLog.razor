@@ -1,0 +1,83 @@
+@* The run log: every run (dry runs included), newest first, filterable; click a row for its details. *@
+@inject IAutomationService Automations
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudSelect T="AutomationRunStatus?" Value="_status" ValueChanged="v => FilterAsync(v)" Label="Status" Dense="true" Clearable="true" Style="max-width:220px">
+        @foreach (var status in Enum.GetValues<AutomationRunStatus>())
+        {
+            <MudSelectItem T="AutomationRunStatus?" Value="status">@AutomationUi.Status(status)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">Refresh</MudButton>
+</MudStack>
+<MudTable T="AutomationRunDto" Items="_runs" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" OnRowClick="args => ShowAsync(args.Item!)" RowStyle="cursor:pointer"
+          aria-label="Automation runs" data-testid="run-log">
+    <HeaderContent>
+        <MudTh>When</MudTh>
+        @if (AutomationId is null)
+        {
+            <MudTh>Automation</MudTh>
+        }
+        <MudTh>Trigger</MudTh>
+        <MudTh>Record</MudTh>
+        <MudTh>Acted as</MudTh>
+        <MudTh>Result</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="When">@AutomationUi.When(context.StartedAtUtc)</MudTd>
+        @if (AutomationId is null)
+        {
+            <MudTd DataLabel="Automation">@context.AutomationName <span class="mud-text-secondary">v@(context.Version)</span></MudTd>
+        }
+        <MudTd DataLabel="Trigger">@(context.TriggerDetail ?? AutomationUi.Trigger(context.TriggerKind))</MudTd>
+        <MudTd DataLabel="Record">@(context.RecordLabel ?? "—")</MudTd>
+        <MudTd DataLabel="Acted as">@context.Principal</MudTd>
+        <MudTd DataLabel="Result">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="AutomationUi.StatusColor(context.Status)">@AutomationUi.Status(context.Status)</MudChip>
+            @if (context.Error is { } error)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@error</MudText>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No runs yet.</MudText></NoRecordsContent>
+</MudTable>
+
+@code {
+    [Parameter] public Guid? AutomationId { get; set; }
+
+    private IReadOnlyList<AutomationRunDto> _runs = [];
+    private AutomationRunStatus? _status;
+    private bool _loading = true;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    public async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _runs = await Automations.ListRunsAsync(new AutomationRunQuery(AutomationId, _status, Take: 200));
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the run log: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task FilterAsync(AutomationRunStatus? status)
+    {
+        _status = status;
+        await LoadAsync();
+    }
+
+    private Task ShowAsync(AutomationRunDto run) =>
+        Dialogs.ShowAsync<RunDetailDialog>("Run", new DialogParameters<RunDetailDialog> { { d => d.Run, run } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+}

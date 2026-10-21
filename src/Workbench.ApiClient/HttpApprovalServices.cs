@@ -54,6 +54,9 @@ public sealed class HttpApprovalWorkflowService(HttpClient http) : IApprovalWork
     public async Task<ApprovalWorkflowDto> ResetToDefaultAsync(string documentType, CancellationToken cancellationToken = default) =>
         await (await http.PostAsync($"{Root}/{Uri.EscapeDataString(documentType)}/reset", null, cancellationToken)).ReadAsync<ApprovalWorkflowDto>(cancellationToken);
 
+    public async Task<ApprovalWorkflowDto> CreateRecordWorkflowAsync(CreateRecordApprovalWorkflowRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/record", request, cancellationToken)).ReadAsync<ApprovalWorkflowDto>(cancellationToken);
+
     public async Task<IReadOnlyList<OrgUnitApproverDto>> ListOrgUnitApproversAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Root}/org-unit-approvers", cancellationToken)).ReadAsync<List<OrgUnitApproverDto>>(cancellationToken);
 

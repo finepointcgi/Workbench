@@ -180,6 +180,12 @@ internal sealed class ReauthApprovalWorkflowService(IApprovalWorkflowService inn
         return await inner.ResetToDefaultAsync(documentType, cancellationToken);
     }
 
+    public async Task<ApprovalWorkflowDto> CreateRecordWorkflowAsync(CreateRecordApprovalWorkflowRequest request, CancellationToken cancellationToken = default)
+    {
+        await guard.RequireRecentAsync(SensitiveActions.ApprovalWorkflowChange, cancellationToken);
+        return await inner.CreateRecordWorkflowAsync(request, cancellationToken);
+    }
+
     public Task<IReadOnlyList<OrgUnitApproverDto>> ListOrgUnitApproversAsync(CancellationToken cancellationToken = default) => inner.ListOrgUnitApproversAsync(cancellationToken);
 
     public async Task<OrgUnitApproverDto> SetOrgUnitApproverAsync(Guid orgUnitId, Guid? employeeId, CancellationToken cancellationToken = default)

@@ -38,6 +38,7 @@ public static class ChatMessages
             "employee.terminated" => ($"{label}: {S("displayName")}", F(("Last day", S("terminationDate"))), $"hr/employees/{id}"),
             "opportunity.stage_changed" => ($"{label}: {S("number")} {S("name")}", F(("From", S("fromStage")), ("To", S("toStage"))), $"bd/opportunities/{id}"),
             "period.closed" => ($"{label}: {S("name")} FY{S("fiscalYear")}", F(("Dates", $"{S("start")} to {S("end")}")), "accounting/close"),
+            "automation.message" => (S("title"), F(("Message", S("text")), ("Record", S("record")), ("Automation", S("automation"))), S("link") is { Length: > 0 } l ? l : null),
             _ => (label, F(), (string?)null),
         };
 

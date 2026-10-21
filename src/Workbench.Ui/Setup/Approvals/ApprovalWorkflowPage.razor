@@ -3,6 +3,7 @@
 @inject IProjectService Projects
 @inject IContractService Contracts
 @inject IPeopleService People
+@inject Workbench.Contracts.Companies.ICompanyService Companies
 @inject ISnackbar Snackbar
 
 <PageTitle>@(_workflow?.DocumentLabel ?? "Workflow") approval · Setup · Workbench</PageTitle>
@@ -79,6 +80,21 @@ else
                         <MudNumericField T="int?" @bind-Value="step.RemindAfter" Label="Remind after (business days)" Min="1" Max="60" Clearable="true" Style="max-width:200px" ReadOnly="!_workflow.CanEdit" />
                         <MudCheckBox T="bool" @bind-Value="step.Escalate" Label="Also tell the approver's supervisor" Disabled="step.RemindAfter is null" ReadOnly="!_workflow.CanEdit" />
                     </MudItem>
+                    <MudItem xs="12" sm="5">
+                        <MudSelect T="ApproverRuleKind?" @bind-Value="step.EscalateKind" Label="Then escalate to (they can decide too)" Clearable="true" Placeholder="Nobody"
+                                   Disabled="step.RemindAfter is null" ReadOnly="!_workflow.CanEdit" data-testid="escalate-to">
+                            @foreach (var kind in new[] { ApproverRuleKind.OrgRole, ApproverRuleKind.AnyOf })
+                            {
+                                <MudSelectItem T="ApproverRuleKind?" Value="kind">@ApprovalText.Rule(kind)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="7">
+                        @if (step.EscalateKind is not null && step.RemindAfter is not null)
+                        {
+                            <RuleDetail Rule="step.EscalateTo" ReadOnly="!_workflow.CanEdit" />
+                        }
+                    </MudItem>
                     <MudItem xs="12">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <MudText Typo="Typo.subtitle2">Applies</MudText>
@@ -116,6 +132,9 @@ else
                                             break;
                                         case ApprovalConditionKind.OrgUnitIn:
                                             <IdPicker Options="_orgUnits" @bind-Selected="condition.Ids" Label="Org units" ReadOnly="!_workflow.CanEdit" />
+                                            break;
+                                        case ApprovalConditionKind.CompanyIn:
+                                            <IdPicker Options="_companies" @bind-Selected="condition.Ids" Label="Companies" ReadOnly="!_workflow.CanEdit" />
                                             break;
                                         case ApprovalConditionKind.CostTypeIn:
                                             <MudTextField @bind-Value="condition.Values" Label="Cost types (comma-separated, e.g. Travel, Materials)" Dense="true" ReadOnly="!_workflow.CanEdit" />
@@ -195,6 +214,7 @@ else
     private IReadOnlyList<(Guid Id, string Label)> _projects = [];
     private IReadOnlyList<(Guid Id, string Label)> _contracts = [];
     private IReadOnlyList<(Guid Id, string Label)> _orgUnits = [];
+    private IReadOnlyList<(Guid Id, string Label)> _companies = [];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -204,6 +224,7 @@ else
             _projects = (await Projects.ListProjectsAsync()).Select(p => (p.Id, $"{p.Code} {p.Name}")).ToList();
             _contracts = (await Contracts.ListContractsAsync()).Select(c => (c.Id, c.ContractNumber)).ToList();
             _orgUnits = (await People.ListOrgUnitsAsync()).Select(u => (u.Id, $"{u.Code} {u.Name}")).ToList();
+            _companies = (await Companies.GetContextAsync()).Companies.Select(c => (c.Id, $"{c.Code} {c.LegalName}")).ToList();
         }
         catch (Exception ex) when (ex is WorkbenchNotFoundException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -317,6 +338,22 @@ else
 
         private ApproverRuleKind? _fallbackKind;
         public RuleModel Fallback { get; set; } = new();
+
+        public ApproverRuleKind? EscalateKind
+        {
+            get => _escalateKind;
+            set
+            {
+                _escalateKind = value;
+                if (value is { } kind)
+                {
+                    EscalateTo.Kind = kind;
+                }
+            }
+        }
+
+        private ApproverRuleKind? _escalateKind;
+        public RuleModel EscalateTo { get; set; } = new();
         public List<ConditionModel> Conditions { get; set; } = [];
         public ConditionMatch Match { get; set; }
         public SelfApprovalPolicy Self { get; set; }
@@ -340,10 +377,13 @@ else
             AdminsMayAct = s.AdminsMayAct,
             RemindAfter = s.RemindAfterBusinessDays,
             Escalate = s.EscalateToApproverSupervisor,
+            EscalateTo = RuleModel.From(s.EscalateTo),
+            EscalateKind = s.EscalateTo?.Kind,
         };
 
         public ApprovalStepDefinition ToDefinition() => new(Name, Sequence, Approver.ToRule(),
             FallbackKind is { } fk ? new RuleModel { Kind = fk, Role = Fallback.Role, CustomRoleId = Fallback.CustomRoleId, People = Fallback.People }.ToRule() : null,
-            Conditions.Select(c => c.ToCondition()).ToList(), Match, Self, AdminsMayAct, RemindAfter, Escalate && RemindAfter is not null);
+            Conditions.Select(c => c.ToCondition()).ToList(), Match, Self, AdminsMayAct, RemindAfter, Escalate && RemindAfter is not null,
+            EscalateKind is { } ek && RemindAfter is not null ? new RuleModel { Kind = ek, Role = EscalateTo.Role, CustomRoleId = EscalateTo.CustomRoleId, People = EscalateTo.People }.ToRule() : null);
     }
 }

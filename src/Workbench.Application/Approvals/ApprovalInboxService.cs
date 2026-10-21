@@ -15,6 +15,9 @@ public interface IApprovalDocumentHandler
 {
     string DocumentType { get; }
 
+    /// <summary>Whether this handler decides <paramref name="documentType"/> (by default, exactly its own type).</summary>
+    bool Handles(string documentType) => documentType == DocumentType;
+
     Task ApproveAsync(Guid documentId, string? comment, CancellationToken cancellationToken);
 
     Task RejectAsync(Guid documentId, string reason, CancellationToken cancellationToken);
@@ -71,7 +74,7 @@ public sealed class ApprovalInboxService(
     public async Task DecideAsync(string documentType, Guid documentId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var handler = handlers.LastOrDefault(h => h.DocumentType == documentType)
+        var handler = handlers.LastOrDefault(h => h.Handles(documentType))
             ?? throw new WorkbenchNotFoundException($"There's no approval handler for \"{documentType}\".");
         var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
         switch (request.Decision)
