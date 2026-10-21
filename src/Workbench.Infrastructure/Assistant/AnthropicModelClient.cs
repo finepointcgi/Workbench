@@ -221,6 +221,25 @@ internal sealed class AnthropicModelClient(Func<Task<IAnthropicClient>> clientFa
                 case ModelToolResult r:
                     content.Add(new ToolResultBlockParam { ToolUseID = r.ToolUseId, Content = r.Content, IsError = r.IsError });
                     break;
+                case ModelFile { MediaType: "application/pdf" } pdf:
+                    content.Add(new DocumentBlockParam { Source = new Base64PdfSource { Data = pdf.Base64Data } });
+                    break;
+                case ModelFile image:
+                    content.Add(new ImageBlockParam
+                    {
+                        Source = new Base64ImageSource
+                        {
+                            Data = image.Base64Data,
+                            MediaType = image.MediaType switch
+                            {
+                                "image/png" => MediaType.ImagePng,
+                                "image/gif" => MediaType.ImageGif,
+                                "image/webp" => MediaType.ImageWebP,
+                                _ => MediaType.ImageJpeg,
+                            },
+                        },
+                    });
+                    break;
                 case ModelOpaque { Block: ThinkingBlockParam thinking }:
                     content.Add(thinking);
                     break;

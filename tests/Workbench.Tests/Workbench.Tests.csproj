@@ -24,6 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Sample hotel folios and receipts for the receipt reading tests. -->
+    <None Include="Receipts\Samples\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Workbench.Application\Workbench.Application.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Infrastructure\Workbench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Ui\Workbench.Ui.csproj" />

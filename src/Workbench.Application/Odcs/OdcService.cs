@@ -114,11 +114,19 @@ public sealed class OdcService(IWorkbenchDbContextFactory dbFactory, OdcWorkflow
 
     internal static async Task<OdcEntryDto> AttachAsync(IWorkbenchDbContext db, OdcWorkflow workflow, OdcEntry entry, string fileName, Stream content, CancellationToken cancellationToken)
     {
-        var file = await workflow.Files.SaveAsync(db, OdcWorkflow.OdcEntityType, entry.Id, fileName, content, cancellationToken);
+        // An expense receipt also joins the employee's receipt library (read from its text layer), so it can back other lines.
+        var bytes = entry.ExpenseReportId is null ? null : await Receipts.ReceiptLibrary.ReadAllAsync(content, cancellationToken);
+        var file = await workflow.Files.SaveAsync(db, OdcWorkflow.OdcEntityType, entry.Id, fileName, bytes is null ? content : new MemoryStream(bytes), cancellationToken);
         try
         {
             var previous = entry.ReceiptAttachmentId;
             entry.ReceiptAttachmentId = file.Id;
+            if (bytes is not null)
+            {
+                var reading = await new Receipts.ReceiptReader().ReadAsync(file.FileName, file.ContentType, bytes, cancellationToken);
+                Receipts.ReceiptLibrary.AddAttachedUpload(db, file, workflow.Actor, workflow.UtcNow, reading);
+            }
+
             workflow.Audit.Record(db, OdcWorkflow.OdcEntityType, entry.Id, "ReceiptAttached",
                 before: previous is null ? null : new { ReceiptFileId = previous },
                 after: new { ReceiptFileId = file.Id, file.FileName, file.SizeBytes });

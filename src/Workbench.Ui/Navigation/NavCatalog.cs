@@ -73,6 +73,7 @@ public static class NavCatalog
         new(MyWork, null, "Time", "time", Icons.Material.Filled.AccessTime, Everyone, MatchAll: true, Detail: "Timesheet", Keywords: "timesheet hours"),
         new(MyWork, null, "Team time", "time/team", Icons.Material.Filled.Groups, a => a.ShowTeamTime, Keywords: "supervisor timesheets"),
         new(MyWork, null, "Expenses", "expenses", Icons.Material.Filled.Receipt, Everyone, Detail: "Expense report", Keywords: "expense report travel receipts"),
+        new(MyWork, null, "My receipts", "receipts", Icons.Material.Filled.ReceiptLong, Everyone, Keywords: "receipt folio hotel upload attachments files library"),
         new(MyWork, null, "Travel", "travel", Icons.Material.Filled.FlightTakeoff, Everyone, Detail: "Trip", Keywords: "travel authorization trip request per diem advance"),
         new(MyWork, null, "Leave", "leave", Icons.Material.Filled.BeachAccess, Everyone, Keywords: "vacation pto time off"),
         new(MyWork, null, "My requisitions", "purchasing/requisitions", Icons.Material.Filled.PostAdd, Everyone, Detail: "Requisition", Keywords: "purchase request buy"),

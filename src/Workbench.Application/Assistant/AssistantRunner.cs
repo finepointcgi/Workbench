@@ -113,7 +113,8 @@ public sealed class AssistantRunner(
         string? pagePath,
         string factsSource,
         IReadOnlyList<string> records,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<ModelContent>? attachments = null)
     {
         var settings = await gate.LoadSettingsAsync(ct);
         if (await gate.CheckAsync(settings, UserEmail, kind, ct) is not null || gate.Route(settings) is not { } route)
@@ -128,7 +129,10 @@ public sealed class AssistantRunner(
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(gate.Options.RequestTimeout);
-            var request = new ModelRequest(route.Model, system, [ModelMessage.UserText(userMessage)], [], gate.Options.MaxOutputTokens, "low", jsonSchema);
+            var message = attachments is { Count: > 0 }
+                ? new ModelMessage(ModelRole.User, [.. attachments, new ModelText(userMessage)])
+                : ModelMessage.UserText(userMessage);
+            var request = new ModelRequest(route.Model, system, [message], [], gate.Options.MaxOutputTokens, "low", jsonSchema);
             ModelResponse? response = null;
             await foreach (var e in ClientFor(route).StreamAsync(request, timeout.Token))
             {

@@ -1,0 +1,90 @@
+@inject IReceiptLibraryService Library
+
+@* "Choose from my receipts": the signed-in person's own files, unattached first. Returns the chosen ReceiptDto. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudTextField T="string" @bind-Value="_search" Label="Search by name, vendor, place or amount" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" DebounceInterval="300" OnDebounceIntervalElapsed="_ => LoadAsync()"
+                          Clearable="true" OnClearButtonClick="_ => LoadAsync()" data-testid="receipt-search" />
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" aria-label="Loading your receipts" />
+            }
+            else if (_receipts.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="receipt-picker-empty">
+                    @(string.IsNullOrWhiteSpace(_search) ? "You haven't uploaded any receipts yet. Use Upload new instead." : "No receipts match your search.")
+                </MudText>
+            }
+            else
+            {
+                <MudList T="ReceiptDto" Dense="true" aria-label="Your receipts" data-testid="receipt-picker-list">
+                    @foreach (var receipt in _receipts)
+                    {
+                        var current = receipt.Id == CurrentFileId;
+                        <MudListItem T="ReceiptDto" Value="receipt" OnClick="() => Choose(receipt)" Disabled="current"
+                                     Icon="@(receipt.Kind == ReceiptDocumentKind.LodgingFolio ? Icons.Material.Filled.Hotel : receipt.IsImage ? Icons.Material.Filled.Image : Icons.Material.Filled.Description)">
+                            <div class="d-flex flex-wrap align-center gap-2">
+                                <span style="font-weight:500">@receipt.FileName</span>
+                                @if (current)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Attached to this line</MudChip>
+                                }
+                                else if (Matches(receipt))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">Same amount</MudChip>
+                                }
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(receipt.IsInUse ? Color.Default : Color.Success)">@ReceiptFormat.Uses(receipt)</MudChip>
+                            </div>
+                            <div class="mud-text-secondary" style="font-size:0.85rem">
+                                @ReceiptFormat.Kind(receipt.Kind)@(receipt.Vendor is { } v ? $" · {v}" : "") · @ReceiptFormat.Date(receipt.DocumentDate ?? DateOnly.FromDateTime(receipt.UploadedAtUtc)) · @ReceiptFormat.Money(receipt.Total)
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The line's current receipt (shown, not choosable again).</summary>
+    [Parameter] public Guid? CurrentFileId { get; set; }
+
+    /// <summary>The amount being entered: receipts with the same total are marked.</summary>
+    [Parameter] public decimal? Amount { get; set; }
+
+    private IReadOnlyList<ReceiptDto> _receipts = [];
+    private string? _search;
+    private bool _loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _receipts = await Library.ListMineAsync(new ReceiptQuery(_search, Take: 100));
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            _receipts = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool Matches(ReceiptDto receipt) => Amount is > 0 && receipt.Total == Amount;
+
+    private void Choose(ReceiptDto receipt) => MudDialog.Close(DialogResult.Ok(receipt));
+}

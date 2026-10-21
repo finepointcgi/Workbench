@@ -60,6 +60,7 @@ public sealed partial class FakeAssistantModel : IAssistantModelClient
         ModelText t => t.Text.Length,
         ModelToolUse u => u.Name.Length + u.InputJson.Length,
         ModelToolResult r => r.Content.Length,
+        ModelFile f => f.Base64Data.Length / 8,
         _ => 0,
     };
 
