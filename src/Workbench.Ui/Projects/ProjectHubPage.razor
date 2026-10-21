@@ -4,6 +4,7 @@
    The older routes (/projects/{id}/financials, /budgets, /revenue, /evm) land here with that tab selected. *@
 @inject IProjectHubService Hub
 @inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <PageTitle>@(_hub is { } h ? $"{h.Project.Code} {TabLabel}" : "Project") · Workbench</PageTitle>
 
@@ -27,7 +28,7 @@ else
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
         <MudIconButton Href="projects" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to Projects" />
         <MudText Typo="Typo.h4" HtmlTag="h1">@p.Code · @p.Name</MudText>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(p.Status)">@ProjectsFormat.Status(p.Status)</MudChip>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(p.Status)">@_labels.Label("project-status", p.Status, ProjectsFormat.Status(p.Status))</MudChip>
         @if (p.Money is { } money)
         {
             <ProjectHealthChip Money="money" />
@@ -69,8 +70,15 @@ else
 
     private string TabLabel => ProjectsFormat.Tabs.FirstOrDefault(t => t.Slug == _tab).Label ?? "";
 
+    private StatusLabels _labels = StatusLabels.Empty;
+
     protected override async Task OnParametersSetAsync()
     {
+        if (ReferenceEquals(_labels, StatusLabels.Empty))
+        {
+            _labels = await StatusLabels.LoadAsync(Services);
+        }
+
         if (_hub is null || _loadedProject != ProjectId)
         {
             await LoadAsync();

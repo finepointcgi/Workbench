@@ -82,6 +82,10 @@
             <MudSpacer />
             <MudText>Total <b>@PurchasingFormat.Amount(_lines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2, MidpointRounding.AwayFromZero)))</b></MudText>
         </MudStack>
+        @if (Order?.Order.Id is { } cfRecordId)
+        {
+            <CustomFieldsEditor @ref="_custom" EntityType="@CustomizableEntityTypes.PurchaseOrder" RecordId="cfRecordId" />
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
@@ -145,8 +149,13 @@
             isAccount ? null : id, isAccount ? null : l.OdcType, isAccount ? id : null, isAccount ? l.OrgUnitId : null, null, l.IsService, l.LineId);
     }
 
-    private void Save()
+    private async Task Save()
     {
+        if (!await CustomFieldsSavedAsync())
+        {
+            return;
+        }
+
         var lines = _lines.Select(ToRequest).ToList();
         object result = Order is null
             ? new SavePurchaseOrderRequest(_vendorId!.Value, DateOnly.FromDateTime(_orderDate!.Value), lines, _terms, _shipTo, null,
@@ -154,4 +163,8 @@
             : new ChangeOrderRequest(_reason!, lines, _terms);
         MudDialog.Close(DialogResult.Ok(result));
     }
+    // Custom fields of an existing record are checked and saved here; a new record's are set on its page once it exists.
+    private CustomFieldsEditor? _custom;
+
+    private async Task<bool> CustomFieldsSavedAsync() => _custom is null || Order?.Order.Id is not { } id || (await _custom.ValidateAsync() && await _custom.SaveAsync(id));
 }

@@ -113,7 +113,7 @@ public sealed class EngineeringChangeService(
         eco.UpdatedAtUtc = UtcNow;
         if (ecoId is null)
         {
-            eco.Number = await QualityRules.NextNumberAsync<EngineeringChange>(db, c => c.Number, "ECO", cancellationToken);
+            eco.Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.EngineeringChange, null, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken)).Number;
             db.Set<EngineeringChange>().Add(eco);
         }
         else

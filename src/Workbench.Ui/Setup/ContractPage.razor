@@ -132,6 +132,10 @@ else
             }
         </MudItem>
     </MudGrid>
+    @if (_contract is not null)
+    {
+        <CustomFieldsSection EntityType="@CustomizableEntityTypes.Contract" RecordId="_contract.Id" StatusSet="contract-status" Class="mt-3" />
+    }
     </MudTabPanel>
     @if (_contract is { } detail)
     {

@@ -23,8 +23,11 @@ public sealed class ShippingService(
     IOptions<SalesShippingOptions> options,
     IWawfSubmitter submitter,
     TimeProvider clock,
-    ShipmentInvoicer? invoicer = null) : IShippingService
+    ShipmentInvoicer? invoicer = null,
+    Customization.DocumentNumbers? documentNumbers = null) : IShippingService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
     // ---- Picking ----
@@ -75,7 +78,7 @@ public sealed class ShippingService(
         var parts = await db.Set<Part>().AsNoTracking().Where(p => partIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, cancellationToken);
         var pick = new PickList
         {
-            Number = await SalesRules.NextNumberAsync(db.Set<PickList>(), q => q.Select(p => p.Number), "PK-", cancellationToken),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.PickList, cancellationToken: cancellationToken),
             SalesOrderId = order.Id,
             Status = PickListStatus.Open,
             CreatedBy = audit.Actor,
@@ -313,7 +316,7 @@ public sealed class ShippingService(
 
         var shipment = new Shipment
         {
-            Number = await SalesRules.NextNumberAsync(db.Set<Shipment>(), q => q.Select(s => s.Number), "SH-", cancellationToken),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.Shipment, cancellationToken: cancellationToken),
             CompanyId = order.CompanyId,
             SalesOrderId = order.Id,
             Status = ShipmentStatus.Packing,

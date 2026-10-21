@@ -1,0 +1,204 @@
+@* The field designer: one record type at a time, drag (or use the arrows) to set the order records show them in. *@
+@inject ICustomFieldService Fields
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject Microsoft.JSInterop.IJSRuntime JS
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
+    <MudSelect T="string" Value="_entity" ValueChanged="SelectAsync" Label="Record type" Variant="Variant.Outlined" Dense="true" Style="min-width:260px" data-testid="entity-type">
+        @foreach (var e in _entities)
+        {
+            <MudSelectItem T="string" Value="@e.EntityType">@e.LabelPlural</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSwitch T="bool" Value="_showRetired" ValueChanged="ShowRetiredAsync" Label="Show retired fields" Color="Color.Primary" />
+    <MudSpacer />
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="@(_fields.Count == 0)">Export values (CSV)</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" Disabled="@(_entity is null)" data-testid="add-field">Add field</MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_fields.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-6 text-center">
+        <MudIcon Icon="@Icons.Material.Filled.DynamicForm" Size="Size.Large" Class="mud-text-secondary" />
+        <MudText Class="mud-text-secondary mt-2">@(Current?.LabelPlural ?? "This record type") have no custom fields yet. Fields you add show in a Details section on each record's page and edit dialog.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Drag fields to reorder them. Retired fields are hidden from records but keep their values and history.</MudText>
+    <MudDropContainer T="CustomFieldDefinitionDto" @ref="_container" Items="_fields" ItemsSelector="@((_, _) => true)" ItemDropped="DroppedAsync" Class="d-flex flex-column">
+        <ChildContent>
+            <MudDropZone T="CustomFieldDefinitionDto" Identifier="fields" AllowReorder="true" Class="d-flex flex-column gap-2" data-testid="field-list" />
+        </ChildContent>
+        <ItemRenderer>
+            <MudPaper Outlined="true" Class="@($"pa-3 d-flex align-center gap-3 {(context.IsActive ? "" : "mud-text-disabled")}")" Style="cursor:grab" data-testid="@($"field-{context.Key}")">
+                <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Class="mud-text-secondary" />
+                <MudIcon Icon="@CustomizationFormat.TypeIcon(context.FieldType)" Color="Color.Primary" />
+                <div class="flex-grow-1">
+                    <MudText Typo="Typo.body1"><b>@context.Label</b> <span class="mud-text-secondary">· @CustomizationFormat.TypeName(context.FieldType)</span></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @context.Key@(context.ValueListKey is null ? "" : $" · list {context.ValueListKey}")@(context.LinkEntityType is null ? "" : $" · links to {context.LinkEntityType}") · @context.ValueCount value@(context.ValueCount == 1 ? "" : "s")
+                    </MudText>
+                </div>
+                @if (context.IsRequired) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Required</MudChip> }
+                @if (context.ReadOnlyAfterApproval) { <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Locked after approval</MudChip> }
+                @if (context.IsSensitive) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Lock">Sensitive</MudChip> }
+                @if (!context.IsActive) { <MudChip T="string" Size="Size.Small">Retired</MudChip> }
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="@($"Move {context.Label} up")" OnClick="() => MoveAsync(context, -1)" Disabled="@(_fields.IndexOf(context) == 0)" />
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" aria-label="@($"Move {context.Label} down")" OnClick="() => MoveAsync(context, 1)" Disabled="@(_fields.IndexOf(context) == _fields.Count - 1)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {context.Label}")" OnClick="() => EditAsync(context)" />
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ToggleAsync(context)">@(context.IsActive ? "Retire" : "Restore")</MudButton>
+            </MudPaper>
+        </ItemRenderer>
+    </MudDropContainer>
+}
+
+<MudPaper Outlined="true" Class="pa-4 mt-4">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Find records by their details</MudText>
+    <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Label="Search custom field values" Immediate="true" DebounceInterval="300"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Clearable="true" data-testid="custom-search" />
+    @if (_hits.Count > 0)
+    {
+        <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+            <thead><tr><th>Record</th><th>Field</th><th>Value</th></tr></thead>
+            <tbody>
+                @foreach (var h in _hits)
+                {
+                    <tr>
+                        <td>@h.EntityLabel · @if (h.Link is not null) { <MudLink Href="@h.Link">@h.Title</MudLink> } else { @h.Title }</td>
+                        <td>@h.FieldLabel</td>
+                        <td>@h.Display</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+    else if (!string.IsNullOrWhiteSpace(_search) && _search.Trim().Length >= 2)
+    {
+        <MudText Class="mud-text-secondary mt-2">No records of this type have that in their details.</MudText>
+    }
+</MudPaper>
+
+@code {
+    private IReadOnlyList<CustomizableEntityDto> _entities = [];
+    private List<CustomFieldDefinitionDto> _fields = [];
+    private MudDropContainer<CustomFieldDefinitionDto>? _container;
+    private string? _entity;
+    private bool _showRetired = true;
+    private bool _loading = true;
+    private string? _search;
+    private IReadOnlyList<CustomFieldSearchHitDto> _hits = [];
+
+    [Parameter] public string? EntityType { get; set; }
+
+    private CustomizableEntityDto? Current => _entities.FirstOrDefault(e => e.EntityType == _entity);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _entities = await Fields.ListEntityTypesAsync();
+        _entity = _entities.FirstOrDefault(e => e.EntityType == EntityType)?.EntityType ?? _entities.FirstOrDefault()?.EntityType;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _fields = _entity is null ? [] : (await Fields.ListDefinitionsAsync(_entity, _showRetired)).ToList();
+        _loading = false;
+        _container?.Refresh();
+    }
+
+    private async Task SelectAsync(string entity)
+    {
+        _entity = entity;
+        await LoadAsync();
+    }
+
+    private async Task ShowRetiredAsync(bool value)
+    {
+        _showRetired = value;
+        await LoadAsync();
+    }
+
+    private async Task DroppedAsync(MudItemDropInfo<CustomFieldDefinitionDto> drop)
+    {
+        if (drop.Item is not { } item)
+        {
+            return;
+        }
+
+        _fields.Remove(item);
+        _fields.Insert(Math.Clamp(drop.IndexInZone, 0, _fields.Count), item);
+        await SaveOrderAsync();
+    }
+
+    private async Task MoveAsync(CustomFieldDefinitionDto field, int by)
+    {
+        var index = _fields.IndexOf(field);
+        _fields.RemoveAt(index);
+        _fields.Insert(Math.Clamp(index + by, 0, _fields.Count), field);
+        await SaveOrderAsync();
+    }
+
+    private async Task SaveOrderAsync()
+    {
+        try
+        {
+            _fields = (await Fields.ReorderAsync(_entity!, _fields.Select(f => f.Id).ToList())).Where(f => _showRetired || f.IsActive).ToList();
+            _container?.Refresh();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            await LoadAsync();
+        }
+    }
+
+    private async Task EditAsync(CustomFieldDefinitionDto? field)
+    {
+        var parameters = new DialogParameters<CustomFieldDialog> { { d => d.EntityType, _entity }, { d => d.Field, field }, { d => d.Entities, _entities } };
+        var dialog = await DialogService.ShowAsync<CustomFieldDialog>(field is null ? "Add field" : $"Edit {field.Label}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task ToggleAsync(CustomFieldDefinitionDto field)
+    {
+        try
+        {
+            await Fields.SetActiveAsync(field.Id, !field.IsActive);
+            Snackbar.Add(field.IsActive ? $"{field.Label} retired; its values are kept." : $"{field.Label} restored.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SearchAsync(string? text)
+    {
+        _search = text;
+        _hits = string.IsNullOrWhiteSpace(text) || text.Trim().Length < 2 ? [] : await Fields.SearchAsync(text, _entity, 50);
+    }
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            await CustomizationFormat.DownloadAsync(JS, await Fields.ExportCsvAsync(_entity!));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

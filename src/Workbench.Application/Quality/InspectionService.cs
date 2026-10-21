@@ -313,7 +313,7 @@ public sealed class InspectionService(IWorkbenchDbContextFactory dbFactory, Mate
         {
             ncr = new Nonconformance
             {
-                Number = await QualityRules.NextNumberAsync<Nonconformance>(db, n => n.Number, "NCR", cancellationToken),
+                Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Nonconformance, null, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken)).Number,
                 PartId = part.Id,
                 Quantity = totalRejected,
                 Source = inspection.Kind switch

@@ -82,7 +82,7 @@ public sealed class NonconformanceService(
         var balance = db.Set<InventoryBalance>().Local.First(b => b.Id == request.BalanceId);
         var ncr = new Nonconformance
         {
-            Number = await QualityRules.NextNumberAsync<Nonconformance>(db, n => n.Number, "NCR", cancellationToken),
+            Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Nonconformance, null, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken)).Number,
             PartId = part.Id, Lot = balance.Lot, Serial = balance.Serial, Quantity = quantity, Source = NonconformanceSource.Stock, DefectCodes = codes,
             Description = description, CreatedBy = audit.Actor, CreatedAtUtc = UtcNow, UpdatedAtUtc = UtcNow,
         };
@@ -380,7 +380,7 @@ public sealed class NonconformanceService(
 
         var debitMemo = new VendorDebitMemo
         {
-            Number = await QualityRules.NextNumberAsync<VendorDebitMemo>(db, m => m.Number, "DM", ct),
+            Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.DebitMemo, null, DateOnly.FromDateTime(DateTime.UtcNow), ct)).Number,
             VendorId = ncr.VendorId!.Value, NonconformanceId = ncr.Id, PurchaseOrderLineId = ncr.PurchaseOrderLineId, PartId = part.Id, Quantity = ncr.Quantity,
             UnitPrice = unitPrice, Amount = amount, ReturnAuthorization = ncr.ReturnAuthorization,
             Date = date, CreatedBy = engine.Actor, CreatedAtUtc = UtcNow,

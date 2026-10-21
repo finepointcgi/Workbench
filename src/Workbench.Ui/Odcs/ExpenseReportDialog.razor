@@ -10,6 +10,10 @@
             </MudStack>
             <MudTextField @bind-Value="_purpose" Label="Business purpose" Lines="2" />
         </MudStack>
+        @if (Existing?.Id is { } cfRecordId)
+        {
+            <CustomFieldsEditor @ref="_custom" EntityType="@CustomizableEntityTypes.ExpenseReport" RecordId="cfRecordId" />
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
@@ -41,6 +45,19 @@
         }
     }
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(
+    private async Task Save()
+    {
+        if (!await CustomFieldsSavedAsync())
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(
         new SaveExpenseReportRequest(_title!.Trim(), OdcFormat.ToDateOnly(_start), OdcFormat.ToDateOnly(_end), _purpose)));
+    }
+
+    // Custom fields of an existing record are checked and saved here; a new record's are set on its page once it exists.
+    private CustomFieldsEditor? _custom;
+
+    private async Task<bool> CustomFieldsSavedAsync() => _custom is null || Existing?.Id is not { } id || (await _custom.ValidateAsync() && await _custom.SaveAsync(id));
 }

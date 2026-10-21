@@ -76,6 +76,7 @@ else if (_opportunity is { } o)
                     </MudStack>
                 }
             }
+            <CustomFieldsSection EntityType="@CustomizableEntityTypes.Opportunity" RecordId="o.Id" StatusSet="opportunity-stage" CanEdit="o.CanEdit" Class="mt-4" />
         </MudTabPanel>
         <MudTabPanel Text="Team and competition">
             @if (_tab == "team")

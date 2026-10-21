@@ -23,7 +23,8 @@ public enum FieldRestriction
 public sealed record SourceField(string Key, string Label, ReportColumnType Type, FieldRestriction Restriction = FieldRestriction.None, string? Description = null);
 
 /// <summary>Rows loaded from a source: values line up with <see cref="ReportSource.Fields"/>.</summary>
-public sealed record SourceRows(IReadOnlyList<object?[]> Rows, bool Truncated);
+/// <param name="RecordIds">Per row, the id of the <see cref="ReportSource.CustomFieldEntity"/> record it shows (custom field columns).</param>
+public sealed record SourceRows(IReadOnlyList<object?[]> Rows, bool Truncated, IReadOnlyList<Guid?>? RecordIds = null);
 
 /// <summary>
 /// A curated report-writer data source. Each one loads its rows already limited to what the user may see (the same rules
@@ -46,6 +47,9 @@ public abstract class ReportSource
 
     public abstract IReadOnlyList<SourceField> Fields { get; }
 
+    /// <summary>The customizable entity type each row is (or belongs to), so its custom fields can be added as columns.</summary>
+    public virtual string? CustomFieldEntity => null;
+
     /// <summary>Why the user can't use this source at all, or null when they can.</summary>
     public virtual string? Unavailable(ReportAccessContext access) => null;
 
@@ -60,6 +64,9 @@ public abstract class ReportSource
 
     protected static SourceRows Rows<T>(List<T> loaded, Func<T, object?[]> map) =>
         new(loaded.Take(RowLimit).Select(map).ToList(), loaded.Count > RowLimit);
+
+    protected static SourceRows Rows<T>(List<T> loaded, Func<T, object?[]> map, Func<T, Guid?> recordId) =>
+        new(loaded.Take(RowLimit).Select(map).ToList(), loaded.Count > RowLimit, loaded.Take(RowLimit).Select(recordId).ToList());
 
     protected static string? Lookup<TKey>(IReadOnlyDictionary<TKey, string> names, TKey? key)
         where TKey : struct => key is { } k && names.TryGetValue(k, out var n) ? n : null;
@@ -320,6 +327,7 @@ public sealed class OdcSource : ReportSource
 public sealed class InvoiceSource : ReportSource
 {
     public override string Key => ReportSourceKeys.Invoices;
+    public override string? CustomFieldEntity => Contracts.Customization.CustomizableEntityTypes.Invoice;
     public override string Name => "Invoices";
     public override string Description => "Customer invoices with totals, payments and open balance.";
     public override string? DateField => "invoice_date";
@@ -373,7 +381,7 @@ public sealed class InvoiceSource : ReportSource
             var balance = i.Balance;
             return [i.Number, i.Type, i.Status, customers.GetValueOrDefault(i.CustomerId), contracts.GetValueOrDefault(i.ContractId), i.InvoiceDate, i.DueDate, i.PeriodFrom, i.PeriodTo,
                 i.Total, i.Withheld, i.AmountPaid, i.AmountCredited, balance, balance > 0 && today > i.DueDate ? today.DayNumber - i.DueDate.DayNumber : 0];
-        });
+        }, i => (Guid?)i.Id);
     }
 }
 
@@ -381,6 +389,7 @@ public sealed class InvoiceSource : ReportSource
 public sealed class ApBillSource : ReportSource
 {
     public override string Key => ReportSourceKeys.ApBills;
+    public override string? CustomFieldEntity => Contracts.Customization.CustomizableEntityTypes.ApBill;
     public override string Name => "AP bills";
     public override string Description => "Vendor bills with amounts, retainage, payments and open balance.";
     public override string? DateField => "invoice_date";
@@ -427,7 +436,7 @@ public sealed class ApBillSource : ReportSource
             var open = b.Status == ApBillStatus.Posted ? b.Amount - b.PaidAmount : 0m;
             return [b.Number, vendor?.Code, vendor?.Name, b.InvoiceNumber, b.InvoiceDate, b.DueDate, b.Status, b.Amount, b.RetainageAmount, b.PaidAmount, open,
                 open > 0 && today > b.DueDate ? today.DayNumber - b.DueDate.DayNumber : 0, b.Description, b.EnteredBy];
-        });
+        }, b => (Guid?)b.Id);
     }
 }
 
@@ -438,6 +447,7 @@ public sealed class ApBillSource : ReportSource
 public sealed class ProjectWbsSource : ReportSource
 {
     public override string Key => ReportSourceKeys.ProjectsWbs;
+    public override string? CustomFieldEntity => Contracts.Customization.CustomizableEntityTypes.Project;
     public override string Name => "Projects and WBS";
     public override string Description => "Every WBS element with its project, contract and project manager.";
 
@@ -489,7 +499,7 @@ public sealed class ProjectWbsSource : ReportSource
                 x.W?.Code, x.W?.Name, x.W?.Kind, x.W is null ? null : !parents.Contains(x.W.Id), x.W?.IsChargeable, x.W?.IsOpen,
                 x.W?.ClinId is { } clin ? clins.GetValueOrDefault(clin) : null,
                 values ? contract!.CeilingValue : null, values ? contract!.FundedValue : null];
-        });
+        }, x => (Guid?)x.P.Id);
     }
 }
 
@@ -497,6 +507,7 @@ public sealed class ProjectWbsSource : ReportSource
 public sealed class EmployeeSource : ReportSource
 {
     public override string Key => ReportSourceKeys.Employees;
+    public override string? CustomFieldEntity => Contracts.Customization.CustomizableEntityTypes.Employee;
     public override string Name => "Employees";
     public override string Description => "Employees with org, supervisor, labor category and employment dates.";
 
@@ -528,6 +539,6 @@ public sealed class EmployeeSource : ReportSource
             e.DefaultLaborCategoryId is { } c ? lookups.Categories.GetValueOrDefault(c) : null,
             e.HireDate, e.TerminationDate, e.StandardHoursPerWeek, e.IsExempt, e.IsActiveOn(today),
             access.IsFinance ? lookups.CostRates.Find(e.Id, today) : null,
-        ]);
+        ], e => (Guid?)e.Id);
     }
 }

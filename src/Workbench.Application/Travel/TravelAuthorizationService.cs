@@ -556,9 +556,7 @@ public sealed class TravelAuthorizationService(
 
     private static async Task<string> NextNumberAsync(IWorkbenchDbContext db, CancellationToken ct)
     {
-        var numbers = await db.Set<TravelAuthorization>().AsNoTracking().Select(t => t.Number).ToListAsync(ct);
-        var next = numbers.Select(n => int.TryParse(n.AsSpan(3), out var v) ? v : 0).DefaultIfEmpty(0).Max() + 1;
-        return $"TA-{next:000000}";
+        return (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.TravelAuthorization, null, DateOnly.FromDateTime(DateTime.UtcNow), ct)).Number;
     }
 
     private static object Snapshot(TravelAuthorization t) => new

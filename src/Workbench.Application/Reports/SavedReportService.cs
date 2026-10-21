@@ -241,7 +241,13 @@ public sealed class SavedReportService(
     internal static void Validate(ReportDefinition definition)
     {
         var source = ReportSource.Find(definition.Source ?? "") ?? throw new ArgumentException($"Unknown data source '{definition.Source}'.");
+        // Custom field columns (cf.<key>) depend on the tenant's fields; they're checked when the report runs.
         var keys = source.Fields.Select(f => f.Key).ToHashSet(StringComparer.Ordinal);
+        if (source.CustomFieldEntity is not null)
+        {
+            keys.UnionWith((definition.Columns ?? []).Select(c => c.Field).Concat((definition.Filters ?? []).Select(f => f.Field)).Concat(definition.GroupBy ?? [])
+                .Concat((definition.Sort ?? []).Select(s => s.Field)).Where(f => f.StartsWith(Contracts.Customization.CustomFieldValues.CatalogPrefix, StringComparison.Ordinal)));
+        }
         var used = (definition.Columns ?? []).Select(c => c.Field)
             .Concat((definition.Filters ?? []).Select(f => f.Field))
             .Concat(definition.GroupBy ?? [])

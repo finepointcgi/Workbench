@@ -96,7 +96,7 @@ public sealed class CorrectiveActionService(IWorkbenchDbContextFactory dbFactory
         car.UpdatedAtUtc = UtcNow;
         if (carId is null)
         {
-            car.Number = await QualityRules.NextNumberAsync<CorrectiveAction>(db, c => c.Number, "CAR", cancellationToken);
+            car.Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.CorrectiveAction, null, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken)).Number;
             db.Set<CorrectiveAction>().Add(car);
         }
 

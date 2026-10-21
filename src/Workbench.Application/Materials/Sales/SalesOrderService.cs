@@ -9,8 +9,10 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.Application.Materials;
 
 /// <summary>Sales order entry: customers' orders for parts, by contract CLIN or project, released to MRP and the floor.</summary>
-public sealed class SalesOrderService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, TimeProvider clock) : ISalesOrderService
+public sealed class SalesOrderService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, TimeProvider clock, Customization.DocumentNumbers? documentNumbers = null) : ISalesOrderService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
     public async Task<IReadOnlyList<SalesOrderSummaryDto>> ListAsync(SalesOrderQuery query, CancellationToken cancellationToken = default)
@@ -97,7 +99,7 @@ public sealed class SalesOrderService(IWorkbenchDbContextFactory dbFactory, Audi
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var order = new SalesOrder
         {
-            Number = await SalesRules.NextNumberAsync(db.Set<SalesOrder>(), q => q.Select(o => o.Number), "SO-", cancellationToken),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.SalesOrder, cancellationToken: cancellationToken),
             Status = SalesOrderStatus.Draft,
             CreatedBy = audit.Actor,
             CreatedAtUtc = UtcNow,
