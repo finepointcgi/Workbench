@@ -40,6 +40,7 @@ public static class IdentityRegistration
         services.AddScoped<IWorkspaceMembershipService, WorkspaceMembershipService>();
         services.AddScoped<SheetWorkspacePreference>();
         services.AddScoped<ISheetWorkspacePicker, EditableWorkspacePicker>();
+        services.AddScoped<ProjectVisibility>(); // Who may see a project at all: the one rule every project read path uses.
         services.AddScoped<ProjectAccess>();
         services.AddScoped<RestrictedColumnAccess>();
         services.AddScoped<AssigneeStatusPermission>();
@@ -67,6 +68,7 @@ public static class IdentityRegistration
         services.Decorate<IOdcService, PermissionCheckingOdcService>();
         services.Decorate<IRuleService, PermissionCheckingRuleService>();
         services.Decorate<IDashboardService, PermissionCheckingDashboardService>();
+        services.Decorate<Workbench.Contracts.Notifications.INotificationService, ProjectScopedNotificationService>(); // Notifications about projects the user can no longer see are left out.
         services.AddWorkbenchAccountingPermissions(); // General ledger (accounting branch): Finance or Admin only on all five GL services.
         services.AddWorkbenchContractDetailPermissions(); // Contract detail: reads Finance/Admin/PM on the contract, writes Finance/Admin.
         services.AddWorkbenchIndirectRatePermissions(); // Indirect rates: Finance or Admin; burdened cost: Finance, Admin or the project's PM.

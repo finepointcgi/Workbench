@@ -51,7 +51,6 @@ public sealed class ProjectHubServiceTests
 
     [Theory]
     [InlineData(Editor, "1001")]
-    [InlineData(Viewer, "2002")]
     [InlineData(Outsider, "2002")]
     public async Task Everyone_else_sees_the_projects_they_charge_to_without_money(string email, string code)
     {
@@ -91,14 +90,29 @@ public sealed class ProjectHubServiceTests
     }
 
     [Fact]
-    public async Task Someone_with_no_employee_record_and_no_projects_gets_an_empty_list()
+    public async Task Members_of_a_projects_plan_workspace_see_it_without_charging_to_it()
     {
         await using var seeded = await CreateAsync();
         await SeedAsync(seeded);
 
-        var list = await seeded.As(Commenter).Host.Get<IProjectHubService>().ListProjectsAsync();
+        // reviewer@ has no employee record; viewer@ charges 2002. Both are members of 1001's plan workspace.
+        var reviewer = await seeded.As(Commenter).Host.Get<IProjectHubService>().ListProjectsAsync();
+        var viewer = await seeded.As(Viewer).Host.Get<IProjectHubService>().ListProjectsAsync();
 
-        Assert.Empty(list.Projects);
+        var row = Assert.Single(reviewer.Projects);
+        Assert.Equal("1001", row.Code);
+        Assert.False(row.ChargesTo);
+        Assert.Equal([("1001", false), ("2002", true)], viewer.Projects.Select(p => (p.Code, p.ChargesTo)));
+        Assert.All(viewer.Projects, p => Assert.Null(p.Money));
+    }
+
+    [Fact]
+    public async Task Someone_on_no_project_gets_an_empty_list()
+    {
+        await using var seeded = await CreateAsync();
+        await SeedAsync(seeded);
+
+        Assert.Empty((await seeded.As(Timekeeper).Host.Get<IProjectHubService>().ListProjectsAsync()).Projects);
     }
 
     [Theory]

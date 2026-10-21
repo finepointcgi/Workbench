@@ -29,7 +29,7 @@ public sealed class ResourcingPermissionTests
                 await allocations.CreateAsync(new SaveAllocationRequest(host.DevId, projectId, ThisWeek, 8));
                 return true;
             }
-            catch (WorkbenchForbiddenException)
+            catch (Exception e) when (e is WorkbenchForbiddenException or WorkbenchNotFoundException) // not found: not on the project at all
             {
                 return false;
             }
@@ -46,9 +46,10 @@ public sealed class ResourcingPermissionTests
         var created = await host.As(Pm2).Get<IResourceAllocationService>().CreateAsync(new SaveAllocationRequest(host.DevId, host.Project2, ThisWeek, 8));
         var pm = host.As(Pm).Get<IResourceAllocationService>();
 
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => pm.UpdateAsync(created[0].Id, new SaveAllocationRequest(host.DevId, host.Project2, ThisWeek, 4)));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => pm.UpdateAsync(created[0].Id, new SaveAllocationRequest(host.DevId, host.Project1, ThisWeek, 4)));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => pm.DeleteAsync(created[0].Id));
+        // pm@ isn't on 2002 at all, so its allocations' project is not found; analyst@ charges 1001 but doesn't manage it.
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => pm.UpdateAsync(created[0].Id, new SaveAllocationRequest(host.DevId, host.Project2, ThisWeek, 4)));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => pm.UpdateAsync(created[0].Id, new SaveAllocationRequest(host.DevId, host.Project1, ThisWeek, 4)));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => pm.DeleteAsync(created[0].Id));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.As(Analyst).Get<IResourceAllocationService>().GenerateFromPlanAsync(host.Project1));
         await host.As(ResourceManager).Get<IResourceAllocationService>().DeleteAsync(created[0].Id);
     }
@@ -76,7 +77,7 @@ public sealed class ResourcingPermissionTests
         await host.As(Pm).Get<IResourcePlanningService>().GetProjectStaffingAsync(host.Project1);
         await host.As(ResourceManager).Get<IResourcePlanningService>().GetProjectStaffingAsync(host.Project2);
         await host.As(Finance).Get<IResourcePlanningService>().GetProjectStaffingAsync(host.Project2);
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.As(Pm).Get<IResourcePlanningService>().GetProjectStaffingAsync(host.Project2));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.As(Pm).Get<IResourcePlanningService>().GetProjectStaffingAsync(host.Project2)); // not on 2002
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.As(Analyst).Get<IResourcePlanningService>().ListOpenDemandAsync(host.Project1));
 
         var mine = await host.As(Analyst).Get<IResourcePlanningService>().GetHeatMapAsync(new HeatMapQuery(Today));
@@ -97,7 +98,7 @@ public sealed class ResourcingPermissionTests
         await host.As(Pm).Get<IAllocationForecastService>().GetProjectSummaryAsync(host.Project1);
         await host.As(Finance).Get<IAllocationForecastService>().GetProjectSummaryAsync(host.Project1);
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.As(ResourceManager).Get<IAllocationForecastService>().GetProjectSummaryAsync(host.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.As(Pm2).Get<IAllocationForecastService>().GetWbsFinancialsAsync(host.Project1));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.As(Pm2).Get<IAllocationForecastService>().GetWbsFinancialsAsync(host.Project1)); // not on 1001
     }
 
     [Fact]

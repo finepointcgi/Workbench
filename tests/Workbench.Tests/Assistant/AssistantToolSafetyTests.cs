@@ -73,7 +73,7 @@ public sealed class AssistantToolSafetyTests
         Assert.Equal(AssistantToolOutcome.Invalid, (await tools.RunAsync("get_hours_by_charge_code", """{"from":"yesterday","to":"2026-10-31"}""", default)).Outcome);
         Assert.Equal(AssistantToolOutcome.NotFound, (await tools.RunAsync("get_project_financials", """{"project":"9999"}""", default)).Outcome);
         Assert.Equal(AssistantToolOutcome.Ok, (await tools.RunAsync("get_project_financials", """{"project":"1001"}""", default)).Outcome);
-        Assert.Equal(AssistantToolOutcome.Denied, (await tools.RunAsync("get_project_financials", """{"project":"2002"}""", default)).Outcome);
+        Assert.Equal(AssistantToolOutcome.NotFound, (await tools.RunAsync("get_project_financials", """{"project":"2002"}""", default)).Outcome); // pm@ isn't on 2002
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class AssistantToolSafetyTests
             var calls = await db.Set<AssistantToolCall>().OrderBy(c => c.Sequence).ToListAsync();
             Assert.Equal(AssistantToolOutcome.Invalid, calls.Single(c => c.ToolName == "delete_project").Outcome);
             Assert.Equal(AssistantToolOutcome.Invalid, calls.Single(c => c.ToolName == "send_email").Outcome);
-            Assert.Equal(AssistantToolOutcome.Denied, calls.Single(c => c.ToolName == "get_project_financials").Outcome);
+            Assert.Equal(AssistantToolOutcome.NotFound, calls.Single(c => c.ToolName == "get_project_financials").Outcome); // a project the user isn't on
         }
 
         Assert.DoesNotContain(answer!.Citations, c => c.Href.Contains("evil", StringComparison.OrdinalIgnoreCase));
