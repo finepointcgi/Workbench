@@ -25,7 +25,7 @@ else
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" OnClick="EditAsync" data-testid="part-edit">Edit</MudButton>
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="AdjustAsync" data-testid="part-adjust">Adjust stock</MudButton>
         }
-        @if (User?.IsFinance == true && s.CostMethod == PartCostMethod.Standard)
+        @if (User?.Can(Workbench.Contracts.Identity.Permission.MaterialsCosting) == true && s.CostMethod == PartCostMethod.Standard)
         {
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PriceChange" OnClick="RevalueAsync" data-testid="part-revalue">Change standard cost</MudButton>
         }

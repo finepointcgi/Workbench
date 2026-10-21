@@ -10,6 +10,7 @@ using Workbench.Application.Security;
 using Workbench.Contracts;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.BankFiles;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Purchasing;
 
@@ -215,7 +216,7 @@ public sealed class VendorBankService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var (change, vendor) = await LoadPendingAsync(db, changeId, cancellationToken);
-        if (!PurchasingSame(change.RequestedBy, access.Email) && !await access.IsAdminAsync(cancellationToken))
+        if (!PurchasingSame(change.RequestedBy, access.Email) && !await access.HasAsync(Permission.VendorBankDetails, cancellationToken))
         {
             throw new WorkbenchForbiddenException("Only the person who asked for the change (or an administrator) can cancel it.");
         }

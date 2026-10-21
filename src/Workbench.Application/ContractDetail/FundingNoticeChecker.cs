@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Contracts.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 
@@ -122,7 +123,7 @@ public sealed class FundingNoticeChecker(
         var managerIds = projects.Where(p => charging.Count == 0 || charging.Contains(p.Id))
             .Select(p => p.ProjectManagerId).OfType<Guid>().Distinct().ToList();
         var managers = await db.Set<Employee>().AsNoTracking().Where(e => managerIds.Contains(e.Id)).Select(e => e.Email).ToListAsync(ct);
-        var finance = await db.Set<AppUser>().AsNoTracking().Where(u => u.IsFinance && u.IsActive).Select(u => u.Email).ToListAsync(ct);
+        var finance = await Identity.RoleStore.EmailsWithPermissionAsync(db, Permission.SetupContracts, ct, includeAdmins: false);
         return managers.Concat(finance).Select(e => e.Trim().ToLowerInvariant()).Where(e => e.Length > 0).Distinct().Order(StringComparer.Ordinal).ToList();
     }
 }

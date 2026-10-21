@@ -72,6 +72,14 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
 
         var definition = Validate(request.Definition);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        foreach (var (step, index) in definition.Steps.Select((s, i) => (s, i)))
+        {
+            foreach (var rule in new[] { step.Approver, step.Fallback }.OfType<ApproverRule>().Where(r => r.Kind == ApproverRuleKind.OrgRole && r.CustomRoleId is not null))
+            {
+                await ApproverRoles.RequireExistsAsync(db, rule.CustomRoleId!.Value, $"Step {index + 1}", cancellationToken);
+            }
+        }
+
         await PublishAsync(db, documentType, name, definition, note, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, documentType, cancellationToken);
@@ -202,7 +210,7 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
         switch (rule.Kind)
         {
             case ApproverRuleKind.OrgRole:
-                return rule.Role is null ? throw new ArgumentException($"{where}: choose the org role.") : rule with { People = null };
+                return rule.Role is null && rule.CustomRoleId is null ? throw new ArgumentException($"{where}: choose the role.") : rule with { People = null };
             case ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf:
                 var people = (rule.People ?? []).Select(ApprovalEngine.Normalize).Where(p => p.Length > 0).Distinct().ToList();
                 if (people.Count == 0)
@@ -277,7 +285,7 @@ public sealed class ApprovalWorkflowService(IWorkbenchDbContextFactory dbFactory
                 .Where(i => i.DocumentType == documentType && i.Status == ApprovalInstanceStatus.Pending)
                 .GroupBy(i => i.WorkflowVersionId).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct))
             .ToDictionary(x => x.Key, x => x.Count);
-        var canEdit = (await access.GetOrgRolesAsync(ct)).IsAdmin();
+        var canEdit = await access.HasAsync(Permission.ApprovalWorkflowsManage, ct);
         return new ApprovalWorkflowDto(documentType, ApprovalDocumentTypes.Label(documentType), workflow.Name, current.Version,
             ApprovalDefaults.Deserialize(current.DefinitionJson),
             versions.Select(v => new ApprovalWorkflowVersionDto(v.Id, v.Version, v.CreatedBy, v.CreatedAtUtc, v.Note, v.Id == current.Id, inFlight.GetValueOrDefault(v.Id))).ToList(),
@@ -290,43 +298,43 @@ public sealed class PermissionCheckingApprovalWorkflowService(IApprovalWorkflowS
 {
     public async Task<IReadOnlyList<ApprovalWorkflowSummaryDto>> ListAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view approval workflows", cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsView, "view approval workflows", cancellationToken);
         return await inner.ListAsync(cancellationToken);
     }
 
     public async Task<ApprovalWorkflowDto> GetAsync(string documentType, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view approval workflows", cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsView, "view approval workflows", cancellationToken);
         return await inner.GetAsync(documentType, cancellationToken);
     }
 
     public async Task<ApprovalWorkflowDefinition> GetVersionAsync(string documentType, int version, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view approval workflows", cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsView, "view approval workflows", cancellationToken);
         return await inner.GetVersionAsync(documentType, version, cancellationToken);
     }
 
     public async Task<ApprovalWorkflowDto> SaveAsync(string documentType, SaveApprovalWorkflowRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsManage, "change approval workflows", cancellationToken);
         return await inner.SaveAsync(documentType, request, cancellationToken);
     }
 
     public async Task<ApprovalWorkflowDto> ResetToDefaultAsync(string documentType, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsManage, "change approval workflows", cancellationToken);
         return await inner.ResetToDefaultAsync(documentType, cancellationToken);
     }
 
     public async Task<IReadOnlyList<OrgUnitApproverDto>> ListOrgUnitApproversAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view org-unit approvers", cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsView, "view org-unit approvers", cancellationToken);
         return await inner.ListOrgUnitApproversAsync(cancellationToken);
     }
 
     public async Task<OrgUnitApproverDto> SetOrgUnitApproverAsync(Guid orgUnitId, Guid? employeeId, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsManage, "change approval workflows", cancellationToken);
         return await inner.SetOrgUnitApproverAsync(orgUnitId, employeeId, cancellationToken);
     }
 }

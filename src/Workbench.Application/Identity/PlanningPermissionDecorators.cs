@@ -30,7 +30,7 @@ public static class PlanningPermissionRegistration
 
 public sealed class PermissionCheckingRecurringJournalService(IRecurringJournalService inner, AccessControl access) : IRecurringJournalService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("manage recurring journals", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.GlRecurringManage, "manage recurring journals", ct);
 
     public async Task<IReadOnlyList<RecurringTemplateDto>> ListTemplatesAsync(bool includeInactive = true, CancellationToken cancellationToken = default)
     {
@@ -95,7 +95,7 @@ public sealed class PermissionCheckingRecurringJournalService(IRecurringJournalS
 
 public sealed class PermissionCheckingGlBudgetService(IGlBudgetService inner, AccessControl access) : IGlBudgetService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("manage corporate budgets", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.BudgetsManage, "manage corporate budgets", ct);
 
     public async Task<IReadOnlyList<BudgetVersionDto>> ListVersionsAsync(int? fiscalYear = null, CancellationToken cancellationToken = default)
     {
@@ -142,7 +142,7 @@ public sealed class PermissionCheckingGlBudgetService(IGlBudgetService inner, Ac
 
 public sealed class PermissionCheckingBudgetReportService(IBudgetReportService inner, AccessControl access) : IBudgetReportService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("see budget vs actual", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.BudgetsManage, "see budget vs actual", ct);
 
     public async Task<BudgetVsActualDto> GetIncomeStatementAsync(BudgetVsActualQuery query, CancellationToken cancellationToken = default)
     {
@@ -178,7 +178,7 @@ public sealed class PermissionCheckingBudgetReportService(IBudgetReportService i
 public sealed class PermissionCheckingPlanningCycleService(IPlanningCycleService inner, AccessControl access, IWorkbenchDbContextFactory dbFactory, ApprovalEngine? approvals = null)
     : IPlanningCycleService
 {
-    private Task RequireFinanceAsync(CancellationToken ct) => access.RequireFinanceAsync("run planning cycles", ct);
+    private Task RequireFinanceAsync(CancellationToken ct) => access.RequireAsync(Permission.BudgetsManage, "run planning cycles", ct);
 
     private void RequireSignedIn()
     {
@@ -195,7 +195,7 @@ public sealed class PermissionCheckingPlanningCycleService(IPlanningCycleService
         await using var db = await dbFactory.CreateAsync(ct);
         var owner = await db.Set<BudgetSubmission>().AsNoTracking().Where(s => s.Id == submissionId).Select(s => (Guid?)s.OwnerEmployeeId).FirstOrDefaultAsync(ct)
             ?? throw WorkbenchNotFoundException.For("Budget submission", submissionId);
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance() || await access.GetEmployeeIdAsync(ct) == owner)
+        if (await access.HasAsync(Permission.BudgetsManage, ct) || await access.GetEmployeeIdAsync(ct) == owner)
         {
             return;
         }

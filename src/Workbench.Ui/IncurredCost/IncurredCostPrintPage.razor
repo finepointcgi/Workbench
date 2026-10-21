@@ -89,7 +89,7 @@ else
     {
         try
         {
-            if (!(await CurrentUser.GetAsync()).IsFinance)
+            if (!(await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.IncurredCostManage))
             {
                 _error = "Incurred cost submissions are for Finance and administrators.";
                 return;

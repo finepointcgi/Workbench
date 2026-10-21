@@ -2,9 +2,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
 using Workbench.Application.Collaboration;
+using Workbench.Application.Identity;
 using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
 using Workbench.Contracts.Collaboration;
+using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -102,12 +104,11 @@ internal sealed class ResourcingHost : IAsyncDisposable
             db.Set<FiscalPeriod>().Add(new FiscalPeriod { FiscalYearId = year.Id, Number = i + 1, Name = start.ToString("yyyy-MM"), Start = start, End = start.AddMonths(1).AddDays(-1) });
         }
 
-        db.Set<AppUser>().AddRange(
-            new AppUser { Email = Admin, DisplayName = "Admin", IsAdmin = true },
-            new AppUser { Email = Pm, DisplayName = "Pat" },
-            new AppUser { Email = Finance, DisplayName = "Fin", IsFinance = true },
-            new AppUser { Email = ResourceManager, DisplayName = "Rae", IsResourceManager = true },
-            new AppUser { Email = Timekeeper, DisplayName = "Tim", IsTimekeeper = true });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Admin, DisplayName = "Admin" }, OrgRoles.Admin);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Pm, DisplayName = "Pat" }, OrgRoles.Employee);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Finance, DisplayName = "Fin" }, OrgRoles.Finance);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = ResourceManager, DisplayName = "Rae" }, OrgRoles.ResourceManager);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Timekeeper, DisplayName = "Tim" }, OrgRoles.Timekeeper);
 
         var se2 = new LaborCategory { Code = "SE2", Name = "Systems Engineer II" };
         var ba2 = new LaborCategory { Code = "BA2", Name = "Business Analyst II" };

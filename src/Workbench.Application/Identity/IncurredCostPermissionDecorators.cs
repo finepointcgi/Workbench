@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Security;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Security;
 using Workbench.Contracts.IncurredCost;
 
@@ -18,7 +19,7 @@ public static class IncurredCostPermissionRegistration
 
 public sealed class PermissionCheckingIncurredCostService(IIncurredCostService inner, AccessControl access, SecurityEventLog log) : IIncurredCostService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with incurred cost submissions", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.IncurredCostManage, "work with incurred cost submissions", ct);
 
     public async Task<IReadOnlyList<IncurredCostSummaryDto>> ListAsync(CancellationToken cancellationToken = default)
     {

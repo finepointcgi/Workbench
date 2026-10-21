@@ -26,7 +26,7 @@ public static class ShopFloorPermissionRegistration
 internal static class ShopFloorAccess
 {
     public static Task RequireMaterialsOrFinanceAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(r => r.IsMaterials() || r.IsFinance(), "Only the Materials role, Finance and administrators can enter landed cost.", ct);
+        access.RequireAsync(p => p.HasAny(Permission.MaterialsManage, Permission.MaterialsCosting), "Only the Materials role, Finance and administrators can enter landed cost.", ct);
 }
 
 public sealed class PermissionCheckingKittingService(IKittingService inner, AccessControl access) : IKittingService
@@ -159,7 +159,7 @@ public sealed class PermissionCheckingLandedCostService(ILandedCostService inner
 
     public async Task<LandedChargeDto> PostAsync(Guid chargeId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("post landed cost (it changes inventory value in the general ledger)", cancellationToken);
+        await access.RequireAsync(Permission.MaterialsCosting, "post landed cost (it changes inventory value in the general ledger)", cancellationToken);
         return await inner.PostAsync(chargeId, cancellationToken);
     }
 
@@ -228,7 +228,7 @@ public sealed class PermissionCheckingPhysicalInventoryService(IPhysicalInventor
 
     public async Task<PhysicalInventoryDto> PostAsync(Guid physicalInventoryId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("post physical inventory adjustments (they post inventory value to the general ledger)", cancellationToken);
+        await access.RequireAsync(Permission.MaterialsCosting, "post physical inventory adjustments (they post inventory value to the general ledger)", cancellationToken);
         return await inner.PostAsync(physicalInventoryId, cancellationToken);
     }
 

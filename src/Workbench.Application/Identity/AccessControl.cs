@@ -10,7 +10,7 @@ using WorkspaceRole = Workbench.Contracts.Identity.WorkspaceRole;
 namespace Workbench.Application.Identity;
 
 /// <summary>
-/// Answers "what may the current user do here" from workspace memberships and the admin flag. Nothing is cached:
+/// Answers "what may the current user do here" from workspace memberships and the permissions of the roles the user holds. Nothing is cached:
 /// a Blazor circuit keeps its scope for hours, and role changes should apply on the next call.
 /// </summary>
 public sealed class AccessControl(
@@ -31,43 +31,96 @@ public sealed class AccessControl(
     // The worker's all-powerful user, unless this scope acts for a rule's author (who gets only their own roles).
     private bool IsSystemUser => currentUser is SystemCurrentUser && ruleAuthor?.IsActive != true;
 
-    public async Task<bool> IsAdminAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The user's built-in roles, every role they hold and the union of their permissions. The system user has every
+    /// permission; nobody signed in (or a deactivated user) has none.
+    /// </summary>
+    public async Task<ResolvedAccess> GetAccessAsync(CancellationToken cancellationToken = default)
     {
         if (IsSystemUser)
         {
-            return true;
+            return ResolvedAccess.Everything;
         }
 
         if (!IsAuthenticated)
         {
-            return false;
+            return ResolvedAccess.None;
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return await IsAdminAsync(db, cancellationToken);
+        return await RoleStore.ResolveAsync(db, Email, cancellationToken);
     }
 
-    /// <summary>The user's organization roles. The system user has them all; nobody signed in has none.</summary>
-    public async Task<OrgRoles> GetOrgRolesAsync(CancellationToken cancellationToken = default)
+    /// <summary>The user's effective permissions: the union of every role they hold.</summary>
+    public async Task<PermissionSet> GetPermissionsAsync(CancellationToken cancellationToken = default) =>
+        (await GetAccessAsync(cancellationToken)).Permissions;
+
+    /// <summary>True when the user holds <paramref name="permission"/> (a <see cref="Permission"/> constant).</summary>
+    public async Task<bool> HasAsync(string permission, CancellationToken cancellationToken = default) =>
+        (await GetPermissionsAsync(cancellationToken)).Has(permission);
+
+    /// <summary>
+    /// Where the user holds <paramref name="permission"/>: everywhere, nowhere, or within the companies, org units,
+    /// projects and contracts their scoped roles are limited to.
+    /// </summary>
+    public async Task<GrantScope> GetGrantScopeAsync(string permission, CancellationToken cancellationToken = default) =>
+        RoleScopes.ScopeOf(await GetAccessAsync(cancellationToken), permission);
+
+    /// <summary>True when the user holds <paramref name="permission"/> for this project (everywhere, or a scope covering it).</summary>
+    public Task<bool> HasForProjectAsync(string permission, Guid projectId, CancellationToken cancellationToken = default) =>
+        HasForAsync(permission, (db, ct) => RoleScopes.ForProjectAsync(db, projectId, ct), cancellationToken);
+
+    /// <summary>True when the user holds <paramref name="permission"/> for this contract.</summary>
+    public Task<bool> HasForContractAsync(string permission, Guid contractId, CancellationToken cancellationToken = default) =>
+        HasForAsync(permission, (db, ct) => RoleScopes.ForContractAsync(db, contractId, ct), cancellationToken);
+
+    /// <summary>True when the user holds <paramref name="permission"/> for this employee (their company or org unit).</summary>
+    public Task<bool> HasForEmployeeAsync(string permission, Guid employeeId, CancellationToken cancellationToken = default) =>
+        HasForAsync(permission, (db, ct) => RoleScopes.ForEmployeeAsync(db, employeeId, ct), cancellationToken);
+
+    /// <summary>The projects the user holds <paramref name="permission"/> for; null means every project.</summary>
+    public Task<IReadOnlySet<Guid>?> ProjectsWithAsync(string permission, CancellationToken cancellationToken = default) =>
+        InScopeAsync(permission, RoleScopes.ProjectIdsAsync, cancellationToken);
+
+    /// <summary>The contracts the user holds <paramref name="permission"/> for; null means every contract.</summary>
+    public Task<IReadOnlySet<Guid>?> ContractsWithAsync(string permission, CancellationToken cancellationToken = default) =>
+        InScopeAsync(permission, RoleScopes.ContractIdsAsync, cancellationToken);
+
+    /// <summary>The employees the user holds <paramref name="permission"/> for; null means everyone.</summary>
+    public Task<IReadOnlySet<Guid>?> EmployeesWithAsync(string permission, CancellationToken cancellationToken = default) =>
+        InScopeAsync(permission, RoleScopes.EmployeeIdsAsync, cancellationToken);
+
+    private async Task<bool> HasForAsync(string permission, Func<IWorkbenchDbContext, CancellationToken, Task<ResourceRef>> resource, CancellationToken cancellationToken)
     {
-        if (IsSystemUser)
+        var scope = await GetGrantScopeAsync(permission, cancellationToken);
+        if (scope.All || scope.IsNowhere)
         {
-            return OrgRoleChecks.Everything;
+            return scope.All;
         }
 
-        if (!IsAuthenticated)
-        {
-            return OrgRoles.Employee;
-        }
-
-        var email = Email;
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var user = await db.Set<AppUser>().AsNoTracking()
-            .Where(u => u.Email == email && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment, u.IsPricing })
-            .FirstOrDefaultAsync(cancellationToken);
-        return user is null ? OrgRoles.Employee : ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment, user.IsPricing);
+        return scope.Covers(await resource(db, cancellationToken));
     }
+
+    private async Task<IReadOnlySet<Guid>?> InScopeAsync(
+        string permission, Func<IWorkbenchDbContext, GrantScope, CancellationToken, Task<IReadOnlySet<Guid>?>> ids, CancellationToken cancellationToken)
+    {
+        var scope = await GetGrantScopeAsync(permission, cancellationToken);
+        if (scope.All || scope.IsNowhere)
+        {
+            return scope.All ? null : new HashSet<Guid>();
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await ids(db, scope, cancellationToken);
+    }
+
+    /// <summary>
+    /// The built-in roles the user holds, as flags (a compatibility view: custom roles aren't in it). Decide access with
+    /// <see cref="HasAsync"/> or <see cref="RequireAsync(string, string, CancellationToken)"/> instead.
+    /// </summary>
+    public async Task<OrgRoles> GetOrgRolesAsync(CancellationToken cancellationToken = default) =>
+        (await GetAccessAsync(cancellationToken)).BuiltIn;
 
     /// <summary>The employee record with the signed-in user's email, if any.</summary>
     public async Task<Guid?> GetEmployeeIdAsync(CancellationToken cancellationToken = default)
@@ -81,30 +134,28 @@ public sealed class AccessControl(
         return (await EmployeeLinks.FindForUserAsync(db, Email, cancellationToken))?.Id;
     }
 
-    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless the user is in Finance or an Admin.</summary>
-    public async Task RequireFinanceAsync(string what, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Throws <see cref="WorkbenchForbiddenException"/> (recorded as a denial) unless the user holds
+    /// <paramref name="permission"/>. <paramref name="what"/> finishes "You need the … permission to …".
+    /// </summary>
+    public async Task RequireAsync(string permission, string what, CancellationToken cancellationToken = default)
     {
         RequireSignedIn();
-        if (!(await GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (!await HasAsync(permission, cancellationToken))
         {
-            throw await DeniedAsync($"Only Finance and administrators can {what}.", cancellationToken);
+            throw await DeniedAsync($"You need the \"{PermissionCatalog.NameOf(permission)}\" permission to {what}.", cancellationToken);
         }
     }
 
-    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> (recorded as a denial) unless the user's org roles pass <paramref name="allowed"/>.</summary>
-    public async Task RequireRoleAsync(Func<OrgRoles, bool> allowed, string message, CancellationToken cancellationToken = default)
+    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> (recorded as a denial) unless the user's permissions pass <paramref name="allowed"/>.</summary>
+    public async Task RequireAsync(Func<PermissionSet, bool> allowed, string message, CancellationToken cancellationToken = default)
     {
         RequireSignedIn();
-        if (!allowed(await GetOrgRolesAsync(cancellationToken)))
+        if (!allowed(await GetPermissionsAsync(cancellationToken)))
         {
             throw await DeniedAsync(message, cancellationToken);
         }
     }
-
-    internal static OrgRoles ToRoles(bool admin, bool finance, bool timekeeper, bool resourceManager = false, bool projectManager = false, bool hr = false, bool materials = false, bool businessDevelopment = false, bool pricing = false) =>
-        (admin ? OrgRoles.Admin : 0) | (finance ? OrgRoles.Finance : 0) | (timekeeper ? OrgRoles.Timekeeper : 0)
-        | (resourceManager ? OrgRoles.ResourceManager : 0) | (projectManager ? OrgRoles.ProjectManager : 0) | (hr ? OrgRoles.Hr : 0) | (materials ? OrgRoles.Materials : 0)
-        | (businessDevelopment ? OrgRoles.BusinessDevelopment : 0) | (pricing ? OrgRoles.Pricing : 0);
 
     /// <summary>The user's role on a sheet (Owner for admins), or null when they can't see it or it doesn't exist.</summary>
     public async Task<WorkspaceRole?> GetSheetRoleAsync(Guid sheetId, CancellationToken cancellationToken = default)
@@ -134,7 +185,7 @@ public sealed class AccessControl(
         return await GetWorkspaceRoleAsync(db, workspaceId, cancellationToken);
     }
 
-    /// <summary>Ids of the workspaces the user belongs to, or null for admins (who see every workspace).</summary>
+    /// <summary>Ids of the workspaces the user belongs to, or null for those who see every workspace (<see cref="Permission.AdminAllWorkspaces"/>).</summary>
     public async Task<IReadOnlySet<Guid>?> GetVisibleWorkspaceIdsAsync(CancellationToken cancellationToken = default)
     {
         if (!IsAuthenticated)
@@ -143,7 +194,7 @@ public sealed class AccessControl(
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        if (await IsAdminAsync(db, cancellationToken))
+        if (await SeesAllWorkspacesAsync(db, cancellationToken))
         {
             return null;
         }
@@ -190,23 +241,50 @@ public sealed class AccessControl(
         }
     }
 
-    public async Task RequireAdminAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Nobody can give out more than they have: throws <see cref="WorkbenchForbiddenException"/> (recorded) when
+    /// <paramref name="permissions"/> include one the user doesn't hold.
+    /// </summary>
+    public async Task RequireCanGrantAsync(IEnumerable<string> permissions, CancellationToken cancellationToken = default)
     {
         RequireSignedIn();
-        if (!await IsAdminAsync(cancellationToken))
+        var mine = await GetPermissionsAsync(cancellationToken);
+        // Unknown keys are left to the caller's validation (a clearer 400).
+        var missing = permissions.Where(p => PermissionCatalog.Exists(p) && !mine.Has(p)).Distinct().Select(PermissionCatalog.NameOf).ToList();
+        if (missing.Count > 0)
         {
-            throw await DeniedAsync("Only administrators can do that.", cancellationToken);
+            throw await DeniedAsync($"You can't give out permissions you don't have yourself: {string.Join(", ", missing.Take(5))}{(missing.Count > 5 ? ", …" : "")}.", cancellationToken);
         }
     }
 
-    /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless the user is in HR or an Admin.</summary>
-    public async Task RequireHrAsync(string what, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Like <see cref="RequireCanGrantRolesAsync"/> for the roles in <paramref name="target"/> that the user with
+    /// <paramref name="email"/> doesn't hold yet (taking roles away needs no such check).
+    /// </summary>
+    public async Task RequireCanGrantNewRolesAsync(string email, IReadOnlyCollection<Guid> target, CancellationToken cancellationToken = default)
     {
-        RequireSignedIn();
-        if (!(await GetOrgRolesAsync(cancellationToken)).IsHr())
+        email = Normalize(email);
+        List<Guid> held;
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
-            throw await DeniedAsync($"Only HR and administrators can {what}.", cancellationToken);
+            var userId = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == email).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(cancellationToken);
+            held = userId is { } id ? await RoleStore.RoleIdsOfAsync(db, id, cancellationToken) : [];
         }
+
+        await RequireCanGrantRolesAsync(target.Except(held).ToList(), cancellationToken);
+    }
+
+    /// <summary>Like <see cref="RequireCanGrantAsync(IEnumerable{string}, CancellationToken)"/> for every permission the roles grant.</summary>
+    public async Task RequireCanGrantRolesAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken cancellationToken = default)
+    {
+        if (roleIds.Count == 0 || IsSystemUser)
+        {
+            return;
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var granted = await RoleStore.ResolveRoleIdsAsync(db, roleIds, cancellationToken);
+        await RequireCanGrantAsync(granted.Permissions, cancellationToken);
     }
 
     /// <summary>A denial with <paramref name="message"/>, recorded like the role checks above (for rules decided elsewhere).</summary>
@@ -231,20 +309,20 @@ public sealed class AccessControl(
         }
     }
 
-    internal async Task<bool> IsAdminAsync(IWorkbenchDbContext db, CancellationToken cancellationToken)
+    /// <summary>True for holders of <see cref="Permission.AdminAllWorkspaces"/> (and the system user): Owner of every workspace.</summary>
+    internal async Task<bool> SeesAllWorkspacesAsync(IWorkbenchDbContext db, CancellationToken cancellationToken)
     {
         if (IsSystemUser)
         {
             return true;
         }
 
-        var email = Email;
-        return email.Length > 0 && await db.Set<AppUser>().AsNoTracking().AnyAsync(u => u.Email == email && u.IsAdmin && u.IsActive, cancellationToken);
+        return IsAuthenticated && (await RoleStore.ResolveAsync(db, Email, cancellationToken)).Permissions.Has(Permission.AdminAllWorkspaces);
     }
 
     internal async Task<WorkspaceRole?> GetWorkspaceRoleAsync(IWorkbenchDbContext db, Guid workspaceId, CancellationToken cancellationToken)
     {
-        if (await IsAdminAsync(db, cancellationToken))
+        if (await SeesAllWorkspacesAsync(db, cancellationToken))
         {
             return await db.Workspaces.AnyAsync(w => w.Id == workspaceId, cancellationToken) ? WorkspaceRole.Owner : null;
         }

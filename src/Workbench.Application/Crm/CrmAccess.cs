@@ -23,18 +23,18 @@ public sealed class CrmAccess(AccessControl access, IWorkbenchDbContextFactory d
 
     public bool IsSignedIn => access.IsAuthenticated;
 
-    public Task<OrgRoles> RolesAsync(CancellationToken ct) => access.GetOrgRolesAsync(ct);
+    public Task<PermissionSet> RolesAsync(CancellationToken ct) => access.GetPermissionsAsync(ct);
 
     public void RequireSignedInOrThrow() => access.RequireSignedIn();
 
     public static bool IsManager(Opportunity opportunity, string email) =>
         email.Length > 0 && (opportunity.CaptureManagerEmail == email || opportunity.ProposalManagerEmail == email);
 
-    public static bool CanEdit(Opportunity opportunity, OrgRoles roles, string email) => roles.IsAdmin() || IsManager(opportunity, email);
+    public static bool CanEdit(Opportunity opportunity, PermissionSet roles, string email) => roles.Has(Permission.OpportunitiesEditAll) || IsManager(opportunity, email);
 
-    public static bool CanRead(Opportunity opportunity, OrgRoles roles, string email) => roles.CanViewPipeline() || IsManager(opportunity, email);
+    public static bool CanRead(Opportunity opportunity, PermissionSet roles, string email) => roles.Has(Permission.PipelineView) || IsManager(opportunity, email);
 
-    public async Task<bool> SeesPipelineAsync(CancellationToken ct) => access.IsAuthenticated && (await RolesAsync(ct)).CanViewPipeline();
+    public async Task<bool> SeesPipelineAsync(CancellationToken ct) => access.IsAuthenticated && (await RolesAsync(ct)).Has(Permission.PipelineView);
 
     /// <summary>Capture or proposal manager of at least one opportunity.</summary>
     public async Task<bool> ManagesAnyAsync(CancellationToken ct)
@@ -65,7 +65,7 @@ public sealed class CrmAccess(AccessControl access, IWorkbenchDbContextFactory d
     public async Task RequireBusinessDevelopmentAsync(string what, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if (!(await RolesAsync(ct)).IsBusinessDevelopment())
+        if (!(await RolesAsync(ct)).Has(Permission.CaptureManage))
         {
             throw await DeniedAsync($"Only business development and administrators can {what}.", ct);
         }
@@ -75,13 +75,13 @@ public sealed class CrmAccess(AccessControl access, IWorkbenchDbContextFactory d
     public async Task RequireCrmEditorAsync(string what, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if (!(await RolesAsync(ct)).CanViewPipeline())
+        if (!(await RolesAsync(ct)).Has(Permission.PipelineView))
         {
             throw await DeniedAsync($"Only business development, Finance and administrators can {what}.", ct);
         }
     }
 
-    public Task RequireFinanceAsync(string what, CancellationToken ct) => access.RequireFinanceAsync(what, ct);
+    public Task RequireAsync(string permission, string what, CancellationToken ct) => access.RequireAsync(permission, what, ct);
 
     public async Task<Opportunity> RequireReadAsync(Guid opportunityId, CancellationToken ct)
     {

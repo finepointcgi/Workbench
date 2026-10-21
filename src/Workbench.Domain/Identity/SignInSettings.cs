@@ -102,5 +102,8 @@ public sealed class SsoGroupMapping : Entity
     /// <summary>The <c>OrgRoles</c> flags it grants.</summary>
     public int Roles { get; set; }
 
+    /// <summary>Custom roles it grants: comma-separated role ids.</summary>
+    public string? CustomRoleIds { get; set; }
+
     public string? Description { get; set; }
 }

@@ -85,6 +85,7 @@ internal sealed class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
         b.Property(k => k.Prefix).HasMaxLength(16);
         b.Property(k => k.KeyHash).HasMaxLength(64);
         b.Property(k => k.Scopes).HasMaxLength(2000);
+        b.Property(k => k.CustomRoleIds).HasMaxLength(2000);
         b.Property(k => k.ServiceUserEmail).HasMaxLength(320);
         b.Property(k => k.CreatedBy).HasMaxLength(320);
         b.Property(k => k.RevokedBy).HasMaxLength(320);

@@ -900,7 +900,7 @@ public sealed class ApBillService(
             throw new ArgumentException($"This invoice exceeds the funded value of {string.Join("; ", over)}. Finance can override with a reason.");
         }
 
-        if (!(await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (!await access.HasAsync(Permission.ApBillsManage, ct))
         {
             throw new WorkbenchForbiddenException("Only Finance can submit a subcontract invoice over its funded value.");
         }

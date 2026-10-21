@@ -8,6 +8,7 @@ using Workbench.Application.Notifications;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Materials;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Identity;
@@ -47,7 +48,7 @@ internal static class MaterialsSeed
         db.Add(technician);
         if (!await db.Set<AppUser>().AnyAsync(u => u.Email == MiaEmail, cancellationToken))
         {
-            db.Add(new AppUser { Email = MiaEmail, DisplayName = "Mia Torres", IsMaterials = true, CreatedAtUtc = DateTime.UtcNow });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = MiaEmail, DisplayName = "Mia Torres", CreatedAtUtc = DateTime.UtcNow }, OrgRoles.Materials, cancellationToken);
         }
 
         var mia = new Employee

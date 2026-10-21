@@ -1,3 +1,5 @@
+using Workbench.Contracts.Identity;
+
 namespace Workbench.Contracts.Payroll;
 
 // Payroll integration contracts. Workbench never calculates payroll taxes: it exports approved hours to the payroll
@@ -75,8 +77,8 @@ public interface IPayGroupService
 public sealed record PayRateDto(
     DateOnly EffectiveFrom,
     PayTypeKind PayType,
-    decimal? AnnualSalary,
-    decimal? HourlyRate,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? AnnualSalary,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? HourlyRate,
     string? Reason,
     string CreatedBy,
     DateTime CreatedAtUtc,

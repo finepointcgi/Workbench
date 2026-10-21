@@ -24,7 +24,7 @@ public sealed class RequisitionAccess(IWorkbenchDbContextFactory dbFactory, Acce
     /// <summary>Projects the user may charge, or null for Finance and Admin (all of them).</summary>
     public async Task<IReadOnlySet<Guid>?> ProjectIdsAsync(CancellationToken ct)
     {
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (await access.HasAsync(Permission.PurchaseOrdersManage, ct))
         {
             return null;
         }
@@ -45,7 +45,7 @@ public sealed class RequisitionAccess(IWorkbenchDbContextFactory dbFactory, Acce
     /// <summary>The organizations the user may charge account lines to, or null for Finance and Admin (all of them).</summary>
     public async Task<IReadOnlySet<Guid>?> OrgIdsAsync(CancellationToken ct)
     {
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (await access.HasAsync(Permission.PurchaseOrdersManage, ct))
         {
             return null;
         }
@@ -122,7 +122,7 @@ public sealed class RequisitionService(
     public async Task<IReadOnlyList<RequisitionSummaryDto>> ListAsync(RequisitionQuery query, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var finance = (await access.GetOrgRolesAsync(cancellationToken)).IsFinance();
+        var finance = await access.HasAsync(Permission.PurchaseOrdersManage, cancellationToken);
         var me = Me;
         var q = db.Set<PurchaseRequisition>().AsNoTracking().Include(r => r.Lines).AsQueryable();
         if (query.Mine || !finance)
@@ -381,7 +381,7 @@ public sealed class RequisitionService(
         var reason = PurchasingSupport.Optional(request?.Comment, "The reason", 1000);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var req = await LoadAsync(db, requisitionId, cancellationToken);
-        var finance = (await access.GetOrgRolesAsync(cancellationToken)).IsFinance();
+        var finance = await access.HasAsync(Permission.PurchaseOrdersManage, cancellationToken);
         if (!finance && !PurchasingSupport.SameEmail(req.RequesterEmail, Me))
         {
             throw new WorkbenchForbiddenException("Only the requester or Finance can cancel a requisition.");
@@ -521,7 +521,7 @@ public sealed class RequisitionService(
             $"{req.Total:C}: {req.Justification}", link: $"purchasing/requisitions/{req.Id}");
 
     private static async Task<IReadOnlyList<string>> FinanceUsersAsync(IWorkbenchDbContext db, CancellationToken ct) =>
-        await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive && (u.IsFinance || u.IsAdmin)).Select(u => u.Email).ToListAsync(ct);
+        await Identity.RoleStore.EmailsWithPermissionAsync(db, Permission.PurchaseOrdersManage, ct);
 
     private static async Task<PurchaseRequisition> LoadAsync(IWorkbenchDbContext db, Guid id, CancellationToken ct) =>
         await db.Set<PurchaseRequisition>().Include(r => r.Lines).FirstOrDefaultAsync(r => r.Id == id, ct) ?? throw WorkbenchNotFoundException.For("Requisition", id);

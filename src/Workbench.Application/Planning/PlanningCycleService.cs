@@ -546,8 +546,7 @@ public sealed class PlanningCycleService(
         }
 
         var employeeId = await access.GetEmployeeIdAsync(ct);
-        var roles = await access.GetOrgRolesAsync(ct);
-        var mayChange = s.OwnerEmployeeId == employeeId || roles.IsFinance();
+                var mayChange = s.OwnerEmployeeId == employeeId || await access.HasAsync(Permission.BudgetsManage, ct);
         var canEdit = s.IsEditable && cycle.Status == PlanningCycleStatus.Open && mayChange;
         var canDecide = s.Status == BudgetSubmissionStatus.Submitted
             && await _approvals.CanDecideAsync(db, ApprovalDocumentTypes.BudgetSubmission, s.Id, audit.Actor, c => SubjectAsync(db, s, c), ct);

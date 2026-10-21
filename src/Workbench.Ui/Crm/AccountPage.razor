@@ -164,7 +164,7 @@ else
         try
         {
             var me = await CurrentUser.GetAsync();
-            _canEdit = me.Roles.CanViewPipeline();
+            _canEdit = me.Can(Workbench.Contracts.Identity.Permission.PipelineView);
             _accounts = await Crm.ListAccountsAsync();
             _people = await Users.SearchAsync(null, 500);
             await LoadAsync();

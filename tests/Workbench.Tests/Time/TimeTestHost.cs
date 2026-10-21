@@ -81,7 +81,10 @@ internal sealed class TimeTestHost
             db.Set<AppUser>().Add(user);
         }
 
-        (user.IsAdmin, user.IsFinance, user.IsTimekeeper) = (roles.HasFlag(OrgRoles.Admin), roles.HasFlag(OrgRoles.Finance), roles.HasFlag(OrgRoles.Timekeeper));
+        // Sets the Admin, Finance and Timekeeper roles, leaving the others.
+        const OrgRoles managed = OrgRoles.Admin | OrgRoles.Finance | OrgRoles.Timekeeper;
+        var held = BuiltInRoles.FlagsOf(await RoleStore.RoleIdsOfAsync(db, user.Id, default));
+        await RoleStore.ReplaceBuiltInAsync(db, user, (held & ~managed) | (roles & managed), "test", DateTime.UtcNow, default);
         await db.SaveChangesAsync();
     }
 

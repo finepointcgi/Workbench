@@ -144,7 +144,7 @@ public sealed class ThreeWayMatchService(
     public async Task<MatchExceptionDto> OverrideAsync(Guid billLineId, MatchOverrideRequest request, CancellationToken cancellationToken = default)
     {
         var reason = PurchasingSupport.Required(request?.Reason, "A reason", 1000);
-        if (!(await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (!await access.HasAsync(Permission.PurchaseOrdersManage, cancellationToken))
         {
             throw new WorkbenchForbiddenException("Only Finance can override a three-way match.");
         }

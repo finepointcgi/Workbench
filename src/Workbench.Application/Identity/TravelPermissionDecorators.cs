@@ -49,7 +49,7 @@ public sealed class PermissionCheckingTravelAuthorizationService(
 
     public async Task<IReadOnlyList<TravelAuthorizationDto>> ListAllAsync(TravelAuthorizationQuery? query = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see everyone's trips", cancellationToken);
+        await access.RequireAsync(Permission.TravelManage, "see everyone's trips", cancellationToken);
         return await inner.ListAllAsync(query, cancellationToken);
     }
 
@@ -133,7 +133,7 @@ public sealed class PermissionCheckingTravelAuthorizationService(
 
     public async Task<TravelAuthorizationDetailDto> RecordAdvanceAsync(Guid authorizationId, RecordTravelAdvanceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("record travel advances", cancellationToken);
+        await access.RequireAsync(Permission.TravelManage, "record travel advances", cancellationToken);
         return await inner.RecordAdvanceAsync(authorizationId, request, cancellationToken);
     }
 
@@ -149,7 +149,7 @@ public sealed class PermissionCheckingTravelAuthorizationService(
         await using var db = await dbFactory.CreateAsync(ct);
         var ta = await db.Set<TravelAuthorization>().AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct);
         if (ta is not null
-            && ((await access.GetOrgRolesAsync(ct)).IsFinance()
+            && (await access.HasAsync(Permission.TravelManage, ct)
                 || ta.EmployeeId == await access.GetEmployeeIdAsync(ct)
                 || await approvals.IsParticipantAsync(db, ApprovalDocumentTypes.TravelAuthorization, id, access.Email, ct)
                 || await approvals.CanDecideAsync(db, ApprovalDocumentTypes.TravelAuthorization, id, access.Email, null, ct)))
@@ -172,7 +172,7 @@ public sealed class PermissionCheckingTravelAuthorizationService(
     private async Task RequireReportAsync(Guid reportId, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (!await access.HasAsync(Permission.TravelManage, ct))
         {
             await reports.GetReportAsync(reportId, ct); // Throws unless the user is the employee or one of the report's approvers.
         }
@@ -185,85 +185,85 @@ public sealed class PermissionCheckingCardProgramService(ICardProgramService inn
 
     public async Task<IReadOnlyList<CardProgramDto>> ListProgramsAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.ListProgramsAsync(cancellationToken);
     }
 
     public async Task<CardProgramDto> CreateProgramAsync(SaveCardProgramRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.CreateProgramAsync(request, cancellationToken);
     }
 
     public async Task<CardProgramDto> UpdateProgramAsync(Guid programId, SaveCardProgramRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.UpdateProgramAsync(programId, request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CorporateCardDto>> ListCardsAsync(Guid? programId = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.ListCardsAsync(programId, cancellationToken);
     }
 
     public async Task<CorporateCardDto> CreateCardAsync(SaveCorporateCardRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.CreateCardAsync(request, cancellationToken);
     }
 
     public async Task<CorporateCardDto> UpdateCardAsync(Guid cardId, SaveCorporateCardRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.UpdateCardAsync(cardId, request, cancellationToken);
     }
 
     public async Task<CardImportResultDto> ImportStatementAsync(Guid programId, string fileName, Stream content, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("import card statements", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "import card statements", cancellationToken);
         return await inner.ImportStatementAsync(programId, fileName, content, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CardStatementImportDto>> ListImportsAsync(Guid? programId = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, What, cancellationToken);
         return await inner.ListImportsAsync(programId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CardTransactionDto>> ListTransactionsAsync(CardTransactionQuery? query = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see everyone's card charges", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "see everyone's card charges", cancellationToken);
         return await inner.ListTransactionsAsync(query, cancellationToken);
     }
 
     public async Task<CardAgingDto> GetAgingAsync(DateOnly? asOf = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see everyone's card charges", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "see everyone's card charges", cancellationToken);
         return await inner.GetAgingAsync(asOf, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CardReconciliationDto>> GetReconciliationAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("reconcile corporate cards", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "reconcile corporate cards", cancellationToken);
         return await inner.GetReconciliationAsync(cancellationToken);
     }
 
     public async Task<CardTransactionDto> ExcludeTransactionAsync(Guid transactionId, ExcludeCardTransactionRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("reconcile corporate cards", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "reconcile corporate cards", cancellationToken);
         return await inner.ExcludeTransactionAsync(transactionId, request, cancellationToken);
     }
 
     public async Task<CardTransactionDto> RestoreTransactionAsync(Guid transactionId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("reconcile corporate cards", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "reconcile corporate cards", cancellationToken);
         return await inner.RestoreTransactionAsync(transactionId, cancellationToken);
     }
 
     public async Task<CardTransactionDto> AssignCardAsync(Guid transactionId, AssignCardRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("reconcile corporate cards", cancellationToken);
+        await access.RequireAsync(Permission.CardsManage, "reconcile corporate cards", cancellationToken);
         return await inner.AssignCardAsync(transactionId, request, cancellationToken);
     }
 }

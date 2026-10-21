@@ -109,8 +109,8 @@ public sealed class ResourcingPermissionTests
         var info = await host.As(ResourceManager).Get<ICurrentUserContext>().GetAsync();
 
         Assert.Equal(OrgRoles.ResourceManager, info.Roles);
-        Assert.False(info.CanViewAllTimesheets);
-        Assert.False(info.IsFinance);
+        Assert.False(info.Can(Permission.TimeViewAll));
+        Assert.False(info.Roles.IsFinance());
         Assert.True(info.Roles.IsResourceManager());
         Assert.True(OrgRoles.Admin.IsResourceManager());
     }

@@ -176,11 +176,14 @@ public sealed record ApiKeyDto(
     string? RevokedBy,
     DateTime? LastUsedAtUtc,
     string? LastUsedFrom,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<RoleRef>? CustomRoles = null);
 
-/// <param name="Roles">The service user's organization roles (Employee is implied).</param>
+/// <param name="Roles">The service user's built-in roles (Employee is implied).</param>
+/// <param name="CustomRoleIds">Custom roles the service user holds too.</param>
 /// <param name="Scopes">Areas and access, such as <c>time:read</c> and <c>billing:write</c> (<see cref="ApiKeyScopes"/>).</param>
-public sealed record CreateApiKeyRequest(string Name, OrgRoles Roles, IReadOnlyList<string> Scopes, DateTime? ExpiresAtUtc = null, string? Description = null);
+public sealed record CreateApiKeyRequest(string Name, OrgRoles Roles, IReadOnlyList<string> Scopes, DateTime? ExpiresAtUtc = null, string? Description = null,
+    IReadOnlyList<Guid>? CustomRoleIds = null);
 
 /// <summary>Returned once, when a key is created: the only time the key itself is shown.</summary>
 public sealed record ApiKeyCreatedDto(ApiKeyDto ApiKey, string Key);

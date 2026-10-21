@@ -5,9 +5,9 @@
 @inject ISnackbar Snackbar
 
 <MudText Class="mud-text-secondary mb-3">
-    Administrators see every workspace and can do everything. Finance manages rates, contracts, budgets, project setup and
-    fiscal close. Timekeepers see everyone's timesheets. Sheet access comes from workspace membership (Share on a sheet).
-    Deactivated people can't sign in; their history stays.
+    What people can do comes from their roles: each is a set of permissions, and someone with several roles gets all of them
+    (<MudLink Href="admin/roles">Admin › Roles</MudLink> explains each one). Sheet access comes from workspace membership (Share on
+    a sheet). Deactivated people can't sign in; their history stays.
 </MudText>
 
 <MudTable T="UserAdminDto" Items="_users" Loading="_loading" Dense="true" Hover="true" Filter="Matches" Breakpoint="Breakpoint.Sm" data-testid="users-table">
@@ -20,14 +20,7 @@
     <HeaderContent>
         <MudTh>Name</MudTh>
         <MudTh>Status</MudTh>
-        <MudTh>Admin</MudTh>
-        <MudTh>Finance</MudTh>
-        <MudTh>Project manager</MudTh>
-        <MudTh>Timekeeper</MudTh>
-        <MudTh>Resource manager</MudTh>
-        <MudTh>HR</MudTh>
-        <MudTh>Materials</MudTh>
-        <MudTh>Pricing</MudTh>
+        <MudTh>Roles</MudTh>
         <MudTh>Employee</MudTh>
         <MudTh>Last sign-in (UTC)</MudTh>
         <MudTh>Last seen (UTC)</MudTh>
@@ -54,14 +47,20 @@
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text">SCIM</MudChip>
             }
         </MudTd>
-        @foreach (var role in OrgRoleChecks.All)
-        {
-            <MudTd DataLabel="@OrgRoleChecks.Label(role)">
-                <MudSwitch T="bool" Value="context.Roles.HasFlag(role)" ValueChanged="value => SetRoleAsync(context, role, value)" Color="Color.Primary"
-                           Disabled="!context.IsActive || (role == OrgRoles.Admin && IsMe(context))"
-                           aria-label="@($"{OrgRoleChecks.Label(role)}: {context.Email}")" />
-            </MudTd>
-        }
+        <MudTd DataLabel="Roles">
+            <div class="d-flex align-center flex-wrap gap-1" data-testid="user-roles">
+                @foreach (var role in context.AssignedRoles ?? [])
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="@(role.IsBuiltIn ? Variant.Outlined : Variant.Filled)" Color="@(role.Id == BuiltInRoles.Admin.Id ? Color.Primary : Color.Default)">@role.Label</MudChip>
+                }
+                @if (context.AssignedRoles is not { Count: > 0 })
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Employee</MudText>
+                }
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Disabled="!context.IsActive" OnClick="() => EditRolesAsync(context)"
+                               aria-label="@($"Change roles for {context.Email}")" data-testid="user-roles-edit" />
+            </div>
+        </MudTd>
         <MudTd DataLabel="Employee">
             @if (context.EmployeeName is not null)
             {
@@ -162,9 +161,19 @@
         }
     }
 
-    private Task SetRoleAsync(UserAdminDto user, OrgRoles role, bool on) =>
-        RunAsync(() => UserAdmin.SetRolesAsync(user.Email, on ? user.Roles | role : user.Roles & ~role),
-            u => $"{u.DisplayName} is {(on ? "now" : "no longer")} {role}.");
+    private async Task EditRolesAsync(UserAdminDto user)
+    {
+        var dialog = await Dialogs.ShowAsync<Roles.UserRolesDialog>($"Roles for {user.DisplayName}", new DialogParameters<Roles.UserRolesDialog>
+        {
+            { d => d.Email, user.Email },
+            { d => d.IsMe, IsMe(user) },
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: UserRolesDto saved })
+        {
+            Replace(user with { Roles = BuiltInRoles.FlagsOf(saved.Roles.Where(r => r.Scope is null).Select(r => r.Id)), AssignedRoles = saved.Roles });
+            Snackbar.Add($"{saved.DisplayName}'s roles saved: {(saved.Roles.Count == 0 ? "Employee" : string.Join(", ", saved.Roles.Select(r => r.Label)))}.", Severity.Success);
+        }
+    }
 
     private async Task DeactivateAsync(UserAdminDto user)
     {

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
+using Workbench.Application.Identity;
 using Workbench.Contracts.Crm;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Tests.Identity;
@@ -61,9 +63,8 @@ internal sealed class CrmKit : IAsyncDisposable
         var kit = new CrmKit(seeded, fx);
         await using (var db = await kit.Factory.CreateAsync())
         {
-            db.Set<AppUser>().AddRange(
-                new AppUser { Email = Bd, DisplayName = "Blake", IsBusinessDevelopment = true },
-                new AppUser { Email = Bd2, DisplayName = "Bree", IsBusinessDevelopment = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = Bd, DisplayName = "Blake" }, OrgRoles.BusinessDevelopment);
+            await RoleStore.AddUserAsync(db, new AppUser { Email = Bd2, DisplayName = "Bree" }, OrgRoles.BusinessDevelopment);
             var indirect = new Project { Code = "IND", Name = "Indirect" };
             var root = new WbsElement { ProjectId = indirect.Id, Code = "IND", Name = "Indirect", Kind = ChargeKind.Indirect, IsChargeable = false, RequiresAssignment = false };
             var bp = new WbsElement { ProjectId = indirect.Id, ParentId = root.Id, Code = "IND.BP", Name = "Bid and proposal", Kind = ChargeKind.Indirect, RequiresAssignment = false, Order = 1 };

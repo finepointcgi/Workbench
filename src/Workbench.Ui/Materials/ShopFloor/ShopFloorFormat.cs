@@ -64,10 +64,10 @@ public static class ShopFloorFormat
     };
 
     /// <summary>Finance and administrators post landed cost and count adjustments.</summary>
-    public static bool CanPost(CurrentUserInfo? user) => user is null || user.Roles.IsFinance();
+    public static bool CanPost(CurrentUserInfo? user) => user is null || user.Can(Workbench.Contracts.Identity.Permission.MaterialsCosting);
 
     /// <summary>Landed cost drafts: Materials, Finance and administrators.</summary>
-    public static bool CanDraftLandedCost(CurrentUserInfo? user) => user is null || user.Roles.IsMaterials() || user.Roles.IsFinance();
+    public static bool CanDraftLandedCost(CurrentUserInfo? user) => user is null || user.CanAny(Workbench.Contracts.Identity.Permission.MaterialsManage, Workbench.Contracts.Identity.Permission.MaterialsCosting);
 
     public static string Weekdays(string mask)
     {

@@ -140,12 +140,23 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 
 ## Authentication and permissions
 
-- Who is signed in: `ICurrentUser` (sync: email, name). Roles and the linked employee: `ICurrentUserContext.GetAsync()`
-  (`CurrentUserInfo`: `Roles`, `EmployeeId`, `IsFinance`, `CanViewAllTimesheets`). Server code can also inject
-  `Application.Identity.AccessControl` (`RequireSheetRoleAsync`, `RequireFinanceAsync`, `RequireAdminAsync`).
+- Who is signed in: `ICurrentUser` (sync: email, name). Permissions, roles and the linked employee:
+  `ICurrentUserContext.GetAsync()` (`CurrentUserInfo`: `Can(Permission.X)`, `AssignedRoles`, `EmployeeId`). Server code
+  injects `Application.Identity.AccessControl` (`RequireAsync(Permission.X, "what", ct)`, `HasAsync`, `RequireSheetRoleAsync`).
 - Two kinds of roles. **Workspace roles** (Viewer < Commenter < Editor < Owner) govern sheets, through membership of the
-  sheet's workspace. **Organization roles** (`OrgRoles` flags: Timekeeper, Finance, Admin; everyone is an Employee)
-  govern project accounting. Admin can do everything.
+  sheet's workspace. **Organization roles** are bundles of **permissions** from the catalog
+  (`Contracts/Identity/Permissions.cs`, documented in `docs/security/permissions.md`): the ten built-in roles (Admin holds
+  every permission; everyone is an Employee) and custom roles from Admin › Roles. A user's permissions are the union of
+  their roles'. Decide access with a permission, never with `OrgRoles` flags (a compatibility view of the built-in roles).
+  A new capability gets a new permission (plus its built-in grants and a parity-test entry); a new page's menu entry
+  declares its permission (`NavRule.Need`).
+- A role assignment can be limited to companies, org units, projects or contracts. When a check is about a record, use
+  `HasForProjectAsync` / `HasForContractAsync` / `HasForEmployeeAsync` (or `ProjectsWithAsync` etc. for lists) so limited
+  roles count; plain `HasAsync` only counts roles that apply everywhere (fails closed).
+- Sensitive fields are permissions too: mark the contract property `[property: SensitiveField(Permission.X)]` and return
+  reads through `FieldMasker.Mask(dto, permissions)` in the permission decorator. Admin-defined things (custom fields,
+  automations, forms) register their permissions at run time with `IPermissionRegistry`; read the full catalog with
+  `IPermissionCatalog`. Details in `docs/security/permissions.md`.
 - Enforce on the server with decorators registered by `AddWorkbenchIdentity()`, which stays the **last** line of
   `AddWorkbenchApplication` so the permission checks wrap every other decorator. Put new feature registrations
   (and their own decorators) above it, and add the new service's permission decorator inside `AddWorkbenchIdentity`.

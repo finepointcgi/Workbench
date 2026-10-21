@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Security;
 
@@ -12,13 +13,13 @@ public sealed class SecurityEventService(IWorkbenchDbContextFactory dbFactory, A
 {
     public async Task<IReadOnlyList<SecurityEventDto>> SearchAsync(SecurityEventQuery query, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSecurity, "read the security event log", cancellationToken);
         return await QueryAsync(query, Math.Clamp(query.Limit, 1, 5000), cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> ListEventTypesAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSecurity, "read the security event log", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var types = await db.Set<SecurityEvent>().AsNoTracking().Select(e => e.EventType).Distinct().ToListAsync(cancellationToken);
         return types.Order(StringComparer.Ordinal).ToList();
@@ -26,7 +27,7 @@ public sealed class SecurityEventService(IWorkbenchDbContextFactory dbFactory, A
 
     public async Task<SecurityEventExport> ExportCsvAsync(SecurityEventQuery query, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSecurity, "read the security event log", cancellationToken);
         var rows = await QueryAsync(query, 100_000, cancellationToken);
         var csv = new StringBuilder("OccurredAtUtc,EventType,Outcome,Actor,Target,IpAddress,UserAgent,Detail\r\n");
         foreach (var e in rows)

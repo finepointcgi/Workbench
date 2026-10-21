@@ -27,7 +27,7 @@ else
         try
         {
             _user = await CurrentUser.GetAsync();
-            _allowed = _user.Roles.CanViewMaterials() || _user.Roles.IsBusinessDevelopment();
+            _allowed = _user.Can(Workbench.Contracts.Identity.Permission.SalesOrdersView);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {

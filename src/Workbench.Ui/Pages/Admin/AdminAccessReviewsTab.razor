@@ -68,7 +68,7 @@
         <MudTable T="AccessReviewItemDto" Items="review.Items" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>User</MudTh>
-                <MudTh>Org roles</MudTh>
+                <MudTh>Roles</MudTh>
                 <MudTh>Workspace roles</MudTh>
                 <MudTh>Last sign-in (UTC)</MudTh>
                 <MudTh>Employee</MudTh>
@@ -80,7 +80,17 @@
                     <div>@context.DisplayName</div>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.UserEmail</MudText>
                 </MudTd>
-                <MudTd DataLabel="Org roles">@context.OrgRoles</MudTd>
+                <MudTd DataLabel="Roles">
+                    <div>@context.OrgRoles</div>
+                    @if (context.Permissions is { Length: > 0 } permissions)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@(permissions.Split(", ").Length) permissions</MudText>
+                    }
+                    @if (context.RoleChanges is { } changes)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block" Color="Color.Warning">Changed this period: @changes</MudText>
+                    }
+                </MudTd>
                 <MudTd DataLabel="Workspace roles"><MudText Typo="Typo.body2">@context.WorkspaceRoles</MudText></MudTd>
                 <MudTd DataLabel="Last sign-in">
                     @(context.LastSignInAtUtc?.ToString("yyyy-MM-dd") ?? "Never")
@@ -234,11 +244,22 @@
             return;
         }
 
-        var csv = new StringBuilder("User,Email,OrgRoles,WorkspaceRoles,LastSignInUtc,Employee,NoSignIn90Days,Decision,Comment,DecidedBy,DecidedAtUtc\r\n");
+        var csv = new StringBuilder("User,Email,Roles,Permissions,RoleChangesInPeriod,WorkspaceRoles,LastSignInUtc,Employee,NoSignIn90Days,Decision,Comment,DecidedBy,DecidedAtUtc\r\n");
         foreach (var i in review.Items)
         {
-            csv.AppendJoin(',', Csv(i.DisplayName), Csv(i.UserEmail), Csv(i.OrgRoles), Csv(i.WorkspaceRoles), i.LastSignInAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "",
-                Csv(i.EmployeeName), i.Dormant ? "yes" : "no", i.Decision, Csv(i.Comment), Csv(i.DecidedBy), i.DecidedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "").Append("\r\n");
+            csv.AppendJoin(',', Csv(i.DisplayName), Csv(i.UserEmail), Csv(i.OrgRoles), Csv(i.Permissions), Csv(i.RoleChanges), Csv(i.WorkspaceRoles),
+                i.LastSignInAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "", Csv(i.EmployeeName), i.Dormant ? "yes" : "no", i.Decision, Csv(i.Comment), Csv(i.DecidedBy),
+                i.DecidedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "").Append("\r\n");
+        }
+
+        // Changes to role definitions (Admin › Roles) in the review period.
+        if (review.RoleChanges is { Count: > 0 } changes)
+        {
+            csv.Append("\r\nRole changes in the period\r\n");
+            foreach (var change in changes)
+            {
+                csv.Append(Csv(change)).Append("\r\n");
+            }
         }
 
         csv.Append($"\r\nReview,{Csv(review.Summary.Name)}\r\nStarted,{review.Summary.StartedAtUtc:yyyy-MM-dd HH:mm} UTC,{Csv(review.Summary.StartedBy)}\r\n");

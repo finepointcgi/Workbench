@@ -32,9 +32,9 @@
             <div class="px-4 py-2" style="min-width:220px">
                 <MudText Typo="Typo.subtitle2" data-testid="user-menu-name">@_name</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@me.Email</MudText>
-                @foreach (var role in OrgRoleChecks.All.Where(r => me.Roles.HasFlag(r)))
+                @foreach (var role in me.AssignedRoles?.Select(r => r.Label) ?? OrgRoleChecks.All.Where(r => me.Roles.HasFlag(r)).Select(OrgRoleChecks.Label))
                 {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-0 mt-1 mr-1">@OrgRoleChecks.Label(role)</MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-0 mt-1 mr-1">@role</MudChip>
                 }
             </div>
             <MudDivider />

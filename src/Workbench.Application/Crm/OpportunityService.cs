@@ -6,8 +6,8 @@ using Workbench.Contracts.Contracts;
 using Workbench.Contracts.Crm;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.ProjectAccounting;
-using D = Workbench.Domain.Crm;
 using Workbench.Application.Integrations;
+using D = Workbench.Domain.Crm;
 
 namespace Workbench.Application.Crm;
 
@@ -54,7 +54,7 @@ public sealed class OpportunityService(
         var me = access.Email;
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var query = db.Set<D.Opportunity>().AsNoTracking();
-        if (!roles.CanViewPipeline() || filter.MineOnly)
+        if (!roles.Has(Permission.PipelineView) || filter.MineOnly)
         {
             query = query.Where(o => o.CaptureManagerEmail == me || o.ProposalManagerEmail == me);
         }
@@ -111,7 +111,7 @@ public sealed class OpportunityService(
     }
 
     private static async Task<List<OpportunityDto>> AgencyMatchesAsync(IWorkbenchDbContext db, IQueryable<D.Opportunity> query, string term, HashSet<Guid> already,
-        OrgRoles roles, string me, CancellationToken ct)
+        PermissionSet roles, string me, CancellationToken ct)
     {
         var accounts = (await db.Set<D.CrmAccount>().AsNoTracking().Select(a => new { a.Id, a.Name, a.Acronym }).ToListAsync(ct))
             .Where(a => a.Name.Contains(term, StringComparison.OrdinalIgnoreCase) || (a.Acronym?.Equals(term, StringComparison.OrdinalIgnoreCase) ?? false))

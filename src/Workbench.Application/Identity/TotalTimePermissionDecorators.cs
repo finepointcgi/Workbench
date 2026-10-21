@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.TotalTime;
 
 namespace Workbench.Application.Identity;
@@ -21,13 +22,13 @@ public sealed class PermissionCheckingTotalTimeService(ITotalTimeService inner, 
 {
     public async Task<LaborCostSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view the labor cost method", cancellationToken);
+        await access.RequireAsync(Permission.TimeTotalTime, "view the labor cost method", cancellationToken);
         return await inner.GetSettingsAsync(cancellationToken);
     }
 
     public async Task<LaborCostSettingsDto> SetMethodAsync(SetLaborCostMethodRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("change the labor cost method", cancellationToken);
+        await access.RequireAsync(Permission.TimeTotalTime, "change the labor cost method", cancellationToken);
         return await inner.SetMethodAsync(request, cancellationToken);
     }
 
@@ -36,7 +37,7 @@ public sealed class PermissionCheckingTotalTimeService(ITotalTimeService inner, 
 
     public async Task<TotalTimeReportDto> GetReportAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view uncompensated overtime and effective labor rates", cancellationToken);
+        await access.RequireAsync(Permission.TimeTotalTime, "view uncompensated overtime and effective labor rates", cancellationToken);
         return await inner.GetReportAsync(from, to, cancellationToken);
     }
 }

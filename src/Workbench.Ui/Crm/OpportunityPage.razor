@@ -171,8 +171,8 @@ else if (_opportunity is { } o)
         {
             _error = null;
             var me = await CurrentUser.GetAsync();
-            _isFinance = me.IsFinance;
-            _seesPipeline = me.Roles.CanViewPipeline();
+            _isFinance = me.Can(Workbench.Contracts.Identity.Permission.SetupContracts);
+            _seesPipeline = me.Can(Workbench.Contracts.Identity.Permission.PipelineView);
             _people = await Users.SearchAsync(null, 500);
             try
             {
@@ -185,7 +185,7 @@ else if (_opportunity is { } o)
 
             if (IsNew)
             {
-                if (!me.Roles.IsBusinessDevelopment())
+                if (!me.Can(Workbench.Contracts.Identity.Permission.CaptureManage))
                 {
                     _error = "Only business development and administrators can add opportunities.";
                     return;

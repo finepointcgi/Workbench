@@ -1,0 +1,41 @@
+@* Picks custom roles (Admin › Roles) to grant alongside built-in ones: invites, API keys, SSO groups, shared reports.
+   Shows nothing when the organization has no custom roles. *@
+@inject IServiceProvider Services
+
+@if (_roles.Count > 0)
+{
+    <MudSelect T="Guid" MultiSelection="true" SelectedValues="Selected" SelectedValuesChanged="OnChanged" Label="@Label" Dense="true"
+               Margin="Margin.Dense" Variant="Variant.Outlined" Clearable="true" ToStringFunc="NameOf" data-testid="custom-roles">
+        @foreach (var role in _roles)
+        {
+            <MudSelectItem T="Guid" Value="role.Id">@role.Name</MudSelectItem>
+        }
+    </MudSelect>
+}
+
+@code {
+    [Parameter] public IReadOnlyCollection<Guid> Selected { get; set; } = [];
+
+    [Parameter] public EventCallback<IReadOnlyCollection<Guid>> SelectedChanged { get; set; }
+
+    [Parameter] public string Label { get; set; } = "Custom roles";
+
+    private IReadOnlyList<RoleRef> _roles = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Hosts (and component tests) without the roles service just don't offer custom roles.
+            _roles = Services.GetService(typeof(IRoleService)) is IRoleService roles ? (await roles.ListNamesAsync()).Where(r => !r.IsBuiltIn).ToList() : [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException)
+        {
+            _roles = [];
+        }
+    }
+
+    private string NameOf(Guid id) => _roles.FirstOrDefault(r => r.Id == id)?.Name ?? "";
+
+    private Task OnChanged(IEnumerable<Guid> values) => SelectedChanged.InvokeAsync(values.ToList());
+}

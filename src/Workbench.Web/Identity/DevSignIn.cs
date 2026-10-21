@@ -35,11 +35,15 @@ public static class DevSignIn
             {
                 // The host admin site has no user table: offer the configured host admins.
                 var hostAdmins = tenancy.HostAdmins.Select(e => new AppUser { Email = e.Trim().ToLowerInvariant(), DisplayName = e.Trim(), CreatedAtUtc = DateTime.UtcNow }).ToList();
-                return Results.Content(RenderPage(hostAdmins, [], antiforgery.GetAndStoreTokens(http), AccountEndpoints.SafeReturnUrl(returnUrl), host: true, demo: demo), "text/html; charset=utf-8");
+                return Results.Content(RenderPage(hostAdmins, new Dictionary<Guid, string>(), [], antiforgery.GetAndStoreTokens(http), AccountEndpoints.SafeReturnUrl(returnUrl), host: true, demo: demo), "text/html; charset=utf-8");
             }
 
             await using var db = await dbFactory.CreateAsync(http.RequestAborted);
-            var users = await db.Set<AppUser>().AsNoTracking().OrderByDescending(u => u.IsActive).ThenByDescending(u => u.IsAdmin).ThenBy(u => u.Email).ToListAsync(http.RequestAborted);
+            // Every role each person holds (built-in and custom), for the labels; administrators first.
+            var users = await db.Set<AppUser>().AsNoTracking().ToListAsync(http.RequestAborted);
+            var held = await RoleStore.UserRefsAsync(db, users.Select(u => u.Id).ToList(), http.RequestAborted);
+            var labels = users.ToDictionary(u => u.Id, u => RoleStore.Describe(held[u.Id]));
+            users = users.OrderByDescending(u => u.IsActive).ThenByDescending(u => held[u.Id].Any(r => r.Id == Contracts.Identity.BuiltInRoles.Admin.Id)).ThenBy(u => u.Email).ToList();
             var now = clock.GetUtcNow().UtcDateTime;
 
             // Pending invites stand in for "first sign-in at the identity provider" in Development.
@@ -51,7 +55,7 @@ public static class DevSignIn
             var tokens = antiforgery.GetAndStoreTokens(http);
             var policy = await signInSettings.GetAsync(http.RequestAborted);
             var organizationIdp = policy.OrganizationIdpReady ? policy.Settings.DisplayName ?? "your organization's identity provider" : null;
-            return Results.Content(RenderPage(users, invites.Where(i => !known.Contains(i.Email)).ToList(), tokens, AccountEndpoints.SafeReturnUrl(returnUrl),
+            return Results.Content(RenderPage(users, labels, invites.Where(i => !known.Contains(i.Email)).ToList(), tokens, AccountEndpoints.SafeReturnUrl(returnUrl),
                 organizationIdp: organizationIdp, reauth: reauth == "1", demo: demo), "text/html; charset=utf-8");
         }).AllowAnonymous().ExcludeFromDescription();
 
@@ -77,7 +81,7 @@ public static class DevSignIn
         }).AllowAnonymous().ExcludeFromDescription();
     }
 
-    private static string RoleLabel(AppUser user, bool host)
+    private static string RoleLabel(AppUser user, IReadOnlyDictionary<Guid, string> labels, bool host)
     {
         if (host)
         {
@@ -89,11 +93,10 @@ public static class DevSignIn
             return "Deactivated";
         }
 
-        var roles = string.Join(", ", new[] { user.IsAdmin ? "Admin" : null, user.IsFinance ? "Finance" : null, user.IsTimekeeper ? "Timekeeper" : null, user.IsResourceManager ? "ResourceManager" : null, user.IsProjectManager ? "Project manager" : null, user.IsHr ? "HR" : null, user.IsMaterials ? "Materials" : null, user.IsBusinessDevelopment ? "Business development" : null, user.IsPricing ? "Pricing" : null }.OfType<string>());
-        return roles.Length == 0 ? "Employee" : roles;
+        return labels.GetValueOrDefault(user.Id) ?? "Employee";
     }
 
-    private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false,
+    private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyDictionary<Guid, string> labels, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false,
         string? organizationIdp = null, bool reauth = false, bool demo = false)
     {
         static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
@@ -133,7 +136,7 @@ public static class DevSignIn
                 <form method="post" action="{Path}">
                   <input type="hidden" name="{E(tokens.FormFieldName)}" value="{E(tokens.RequestToken)}" />
                   <input type="hidden" name="returnUrl" value="{E(returnUrl)}" />
-                  <button type="submit" name="email" value="{E(user.Email)}">{E(user.DisplayName)}<span class="admin">{E(RoleLabel(user, host))}</span><small>{E(user.Email)}</small></button>
+                  <button type="submit" name="email" value="{E(user.Email)}">{E(user.DisplayName)}<span class="admin">{E(RoleLabel(user, labels, host))}</span><small>{E(user.Email)}</small></button>
                 </form>
                 """);
         }

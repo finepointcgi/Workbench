@@ -8,9 +8,9 @@ using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Projects;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Identity;
-using WorkspaceRole = Workbench.Contracts.Identity.WorkspaceRole;
 using Workbench.Domain.Notifications;
 using Workbench.Domain.ProjectAccounting;
+using WorkspaceRole = Workbench.Contracts.Identity.WorkspaceRole;
 using static Workbench.Tests.Identity.SeededHost;
 
 namespace Workbench.Tests.Identity;
@@ -43,8 +43,10 @@ public sealed class ProjectManagerRoleTests
             db.Set<AppUser>().Add(user);
         }
 
-        user.IsProjectManager = roles.HasFlag(OrgRoles.ProjectManager);
-        user.IsFinance = roles.HasFlag(OrgRoles.Finance);
+        // Sets the Project manager and Finance roles, leaving the others.
+        const OrgRoles managed = OrgRoles.ProjectManager | OrgRoles.Finance;
+        var held = BuiltInRoles.FlagsOf(await RoleStore.RoleIdsOfAsync(db, user.Id, default));
+        await RoleStore.ReplaceBuiltInAsync(db, user, (held & ~managed) | (roles & managed), "test", DateTime.UtcNow, default);
         await db.SaveChangesAsync();
     }
 
@@ -65,7 +67,7 @@ public sealed class ProjectManagerRoleTests
         Assert.Equal(OrgRoles.ProjectManager, context.Roles);
         Assert.True(context.Roles.IsProjectManager());
         Assert.True(context.Roles.CanManageProjects());
-        Assert.False(context.IsFinance);
+        Assert.False(context.Roles.IsFinance());
         Assert.True(OrgRoles.Admin.IsProjectManager());
         Assert.False(OrgRoles.Finance.IsProjectManager());
         Assert.True(OrgRoles.Finance.CanManageProjects());

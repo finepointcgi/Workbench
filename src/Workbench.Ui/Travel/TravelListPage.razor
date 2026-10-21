@@ -46,7 +46,7 @@
         {
             _mine = await Travel.ListMineAsync();
             _awaiting = await Travel.ListAwaitingMeAsync();
-            _isFinance = (await CurrentUser.GetAsync()).IsFinance;
+            _isFinance = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.TravelManage);
             if (_isFinance)
             {
                 _all = await Travel.ListAllAsync();

@@ -104,7 +104,7 @@ public sealed class BillTests
         {
             // pm@ joins Finance so they can enter bills.
             var user = await db.Set<Domain.Identity.AppUser>().SingleAsync(u => u.Email == Owner);
-            user.IsFinance = true;
+            await Application.Identity.RoleStore.GrantBuiltInAsync(db, user, Contracts.Identity.OrgRoles.Finance);
             await db.SaveChangesAsync();
         }
 

@@ -1,7 +1,7 @@
 @page "/admin/dcaa-readiness"
 @using Workbench.Contracts.Security
 @inject IComplianceChecklistService Checklists
-@inject IUserDirectory Users
+@inject ICurrentUserContext CurrentUser
 @inject ISnackbar Snackbar
 
 <PageTitle>DCAA readiness · Workbench</PageTitle>
@@ -112,7 +112,7 @@ else if (_checklist is { } checklist)
     {
         try
         {
-            _isAdmin = (await Users.GetMeAsync()).IsAdmin;
+            _isAdmin = (await CurrentUser.GetAsync()).Can(Permission.AdminCompliance);
             if (_isAdmin)
             {
                 _checklist = await Checklists.GetAsync(ComplianceChecklists.DcaaSf1408);

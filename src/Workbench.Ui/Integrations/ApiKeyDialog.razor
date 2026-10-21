@@ -17,7 +17,8 @@
                         <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@OrgRoleChecks.Label(role)" Dense="true" Color="Color.Primary" />
                     }
                 </div>
-                @if (_roles.IsAdmin())
+                <Workbench.Ui.Pages.Admin.Roles.CustomRolePicker @bind-Selected="_custom" />
+                @if (_roles.HasFlag(OrgRoles.Admin))
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined">An Admin key can do anything in the areas you allow below. Prefer a narrower role.</MudAlert>
                 }
@@ -64,6 +65,7 @@
     private string? _name;
     private string? _description;
     private OrgRoles _roles;
+    private IReadOnlyCollection<Guid> _custom = [];
     private readonly Dictionary<string, string> _access = [];
     private DateTime? _expires;
     private bool _busy;
@@ -78,7 +80,7 @@
         try
         {
             var expires = _expires is { } d ? DateTime.SpecifyKind(d.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc) : (DateTime?)null;
-            MudDialog.Close(DialogResult.Ok(await ApiKeys.CreateAsync(new CreateApiKeyRequest(_name!, _roles, Scopes, expires, _description))));
+            MudDialog.Close(DialogResult.Ok(await ApiKeys.CreateAsync(new CreateApiKeyRequest(_name!, _roles, Scopes, expires, _description, _custom.ToList()))));
         }
         catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
         {

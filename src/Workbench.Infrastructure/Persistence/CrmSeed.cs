@@ -9,6 +9,7 @@ using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Time;
 using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Crm;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -47,7 +48,7 @@ internal static class CrmSeed
         db.Add(new EmployeeCostRate { EmployeeId = blake.Id, EffectiveFrom = blake.HireDate, HourlyCost = 84m });
         if (!await db.Set<AppUser>().AnyAsync(u => u.Email == BdEmail, cancellationToken))
         {
-            db.Add(new AppUser { Email = BdEmail, DisplayName = "Blake Diaz", IsBusinessDevelopment = true, CreatedAtUtc = DateTime.UtcNow });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = BdEmail, DisplayName = "Blake Diaz", CreatedAtUtc = DateTime.UtcNow }, OrgRoles.BusinessDevelopment, cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);

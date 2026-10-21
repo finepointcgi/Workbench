@@ -326,7 +326,7 @@ public sealed class OpportunityGateService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var review = await db.Set<D.OpportunityGateReview>().Include(r => r.Scores).FirstOrDefaultAsync(r => r.Id == reviewId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Gate review", reviewId);
-        if (review.SubmittedBy != access.Email && !(await access.RolesAsync(cancellationToken)).IsAdmin())
+        if (review.SubmittedBy != access.Email && !(await access.RolesAsync(cancellationToken)).Has(Permission.OpportunitiesEditAll))
         {
             throw new WorkbenchForbiddenException("Only whoever submitted the gate decision (or an administrator) can withdraw it.");
         }

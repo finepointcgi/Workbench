@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.BankFiles;
+using Workbench.Contracts.Identity;
 
 namespace Workbench.Application.Identity;
 
@@ -24,43 +25,43 @@ public sealed class PermissionCheckingVendorBankService(IVendorBankService inner
 
     public async Task<VendorBankDetailsDto> GetAsync(Guid vendorId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.GetAsync(vendorId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<VendorBankChangeDto>> ListPendingAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.ListPendingAsync(cancellationToken);
     }
 
     public async Task<VendorBankChangeDto> RequestChangeAsync(Guid vendorId, RequestVendorBankChangeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.RequestChangeAsync(vendorId, request, cancellationToken);
     }
 
     public async Task<VendorBankChangeDto> ApproveChangeAsync(Guid changeId, DecideVendorBankChangeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.ApproveChangeAsync(changeId, request, cancellationToken);
     }
 
     public async Task<VendorBankChangeDto> RejectChangeAsync(Guid changeId, DecideVendorBankChangeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.RejectChangeAsync(changeId, request, cancellationToken);
     }
 
     public async Task<VendorBankChangeDto> CancelChangeAsync(Guid changeId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.CancelChangeAsync(changeId, cancellationToken);
     }
 
     public async Task<VendorBankRevealDto> RevealAsync(Guid vendorId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorBankDetails, What, cancellationToken);
         return await inner.RevealAsync(vendorId, cancellationToken);
     }
 }
@@ -71,51 +72,51 @@ public sealed class PermissionCheckingPaymentFileService(IPaymentFileService inn
 
     public async Task<IReadOnlyList<BankFileSettingsDto>> ListBankAccountsAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         return await inner.ListBankAccountsAsync(cancellationToken);
     }
 
     public async Task<BankFileSettingsDto> GetSettingsAsync(Guid bankAccountId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         return await inner.GetSettingsAsync(bankAccountId, cancellationToken);
     }
 
     public async Task<BankFileSettingsDto> SaveSettingsAsync(Guid bankAccountId, SaveBankFileSettingsRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         return await inner.SaveSettingsAsync(bankAccountId, request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<PositivePayLayoutDto>> ListLayoutsAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         return await inner.ListLayoutsAsync(cancellationToken);
     }
 
     public async Task<PositivePayLayoutDto> SaveLayoutAsync(Guid? layoutId, SavePositivePayLayoutRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         return await inner.SaveLayoutAsync(layoutId, request, cancellationToken);
     }
 
     public async Task<PaymentRunFilesDto> GetRunFilesAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         await companies.EnsureAsync<Domain.Purchasing.ApPaymentRun>(runId, "Payment run", cancellationToken);
         return await inner.GetRunFilesAsync(runId, cancellationToken);
     }
 
     public async Task<PaymentFileDto> GenerateAsync(Guid runId, GeneratePaymentFileRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         await companies.EnsureAsync<Domain.Purchasing.ApPaymentRun>(runId, "Payment run", cancellationToken);
         return await inner.GenerateAsync(runId, request, cancellationToken);
     }
 
     public async Task<RemittanceResultDto> SendRemittanceAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.ApPaymentsManage, What, cancellationToken);
         await companies.EnsureAsync<Domain.Purchasing.ApPaymentRun>(runId, "Payment run", cancellationToken);
         return await inner.SendRemittanceAsync(runId, cancellationToken);
     }

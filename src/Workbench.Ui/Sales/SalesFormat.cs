@@ -8,9 +8,11 @@ namespace Workbench.Ui.Sales;
 public static class SalesFormat
 {
     /// <summary>Materials, Finance and administrators enter orders and ship them; Business development only reads orders.</summary>
-    public static bool CanEdit(CurrentUserInfo? user) => user is null || user.Roles.CanViewMaterials();
+    public static bool CanEdit(CurrentUserInfo? user) => user is null || user.Can(Workbench.Contracts.Identity.Permission.SalesOrdersManage);
 
-    public static bool IsFinance(CurrentUserInfo? user) => user is null || user.IsFinance;
+    public static bool CanCreditHold(CurrentUserInfo? user) => user is null || user.Can(Workbench.Contracts.Identity.Permission.SalesCreditHold);
+
+    public static bool CanInvoice(CurrentUserInfo? user) => user is null || user.Can(Workbench.Contracts.Identity.Permission.BillingInvoicesManage);
 
     public static string Label(SalesOrderState s) => s switch
     {

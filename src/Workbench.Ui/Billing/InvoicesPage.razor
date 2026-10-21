@@ -5,7 +5,7 @@
 <PageTitle>Invoices · Billing · Workbench</PageTitle>
 
 <BillingHeader Title="Invoices" Subtitle="Customer invoices and credit memos by contract. Approving an invoice posts it to the general ledger; voiding reverses it and frees what it billed.">
-    <FinanceOnly>
+    <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.BillingInvoicesManage">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="billing/new" data-testid="new-invoice">New invoice</MudButton>
     </FinanceOnly>
 </BillingHeader>

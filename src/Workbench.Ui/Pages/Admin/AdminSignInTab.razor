@@ -145,7 +145,10 @@ else
                 {
                     <tr>
                         <td><MudTextField @bind-Value="row.Group" Margin="Margin.Dense" Variant="Variant.Outlined" MaxLength="256" aria-label="Group" /></td>
-                        <td><RoleChecks Roles="row.Roles" RolesChanged="r => row.Roles = r" AllowAdmin="true" /></td>
+                        <td>
+                            <RoleChecks Roles="row.Roles" RolesChanged="r => row.Roles = r" AllowAdmin="true" />
+                            <Workbench.Ui.Pages.Admin.Roles.CustomRolePicker @bind-Selected="row.Custom" />
+                        </td>
                         <td><MudTextField @bind-Value="row.Description" Margin="Margin.Dense" Variant="Variant.Outlined" MaxLength="200" aria-label="Description" /></td>
                         <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _mappings.Remove(row)" aria-label="Remove mapping" /></td>
                     </tr>
@@ -215,6 +218,7 @@ else
     {
         public string? Group { get; set; }
         public OrgRoles Roles { get; set; }
+        public IReadOnlyCollection<Guid> Custom { get; set; } = [];
         public string? Description { get; set; }
     }
 
@@ -246,7 +250,7 @@ else
 
     private Task SaveProvisioningAsync() =>
         RunAsync(() => SignIn.SaveProvisioningAsync(new SaveProvisioningRequest(_jit, _domains, _defaultRoles, _groupsClaim, _syncRoles,
-            _mappings.Where(m => !string.IsNullOrWhiteSpace(m.Group)).Select(m => new SaveSsoGroupMapping(m.Group!, m.Roles, m.Description)).ToList())), "Provisioning saved.");
+            _mappings.Where(m => !string.IsNullOrWhiteSpace(m.Group)).Select(m => new SaveSsoGroupMapping(m.Group!, m.Roles, m.Description, m.Custom.ToList())).ToList())), "Provisioning saved.");
 
     private Task SaveSessionsAsync() => RunAsync(() => SignIn.SaveSessionPolicyAsync(new SaveSessionPolicyRequest(_reauthMinutes, _maxHours)), "Session policy saved.");
 
@@ -295,7 +299,7 @@ else
         _groupsClaim = s.GroupsClaim;
         _defaultRoles = s.JitDefaultRoles;
         _syncRoles = s.SyncRolesFromGroups;
-        _mappings = s.GroupMappings.Select(m => new MappingRow { Group = m.GroupValue, Roles = m.Roles, Description = m.Description }).ToList();
+        _mappings = s.GroupMappings.Select(m => new MappingRow { Group = m.GroupValue, Roles = m.Roles, Custom = (m.CustomRoles ?? []).Select(r => r.Id).ToList(), Description = m.Description }).ToList();
         _reauthMinutes = s.ReauthenticationMinutes;
         _maxHours = s.SessionMaxHours;
     }

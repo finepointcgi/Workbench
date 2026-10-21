@@ -123,7 +123,7 @@ else
         {
             var me = await CurrentUser.GetAsync();
             _me = me.Email.ToLowerInvariant();
-            _canCreate = me.Roles.IsBusinessDevelopment();
+            _canCreate = me.Can(Workbench.Contracts.Identity.Permission.CaptureManage);
             _all = await Opportunities.ListAsync(new OpportunityFilter());
             try
             {

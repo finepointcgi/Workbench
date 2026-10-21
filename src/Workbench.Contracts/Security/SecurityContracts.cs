@@ -19,9 +19,10 @@ public sealed record UserAdminDto(
     Guid? EmployeeId,
     string? EmployeeName,
     EmployeeLinkMode EmployeeLink,
-    bool ScimManaged)
+    bool ScimManaged,
+    IReadOnlyList<RoleRef>? AssignedRoles = null)
 {
-    public bool IsAdmin => Roles.IsAdmin();
+    public bool IsAdmin => Roles.HasFlag(OrgRoles.Admin);
 }
 
 public enum EmployeeLinkMode
@@ -85,9 +86,11 @@ public sealed record InviteDto(
     DateTime ExpiresAtUtc,
     DateTime? AcceptedAtUtc,
     DateTime? RevokedAtUtc,
-    InviteStatus Status);
+    InviteStatus Status,
+    IReadOnlyList<RoleRef>? CustomRoles = null);
 
-public sealed record CreateInviteRequest(string Email, string DisplayName, OrgRoles Roles);
+/// <summary>An invite. <paramref name="CustomRoleIds"/> are custom roles granted on top of the built-in <paramref name="Roles"/>.</summary>
+public sealed record CreateInviteRequest(string Email, string DisplayName, OrgRoles Roles, IReadOnlyList<Guid>? CustomRoleIds = null);
 
 /// <summary>Invitations. An invite expires after 7 days and is accepted on the first sign-in with its email.</summary>
 public interface IInviteService
@@ -134,9 +137,12 @@ public sealed record AccessReviewItemDto(
     string? Comment,
     string? DecidedBy,
     DateTime? DecidedAtUtc,
-    DateTime? AppliedAtUtc);
+    DateTime? AppliedAtUtc,
+    string? Permissions = null,
+    string? RoleChanges = null);
 
-public sealed record AccessReviewDto(AccessReviewSummaryDto Summary, string? Notes, IReadOnlyList<AccessReviewItemDto> Items);
+/// <summary>A review. <paramref name="RoleChanges"/> lists changes to role definitions in the review period, for the export.</summary>
+public sealed record AccessReviewDto(AccessReviewSummaryDto Summary, string? Notes, IReadOnlyList<AccessReviewItemDto> Items, IReadOnlyList<string>? RoleChanges = null);
 
 public sealed record AccessReviewDecisionRequest(AccessReviewDecisionKind Decision, string? Comment);
 

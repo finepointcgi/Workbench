@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Companies;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Assets;
 using Workbench.Contracts.Assets;
 
@@ -23,7 +24,7 @@ public static class AssetPermissionRegistration
 
 public sealed class PermissionCheckingAssetService(IAssetService inner, AccessControl access) : IAssetService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with fixed assets", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.AssetsManage, "work with fixed assets", ct);
 
     public async Task<IReadOnlyList<AssetSummaryDto>> ListAsync(AssetQuery query, CancellationToken cancellationToken = default)
     {
@@ -106,7 +107,7 @@ public sealed class PermissionCheckingAssetService(IAssetService inner, AccessCo
 
 public sealed class PermissionCheckingDepreciationService(IDepreciationService inner, AccessControl access) : IDepreciationService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("run depreciation", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.AssetsDepreciationRun, "run depreciation", ct);
 
     public async Task<DepreciationPreviewDto> PreviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
@@ -129,7 +130,7 @@ public sealed class PermissionCheckingDepreciationService(IDepreciationService i
 
 public sealed class PermissionCheckingAssetReportService(IAssetReportService inner, AccessControl access) : IAssetReportService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("see fixed asset reports", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.AssetsManage, "see fixed asset reports", ct);
 
     public async Task<IReadOnlyList<AssetSummaryDto>> GetRegisterAsync(AssetQuery query, CancellationToken cancellationToken = default)
     {
@@ -182,7 +183,7 @@ public sealed class PermissionCheckingAssetReportService(IAssetReportService inn
 
 public sealed class PermissionCheckingAssetTaxBookService(IAssetTaxBookService inner, AccessControl access) : IAssetTaxBookService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with tax depreciation books", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.AssetsManage, "work with tax depreciation books", ct);
 
     public async Task<AssetBooksDto> GetBooksAsync(Guid assetId, CancellationToken cancellationToken = default)
     {

@@ -12,7 +12,7 @@ internal sealed class SavedReportConfiguration : IEntityTypeConfiguration<SavedR
         b.Property(r => r.Name).HasMaxLength(200);
         b.Property(r => r.Description).HasMaxLength(1000);
         b.Property(r => r.OwnerEmail).HasMaxLength(320);
-        b.Property(r => r.SharedWith).HasMaxLength(200);
+        b.Property(r => r.SharedWith).HasMaxLength(2000); // Built-in role names and role:{id} for custom roles.
         b.Property(r => r.StandardKey).HasMaxLength(64);
         b.Property(r => r.DefinitionJson).HasMaxLength(32000);
         b.HasIndex(r => r.OwnerEmail);

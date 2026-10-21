@@ -1,4 +1,5 @@
 using Workbench.Application;
+using Workbench.Application.Identity;
 using Workbench.Contracts;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Pricing;
@@ -17,7 +18,7 @@ public sealed class PricingPermissionTests
     {
         var seeded = await SeededHost.CreateAsync();
         await using var db = await seeded.Host.Get<IWorkbenchDbContextFactory>().CreateAsync();
-        db.Set<AppUser>().Add(new AppUser { Email = Pricer, DisplayName = "Riley", IsPricing = true });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Pricer, DisplayName = "Riley" }, OrgRoles.Pricing);
         await db.SaveChangesAsync();
         return seeded;
     }

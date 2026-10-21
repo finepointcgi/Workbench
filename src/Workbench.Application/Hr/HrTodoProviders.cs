@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.MyTodo;
 using Workbench.Contracts.Hr;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using D = Workbench.Domain.Hr;
 
@@ -59,7 +60,7 @@ public sealed class CredentialExpiryTodoProvider : IMyTodoProvider
         }
 
         var others = expiring.Where(c => c.EmployeeId != me).ToList();
-        if (context.User.IsHr)
+        if (context.User.Can(Permission.HrRecordsManage))
         {
             if (others.Count > 0)
             {
@@ -133,7 +134,7 @@ public sealed class BenefitsTodoProvider : IMyTodoProvider
             }
         }
 
-        if (context.User.IsHr)
+        if (context.User.Can(Permission.HrBenefitsManage))
         {
             var pending = (await benefits.ListPendingLifeEventsAsync(cancellationToken)).Where(e => e.EmployeeId != context.User.EmployeeId).ToList();
             if (pending.Count > 0)

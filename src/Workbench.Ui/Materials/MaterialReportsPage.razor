@@ -75,7 +75,7 @@
             }
         </MudPaper>
     </MudTabPanel>
-    @if (User?.IsFinance == true)
+    @if (User?.Can(Workbench.Contracts.Identity.Permission.MaterialsCosting) == true)
     {
         <MudTabPanel Text="Work in process">
             @if (_wip is { } w)
@@ -155,7 +155,7 @@
 
     private async Task TabAsync(int index)
     {
-        if (index == 3 && User?.IsFinance == true && _wip is null)
+        if (index == 3 && User?.Can(Workbench.Contracts.Identity.Permission.MaterialsCosting) == true && _wip is null)
         {
             try
             {

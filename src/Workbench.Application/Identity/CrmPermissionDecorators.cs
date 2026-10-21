@@ -87,7 +87,7 @@ public sealed class PermissionCheckingOpportunityService(IOpportunityService inn
     public async Task<HandoffResultDto> HandoffAsync(Guid id, HandoffRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireReadAsync(id, cancellationToken);
-        await access.RequireFinanceAsync("create contracts from won opportunities", cancellationToken);
+        await access.RequireAsync(Permission.SetupContracts, "create contracts from won opportunities", cancellationToken);
         return await inner.HandoffAsync(id, request, cancellationToken);
     }
 
@@ -375,13 +375,13 @@ public sealed class PermissionCheckingPipelineService(IPipelineService inner, Cr
 
     public async Task<CrmSettingsDto> SetBpParentAsync(Guid? wbsElementId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("choose the B&P charge code", cancellationToken);
+        await access.RequireAsync(Permission.BpChargeCode, "choose the B&P charge code", cancellationToken);
         return await inner.SetBpParentAsync(wbsElementId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<BpParentOptionDto>> ListBpParentOptionsAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("choose the B&P charge code", cancellationToken);
+        await access.RequireAsync(Permission.BpChargeCode, "choose the B&P charge code", cancellationToken);
         return await inner.ListBpParentOptionsAsync(cancellationToken);
     }
 }

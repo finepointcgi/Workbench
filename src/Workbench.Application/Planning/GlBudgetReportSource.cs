@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Reports;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Reports;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Planning;
@@ -36,7 +37,7 @@ public sealed class GlBudgetReportSource : ReportSource
     ];
 
     public override string? Unavailable(ReportAccessContext access) =>
-        access.IsFinance ? null : "Budgets are for Finance and administrators.";
+        access.Can(Permission.BudgetsManage) ? null : "Budgets need the \"Manage corporate budgets\" permission.";
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {

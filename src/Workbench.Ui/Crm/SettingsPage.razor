@@ -130,8 +130,8 @@ else
         try
         {
             var me = await CurrentUser.GetAsync();
-            _canEditGates = me.Roles.IsBusinessDevelopment();
-            _isFinance = me.IsFinance;
+            _canEditGates = me.Can(Workbench.Contracts.Identity.Permission.CaptureManage);
+            _isFinance = me.Can(Workbench.Contracts.Identity.Permission.BpChargeCode);
             _gates = await Gates.ListGatesAsync(includeInactive: true);
             _settings = await Pipeline.GetSettingsAsync();
             if (_isFinance)

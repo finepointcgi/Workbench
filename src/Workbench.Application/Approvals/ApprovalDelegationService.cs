@@ -21,7 +21,7 @@ public sealed class ApprovalDelegationService(IWorkbenchDbContextFactory dbFacto
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var me = access.Email;
         var q = db.Set<ApprovalDelegation>().AsNoTracking();
-        if (!(await access.GetOrgRolesAsync(cancellationToken)).IsAdmin())
+        if (!await access.HasAsync(Permission.ApprovalDelegationsManage, cancellationToken))
         {
             q = q.Where(d => d.DelegatorEmail == me || d.DelegateEmail == me);
         }
@@ -35,7 +35,7 @@ public sealed class ApprovalDelegationService(IWorkbenchDbContextFactory dbFacto
         ArgumentNullException.ThrowIfNull(request);
         var me = access.Email;
         var delegator = string.IsNullOrWhiteSpace(request.DelegatorEmail) ? me : ApprovalEngine.Normalize(request.DelegatorEmail);
-        if (delegator != me && !(await access.GetOrgRolesAsync(cancellationToken)).IsAdmin())
+        if (delegator != me && !await access.HasAsync(Permission.ApprovalDelegationsManage, cancellationToken))
         {
             throw new WorkbenchForbiddenException("Only administrators can delegate someone else's approvals.");
         }
@@ -102,7 +102,7 @@ public sealed class ApprovalDelegationService(IWorkbenchDbContextFactory dbFacto
         var delegation = await db.Set<ApprovalDelegation>().FirstOrDefaultAsync(d => d.Id == delegationId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Delegation", delegationId);
         var me = access.Email;
-        if (delegation.DelegatorEmail != me && delegation.CreatedBy != me && !(await access.GetOrgRolesAsync(cancellationToken)).IsAdmin())
+        if (delegation.DelegatorEmail != me && delegation.CreatedBy != me && !await access.HasAsync(Permission.ApprovalDelegationsManage, cancellationToken))
         {
             throw new WorkbenchForbiddenException("Only the person who delegated (or an administrator) can end a delegation.");
         }

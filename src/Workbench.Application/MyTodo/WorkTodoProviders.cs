@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Time;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Leave;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.MyWork;
@@ -38,7 +39,7 @@ public sealed class ReceivingTodoProvider : IMyTodoProvider
 
             var partly = summary.Status == PurchaseOrderState.PartiallyReceived;
             // PO dollars are Finance's; a receiver only needs to know what's still to come (as on the Receiving page).
-            var finance = context.User.IsFinance;
+            var finance = context.User.Can(Permission.PurchaseOrdersManage);
             items.Add(new MyTodoItem(
                 $"receiving:{summary.Id}", TodoCategories.Receiving,
                 $"Receive {summary.Number} from {summary.VendorName}",

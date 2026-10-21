@@ -62,9 +62,7 @@ public enum ApproverRuleKind
     /// <summary>The approver set for each charged org unit (or the submitter's org unit): one approval per unit.</summary>
     OrgUnitManager,
 
-    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, HR).</summary>
-    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, BusinessDevelopment).</summary>
-    /// <summary>Any member of an org role (Finance, Admin, ResourceManager, Timekeeper, ProjectManager, Pricing).</summary>
+    /// <summary>Anyone holding a role: a built-in org role (<see cref="ApprovalOrgRole"/>) or a custom role.</summary>
     OrgRole,
 
     /// <summary>Each listed person: every one of them must approve.</summary>
@@ -127,7 +125,11 @@ public enum ApprovalConditionKind
 
 public enum ConditionMatch { All, Any }
 
-public sealed record ApproverRule(ApproverRuleKind Kind, ApprovalOrgRole? Role = null, IReadOnlyList<string>? People = null);
+/// <summary>
+/// Who approves. For <see cref="ApproverRuleKind.OrgRole"/>, <paramref name="CustomRoleId"/> (a custom role from Admin ›
+/// Roles) takes precedence over <paramref name="Role"/>: everyone holding that role can decide.
+/// </summary>
+public sealed record ApproverRule(ApproverRuleKind Kind, ApprovalOrgRole? Role = null, IReadOnlyList<string>? People = null, Guid? CustomRoleId = null);
 
 public sealed record ApprovalCondition(ApprovalConditionKind Kind, decimal? Amount = null, IReadOnlyList<Guid>? Ids = null, IReadOnlyList<string>? Values = null);
 

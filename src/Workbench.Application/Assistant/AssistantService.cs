@@ -244,7 +244,7 @@ public sealed partial class AssistantService(
         try
         {
             var me = await services.GetRequiredService<ICurrentUserContext>().GetAsync(ct);
-            var roles = OrgRoleChecks.All.Where(r => me.Roles.HasFlag(r)).Select(OrgRoleChecks.Label).ToList();
+            var roles = me.AssignedRoles?.Select(r => r.Name).ToList() ?? OrgRoleChecks.All.Where(r => me.Roles.HasFlag(r)).Select(OrgRoleChecks.Label).ToList();
             context.AppendLine($"signed in as: {AssistantToolbox.Clip(me.DisplayName, 120)} (roles: {(roles.Count == 0 ? "Employee" : string.Join(", ", roles))})");
         }
         catch (UnauthorizedAccessException)

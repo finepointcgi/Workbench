@@ -124,7 +124,7 @@ else
     {
         try
         {
-            _canCreate = (await CurrentUser.GetAsync()).Roles.IsBusinessDevelopment();
+            _canCreate = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.CaptureManage);
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {

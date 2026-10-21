@@ -288,7 +288,7 @@ public sealed class CloseoutService(IWorkbenchDbContextFactory dbFactory, AuditR
             .Where(i => i.ContractId == target.ContractId && BilledStatuses.Contains(i.Status) && i.Type != InvoiceType.CreditMemo)
             .ToListAsync(ct);
         var history = await db.Set<AuditEvent>().AsNoTracking().Where(a => a.EntityType == Entity && a.EntityId == record.Id).ToListAsync(ct);
-        var finance = (await access.GetOrgRolesAsync(ct)).IsFinance();
+        var finance = await access.HasAsync(Permission.CeilingsManage, ct);
         return new CloseoutDto(
             target.Scope, target.Id, target.Code, target.Name, (CloseoutState)(int)record.Status, record.PhysicallyCompleteOn, items,
             record.FinalInvoiceId, invoices.FirstOrDefault(i => i.Id == record.FinalInvoiceId)?.Number,

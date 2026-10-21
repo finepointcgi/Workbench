@@ -1,4 +1,4 @@
-@* Looks up once whether the user is Finance/Admin and cascades it as FinanceAccess to the pages below. *@
+@* Looks up the user's permissions once and cascades them as FinanceAccess to the pages below. *@
 @inject ICurrentUserContext CurrentUser
 
 @if (_access is null)
@@ -22,11 +22,11 @@ else
     {
         try
         {
-            _access = new FinanceAccess((await CurrentUser.GetAsync()).IsFinance);
+            _access = new FinanceAccess((await CurrentUser.GetAsync()).Permissions);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {
-            _access = new FinanceAccess(false);
+            _access = FinanceAccess.None;
         }
     }
 }

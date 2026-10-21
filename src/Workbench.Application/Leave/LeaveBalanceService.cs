@@ -33,9 +33,8 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
     {
         access.RequireSignedIn();
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        List<Employee> employees;
-        if (roles.IsFinance())
+                List<Employee> employees;
+        if (await access.HasAsync(Permission.LeaveBalancesManage, cancellationToken))
         {
             employees = await db.Set<Employee>().AsNoTracking().ToListAsync(cancellationToken);
         }
@@ -72,7 +71,7 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
     public async Task<LeaveLedgerEntryDto> AdjustAsync(AdjustLeaveRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await access.RequireFinanceAsync("adjust leave balances", cancellationToken);
+        await access.RequireAsync(Permission.LeaveBalancesManage, "adjust leave balances", cancellationToken);
         var reason = request.Reason.Required("Reason");
         if (request.Hours == 0 || decimal.Round(request.Hours, 2) != request.Hours || Math.Abs(request.Hours) > 2000)
         {
@@ -108,7 +107,7 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
 
     public async Task<AccrualRunResultDto> RunAccrualAsync(Guid payPeriodId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("run leave accruals", cancellationToken);
+        await access.RequireAsync(Permission.LeaveBalancesManage, "run leave accruals", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var period = await db.Set<PayPeriod>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == payPeriodId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Pay period", payPeriodId);
@@ -124,7 +123,7 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
 
     public async Task<YearEndResultDto> RunYearEndAsync(int year, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("run the leave year end", cancellationToken);
+        await access.RequireAsync(Permission.LeaveBalancesManage, "run the leave year end", cancellationToken);
         if (year is < 2000 or > 2100)
         {
             throw new ArgumentException("Choose a year between 2000 and 2100.");
@@ -144,7 +143,7 @@ public sealed class LeaveBalanceService(IWorkbenchDbContextFactory dbFactory, Ac
     private async Task RequireCanSeeAsync(IWorkbenchDbContext db, Employee employee, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if (string.Equals(employee.Email, access.Email, StringComparison.OrdinalIgnoreCase) || (await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (string.Equals(employee.Email, access.Email, StringComparison.OrdinalIgnoreCase) || await access.HasAsync(Permission.LeaveBalancesManage, ct))
         {
             return;
         }

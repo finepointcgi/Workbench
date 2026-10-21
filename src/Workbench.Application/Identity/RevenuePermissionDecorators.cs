@@ -29,7 +29,7 @@ public sealed class PermissionCheckingRevenueSetupService(IRevenueSetupService i
 {
     private AccessControl Access => projects.Access;
 
-    private Task RequireFinanceAsync(CancellationToken ct) => Access.RequireFinanceAsync("manage revenue recognition", ct);
+    private Task RequireFinanceAsync(CancellationToken ct) => Access.RequireAsync(Permission.RevenueManage, "manage revenue recognition", ct);
 
     public async Task<IReadOnlyList<RevenueProjectSummaryDto>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {
@@ -41,7 +41,7 @@ public sealed class PermissionCheckingRevenueSetupService(IRevenueSetupService i
     {
         await projects.RequireProjectFinancialsAsync(projectId, "see a project's revenue", cancellationToken);
         var result = await inner.GetProjectAsync(projectId, cancellationToken);
-        return result with { CanManage = (await Access.GetOrgRolesAsync(cancellationToken)).IsFinance() };
+        return result with { CanManage = await Access.HasAsync(Permission.RevenueManage, cancellationToken) };
     }
 
     public async Task<RevenueSetupDto> SaveSetupAsync(SaveRevenueSetupRequest request, CancellationToken cancellationToken = default)
@@ -70,13 +70,13 @@ public sealed class PermissionCheckingRevenueSetupService(IRevenueSetupService i
 
     public async Task<EstimateDto> ApproveEstimateAsync(Guid estimateId, DecideEstimateRequest request, CancellationToken cancellationToken = default)
     {
-        await Access.RequireFinanceAsync("approve estimates at completion", cancellationToken);
+        await Access.RequireAsync(Permission.RevenueManage, "approve estimates at completion", cancellationToken);
         return await inner.ApproveEstimateAsync(estimateId, request, cancellationToken);
     }
 
     public async Task<EstimateDto> RejectEstimateAsync(Guid estimateId, DecideEstimateRequest request, CancellationToken cancellationToken = default)
     {
-        await Access.RequireFinanceAsync("reject estimates at completion", cancellationToken);
+        await Access.RequireAsync(Permission.RevenueManage, "reject estimates at completion", cancellationToken);
         return await inner.RejectEstimateAsync(estimateId, request, cancellationToken);
     }
 
@@ -90,7 +90,7 @@ public sealed class PermissionCheckingRevenueSetupService(IRevenueSetupService i
     internal static async Task<IReadOnlySet<Guid>?> ManagedProjectIdsAsync(AccessControl access, IWorkbenchDbContextFactory dbFactory, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (await access.HasAsync(Permission.RevenueManage, ct))
         {
             return null;
         }
@@ -108,7 +108,7 @@ public sealed class PermissionCheckingRevenueSetupService(IRevenueSetupService i
 
 public sealed class PermissionCheckingRevenueRunService(IRevenueRunService inner, AccessControl access) : IRevenueRunService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("run revenue recognition", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.RevenueManage, "run revenue recognition", ct);
 
     public async Task<RevenuePreviewDto> PreviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {

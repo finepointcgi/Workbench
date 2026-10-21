@@ -16,7 +16,7 @@ public sealed class RestrictedColumnAccess(IWorkbenchDbContextFactory dbFactory,
 {
     /// <summary>True for Finance, administrators and the owners of the sheet's workspace.</summary>
     public async Task<bool> CanSeeRestrictedAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
-        (await access.GetOrgRolesAsync(cancellationToken)).IsFinance()
+        await access.HasAsync(Permission.RestrictedColumnsView, cancellationToken)
         || await access.GetSheetRoleAsync(sheetId, cancellationToken) == WorkspaceRole.Owner;
 
     /// <summary>The ids of the columns hidden from the current user on the sheet (empty when they see everything).</summary>

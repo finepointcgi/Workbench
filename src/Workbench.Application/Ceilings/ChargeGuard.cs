@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Contracts.Ceilings;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Ceilings;
 using Workbench.Domain.Closeout;
 using Workbench.Domain.Identity;
@@ -224,7 +225,7 @@ public sealed class ChargeGuard(
         }
 
         await db.SaveChangesAsync(ct);
-        var finance = await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive && (u.IsFinance || u.IsAdmin)).Select(u => u.Email).ToListAsync(ct);
+        var finance = await Identity.RoleStore.EmailsWithPermissionAsync(db, Permission.CeilingsManage, ct);
         foreach (var (s, m, threshold, limit, consumed) in pending)
         {
             var projectIds = s.Projects.ToList();

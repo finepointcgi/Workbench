@@ -28,10 +28,10 @@ public static class QualityPermissionRegistration
 internal static class QualityAccess
 {
     public static Task RequireQualityReadAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(r => r.CanViewMaterials(), "Only Materials, Finance and administrators can see quality records and engineering changes.", ct);
+        access.RequireAsync(p => p.Has(Permission.MaterialsView), "Only Materials, Finance and administrators can see quality records and engineering changes.", ct);
 
     public static Task RequireQualityWriteAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(r => r.IsMaterials(), "Only the Materials role and administrators can change inspections, NCRs, corrective actions and engineering changes.", ct);
+        access.RequireAsync(p => p.Has(Permission.MaterialsManage), "Only the Materials role and administrators can change inspections, NCRs, corrective actions and engineering changes.", ct);
 }
 
 public sealed class PermissionCheckingInspectionService(IInspectionService inner, AccessControl access) : IInspectionService
@@ -143,7 +143,7 @@ public sealed class PermissionCheckingNonconformanceService(INonconformanceServi
 
     public async Task<DebitMemoDto> ApplyDebitMemoAsync(Guid debitMemoId, ApplyDebitMemoRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireRoleAsync(r => r.IsFinance() || r.IsMaterials(), "Only Finance, Materials and administrators can apply vendor debit memos.", cancellationToken);
+        await access.RequireAsync(p => p.Has(Permission.QualityDispositions), "Only Finance, Materials and administrators can apply vendor debit memos.", cancellationToken);
         return await inner.ApplyDebitMemoAsync(debitMemoId, request, cancellationToken);
     }
 }

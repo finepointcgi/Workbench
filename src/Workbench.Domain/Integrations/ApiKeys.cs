@@ -19,6 +19,9 @@ public sealed class ApiKey : Entity
     /// <summary>Organization roles of the service user (<c>OrgRoles</c> flags), copied to its AppUser.</summary>
     public int Roles { get; set; }
 
+    /// <summary>Custom roles of the service user: comma-separated role ids.</summary>
+    public string? CustomRoleIds { get; set; }
+
     /// <summary>Granted scopes, comma-separated: <c>area:read</c> or <c>area:write</c> (write includes read).</summary>
     public required string Scopes { get; set; }
 

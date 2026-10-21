@@ -17,13 +17,34 @@ public sealed class ProjectHubAccess(IWorkbenchDbContextFactory dbFactory, Acces
 
     public ProjectVisibility Visibility { get; } = visibility ?? new ProjectVisibility(dbFactory, access);
 
-    public sealed record Viewer(bool IsFinance, bool IsAdmin, Guid? EmployeeId, bool IsProjectManager = false);
+    /// <param name="IsFinance">Sees every project and its financials (<see cref="Permission.ProjectsFinancialsView"/>).</param>
+    /// <param name="IsAdmin">Owns every workspace (<see cref="Permission.AdminAllWorkspaces"/>).</param>
+    /// <param name="IsProjectManager">Runs the projects they manage (<see cref="Permission.ProjectsManageOwn"/>).</param>
+    /// <param name="SetsUpAll">Sets up every project (<see cref="Permission.SetupProjects"/>).</param>
+    /// <param name="FinancialsIn">Projects whose financials a role limited to some companies, org units or projects shows.</param>
+    /// <param name="SetupIn">Projects a limited role sets up.</param>
+    public sealed record Viewer(
+        bool IsFinance, bool IsAdmin, Guid? EmployeeId, bool IsProjectManager = false, bool SetsUpAll = false,
+        IReadOnlySet<Guid>? FinancialsIn = null, IReadOnlySet<Guid>? SetupIn = null)
+    {
+        /// <summary>Sees the project and its money: everywhere, by a limited role's scope, or as its manager.</summary>
+        public bool ReadsMoneyOn(Project project) =>
+            IsFinance || FinancialsIn?.Contains(project.Id) == true || (EmployeeId is { } me && project.ProjectManagerId == me);
+
+        public bool SetsUp(Project project) =>
+            SetsUpAll || SetupIn?.Contains(project.Id) == true || (IsProjectManager && EmployeeId is { } me && project.ProjectManagerId == me);
+    }
 
     public async Task<Viewer> GetViewerAsync(CancellationToken ct)
     {
         access.RequireSignedIn();
-        var roles = await access.GetOrgRolesAsync(ct);
-        return new Viewer(roles.IsFinance(), roles.IsAdmin(), await access.GetEmployeeIdAsync(ct), roles.HasFlag(Contracts.Identity.OrgRoles.ProjectManager));
+        var permissions = await access.GetPermissionsAsync(ct);
+        var finance = permissions.Has(Permission.ProjectsFinancialsView);
+        var setsUp = permissions.Has(Permission.SetupProjects);
+        return new Viewer(finance, permissions.Has(Permission.AdminAllWorkspaces), await access.GetEmployeeIdAsync(ct),
+            permissions.Has(Permission.ProjectsManageOwn), setsUp,
+            finance ? null : await access.ProjectsWithAsync(Permission.ProjectsFinancialsView, ct),
+            setsUp ? null : await access.ProjectsWithAsync(Permission.SetupProjects, ct));
     }
 
     /// <summary>Projects the employee has recorded time on, is assigned to (on a WBS element) or is allocated to.</summary>

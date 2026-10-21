@@ -24,7 +24,7 @@ public static class PricingPermissionRegistration
     internal static async Task RequirePricingAsync(AccessControl access, SecurityEventLog log, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(ct)).CanPrice())
+        if (!await access.HasAsync(Permission.PricingManage, ct))
         {
             const string message = "Only Finance, administrators and the Pricing role can work with proposal prices.";
             await log.RecordAsync(SecurityEventTypes.PermissionDenied, "pricing", SecurityOutcomes.Denied, message, cancellationToken: ct);
@@ -52,88 +52,105 @@ public sealed class PermissionCheckingPricingService(IProposalPricingService inn
 {
     private Task RequireAsync(CancellationToken ct) => PricingPermissionRegistration.RequirePricingAsync(access, log, ct);
 
+    // Fee, margin and price are a sensitive field (Permission.FieldsPricingFee): without it pricing shows cost only.
+    private async Task<T> MaskedAsync<T>(Task<T> read, CancellationToken ct) => FieldMasker.Mask(await read, await access.GetPermissionsAsync(ct));
+
     public async Task<IReadOnlyList<ProposalSummaryDto>> ListProposalsAsync(CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.ListProposalsAsync(cancellationToken);
+        return await MaskedAsync(inner.ListProposalsAsync(cancellationToken), cancellationToken);
     }
 
     public async Task<ProposalDto> GetProposalAsync(Guid proposalId, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.GetProposalAsync(proposalId, cancellationToken);
+        return await MaskedAsync(inner.GetProposalAsync(proposalId, cancellationToken), cancellationToken);
     }
 
     public async Task<ProposalDto> CreateProposalAsync(SaveProposalRequest request, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.CreateProposalAsync(request, cancellationToken);
+        return await MaskedAsync(inner.CreateProposalAsync(request, cancellationToken), cancellationToken);
     }
 
     public async Task<ProposalDto> UpdateProposalAsync(Guid proposalId, SaveProposalRequest request, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.UpdateProposalAsync(proposalId, request, cancellationToken);
+        return await MaskedAsync(inner.UpdateProposalAsync(proposalId, request, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> GetModelAsync(Guid modelId, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.GetModelAsync(modelId, cancellationToken);
+        return await MaskedAsync(inner.GetModelAsync(modelId, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SaveSettingsAsync(Guid modelId, SavePriceSettingsRequest request, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SaveSettingsAsync(modelId, request, cancellationToken);
+        if (request?.Settings is { } settings && !await access.HasAsync(Permission.FieldsPricingFee, cancellationToken))
+        {
+            // Someone who can't see the fee can't set it: keep the model's fee terms (they were sent a masked rate).
+            var current = (await inner.GetModelAsync(modelId, cancellationToken)).Settings;
+            request = request with
+            {
+                Settings = settings with
+                {
+                    FeeMethod = current.FeeMethod, FeeRate = current.FeeRate, WgTechnicalRisk = current.WgTechnicalRisk, WgManagementRisk = current.WgManagementRisk,
+                    WgContractTypeRisk = current.WgContractTypeRisk, WgCostEfficiency = current.WgCostEfficiency,
+                },
+            };
+        }
+
+        return await MaskedAsync(inner.SaveSettingsAsync(modelId, request!, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SavePeriodsAsync(Guid modelId, IReadOnlyList<SavePricePeriodRequest> periods, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SavePeriodsAsync(modelId, periods, cancellationToken);
+        return await MaskedAsync(inner.SavePeriodsAsync(modelId, periods, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SaveClinsAsync(Guid modelId, IReadOnlyList<SavePriceClinRequest> clins, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SaveClinsAsync(modelId, clins, cancellationToken);
+        return await MaskedAsync(inner.SaveClinsAsync(modelId, clins, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SaveWbsAsync(Guid modelId, IReadOnlyList<SavePriceWbsRequest> wbs, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SaveWbsAsync(modelId, wbs, cancellationToken);
+        return await MaskedAsync(inner.SaveWbsAsync(modelId, wbs, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SaveEscalationsAsync(Guid modelId, IReadOnlyList<PriceEscalationDto> escalations, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SaveEscalationsAsync(modelId, escalations, cancellationToken);
+        return await MaskedAsync(inner.SaveEscalationsAsync(modelId, escalations, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SaveLaborLinesAsync(Guid modelId, IReadOnlyList<SavePriceLaborLineRequest> lines, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SaveLaborLinesAsync(modelId, lines, cancellationToken);
+        return await MaskedAsync(inner.SaveLaborLinesAsync(modelId, lines, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> SaveCostLinesAsync(Guid modelId, IReadOnlyList<SavePriceCostLineRequest> lines, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.SaveCostLinesAsync(modelId, lines, cancellationToken);
+        return await MaskedAsync(inner.SaveCostLinesAsync(modelId, lines, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceResultDto> CalculateAsync(Guid modelId, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.CalculateAsync(modelId, cancellationToken);
+        return await MaskedAsync(inner.CalculateAsync(modelId, cancellationToken), cancellationToken);
     }
 
     public async Task<PriceModelDto> CopyModelAsync(Guid modelId, CopyPriceModelRequest request, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.CopyModelAsync(modelId, request, cancellationToken);
+        return await MaskedAsync(inner.CopyModelAsync(modelId, request, cancellationToken), cancellationToken);
     }
 
     public async Task DeleteModelAsync(Guid modelId, CancellationToken cancellationToken = default)
@@ -145,36 +162,37 @@ public sealed class PermissionCheckingPricingService(IProposalPricingService inn
     public async Task<PriceModelDto> LockModelAsync(Guid modelId, LockPriceModelRequest request, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.LockModelAsync(modelId, request, cancellationToken);
+        return await MaskedAsync(inner.LockModelAsync(modelId, request, cancellationToken), cancellationToken);
     }
 
     public async Task<ScenarioComparisonDto> CompareAsync(Guid proposalId, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.CompareAsync(proposalId, cancellationToken);
+        return await MaskedAsync(inner.CompareAsync(proposalId, cancellationToken), cancellationToken);
     }
 
     public async Task<IReadOnlyList<PricingHistoryDto>> ListHistoryAsync(Guid proposalId, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.ListHistoryAsync(proposalId, cancellationToken);
+        return await MaskedAsync(inner.ListHistoryAsync(proposalId, cancellationToken), cancellationToken);
     }
 
     public async Task<PricingOptionsDto> GetOptionsAsync(DateOnly? asOf = null, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
-        return await inner.GetOptionsAsync(asOf, cancellationToken);
+        return await MaskedAsync(inner.GetOptionsAsync(asOf, cancellationToken), cancellationToken);
     }
 
     public async Task<PricingExportFile> ExportCostVolumeAsync(Guid modelId, CancellationToken cancellationToken = default)
     {
         await RequireAsync(cancellationToken);
+        await access.RequireAsync(Permission.FieldsPricingFee, "export the cost volume (it shows fee and price)", cancellationToken);
         return await inner.ExportCostVolumeAsync(modelId, cancellationToken);
     }
 
     public async Task<HandoffResultDto> HandOffAsync(Guid modelId, HandoffRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("hand a won proposal off to its contract and budget", cancellationToken);
+        await access.RequireAsync(Permission.SetupContracts, "hand a won proposal off to its contract and budget", cancellationToken);
         return await inner.HandOffAsync(modelId, request, cancellationToken);
     }
 }

@@ -1,8 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
 using Workbench.Contracts;
 using Workbench.Contracts.Identity;
-using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Reports;
 
@@ -27,14 +25,30 @@ public sealed record ReportAccessContext(
     /// <summary>Contracts whose values and invoices the user may read; null = every contract.</summary>
     IReadOnlySet<Guid>? FinancialContracts,
 
+    /// <summary>The user's permissions; null means those of <see cref="Roles"/> (built-in roles only).</summary>
+    PermissionSet? Permissions = null,
+
+    /// <summary>Every role the user holds (built-in and custom), for reports shared with roles.</summary>
+    IReadOnlyList<Guid>? RoleIds = null,
+
     /// <summary>Projects the user may see at all (<see cref="ProjectVisibility"/>); null = every project.</summary>
     IReadOnlySet<Guid>? VisibleProjects = null)
 {
     public bool CanSeeProject(Guid projectId) => VisibleProjects is null || VisibleProjects.Contains(projectId);
 
-    public bool IsFinance => Roles.IsFinance();
+    public PermissionSet Granted => Permissions ?? PermissionCatalog.ForBuiltInRoles(Roles);
 
-    public bool IsAdmin => Roles.IsAdmin();
+    public bool Can(string permission) => Granted.Has(permission);
+
+    /// <summary>Sees cost rates and labor cost (<see cref="Permission.LaborCostView"/>).</summary>
+    public bool SeesLaborCost => Can(Permission.LaborCostView);
+
+    /// <summary>Changes anyone's saved reports and schedules (<see cref="Permission.AdminAllWorkspaces"/>).</summary>
+    public bool OwnsAllReports => Can(Permission.AdminAllWorkspaces);
+
+    /// <summary>Holds the role with <paramref name="roleId"/> (built-in roles count from <see cref="Roles"/> too).</summary>
+    public bool HoldsRole(Guid roleId) =>
+        roleId == BuiltInRoles.Employee.Id || RoleIds?.Contains(roleId) == true || BuiltInRoles.Find(roleId) is { } d && Roles.HasFlag(d.Role) && d.Role != OrgRoles.Employee;
 
     public bool ManagesAnyProject => FinancialProjects is null || FinancialProjects.Count > 0;
 
@@ -45,7 +59,7 @@ public sealed record ReportAccessContext(
     public bool CanSeeEmployeeTime(Guid employeeId) => VisibleEmployees is null || VisibleEmployees.Contains(employeeId);
 }
 
-public sealed class ReportAccess(ProjectAccess projects, IWorkbenchDbContextFactory dbFactory)
+public sealed class ReportAccess(ProjectAccess projects)
 {
     public AccessControl Access => projects.Access;
 
@@ -53,26 +67,14 @@ public sealed class ReportAccess(ProjectAccess projects, IWorkbenchDbContextFact
     {
         var access = projects.Access;
         access.RequireSignedIn();
-        var roles = await access.GetOrgRolesAsync(ct);
+        var resolved = await access.GetAccessAsync(ct);
         var me = await access.GetEmployeeIdAsync(ct);
         var visible = await projects.VisibleTimeEmployeeIdsAsync(ct);
         var contracts = await projects.ManagedContractIdsAsync(ct);
 
-        IReadOnlySet<Guid>? managedProjects = null;
-        if (!roles.IsFinance())
-        {
-            if (me is null)
-            {
-                managedProjects = new HashSet<Guid>();
-            }
-            else
-            {
-                await using var db = await dbFactory.CreateAsync(ct);
-                managedProjects = (await db.Set<Project>().AsNoTracking().Where(p => p.ProjectManagerId == me).Select(p => p.Id).ToListAsync(ct)).ToHashSet();
-            }
-        }
+        var managedProjects = await projects.ManagedProjectIdsAsync(ct); // Managed, or covered by a limited role's scope.
 
-        return new ReportAccessContext(access.Email, roles, me, visible, managedProjects, contracts, await projects.Visibility.VisibleProjectIdsAsync(ct));
+        return new ReportAccessContext(access.Email, resolved.BuiltIn, me, visible, managedProjects, contracts, resolved.Permissions, resolved.Roles.Select(r => r.Id).ToList(), await projects.Visibility.VisibleProjectIdsAsync(ct));
     }
 
     public static WorkbenchForbiddenException Forbidden(string message) => new(message);

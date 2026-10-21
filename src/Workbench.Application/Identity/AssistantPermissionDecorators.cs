@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Assistant;
+using Workbench.Contracts.Identity;
 
 namespace Workbench.Application.Identity;
 
@@ -40,25 +41,25 @@ internal sealed class PermissionCheckingAssistantAdminService(IAssistantAdminSer
 {
     public async Task<AssistantSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminAssistant, "administer the assistant", cancellationToken);
         return await inner.GetSettingsAsync(cancellationToken);
     }
 
     public async Task<AssistantSettingsDto> SaveSettingsAsync(SaveAssistantSettingsRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminAssistant, "administer the assistant", cancellationToken);
         return await inner.SaveSettingsAsync(request, cancellationToken);
     }
 
     public async Task<AssistantUsageDto> GetUsageAsync(int? year = null, int? month = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminAssistant, "administer the assistant", cancellationToken);
         return await inner.GetUsageAsync(year, month, cancellationToken);
     }
 
     public async Task<IReadOnlyList<AssistantInteractionDto>> ListAuditAsync(AssistantAuditQuery query, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminAssistant, "administer the assistant", cancellationToken);
         return await inner.ListAuditAsync(query, cancellationToken);
     }
 }

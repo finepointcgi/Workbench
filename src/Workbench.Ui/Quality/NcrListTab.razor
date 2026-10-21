@@ -100,7 +100,7 @@ else
     private string? _error;
     private bool _forbidden;
 
-    private bool CanApply => User is null || User.Roles.IsMaterials() || User.Roles.IsFinance();
+    private bool CanApply => User is null || User.Can(Workbench.Contracts.Identity.Permission.QualityDispositions);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

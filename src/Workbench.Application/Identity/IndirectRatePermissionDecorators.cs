@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.IndirectRates;
 
 namespace Workbench.Application.Identity;
@@ -26,7 +27,7 @@ public sealed class PermissionCheckingIndirectRateService(IIndirectRateService i
 {
     private const string What = "manage indirect rates";
 
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.IndirectRatesManage, What, ct);
 
     public async Task<IReadOnlyList<PoolSetupDto>> ListPoolSetupsAsync(CancellationToken cancellationToken = default)
     {
@@ -121,6 +122,7 @@ public sealed class PermissionCheckingBurdenedCostService(IBurdenedCostService i
         if (!projects.Access.IsSystemReader)
         {
             await projects.RequireProjectFinancialsAsync(projectId, "see this project's burdened cost", cancellationToken);
+            await projects.RequireBurdenedCostAsync(projectId, cancellationToken);
         }
 
         return await inner.GetProjectCostAsync(projectId, from, to, basis, cancellationToken);
@@ -132,6 +134,7 @@ public sealed class PermissionCheckingBurdenedFinancialsService(IBurdenedFinanci
     public async Task<BurdenedFinancialsDto> GetProjectAsync(Guid projectId, Guid? budgetVersionId = null, Guid? forecastVersionId = null, CancellationToken cancellationToken = default)
     {
         await projects.RequireProjectFinancialsAsync(projectId, "see this project's financials", cancellationToken);
+        await projects.RequireBurdenedCostAsync(projectId, cancellationToken);
         return await inner.GetProjectAsync(projectId, budgetVersionId, forecastVersionId, cancellationToken);
     }
 }

@@ -6,7 +6,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Workbench.Application.Identity;
 using Workbench.Contracts.Assistant;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
 using Workbench.Infrastructure.Persistence;
 using Workbench.Tests.Identity;
@@ -105,12 +107,12 @@ public sealed partial class DemoModeTests
         await using var db = new WorkbenchDbContext(TestDb.Options(DatabaseProvider.Sqlite, SqliteTemplates.NewDatabase()));
         await DemoMode.EnsureDemoDatabaseAsync(db); // Empty: fine.
 
-        db.Set<AppUser>().Add(new AppUser { Email = "cfo@realcompany.com", DisplayName = "Real CFO", IsAdmin = true, CreatedAtUtc = DateTime.UtcNow });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = "cfo@realcompany.com", DisplayName = "Real CFO", CreatedAtUtc = DateTime.UtcNow }, OrgRoles.Admin);
         await db.SaveChangesAsync();
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => DemoMode.EnsureDemoDatabaseAsync(db));
         Assert.Contains("isn't a demo database", refused.Message);
 
-        db.Set<AppUser>().Add(new AppUser { Email = DemoMode.DemoAdminEmail, DisplayName = "Dana Lee", IsAdmin = true, CreatedAtUtc = DateTime.UtcNow });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = DemoMode.DemoAdminEmail, DisplayName = "Dana Lee", CreatedAtUtc = DateTime.UtcNow }, OrgRoles.Admin);
         await db.SaveChangesAsync();
         await DemoMode.EnsureDemoDatabaseAsync(db);
     }
