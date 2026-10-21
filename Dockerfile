@@ -31,7 +31,9 @@ RUN dotnet restore src/Workbench.Web/Workbench.Web.csproj
 COPY src/ src/
 # The sample GSA per diem table is an embedded resource of Workbench.Application.
 COPY samples/perdiem/ samples/perdiem/
-RUN dotnet publish src/Workbench.Web/Workbench.Web.csproj --no-restore -c "$BUILD_CONFIGURATION" -o /app \
+# No --no-restore: the restore above ran with only the project files, and the SDK adds the Blazor framework assets
+# package (blazor.web.js) only when it can see the components. Restoring again here is quick (packages are cached).
+RUN dotnet publish src/Workbench.Web/Workbench.Web.csproj -c "$BUILD_CONFIGURATION" -o /app \
       -p:UseAppHost=false -p:Version="$VERSION" -p:DebugType=none
 # Root-owned and read-only for the app user in the final images (set here: the chiseled runtime image has no shell).
 RUN chmod -R 0755 /app
