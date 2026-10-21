@@ -28,6 +28,16 @@
                 <MudSelectItem Value="OdcCostType.Other">Other</MudSelectItem>
             </MudSelect>
             <MudTextField @bind-Value="_description" Label="Description" MaxLength="500" />
+            <div data-testid="card-receipt">
+                <MudText Typo="Typo.body2" Class="mb-1">Receipt (optional)</MudText>
+                <Workbench.Ui.Receipts.ReceiptAttach FileName="@_receiptName" CurrentFileId="_receiptId" ExpenseReportId="_reportId" Amount="Charge.Amount" OnRead="OnReceipt" />
+                @if (_receiptTotal is { } total && total != Charge.Amount)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-1">
+                        The receipt's total is @TravelFormat.Money(total); the line keeps the card charge's @TravelFormat.Money(Charge.Amount).
+                    </MudText>
+                }
+            </div>
             <MudCheckBox T="bool" @bind-Value="_unallowable" Label="Unallowable cost (FAR 31.205: alcohol, entertainment, …)" Color="Color.Warning" />
             @if (_unallowable)
             {
@@ -55,6 +65,9 @@
     private string? _description;
     private bool _unallowable;
     private string? _reason;
+    private Guid? _receiptId;
+    private string? _receiptName;
+    private decimal? _receiptTotal;
 
     private bool IsValid => _reportId is not null && _wbsId is not null && (!_unallowable || !string.IsNullOrWhiteSpace(_reason));
 
@@ -80,5 +93,11 @@
         }
     }
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(new AttachCardChargeRequest(_reportId!.Value, _wbsId!.Value, _type, _description, _unallowable, _unallowable ? _reason : null)));
+    // The card charge fixes the amount and date; the receipt only backs the line.
+    private void OnReceipt(Workbench.Contracts.Receipts.ReceiptReadingDto reading)
+    {
+        (_receiptId, _receiptName, _receiptTotal) = (reading.Receipt.Id, reading.Receipt.FileName, reading.Extraction.Total);
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new AttachCardChargeRequest(_reportId!.Value, _wbsId!.Value, _type, _description, _unallowable, _unallowable ? _reason : null, _receiptId)));
 }

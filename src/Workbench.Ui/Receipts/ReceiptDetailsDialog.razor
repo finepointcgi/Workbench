@@ -1,0 +1,47 @@
+@* Corrects what a library file is, who it's from, when and how much, so it can be found by search. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="ReceiptDocumentKind" @bind-Value="_kind" Label="What it is">
+                @foreach (var kind in Enum.GetValues<ReceiptDocumentKind>())
+                {
+                    <MudSelectItem Value="kind">@ReceiptFormat.Kind(kind)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_vendor" Label="Vendor" MaxLength="200" />
+            <MudTextField @bind-Value="_location" Label="Place (optional)" MaxLength="200" />
+            <MudStack Row="true" Spacing="3">
+                <MudDatePicker Label="Date" @bind-Date="_date" Editable="true" Clearable="true" AutoClose="true" DateFormat="MM/dd/yyyy" />
+                <MudNumericField T="decimal?" @bind-Value="_total" Label="Total" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" />
+            </MudStack>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public ReceiptDto Receipt { get; set; } = default!;
+
+    private ReceiptDocumentKind _kind;
+    private string? _vendor;
+    private string? _location;
+    private DateTime? _date;
+    private decimal? _total;
+
+    protected override void OnInitialized()
+    {
+        _kind = Receipt.Kind;
+        _vendor = Receipt.Vendor;
+        _location = Receipt.Location;
+        _date = OdcFormat.ToDateTime(Receipt.DocumentDate);
+        _total = Receipt.Total;
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new UpdateReceiptRequest(_kind, _vendor, OdcFormat.ToDateOnly(_date), _total, _location)));
+}

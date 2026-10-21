@@ -23,6 +23,9 @@ public sealed record ModelToolResult(string ToolUseId, string Content, bool IsEr
 /// <summary>A provider block that must be sent back unchanged in the next request (e.g. a signed thinking block).</summary>
 public sealed record ModelOpaque(object Block) : ModelContent;
 
+/// <summary>A file sent with a user message (a receipt image or PDF): base64 bytes and the media type, e.g. image/png or application/pdf.</summary>
+public sealed record ModelFile(string MediaType, string Base64Data) : ModelContent;
+
 public sealed record ModelMessage(ModelRole Role, IReadOnlyList<ModelContent> Content)
 {
     public static ModelMessage UserText(string text) => new(ModelRole.User, [new ModelText(text)]);

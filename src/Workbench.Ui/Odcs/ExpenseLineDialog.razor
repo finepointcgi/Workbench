@@ -1,12 +1,49 @@
 @using Workbench.Contracts.Odcs
 @using Workbench.Contracts.ProjectAccounting
+@using Workbench.Contracts.Receipts
+@using Workbench.Ui.Receipts
 @inject IProjectService Projects
+@inject IReceiptLibraryService Library
 
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="3">
+            <MudPaper Outlined="true" Class="pa-3" data-testid="line-receipt">
+                <MudText Typo="Typo.subtitle2" HtmlTag="h2">Receipt</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    @(_receiptName is null
+                        ? "Attach a receipt or hotel folio and Workbench fills in what it can read. Check every value before you save."
+                        : "Values read from the receipt are marked. Check them before you save; nothing is saved until you do.")
+                </MudText>
+                <ReceiptAttach FileName="@_receiptName" CurrentFileId="_receiptId" ExpenseReportId="ReportId" Amount="@(_amount > 0 ? _amount : null)" OnRead="OnReadAsync" />
+                @if (_reading is { } reading)
+                {
+                    @if (reading.Method == ReceiptReadMethod.None)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" data-testid="receipt-nothing-read">
+                            Nothing could be read from this file@(reading.Notes.Count > 0 ? $": {reading.Notes[0]}" : ".") Enter the values yourself; the file is still attached.
+                        </MudAlert>
+                    }
+                    else if (!_applied)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            The receipt shows @SuggestionSummary(reading).
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="Apply" data-testid="receipt-apply">Use these values</MudButton>
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        @foreach (var note in reading.Notes)
+                        {
+                            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-1">@note</MudText>
+                        }
+                    }
+                }
+            </MudPaper>
+
             <MudStack Row="true" Spacing="3">
-                <MudDatePicker Editable="true" Label="Date" Date="_date" DateChanged="OnDateChangedAsync" Required="true" DateFormat="MM/dd/yyyy" AutoClose="true" />
+                <MudDatePicker Editable="true" Label="Date" Date="_date" DateChanged="OnDateChangedAsync" Required="true" DateFormat="MM/dd/yyyy" AutoClose="true"
+                               HelperText="@Marker("date")" />
                 <MudSelect T="OdcCostType" @bind-Value="_type" Label="Type">
                     <MudSelectItem Value="OdcCostType.Travel">Travel</MudSelectItem>
                     <MudSelectItem Value="OdcCostType.Other">Other</MudSelectItem>
@@ -19,12 +56,72 @@
                     <MudSelectItem T="Guid?" Value="chargeCode.WbsElementId">@ChargeCodeText.Label(chargeCode)@(chargeCode.Kind == ChargeCodeKind.Direct ? $" · {chargeCode.ProjectName}" : "")</MudSelectItem>
                 }
             </MudSelect>
-            <MudTextField @bind-Value="_description" Label="Description" Required="true" Immediate="true" />
+
+            @if (_isLodging)
+            {
+                <MudPaper Outlined="true" Class="pa-3" data-testid="lodging-stay">
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h2" Class="mb-2">Hotel stay</MudText>
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                            <MudTextField @bind-Value="_city" @bind-Value:after="StayEditedAsync" Label="City" HelperText="@Marker("location")" data-testid="stay-city" />
+                            <MudTextField @bind-Value="_state" @bind-Value:after="StayEditedAsync" Label="State" MaxLength="2" Style="max-width:6rem" />
+                        </MudStack>
+                        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                            <MudDatePicker Editable="true" Label="Check-in" Date="_checkIn" DateChanged="d => StayDateChangedAsync(d, true)" DateFormat="MM/dd/yyyy" AutoClose="true"
+                                           HelperText="@Marker("checkIn")" data-testid="stay-check-in" />
+                            <MudDatePicker Editable="true" Label="Check-out" Date="_checkOut" DateChanged="d => StayDateChangedAsync(d, false)" DateFormat="MM/dd/yyyy" AutoClose="true"
+                                           HelperText="@(Nights is { } n ? $"{n} night{(n == 1 ? "" : "s")}" : Marker("checkOut"))" data-testid="stay-check-out" />
+                        </MudStack>
+                        <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                            <MudNumericField T="decimal?" @bind-Value="_nightlyRate" @bind-Value:after="StayEditedAsync" Label="Nightly room rate" Min="0" Format="N2"
+                                             Adornment="Adornment.Start" AdornmentText="$" HelperText="@Marker("nightlyRate")" data-testid="stay-rate" />
+                            <MudNumericField T="decimal?" @bind-Value="_lodgingTaxes" @bind-Value:after="StayEditedAsync" Label="Lodging taxes" Min="0" Format="N2"
+                                             Adornment="Adornment.Start" AdornmentText="$" HelperText="@Marker("lodgingTaxes")" data-testid="stay-taxes" />
+                        </MudStack>
+                        @if (_reading is { Total: { } folioTotal })
+                        {
+                            <MudText Typo="Typo.body2" data-testid="stay-folio-total">
+                                Folio total @ReceiptFormat.Money(folioTotal)@(_reading.OtherCharges is > 0 ? $", including {ReceiptFormat.Money(_reading.OtherCharges)} of other charges" : "").
+                            </MudText>
+                        }
+                        @if (_lodgingCheck is { } check)
+                        {
+                            <MudAlert Severity="@(check.IsOver ? (check.OverIsUnallowable ? Severity.Error : Severity.Warning) : Severity.Success)" Dense="true" data-testid="lodging-check">
+                                @if (check.IsOver)
+                                {
+                                    @check.Notes[0]
+                                }
+                                else
+                                {
+                                    <text>Within the GSA lodging maximum of @ReceiptFormat.Money(check.LodgingMax) a night for @check.Location.</text>
+                                }
+                                @if (check.IsOver)
+                                {
+                                    <div class="mt-1" style="font-size:0.85rem">GSA maximum for @check.Location: @ReceiptFormat.Money(check.LodgingMax) a night.</div>
+                                }
+                            </MudAlert>
+                        }
+                        @if (_others.Count > 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1">Other charges on the folio. Add any you're claiming as separate lines with the same receipt:</MudText>
+                            @foreach (var other in _others)
+                            {
+                                <MudCheckBox T="bool" @bind-Value="other.Add" Dense="true" data-testid="@($"other-{other.Charge.Kind}")"
+                                             Label="@($"{other.Charge.Label}: {ReceiptFormat.Money(other.Charge.Amount)}{(other.Charge.Kind == ReceiptChargeKind.Food ? " (meals are usually covered by your M&IE per diem)" : "")}")" />
+                            }
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+
+            <MudTextField @bind-Value="_description" @bind-Value:after="DescriptionTyped" Label="Description" Required="true" Immediate="true"
+                          HelperText="@Marker("description")" data-testid="line-description" />
             <MudStack Row="true" Spacing="3">
-                <MudNumericField T="decimal" @bind-Value="_amount" Label="@(_currency is null ? "Amount" : $"Amount in {_currency}")" Min="0" Format="N2"
+                <MudNumericField T="decimal" @bind-Value="_amount" @bind-Value:after="AmountTyped" Label="@(_currency is null ? "Amount" : $"Amount in {_currency}")" Min="0" Format="N2"
                                  Adornment="@(_currency is null ? Adornment.Start : Adornment.End)" AdornmentText="@(_currency ?? "$")" Immediate="true"
-                                 HelperText="@(_currency is null && _amount >= ReceiptThreshold ? $"Receipt required ({OdcFormat.Money(ReceiptThreshold)} or more)" : null)" />
-                <MudTextField @bind-Value="_vendor" Label="Merchant (optional)" />
+                                 HelperText="@AmountHelper" data-testid="line-amount" />
+                <MudTextField @bind-Value="_vendor" @bind-Value:after="@(() => Edited("vendor"))" Label="@(_isLodging ? "Hotel" : "Merchant (optional)")" HelperText="@Marker("vendor")"
+                              data-testid="line-vendor" />
             </MudStack>
             <MudStack Row="true" Spacing="3">
                 <Workbench.Ui.Currencies.CurrencyPicker @bind-Value="_currency" Label="Paid in" TestId="expense-currency" Date="@OdcFormat.ToDateOnly(_date)" />
@@ -43,7 +140,7 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsValid" OnClick="Save">@(Existing is null ? "Add line" : "Save")</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="!IsValid" OnClick="Save" data-testid="line-save">@SaveLabel</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -55,6 +152,9 @@
     [Parameter] public OdcEntryDto? Existing { get; set; }
     [Parameter] public DateOnly? DefaultDate { get; set; }
     [Parameter] public decimal ReceiptThreshold { get; set; } = 75m;
+
+    /// <summary>The report, so a folio is checked against its trip's per diem destination.</summary>
+    [Parameter] public Guid? ReportId { get; set; }
 
     private DateTime? _date;
     private OdcCostType _type = OdcCostType.Travel;
@@ -69,8 +169,45 @@
     private IReadOnlyList<ChargeCodeDto> _codes = [];
     private bool _loadingCodes;
 
+    // Receipt and what was read from it. _marked holds the form fields still showing the receipt's value.
+    private Guid? _receiptId;
+    private string? _receiptName;
+    private ReceiptExtractionDto? _reading;
+    private bool _applied;
+    private readonly Dictionary<string, string> _marked = [];
+    private bool _amountTyped;
+    private bool _descriptionTyped;
+
+    // The stay (lodging folios).
+    private bool _isLodging;
+    private string? _city;
+    private string? _state;
+    private DateTime? _checkIn;
+    private DateTime? _checkOut;
+    private decimal? _nightlyRate;
+    private decimal? _lodgingTaxes;
+    private LodgingRateCheckDto? _lodgingCheck;
+    private List<OtherCharge> _others = [];
+
+    private sealed class OtherCharge(ReceiptChargeDto charge)
+    {
+        public ReceiptChargeDto Charge { get; } = charge;
+        public bool Add { get; set; }
+    }
+
+    private int? Nights => OdcFormat.ToDateOnly(_checkIn) is { } a && OdcFormat.ToDateOnly(_checkOut) is { } b && b > a ? b.DayNumber - a.DayNumber : null;
+
     private bool IsValid => _date is not null && _wbsId is not null && _amount > 0 && !string.IsNullOrWhiteSpace(_description)
         && (!_unallowable || !string.IsNullOrWhiteSpace(_unallowableReason));
+
+    private int ExtraCount => _isLodging ? _others.Count(o => o.Add) : 0;
+
+    private string SaveLabel => (Existing is null ? "Add line" : "Save") + (ExtraCount > 0 ? $" and {ExtraCount} more" : "");
+
+    private string? AmountHelper => Marker("amount")
+        ?? (_currency is null && _amount >= ReceiptThreshold && _receiptId is null ? $"Receipt required ({OdcFormat.Money(ReceiptThreshold)} or more)" : null);
+
+    private string? Marker(string field) => _marked.GetValueOrDefault(field);
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,6 +222,8 @@
             _vendor = e.Vendor;
             _unallowable = e.IsUnallowable;
             _unallowableReason = e.UnallowableReason;
+            _receiptId = e.ReceiptFileId;
+            _receiptName = e.ReceiptFileName;
         }
         else
         {
@@ -97,6 +236,7 @@
     private async Task OnDateChangedAsync(DateTime? date)
     {
         _date = date;
+        Edited("date");
         await LoadCodesAsync();
     }
 
@@ -123,9 +263,220 @@
         {
             _wbsId = null;
         }
+
+        // With a single charge code there's nothing to choose.
+        if (_wbsId is null && _codes.Count == 1)
+        {
+            _wbsId = _codes[0].WbsElementId;
+        }
     }
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveExpenseLineRequest(
-        _wbsId!.Value, _type, OdcFormat.ToDateOnly(_date)!.Value, _amount, _description!.Trim(), _vendor,
-        _unallowable, _unallowable ? _unallowableReason : null, _currency, _currency is null ? null : _rate)));
+    // ---- The receipt ----
+
+    private async Task OnReadAsync(ReceiptReadingDto reading)
+    {
+        _receiptId = reading.Receipt.Id;
+        _receiptName = reading.Receipt.FileName;
+        _reading = reading.Extraction;
+        _lodgingCheck = reading.LodgingCheck;
+        _applied = false;
+
+        // A new line takes the receipt's values straight into the form (still unsaved and marked); an existing line asks first.
+        if (Existing is null && reading.Extraction.Method != ReceiptReadMethod.None)
+        {
+            await ApplyAsync();
+        }
+    }
+
+    private Task Apply() => ApplyAsync();
+
+    private async Task ApplyAsync()
+    {
+        if (_reading is not { } r)
+        {
+            return;
+        }
+
+        _applied = true;
+        _marked.Clear();
+        void Mark(string formField, string readField)
+        {
+            if (ReceiptFormat.Source(r, readField) is { } source)
+            {
+                _marked[formField] = source;
+            }
+        }
+
+        if (r.Vendor is { } vendor)
+        {
+            _vendor = vendor;
+            Mark("vendor", ReceiptFields.Vendor);
+        }
+
+        _isLodging = r.IsLodging;
+        if (r.IsLodging)
+        {
+            _type = OdcCostType.Travel;
+            _city = r.City;
+            _state = r.State;
+            _checkIn = OdcFormat.ToDateTime(r.CheckIn);
+            _checkOut = OdcFormat.ToDateTime(r.CheckOut ?? (r.CheckIn is { } ci && r.Nights is { } n ? ci.AddDays(n) : null));
+            _nightlyRate = r.NightlyRate;
+            _lodgingTaxes = r.LodgingTaxes;
+            _others = r.OtherChargeGroups.Select(c => new OtherCharge(c)).ToList();
+            foreach (var (form, read) in new[] { ("location", ReceiptFields.Location), ("checkIn", ReceiptFields.CheckIn), ("checkOut", ReceiptFields.CheckOut),
+                         ("nightlyRate", ReceiptFields.NightlyRate), ("lodgingTaxes", ReceiptFields.LodgingTaxes) })
+            {
+                Mark(form, read);
+            }
+
+            if (r.LodgingAmount is { } lodging)
+            {
+                _amount = lodging;
+                Mark("amount", ReceiptFields.RoomTotal);
+            }
+
+            _description = LodgingDescription();
+            _marked["description"] = "Suggested from the receipt";
+        }
+        else if (r.Total is { } total)
+        {
+            _amount = total;
+            Mark("amount", ReceiptFields.Total);
+        }
+
+        if ((r.IsLodging ? r.CheckIn : r.Date) is { } date && OdcFormat.ToDateTime(date) != _date)
+        {
+            _date = OdcFormat.ToDateTime(date);
+            await LoadCodesAsync();
+        }
+
+        Mark("date", r.IsLodging ? ReceiptFields.CheckIn : ReceiptFields.Date);
+        _amountTyped = false;
+        _descriptionTyped = false;
+    }
+
+    // No hotel name on these lines: trip comparisons would otherwise file parking or meals under lodging.
+    private string ExtraDescription(ReceiptChargeDto charge) =>
+        $"{ReceiptChargeLabels.For(charge.Kind)}{(string.IsNullOrWhiteSpace(_city) ? " during the stay" : $", {_city} stay")}";
+
+    private string LodgingDescription()
+    {
+        var where = string.IsNullOrWhiteSpace(_city) ? "" : $", {_city}{(string.IsNullOrWhiteSpace(_state) ? "" : $", {_state}")}";
+        var when = OdcFormat.ToDateOnly(_checkIn) is { } a && OdcFormat.ToDateOnly(_checkOut) is { } b && b > a ? $", {ReceiptFormat.Stay(a, b)}" : "";
+        return $"Lodging{where}{when}";
+    }
+
+    private string SuggestionSummary(ReceiptExtractionDto r)
+    {
+        var parts = new List<string>();
+        if (r.Vendor is { } v)
+        {
+            parts.Add(v);
+        }
+
+        if (r.IsLodging && r.CheckIn is { } a && r.CheckOut is { } b)
+        {
+            parts.Add(ReceiptFormat.Stay(a, b));
+        }
+        else if (r.Date is { } d)
+        {
+            parts.Add(ReceiptFormat.Date(d));
+        }
+
+        parts.Add(r.IsLodging && r.LodgingAmount is { } lodging ? $"lodging {ReceiptFormat.Money(lodging)}" : $"total {ReceiptFormat.Money(r.Total)}");
+        return string.Join(", ", parts);
+    }
+
+    private void Edited(string field) => _marked.Remove(field);
+
+    private void AmountTyped()
+    {
+        _amountTyped = true;
+        Edited("amount");
+    }
+
+    private void DescriptionTyped()
+    {
+        _descriptionTyped = true;
+        Edited("description");
+    }
+
+    private async Task StayDateChangedAsync(DateTime? date, bool checkIn)
+    {
+        if (checkIn)
+        {
+            _checkIn = date;
+            Edited("checkIn");
+        }
+        else
+        {
+            _checkOut = date;
+            Edited("checkOut");
+        }
+
+        await StayEditedAsync();
+    }
+
+    /// <summary>A stay value changed: the lodging amount and description follow (unless typed over) and the rate is checked again.</summary>
+    private async Task StayEditedAsync()
+    {
+        foreach (var field in new[] { "location", "nightlyRate", "lodgingTaxes" })
+        {
+            // Clear the marker of whichever field was typed in; values still equal to the receipt's keep it.
+            if (field == "nightlyRate" && _nightlyRate != _reading?.NightlyRate || field == "lodgingTaxes" && _lodgingTaxes != _reading?.LodgingTaxes
+                || field == "location" && _city != _reading?.City)
+            {
+                Edited(field);
+            }
+        }
+
+        if (!_descriptionTyped)
+        {
+            _description = LodgingDescription();
+        }
+
+        // The folio's own lodging amount stands while its nights and rate do (the rate can change night to night).
+        var asRead = _reading is { } r && r.NightlyRate == _nightlyRate && r.Nights == Nights && r.LodgingTaxes == _lodgingTaxes;
+        if (!_amountTyped && !asRead && Nights is { } nights && _nightlyRate is { } rate)
+        {
+            _amount = nights * rate + (_lodgingTaxes ?? 0m);
+            Edited("amount");
+        }
+
+        await CheckLodgingAsync();
+    }
+
+    private async Task CheckLodgingAsync()
+    {
+        if (OdcFormat.ToDateOnly(_checkIn) is not { } checkIn || Nights is not { } nights || _nightlyRate is not > 0m)
+        {
+            _lodgingCheck = null;
+            return;
+        }
+
+        try
+        {
+            _lodgingCheck = await Library.CheckLodgingAsync(new LodgingRateCheckRequest(checkIn, nights, _nightlyRate.Value, _city, _state, ReportId));
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            _lodgingCheck = null;
+        }
+    }
+
+    private void Save()
+    {
+        var date = OdcFormat.ToDateOnly(_date)!.Value;
+        var line = new SaveExpenseLineRequest(
+            _wbsId!.Value, _type, date, _amount, _description!.Trim(), _vendor,
+            _unallowable, _unallowable ? _unallowableReason : null, _currency, _currency is null ? null : _rate,
+            _receiptId != Existing?.ReceiptFileId ? _receiptId : null);
+        var extra = _isLodging
+            ? _others.Where(o => o.Add).Select(o => new SaveExpenseLineRequest(
+                _wbsId.Value, OdcCostType.Travel, o.Charge.Date ?? date, o.Charge.Amount,
+                ExtraDescription(o.Charge), null, ReceiptFileId: _receiptId)).ToList()
+            : [];
+        MudDialog.Close(DialogResult.Ok(new ExpenseLineDialogResult(line, extra)));
+    }
 }
