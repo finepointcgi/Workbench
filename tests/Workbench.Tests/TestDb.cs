@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,10 +31,18 @@ internal static class TestDb
 
     public static IWorkbenchDbContextFactory CreateFactory(TestDatabase provider) => provider switch
     {
-        TestDatabase.Sqlite => new Factory(Options(DatabaseProvider.Sqlite, SqliteTemplates.NewDatabase())),
-        TestDatabase.PostgreSql => new Factory(Options(DatabaseProvider.PostgreSql, PostgresTemplates.NewDatabase())),
+        TestDatabase.Sqlite => new Factory(Disposable(DatabaseProvider.Sqlite, SqliteTemplates.NewDatabase())),
+        TestDatabase.PostgreSql => new Factory(Disposable(DatabaseProvider.PostgreSql, PostgresTemplates.NewDatabase())),
         _ => InMemory(),
     };
+
+    /// <summary>Options for a new test database that is dropped once nothing can reach them (see <see cref="DatabaseReaper"/>).</summary>
+    private static DbContextOptions<WorkbenchDbContext> Disposable(DatabaseProvider provider, string connectionString)
+    {
+        var options = Options(provider, connectionString);
+        DatabaseReaper.DropWhenUnreachable(options, provider, connectionString);
+        return options;
+    }
 
     /// <summary>A connection string to a new, migrated, empty database for <paramref name="provider"/> (not InMemory).</summary>
     public static string NewConnectionString(DatabaseProvider provider) =>
@@ -66,16 +76,82 @@ internal static class TestDb
     }
 }
 
+/// <summary>
+/// Drops test databases the suite can no longer use. A PostgreSQL test database takes about 25 MB and a SQLite one about
+/// 4 MB, so keeping a few thousand until the run ends fills a CI runner's disk. A database is dropped once the options
+/// that point at it (held by its factory and every context made from it) have been garbage collected, which means the
+/// test that made it is done; web hosts drop theirs when disposed.
+/// </summary>
+internal static class DatabaseReaper
+{
+    private const int CollectEvery = 25;
+    private static readonly ConditionalWeakTable<object, Sentinel> Owners = new();
+    private static readonly ConcurrentQueue<(DatabaseProvider Provider, string ConnectionString)> Unreachable = new();
+    private static int _tracked;
+
+    public static void DropWhenUnreachable(object owner, DatabaseProvider provider, string connectionString)
+    {
+        Owners.Add(owner, new Sentinel(provider, connectionString));
+        if (Interlocked.Increment(ref _tracked) % CollectEvery == 0)
+        {
+            GC.Collect(); // finalizers queue what became unreachable; the next call drops it
+        }
+
+        DropUnreachable();
+    }
+
+    public static void DropUnreachable()
+    {
+        while (Unreachable.TryDequeue(out var database))
+        {
+            Drop(database.Provider, database.ConnectionString);
+        }
+    }
+
+    public static void Drop(DatabaseProvider provider, string connectionString)
+    {
+        try
+        {
+            if (provider == DatabaseProvider.PostgreSql)
+            {
+                var name = new NpgsqlConnectionStringBuilder(connectionString).Database;
+                PostgresTemplates.Execute($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)");
+            }
+            else
+            {
+                var path = new SqliteConnectionStringBuilder(connectionString).DataSource;
+                foreach (var file in new[] { path, $"{path}-journal", $"{path}-wal", $"{path}-shm" })
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is NpgsqlException or IOException or UnauthorizedAccessException)
+        {
+            // Best effort: the run's leftovers are removed at exit (and PostgreSQL ones on the next run's start).
+        }
+    }
+
+    private sealed class Sentinel(DatabaseProvider provider, string connectionString)
+    {
+        ~Sentinel() => Unreachable.Enqueue((provider, connectionString));
+    }
+}
+
 /// <summary>Migrates one SQLite file per test run, then copies it for every test (much faster than migrating each time).</summary>
 internal static class SqliteTemplates
 {
     private static readonly string Folder = Path.Combine(Path.GetTempPath(), $"workbench-tests-{Environment.ProcessId}");
     private static readonly Lazy<string> Template = new(CreateTemplate);
 
-    public static string NewDatabase()
+    public static string NewDatabase() => NewDatabase(Template.Value);
+
+    /// <summary>A copy of the SQLite file at <paramref name="template"/>.</summary>
+    public static string NewDatabase(string template)
     {
         var path = Path.Combine(Folder, $"{Guid.NewGuid():N}.db");
-        File.Copy(Template.Value, path);
+        Directory.CreateDirectory(Folder);
+        File.Copy(template, path);
         return $"Data Source={path};Pooling=False";
     }
 
@@ -123,10 +199,13 @@ internal static class PostgresTemplates
     /// <summary>Whether a PostgreSQL server answers (checked once, with a short timeout).</summary>
     public static bool IsAvailable => Available.Value;
 
-    public static string NewDatabase()
+    public static string NewDatabase() => NewDatabase(Template.Value);
+
+    /// <summary>A copy of the database <paramref name="template"/> (which must have no open connections).</summary>
+    public static string NewDatabase(string template)
     {
         var name = $"{RunId}_{Interlocked.Increment(ref _counter)}";
-        Execute($"CREATE DATABASE \"{name}\" TEMPLATE \"{Template.Value}\"");
+        Execute($"CREATE DATABASE \"{name}\" TEMPLATE \"{template}\"");
         return ConnectionString(name);
     }
 

@@ -28,7 +28,7 @@ jobs:
     # always there.
     name: Build and test (${{ matrix.database }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -159,6 +159,8 @@ jobs:
           docker compose -f docker-compose.prod.yml exec -T postgres psql -U workbench -d workbench -Atc \
             "SELECT count(*) > 0 AND bool_and(\"Xml\" LIKE '%encryptedSecret%') FROM \"DataProtectionKeys\"" | grep -qx t
       - name: Backup and restore test
+        env:
+          OIDC_AUTHORITY: https://login.example.test/ci/v2.0
         run: PGPASSWORD="$(cat secrets/postgres_password)" scripts/test-backup-restore.sh "$(docker compose -f docker-compose.prod.yml ps -q postgres)"
       - name: Stack logs
         if: failure()
