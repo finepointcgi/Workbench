@@ -75,7 +75,7 @@ public sealed class StandardReportTests
         Assert.Equal(14m, all.Total().Num(all, "itd_hours"));
 
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => kit.As(Editor).Standard.RunAsync(StandardReportKeys.ProjectStatus, p));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => kit.As(Owner).Standard.RunAsync(StandardReportKeys.ProjectStatus, ReportsKit.Day with { ProjectId = kit.Data.Project2 }));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => kit.As(Owner).Standard.RunAsync(StandardReportKeys.ProjectStatus, ReportsKit.Day with { ProjectId = kit.Data.Project2 })); // not on 2002
 
         // Drill: the PM sees hours, not per-entry labor cost.
         var wbsRow = psr.Details().Single(r => r.Text(psr, "wbs") == "1001.01");

@@ -164,6 +164,26 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
 - Development signs in at `/account/dev-signin` (seeded users: dev@ Admin, pm@ Finance and workspace Owner,
   analyst@ Editor, viewer@ Viewer). Service tests set the user with `CollaborationHost.User` / `Identity/SeededHost`.
 
+## Project visibility (who may see a project at all)
+
+`Application/Identity/ProjectVisibility` is the one rule; every path that reads project data asks it, and finer rules
+(financials, setup, staffing) apply on top. Full write-up: [docs/project-visibility.md](project-visibility.md).
+
+- **Every project:** Finance, Admin and resource managers (staffing), plus the worker's system user and trusted
+  background readers. Business development, pricing, HR, materials, timekeepers and project managers get nothing extra
+  from the role: they see the projects they're on (their own modules keep their own role rules).
+- **Everyone else sees the projects they're on:** project manager; assigned (resource allocation, charge assignment, task
+  assignment on the plan sheet); member of the workspace holding the plan sheet; charged to it (time, expenses/ODCs, a
+  travel authorization) or may charge it now (an active project's open, chargeable code needing no assignment, as the
+  timesheet's charge-code list); approver of a timesheet, expense report, ODC or travel authorization that charges it (or
+  an approval step scoped to it), themselves or as a current delegate.
+- **Company access applies too:** a project outside the user's companies (or the switcher's company) is hidden.
+- A hidden project is **not found** (`WorkbenchNotFoundException`, `GetProjectAsync` returns null), never forbidden.
+  `ProjectAccess.RequireProjectFinancialsAsync`/`RequireProjectSetupAsync` and `ResourcingAccess` check it first, so a
+  project-scoped decorator built on them gets not found for free. Lists filter with `ProjectVisibility.FilterAsync`.
+- New project-scoped reads: inject `ProjectVisibility` (or go through `ProjectAccess`) in the permission decorator; don't
+  hide things only in the UI.
+
 ## Security events, user lifecycle and retention
 
 - Record security-relevant actions with `Application.Security.SecurityEventLog.RecordAsync(SecurityEventTypes.X, target,

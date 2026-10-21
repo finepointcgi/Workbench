@@ -64,7 +64,7 @@ public sealed class CapacityAndHeatMapTests
         var pm = map.Rows.Single(r => r.EmployeeId == host.PmId);
         Assert.Equal(LoadStatus.Under, pm.Weeks[0].Status);
 
-        var onProject2 = await host.Get<IResourcePlanningService>().GetHeatMapAsync(new HeatMapQuery(Today, 2, ProjectId: host.Project2));
+        var onProject2 = await host.As(ResourceManager).Get<IResourcePlanningService>().GetHeatMapAsync(new HeatMapQuery(Today, 2, ProjectId: host.Project2));
         Assert.Equal(host.DevId, Assert.Single(onProject2.Rows).EmployeeId);
     }
 

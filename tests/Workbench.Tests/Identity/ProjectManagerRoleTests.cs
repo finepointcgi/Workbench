@@ -200,14 +200,15 @@ public sealed class ProjectManagerRoleTests
             otherWbs = await db.Set<WbsElement>().Where(w => w.ProjectId == fixture.Project2).Select(w => w.Id).FirstAsync();
         }
 
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => projects.CreateWbsElementAsync(fixture.Project2, new SaveWbsElementRequest(null, "2002.02", "Mine now")));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => projects.UpdateWbsElementAsync(otherWbs, new SaveWbsElementRequest(null, "2002.01", "Renamed")));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => projects.AddAssignmentAsync(otherWbs, new AddChargeAssignmentRequest(fixture.AnalystId)));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => projects.UpdateProjectAsync(fixture.Project2, Request("2002", fixture.Contract2)));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IBudgetService>().ListVersionsAsync(fixture.Project2));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IProjectFinancialsService>().GetProjectSummaryAsync(fixture.Project2));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IPlanSyncService>().CreatePlanSheetAsync(fixture.Project2));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IProjectHubService>().GetTeamAsync(fixture.Project2));
+        // pm@ isn't on 2002 at all, so it's not found rather than forbidden.
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => projects.CreateWbsElementAsync(fixture.Project2, new SaveWbsElementRequest(null, "2002.02", "Mine now")));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => projects.UpdateWbsElementAsync(otherWbs, new SaveWbsElementRequest(null, "2002.01", "Renamed")));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => projects.AddAssignmentAsync(otherWbs, new AddChargeAssignmentRequest(fixture.AnalystId)));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => projects.UpdateProjectAsync(fixture.Project2, Request("2002", fixture.Contract2)));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IBudgetService>().ListVersionsAsync(fixture.Project2));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IProjectFinancialsService>().GetProjectSummaryAsync(fixture.Project2));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IPlanSyncService>().CreatePlanSheetAsync(fixture.Project2));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IProjectHubService>().GetTeamAsync(fixture.Project2));
         Assert.False(await host.Get<ProjectAccess>().CanSetUpProjectAsync(fixture.Project2));
         Assert.True(await host.Get<ProjectAccess>().CanSetUpProjectAsync(fixture.Project1));
     }

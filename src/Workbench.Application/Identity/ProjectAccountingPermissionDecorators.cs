@@ -157,22 +157,24 @@ public sealed class PermissionCheckingProjectService(
     IProjectService inner, AccessControl access, ProjectAccess projects, IWorkbenchDbContextFactory dbFactory,
     Notifications.INotificationPublisher? notifications = null) : IProjectService
 {
-    public Task<IReadOnlyList<ProjectDto>> ListProjectsAsync(CancellationToken cancellationToken = default)
+    // Reads: only the projects the user may see (ProjectVisibility); a hidden one is not found (null), never forbidden.
+    public async Task<IReadOnlyList<ProjectDto>> ListProjectsAsync(CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        return inner.ListProjectsAsync(cancellationToken);
+        return await projects.Visibility.FilterAsync(await inner.ListProjectsAsync(cancellationToken), p => p.Id, cancellationToken);
     }
 
-    public Task<ProjectDto?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    public async Task<ProjectDto?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        return inner.GetProjectAsync(projectId, cancellationToken);
+        return await projects.Visibility.CanSeeAsync(projectId, cancellationToken) ? await inner.GetProjectAsync(projectId, cancellationToken) : null;
     }
 
-    public Task<ProjectDto?> GetProjectForSheetAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    public async Task<ProjectDto?> GetProjectForSheetAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        return inner.GetProjectForSheetAsync(sheetId, cancellationToken);
+        var project = await inner.GetProjectForSheetAsync(sheetId, cancellationToken);
+        return project is not null && await projects.Visibility.CanSeeAsync(project.Id, cancellationToken) ? project : null;
     }
 
     public async Task<ProjectDto> CreateProjectAsync(SaveProjectRequest request, CancellationToken cancellationToken = default)
@@ -234,10 +236,10 @@ public sealed class PermissionCheckingProjectService(
         return await AfterSaveAsync(await inner.UpdateProjectAsync(projectId, request, cancellationToken), cancellationToken);
     }
 
-    public Task<IReadOnlyList<WbsElementDto>> ListWbsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<WbsElementDto>> ListWbsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        access.RequireSignedIn();
-        return inner.ListWbsAsync(projectId, cancellationToken);
+        await projects.Visibility.RequireVisibleAsync(projectId, cancellationToken);
+        return await inner.ListWbsAsync(projectId, cancellationToken);
     }
 
     public async Task<WbsElementDto> CreateWbsElementAsync(Guid projectId, SaveWbsElementRequest request, CancellationToken cancellationToken = default)
@@ -253,10 +255,10 @@ public sealed class PermissionCheckingProjectService(
         return await inner.UpdateWbsElementAsync(wbsElementId, request, cancellationToken);
     }
 
-    public Task<IReadOnlyList<ChargeAssignmentDto>> ListAssignmentsAsync(Guid wbsElementId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ChargeAssignmentDto>> ListAssignmentsAsync(Guid wbsElementId, CancellationToken cancellationToken = default)
     {
-        access.RequireSignedIn();
-        return inner.ListAssignmentsAsync(wbsElementId, cancellationToken);
+        await projects.Visibility.RequireVisibleWbsAsync(wbsElementId, cancellationToken);
+        return await inner.ListAssignmentsAsync(wbsElementId, cancellationToken);
     }
 
     public async Task<ChargeAssignmentDto> AddAssignmentAsync(Guid wbsElementId, AddChargeAssignmentRequest request, CancellationToken cancellationToken = default)
@@ -273,17 +275,33 @@ public sealed class PermissionCheckingProjectService(
         await inner.RemoveAssignmentAsync(assignmentId, cancellationToken);
     }
 
-    public Task<IReadOnlyList<ChargeCodeDto>> ListChargeCodesAsync(Guid employeeId, DateOnly date, CancellationToken cancellationToken = default)
-    {
-        access.RequireSignedIn();
-        return inner.ListChargeCodesAsync(employeeId, date, cancellationToken);
-    }
+    public async Task<IReadOnlyList<ChargeCodeDto>> ListChargeCodesAsync(Guid employeeId, DateOnly date, CancellationToken cancellationToken = default) =>
+        (await ListChargeCodesForDatesAsync(employeeId, [date], cancellationToken))[date];
 
-    public Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>> ListChargeCodesForDatesAsync(
+    /// <summary>
+    /// An employee's charge codes are theirs to see in full, and their timekeepers', Finance's, administrators', resource
+    /// managers' and supervisor's. Anyone else (an approver reading a timesheet, say) sees only the codes on projects they
+    /// can see, so the list can't be used to discover other projects.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>> ListChargeCodesForDatesAsync(
         Guid employeeId, IReadOnlyCollection<DateOnly> dates, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        return inner.ListChargeCodesForDatesAsync(employeeId, dates, cancellationToken);
+        var codes = await inner.ListChargeCodesForDatesAsync(employeeId, dates, cancellationToken);
+        var roles = await access.GetOrgRolesAsync(cancellationToken);
+        if (roles.CanViewAllTimesheets() || ProjectVisibility.SeesEveryProject(roles) || access.IsSystemReader
+            || await access.GetEmployeeIdAsync(cancellationToken) == employeeId || await projects.SupervisesAsync(employeeId, null, cancellationToken))
+        {
+            return codes;
+        }
+
+        var result = new Dictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>();
+        foreach (var (date, list) in codes)
+        {
+            result[date] = await projects.Visibility.FilterAsync(list, c => c.ProjectId, cancellationToken);
+        }
+
+        return result;
     }
 
     /// <summary>The project's manager becomes Owner of its plan sheet's workspace (when they have the role).</summary>

@@ -432,7 +432,7 @@ public sealed class ApBillSource : ReportSource
 }
 
 /// <summary>
-/// Projects and their WBS. Everyone signed in may list them (like the project list); contract ceiling and funded value
+/// Projects and their WBS: the projects the user may see (like the project list); contract ceiling and funded value
 /// are shown only to Finance, administrators and the managers of a project on that contract.
 /// </summary>
 public sealed class ProjectWbsSource : ReportSource
@@ -465,7 +465,7 @@ public sealed class ProjectWbsSource : ReportSource
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
-        var projects = await db.Set<Project>().AsNoTracking().OrderBy(p => p.Code).ToListAsync(ct);
+        var projects = (await db.Set<Project>().AsNoTracking().OrderBy(p => p.Code).ToListAsync(ct)).Where(p => access.CanSeeProject(p.Id)).ToList();
         var wbs = await db.Set<WbsElement>().AsNoTracking().ToListAsync(ct);
         var parents = wbs.Where(w => w.ParentId != null).Select(w => w.ParentId!.Value).ToHashSet();
         var contracts = await db.Set<Contract>().AsNoTracking().ToDictionaryAsync(c => c.Id, ct);
