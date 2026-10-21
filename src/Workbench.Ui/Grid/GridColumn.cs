@@ -12,6 +12,12 @@ public enum GridColumnKind
 
     /// <summary>The item's Assignees (task assignment), edited in a people-search dialog.</summary>
     Assignees,
+
+    /// <summary>Working days from Start to Finish (the plan editor); typing it sets the Finish. 0 is a milestone.</summary>
+    Duration,
+
+    /// <summary>MS Project predecessor text over task IDs, e.g. <c>3, 5SS+2d</c> (the plan editor).</summary>
+    Predecessors,
 }
 
 /// <summary>A column as the grid shows it: one of the built-in item fields or a sheet column.</summary>
@@ -34,8 +40,11 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     /// <summary>Formula columns are computed server-side and can't be edited in the grid.</summary>
     public bool ReadOnly => IsFormula;
 
-    /// <summary>Title, then Assignees (when shown), then Start/Finish when scheduling is on, then the sheet's columns, then WBS.</summary>
-    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false)
+    /// <summary>
+    /// Title, then Assignees (when shown), then Start/Finish when scheduling is on (with Duration and Predecessors when the
+    /// plan is loaded), then the sheet's columns, then WBS.
+    /// </summary>
+    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false)
     {
         var columns = new List<GridColumn> { new("title", "Title", GridColumnKind.Title, null, 320) };
         if (assignees)
@@ -47,6 +56,11 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
         {
             columns.Add(new("start", "Start", GridColumnKind.Start, null, 130));
             columns.Add(new("finish", "Finish", GridColumnKind.Finish, null, 130));
+            if (plan)
+            {
+                columns.Add(new("duration", "Duration", GridColumnKind.Duration, null, 100));
+                columns.Add(new("predecessors", "Predecessors", GridColumnKind.Predecessors, null, 130));
+            }
         }
 
         columns.AddRange(sheet.Columns

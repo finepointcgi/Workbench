@@ -13,7 +13,7 @@ Open **Projects** and pick a project. The list shows the projects you manage or 
 | Tab | What it shows |
 | --- | --- |
 | Overview | Health (on track, at risk or over), spend against budget, funding used and what needs your attention. |
-| Plan | The project's plan sheet: tasks, dates and the Gantt chart. |
+| Plan | The project's plan: tasks, durations, predecessors and the Gantt chart. It works like MS Project (Tab indents) and imports and exports Excel. |
 | Financials | Cost, revenue and margin by task, direct and [burdened](term:burdened). |
 | Budgets | The approved budget and your [EAC](term:eac) (estimate at completion). |
 | Earned value | [CPI](term:cpi), [SPI](term:spi) and variance reports, for projects that report earned value. |
