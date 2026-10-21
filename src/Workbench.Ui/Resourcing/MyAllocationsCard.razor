@@ -5,9 +5,9 @@
 @if (_rows.Count == 0 && ShowWhenEmpty && _loaded)
 {
     <MudPaper Class="pa-4 mb-4" Outlined="true" data-card="allocations">
-        <MudText Typo="Typo.subtitle1" HtmlTag="h2">My allocations</MudText>
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Where you're staffed</MudText>
         <MudText Class="mud-text-secondary" data-testid="allocations-empty">
-            You aren't planned on any project for the next @Weeks weeks. When a project manager staffs you on their project, your weekly hours show up here.
+            You aren't staffed on any project for the next @Weeks weeks. When a project manager staffs you on their project, your weekly hours show up here.
         </MudText>
     </MudPaper>
 }
@@ -16,7 +16,7 @@ else if (_rows.Count > 0)
     <MudPaper Class="pa-4 mb-4" Outlined="true" data-card="allocations">
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
             <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Primary" />
-            <MudText Typo="Typo.subtitle1">My allocations</MudText>
+            <MudText Typo="Typo.subtitle1">Where you're staffed</MudText>
             <MudSpacer />
             @if (ShowLink)
             {
@@ -55,7 +55,7 @@ else if (_rows.Count > 0)
             </tbody>
         </MudSimpleTable>
         </div>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary">Hours you're planned to work on each project, by week starting.</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Hours you're staffed to work on each project, by week starting.</MudText>
     </MudPaper>
 }
 

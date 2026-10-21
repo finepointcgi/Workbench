@@ -86,7 +86,7 @@ public static class NavCatalog
 
         new(Projects, null, "All projects", "projects", Icons.Material.Filled.Work, Everyone, Keywords: "contracts wbs"),
         new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, a => a.HasProjectManagerRole && !a.IsFinance, MatchAll: true, Keywords: "create request project wbs plan"),
-        new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsResourceManager || a.IsPm, Keywords: "allocations staffing capacity utilization"),
+        new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsResourceManager || a.IsPm, Keywords: "staffing allocations capacity utilization heat map"),
         new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, a => a.IsFinance || a.IsPm, MatchAll: true, Keywords: "other direct costs vendor"),
         new(Projects, null, "Proposal pricing", "pricing", Icons.Material.Filled.PriceCheck, a => a.CanPrice, Detail: "Proposal", Keywords: "bid proposal price cost volume wrap rate fee scenario propricer"),
 
@@ -248,7 +248,7 @@ public static class NavCatalog
         new(Home, null, "What's new", "help/whats-new", Icons.Material.Filled.NewReleases, _ => true, Keywords: "changes release notes changelog", InMenu: false),
         new(Home, null, "My support requests", "support", Icons.Material.Filled.SupportAgent, Everyone, Keywords: "report problem feedback bug help", InMenu: false),
         new(Admin, null, "Support requests", "admin/support", Icons.Material.Filled.SupportAgent, AdminOnly, Keywords: "help desk problems feedback bug reports", InMenu: false),
-        new(MyWork, null, "My allocations", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsSignedIn && !a.IsResourceManager && !a.IsPm, Keywords: "resourcing staffing", InMenu: false),
+        new(MyWork, null, "My staffing", "resourcing", Icons.Material.Filled.GroupWork, a => a.IsSignedIn && !a.IsResourceManager && !a.IsPm, Keywords: "resourcing staffing allocations", InMenu: false),
     ];
 
     /// <summary>The section's title for this user: Finance people who aren't administrators see Admin as "Setup".</summary>

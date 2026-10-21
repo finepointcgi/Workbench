@@ -1,9 +1,9 @@
-@* Budgeted hours nobody is allocated to yet, and a search for people with free capacity in a labor category. *@
+@* Budgeted hours nobody is staffed on yet, and a search for people with free capacity in a labor category. *@
 @inject IResourcePlanningService Planning
 @inject ISnackbar Snackbar
 
-<MudText Typo="Typo.subtitle1" Class="mb-1">Open demand</MudText>
-<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Labor hours budgeted in future fiscal periods (current budget) that no allocation covers.</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-1">Unstaffed budget</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Labor hours budgeted in coming fiscal periods (Current budget) that nobody is staffed on yet.</MudText>
 <MudSimpleTable Dense="true" Hover="true" Class="mb-4" data-testid="open-demand">
     <thead>
         <tr>
@@ -11,8 +11,8 @@
             <th>Project</th>
             <th>Labor category</th>
             <th style="text-align:right">Budget h</th>
-            <th style="text-align:right">Allocated h</th>
-            <th style="text-align:right">Open h</th>
+            <th style="text-align:right">Staffed h</th>
+            <th style="text-align:right">Unstaffed h</th>
             <th></th>
         </tr>
     </thead>
@@ -31,7 +31,7 @@
         }
         @if (_demand.Count == 0)
         {
-            <tr><td colspan="7" class="mud-text-secondary">No open demand. Budgeted hours that nobody is planned against yet show up here.</td></tr>
+            <tr><td colspan="7" class="mud-text-secondary">Nothing unstaffed. Budgeted hours (phased by fiscal period) that nobody is staffed on yet show up here.</td></tr>
         }
     </tbody>
 </MudSimpleTable>
@@ -59,7 +59,7 @@
                 <th>Labor category</th>
                 <th>Org unit</th>
                 <th style="text-align:right">Capacity h</th>
-                <th style="text-align:right">Allocated h</th>
+                <th style="text-align:right">Staffed h</th>
                 <th style="text-align:right">Available h</th>
                 <th>By week (available)</th>
             </tr>

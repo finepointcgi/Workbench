@@ -33,8 +33,8 @@
     {
         <MudText Typo="Typo.body2" Class="mt-2" data-testid="allocations">
             <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Small" Class="mr-1" Style="vertical-align:middle" />
-            You're planned for @TodoFormat.Hours(allocated) h on @(Week.AllocatedProjects == 1 ? "1 project" : $"{Week.AllocatedProjects} projects") this week.
-            <MudLink Href="resourcing" Typo="Typo.body2">See allocations</MudLink>
+            You're staffed for @TodoFormat.Hours(allocated) h on @(Week.AllocatedProjects == 1 ? "1 project" : $"{Week.AllocatedProjects} projects") this week.
+            <MudLink Href="resourcing" Typo="Typo.body2">See your staffing</MudLink>
         </MudText>
     }
 </MudPaper>

@@ -2,6 +2,8 @@
 @using Workbench.Contracts.Collaboration
 @inject IActivityService Activity
 
+<ProjectSetupSteps Hub="Hub" />
+
 @if (Hub.Alerts.Count > 0)
 {
     <MudStack Spacing="1" Class="mb-4" data-testid="project-alerts">

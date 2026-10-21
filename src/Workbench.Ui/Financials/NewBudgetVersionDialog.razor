@@ -4,7 +4,7 @@
     <DialogContent>
         <MudStack Spacing="3" Style="min-width: 380px">
             <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
-            <MudSelect T="BudgetVersionKind" @bind-Value="_kind" Label="Kind">
+            <MudSelect T="BudgetVersionKind" @bind-Value="_kind" Label="Kind" HelperText="@KindHelp(_kind)">
                 @foreach (var kind in Enum.GetValues<BudgetVersionKind>())
                 {
                     <MudSelectItem Value="kind" Disabled="Taken(kind)">@kind@(Taken(kind) ? " (already exists)" : "")</MudSelectItem>
@@ -59,10 +59,17 @@
     {
         _source = InitialSource;
         _sourceVersionId = InitialSourceVersionId;
-        _kind = Enum.GetValues<BudgetVersionKind>().FirstOrDefault(k => !Taken(k) && k != BudgetVersionKind.Forecast, BudgetVersionKind.Forecast);
+        _kind = new[] { BudgetVersionKind.Current, BudgetVersionKind.Baseline }.FirstOrDefault(k => !Taken(k), BudgetVersionKind.Forecast);
         var source = Versions.FirstOrDefault(v => v.Id == _sourceVersionId);
         _name = source is null ? "" : $"{source.Name} (copy)";
     }
+
+    private static string KindHelp(BudgetVersionKind kind) => kind switch
+    {
+        BudgetVersionKind.Current => "The working budget. Staffing and financials compare against it.",
+        BudgetVersionKind.Baseline => "The approved budget. Lock it once agreed; progress is measured against it.",
+        _ => "A what-if for the remaining work, used for estimates at completion.",
+    };
 
     private bool Taken(BudgetVersionKind kind) => kind != BudgetVersionKind.Forecast && Versions.Any(v => v.Kind == kind);
 

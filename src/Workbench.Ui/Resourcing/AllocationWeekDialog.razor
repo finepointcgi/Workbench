@@ -44,7 +44,7 @@
                 }
                 @if (_rows.Count == 0)
                 {
-                    <tr><td colspan="6" class="mud-text-secondary">No allocations this week.</td></tr>
+                    <tr><td colspan="6" class="mud-text-secondary">Not staffed on anything this week.</td></tr>
                 }
             </tbody>
         </MudSimpleTable>
@@ -52,7 +52,7 @@
     <DialogActions>
         @if (Lookups.ManageableProjects.Count > 0)
         {
-            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync">Add allocation</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync">Staff on a project</MudButton>
         }
         <MudSpacer />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => MudDialog.Close()" data-testid="week-done">Done</MudButton>
@@ -127,7 +127,7 @@
             { d => d.DefaultEmployeeId, EmployeeId },
             { d => d.DefaultWeek, Week },
         };
-        var dialog = await DialogService.ShowAsync<AllocationDialog>("Add allocation", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowAsync<AllocationDialog>("Staff a person", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SaveAllocationRequest request })
         {
             try

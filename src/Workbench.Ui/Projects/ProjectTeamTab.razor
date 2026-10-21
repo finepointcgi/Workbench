@@ -1,4 +1,4 @@
-@* The Team tab (Finance, administrators and the project's manager): who charges to the project, who is allocated to it and their open tasks. *@
+@* Below the staffing on the Staffing tab (Finance, administrators and the project's manager): who charges to the project, who is staffed on it and their open tasks. *@
 @inject IProjectHubService HubService
 
 @if (_error is not null)
@@ -13,9 +13,9 @@ else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
         <MudText Typo="Typo.h6" HtmlTag="h2">Team</MudText>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary">People who record time on the project, are assigned to its charge codes or are allocated to it.</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">People who charge time to the project, may charge to its WBS elements or are staffed on it.</MudText>
         <MudSpacer />
-        <MudButton Href="resourcing" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Groups">Plan allocations in Resourcing</MudButton>
+        <MudButton Href="resourcing" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Groups">Everyone's week-by-week load</MudButton>
     </MudStack>
     <MudTable Items="_team" Dense="true" Hover="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" data-testid="team-table">
         <HeaderContent>
@@ -26,7 +26,7 @@ else
             </MudTh>
             <MudTh>Last charged</MudTh>
             <MudTh Style="text-align: right">
-                <MudTooltip Text="Allocated hours from this week on (Resourcing)."><span>Allocated ahead</span></MudTooltip>
+                <MudTooltip Text="Hours they're staffed on this project from this week on."><span>Staffed ahead</span></MudTooltip>
             </MudTh>
         </HeaderContent>
         <RowTemplate>
@@ -38,7 +38,7 @@ else
                 }
                 @if (context.IsAssigned)
                 {
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">Assigned</MudChip>
+                    <MudTooltip Text="Assigned to charge to at least one of the project's WBS elements."><MudChip T="string" Size="Size.Small" Variant="Variant.Text">Can charge</MudChip></MudTooltip>
                 }
             </MudTd>
             <MudTd DataLabel="Labor category">@(context.LaborCategory ?? "—")</MudTd>
@@ -50,7 +50,7 @@ else
                 }
             </MudTd>
             <MudTd DataLabel="Last charged">@(context.LastCharged is { } d ? ProjectsFormat.Date(d) : "—")</MudTd>
-            <MudTd DataLabel="Allocated ahead" Style="text-align: right">
+            <MudTd DataLabel="Staffed ahead" Style="text-align: right">
                 @(context.UpcomingAllocatedHours > 0 ? $"{FinancialFormat.Hours(context.UpcomingAllocatedHours)} h" : "—")
                 @if (context.AllocatedThrough is { } through)
                 {
@@ -59,7 +59,7 @@ else
             </MudTd>
         </RowTemplate>
         <NoRecordsContent>
-            <MudText Class="mud-text-secondary">Nobody charges to or is allocated to this project yet.</MudText>
+            <MudText Class="mud-text-secondary">Nobody charges to or is staffed on this project yet. Staff people above.</MudText>
         </NoRecordsContent>
     </MudTable>
     <ProjectWorkloadPanel ProjectId="ProjectId" />

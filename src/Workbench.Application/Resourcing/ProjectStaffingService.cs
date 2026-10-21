@@ -287,8 +287,10 @@ public static class StaffingCalculator
 {
     public static (IReadOnlyList<StaffingCategoryDto> Categories, IReadOnlyList<StaffingSlotDto> Slots) Calculate(StaffingInputs inputs, decimal tolerancePercent)
     {
+        // Hours charged where there's no budget show too, so nothing charged to the project is invisible here.
         var keys = inputs.Budget.Select(b => ((Guid?)b.WbsElementId, b.LaborCategoryId))
             .Concat(inputs.Allocations.Select(a => (a.WbsElementId, a.LaborCategoryId)))
+            .Concat(inputs.Charged.Where(c => c.Hours != 0).Select(c => ((Guid?)c.WbsElementId, c.LaborCategoryId)))
             .Distinct()
             .ToList();
         var budgetedCategories = inputs.Budget.Where(b => b.Hours > 0).Select(b => b.LaborCategoryId).ToHashSet();
@@ -320,7 +322,8 @@ public static class StaffingCalculator
                 var budget = g.Sum(s => s.BudgetHours);
                 var left = g.Sum(s => s.LeftHours);
                 var staffed = g.Sum(s => s.StaffedHours);
-                return new StaffingCategoryDto(g.Key, g.First().LaborCategory, budget, g.Sum(s => s.ChargedHours), left, staffed, left - staffed,
+                // Charged against the budget: hours on WBS elements without budget for the category show on their own slot.
+                return new StaffingCategoryDto(g.Key, g.First().LaborCategory, budget, g.Where(s => s.BudgetHours > 0).Sum(s => s.ChargedHours), left, staffed, left - staffed,
                     StatusOf(budget, left, staffed, tolerancePercent));
             })
             .OrderByDescending(c => c.Gap).ThenBy(c => c.LaborCategory, StringComparer.OrdinalIgnoreCase)

@@ -1,0 +1,205 @@
+@* Staff a person into a project's budget: a labor category on a WBS element, hours a week for some weeks. People who
+   qualify for the category come first; the check warns when they don't qualify or the hours run past the budget. *@
+@inject IProjectStaffingService Staffing
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Pick who fills the budgeted hours. Their hours count against the labor category they bill as.
+        </MudText>
+        <MudStack Spacing="2">
+            <MudSelect T="Guid?" Label="Labor category" Value="_categoryId" ValueChanged="OnCategoryChangedAsync" Required="true" data-testid="staff-category"
+                       HelperText="The job title the contract prices and the budget counts hours in.">
+                @foreach (var c in Categories.Where(c => c.IsActive || c.Id == _categoryId))
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name@(BudgetedOn(c.Id) is { } h ? $" ({h} h left to staff)" : "")</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" Label="WBS element" Value="_wbsId" ValueChanged="OnWbsChangedAsync" data-testid="staff-wbs"
+                       HelperText="Where they'll charge their time.">
+                <MudSelectItem T="Guid?" Value="null">Whole project</MudSelectItem>
+                @foreach (var w in Wbs.Where(w => w.IsChargeable && w.IsOpen))
+                {
+                    <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid" Label="Person" Value="_employeeId" ValueChanged="OnPersonChangedAsync" Required="true" data-testid="staff-person"
+                       ToStringFunc="PersonLabel" HelperText="People who bill as this labor category are listed first.">
+                @foreach (var c in _candidates)
+                {
+                    <MudSelectItem T="Guid" Value="c.EmployeeId">
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                            @if (c.Qualifies)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" aria-hidden="true" />
+                            }
+                            <span>@c.Name</span>
+                            <span class="mud-text-secondary">· @(c.LaborCategory ?? "no labor category") · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h/wk booked</span>
+                        </MudStack>
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudDatePicker Label="Starting the week of" Date="_week" DateChanged="OnWeekChangedAsync" DateFormat="MMM d, yyyy" Style="max-width: 200px" />
+                <MudNumericField T="decimal" Label="Hours a week" Value="_hours" ValueChanged="OnHoursChangedAsync" Min="0" Max="168" Style="max-width: 140px" data-testid="staff-hours" />
+                <MudNumericField T="int" Label="For how many weeks" Value="_weeks" ValueChanged="OnWeeksChangedAsync" Min="1" Max="104" Style="max-width: 160px" data-testid="staff-weeks" />
+            </MudStack>
+            @if (_check is { } check)
+            {
+                <MudText Typo="Typo.body2" data-testid="staff-summary">
+                    Adds @ResourcingFormat.Hours(_hours * _weeks) hours.
+                    @if (check.LaborCategory is { } label && check.LeftHours > 0)
+                    {
+                        <span>@label @WhereText will be @ResourcingFormat.Hours(check.StaffedHoursAfter) of @ResourcingFormat.Hours(check.LeftHours) budgeted hours staffed.</span>
+                    }
+                </MudText>
+                @foreach (var warning in check.Warnings)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" data-testid="@($"staff-warning-{warning.Kind}")">@warning.Message</MudAlert>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(_employeeId == Guid.Empty || _week is null || _hours <= 0)" data-testid="staff-save">
+            @(_check?.Warnings.Count > 0 ? "Staff anyway" : "Staff")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+    [Parameter] public IReadOnlyList<WbsElementDto> Wbs { get; set; } = [];
+    [Parameter] public IReadOnlyList<LaborCategoryDto> Categories { get; set; } = [];
+
+    /// <summary>The project's slots, to suggest hours and show what's left to staff.</summary>
+    [Parameter] public IReadOnlyList<StaffingSlotDto> Slots { get; set; } = [];
+    [Parameter] public Guid? WbsElementId { get; set; }
+    [Parameter] public Guid? LaborCategoryId { get; set; }
+
+    private Guid? _categoryId;
+    private Guid? _wbsId;
+    private Guid _employeeId;
+    private DateTime? _week = ResourcingFormat.ThisWeek.ToDateTime(TimeOnly.MinValue);
+    private decimal _hours = 40;
+    private int _weeks = 4;
+    private IReadOnlyList<StaffingCandidateDto> _candidates = [];
+    private StaffingCheckDto? _check;
+
+    private string WhereText => _wbsId is { } id && Wbs.FirstOrDefault(w => w.Id == id) is { } w ? $"on {w.Code}" : "on the project";
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_categoryId, _wbsId) = (LaborCategoryId, WbsElementId);
+        await LoadCandidatesAsync();
+        if (_candidates.FirstOrDefault(c => c.Qualifies) is { } first)
+        {
+            await OnPersonChangedAsync(first.EmployeeId);
+        }
+    }
+
+    private decimal? Gap(Guid? categoryId, Guid? wbsId) =>
+        Slots.FirstOrDefault(s => s.LaborCategoryId == categoryId && s.WbsElementId == wbsId) is { Gap: > 0 } slot ? slot.Gap : null;
+
+    private string? BudgetedOn(Guid categoryId) => Gap(categoryId, _wbsId) is { } gap ? ResourcingFormat.Hours(gap) : null;
+
+    private string PersonLabel(Guid id) => _candidates.FirstOrDefault(c => c.EmployeeId == id) is { } c ? $"{c.Name} ({c.LaborCategory ?? "no labor category"})" : "";
+
+    private async Task LoadCandidatesAsync()
+    {
+        try
+        {
+            _candidates = await Staffing.ListCandidatesAsync(ProjectId, _categoryId);
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _candidates = [];
+        }
+    }
+
+    private async Task OnCategoryChangedAsync(Guid? id)
+    {
+        _categoryId = id;
+        await LoadCandidatesAsync();
+        SuggestWeeks();
+        await CheckAsync();
+    }
+
+    private async Task OnWbsChangedAsync(Guid? id)
+    {
+        _wbsId = id;
+        SuggestWeeks();
+        await CheckAsync();
+    }
+
+    private async Task OnPersonChangedAsync(Guid id)
+    {
+        _employeeId = id;
+        if (_candidates.FirstOrDefault(c => c.EmployeeId == id) is { } person)
+        {
+            // Default to the category they bill as, and to the hours they have free.
+            if (_categoryId is null && person.LaborCategoryId is { } own)
+            {
+                _categoryId = own;
+                await LoadCandidatesAsync();
+            }
+
+            var free = Math.Max(0, person.StandardHoursPerWeek - person.BookedHoursPerWeek);
+            _hours = free > 0 ? free : person.StandardHoursPerWeek;
+            SuggestWeeks();
+        }
+
+        await CheckAsync();
+    }
+
+    private async Task OnWeekChangedAsync(DateTime? date)
+    {
+        _week = date;
+        await CheckAsync();
+    }
+
+    private async Task OnHoursChangedAsync(decimal hours)
+    {
+        _hours = hours;
+        await CheckAsync();
+    }
+
+    private async Task OnWeeksChangedAsync(int weeks)
+    {
+        _weeks = weeks;
+        await CheckAsync();
+    }
+
+    /// <summary>Enough weeks at these hours to fill the gap (one week at least, a year at most).</summary>
+    private void SuggestWeeks()
+    {
+        if (Gap(_categoryId, _wbsId) is { } gap && _hours > 0)
+        {
+            _weeks = (int)Math.Clamp(Math.Ceiling(gap / _hours), 1, 52);
+        }
+    }
+
+    private async Task CheckAsync()
+    {
+        if (_employeeId == Guid.Empty || _week is null)
+        {
+            _check = null;
+            return;
+        }
+
+        try
+        {
+            _check = await Staffing.CheckAsync(new StaffingCheckRequest(ProjectId, _employeeId, _wbsId, _categoryId, DateOnly.FromDateTime(_week.Value), _hours, Math.Max(1, _weeks)));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _check = null;
+        }
+    }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(new SaveAllocationRequest(
+        _employeeId, ProjectId, DateOnly.FromDateTime(_week!.Value), _hours, null, _wbsId, _categoryId, Math.Max(1, _weeks))));
+}

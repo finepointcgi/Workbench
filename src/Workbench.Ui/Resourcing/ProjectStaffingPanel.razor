@@ -1,0 +1,329 @@
+@* A project's staffing against its labor budget: budgeted, staffed and the gap for each labor category, then each WBS
+   element × labor category with the people on it and a Staff button. Used by the project page's Staffing tab. *@
+@inject IProjectStaffingService Staffing
+@inject IResourceAllocationService Allocations
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h6" HtmlTag="h2">Budget and staffing</MudText>
+    <MudSpacer />
+    @if (_canManage && _plan is { HasLaborBudget: true })
+    {
+        @if (_hasPlanSheet)
+        {
+            <MudTooltip Text="Staff the people assigned to tasks in the plan, over the tasks' dates. Replaces what was filled from the plan before; people you staffed here are kept.">
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AccountTree" OnClick="GenerateAsync" Disabled="_busy" data-testid="generate-from-plan">Fill from the plan</MudButton>
+            </MudTooltip>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => StaffAsync(null, null)" Disabled="_busy" data-testid="staff-person-button">Staff a person</MudButton>
+    }
+</MudStack>
+<MudText Typo="Typo.body2" HtmlTag="div" Class="mud-text-secondary mb-3" Style="max-width: 72ch">
+    The <Term Key="budget">budget</Term> says how many hours of each <Term Key="labor-category">labor category</Term> the work needs.
+    <Term Key="staffing">Staffing</Term> fills those hours with named people who bill as that category. Timesheets then charge
+    the actual hours, which count against the same labor category.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">@_error</MudAlert>
+}
+else if (_plan is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (!_plan.HasLaborBudget)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="staffing-no-budget">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3">Budget by labor category first</MudText>
+        <MudText Class="mud-text-secondary mb-3">
+            There's nothing to staff yet. Add hours by labor category to each WBS element on the Budget tab, for example
+            1,200 Systems Engineer II hours on 1.2. Then come back here and staff people into those hours.
+        </MudText>
+        <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Calculate">Go to the budget</MudButton>
+    </MudPaper>
+    @if (_plan.Slots.Count > 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Already staffed without a budget:</MudText>
+        @SlotTable(_plan.Slots)
+    }
+}
+else
+{
+    @foreach (var note in _plan.Notes)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+    }
+    @if (_plan.Overbooked.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="overbooked">
+            Booked past their hours in the next weeks (all projects):
+            @string.Join("; ", _plan.Overbooked.Select(p => $"{p.Name}, {ResourcingFormat.Hours(p.WorstAllocated)} of {ResourcingFormat.Hours(p.WorstCapacity)} h the week of {p.FirstWeek:MMM d}"))
+        </MudAlert>
+    }
+
+    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-1">
+        Budget: @(_plan.BudgetName ?? "none"). Hours left = budgeted − charged on approved timesheets. Staffed hours count from this week on.
+    </MudText>
+    <MudSimpleTable Dense="true" Outlined="true" Class="mb-5" data-testid="staffing-categories">
+        <thead>
+            <tr>
+                <th scope="col">Labor category</th>
+                <th scope="col" style="text-align: right">Budgeted</th>
+                <th scope="col" style="text-align: right">Charged</th>
+                <th scope="col" style="text-align: right">Left</th>
+                <th scope="col" style="text-align: right">Staffed</th>
+                <th scope="col" style="min-width: 160px">Gap</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in _plan.Categories)
+            {
+                <tr data-category="@c.LaborCategory">
+                    <th scope="row" style="font-weight: 500">@c.LaborCategory</th>
+                    <td style="text-align: right">@ResourcingFormat.Hours(c.BudgetHours)</td>
+                    <td style="text-align: right">@ResourcingFormat.Hours(c.ChargedHours)</td>
+                    <td style="text-align: right">@ResourcingFormat.Hours(c.LeftHours)</td>
+                    <td style="text-align: right">@ResourcingFormat.Hours(c.StaffedHours)</td>
+                    <td>
+                        <MudProgressLinear Value="@Bar(c.StaffedHours, c.LeftHours)" Color="@GapColor(c.Status)" Rounded="true" Size="Size.Small"
+                                           aria-label="@($"{c.LaborCategory}: {ResourcingFormat.Hours(c.StaffedHours)} of {ResourcingFormat.Hours(c.LeftHours)} hours staffed")" />
+                        <span class="@GapClass(c.Status)" style="font-size: 0.8rem">@GapText(c.Status, c.Gap)</span>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mb-1">By WBS element</MudText>
+    @SlotTable(_plan.Slots)
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    /// <summary>Raised after staffing changes, so the page can refresh its setup steps and alerts.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private ProjectStaffingPlanDto? _plan;
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private bool _canManage;
+    private bool _hasPlanSheet;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _canManage = await Allocations.CanManageAsync(ProjectId);
+            _hasPlanSheet = (await Projects.GetProjectAsync(ProjectId))?.SheetId is not null;
+            _wbs = await Projects.ListWbsAsync(ProjectId);
+            _categories = await People.ListLaborCategoriesAsync();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _canManage = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _plan = await Staffing.GetPlanAsync(ProjectId);
+            _error = null;
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private RenderFragment SlotTable(IReadOnlyList<StaffingSlotDto> slots) => @<MudSimpleTable Dense="true" Outlined="true" Hover="true" data-testid="staffing-slots">
+        <thead>
+            <tr>
+                <th scope="col"><Term Key="wbs">WBS</Term> and labor category</th>
+                <th scope="col" style="text-align: right">Left</th>
+                <th scope="col" style="text-align: right">Staffed</th>
+                <th scope="col">Gap</th>
+                <th scope="col">People</th>
+                @if (_canManage)
+                {
+                    <th scope="col"><span class="wb-sr-only">Actions</span></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in slots)
+            {
+                <tr data-slot="@($"{s.WbsCode ?? "project"}|{s.LaborCategory}")">
+                    <td>
+                        <div>@s.WbsLabel</div>
+                        <div class="mud-text-secondary" style="font-size: 0.8rem">@s.LaborCategory</div>
+                    </td>
+                    <td style="text-align: right">@ResourcingFormat.Hours(s.LeftHours)</td>
+                    <td style="text-align: right">@ResourcingFormat.Hours(s.StaffedHours)</td>
+                    <td class="@GapClass(s.Status)" style="white-space: nowrap">@SlotGapText(s)</td>
+                    <td>
+                        @if (s.People.Count == 0)
+                        {
+                            <span class="mud-text-secondary">Nobody yet</span>
+                        }
+                        @foreach (var p in s.People)
+                        {
+                            var label = $"{p.Name} · {ResourcingFormat.Hours(p.Hours)} h{(p.Through is { } t ? $" to {t:MMM d}" : "")}";
+                            <MudTooltip Text="@(p.Qualifies ? $"Bills as {s.LaborCategory}" : $"Doesn't bill as {s.LaborCategory}. Check they qualify.")">
+                                @if (_canManage)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(p.Qualifies ? Color.Default : Color.Warning)"
+                                             Icon="@(p.Qualifies ? null : Icons.Material.Filled.WarningAmber)" OnClose="() => RemoveAsync(s, p)"
+                                             CloseIcon="@Icons.Material.Filled.Close">@label</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(p.Qualifies ? Color.Default : Color.Warning)"
+                                             Icon="@(p.Qualifies ? null : Icons.Material.Filled.WarningAmber)">@label</MudChip>
+                                }
+                            </MudTooltip>
+                        }
+                    </td>
+                    @if (_canManage)
+                    {
+                        <td style="text-align: right">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                                       OnClick="() => StaffAsync(s.WbsElementId, s.LaborCategoryId)" Disabled="_busy"
+                                       aria-label="@($"Staff {s.LaborCategory} on {s.WbsLabel}")">Staff</MudButton>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>;
+
+    private static double Bar(decimal staffed, decimal left) => left <= 0 ? (staffed > 0 ? 100 : 0) : (double)Math.Clamp(staffed / left * 100m, 0m, 100m);
+
+    private static Color GapColor(StaffingGapStatus status) => status switch
+    {
+        StaffingGapStatus.Understaffed => Color.Warning,
+        StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted => Color.Error,
+        _ => Color.Success,
+    };
+
+    private static string GapClass(StaffingGapStatus status) => status switch
+    {
+        StaffingGapStatus.Understaffed => "mud-warning-text",
+        StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted => "mud-error-text",
+        _ => "mud-text-secondary",
+    };
+
+    public static string GapText(StaffingGapStatus status, decimal gap) => status switch
+    {
+        StaffingGapStatus.Understaffed => $"{ResourcingFormat.Hours(gap)} h unstaffed",
+        StaffingGapStatus.Overstaffed => $"{ResourcingFormat.Hours(-gap)} h over budget",
+        StaffingGapStatus.NotBudgeted => "No budget",
+        _ => "Staffed",
+    };
+
+    private static string SlotGapText(StaffingSlotDto s) => s switch
+    {
+        { WbsElementId: null, Status: StaffingGapStatus.Balanced } => "Counts toward the category",
+        { BudgetHours: 0, StaffedHours: 0, ChargedHours: > 0 } => $"{ResourcingFormat.Hours(s.ChargedHours)} h charged, no budget",
+        _ => GapText(s.Status, s.Gap),
+    };
+
+    private async Task StaffAsync(Guid? wbsId, Guid? categoryId)
+    {
+        var parameters = new DialogParameters<StaffPersonDialog>
+        {
+            { d => d.ProjectId, ProjectId },
+            { d => d.Wbs, _wbs },
+            { d => d.Categories, _categories },
+            { d => d.Slots, _plan?.Slots ?? [] },
+            { d => d.WbsElementId, wbsId },
+            { d => d.LaborCategoryId, categoryId },
+        };
+        var dialog = await DialogService.ShowAsync<StaffPersonDialog>("Staff a person", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveAllocationRequest request })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var saved = await Allocations.CreateAsync(request);
+            Snackbar.Add($"Staffed {saved.FirstOrDefault()?.EmployeeName} for {saved.Count} {(saved.Count == 1 ? "week" : "weeks")} ({ResourcingFormat.Hours(saved.Sum(a => a.Hours))} h).", Severity.Success);
+        });
+    }
+
+    /// <summary>Takes the person off this WBS element and labor category from this week on (earlier weeks are history).</summary>
+    private async Task RemoveAsync(StaffingSlotDto slot, StaffedPersonDto person)
+    {
+        var confirm = await DialogService.ShowMessageBoxAsync("Remove from staffing",
+            $"Take {person.Name} off {slot.LaborCategory} on {slot.WbsLabel} from this week on ({ResourcingFormat.Hours(person.Hours)} h)?",
+            yesText: "Remove", cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var thisWeek = ResourcingFormat.ThisWeek;
+            var rows = await Allocations.ListAsync(new AllocationQuery(thisWeek, thisWeek.AddYears(2), ProjectId, person.EmployeeId));
+            foreach (var row in rows.Where(r => r.WbsElementId == slot.WbsElementId && (r.LaborCategoryId ?? slot.LaborCategoryId) == slot.LaborCategoryId))
+            {
+                await Allocations.DeleteAsync(row.Id);
+            }
+
+            Snackbar.Add($"Removed {person.Name} from {slot.LaborCategory} on {slot.WbsLabel}.", Severity.Success);
+        });
+    }
+
+    private async Task GenerateAsync()
+    {
+        var confirm = await DialogService.ShowMessageBoxAsync("Fill staffing from the plan",
+            "Staff the people assigned to tasks in the plan sheet, over each task's dates (its Planned hours, or their standard day). This replaces what was filled from the plan before; people you staffed here are kept.",
+            yesText: "Fill from the plan", cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var result = await Allocations.GenerateFromPlanAsync(ProjectId);
+            Snackbar.Add($"Staffed {ResourcingFormat.Hours(result.TotalHours)} h from the plan.", Severity.Success);
+            foreach (var skipped in result.Skipped.Take(5))
+            {
+                Snackbar.Add(skipped, Severity.Warning);
+            }
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+        await Changed.InvokeAsync();
+    }
+}

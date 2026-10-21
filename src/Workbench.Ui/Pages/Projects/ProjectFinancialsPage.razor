@@ -64,7 +64,7 @@ else
         <MudSelect T="Guid?" Label="Estimate to complete" Value="_forecastVersionId" ValueChanged="OnForecastChangedAsync" Dense="true" Style="min-width: 260px"
                    ToStringFunc="ForecastLabel">
             <MudSelectItem T="Guid?" Value="null">Remaining budget</MudSelectItem>
-            <MudSelectItem T="Guid?" Value="AllocationEtc">Allocation-based (resourcing)</MudSelectItem>
+            <MudSelectItem T="Guid?" Value="AllocationEtc">From staffing (staffed hours × cost rates)</MudSelectItem>
             @foreach (var v in _versions.Where(v => v.Kind == BudgetVersionKind.Forecast))
             {
                 <MudSelectItem T="Guid?" Value="v.Id">Forecast: @v.Name</MudSelectItem>
@@ -243,7 +243,7 @@ else
     private static readonly Guid AllocationEtc = new("a110ca7e-0000-4000-8000-000000000e7c");
 
     private string ForecastLabel(Guid? id) =>
-        id is null ? "Remaining budget" : id == AllocationEtc ? "Allocation-based (resourcing)" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"Forecast: {v.Name}" : "";
+        id is null ? "Remaining budget" : id == AllocationEtc ? "From staffing" : _versions.FirstOrDefault(v => v.Id == id) is { } v ? $"Forecast: {v.Name}" : "";
 
     private async Task ExportWbsAsync() => await DownloadAsync(() => Exports.ExportWbsCsvAsync(ProjectId, _budgetVersionId, _forecastVersionId == AllocationEtc ? null : _forecastVersionId));
 

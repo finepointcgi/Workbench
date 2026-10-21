@@ -186,7 +186,7 @@ public sealed class PlainLanguageTests
         {
             Assert.Equal(staffing, page.FindAll("[data-testid=resourcing-tabs]").Count == 1);
             Assert.Equal(staffing, page.Markup.Contains("Project staffing"));
-            Assert.Contains("My allocations", page.Markup);
+            Assert.Contains(staffing ? "My staffing" : "Where you're staffed", page.Markup);
         });
         if (!staffing)
         {

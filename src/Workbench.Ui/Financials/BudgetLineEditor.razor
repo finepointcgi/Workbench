@@ -82,7 +82,7 @@
             }
             @if (_labor.Count == 0)
             {
-                <tr><td colspan="20" class="mud-text-secondary">No labor lines.</td></tr>
+                <tr><td colspan="20" class="mud-text-secondary">No labor hours yet. Pick a WBS element and a labor category below, add the row, then type the hours.</td></tr>
             }
         </tbody>
     </MudSimpleTable>
@@ -91,7 +91,7 @@
 @if (!ReadOnly)
 {
     <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-6" Wrap="Wrap.Wrap">
-        <MudSelect T="Guid?" @bind-Value="_newWbs" Label="WBS leaf" Dense="true" Style="min-width: 240px" ToStringFunc="WbsLabel">
+        <MudSelect T="Guid?" @bind-Value="_newWbs" Label="WBS element" Dense="true" Style="min-width: 240px" ToStringFunc="WbsLabel">
             @foreach (var w in Leaves)
             {
                 <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
