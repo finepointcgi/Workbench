@@ -24,6 +24,7 @@ public static class PerDiemResourcingPermissionRegistration
         services.Decorate<IResourceAllocationService, PermissionCheckingResourceAllocationService>();
         services.Decorate<IResourcePlanningService, PermissionCheckingResourcePlanningService>();
         services.Decorate<IAllocationForecastService, PermissionCheckingAllocationForecastService>();
+        services.Decorate<IProjectStaffingService, PermissionCheckingProjectStaffingService>();
         return services;
     }
 }
@@ -188,6 +189,35 @@ public sealed class PermissionCheckingResourcePlanningService(IResourcePlanningS
     {
         rules.Access.RequireSignedIn();
         return inner.FindAvailablePeopleAsync(query, cancellationToken);
+    }
+}
+
+/// <summary>Budget against staffing: Finance, administrators, resource managers and the project's manager (like project staffing).</summary>
+public sealed class PermissionCheckingProjectStaffingService(IProjectStaffingService inner, ResourcingAccess rules) : IProjectStaffingService
+{
+    public async Task<ProjectStaffingPlanDto> GetPlanAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireReadProjectAsync(projectId, cancellationToken);
+        return await inner.GetPlanAsync(projectId, cancellationToken);
+    }
+
+    public async Task<ProjectSetupProgressDto> GetSetupProgressAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireReadProjectAsync(projectId, cancellationToken);
+        return await inner.GetSetupProgressAsync(projectId, cancellationToken);
+    }
+
+    public async Task<StaffingCheckDto> CheckAsync(StaffingCheckRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await rules.RequireReadProjectAsync(request.ProjectId, cancellationToken);
+        return await inner.CheckAsync(request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<StaffingCandidateDto>> ListCandidatesAsync(Guid projectId, Guid? laborCategoryId, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireReadProjectAsync(projectId, cancellationToken);
+        return await inner.ListCandidatesAsync(projectId, laborCategoryId, cancellationToken);
     }
 }
 

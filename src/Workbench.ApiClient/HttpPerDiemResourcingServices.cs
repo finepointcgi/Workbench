@@ -150,6 +150,24 @@ file static class Query
     }
 }
 
+public sealed class HttpProjectStaffingService(HttpClient http) : IProjectStaffingService
+{
+    private const string Root = "api/v1/resourcing";
+
+    public async Task<ProjectStaffingPlanDto> GetPlanAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/projects/{projectId}/staffing-plan", cancellationToken)).ReadAsync<ProjectStaffingPlanDto>(cancellationToken);
+
+    public async Task<ProjectSetupProgressDto> GetSetupProgressAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/projects/{projectId}/setup-progress", cancellationToken)).ReadAsync<ProjectSetupProgressDto>(cancellationToken);
+
+    public async Task<StaffingCheckDto> CheckAsync(StaffingCheckRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/staffing-check", request, cancellationToken)).ReadAsync<StaffingCheckDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<StaffingCandidateDto>> ListCandidatesAsync(Guid projectId, Guid? laborCategoryId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Query.With($"{Root}/projects/{projectId}/staffing-candidates", ("laborCategoryId", laborCategoryId?.ToString())), cancellationToken))
+            .ReadAsync<List<StaffingCandidateDto>>(cancellationToken);
+}
+
 public static class PerDiemResourcingClientRegistration
 {
     public static IServiceCollection AddPerDiemResourcingClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -159,6 +177,7 @@ public static class PerDiemResourcingClientRegistration
         services.AddHttpClient<IResourceAllocationService, HttpResourceAllocationService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IResourcePlanningService, HttpResourcePlanningService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IAllocationForecastService, HttpAllocationForecastService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IProjectStaffingService, HttpProjectStaffingService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }
