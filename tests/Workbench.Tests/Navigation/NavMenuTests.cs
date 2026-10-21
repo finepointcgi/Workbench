@@ -9,7 +9,7 @@ namespace Workbench.Tests.Navigation;
 /// <summary>The menu is shaped by role: a few sections, each showing only what the user can use.</summary>
 public sealed class NavMenuTests
 {
-    private static readonly string[] EmployeeLinks = ["", "time", "expenses", "travel", "leave", "purchasing/requisitions", "projects", "hr/me", "hr/benefits/me", "hr", "hr/org-chart", "sheets", "dashboards", "reports", "reports/writer"];
+    private static readonly string[] EmployeeLinks = ["", "time", "expenses", "receipts", "travel", "leave", "purchasing/requisitions", "projects", "hr/me", "hr/benefits/me", "hr", "hr/org-chart", "sheets", "dashboards", "reports", "reports/writer"];
 
     // Approval pages are reached from the one inbox; none of them is a menu link any more.
     private static readonly string[] OldApprovalLinks = ["time/approvals", "odcs/approvals", "purchasing/approvals"];

@@ -97,9 +97,13 @@ else
                     }
                 </MudTd>
                 <MudTd DataLabel="Receipt">
-                    @if (context.ReceiptFileId is not null)
+                    @if (context.ReceiptFileId is { } fileId)
                     {
                         <MudLink Href="@Odcs.GetReceiptUrl(context.Id)" Typo="Typo.body2" download="@context.ReceiptFileName">@context.ReceiptFileName</MudLink>
+                        @if (SharedWith(context) is > 0 and var others)
+                        {
+                            <div class="mud-text-secondary" style="font-size:0.8rem">Also backs @others other line@(others == 1 ? "" : "s")</div>
+                        }
                     }
                     else if (context.Amount >= _threshold)
                     {
@@ -107,7 +111,8 @@ else
                     }
                     @if (report.IsEditable)
                     {
-                        <ReceiptUpload Label="@(context.ReceiptFileId is null ? "Attach receipt" : "Replace")" OnUpload="(name, stream) => UploadReceiptAsync(context, name, stream)" />
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.AttachFile"
+                                   OnClick="() => EditLineAsync(context)" data-testid="line-attach-receipt">@(context.ReceiptFileId is null ? "Attach receipt" : "Replace")</MudButton>
                     }
                 </MudTd>
                 <MudTd Style="white-space:nowrap">
@@ -199,7 +204,7 @@ else
         }
     }
 
-    private async Task<SaveExpenseLineRequest?> AskLineAsync(OdcEntryDto? existing)
+    private async Task<ExpenseLineDialogResult?> AskLineAsync(OdcEntryDto? existing)
     {
         var parameters = new DialogParameters<ExpenseLineDialog>
         {
@@ -207,39 +212,52 @@ else
             { d => d.Existing, existing },
             { d => d.DefaultDate, _detail.Report.TripStart },
             { d => d.ReceiptThreshold, _threshold },
+            { d => d.ReportId, ReportId },
         };
         var dialog = await DialogService.ShowAsync<ExpenseLineDialog>(existing is null ? "Add expense line" : "Edit expense line", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
-        return await dialog.Result is { Canceled: false, Data: SaveExpenseLineRequest request } ? request : null;
+        return await dialog.Result is { Canceled: false, Data: ExpenseLineDialogResult result } ? result : null;
     }
 
     private async Task AddLineAsync()
     {
-        if (await AskLineAsync(null) is { } request)
+        if (await AskLineAsync(null) is { } result)
         {
-            await RunAsync(() => Reports.AddLineAsync(ReportId, request));
+            await RunAsync(async () =>
+            {
+                await Reports.AddLineAsync(ReportId, result.Line);
+                await AddExtraLinesAsync(result);
+            }, Added(result));
         }
     }
 
     private async Task EditLineAsync(OdcEntryDto line)
     {
-        if (await AskLineAsync(line) is { } request)
+        if (await AskLineAsync(line) is { } result)
         {
-            await RunAsync(() => Reports.UpdateLineAsync(ReportId, line.Id, request));
+            await RunAsync(async () =>
+            {
+                await Reports.UpdateLineAsync(ReportId, line.Id, result.Line);
+                await AddExtraLinesAsync(result);
+            }, result.ExtraLines.Count > 0 ? Added(result) : null);
         }
     }
 
-    private Task RemoveLineAsync(OdcEntryDto line) => RunAsync(() => Reports.RemoveLineAsync(ReportId, line.Id));
-
-    private async Task UploadReceiptAsync(OdcEntryDto line, string fileName, Stream content)
+    // Other charges from the same folio (parking, ...) become their own lines, backed by the same receipt.
+    private async Task AddExtraLinesAsync(ExpenseLineDialogResult result)
     {
-        await Reports.AttachReceiptAsync(ReportId, line.Id, fileName, content);
-        Snackbar.Add($"Attached {fileName}.", Severity.Success);
-        await LoadAsync();
-
-        // Called from ReceiptUpload's delegate, which doesn't re-render this page by itself.
-        StateHasChanged();
+        foreach (var extra in result.ExtraLines)
+        {
+            await Reports.AddLineAsync(ReportId, extra);
+        }
     }
+
+    private static string? Added(ExpenseLineDialogResult result) =>
+        result.ExtraLines.Count == 0 ? null : $"Added {result.ExtraLines.Count + 1} lines from the same receipt.";
+
+    private int SharedWith(OdcEntryDto line) => _detail!.Lines.Count(l => l.Id != line.Id && l.ReceiptFileId == line.ReceiptFileId);
+
+    private Task RemoveLineAsync(OdcEntryDto line) => RunAsync(() => Reports.RemoveLineAsync(ReportId, line.Id));
 
     private async Task EditReportAsync()
     {

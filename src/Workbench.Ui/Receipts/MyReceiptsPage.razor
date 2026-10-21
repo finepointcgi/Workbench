@@ -1,0 +1,224 @@
+@page "/receipts"
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Collaboration
+@inject IReceiptLibraryService Library
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>My receipts · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" HtmlTag="h1">My receipts</MudText>
+    <MudSpacer />
+    <MudFileUpload T="IBrowserFile" @ref="_upload" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="_uploading" Class="mt-0">
+        <CustomContent>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync"
+                       Disabled="_uploading" data-testid="receipts-upload">@(_uploading ? "Uploading…" : "Upload receipt")</MudButton>
+        </CustomContent>
+        <SelectedTemplate />
+    </MudFileUpload>
+</MudStack>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Receipts, hotel folios and card statements you've uploaded. Each file is stored once and can back several expense lines.
+    Files that aren't attached to anything are listed first. A file attached to a line can't be deleted.
+</MudText>
+
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="4">
+            <MudTextField T="string" @bind-Value="_search" Label="Search by name, vendor or place" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" DebounceInterval="300" OnDebounceIntervalElapsed="_ => LoadAsync()" Clearable="true" OnClearButtonClick="_ => LoadAsync()"
+                          data-testid="receipts-search" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudDatePicker Label="From" Date="_from" DateChanged="d => FilterAsync(() => _from = d)" Editable="true" Clearable="true" AutoClose="true" DateFormat="MM/dd/yyyy" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudDatePicker Label="To" Date="_to" DateChanged="d => FilterAsync(() => _to = d)" Editable="true" Clearable="true" AutoClose="true" DateFormat="MM/dd/yyyy" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudNumericField T="decimal?" Label="Amount from" Value="_min" ValueChanged="v => FilterAsync(() => _min = v)" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudNumericField T="decimal?" Label="Amount to" Value="_max" ValueChanged="v => FilterAsync(() => _max = v)" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudSwitch T="bool" Value="_unattachedOnly" ValueChanged="v => FilterAsync(() => _unattachedOnly = v)" Color="Color.Primary" Label="Only files not attached to a line" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable T="ReceiptDto" Items="_receipts" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="My receipts" data-testid="receipts-table">
+    <HeaderContent>
+        <MudTh>File</MudTh>
+        <MudTh>What</MudTh>
+        <MudTh>Vendor</MudTh>
+        <MudTh>Date</MudTh>
+        <MudTh Style="text-align:right">Total</MudTh>
+        <MudTh>Used on</MudTh>
+        <MudTh><span class="mud-sr-only">Actions</span></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="File">
+            <MudLink Href="@Library.GetContentUrl(context.Id)" download="@context.FileName" Typo="Typo.body2">@context.FileName</MudLink>
+            <div class="mud-text-secondary" style="font-size:0.8rem">@ReceiptFormat.Size(context.SizeBytes) · uploaded @context.UploadedAtUtc.ToString("MMM d, yyyy", CultureInfo.GetCultureInfo("en-US"))</div>
+        </MudTd>
+        <MudTd DataLabel="What">@ReceiptFormat.Kind(context.Kind)</MudTd>
+        <MudTd DataLabel="Vendor">@(context.Vendor ?? "—")@(context.Location is { } where ? $" · {where}" : "")</MudTd>
+        <MudTd DataLabel="Date">@ReceiptFormat.Date(context.DocumentDate)</MudTd>
+        <MudTd DataLabel="Total" Style="text-align:right">@ReceiptFormat.Money(context.Total)</MudTd>
+        <MudTd DataLabel="Used on">
+            @if (context.Uses.Count == 0)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Not attached</MudChip>
+            }
+            else
+            {
+                @foreach (var use in context.Uses)
+                {
+                    <div style="font-size:0.85rem">
+                        @if (use.ExpenseReportId is { } reportId)
+                        {
+                            <MudLink Href="@($"expenses/{reportId}")" Typo="Typo.body2">@(use.ExpenseReportTitle ?? "Expense report")</MudLink>
+                        }
+                        <span class="mud-text-secondary"> · @Short(use.Description) · @OdcFormat.Money(use.Amount)</span>
+                    </div>
+                }
+            }
+        </MudTd>
+        <MudTd Style="white-space:nowrap">
+            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" OnClick="() => EditAsync(context)" aria-label="@($"Edit details of {context.FileName}")" />
+            <MudTooltip Text="@(context.IsInUse ? "Attached to a line, so it can't be deleted" : "Delete")">
+                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" OnClick="() => DeleteAsync(context)" Disabled="context.IsInUse"
+                               aria-label="@($"Delete {context.FileName}")" />
+            </MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Typo="Typo.body2" data-testid="receipts-empty">
+            @(_filtered ? "No receipts match these filters." : "No receipts yet. Upload one here, or attach one to an expense line and it's kept here too.")
+        </MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private IReadOnlyList<ReceiptDto> _receipts = [];
+    private bool _loading = true;
+    private bool _uploading;
+    private string? _search;
+    private DateTime? _from;
+    private DateTime? _to;
+    private decimal? _min;
+    private decimal? _max;
+    private bool _unattachedOnly;
+    private MudFileUpload<IBrowserFile>? _upload;
+
+    private bool _filtered => !string.IsNullOrWhiteSpace(_search) || _from is not null || _to is not null || _min is not null || _max is not null || _unattachedOnly;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static string Short(string text) => text.Length <= 32 ? text : text[..31].TrimEnd() + "…";
+
+    private async Task FilterAsync(Action set)
+    {
+        set();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _receipts = await Library.ListMineAsync(new ReceiptQuery(_search, OdcFormat.ToDateOnly(_from), OdcFormat.ToDateOnly(_to), _min, _max, _unattachedOnly));
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load your receipts: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!AttachmentRules.IsAllowed(file.Name) || file.Size > AttachmentRules.MaxSizeBytes)
+        {
+            Snackbar.Add(AttachmentRules.IsAllowed(file.Name)
+                ? $"{file.Name} is larger than {AttachmentRules.MaxSizeBytes / (1024 * 1024)} MB."
+                : $"\"{Path.GetExtension(file.Name)}\" files can't be uploaded.", Severity.Warning);
+        }
+        else
+        {
+            _uploading = true;
+            StateHasChanged();
+            try
+            {
+                await using var stream = file.OpenReadStream(AttachmentRules.MaxSizeBytes);
+                var reading = await Library.UploadAsync(file.Name, stream);
+                Snackbar.Add(reading.Extraction.Method == ReceiptReadMethod.None
+                    ? $"Uploaded {file.Name}. Nothing could be read from it; add its details with Edit."
+                    : $"Uploaded {file.Name}: {ReceiptFormat.Kind(reading.Receipt.Kind).ToLowerInvariant()}{(reading.Receipt.Vendor is { } v ? $" from {v}" : "")}, {ReceiptFormat.Money(reading.Receipt.Total)}.",
+                    Severity.Success);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (OdcFormat.IsExpected(ex))
+            {
+                Snackbar.Add($"Couldn't upload {file.Name}: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _uploading = false;
+            }
+        }
+
+        if (_upload is not null)
+        {
+            await _upload.ClearAsync();
+        }
+    }
+
+    private async Task EditAsync(ReceiptDto receipt)
+    {
+        var parameters = new DialogParameters<ReceiptDetailsDialog> { { d => d.Receipt, receipt } };
+        var dialog = await DialogService.ShowAsync<ReceiptDetailsDialog>($"Details of {receipt.FileName}", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: UpdateReceiptRequest request })
+        {
+            try
+            {
+                await Library.UpdateAsync(receipt.Id, request);
+                await LoadAsync();
+            }
+            catch (Exception ex) when (OdcFormat.IsExpected(ex))
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteAsync(ReceiptDto receipt)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete receipt", $"Delete {receipt.FileName} from your receipts?", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Library.DeleteAsync(receipt.Id);
+            Snackbar.Add($"Deleted {receipt.FileName}.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

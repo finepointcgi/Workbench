@@ -157,7 +157,13 @@ public sealed record SaveExpenseLineRequest(
     /// the date incurred.
     /// </summary>
     string? CurrencyCode = null,
-    decimal? ExchangeRate = null);
+    decimal? ExchangeRate = null,
+
+    /// <summary>
+    /// Added by receipts: a file from the employee's receipt library (<c>IReceiptLibraryService</c>) to attach as the line's
+    /// receipt, so a receipt uploaded once (for example to fill the line) isn't uploaded again. Null keeps the current receipt.
+    /// </summary>
+    Guid? ReceiptFileId = null);
 
 /// <summary>The signed-in employee's expense reports.</summary>
 public interface IExpenseReportService

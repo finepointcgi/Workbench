@@ -201,7 +201,10 @@ public sealed record AttachCardChargeRequest(
     OdcCostType Type = OdcCostType.Travel,
     string? Description = null,
     bool IsUnallowable = false,
-    string? UnallowableReason = null);
+    string? UnallowableReason = null,
+
+    /// <summary>Added by receipts: a file from the cardholder's receipt library to attach to the new line.</summary>
+    Guid? ReceiptFileId = null);
 
 /// <summary>The signed-in cardholder's cards and charges ("unassigned card charges").</summary>
 public interface ICardChargeService

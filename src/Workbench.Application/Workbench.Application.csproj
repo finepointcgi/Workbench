@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
     <!-- Imports: reads .xlsx exports (Costpoint reports, Smartsheet sheets) incl. outline levels and indentation. MIT. -->
     <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <!-- Receipts: reads the text layer of receipt and hotel folio PDFs to suggest expense line values. Apache-2.0. -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
 
   <ItemGroup>

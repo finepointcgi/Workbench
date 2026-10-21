@@ -92,6 +92,7 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
         await ApplyAsync(db, report, line, request, cancellationToken);
         db.Set<OdcEntry>().Add(line);
         workflow.Audit.Record(db, OdcWorkflow.OdcEntityType, line.Id, "Created", after: OdcWorkflow.Snapshot(line));
+        await AttachLibraryReceiptAsync(db, line, request.ReceiptFileId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return await OdcWorkflow.ToDtoAsync(db, line, cancellationToken);
     }
@@ -104,6 +105,7 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
         var before = OdcWorkflow.Snapshot(line);
         await ApplyAsync(db, report, line, request, cancellationToken);
         workflow.Audit.Record(db, OdcWorkflow.OdcEntityType, line.Id, "Updated", before, OdcWorkflow.Snapshot(line));
+        await AttachLibraryReceiptAsync(db, line, request.ReceiptFileId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return await OdcWorkflow.ToDtoAsync(db, line, cancellationToken);
     }
@@ -177,6 +179,15 @@ public sealed class ExpenseReportService(IWorkbenchDbContextFactory dbFactory, O
         }
         return (await OdcWorkflow.ToDetailAsync(db, report, cancellationToken)).Report;
     }
+
+    /// <summary>
+    /// Attaches a file from the employee's receipt library (the receipt that filled the line, or one chosen from "My
+    /// receipts"): the line points at the stored file, nothing is copied.
+    /// </summary>
+    private Task AttachLibraryReceiptAsync(IWorkbenchDbContext db, OdcEntry line, Guid? fileId, CancellationToken cancellationToken) =>
+        fileId is { } id
+            ? Receipts.ReceiptLibrary.AttachAsync(db, workflow.Audit, workflow.Actor, line, id, workflow.UtcNow, cancellationToken)
+            : Task.CompletedTask;
 
     internal static async Task EnsureOwnerAsync(IWorkbenchDbContext db, OdcWorkflow workflow, ExpenseReport report, CancellationToken cancellationToken)
     {
