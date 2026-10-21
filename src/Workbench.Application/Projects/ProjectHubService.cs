@@ -20,6 +20,7 @@ public sealed class ProjectHubService(
     IWorkbenchDbContextFactory dbFactory,
     ProjectHubAccess hubAccess,
     ICeilingService ceilings,
+    Resourcing.ProjectStaffingService staffing,
     TimeProvider clock) : IProjectHubService
 {
     private const int DueSoonDays = 14;
@@ -106,6 +107,7 @@ public sealed class ProjectHubService(
             }
 
             alerts.AddRange(await CeilingAlertsAsync(project.Id, cancellationToken));
+            alerts.AddRange(StaffingAlerts(await staffing.GetPlanAsync(project.Id, cancellationToken)));
         }
 
         if (schedule is not null)
@@ -218,6 +220,15 @@ public sealed class ProjectHubService(
             funding?.CeilingValue, funding?.FundedValue, funding?.FundedRemaining,
             funding is { CeilingValue: > 0 } ? funding.FundedValue / funding.CeilingValue : null,
             fundingUsed, elapsed, health, reasons);
+    }
+
+    /// <summary>Budgeted hours nobody is staffed on, staffing over the budget and people booked past their hours.</summary>
+    internal static IEnumerable<ProjectAlertDto> StaffingAlerts(Contracts.Resourcing.ProjectStaffingPlanDto plan)
+    {
+        foreach (var item in Resourcing.StaffingTodoProvider.For(plan).Where(i => !i.Key.EndsWith(":budget", StringComparison.Ordinal)))
+        {
+            yield return new ProjectAlertDto(ProjectAlertLevel.Warning, "staffing", $"{item.Title}. {item.Reason}", "staffing");
+        }
     }
 
     private async Task<IEnumerable<ProjectAlertDto>> CeilingAlertsAsync(Guid projectId, CancellationToken ct)

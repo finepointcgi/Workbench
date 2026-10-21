@@ -52,6 +52,12 @@ internal static class PerDiemResourcingEndpoints
         res.MapGet("/open-demand", (Guid? projectId, IResourcePlanningService s, CancellationToken ct) => s.ListOpenDemandAsync(projectId, ct));
         res.MapPost("/find-people", (FindPeopleQuery q, IResourcePlanningService s, CancellationToken ct) => s.FindAvailablePeopleAsync(q, ct));
 
+        res.MapGet("/projects/{projectId:guid}/staffing-plan", (Guid projectId, IProjectStaffingService s, CancellationToken ct) => s.GetPlanAsync(projectId, ct));
+        res.MapGet("/projects/{projectId:guid}/setup-progress", (Guid projectId, IProjectStaffingService s, CancellationToken ct) => s.GetSetupProgressAsync(projectId, ct));
+        res.MapPost("/staffing-check", (StaffingCheckRequest r, IProjectStaffingService s, CancellationToken ct) => s.CheckAsync(r, ct));
+        res.MapGet("/projects/{projectId:guid}/staffing-candidates", (Guid projectId, Guid? laborCategoryId, IProjectStaffingService s, CancellationToken ct) =>
+            s.ListCandidatesAsync(projectId, laborCategoryId, ct));
+
         v1.MapGet("/projects/{projectId:guid}/financials/allocation-etc", (Guid projectId, Guid? budgetVersionId, IAllocationForecastService s, CancellationToken ct) =>
             s.GetProjectSummaryAsync(projectId, budgetVersionId, ct)).WithTags("Resourcing");
         v1.MapGet("/projects/{projectId:guid}/financials/allocation-etc/wbs", (Guid projectId, Guid? budgetVersionId, IAllocationForecastService s, CancellationToken ct) =>
