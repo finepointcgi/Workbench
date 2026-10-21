@@ -194,7 +194,7 @@ public sealed class PermissionCheckingDashboardService(IDashboardService inner, 
 
     private async Task RequireViewAsync(DashboardSummary dashboard, CancellationToken cancellationToken)
     {
-        if (IsOwner(dashboard) || await access.IsAdminAsync(cancellationToken))
+        if (IsOwner(dashboard) || await access.HasAsync(Permission.AdminAllWorkspaces, cancellationToken))
         {
             return;
         }
@@ -210,7 +210,7 @@ public sealed class PermissionCheckingDashboardService(IDashboardService inner, 
         access.RequireSignedIn();
         var dashboard = (await inner.GetAsync(dashboardId, cancellationToken)).Summary;
         await RequireViewAsync(dashboard, cancellationToken);
-        if (!IsOwner(dashboard) && !await access.IsAdminAsync(cancellationToken))
+        if (!IsOwner(dashboard) && !await access.HasAsync(Permission.AdminAllWorkspaces, cancellationToken))
         {
             throw new WorkbenchForbiddenException("Only the dashboard's owner can change it.");
         }

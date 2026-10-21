@@ -32,6 +32,7 @@ internal sealed class SsoGroupMappingConfiguration : IEntityTypeConfiguration<Ss
     {
         b.Property(m => m.GroupValue).HasMaxLength(256);
         b.Property(m => m.Description).HasMaxLength(200);
+        b.Property(m => m.CustomRoleIds).HasMaxLength(2000);
         b.HasIndex(m => m.GroupValue).IsUnique();
     }
 }

@@ -106,15 +106,6 @@ public sealed class UserLifecycle(
         {
             Email = email,
             DisplayName = CleanName(displayName) ?? email.Split('@')[0],
-            IsAdmin = roles.IsAdmin(),
-            IsFinance = roles.HasFlag(OrgRoles.Finance),
-            IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper),
-            IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager),
-            IsProjectManager = roles.HasFlag(OrgRoles.ProjectManager),
-            IsHr = roles.HasFlag(OrgRoles.Hr),
-            IsMaterials = roles.HasFlag(OrgRoles.Materials),
-            IsBusinessDevelopment = roles.HasFlag(OrgRoles.BusinessDevelopment),
-            IsPricing = roles.HasFlag(OrgRoles.Pricing),
             CreatedAtUtc = now,
             IsActive = active,
             DeactivatedAtUtc = active ? null : now,
@@ -123,6 +114,12 @@ public sealed class UserLifecycle(
             ScimManaged = actor == ScimActor,
         };
         db.Set<AppUser>().Add(user);
+        var (before, after) = await RoleStore.ReplaceAsync(db, user, BuiltInRoles.IdsOf(roles), actor, now, cancellationToken);
+        if (after.Count > 0)
+        {
+            RoleStore.RecordAssignmentAudit(db, user, [], await RoleStore.RefsAsync(db, after, cancellationToken), actor, now);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         statusCache.Invalidate(email);
         await securityLog.RecordAsync(SecurityEventTypes.UserCreated, email, detail: $"Roles: {RoleText(roles)}{(active ? "" : "; inactive")}", actor: actor, cancellationToken: cancellationToken);
@@ -154,44 +151,73 @@ public sealed class UserLifecycle(
         return user;
     }
 
-    public async Task<AppUser> SetRolesAsync(string email, OrgRoles roles, string actor, CancellationToken cancellationToken = default)
+    /// <summary>Replaces the built-in roles a user holds with <paramref name="roles"/>; their custom roles stay.</summary>
+    public Task<AppUser> SetRolesAsync(string email, OrgRoles roles, string actor, CancellationToken cancellationToken = default) =>
+        ChangeRolesAsync(email, current => current.Where(id => !BuiltInRoles.IsBuiltIn(id)).Concat(BuiltInRoles.IdsOf(roles)), actor, cancellationToken);
+
+    /// <summary>Replaces every role a user holds (built-in and custom) with <paramref name="roleIds"/>.</summary>
+    public Task<AppUser> SetRoleIdsAsync(string email, IReadOnlyCollection<Guid> roleIds, string actor, CancellationToken cancellationToken = default) =>
+        ChangeRolesAsync(email, _ => roleIds, actor, cancellationToken);
+
+    /// <summary>Adds the roles in <paramref name="grant"/> to those the user holds (invites, just-in-time sign-up).</summary>
+    public Task<AppUser> GrantAsync(string email, RoleGrant grant, string actor, CancellationToken cancellationToken = default) =>
+        ChangeRolesAsync(email, current => current.Concat(grant.RoleIds), actor, cancellationToken);
+
+    /// <summary>Makes the user hold exactly the roles in <paramref name="grant"/> (roles synced from identity provider groups).</summary>
+    public Task<AppUser> SetGrantAsync(string email, RoleGrant grant, string actor, CancellationToken cancellationToken = default) =>
+        ChangeRolesAsync(email, _ => grant.RoleIds, actor, cancellationToken);
+
+    /// <summary>
+    /// Every change to the roles a user holds goes through here: nobody removes their own Admin role, there is always an
+    /// active administrator, and the change is audit logged (before and after) and recorded as a security event.
+    /// </summary>
+    private async Task<AppUser> ChangeRolesAsync(string email, Func<IReadOnlyList<Guid>, IEnumerable<Guid>> target, string actor, CancellationToken cancellationToken)
     {
         email = AccessControl.Normalize(email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await LoadAsync(db, email, cancellationToken);
-        var before = AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment, user.IsPricing);
-        if (user.IsAdmin && !roles.IsAdmin())
+        var current = await RoleStore.RoleIdsOfAsync(db, user.Id, cancellationToken);
+        var wanted = target(current).Where(id => id != BuiltInRoles.Employee.Id).Distinct().ToList();
+        var admin = BuiltInRoles.Admin.Id;
+        if (current.Contains(admin) && !wanted.Contains(admin))
         {
             if (IsSelf(actor, email))
             {
-                throw new ArgumentException("You can't remove your own Admin role. Ask another administrator.", nameof(roles));
+                throw new ArgumentException("You can't remove your own Admin role. Ask another administrator.", nameof(target));
             }
 
             await RequireAnotherActiveAdminAsync(db, email, cancellationToken);
         }
 
-        user.IsAdmin = roles.IsAdmin();
-        user.IsFinance = roles.HasFlag(OrgRoles.Finance);
-        user.IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper);
-        user.IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager);
-        user.IsProjectManager = roles.HasFlag(OrgRoles.ProjectManager);
-        user.IsHr = roles.HasFlag(OrgRoles.Hr);
-        user.IsMaterials = roles.HasFlag(OrgRoles.Materials);
-        user.IsBusinessDevelopment = roles.HasFlag(OrgRoles.BusinessDevelopment);
-        user.IsPricing = roles.HasFlag(OrgRoles.Pricing);
-        if (!before.HasFlag(OrgRoles.ProjectManager) && user.IsProjectManager)
+        var now = clock.GetUtcNow().UtcDateTime;
+        var (before, after) = await RoleStore.ReplaceAsync(db, user, wanted, actor, now, cancellationToken);
+        var changed = !before.ToHashSet().SetEquals(after);
+        if (changed)
         {
-            await ProjectWorkspaceOwnership.EnsureForManagerAsync(db, user, cancellationToken); // Owner of their projects' workspaces
-        }
+            var beforeRefs = await RoleStore.RefsAsync(db, before, cancellationToken);
+            var afterRefs = await RoleStore.RefsAsync(db, after, cancellationToken);
+            RoleStore.RecordAssignmentAudit(db, user, beforeRefs, afterRefs, actor, now);
 
-        await db.SaveChangesAsync(cancellationToken);
-        if (before != roles)
+            // Gaining "Run the projects you manage" makes them Owner of their projects' workspaces.
+            if (!await ManagesOwnProjectsAsync(db, before, cancellationToken) && await ManagesOwnProjectsAsync(db, after, cancellationToken))
+            {
+                await ProjectWorkspaceOwnership.EnsureForManagerAsync(db, user, cancellationToken);
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            await securityLog.RecordAsync(SecurityEventTypes.RolesChanged, email, detail: $"{RoleStore.Describe(beforeRefs)} → {RoleStore.Describe(afterRefs)}", actor: actor,
+                cancellationToken: cancellationToken);
+        }
+        else
         {
-            await securityLog.RecordAsync(SecurityEventTypes.RolesChanged, email, detail: $"{RoleText(before)} → {RoleText(roles)}", actor: actor, cancellationToken: cancellationToken);
+            await db.SaveChangesAsync(cancellationToken); // Built-in role rows the database didn't have yet.
         }
 
         return user;
     }
+
+    private static async Task<bool> ManagesOwnProjectsAsync(IWorkbenchDbContext db, IReadOnlyList<Guid> roleIds, CancellationToken ct) =>
+        (await RoleStore.ResolveRoleIdsAsync(db, roleIds.Where(id => id != BuiltInRoles.Admin.Id).ToList(), ct)).Permissions.Has(Permission.ProjectsManageOwn);
 
     /// <summary>Deactivates or reactivates. Deactivating also ends every session and token at once.</summary>
     public async Task<AppUser> SetActiveAsync(string email, bool active, string actor, string? reason = null, CancellationToken cancellationToken = default)
@@ -212,7 +238,7 @@ public sealed class UserLifecycle(
                 throw new ArgumentException("You can't deactivate yourself.", nameof(email));
             }
 
-            if (user.IsAdmin)
+            if (await db.Set<UserRole>().AnyAsync(r => r.UserId == user.Id && r.RoleId == BuiltInRoles.Admin.Id, cancellationToken))
             {
                 await RequireAnotherActiveAdminAsync(db, email, cancellationToken);
             }
@@ -321,7 +347,7 @@ public sealed class UserLifecycle(
 
     private static async Task RequireAnotherActiveAdminAsync(IWorkbenchDbContext db, string email, CancellationToken cancellationToken)
     {
-        if (!await db.Set<AppUser>().AnyAsync(u => u.Email != email && u.IsAdmin && u.IsActive, cancellationToken))
+        if (!await RoleStore.AnotherActiveAdminAsync(db, email, cancellationToken))
         {
             throw new ArgumentException("There must be at least one active administrator.", nameof(email));
         }

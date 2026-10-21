@@ -128,7 +128,7 @@ else
     {
         try
         {
-            _finance = (await UserContext.GetAsync()).IsFinance;
+            _finance = (await UserContext.GetAsync()).Can(Workbench.Contracts.Identity.Permission.PurchaseOrdersManage);
             _req = await Requisitions.GetAsync(RequisitionId);
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

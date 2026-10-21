@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Purchasing;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Purchasing;
 
@@ -28,7 +29,7 @@ public static class SourcingPermissionRegistration
 
 public sealed class PermissionCheckingRfqService(IRfqService inner, AccessControl access) : IRfqService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with RFQs and quotes", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SourcingManage, "work with RFQs and quotes", ct);
 
     public async Task<IReadOnlyList<RfqSummaryDto>> ListAsync(RfqQuery query, CancellationToken cancellationToken = default)
     {
@@ -99,7 +100,7 @@ public sealed class PermissionCheckingRfqService(IRfqService inner, AccessContro
 
 public sealed class PermissionCheckingSupplierPortalAdminService(ISupplierPortalAdminService inner, AccessControl access) : ISupplierPortalAdminService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("manage the supplier portal", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SourcingManage, "manage the supplier portal", ct);
 
     public async Task<IReadOnlyList<SupplierContactDto>> ListContactsAsync(Guid? vendorId = null, CancellationToken cancellationToken = default)
     {
@@ -164,7 +165,7 @@ public sealed class PermissionCheckingSupplierPortalAdminService(ISupplierPortal
 
 public sealed class PermissionCheckingEdiService(IEdiService inner, AccessControl access) : IEdiService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with EDI", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SourcingManage, "work with EDI", ct);
 
     public async Task<IReadOnlyList<EdiPartnerDto>> ListPartnersAsync(CancellationToken cancellationToken = default)
     {

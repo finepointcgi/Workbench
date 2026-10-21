@@ -37,14 +37,12 @@ public static class ProjectWorkspaceOwnership
         }
     }
 
-    /// <summary>Makes the user Owner of every workspace holding a plan sheet of a project they manage (after the role is given).</summary>
+    /// <summary>
+    /// Makes the user Owner of every workspace holding a plan sheet of a project they manage. Call it when the user is
+    /// given a role with "Run the projects you manage".
+    /// </summary>
     public static async Task EnsureForManagerAsync(IWorkbenchDbContext db, AppUser user, CancellationToken ct)
     {
-        if (!user.IsProjectManager)
-        {
-            return;
-        }
-
         var employee = await EmployeeLinks.FindForUserAsync(db, user.Email, ct);
         if (employee is null)
         {
@@ -88,8 +86,10 @@ public static class ProjectWorkspaceOwnership
         return string.IsNullOrWhiteSpace(email) ? null : AccessControl.Normalize(email);
     }
 
-    private static Task<bool> HasRoleAsync(IWorkbenchDbContext db, string email, CancellationToken ct) =>
-        db.Set<AppUser>().AsNoTracking().AnyAsync(u => u.Email == email && u.IsActive && u.IsProjectManager && !u.EmployeeUnlinked, ct);
+    // "Run the projects you manage" through a role other than Admin alone (administrators own every workspace already).
+    private static async Task<bool> HasRoleAsync(IWorkbenchDbContext db, string email, CancellationToken ct) =>
+        await db.Set<AppUser>().AsNoTracking().AnyAsync(u => u.Email == email && !u.EmployeeUnlinked, ct)
+        && await RoleStore.HoldsAsync(db, email, Contracts.Identity.Permission.ProjectsManageOwn, ct, includeAdmins: false);
 }
 
 /// <summary>

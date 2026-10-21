@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Reports;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Accounting;
@@ -183,7 +184,7 @@ public sealed class ComplianceChecklistService(
 
     public async Task<ChecklistDto> GetAsync(string checklistKey, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminCompliance, "work with the DCAA readiness checklist", cancellationToken);
         var items = ItemsOf(checklistKey);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var answers = await LatestAnswersAsync(db, checklistKey, cancellationToken);
@@ -202,7 +203,7 @@ public sealed class ComplianceChecklistService(
     public async Task<ChecklistItemDto> SaveAnswerAsync(string checklistKey, string itemKey, SaveChecklistAnswerRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminCompliance, "work with the DCAA readiness checklist", cancellationToken);
         var item = ItemsOf(checklistKey).FirstOrDefault(i => i.Key == itemKey) ?? throw new WorkbenchNotFoundException($"There is no checklist item '{itemKey}'.");
         if (!Enum.IsDefined(request.Status))
         {

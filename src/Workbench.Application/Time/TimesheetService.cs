@@ -74,8 +74,8 @@ public sealed class TimesheetService(
         var sheet = await TimesheetQueries.LoadAsync(db, timesheetId, cancellationToken);
         var owner = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == sheet.EmployeeId, cancellationToken);
         var isOwner = string.Equals(owner.Email, currentUser.Email, StringComparison.OrdinalIgnoreCase);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        if (!isOwner && !roles.CanViewAllTimesheets() && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, roles, cancellationToken)
+        var roles = await access.GetPermissionsAsync(cancellationToken);
+        if (!isOwner && !roles.Has(Permission.TimeViewAll) && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, roles, cancellationToken)
             && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.Timesheet, sheet.Id, currentUser.Email, cancellationToken))
         {
             throw new UnauthorizedAccessException("Only the employee, their approver, timekeepers, Finance and administrators can view this timesheet.");
@@ -374,7 +374,7 @@ public sealed class TimesheetService(
         var sheet = await TimesheetQueries.LoadAsync(db, timesheetId, cancellationToken);
         var owner = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == sheet.EmployeeId, cancellationToken);
         var isOwner = string.Equals(owner.Email, currentUser.Email, StringComparison.OrdinalIgnoreCase);
-        if (!isOwner && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetOrgRolesAsync(cancellationToken), cancellationToken)
+        if (!isOwner && !await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetPermissionsAsync(cancellationToken), cancellationToken)
             && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.Timesheet, sheet.Id, currentUser.Email, cancellationToken))
         {
             throw new UnauthorizedAccessException("Only the employee or their approver can reopen this timesheet.");

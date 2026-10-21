@@ -1,5 +1,6 @@
 @page "/admin/users"
 @inject IUserDirectory Users
+@inject ICurrentUserContext CurrentUser
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -14,52 +15,63 @@
 {
     <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
-else if (_me is not { IsAdmin: true })
+else if (_tabs.Count == 0)
 {
-    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Only administrators can manage users.</MudAlert>
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Users and security are for people with the "Administer users" or "Manage sign-in and security" permission.</MudAlert>
 }
 else
 {
     <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4"
              ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged" KeepPanelsAlive="false">
-        <MudTabPanel Text="Users" Icon="@Icons.Material.Filled.People">
-            <AdminUsersTab Me="_me" />
-        </MudTabPanel>
-        <MudTabPanel Text="Invites" Icon="@Icons.Material.Filled.PersonAdd">
-            <AdminInvitesTab />
-        </MudTabPanel>
-        <MudTabPanel Text="Access reviews" Icon="@Icons.Material.Filled.FactCheck">
-            <AdminAccessReviewsTab />
-        </MudTabPanel>
-        <MudTabPanel Text="Security events" Icon="@Icons.Material.Filled.Policy">
-            <AdminSecurityEventsTab />
-        </MudTabPanel>
-        <MudTabPanel Text="Retention" Icon="@Icons.Material.Filled.Inventory2">
-            <AdminRetentionTab />
-        </MudTabPanel>
-        <MudTabPanel Text="Sign-in" Icon="@Icons.Material.Filled.Key">
-            <AdminSignInTab />
-        </MudTabPanel>
+        @foreach (var tab in _tabs)
+        {
+            <MudTabPanel Text="@tab.Title" Icon="@tab.Icon">
+                @switch (tab.Key)
+                {
+                    case "users": <AdminUsersTab Me="_me!" />; break;
+                    case "invites": <AdminInvitesTab />; break;
+                    case "reviews": <AdminAccessReviewsTab />; break;
+                    case "events": <AdminSecurityEventsTab />; break;
+                    case "retention": <AdminRetentionTab />; break;
+                    case "sign-in": <AdminSignInTab />; break;
+                }
+            </MudTabPanel>
+        }
     </MudTabs>
 }
 
 @code {
-    private static readonly string[] Tabs = ["users", "invites", "reviews", "events", "retention", "sign-in"];
+    private sealed record Tab(string Key, string Title, string Icon, string Permission);
+
+    // Each tab shows for holders of its permission (the server checks the same ones).
+    private static readonly Tab[] AllTabs =
+    [
+        new("users", "Users", Icons.Material.Filled.People, Permission.AdminUsers),
+        new("invites", "Invites", Icons.Material.Filled.PersonAdd, Permission.AdminUsers),
+        new("reviews", "Access reviews", Icons.Material.Filled.FactCheck, Permission.AdminSecurity),
+        new("events", "Security events", Icons.Material.Filled.Policy, Permission.AdminSecurity),
+        new("retention", "Retention", Icons.Material.Filled.Inventory2, Permission.AdminRetention),
+        new("sign-in", "Sign-in", Icons.Material.Filled.Key, Permission.AdminSecurity),
+    ];
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }
 
     private UserDto? _me;
+    private IReadOnlyList<Tab> _tabs = [];
     private bool _loading = true;
     private int _tab;
 
-    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "users"));
+    protected override void OnParametersSet() => _tab = Math.Max(0, _tabs.ToList().FindIndex(t => t.Key == (TabQuery ?? "users")));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _me = await Users.GetMeAsync();
+            var permissions = (await CurrentUser.GetAsync()).Permissions;
+            _tabs = AllTabs.Where(t => permissions.Has(t.Permission)).ToList();
+            OnParametersSet();
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {
@@ -74,6 +86,6 @@ else
     private void OnTabChanged(int index)
     {
         _tab = index;
-        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", Tabs[index]), replace: true);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", _tabs[index].Key), replace: true);
     }
 }

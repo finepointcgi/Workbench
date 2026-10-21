@@ -282,7 +282,7 @@ public sealed class PermissionCheckingCostpointService(ICostpointService inner, 
 
     public async Task<CostpointSyncRunDto> SyncNowAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminIntegrations, "run the Costpoint sync", cancellationToken);
         return await inner.SyncNowAsync(cancellationToken);
     }
 

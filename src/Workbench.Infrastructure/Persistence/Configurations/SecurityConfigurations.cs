@@ -12,6 +12,7 @@ internal sealed class UserInviteConfiguration : IEntityTypeConfiguration<UserInv
         b.Property(i => i.DisplayName).HasMaxLength(200);
         b.Property(i => i.InvitedBy).HasMaxLength(320);
         b.Property(i => i.RevokedBy).HasMaxLength(320);
+        b.Property(i => i.CustomRoleIds).HasMaxLength(2000);
         b.HasIndex(i => i.Email);
     }
 }
@@ -53,7 +54,9 @@ internal sealed class AccessReviewItemConfiguration : IEntityTypeConfiguration<A
     {
         b.Property(i => i.UserEmail).HasMaxLength(320);
         b.Property(i => i.DisplayName).HasMaxLength(200);
-        b.Property(i => i.OrgRoles).HasMaxLength(100);
+        b.Property(i => i.OrgRoles).HasMaxLength(1000);
+        b.Property(i => i.Permissions).HasMaxLength(4000);
+        b.Property(i => i.RoleChanges).HasMaxLength(4000);
         b.Property(i => i.WorkspaceRoles).HasMaxLength(4000);
         b.Property(i => i.EmployeeName).HasMaxLength(200);
         b.Property(i => i.Decision).HasConversion<string>().HasMaxLength(16);

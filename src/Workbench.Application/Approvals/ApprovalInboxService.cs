@@ -107,7 +107,7 @@ public sealed class ApprovalInboxService(
 
         var me = access.Email;
         if (!instances.Any(i => i.SubmitterEmail == me)
-            && !(await access.GetOrgRolesAsync(cancellationToken)).IsFinance()
+            && !await access.HasAsync(Permission.ApprovalWorkflowsView, cancellationToken)
             && !await engine.IsParticipantAsync(db, documentType, documentId, me, cancellationToken))
         {
             throw new WorkbenchForbiddenException("Only the submitter, its approvers, Finance and administrators can see this approval history.");
@@ -118,13 +118,19 @@ public sealed class ApprovalInboxService(
         var versions = await db.Set<ApprovalWorkflowVersion>().AsNoTracking().Where(v => versionIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, v => v.Version, cancellationToken);
         var tasks = (await db.Set<ApprovalTask>().AsNoTracking().Where(t => ids.Contains(t.InstanceId)).ToListAsync(cancellationToken)).ToLookup(t => t.InstanceId);
         var actions = (await db.Set<ApprovalAction>().AsNoTracking().Where(a => ids.Contains(a.InstanceId)).ToListAsync(cancellationToken)).ToLookup(a => a.InstanceId);
+        var roleLabels = new Dictionary<string, string?>();
+        foreach (var key in tasks.SelectMany(g => g).Select(t => t.AssigneeRole).OfType<string>().Distinct())
+        {
+            roleLabels[key] = await ApproverRoles.LabelAsync(db, key, cancellationToken);
+        }
+
         return instances.OrderByDescending(i => i.StartedAtUtc).Select(i =>
         {
             var steps = tasks[i.Id].ToDictionary(t => t.Id, t => t.StepName);
             return new ApprovalInstanceDto(i.Id, i.DocumentType, i.DocumentId, i.Title, (ApprovalInstanceState)(int)i.Status, versions.GetValueOrDefault(i.WorkflowVersionId),
                 i.SubmitterEmail, i.StartedAtUtc, i.CompletedAtUtc,
                 tasks[i.Id].OrderBy(t => t.Sequence).ThenBy(t => t.StepIndex).Select(t => new ApprovalTaskDto(t.Id, t.Sequence, t.StepName, t.ScopeLabel,
-                    (ApprovalTaskState)(int)t.Status, ApprovalEngine.Split(t.AssigneesCsv).ToList(), t.AssigneeRole, t.DecidedBy, t.OnBehalfOf, t.DecidedAtUtc,
+                    (ApprovalTaskState)(int)t.Status, ApprovalEngine.Split(t.AssigneesCsv).ToList(), t.AssigneeRole is { } r ? roleLabels[r] : null, t.DecidedBy, t.OnBehalfOf, t.DecidedAtUtc,
                     t.Comment, t.SkipReason)).ToList(),
                 actions[i.Id].OrderBy(a => a.OccurredAtUtc).Select(a => new ApprovalActionDto(a.Action, a.Actor, a.OnBehalfOf, a.Comment, a.OccurredAtUtc,
                     a.TaskId is { } t ? steps.GetValueOrDefault(t) : null)).ToList());

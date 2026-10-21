@@ -8,29 +8,7 @@ public sealed class AppUser : Entity
 
     public required string DisplayName { get; set; }
 
-    /// <summary>Organization role Admin: sees every workspace and can do everything.</summary>
-    public bool IsAdmin { get; set; }
-
-    /// <summary>Organization role Finance: rates, contracts, budgets, project setup and fiscal close.</summary>
-    public bool IsFinance { get; set; }
-
-    /// <summary>Organization role Timekeeper: can view everyone's timesheets.</summary>
-    public bool IsTimekeeper { get; set; }
-
-    /// <summary>Organization role ResourceManager: manages every project's allocations (resource planning).</summary>
-    public bool IsResourceManager { get; set; }
-
-    /// <summary>Organization role ProjectManager: sets up, staffs and approves for the projects they manage; assigns tasks.</summary>
-    public bool IsProjectManager { get; set; }
-
-    /// <summary>Organization role HR: personnel records, EEO data, compensation, benefits, onboarding and offboarding.</summary>
-    public bool IsHr { get; set; }
-    /// <summary>Organization role Materials: parts, inventory, BOMs, work orders and MRP planning.</summary>
-    public bool IsMaterials { get; set; }
-    /// <summary>Organization role BusinessDevelopment: sees the capture pipeline; edits the opportunities they manage.</summary>
-    public bool IsBusinessDevelopment { get; set; }
-    /// <summary>Organization role Pricing: builds and locks proposal prices (sees cost and indirect rates there).</summary>
-    public bool IsPricing { get; set; }
+    // Roles are UserRole rows (Domain/Identity/Roles.cs); a user's permissions are the union of their roles'.
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastSeenAtUtc { get; set; }

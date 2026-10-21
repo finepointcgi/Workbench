@@ -9,7 +9,7 @@
 
 <PurchasingHeader Title="Purchase orders" Subtitle="Order approved requisitions (or enter a PO directly), issue it, receive against it and bill it with a three-way match. Open amounts are commitments on the project.">
     <MudButton Variant="Variant.Outlined" Href="purchasing/receiving" StartIcon="@Icons.Material.Filled.Inventory">Receiving</MudButton>
-    <FinanceOnly>
+    <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.PurchaseOrdersManage">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewOrderAsync" Disabled="_options is null" data-testid="new-po">New PO</MudButton>
     </FinanceOnly>
 </PurchasingHeader>

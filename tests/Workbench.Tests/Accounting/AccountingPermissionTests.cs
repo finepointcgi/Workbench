@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
+using Workbench.Application.Identity;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
 using Workbench.Tests.Collaboration;
 using Workbench.Application;
@@ -63,7 +65,7 @@ public sealed class AccountingPermissionTests
         T Get<T>() where T : notnull => scope.ServiceProvider.GetRequiredService<T>();
         await using (var db = await Get<IWorkbenchDbContextFactory>().CreateAsync())
         {
-            db.Set<AppUser>().Add(new AppUser { Email = SeededHost.Admin, DisplayName = "Admin", IsAdmin = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = SeededHost.Admin, DisplayName = "Admin" }, OrgRoles.Admin);
             await db.SaveChangesAsync();
         }
 

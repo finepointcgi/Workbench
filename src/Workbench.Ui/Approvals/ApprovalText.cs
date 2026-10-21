@@ -41,7 +41,7 @@ public static class ApprovalText
     {
         var who = step.Approver.Kind switch
         {
-            ApproverRuleKind.OrgRole => $"anyone in {step.Approver.Role}",
+            ApproverRuleKind.OrgRole => step.Approver.CustomRoleId is not null ? "anyone with the chosen custom role" : $"anyone in {step.Approver.Role}",
             ApproverRuleKind.SpecificPeople => $"each of {string.Join(", ", step.Approver.People ?? [])}",
             ApproverRuleKind.AnyOf => $"any of {string.Join(", ", step.Approver.People ?? [])}",
             _ => Rule(step.Approver.Kind).ToLowerInvariant(),

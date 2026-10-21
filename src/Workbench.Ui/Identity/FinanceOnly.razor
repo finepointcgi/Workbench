@@ -1,6 +1,6 @@
-@* Shows its content only to Finance and administrators (the cascaded FinanceAccess); everyone else sees NotAllowed, if
-   given. With no FinanceAccess cascaded it shows nothing: Finance-only actions fail closed. *@
-@if (Access?.IsFinance == true)
+@* Shows its content only to holders of Permission (the cascaded FinanceAccess); everyone else sees NotAllowed, if given.
+   With no FinanceAccess cascaded it shows nothing: actions that need a permission fail closed. *@
+@if (Access?.Can(Permission) == true)
 {
     @ChildContent
 }
@@ -12,6 +12,10 @@ else
 @code {
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
+
+    /// <summary>The permission (a <c>Permission</c> constant) the content needs.</summary>
+    [Parameter, EditorRequired]
+    public string Permission { get; set; } = "";
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }

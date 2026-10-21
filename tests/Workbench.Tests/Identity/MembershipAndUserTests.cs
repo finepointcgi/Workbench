@@ -94,7 +94,8 @@ public sealed class MembershipAndUserTests
 
         Assert.Equal(first.Id, again.Id);
         Assert.Equal("Samantha", renamed.DisplayName);
-        Assert.True(again.IsAdmin);
+        await using var db = await seeded.Host.Get<Workbench.Application.IWorkbenchDbContextFactory>().CreateAsync();
+        Assert.True((await Workbench.Application.Identity.RoleStore.BuiltInRolesOfAsync(db, "sam@example.com", default)).HasFlag(OrgRoles.Admin));
     }
 
     [Fact]

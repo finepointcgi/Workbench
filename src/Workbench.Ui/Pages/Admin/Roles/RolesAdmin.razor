@@ -1,0 +1,205 @@
+@page "/admin/roles"
+@page "/admin/roles/{RoleId:guid}"
+@* Admin › Roles: the built-in roles (read only, can be cloned) and custom roles, each a bundle of permissions from the
+   catalog. The server checks every change ("Manage roles"; who holds a role, "Administer users") and audit logs it. *@
+@using Workbench.Contracts
+@inject IRoleService Roles
+@inject ICurrentUserContext CurrentUser
+@inject IDialogService Dialogs
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Roles · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Roles</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    A role is a set of permissions. People can hold several roles and get everything any of them allows. Built-in roles match
+    what Workbench has always done and can't be changed; clone one to make a role you can edit.
+</MudText>
+
+@if (_loading && _roles.Count == 0)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_me is null || !_me.CanAny(Permission.AdminRoles, Permission.AdminUsers))
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+        Roles are for people with the "@PermissionCatalog.NameOf(Permission.AdminRoles)" permission. Ask an administrator if you need it.
+    </MudAlert>
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-2">
+                <div class="d-flex align-center pa-2">
+                    <MudText Typo="Typo.h6" HtmlTag="h2">All roles</MudText>
+                    <MudSpacer />
+                    @if (CanManage)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                   OnClick="NewAsync" data-testid="role-new">New role</MudButton>
+                    }
+                </div>
+                <nav aria-label="Roles">
+                    @foreach (var (heading, group) in Groups)
+                    {
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary px-2 d-block mt-2">@heading</MudText>
+                        @if (group.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary px-2 pb-2">None yet. Clone a built-in role or start a new one.</MudText>
+                        }
+                        @foreach (var role in group)
+                        {
+                            <a href="@($"admin/roles/{role.Id}")" class="@($"wb-role-link d-flex align-center px-2 py-2 {(role.Id == _selected?.Id ? "wb-role-selected" : "")}")"
+                               aria-current="@(role.Id == _selected?.Id ? "page" : null)" data-testid="role-link">
+                                <div class="flex-grow-1">
+                                    <div>@role.Name</div>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @Plural(role.UserCount, "person", "people") · @Plural(role.Permissions.Count, "permission", "permissions")
+                                    </MudText>
+                                </div>
+                                @if (role.Conflicts.Count > 0)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Warning" Size="Size.Small" Title="Combines duties that are usually separated" />
+                                }
+                            </a>
+                        }
+                    }
+                </nav>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="8">
+            @if (_selected is { } role)
+            {
+                <RoleEditor @key="role.Id" Role="role" CanManage="CanManage" CanAssign="CanAssign" Saved="OnSavedAsync" Deleted="OnDeletedAsync" Clone="CloneAsync" />
+            }
+            else
+            {
+                <MudPaper Outlined="true" Class="pa-6">
+                    <MudText Class="mud-text-secondary">Choose a role to see what it allows and who holds it.</MudText>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+<style>
+    .wb-role-link { border-radius: 12px; color: inherit; text-decoration: none; }
+    .wb-role-link:hover { background: var(--mud-palette-action-default-hover); }
+    .wb-role-link:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+    .wb-role-selected { background: var(--mud-palette-primary-hover); font-weight: 500; }
+</style>
+
+@code {
+    [Parameter]
+    public Guid? RoleId { get; set; }
+
+    private IReadOnlyList<RoleDto> _roles = [];
+    private RoleDto? _selected;
+    private CurrentUserInfo? _me;
+    private bool _loading = true;
+
+    private bool CanManage => _me?.Can(Permission.AdminRoles) == true;
+
+    private bool CanAssign => _me?.Can(Permission.AdminUsers) == true;
+
+    private IEnumerable<(string Heading, IReadOnlyList<RoleDto> Roles)> Groups =>
+    [
+        ("Built-in", _roles.Where(r => r.IsBuiltIn).ToList()),
+        ("Custom", _roles.Where(r => !r.IsBuiltIn).ToList()),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _me = await CurrentUser.GetAsync();
+            if (_me.CanAny(Permission.AdminRoles, Permission.AdminUsers))
+            {
+                _roles = await Roles.ListAsync();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Snackbar.Add($"Couldn't load roles: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    protected override void OnParametersSet() => Select();
+
+    private void Select() => _selected = RoleId is { } id ? _roles.FirstOrDefault(r => r.Id == id) : null;
+
+    private async Task ReloadAsync(Guid? select)
+    {
+        _roles = await Roles.ListAsync();
+        if (select is { } id && id != RoleId)
+        {
+            Navigation.NavigateTo($"admin/roles/{id}");
+        }
+        else if (select is null && RoleId is not null)
+        {
+            Navigation.NavigateTo("admin/roles");
+        }
+
+        Select();
+    }
+
+    private async Task NewAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<RoleNameDialog>("New role", new DialogParameters<RoleNameDialog>
+        {
+            { d => d.Message, "Start with no permissions, then pick what the role allows." },
+        });
+        if (await dialog.Result is { Canceled: false, Data: string name })
+        {
+            await RunAsync(async () =>
+            {
+                var created = await Roles.CreateAsync(new SaveRoleRequest(name, null, []));
+                await ReloadAsync(created.Id);
+                Snackbar.Add($"Role {created.Name} created.", Severity.Success);
+            });
+        }
+    }
+
+    private async Task CloneAsync(RoleDto source)
+    {
+        var dialog = await Dialogs.ShowAsync<RoleNameDialog>($"Clone {source.Name}", new DialogParameters<RoleNameDialog>
+        {
+            { d => d.Message, $"The new role starts with the same {source.Permissions.Count} permissions as {source.Name}. Nobody holds it until you assign it." },
+            { d => d.Name, $"{source.Name} (copy)" },
+            { d => d.ConfirmText, "Clone" },
+        });
+        if (await dialog.Result is { Canceled: false, Data: string name })
+        {
+            await RunAsync(async () =>
+            {
+                var created = await Roles.CloneAsync(source.Id, name);
+                await ReloadAsync(created.Id);
+                Snackbar.Add($"Role {created.Name} created from {source.Name}.", Severity.Success);
+            });
+        }
+    }
+
+    private Task OnSavedAsync(RoleDto role) => RunAsync(() => ReloadAsync(role.Id));
+
+    private Task OnDeletedAsync() => RunAsync(() => ReloadAsync(null));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private static string Plural(int count, string one, string many) => $"{count} {(count == 1 ? one : many)}";
+}

@@ -1,13 +1,26 @@
-@* The extra input an approver rule needs: the org role, or the people. *@
+@* The extra input an approver rule needs: the role (a built-in org role, or a custom role from Admin › Roles), or the people. *@
+@inject IServiceProvider Services
 @switch (Rule.Kind)
 {
     case ApproverRuleKind.OrgRole:
-        <MudSelect T="ApprovalOrgRole?" @bind-Value="Rule.Role" Label="Org role" ReadOnly="ReadOnly">
-            @foreach (var role in Enum.GetValues<ApprovalOrgRole>())
+        <div class="d-flex flex-wrap gap-2">
+            <MudSelect T="ApprovalOrgRole?" @bind-Value="Rule.Role" Label="Org role" ReadOnly="@(ReadOnly || Rule.CustomRoleId is not null)" Style="min-width:200px">
+                @foreach (var role in Enum.GetValues<ApprovalOrgRole>())
+                {
+                    <MudSelectItem T="ApprovalOrgRole?" Value="role">@role</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_custom.Count > 0 || Rule.CustomRoleId is not null)
             {
-                <MudSelectItem T="ApprovalOrgRole?" Value="role">@role</MudSelectItem>
+                <MudSelect T="Guid?" @bind-Value="Rule.CustomRoleId" Label="Or a custom role" ReadOnly="ReadOnly" Clearable="true" Style="min-width:200px"
+                           ToStringFunc="@(id => id is { } v ? _custom.FirstOrDefault(r => r.Id == v)?.Name ?? "A deleted role" : "")" data-testid="rule-custom-role">
+                    @foreach (var role in _custom)
+                    {
+                        <MudSelectItem T="Guid?" Value="role.Id">@role.Name</MudSelectItem>
+                    }
+                </MudSelect>
             }
-        </MudSelect>
+        </div>
         break;
     case ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf:
         <MudTextField @bind-Value="Rule.People" Label="Emails (comma-separated)" ReadOnly="ReadOnly" />
@@ -20,4 +33,18 @@
 
     [Parameter]
     public bool ReadOnly { get; set; }
+
+    private IReadOnlyList<RoleRef> _custom = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _custom = Services.GetService(typeof(IRoleService)) is IRoleService roles ? (await roles.ListNamesAsync()).Where(r => !r.IsBuiltIn).ToList() : [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException)
+        {
+            _custom = [];
+        }
+    }
 }

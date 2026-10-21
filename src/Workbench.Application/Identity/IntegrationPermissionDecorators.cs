@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Integrations;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Integrations;
 
 namespace Workbench.Application.Identity;
@@ -28,7 +29,7 @@ public static class IntegrationPermissionRegistration
             throw new WorkbenchForbiddenException("API keys can't manage integrations.");
         }
 
-        await access.RequireAdminAsync(ct);
+        await access.RequireAsync(Permission.AdminIntegrations, "manage integrations", ct);
     }
 }
 
@@ -112,6 +113,7 @@ public sealed class PermissionCheckingApiKeyService(IApiKeyService inner, Access
     public async Task<ApiKeyCreatedDto> CreateAsync(CreateApiKeyRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireIntegrationAdminAsync(cancellationToken);
+        await access.RequireCanGrantRolesAsync(RoleGrant.Of(request.Roles, request.CustomRoleIds).RoleIds, cancellationToken);
         return await inner.CreateAsync(request, cancellationToken);
     }
 

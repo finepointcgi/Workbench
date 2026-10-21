@@ -72,7 +72,7 @@ public sealed class TimesheetApprovalService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var (start, end) = await clock.PeriodForAsync(db, date, cancellationToken);
-        var everyone = (await access.GetOrgRolesAsync(cancellationToken)).CanViewAllTimesheets();
+        var everyone = await access.HasAsync(Permission.TimeViewAll, cancellationToken);
         var team = everyone ? await db.Set<Employee>().AsNoTracking().ToListAsync(cancellationToken) : await ReportsAsync(db, cancellationToken);
         var reports = team.Where(e => e.HireDate <= end && (e.TerminationDate is null || e.TerminationDate >= start)).ToList();
         var ids = reports.Select(e => e.Id).ToList();
@@ -103,7 +103,7 @@ public sealed class TimesheetApprovalService(
         const string notYours = "Only the employee's supervisor (or an administrator when there's no supervisor) can review this timesheet.";
         if (sheet.Status != TimesheetStatus.Submitted)
         {
-            if (!await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetOrgRolesAsync(cancellationToken), cancellationToken)
+            if (!await TimesheetQueries.CanApproveAsync(db, owner, currentUser.Email, await access.GetPermissionsAsync(cancellationToken), cancellationToken)
                 && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.Timesheet, sheet.Id, currentUser.Email, cancellationToken))
             {
                 throw new UnauthorizedAccessException(notYours);
@@ -166,7 +166,7 @@ public sealed class TimesheetApprovalService(
     {
         var email = currentUser.Email.Trim().ToLowerInvariant();
         var me = await TimesheetQueries.FindByEmailAsync(db, email, cancellationToken);
-        var isAdmin = (await access.GetOrgRolesAsync(cancellationToken)).IsAdmin();
+        var isAdmin = await access.HasAsync(Permission.ApprovalsActAsAdmin, cancellationToken);
         var myId = me?.Id;
         return await db.Set<Employee>().AsNoTracking()
             .Where(e => e.Email != email && ((myId != null && e.SupervisorId == myId) || (isAdmin && e.SupervisorId == null)))

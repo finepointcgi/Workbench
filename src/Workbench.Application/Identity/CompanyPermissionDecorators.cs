@@ -8,6 +8,7 @@ using Workbench.Contracts.Assets;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Cash;
 using Workbench.Contracts.Companies;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Accounting;
@@ -71,55 +72,55 @@ public sealed class PermissionCheckingCompanyService(ICompanyService inner, Acce
 
     public async Task<IReadOnlyList<CompanyDto>> ListAsync(bool includeInactive = true, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.ListAsync(includeInactive, cancellationToken);
     }
 
     public async Task<CompanyDto> CreateAsync(SaveCompanyRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.CreateAsync(request, cancellationToken);
     }
 
     public async Task<CompanyDto> UpdateAsync(Guid companyId, SaveCompanyRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.UpdateAsync(companyId, request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<UserCompanyAccessDto>> ListUserAccessAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "change which companies people can see", cancellationToken);
         return await inner.ListUserAccessAsync(cancellationToken);
     }
 
     public async Task<UserCompanyAccessDto> SetUserAccessAsync(Guid userId, SetUserCompanyAccessRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "change which companies people can see", cancellationToken);
         return await inner.SetUserAccessAsync(userId, request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CompanyRecordDto>> ListRecordsAsync(CompanyRecordKind kind, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.ListRecordsAsync(kind, cancellationToken);
     }
 
     public async Task<CompanyRecordDto> AssignAsync(AssignCompanyRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.AssignAsync(request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CompanyPeriodDto>> ListPeriodsAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.ListPeriodsAsync(fiscalPeriodId, cancellationToken);
     }
 
     public async Task<CompanyPeriodDto> SetPeriodClosedAsync(Guid companyId, Guid fiscalPeriodId, SetCompanyPeriodRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("close periods", cancellationToken);
+        await access.RequireAsync(Permission.GlClose, "close periods", cancellationToken);
         return await inner.SetPeriodClosedAsync(companyId, fiscalPeriodId, request, cancellationToken);
     }
 }
@@ -130,19 +131,19 @@ public sealed class PermissionCheckingIntercompanyService(IIntercompanyService i
 
     public async Task<IReadOnlyList<IntercompanyAccountDto>> ListAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.ListAsync(cancellationToken);
     }
 
     public async Task<IntercompanyAccountDto> SaveAsync(SaveIntercompanyAccountRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupCompanies, What, cancellationToken);
         return await inner.SaveAsync(request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<IntercompanyBalanceDto>> ListBalancesAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see intercompany balances", cancellationToken);
+        await access.RequireAsync(Permission.GlReportsView, "see intercompany balances", cancellationToken);
         return await inner.ListBalancesAsync(fiscalPeriodId, cancellationToken);
     }
 }
@@ -152,7 +153,7 @@ public sealed class PermissionCheckingConsolidationService(IConsolidationService
 {
     public async Task<ConsolidationDto> GetAsync(ConsolidatedReport report, ConsolidationRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see consolidated statements", cancellationToken);
+        await access.RequireAsync(Permission.GlReportsView, "see consolidated statements", cancellationToken);
         return await inner.GetAsync(report, request, cancellationToken);
     }
 }

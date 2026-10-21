@@ -29,46 +29,46 @@ public sealed record NavAccess(
 
     public bool IsSignedIn => User is not null;
 
-    public bool IsAdmin => User?.IsAdmin == true;
+    /// <summary>True when the user holds <paramref name="permission"/> (a <see cref="Permission"/> constant).</summary>
+    public bool Can(string permission) => User?.Can(permission) == true;
 
-    public bool IsFinance => User?.IsFinance == true;
+    /// <summary>Holds any Administration permission: sees the Admin section by that name (otherwise "Setup").</summary>
+    public bool IsAdministrator => User is { } u && u.Permissions.Any(p => PermissionCatalog.Find(p)?.Area == PermissionCatalog.AreaAdministration);
 
-    public bool IsTimekeeper => User?.Roles.HasFlag(OrgRoles.Timekeeper) == true;
+    public bool IsResourceManager => Can(Permission.ResourcingManage);
 
-    public bool IsResourceManager => User?.Roles.IsResourceManager() == true;
+    /// <summary>Manages personnel records (HR).</summary>
+    public bool IsHr => Can(Permission.HrRecordsManage);
 
-    /// <summary>HR or Admin: personnel records, compensation, benefits, onboarding and HR reports.</summary>
-    public bool IsHr => User?.Roles.IsHr() == true;
+    /// <summary>Holds "Run the projects you manage" (whether or not they manage a project yet).</summary>
+    public bool HasProjectManagerRole => Can(Permission.ProjectsManageOwn);
 
-    /// <summary>Has the Project manager org role (whether or not they manage a project yet).</summary>
-    public bool HasProjectManagerRole => User?.Roles.HasFlag(OrgRoles.ProjectManager) == true;
-
-    /// <summary>Runs projects: the Project manager role, or the manager of at least one project.</summary>
+    /// <summary>Runs projects: "Run the projects you manage", or the manager of at least one project.</summary>
     public bool IsPm => IsProjectManager || HasProjectManagerRole;
 
-    /// <summary>Has the Materials org role (or is an administrator): changes parts, inventory, BOMs, work orders and MRP.</summary>
-    public bool IsMaterials => User?.Roles.IsMaterials() == true;
+    /// <summary>Changes parts, inventory, BOMs, work orders and MRP.</summary>
+    public bool IsMaterials => Can(Permission.MaterialsManage);
 
-    /// <summary>Materials, Finance or Admin: sees the Materials section.</summary>
-    public bool CanViewMaterials => User?.Roles.CanViewMaterials() == true;
+    /// <summary>Sees the Materials section.</summary>
+    public bool CanViewMaterials => Can(Permission.MaterialsView);
 
-    /// <summary>Sees the whole capture pipeline: Business development, Finance or Admin.</summary>
-    public bool SeesPipeline => User?.Roles.CanViewPipeline() == true;
+    /// <summary>Sees the whole capture pipeline.</summary>
+    public bool SeesPipeline => Can(Permission.PipelineView);
 
     /// <summary>The pipeline, or the capture/proposal manager of an opportunity (who sees just theirs).</summary>
     public bool ShowBusinessDevelopment => SeesPipeline || ManagesOpportunities;
 
-    /// <summary>Prices proposals: the Pricing role, Finance or Admin.</summary>
-    public bool CanPrice => User?.Roles.CanPrice() == true;
+    /// <summary>Prices proposals.</summary>
+    public bool CanPrice => Can(Permission.PricingManage);
 
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
 
     /// <summary>Anyone who approves something, or has something waiting on them.</summary>
-    public bool ShowApprovals => IsSignedIn && (ApprovalCount > 0 || IsFinance || IsTimekeeper || IsTimesheetApprover || IsLeaveApprover || IsPm);
+    public bool ShowApprovals => IsSignedIn && (ApprovalCount > 0 || Can(Permission.ApBillsManage) || Can(Permission.TimeTeam) || IsTimesheetApprover || IsLeaveApprover || IsPm);
 
-    /// <summary>Supervisors, timekeepers and administrators see their team's timesheets.</summary>
-    public bool ShowTeamTime => IsAdmin || IsTimekeeper || IsTimesheetApprover;
+    /// <summary>Supervisors see their team's timesheets; "Team time for everyone" sees everyone's.</summary>
+    public bool ShowTeamTime => Can(Permission.TimeTeam) || IsTimesheetApprover;
 
     /// <summary>
     /// Works out the user's access from whichever services are registered (tests register only some). Each lookup is
@@ -95,11 +95,11 @@ public sealed record NavAccess(
         var leave = services.GetService<ILeaveRequestService>();
         var leaveApprover = await TryAsync(leave, s => s.IsApproverAsync(cancellationToken), false);
         var leavePending = leaveApprover ? await TryAsync(leave, async s => (await s.ListPendingApprovalsAsync(cancellationToken)).Count, 0) : 0;
-        var receivable = user.IsFinance ? 0 : await TryAsync(services.GetService<IPurchaseOrderService>(), async s => (await s.ListReceivableAsync(cancellationToken)).Count, 0);
+        var receivable = user.Can(Permission.PurchaseOrdersManage) ? 0 : await TryAsync(services.GetService<IPurchaseOrderService>(), async s => (await s.ListReceivableAsync(cancellationToken)).Count, 0);
         var projectManager = user.EmployeeId is { } employeeId && await TryAsync(services.GetService<IProjectService>(),
             async s => (await s.ListProjectsAsync(cancellationToken)).Any(p => p.ProjectManagerId == employeeId), false);
         var approvals = await CountApprovalsAsync(services, cancellationToken);
-        var opportunities = !user.Roles.CanViewPipeline() && await TryAsync(services.GetService<Contracts.Crm.IOpportunityService>(),
+        var opportunities = !user.Can(Permission.PipelineView) && await TryAsync(services.GetService<Contracts.Crm.IOpportunityService>(),
             async s => (await s.ListAsync(new Contracts.Crm.OpportunityFilter(MineOnly: true), cancellationToken)).Count > 0, false);
 
         var ownsBudget = await TryAsync(services.GetService<Contracts.Planning.IPlanningCycleService>(), async s => (await s.ListMineAsync(cancellationToken)).Count > 0, false);

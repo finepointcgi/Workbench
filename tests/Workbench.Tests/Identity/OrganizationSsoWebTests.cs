@@ -109,8 +109,8 @@ public sealed class OrganizationSsoWebTests
         using var outsider = await web.SignInAsync(web.Browser(), new MockOidcProvider.User("someone@other.example", "Someone", ["pwd"]));
 
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
-        Assert.True(user.IsFinance);
-        Assert.False(user.IsAdmin);
+        Assert.True((await web.RolesAsync("new.hire@acme.example")).HasFlag(OrgRoles.Finance));
+        Assert.False((await web.RolesAsync("new.hire@acme.example")).HasFlag(OrgRoles.Admin));
         Assert.Equal("/account/access-denied?reason=signin", outsider.Headers.Location!.OriginalString);
     }
 
@@ -156,7 +156,7 @@ public sealed class OrganizationSsoWebTests
         await using var scope = factory.Services.CreateAsyncScope();
         await using (var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync())
         {
-            db.Set<AppUser>().Add(new AppUser { Email = Admin, DisplayName = "Ada Admin", IsAdmin = true, CreatedAtUtc = DateTime.UtcNow });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = Admin, DisplayName = "Ada Admin", CreatedAtUtc = DateTime.UtcNow }, OrgRoles.Admin);
             await db.SaveChangesAsync();
         }
 
@@ -215,6 +215,14 @@ public sealed class OrganizationSsoWebTests
             await using var scope = factory.Services.CreateAsyncScope();
             await using var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync();
             return await db.Set<AppUser>().AsNoTracking().SingleAsync(u => u.Email == email);
+        }
+
+        /// <summary>The built-in roles the user holds.</summary>
+        public async Task<OrgRoles> RolesAsync(string email)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            await using var db = await scope.ServiceProvider.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync();
+            return BuiltInRoles.FlagsOf(await RoleStore.RoleIdsOfAsync(db, (await UserAsync(email)).Id, default));
         }
 
         public ValueTask DisposeAsync() => factory.DisposeAsync();

@@ -179,7 +179,7 @@ else
 
     private InvoiceDto? _invoice;
     private IReadOnlyList<BillingClinDto> _clins = [];
-    private bool _isFinance => Access?.IsFinance == true;
+    private bool _isFinance => Access?.Can(Workbench.Contracts.Identity.Permission.BillingInvoicesManage) == true;
     private bool _busy;
     private string? _error;
     private bool _forbidden;

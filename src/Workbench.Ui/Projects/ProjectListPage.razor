@@ -205,7 +205,7 @@ else
         try
         {
             // Optional so the page renders where no user context is registered (tests).
-            _canCreate = Services.GetService(typeof(ICurrentUserContext)) is ICurrentUserContext context && (await context.GetAsync()).Roles.CanManageProjects();
+            _canCreate = Services.GetService(typeof(ICurrentUserContext)) is ICurrentUserContext context && (await context.GetAsync()).Can(Workbench.Contracts.Identity.Permission.ProjectsCreate);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {

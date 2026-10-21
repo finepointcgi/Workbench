@@ -159,7 +159,7 @@ else
     {
         try
         {
-            _finance = (await UserContext.GetAsync()).IsFinance;
+            _finance = (await UserContext.GetAsync()).Can(Workbench.Contracts.Identity.Permission.PurchaseOrdersManage);
             _po = await Orders.GetAsync(OrderId);
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

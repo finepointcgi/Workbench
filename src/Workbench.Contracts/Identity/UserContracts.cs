@@ -1,8 +1,10 @@
 namespace Workbench.Contracts.Identity;
 
 /// <summary>
-/// Organization-level roles, alongside the per-workspace <see cref="WorkspaceRole"/>s. Everyone is an
-/// <see cref="Employee"/>; the others combine. <see cref="Admin"/> can do everything.
+/// The ten built-in organization roles, as flags (alongside the per-workspace <see cref="WorkspaceRole"/>s). Everyone is
+/// an <see cref="Employee"/>; the others combine. Kept as a compatibility layer: roles are now bundles of
+/// <see cref="Permission"/>s (<see cref="BuiltInRoles"/>, custom roles in Admin › Roles), and access is decided by
+/// permissions, never by these flags.
 /// </summary>
 [Flags]
 public enum OrgRoles
@@ -47,6 +49,11 @@ public enum OrgRoles
     Pricing = 256,
 }
 
+/// <summary>
+/// What the built-in role flags meant before permissions (for display, the API's role flags and tests). Don't decide access
+/// with these: check a <see cref="Permission"/> (<c>AccessControl.RequireAsync</c>, <c>CurrentUserInfo.Can</c>), so custom
+/// roles work too.
+/// </summary>
 public static class OrgRoleChecks
 {
     public static bool IsAdmin(this OrgRoles roles) => roles.HasFlag(OrgRoles.Admin);
@@ -102,9 +109,10 @@ public static class OrgRoleChecks
     };
 }
 
-public sealed record UserDto(string Email, string DisplayName, OrgRoles Roles, DateTime CreatedAtUtc, DateTime? LastSeenAtUtc)
+/// <summary>A user. <see cref="Roles"/> are the built-in roles held; <see cref="AssignedRoles"/> every role (built-in and custom).</summary>
+public sealed record UserDto(string Email, string DisplayName, OrgRoles Roles, DateTime CreatedAtUtc, DateTime? LastSeenAtUtc, IReadOnlyList<RoleRef>? AssignedRoles = null)
 {
-    public bool IsAdmin => Roles.IsAdmin();
+    public bool IsAdmin => Roles.HasFlag(OrgRoles.Admin);
 }
 
 /// <summary>People who have signed in (or were added). Used for Person columns, mentions, sharing and admin.</summary>
@@ -126,16 +134,32 @@ public interface IUserDirectory
 /// <summary>
 /// Who is signed in, for permission decisions in other features (for example a supervisor approving a timesheet).
 /// <see cref="EmployeeId"/> links the sign-in to the employee record with the same email, when there is one.
+/// <see cref="Roles"/> lists the built-in roles held; <see cref="PermissionKeys"/> is the union of every role held
+/// (built-in and custom). Decide with <see cref="Can"/>; when <see cref="PermissionKeys"/> is null (built from roles
+/// alone, as tests do) the built-in roles' permissions apply.
 /// </summary>
-public sealed record CurrentUserInfo(string Email, string DisplayName, OrgRoles Roles, Guid? EmployeeId)
+public sealed record CurrentUserInfo(
+    string Email,
+    string DisplayName,
+    OrgRoles Roles,
+    Guid? EmployeeId,
+    IReadOnlyList<string>? PermissionKeys = null,
+    IReadOnlyList<RoleRef>? AssignedRoles = null)
 {
-    public bool IsAdmin => Roles.IsAdmin();
+    private PermissionSet? _permissions;
 
-    public bool IsFinance => Roles.IsFinance();
+    /// <summary>The user's effective permissions.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public PermissionSet Permissions => _permissions ??= PermissionKeys is null ? PermissionCatalog.ForBuiltInRoles(Roles) : PermissionSet.Of(PermissionKeys);
 
-    public bool CanViewAllTimesheets => Roles.CanViewAllTimesheets();
+    /// <summary>True when the user holds <paramref name="permission"/> (a <see cref="Permission"/> constant).</summary>
+    public bool Can(string permission) => Permissions.Has(permission);
 
-    public bool IsHr => Roles.IsHr();
+    /// <summary>True when the user holds any of <paramref name="permissions"/>.</summary>
+    public bool CanAny(params string[] permissions) => Permissions.HasAny(permissions);
+
+    /// <summary>Holds the built-in Admin role. For access decisions use <see cref="Can"/>.</summary>
+    public bool IsAdmin => Roles.HasFlag(OrgRoles.Admin);
 }
 
 public interface ICurrentUserContext

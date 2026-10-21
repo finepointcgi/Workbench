@@ -15,13 +15,18 @@ public sealed class ProjectHubAccess(IWorkbenchDbContextFactory dbFactory, Acces
 {
     public AccessControl Access => access;
 
-    public sealed record Viewer(bool IsFinance, bool IsAdmin, Guid? EmployeeId, bool IsProjectManager = false);
+    /// <param name="IsFinance">Sees every project and its financials (<see cref="Permission.ProjectsFinancialsView"/>).</param>
+    /// <param name="IsAdmin">Owns every workspace (<see cref="Permission.AdminAllWorkspaces"/>).</param>
+    /// <param name="IsProjectManager">Runs the projects they manage (<see cref="Permission.ProjectsManageOwn"/>).</param>
+    /// <param name="SetsUpAll">Sets up every project (<see cref="Permission.SetupProjects"/>).</param>
+    public sealed record Viewer(bool IsFinance, bool IsAdmin, Guid? EmployeeId, bool IsProjectManager = false, bool SetsUpAll = false);
 
     public async Task<Viewer> GetViewerAsync(CancellationToken ct)
     {
         access.RequireSignedIn();
-        var roles = await access.GetOrgRolesAsync(ct);
-        return new Viewer(roles.IsFinance(), roles.IsAdmin(), await access.GetEmployeeIdAsync(ct), roles.HasFlag(Contracts.Identity.OrgRoles.ProjectManager));
+        var permissions = await access.GetPermissionsAsync(ct);
+        return new Viewer(permissions.Has(Permission.ProjectsFinancialsView), permissions.Has(Permission.AdminAllWorkspaces), await access.GetEmployeeIdAsync(ct),
+            permissions.Has(Permission.ProjectsManageOwn), permissions.Has(Permission.SetupProjects));
     }
 
     /// <summary>Projects the employee has recorded time on, is assigned to (on a WBS element) or is allocated to.</summary>

@@ -1,3 +1,4 @@
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Imports;
 
 namespace Workbench.Application.Identity;
@@ -10,7 +11,7 @@ public sealed class PermissionCheckingImportService(IImportService inner, Access
 {
     private const string What = "import data";
 
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SetupImports, What, ct);
 
     public async Task<IReadOnlyList<ImportKindDto>> ListKindsAsync(CancellationToken cancellationToken = default)
     {

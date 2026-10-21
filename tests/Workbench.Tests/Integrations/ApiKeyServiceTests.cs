@@ -32,7 +32,8 @@ public sealed class ApiKeyServiceTests
         Assert.Equal(IntegrationSecrets.HashApiKey(created.Key), row.KeyHash);
         Assert.DoesNotContain(created.Key, row.KeyHash + row.Prefix + row.Scopes);
         var user = await db.Set<AppUser>().AsNoTracking().SingleAsync(u => u.Email == row.ServiceUserEmail);
-        Assert.True(user is { IsActive: true, IsFinance: true, IsAdmin: false });
+        var roles = BuiltInRoles.FlagsOf(await Workbench.Application.Identity.RoleStore.RoleIdsOfAsync(db, user.Id, default));
+        Assert.True(user.IsActive && roles.HasFlag(OrgRoles.Finance) && !roles.HasFlag(OrgRoles.Admin));
         var events = await db.Set<SecurityEvent>().AsNoTracking().Where(e => e.EventType == SecurityEventTypes.ApiKeyCreated).ToListAsync();
         Assert.DoesNotContain(created.Key, Assert.Single(events).Detail);
 
@@ -88,14 +89,14 @@ public sealed class ApiKeyServiceTests
         await using (var db = await host.Get<IWorkbenchDbContextFactory>().CreateAsync())
         {
             var user = await db.Set<AppUser>().SingleAsync(u => u.Email == key.ApiKey.ServiceUserEmail);
-            user.IsAdmin = true; // someone promoted the service user elsewhere
+            await Workbench.Application.Identity.RoleStore.GrantBuiltInAsync(db, user, OrgRoles.Admin); // someone promoted the service user elsewhere
             await db.SaveChangesAsync();
         }
 
         await host.Get<ApiKeyAuthenticator>().AuthenticateAsync(key.Key, null, CancellationToken.None);
         await using (var db = await host.Get<IWorkbenchDbContextFactory>().CreateAsync())
         {
-            Assert.False((await db.Set<AppUser>().AsNoTracking().SingleAsync(u => u.Email == key.ApiKey.ServiceUserEmail)).IsAdmin);
+            Assert.False((await Workbench.Application.Identity.RoleStore.BuiltInRolesOfAsync(db, key.ApiKey.ServiceUserEmail, default)).HasFlag(OrgRoles.Admin));
         }
     }
 

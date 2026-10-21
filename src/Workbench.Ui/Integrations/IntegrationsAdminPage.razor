@@ -1,5 +1,5 @@
 @page "/admin/integrations"
-@inject IUserDirectory Users
+@inject ICurrentUserContext CurrentUser
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -15,9 +15,9 @@
 {
     <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
-else if (_me is not { IsAdmin: true })
+else if (_me?.Can(Permission.AdminIntegrations) != true)
 {
-    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Only administrators can manage integrations.</MudAlert>
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Integrations need the "Manage integrations" permission. Ask an administrator if you need it.</MudAlert>
 }
 else
 {
@@ -44,7 +44,7 @@ else
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }
 
-    private UserDto? _me;
+    private CurrentUserInfo? _me;
     private bool _loading = true;
     private int _tab;
     private Guid? _endpointFilter;
@@ -55,7 +55,7 @@ else
     {
         try
         {
-            _me = await Users.GetMeAsync();
+            _me = await CurrentUser.GetAsync();
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {

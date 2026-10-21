@@ -283,7 +283,7 @@ else
         try
         {
             var me = await CurrentUser.GetAsync();
-            (_employeeId, _isFinance) = (me.EmployeeId, me.IsFinance);
+            (_employeeId, _isFinance) = (me.EmployeeId, me.Can(Workbench.Contracts.Identity.Permission.TravelManage));
             if (Id is { } id)
             {
                 Apply(await Travel.GetAsync(id));

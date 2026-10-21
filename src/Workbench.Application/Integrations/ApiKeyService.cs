@@ -23,20 +23,26 @@ public static class ApiKeyPrincipal
     public static bool IsServiceAccount(string? email) =>
         email is not null && email.EndsWith("@" + EmailDomain, StringComparison.OrdinalIgnoreCase);
 
-    internal static OrgRoles RolesOf(AppUser u) =>
-        AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment, u.IsPricing);
-
-    internal static void SetRoles(AppUser u, OrgRoles roles)
+    /// <summary>The roles a key's service user holds: its built-in roles plus its custom roles that still exist.</summary>
+    internal static async Task<IReadOnlyList<Guid>> RoleIdsOfAsync(IWorkbenchDbContext db, ApiKey key, CancellationToken ct)
     {
-        u.IsAdmin = roles.HasFlag(OrgRoles.Admin);
-        u.IsFinance = roles.HasFlag(OrgRoles.Finance);
-        u.IsTimekeeper = roles.HasFlag(OrgRoles.Timekeeper);
-        u.IsResourceManager = roles.HasFlag(OrgRoles.ResourceManager);
-        u.IsProjectManager = roles.HasFlag(OrgRoles.ProjectManager);
-        u.IsHr = roles.HasFlag(OrgRoles.Hr);
-        u.IsMaterials = roles.HasFlag(OrgRoles.Materials);
-        u.IsBusinessDevelopment = roles.HasFlag(OrgRoles.BusinessDevelopment);
-        u.IsPricing = roles.HasFlag(OrgRoles.Pricing);
+        var custom = RoleStore.ParseIds(key.CustomRoleIds).ToList();
+        var existing = custom.Count == 0 ? [] : await db.Set<Role>().AsNoTracking().Where(r => custom.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
+        return RoleGrant.Of((OrgRoles)key.Roles, existing).RoleIds;
+    }
+
+    /// <summary>Makes the service user hold exactly the key's roles (tracked, not saved). True when something changed.</summary>
+    internal static async Task<bool> SyncRolesAsync(IWorkbenchDbContext db, AppUser user, ApiKey key, DateTime now, CancellationToken ct)
+    {
+        var wanted = await RoleIdsOfAsync(db, key, ct);
+        var held = await RoleStore.RoleIdsOfAsync(db, user.Id, ct);
+        if (held.ToHashSet().SetEquals(wanted))
+        {
+            return false;
+        }
+
+        await RoleStore.ReplaceAsync(db, user, wanted, "api-key", now, ct);
+        return true;
     }
 }
 
@@ -48,7 +54,7 @@ public sealed class ApiKeyService(
     UserStatusCache statusCache,
     TimeProvider clock) : IApiKeyService
 {
-    private static readonly OrgRoles KnownRoles = Enum.GetValues<OrgRoles>().Aggregate((a, b) => a | b);
+    private static readonly OrgRoles KnownRoles = OrgRoleChecks.Everything;
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private string Me => currentUser.Email.Trim().ToLowerInvariant();
 
@@ -56,7 +62,8 @@ public sealed class ApiKeyService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var keys = await db.Set<ApiKey>().AsNoTracking().OrderByDescending(k => k.CreatedAtUtc).ToListAsync(cancellationToken);
-        return keys.Select(k => ToDto(k, Now)).ToList();
+        var names = (await RoleStore.RefsAsync(db, keys.SelectMany(k => RoleStore.ParseIds(k.CustomRoleIds)), cancellationToken)).ToDictionary(r => r.Id);
+        return keys.Select(k => ToDto(k, Now, names)).ToList();
     }
 
     public async Task<ApiKeyCreatedDto> CreateAsync(CreateApiKeyRequest request, CancellationToken cancellationToken = default)
@@ -101,18 +108,21 @@ public sealed class ApiKeyService(
         row.ServiceUserEmail = ApiKeyPrincipal.EmailFor(row.Id);
 
         var user = new AppUser { Email = row.ServiceUserEmail, DisplayName = $"API key: {name}"[..Math.Min(name.Length + 9, 200)], CreatedAtUtc = now, IsActive = true };
-        ApiKeyPrincipal.SetRoles(user, request.Roles);
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        row.CustomRoleIds = RoleStore.FormatIds(await RoleStore.ValidateCustomAsync(db, request.CustomRoleIds, cancellationToken));
         db.Set<AppUser>().Add(user);
         db.Set<ApiKey>().Add(row);
+        await ApiKeyPrincipal.SyncRolesAsync(db, user, row, now, cancellationToken);
+        var refs = await RoleStore.RefsAsync(db, await ApiKeyPrincipal.RoleIdsOfAsync(db, row, cancellationToken), cancellationToken);
+        RoleStore.RecordAssignmentAudit(db, user, [], refs, Me, now);
         await db.SaveChangesAsync(cancellationToken);
         statusCache.Invalidate(row.ServiceUserEmail);
         await securityLog.RecordAsync(SecurityEventTypes.ApiKeyCreated, $"{row.Prefix}… {name}",
-            detail: $"Scopes: {row.Scopes}; roles: {(request.Roles == OrgRoles.Employee ? "Employee" : request.Roles.ToString())}; service user {row.ServiceUserEmail}"
+            detail: $"Scopes: {row.Scopes}; roles: {RoleStore.Describe(refs)}; service user {row.ServiceUserEmail}"
                 + (row.ExpiresAtUtc is { } x ? $"; expires {x:yyyy-MM-dd}" : ""),
             cancellationToken: cancellationToken);
-        return new ApiKeyCreatedDto(ToDto(row, now), key);
+        return new ApiKeyCreatedDto(ToDto(row, now, refs.ToDictionary(r => r.Id)), key);
     }
 
     public async Task<ApiKeyDto> RevokeAsync(Guid apiKeyId, RevokeApiKeyRequest request, CancellationToken cancellationToken = default)
@@ -121,7 +131,7 @@ public sealed class ApiKeyService(
         var row = await db.Set<ApiKey>().FirstOrDefaultAsync(k => k.Id == apiKeyId, cancellationToken) ?? throw WorkbenchNotFoundException.For("API key", apiKeyId);
         if (row.RevokedAtUtc is not null)
         {
-            return ToDto(row, Now);
+            return ToDto(row, Now, new Dictionary<Guid, RoleRef>());
         }
 
         var now = Now;
@@ -140,12 +150,13 @@ public sealed class ApiKeyService(
         await db.SaveChangesAsync(cancellationToken);
         statusCache.Invalidate(row.ServiceUserEmail);
         await securityLog.RecordAsync(SecurityEventTypes.ApiKeyRevoked, $"{row.Prefix}… {row.Name}", detail: reason, cancellationToken: cancellationToken);
-        return ToDto(row, now);
+        return ToDto(row, now, (await RoleStore.RefsAsync(db, RoleStore.ParseIds(row.CustomRoleIds), cancellationToken)).ToDictionary(r => r.Id));
     }
 
-    internal static ApiKeyDto ToDto(ApiKey k, DateTime now) => new(
+    internal static ApiKeyDto ToDto(ApiKey k, DateTime now, IReadOnlyDictionary<Guid, RoleRef> roleNames) => new(
         k.Id, k.Name, k.Description, k.Prefix, (OrgRoles)k.Roles, k.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries), k.ServiceUserEmail, k.CreatedBy,
-        k.CreatedAtUtc, k.ExpiresAtUtc, k.RevokedAtUtc, k.RevokedBy, k.LastUsedAtUtc, k.LastUsedFrom, k.IsUsable(now));
+        k.CreatedAtUtc, k.ExpiresAtUtc, k.RevokedAtUtc, k.RevokedBy, k.LastUsedAtUtc, k.LastUsedFrom, k.IsUsable(now),
+        RoleStore.ParseIds(k.CustomRoleIds).Select(roleNames.GetValueOrDefault).OfType<RoleRef>().ToList());
 }
 
 /// <summary>Who a valid API key is: its service user and scopes.</summary>
@@ -197,12 +208,7 @@ public sealed class ApiKeyAuthenticator(IWorkbenchDbContextFactory dbFactory, Se
             return (null, failure);
         }
 
-        var changed = false;
-        if (ApiKeyPrincipal.RolesOf(user!) != (OrgRoles)key!.Roles)
-        {
-            ApiKeyPrincipal.SetRoles(user!, (OrgRoles)key.Roles);
-            changed = true;
-        }
+        var changed = await ApiKeyPrincipal.SyncRolesAsync(db, user!, key!, now, cancellationToken);
 
         if (key.LastUsedAtUtc is not { } last || now - last >= LastUsedResolution || key.LastUsedFrom != Clip(remoteAddress))
         {

@@ -32,7 +32,7 @@
 {
     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
         @(_report.IsMine ? "Your report" : $"Owned by {_report.OwnerEmail}") ·
-        @(_report.Visibility == ReportVisibility.Shared ? $"shared with {string.Join(", ", _report.SharedWith.Select(r => r == OrgRoles.Employee ? "everyone" : r.ToString()))}" : "private") ·
+        @(_report.Visibility == ReportVisibility.Shared ? $"shared with {string.Join(", ", _report.SharedWith.Select(r => r == OrgRoles.Employee ? "everyone" : OrgRoleChecks.Label(r)).Concat((_report.SharedWithRoles ?? []).Select(r => r.Name)))}" : "private") ·
         runs with your access
     </MudText>
 

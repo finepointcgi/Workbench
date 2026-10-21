@@ -34,7 +34,7 @@ public sealed class PermissionCheckingRequisitionService(IRequisitionService inn
     private async Task RequireVisibleAsync(Guid requisitionId, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (await access.HasAsync(Permission.PurchaseOrdersManage, ct))
         {
             return;
         }
@@ -116,13 +116,13 @@ public sealed class PermissionCheckingPurchaseOrderService(IPurchaseOrderService
 {
     private const string What = "work with purchase orders";
 
-    private Task RequireFinanceAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireFinanceAsync(CancellationToken ct) => access.RequireAsync(Permission.PurchaseOrdersManage, What, ct);
 
     /// <summary>Finance, Materials (receives into inventory), or a receiver named on the order; to anyone else it doesn't exist.</summary>
     private async Task RequireReceiverAsync(Guid purchaseOrderId, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(ct)) is var roles && (roles.IsFinance() || roles.IsMaterials()))
+        if ((await access.GetPermissionsAsync(ct)) is var roles && roles.HasAny(Permission.PurchaseOrdersManage, Permission.MaterialsManage))
         {
             return;
         }
@@ -214,19 +214,19 @@ public sealed class PermissionCheckingThreeWayMatchService(IThreeWayMatchService
 
     public async Task<IReadOnlyList<MatchExceptionDto>> ListExceptionsAsync(bool includeOverridden = false, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.PurchaseOrdersManage, What, cancellationToken);
         return await inner.ListExceptionsAsync(includeOverridden, cancellationToken);
     }
 
     public async Task<MatchExceptionDto> OverrideAsync(Guid billLineId, MatchOverrideRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("override a three-way match", cancellationToken);
+        await access.RequireAsync(Permission.PurchaseOrdersManage, "override a three-way match", cancellationToken);
         return await inner.OverrideAsync(billLineId, request, cancellationToken);
     }
 
     public async Task<SaveBillRequest> BuildBillAsync(CreateBillFromPurchaseOrderRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("bill purchase orders", cancellationToken);
+        await access.RequireAsync(Permission.ApBillsManage, "bill purchase orders", cancellationToken);
         return await inner.BuildBillAsync(request, cancellationToken);
     }
 }

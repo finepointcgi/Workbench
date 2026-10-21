@@ -1,0 +1,31 @@
+@* Asks for a role's name (new role, clone). *@
+
+<MudDialog>
+    <DialogContent>
+        @if (Message is not null)
+        {
+            <MudText Class="mb-3">@Message</MudText>
+        }
+        <MudTextField T="string" @bind-Value="_name" Immediate="true" Label="Role name" MaxLength="80" AutoFocus="true" Variant="Variant.Outlined" data-testid="role-name" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_name)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(_name!.Trim()))" data-testid="role-name-ok">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string? Message { get; set; }
+
+    [Parameter] public string? Name { get; set; }
+
+    [Parameter] public string ConfirmText { get; set; } = "Create";
+
+    private string? _name;
+
+    protected override void OnInitialized() => _name = Name;
+}

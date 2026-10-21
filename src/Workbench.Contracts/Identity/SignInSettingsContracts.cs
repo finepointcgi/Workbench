@@ -27,7 +27,7 @@ public enum JitProvisioningMode
     AllowedDomains,
 }
 
-public sealed record SsoGroupMappingDto(Guid Id, string GroupValue, OrgRoles Roles, string? Description);
+public sealed record SsoGroupMappingDto(Guid Id, string GroupValue, OrgRoles Roles, string? Description, IReadOnlyList<RoleRef>? CustomRoles = null);
 
 /// <summary>
 /// The organization's sign-in settings as administrators see them. The client secret is never returned, only whether
@@ -85,7 +85,8 @@ public sealed record SaveSsoProviderRequest(
 
 public sealed record SaveMfaPolicyRequest(MfaRequirement Mfa, string? AcceptedAmrValues, string? AcceptedAcrValues, string? RequestedAcrValues);
 
-public sealed record SaveSsoGroupMapping(string GroupValue, OrgRoles Roles, string? Description = null);
+/// <param name="CustomRoleIds">Custom roles the group grants, besides the built-in <paramref name="Roles"/>.</param>
+public sealed record SaveSsoGroupMapping(string GroupValue, OrgRoles Roles, string? Description = null, IReadOnlyList<Guid>? CustomRoleIds = null);
 
 public sealed record SaveProvisioningRequest(
     JitProvisioningMode Mode,

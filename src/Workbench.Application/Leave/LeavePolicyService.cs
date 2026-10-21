@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Leave;
 using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
@@ -56,7 +57,7 @@ public sealed class LeavePolicyService(IWorkbenchDbContextFactory dbFactory, Acc
 
     public async Task<LeavePolicyDto> CreateAsync(SaveLeavePolicyRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.LeavePoliciesManage, "manage leave policies and holidays", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var policy = new LeavePolicy { Code = "", Name = "" };
         await ApplyAsync(db, policy, request, cancellationToken);
@@ -68,7 +69,7 @@ public sealed class LeavePolicyService(IWorkbenchDbContextFactory dbFactory, Acc
 
     public async Task<LeavePolicyDto> UpdateAsync(Guid policyId, SaveLeavePolicyRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.LeavePoliciesManage, "manage leave policies and holidays", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var policy = await db.Set<LeavePolicy>().Include(p => p.Tiers).FirstOrDefaultAsync(p => p.Id == policyId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Leave policy", policyId);
@@ -184,7 +185,7 @@ public sealed class HolidayService(IWorkbenchDbContextFactory dbFactory, AccessC
 
     public async Task<HolidayDto> AddAsync(SaveHolidayRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.LeavePoliciesManage, "manage leave policies and holidays", cancellationToken);
         ArgumentNullException.ThrowIfNull(request);
         if (request.Hours is < 0 or > 24)
         {
@@ -206,7 +207,7 @@ public sealed class HolidayService(IWorkbenchDbContextFactory dbFactory, AccessC
 
     public async Task RemoveAsync(Guid holidayId, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.LeavePoliciesManage, "manage leave policies and holidays", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var holiday = await db.Set<Holiday>().FirstOrDefaultAsync(h => h.Id == holidayId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Holiday", holidayId);
@@ -217,7 +218,7 @@ public sealed class HolidayService(IWorkbenchDbContextFactory dbFactory, AccessC
 
     public async Task<int> ApplyFederalTemplateAsync(int year, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.LeavePoliciesManage, "manage leave policies and holidays", cancellationToken);
         if (year is < 2000 or > 2100)
         {
             throw new ArgumentException("Choose a year between 2000 and 2100.");

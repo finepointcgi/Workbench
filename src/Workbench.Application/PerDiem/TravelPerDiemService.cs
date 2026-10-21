@@ -322,7 +322,7 @@ public sealed class TravelPerDiemService(
             return;
         }
 
-        if (!(await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (!await access.HasAsync(Permission.TravelManage, ct))
         {
             throw new WorkbenchForbiddenException("Only the traveler, their supervisor, Finance and administrators can see this per diem.");
         }

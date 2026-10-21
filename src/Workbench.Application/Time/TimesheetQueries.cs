@@ -25,7 +25,7 @@ internal static class TimesheetQueries
     /// DCAA: timesheets are approved by the employee's supervisor, or by an Admin when the employee has no supervisor.
     /// Nobody approves their own timesheet. Timekeeper and Finance can view timesheets but never approve them as such.
     /// </summary>
-    public static async Task<bool> CanApproveAsync(IWorkbenchDbContext db, Employee owner, string actorEmail, OrgRoles actorRoles, CancellationToken cancellationToken)
+    public static async Task<bool> CanApproveAsync(IWorkbenchDbContext db, Employee owner, string actorEmail, PermissionSet actorPermissions, CancellationToken cancellationToken)
     {
         if (string.Equals(owner.Email, actorEmail, StringComparison.OrdinalIgnoreCase))
         {
@@ -38,18 +38,18 @@ internal static class TimesheetQueries
             return supervisor is not null && string.Equals(supervisor.Email, actorEmail, StringComparison.OrdinalIgnoreCase);
         }
 
-        return actorRoles.IsAdmin();
+        return actorPermissions.Has(Permission.ApprovalsActAsAdmin);
     }
 
     /// <summary>
-    /// Who approves the employee's timesheets: their supervisor, or every administrator when they have none.
+    /// Who approves the employee's timesheets: their supervisor, or everyone who approves as a last resort (administrators) when they have none.
     /// The employee is never their own approver.
     /// </summary>
     public static async Task<IReadOnlyList<string>> ApproverEmailsAsync(IWorkbenchDbContext db, Employee owner, CancellationToken cancellationToken)
     {
         var emails = owner.SupervisorId is { } supervisorId
             ? await db.Set<Employee>().AsNoTracking().Where(e => e.Id == supervisorId).Select(e => e.Email).ToListAsync(cancellationToken)
-            : await db.Set<AppUser>().AsNoTracking().Where(u => u.IsAdmin).Select(u => u.Email).ToListAsync(cancellationToken);
+            : await Identity.RoleStore.EmailsWithPermissionAsync(db, Permission.ApprovalsActAsAdmin, cancellationToken);
         return emails.Where(e => !string.Equals(e, owner.Email, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
