@@ -775,3 +775,19 @@ Checks:
 - CAS disclosure statements are versioned (`DisclosureStatement`, answers per item); only drafts change. Items linked to the
   setup (`DisclosureItems`, `DisclosureLink`) compare their answer with the live configuration, and
   `ICasDisclosureService.CheckConsistencyAsync` flags CAS 401/402 differences. Add a link there when a new setting is disclosed.
+
+## Receipts library
+
+- `ReceiptDocument` (`Domain/Files`, mapping `Configurations/ReceiptConfigurations.cs`) is a person's library entry for a
+  `StoredFile`; the bytes are stored once. Expense lines point at the file through `OdcEntry.ReceiptAttachmentId`, so one folio
+  can back several lines; which lines use a file is always read from those lines (`ReceiptLibrary.UsesAsync`), never copied.
+- Attach a library file with `SaveExpenseLineRequest.ReceiptFileId` (or `AttachCardChargeRequest.ReceiptFileId`); new code
+  that takes receipts should call `ReceiptLibrary.AttachAsync` the same way (it checks the file is the actor's and audits
+  `ReceiptAttached`). A file in use can't be deleted; one that was ever attached is only hidden (`RemovedAtUtc`).
+- `IReceiptLibraryService` (`Contracts/Receipts`): people see only their own library; `PermissionCheckingReceiptLibraryService`
+  lets others open a file only through a line they can see (`IExpenseReportService.GetReportAsync` / `IOdcService.GetAsync`).
+- Reading: `ReceiptText` (PdfPig text layer) → `ReceiptParser` (pure folio/receipt heuristics) → `ReceiptReader`, which asks
+  the AI assistant (`AssistantInteractionKind.ReceiptReading`, audited) only when an admin turned it on and the text left
+  gaps; images and scans go to the provider only then. `LodgingRateChecker` compares each night with the per diem tables
+  (the report's per diem or trip destination first, else the folio's city). Values are suggestions; the UI never saves them
+  without the person. Sample folios: `tests/Workbench.Tests/Receipts/Samples`.

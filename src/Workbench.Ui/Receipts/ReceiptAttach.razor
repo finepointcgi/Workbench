@@ -1,0 +1,99 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Collaboration
+@inject IReceiptLibraryService Library
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@* Attach a receipt: "Upload new" (stored once in My receipts and read) or "Choose from my receipts". Raises OnRead with what was read. *@
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" data-testid="receipt-attach">
+    @if (FileName is { } name)
+    {
+        <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Color="Color.Primary" Variant="Variant.Outlined" data-testid="receipt-chosen">@name</MudChip>
+    }
+    <MudFileUpload T="IBrowserFile" @ref="_upload" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="_busy" Class="mt-0">
+        <CustomContent>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_busy"
+                       OnClick="@context.OpenFilePickerAsync" data-testid="receipt-upload-new">@(_busy ? "Reading…" : "Upload new")</MudButton>
+        </CustomContent>
+        <SelectedTemplate />
+    </MudFileUpload>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="ChooseAsync" Disabled="_busy"
+               data-testid="receipt-choose">Choose from my receipts</MudButton>
+</MudStack>
+
+@code {
+    /// <summary>The file attached or chosen so far.</summary>
+    [Parameter] public string? FileName { get; set; }
+
+    [Parameter] public Guid? CurrentFileId { get; set; }
+
+    /// <summary>The expense report, so a folio's room rate is checked against the trip's destination.</summary>
+    [Parameter] public Guid? ExpenseReportId { get; set; }
+
+    /// <summary>The amount being entered, to mark receipts with the same total in the picker.</summary>
+    [Parameter] public decimal? Amount { get; set; }
+
+    [Parameter, EditorRequired] public EventCallback<ReceiptReadingDto> OnRead { get; set; }
+
+    private MudFileUpload<IBrowserFile>? _upload;
+    private bool _busy;
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!AttachmentRules.IsAllowed(file.Name))
+        {
+            Snackbar.Add($"\"{Path.GetExtension(file.Name)}\" files can't be uploaded.", Severity.Warning);
+        }
+        else if (file.Size > AttachmentRules.MaxSizeBytes)
+        {
+            Snackbar.Add($"{file.Name} is larger than {AttachmentRules.MaxSizeBytes / (1024 * 1024)} MB.", Severity.Warning);
+        }
+        else
+        {
+            await RunAsync(async () =>
+            {
+                await using var stream = file.OpenReadStream(AttachmentRules.MaxSizeBytes);
+                return await Library.UploadAsync(file.Name, stream, ExpenseReportId);
+            }, $"Couldn't upload {file.Name}");
+        }
+
+        if (_upload is not null)
+        {
+            await _upload.ClearAsync();
+        }
+    }
+
+    private async Task ChooseAsync()
+    {
+        var parameters = new DialogParameters<ReceiptPickerDialog> { { d => d.CurrentFileId, CurrentFileId }, { d => d.Amount, Amount } };
+        var dialog = await DialogService.ShowAsync<ReceiptPickerDialog>("Choose from my receipts", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ReceiptDto chosen })
+        {
+            await RunAsync(() => Library.ReadAsync(chosen.Id, ExpenseReportId), $"Couldn't open {chosen.FileName}");
+        }
+    }
+
+    private async Task RunAsync(Func<Task<ReceiptReadingDto>> read, string failure)
+    {
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            await OnRead.InvokeAsync(await read());
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"{failure}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

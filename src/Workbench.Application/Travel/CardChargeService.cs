@@ -109,6 +109,11 @@ public sealed class CardChargeService(IWorkbenchDbContextFactory dbFactory, OdcW
         charge.AttachedBy = workflow.Actor;
         workflow.Audit.Record(db, OdcWorkflow.OdcEntityType, line.Id, "Created", after: OdcWorkflow.Snapshot(line), reason: $"Card charge ••{charge.CardLast4}");
         workflow.Audit.Record(db, CardProgramService.TransactionEntity, charge.Id, "Attached", null, new { line.ExpenseReportId, OdcEntryId = line.Id });
+        if (request.ReceiptFileId is { } receipt)
+        {
+            await Receipts.ReceiptLibrary.AttachAsync(db, workflow.Audit, workflow.Actor, line, receipt, workflow.UtcNow, cancellationToken);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         return await OdcWorkflow.ToDtoAsync(db, line, cancellationToken);
     }
