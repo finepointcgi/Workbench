@@ -118,19 +118,19 @@ public sealed class PermissionCheckingCustomFieldService(ICustomFieldService inn
 
     public async Task<CustomFieldDefinitionDto> SaveDefinitionAsync(Guid? id, SaveCustomFieldRequest request, CancellationToken cancellationToken = default)
     {
-        await check.Access.RequireAdminAsync(cancellationToken);
+        await check.Access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.SaveDefinitionAsync(id, request, cancellationToken);
     }
 
     public async Task<CustomFieldDefinitionDto> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default)
     {
-        await check.Access.RequireAdminAsync(cancellationToken);
+        await check.Access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.SetActiveAsync(id, isActive, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CustomFieldDefinitionDto>> ReorderAsync(string entityType, IReadOnlyList<Guid> orderedIds, CancellationToken cancellationToken = default)
     {
-        await check.Access.RequireAdminAsync(cancellationToken);
+        await check.Access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.ReorderAsync(entityType, orderedIds, cancellationToken);
     }
 
@@ -236,13 +236,13 @@ public sealed class PermissionCheckingCustomListService(ICustomListService inner
 
     public async Task<ValueListDto> SaveAsync(SaveValueListRequest request, CancellationToken cancellationToken = default)
     {
-        await check.Access.RequireAdminAsync(cancellationToken);
+        await check.Access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.SaveAsync(request, cancellationToken);
     }
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
-        await check.Access.RequireAdminAsync(cancellationToken);
+        await check.Access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         await inner.DeleteAsync(key, cancellationToken);
     }
 
@@ -254,7 +254,7 @@ public sealed class PermissionCheckingCustomListService(ICustomListService inner
 
     public async Task<StatusSetDto> SaveStatusSetAsync(string setKey, SaveStatusSetRequest request, CancellationToken cancellationToken = default)
     {
-        await check.Access.RequireAdminAsync(cancellationToken);
+        await check.Access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.SaveStatusSetAsync(setKey, request, cancellationToken);
     }
 
@@ -289,19 +289,19 @@ public sealed class PermissionCheckingNumberingService(INumberingService inner, 
 
     public async Task<NumberingSchemeDto> SaveAsync(string documentType, SaveNumberingSchemeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.SaveAsync(documentType, request, cancellationToken);
     }
 
     public async Task<NumberingSchemeDto> ResetAsync(string documentType, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.ResetAsync(documentType, cancellationToken);
     }
 
     public async Task<NumberingPreviewDto> PreviewAsync(string documentType, SaveNumberingSchemeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminCustomization, "manage customization", cancellationToken);
         return await inner.PreviewAsync(documentType, request, cancellationToken);
     }
 }

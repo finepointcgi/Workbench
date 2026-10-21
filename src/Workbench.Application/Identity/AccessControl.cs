@@ -138,6 +138,20 @@ public sealed class AccessControl(
     /// Throws <see cref="WorkbenchForbiddenException"/> (recorded as a denial) unless the user holds
     /// <paramref name="permission"/>. <paramref name="what"/> finishes "You need the … permission to …".
     /// </summary>
+    /// <summary>
+    /// Compatibility check on the built-in roles only (custom roles aren't in <see cref="GetOrgRolesAsync"/>), for rules
+    /// still written as "who holds these built-in roles", such as which roles manage a customizable record type. New
+    /// checks use <see cref="RequireAsync(string, string, CancellationToken)"/> with a permission.
+    /// </summary>
+    public async Task RequireRoleAsync(Func<OrgRoles, bool> allowed, string message, CancellationToken cancellationToken = default)
+    {
+        RequireSignedIn();
+        if (!allowed(await GetOrgRolesAsync(cancellationToken)))
+        {
+            throw await DeniedAsync(message, cancellationToken);
+        }
+    }
+
     public async Task RequireAsync(string permission, string what, CancellationToken cancellationToken = default)
     {
         RequireSignedIn();
