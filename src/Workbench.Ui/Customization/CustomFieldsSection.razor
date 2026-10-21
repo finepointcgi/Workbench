@@ -1,0 +1,192 @@
+@* The "Details" card on a record's page: its custom fields (read, then Edit in place) and, for statuses that take one,
+   its sub-status. Renders nothing when there's nothing to show. The server decides who may change what. *@
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (_record is { } record && (record.Fields.Count > 0 || _subStatuses.Count > 0))
+{
+    <MudPaper Outlined="true" Class="@($"pa-4 {Class}")" data-testid="custom-fields-section">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">@Title</MudText>
+            <MudSpacer />
+            @if (!_editing && CanEdit && record.Fields.Any(f => !f.IsReadOnly))
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Edit" OnClick="() => _editing = true" data-testid="edit-custom-fields">Edit</MudButton>
+            }
+        </MudStack>
+
+        @if (_subStatuses.Count > 0)
+        {
+            <MudSelect T="string" Value="_subStatus" ValueChanged="SetSubStatusAsync" Label="Sub-status" Clearable="true" Dense="true" Disabled="@(!CanEdit)"
+                       Variant="Variant.Outlined" Class="mb-3" Style="max-width:320px" data-testid="sub-status">
+                @foreach (var s in _subStatuses)
+                {
+                    <MudSelectItem T="string" Value="@s.Code">@s.Label</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        @if (_editing)
+        {
+            <CustomFieldsEditor @ref="_editor" EntityType="@EntityType" RecordId="RecordId" ShowTitle="false" />
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Text" OnClick="CancelAsync">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="save-custom-fields">Save</MudButton>
+            </MudStack>
+        }
+        else if (record.Fields.Count > 0)
+        {
+            <MudSimpleTable Dense="true" Elevation="0">
+                <tbody>
+                    @foreach (var f in record.Fields)
+                    {
+                        <tr>
+                            <td class="mud-text-secondary" style="width:40%">
+                                @f.Label
+                                @if (f.HelpText is not null)
+                                {
+                                    <MudTooltip Text="@f.HelpText"><MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" Class="ml-1" Style="vertical-align:middle" /></MudTooltip>
+                                }
+                            </td>
+                            <td data-testid="@($"cf-value-{f.Key}")">
+                                @if (f.IsMasked)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" Style="vertical-align:middle" />@(f.Display ?? "")
+                                }
+                                else if (f.FieldType == CustomFieldType.Url && f.Value is { } url)
+                                {
+                                    <MudLink Href="@url" Target="_blank" rel="noopener noreferrer">@url</MudLink>
+                                }
+                                else if (f.FieldType == CustomFieldType.LongText)
+                                {
+                                    <span style="white-space:pre-line">@f.Display</span>
+                                }
+                                else
+                                {
+                                    @(f.Display ?? "")
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private RecordCustomFieldsDto? _record;
+    private CustomFieldsEditor? _editor;
+    private bool _editing;
+    private bool _saving;
+    private string? _subStatus;
+    private List<ValueListItemDto> _subStatuses = [];
+    private (string, Guid)? _loadedFor;
+
+    [Parameter, EditorRequired] public string EntityType { get; set; } = "";
+    [Parameter, EditorRequired] public Guid RecordId { get; set; }
+
+    /// <summary>A status set that takes sub-statuses (for example project-status), to offer one.</summary>
+    [Parameter] public string? StatusSet { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Details";
+    [Parameter] public bool CanEdit { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == (EntityType, RecordId))
+        {
+            return;
+        }
+
+        _loadedFor = (EntityType, RecordId);
+        await LoadAsync();
+    }
+
+    /// <summary>Reloads (call after the record's status changed).</summary>
+    public async Task LoadAsync()
+    {
+        if (Services.GetService(typeof(ICustomFieldService)) is not ICustomFieldService fields)
+        {
+            return;
+        }
+
+        try
+        {
+            _record = await fields.GetValuesAsync(EntityType, RecordId);
+            await LoadSubStatusAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException or ArgumentException)
+        {
+            _record = null;
+        }
+    }
+
+    private async Task LoadSubStatusAsync()
+    {
+        _subStatuses = [];
+        if (StatusSet is null || Services.GetService(typeof(ICustomListService)) is not ICustomListService lists)
+        {
+            return;
+        }
+
+        var set = (await lists.ListStatusSetsAsync()).FirstOrDefault(s => s.Key == StatusSet);
+        if (set is not { AllowsSubStatuses: true })
+        {
+            return;
+        }
+
+        var current = await lists.GetSubStatusAsync(StatusSet, RecordId);
+        _subStatus = current.Code;
+        _subStatuses = set.Values.FirstOrDefault(v => v.Value == current.ParentValue)?.SubStatuses.Where(s => s.IsActive || s.Code == current.Code).ToList() ?? [];
+    }
+
+    private async Task SetSubStatusAsync(string? code)
+    {
+        if (StatusSet is null || Services.GetService(typeof(ICustomListService)) is not ICustomListService lists)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await lists.SetSubStatusAsync(StatusSet, RecordId, code);
+            _subStatus = result.Code;
+            Snackbar.Add(result.Label is null ? "Sub-status cleared." : $"Sub-status: {result.Label}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editor is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (await _editor.SaveAsync(RecordId))
+            {
+                _editing = false;
+                await LoadAsync();
+                Snackbar.Add($"{Title} saved.", Severity.Success);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        _editing = false;
+        await LoadAsync();
+    }
+}

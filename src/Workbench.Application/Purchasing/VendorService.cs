@@ -194,11 +194,17 @@ public sealed class VendorService(
             throw new ArgumentException($"Unknown 1099 box {box}.");
         }
 
+        // Admin-managed lists (Admin › Customization › Picklists); a code the vendor already has stays valid once turned off.
+        var socio = await Customization.ValueLists.ItemsAsync(db, Customization.ValueListCatalog.VendorSocioEconomic, ct);
+        var held = (vendor.SocioEconomicCategories ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var categories = (r.SocioEconomicCategories ?? [])
             .Select(c => c.Trim()).Where(c => c.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(c => PurchasingCatalog.SocioEconomicCategories.FirstOrDefault(k => string.Equals(k, c, StringComparison.OrdinalIgnoreCase))
+            .Select(c => socio.FirstOrDefault(k => (k.IsActive || held.Contains(k.Code)) && (string.Equals(k.Code, c, StringComparison.OrdinalIgnoreCase) || string.Equals(k.Label, c, StringComparison.OrdinalIgnoreCase)))?.Code
                 ?? throw new ArgumentException($"Unknown socio-economic category {c}."))
             .ToList();
+        var sizes = await Customization.ValueLists.ItemsAsync(db, Customization.ValueListCatalog.VendorBusinessSize, ct);
+        var size = PurchasingSupport.Optional(r.BusinessSize, "Business size", 32);
+        size = sizes.FirstOrDefault(s => string.Equals(s.Code, size, StringComparison.OrdinalIgnoreCase) || string.Equals(s.Label, size, StringComparison.OrdinalIgnoreCase))?.Code ?? size;
 
         var email = PurchasingSupport.Optional(r.ContactEmail, "Contact email", 320);
         if (email is not null && !System.Net.Mail.MailAddress.TryCreate(email, out _))
@@ -212,7 +218,7 @@ public sealed class VendorService(
         vendor.Is1099 = r.Is1099;
         vendor.Form1099Box = r.Is1099 ? box ?? PurchasingCatalog.DefaultForm1099Box : box;
         vendor.Uei = uei;
-        vendor.BusinessSize = PurchasingSupport.Optional(r.BusinessSize, "Business size", 32);
+        vendor.BusinessSize = size;
         vendor.SocioEconomicCategories = categories.Count == 0 ? null : string.Join(',', categories);
         vendor.PaymentTermsDays = r.PaymentTermsDays;
         vendor.RemitToAddress = PurchasingSupport.Optional(r.RemitToAddress, "Remit-to address", 1000);

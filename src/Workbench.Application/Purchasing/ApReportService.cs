@@ -145,10 +145,11 @@ public sealed class ApReportService(IWorkbenchDbContextFactory dbFactory, Securi
             .OrderByDescending(r => r.Amount).ToList();
 
         // A vendor counts toward every category it holds, so these don't add up to the total.
-        var bySocio = PurchasingCatalog.SocioEconomicCategories.Select(category =>
+        var socio = await Customization.ValueLists.ItemsAsync(db, Customization.ValueListCatalog.VendorSocioEconomic, cancellationToken);
+        var bySocio = socio.Select(category =>
         {
-            var matching = bills.Where(b => (b.Vendor.SocioEconomicCategories ?? "").Split(',', StringSplitOptions.TrimEntries).Contains(category, StringComparer.OrdinalIgnoreCase)).ToList();
-            return new SmallBusinessRowDto(category, matching.Select(b => b.Vendor.Id).Distinct().Count(), matching.Sum(b => b.Amount), Percent(matching.Sum(b => b.Amount)));
+            var matching = bills.Where(b => (b.Vendor.SocioEconomicCategories ?? "").Split(',', StringSplitOptions.TrimEntries).Contains(category.Code, StringComparer.OrdinalIgnoreCase)).ToList();
+            return new SmallBusinessRowDto(category.Label, matching.Select(b => b.Vendor.Id).Distinct().Count(), matching.Sum(b => b.Amount), Percent(matching.Sum(b => b.Amount)));
         }).ToList();
         return new SmallBusinessReportDto(from, to, total, bySize, bySocio);
     }

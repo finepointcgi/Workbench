@@ -45,7 +45,7 @@ else
             <MudSelectItem T="string" Value="@AnyStatus">Any status</MudSelectItem>
             @foreach (var state in Enum.GetValues<ProjectState>())
             {
-                <MudSelectItem T="string" Value="@state.ToString()">@ProjectsFormat.Status(state)</MudSelectItem>
+                <MudSelectItem T="string" Value="@state.ToString()">@_labels.Label("project-status", state, ProjectsFormat.Status(state))</MudSelectItem>
             }
         </MudSelect>
         <MudSpacer />
@@ -127,7 +127,7 @@ else
                     {
                         @* Status and period ride under the name here, so the money columns fit a laptop screen. *@
                         <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
-                            @ProjectsFormat.Status(context.Status) · @ProjectsFormat.Period(context.Start, context.Finish)
+                            @_labels.Label("project-status", context.Status, ProjectsFormat.Status(context.Status)) · @ProjectsFormat.Period(context.Start, context.Finish)
                         </MudText>
                     }
                 </MudTd>
@@ -139,7 +139,7 @@ else
                 <MudTd DataLabel="Contract">@(context.ContractNumber ?? "No contract")</MudTd>
                 @if (!_list.ShowsMoney)
                 {
-                    <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(context.Status)">@ProjectsFormat.Status(context.Status)</MudChip></MudTd>
+                    <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(context.Status)">@_labels.Label("project-status", context.Status, ProjectsFormat.Status(context.Status))</MudChip></MudTd>
                     <MudTd DataLabel="Period">@ProjectsFormat.Period(context.Start, context.Finish)</MudTd>
                 }
                 @if (_list.ShowsMoney)
@@ -200,8 +200,11 @@ else
     private string _status = OpenStatus;
     private bool _canCreate; // Finance, administrators and project managers (a project on a contract is then a request).
 
+    private StatusLabels _labels = StatusLabels.Empty;
+
     protected override async Task OnInitializedAsync()
     {
+        _labels = await StatusLabels.LoadAsync(Services);
         try
         {
             // Optional so the page renders where no user context is registered (tests).

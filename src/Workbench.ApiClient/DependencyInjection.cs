@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddIntegrationClients(serverBaseAddress);
         services.AddComplianceClients(serverBaseAddress);
         services.AddReceiptClients(serverBaseAddress);
+        services.AddCustomizationClients(serverBaseAddress);
         return services;
     }
 }

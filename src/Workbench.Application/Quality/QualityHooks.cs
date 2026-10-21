@@ -27,7 +27,7 @@ internal static class QualityHooks
         var quantity = received.Sum(t => t.Quantity);
         var inspection = new Inspection
         {
-            Number = await QualityRules.NextNumberAsync<Inspection>(db, i => i.Number, "INS", ct),
+            Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Inspection, null, DateOnly.FromDateTime(DateTime.UtcNow), ct)).Number,
             PlanId = plan.Id,
             PartId = part.Id,
             Kind = plan.Kind,
@@ -66,7 +66,7 @@ internal static class QualityHooks
 
             db.Set<Inspection>().Add(new Inspection
             {
-                Number = await QualityRules.NextNumberAsync<Inspection>(db, i => i.Number, "INS", ct),
+                Number = (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Inspection, null, DateOnly.FromDateTime(DateTime.UtcNow), ct)).Number,
                 PlanId = plan.Id,
                 PartId = wo.PartId,
                 Kind = InspectionKind.InProcess,

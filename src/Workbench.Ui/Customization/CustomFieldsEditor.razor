@@ -1,0 +1,147 @@
+@* The custom fields of a record, editable, for edit dialogs and the Details section. Renders nothing when the record type has
+   no fields (or the customization service isn't there, as in component tests). In a dialog: call ValidateAsync before saving
+   the record (required fields block the save) and SaveAsync(id) once it's saved. *@
+@inject IServiceProvider Services
+
+@if (_fields is { Count: > 0 })
+{
+    <div data-testid="custom-fields-editor">
+        @if (ShowTitle)
+        {
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-3 mb-1">@Title</MudText>
+        }
+
+        @if (_errors.Count > 0)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2" data-testid="custom-fields-errors">
+                @foreach (var e in _errors)
+                {
+                    <div>@e</div>
+                }
+            </MudAlert>
+        }
+
+        <MudGrid Spacing="2">
+            @foreach (var f in _fields)
+            {
+                <MudItem xs="12" sm="@(f.FieldType == CustomFieldType.LongText ? 12 : 6)">
+                    @if (f.IsMasked)
+                    {
+                        <MudTextField T="string" Value="@(f.Display ?? "")" Label="@f.Label" ReadOnly="true" Variant="Variant.Outlined"
+                                      HelperText="Sensitive: only people with access see this value." Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Lock" />
+                    }
+                    else
+                    {
+                        <CustomFieldInput Field="f" Value="@_values.GetValueOrDefault(f.Key)" ValueChanged="@(v => _values[f.Key] = v)" />
+                    }
+                </MudItem>
+            }
+        </MudGrid>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<CustomFieldValueDto>? _fields;
+    private readonly Dictionary<string, string?> _values = new(StringComparer.Ordinal);
+    private List<string> _errors = [];
+    private (string, Guid?)? _loadedFor;
+
+    [Parameter, EditorRequired] public string EntityType { get; set; } = "";
+
+    /// <summary>Null for a record that isn't saved yet: the fields start at their defaults.</summary>
+    [Parameter] public Guid? RecordId { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Details";
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
+    /// <summary>Raised once the fields are loaded (whether there are any).</summary>
+    [Parameter] public EventCallback<bool> Loaded { get; set; }
+
+    public bool HasFields => _fields is { Count: > 0 };
+
+    private ICustomFieldService? Fields => Services.GetService(typeof(ICustomFieldService)) as ICustomFieldService;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == (EntityType, RecordId))
+        {
+            return;
+        }
+
+        _loadedFor = (EntityType, RecordId);
+        await ReloadAsync();
+    }
+
+    public async Task ReloadAsync()
+    {
+        _values.Clear();
+        _errors = [];
+        _fields = null;
+        if (Fields is { } fields && !string.IsNullOrEmpty(EntityType))
+        {
+            try
+            {
+                var record = await fields.GetValuesAsync(EntityType, RecordId);
+                _fields = record.Fields;
+                foreach (var f in record.Fields.Where(f => !f.IsMasked))
+                {
+                    _values[f.Key] = f.Value;
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException or ArgumentException)
+            {
+                _fields = [];
+            }
+        }
+
+        await Loaded.InvokeAsync(HasFields);
+        StateHasChanged();
+    }
+
+    private SaveCustomFieldValuesRequest Request() =>
+        new((_fields ?? []).Where(f => !f.IsMasked && !f.IsReadOnly).ToDictionary(f => f.Key, f => _values.GetValueOrDefault(f.Key)));
+
+    /// <summary>Checks the values (types, choices, required fields) without saving; shows and returns false on problems.</summary>
+    public async Task<bool> ValidateAsync()
+    {
+        if (!HasFields || Fields is not { } fields)
+        {
+            return true;
+        }
+
+        try
+        {
+            _errors = (await fields.ValidateAsync(EntityType, RecordId, Request())).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            _errors = [ex.Message];
+        }
+
+        StateHasChanged();
+        return _errors.Count == 0;
+    }
+
+    /// <summary>Saves the values on <paramref name="recordId"/> (the new record's id after a create).</summary>
+    public async Task<bool> SaveAsync(Guid recordId)
+    {
+        if (!HasFields || Fields is not { } fields)
+        {
+            return true;
+        }
+
+        try
+        {
+            var saved = await fields.SaveValuesAsync(EntityType, recordId, Request());
+            _errors = [];
+            _fields = saved.Fields;
+            return true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            _errors = [ex.Message];
+            StateHasChanged();
+            return false;
+        }
+    }
+}

@@ -101,6 +101,7 @@ public static class DependencyInjection
 
         services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.
         Receipts.ReceiptRegistration.AddWorkbenchReceipts(services); // Receipt library ("My receipts"), reading receipts and folios (PDF text, assistant when on), per diem lodging check; above AddWorkbenchIdentity.
+        Customization.CustomizationRegistration.AddWorkbenchCustomization(services); // Custom fields, value lists, status labels, numbering; above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();

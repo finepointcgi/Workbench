@@ -1,5 +1,6 @@
 @* Creates or edits a vendor; warns about possible duplicates (same UEI or a similar name) and returns the saved vendor. *@
 @inject IVendorService Vendors
+@inject IServiceProvider Services
 
 <MudDialog>
     <DialogContent>
@@ -31,15 +32,15 @@
             }
             <MudStack Row="true" Spacing="3">
                 <MudSelect T="string" @bind-Value="_size" Label="Business size" Clearable="true" Style="max-width:200px">
-                    @foreach (var s in PurchasingCatalog.BusinessSizes)
+                    @foreach (var s in _sizes.Where(s => s.IsActive || s.Code == _size))
                     {
-                        <MudSelectItem Value="s">@s</MudSelectItem>
+                        <MudSelectItem Value="s.Code">@s.Label</MudSelectItem>
                     }
                 </MudSelect>
                 <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_categories" Label="Socio-economic categories">
-                    @foreach (var c in PurchasingCatalog.SocioEconomicCategories)
+                    @foreach (var c in _socio.Where(c => c.IsActive || _categories.Contains(c.Code)))
                     {
-                        <MudSelectItem Value="c">@c</MudSelectItem>
+                        <MudSelectItem Value="c.Code">@c.Label</MudSelectItem>
                     }
                 </MudSelect>
             </MudStack>
@@ -61,6 +62,7 @@
                 <MudTextField T="string" @bind-Value="_contactEmail" Label="Email" InputType="InputType.Email" autocomplete="off" />
                 <MudTextField T="string" @bind-Value="_contactPhone" Label="Phone" InputType="InputType.Telephone" autocomplete="off" Style="max-width:170px" />
             </MudStack>
+            <CustomFieldsEditor @ref="_custom" EntityType="@CustomizableEntityTypes.Vendor" RecordId="Vendor?.Id" />
             @if (_error is not null)
             {
                 <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
@@ -96,6 +98,27 @@
     private bool _confirmDuplicate;
     private bool _saving;
     private string? _error;
+    private CustomFieldsEditor? _custom;
+    private Guid? _savedId;
+
+    // Admin › Customization › Picklists; the built-in values without the customization service (component tests).
+    private IReadOnlyList<ValueListItemDto> _sizes = PurchasingCatalog.BusinessSizes.Select((s, i) => new ValueListItemDto(s, s, i, true)).ToList();
+    private IReadOnlyList<ValueListItemDto> _socio = PurchasingCatalog.SocioEconomicCategories.Select((s, i) => new ValueListItemDto(s, s, i, true)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService(typeof(ICustomListService)) is ICustomListService lists)
+        {
+            try
+            {
+                _sizes = (await lists.GetAsync("vendor-business-size")).Items;
+                _socio = (await lists.GetAsync("vendor-socioeconomic")).Items;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -147,9 +170,22 @@
         _error = null;
         var request = new SaveVendorRequest(_code ?? "", _name ?? "", _status, _is1099, _is1099 ? _box : null, _uei, _size, _categories.ToList(),
             _terms, _remitTo, _contactName, _contactEmail, _contactPhone, _confirmDuplicate);
+        if (_custom is not null && !await _custom.ValidateAsync())
+        {
+            _saving = false;
+            return;
+        }
+
         try
         {
-            var saved = Vendor is null ? await Vendors.CreateAsync(request) : await Vendors.UpdateAsync(Vendor.Id, request);
+            var id = _savedId ?? Vendor?.Id;
+            var saved = id is null ? await Vendors.CreateAsync(request) : await Vendors.UpdateAsync(id.Value, request);
+            _savedId = saved.Id;
+            if (_custom is not null && !await _custom.SaveAsync(saved.Id))
+            {
+                return; // The vendor is saved; the editor shows what's wrong with its details.
+            }
+
             MudDialog.Close(DialogResult.Ok(saved));
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

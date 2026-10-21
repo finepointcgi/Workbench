@@ -49,6 +49,10 @@
                 <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_active" Label="Active" Dense="true" /></MudItem>
             }
         </MudGrid>
+        @if (Part?.Summary.Id is { } cfRecordId)
+        {
+            <CustomFieldsEditor @ref="_custom" EntityType="@CustomizableEntityTypes.Part" RecordId="cfRecordId" />
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
@@ -89,6 +93,19 @@
         }
     }
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(new SavePartRequest(_number!, _revision, _description!, _uom ?? "EA", _source, _tracking, _method, _standard,
+    private async Task Save()
+    {
+        if (!await CustomFieldsSavedAsync())
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(new SavePartRequest(_number!, _revision, _description!, _uom ?? "EA", _source, _tracking, _method, _standard,
         _vendorId, _lead, _safety, _moq, _multiple, null, _binId, _notes, _active)));
+    }
+
+    // Custom fields of an existing record are checked and saved here; a new record's are set on its page once it exists.
+    private CustomFieldsEditor? _custom;
+
+    private async Task<bool> CustomFieldsSavedAsync() => _custom is null || Part?.Summary.Id is not { } id || (await _custom.ValidateAsync() && await _custom.SaveAsync(id));
 }

@@ -6,6 +6,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <PageTitle>@(_detail?.Report.Title ?? "Expense report") · Workbench</PageTitle>
 
@@ -76,7 +77,7 @@ else
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Date">@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
-                <MudTd DataLabel="Type">@context.Type</MudTd>
+                <MudTd DataLabel="Type">@_labels.Label("expense-category", context.Type, context.Type.ToString())</MudTd>
                 <MudTd DataLabel="Charge code">@ChargeCodeText.Label(context.WbsCode, context.WbsName)</MudTd>
                 <MudTd DataLabel="Description">
                     @context.Description
@@ -136,6 +137,7 @@ else
     </MudPaper>
     <Workbench.Ui.PerDiem.PerDiemPanel ReportId="ReportId" EmployeeId="report.EmployeeId" Editable="report.IsEditable" TripStart="report.TripStart" TripEnd="report.TripEnd" Changed="LoadAsync" />
     <Workbench.Ui.Travel.TravelReportPanel ReportId="ReportId" Editable="report.IsEditable" Version="_version" />
+    <CustomFieldsSection EntityType="@CustomizableEntityTypes.ExpenseReport" RecordId="ReportId" Class="mt-3" />
 }
 
 @code {
@@ -148,8 +150,15 @@ else
     private int _version;
     private List<BreadcrumbItem> _crumbs = [new("Expenses", "expenses")];
 
+    private StatusLabels _labels = StatusLabels.Empty;
+
     protected override async Task OnParametersSetAsync()
     {
+        if (ReferenceEquals(_labels, StatusLabels.Empty))
+        {
+            _labels = await StatusLabels.LoadAsync(Services);
+        }
+
         try
         {
             _threshold = (await Odcs.GetPolicyAsync()).ReceiptThreshold;

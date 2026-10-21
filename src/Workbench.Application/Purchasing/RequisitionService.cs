@@ -108,8 +108,11 @@ public sealed class RequisitionService(
     INotificationPublisher notifications,
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
-    ApprovalEngine? approvals = null) : IRequisitionService
+    ApprovalEngine? approvals = null,
+    Customization.DocumentNumbers? documentNumbers = null) : IRequisitionService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
@@ -183,11 +186,10 @@ public sealed class RequisitionService(
     {
         access.RequireSignedIn();
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var numbers = await db.Set<PurchaseRequisition>().Select(r => r.Number).ToListAsync(cancellationToken);
         var meId = await access.GetEmployeeIdAsync(cancellationToken);
         var req = new PurchaseRequisition
         {
-            Number = PurchasingSupport.NextNumber(numbers, "REQ"),
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.Requisition, cancellationToken: cancellationToken),
             RequesterEmail = Me,
             RequesterEmployeeId = meId,
             Justification = "",

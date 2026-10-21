@@ -30,8 +30,8 @@ public static class ApiKeyScopes
         new("crm", "Business development and pricing", "Accounts, opportunities, pipeline and proposal pricing.", ["crm", "pricing"]),
         new("materials", "Materials and manufacturing", "Parts, inventory, BOMs, work orders and MRP.", ["materials", "quality", "engineering-changes"]),
         new("reports", "Reports", "Standard reports, the report writer and saved reports.", ["reports"]),
-        new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows and the approval inbox.",
-            ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations"]),
+        new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
+            ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization"]),
     ];
 
     public static string Scope(string area, string access) => $"{area}:{access}";

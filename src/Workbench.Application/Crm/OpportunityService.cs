@@ -632,9 +632,7 @@ public sealed class OpportunityService(
 
     internal static async Task<string> NextNumberAsync(IWorkbenchDbContext db, CancellationToken ct)
     {
-        var numbers = await db.Set<D.Opportunity>().AsNoTracking().Select(o => o.Number).ToListAsync(ct);
-        var max = numbers.Select(n => n.StartsWith("OPP-", StringComparison.Ordinal) && int.TryParse(n[4..], out var v) ? v : 0).DefaultIfEmpty(0).Max();
-        return $"OPP-{max + 1:0000}";
+        return (await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Opportunity, null, DateOnly.FromDateTime(DateTime.UtcNow), ct)).Number;
     }
 
     private static async Task<D.Opportunity> LoadAsync(IWorkbenchDbContext db, Guid id, CancellationToken ct) =>

@@ -10,6 +10,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 @if (!Embedded)
 {
@@ -117,7 +118,7 @@
                     @foreach (var t in list.ByType)
                     {
                         <tr>
-                            <td>@t.Type</td>
+                            <td>@_labels.Label("expense-category", t.Type, t.Type.ToString())</td>
                             <td style="text-align:right">@t.Count</td>
                             <td style="text-align:right">@OdcFormat.Money(t.Amount)</td>
                             <td style="text-align:right">@OdcFormat.Money(t.AllowableAmount)</td>
@@ -143,7 +144,7 @@
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Date">@context.IncurredOn.ToString("yyyy-MM-dd")</MudTd>
-            <MudTd DataLabel="Type">@context.Type</MudTd>
+            <MudTd DataLabel="Type">@_labels.Label("expense-category", context.Type, context.Type.ToString())</MudTd>
             <MudTd DataLabel="Charge code">@ChargeCodeText.Label(context.WbsCode, context.WbsName)</MudTd>
             <MudTd DataLabel="Vendor">
                 @if (context.ExpenseReportId is null && _apLinks.GetValueOrDefault(context.Id) is { } ap)
@@ -242,8 +243,11 @@ else if (!_loading)
     private Guid? _loadedProject;
     private Dictionary<Guid, Workbench.Contracts.Purchasing.OdcBillLinkDto> _apLinks = [];
 
+    private StatusLabels _labels = StatusLabels.Empty;
+
     protected override async Task OnInitializedAsync()
     {
+        _labels = await StatusLabels.LoadAsync(Services);
         try
         {
             _projects = await Projects.ListProjectsAsync();

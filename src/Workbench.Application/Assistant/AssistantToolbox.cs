@@ -98,6 +98,12 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
             ("sheet", "string", "Sheet name", true),
             ("query", "string", "Optional text to match in the row title", false),
             ("max_rows", "integer", "Rows to return (default 50, at most 200)", false)),
+        Spec("get_custom_fields", "A record's custom fields (administrator-defined details such as program office); sensitive ones stay masked.", "Reading custom fields",
+            ("entity", "string", "Record type: project, contract, wbs-element, employee, vendor, customer, purchase-order, ap-bill, invoice, expense-report, timesheet, part or opportunity", true),
+            ("record_id", "string", "The record's id (from another tool's records, such as Project:<id>)", true)),
+        Spec("list_custom_field_matches", "Records whose custom field values contain some text (for example every project in a program office).", "Searching custom fields",
+            ("text", "string", "Text to look for (at least 2 characters)", true),
+            ("entity", "string", "Optional record type to limit the search to", false)),
     ];
 
     public static AssistantToolSpec? Find(string name) => Specs.FirstOrDefault(s => s.Name == name);
@@ -136,6 +142,8 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
                 "get_project_staffing" => await StaffingAsync(args, cancellationToken),
                 "list_sheets" => await ListSheetsAsync(args, cancellationToken),
                 "read_sheet" => await ReadSheetAsync(args, cancellationToken),
+                "get_custom_fields" => await CustomFieldsAsync(args, cancellationToken),
+                "list_custom_field_matches" => await CustomFieldMatchesAsync(args, cancellationToken),
                 _ => AssistantToolResult.Error(AssistantToolOutcome.Invalid, "Unknown tool."),
             };
         }
@@ -585,6 +593,27 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
     }
 
     // ---- Helpers ----
+
+    private async Task<AssistantToolResult> CustomFieldsAsync(Args args, CancellationToken ct)
+    {
+        var entity = args.Required("entity");
+        var id = Guid.TryParse(args.Required("record_id").Split(':')[^1], out var g) ? g : throw new ArgumentException("'record_id' must be a record id.");
+        var record = await Get<Contracts.Customization.ICustomFieldService>().GetValuesAsync(entity, id, ct);
+        var fields = record.Fields.Select(f => new { field = f.Label, key = f.Key, value = f.Display, masked = f.IsMasked }).ToList();
+        var summary = fields.Count == 0 ? "No custom fields are defined for this record type."
+            : string.Join("; ", fields.Select(f => $"{f.field}: {f.value ?? "(blank)"}"));
+        return new(AssistantToolOutcome.Ok, new { summary, entity, recordId = id, fields }, Clip(summary, 400)!, [], [$"{entity}:{id}"]);
+    }
+
+    private async Task<AssistantToolResult> CustomFieldMatchesAsync(Args args, CancellationToken ct)
+    {
+        var hits = await Get<Contracts.Customization.ICustomFieldService>().SearchAsync(args.Required("text"), args.Text("entity"), 50, ct);
+        var summary = hits.Count == 0 ? "No custom field values match."
+            : $"{hits.Count} match{(hits.Count == 1 ? "" : "es")}: " + string.Join(", ", hits.Take(10).Select(h => $"{h.Title} ({h.FieldLabel}: {h.Display})")) + (hits.Count > 10 ? ", …" : "");
+        return new(AssistantToolOutcome.Ok,
+            new { summary, matches = hits.Select(h => new { type = h.EntityLabel, h.Title, field = h.FieldLabel, value = h.Display, link = h.Link }) },
+            summary, hits.Where(h => h.Link is not null).Take(10).Select(h => new AssistantCitation(h.Title, h.Link!)).ToList(), hits.Select(h => $"{h.EntityType}:{h.RecordId}").ToList());
+    }
 
     private T Get<T>() where T : notnull => services.GetRequiredService<T>();
 

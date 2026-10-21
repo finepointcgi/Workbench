@@ -37,8 +37,11 @@ public sealed class ApBillService(
     TimeProvider clock,
     ILogger<ApBillService> logger,
     ApprovalEngine? approvals = null,
-    SalesTax.UseTaxAccrual? useTax = null) : IApBillService
+    SalesTax.UseTaxAccrual? useTax = null,
+    Customization.DocumentNumbers? documentNumbers = null) : IApBillService
 {
+    private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
+
     private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
@@ -86,8 +89,7 @@ public sealed class ApBillService(
     public async Task<BillDto> CreateAsync(SaveBillRequest request, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var numbers = await db.Set<ApBill>().Select(b => b.Number).ToListAsync(cancellationToken);
-        var bill = new ApBill { Number = PurchasingSupport.NextNumber(numbers, "V"), InvoiceNumber = "", EnteredBy = Me, CreatedAtUtc = UtcNow };
+        var bill = new ApBill { Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.ApBill, cancellationToken: cancellationToken), InvoiceNumber = "", EnteredBy = Me, CreatedAtUtc = UtcNow };
         await ApplyAsync(db, bill, request, cancellationToken);
         db.Set<ApBill>().Add(bill);
         audit.Record(db, PurchasingSupport.BillEntity, bill.Id, "Created", after: Snapshot(bill));

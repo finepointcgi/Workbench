@@ -5,6 +5,7 @@
 @using Workbench.Ui.Setup
 @inject ISalesTaxService Tax
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>Sales tax · Setup · Workbench</PageTitle>
 
@@ -270,9 +271,9 @@ else
                         <MudItem xs="6" sm="2"><MudTextField T="string" @bind-Value="_certState" Label="State" MaxLength="2" HelperText="Empty: all states" /></MudItem>
                         <MudItem xs="6" sm="3">
                             <MudSelect T="string" @bind-Value="_certReason" Label="Reason">
-                                @foreach (var r in new[] { "Resale", "Government", "Nonprofit", "Manufacturing", "Other" })
+                                @foreach (var r in _reasons.Where(r => r.IsActive))
                                 {
-                                    <MudSelectItem T="string" Value="r">@r</MudSelectItem>
+                                    <MudSelectItem T="string" Value="r.Code">@r.Label</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
@@ -386,6 +387,9 @@ else
     private Guid? _certFor;
     private string? _certNumber, _certState;
     private string _certReason = "Resale";
+
+    // Admin › Customization › Picklists ("Sales tax exemption reasons"); the built-in values without the customization service.
+    private IReadOnlyList<ValueListItemDto> _reasons = new[] { "Resale", "Government", "Nonprofit", "Manufacturing", "Other" }.Select((r, i) => new ValueListItemDto(r, r, i, true)).ToList();
     private DateTime? _certFrom = DateTime.Today, _certTo;
 
     private Guid? _salesPayable, _usePayable, _useExpense, _home, _defaultSales, _defaultPurchase;
@@ -396,6 +400,11 @@ else
     {
         try
         {
+            if (Services.GetService(typeof(ICustomListService)) is ICustomListService lists)
+            {
+                _reasons = (await lists.GetAsync("tax-exemption-reasons")).Items;
+            }
+
             await LoadAsync();
         }
         catch (Exception ex) when (TaxFormat.IsExpected(ex))
