@@ -270,6 +270,42 @@ html body .mud-typography a:not(.mud-button-root):not(.mud-chip):hover {
     text-decoration-color: currentColor;
 }
 
+/* ---- Group tabs: the pages of a menu group (Finance › Cash), as pill tabs across the top of each of them ---- */
+.wb-group-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 0 0 16px;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+}
+
+.wb-group-tabs .wb-group-tab {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 16px;
+    border-radius: var(--wb-shape-s);
+    border: 1px solid var(--wb-outline-variant);
+    color: var(--mud-palette-text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.wb-group-tabs .wb-group-tab:hover {
+    background-color: var(--wb-state-hover);
+}
+
+.wb-group-tabs .wb-group-tab.wb-group-tab-current {
+    background-color: var(--wb-secondary-container);
+    border-color: transparent;
+    color: var(--wb-on-secondary-container);
+    font-weight: 700;
+}
+
 /* ---- Page rhythm ---- */
 .wb-main > .mud-typography-h4:first-child,
 .wb-main h1.mud-typography-h4 {

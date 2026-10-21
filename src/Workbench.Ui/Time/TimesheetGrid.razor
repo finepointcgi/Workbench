@@ -66,7 +66,7 @@
             }
             @if (_rows.Count == 0)
             {
-                <tr><td colspan="@(Detail.Days.Count + 2)" class="mud-text-secondary pa-4">No charge codes yet. Pick the task you worked on under "Add a charge code" below.</td></tr>
+                <tr><td colspan="@(Detail.Days.Count + 2)" class="mud-text-secondary pa-4">No charge codes yet. Pick what you worked on under "Add a charge code" below.</td></tr>
             }
         </tbody>
         <tfoot>
@@ -95,7 +95,8 @@
 @if (Editable && !Locked)
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3" Style="max-width: 640px">
-        <MudSelect T="Guid?" @bind-Value="_newCode" Label="Add a charge code" Dense="true" Variant="Variant.Outlined" Clearable="true" data-testid="add-code">
+        @* Picking a code adds its row: no separate button. *@
+        <MudSelect T="Guid?" Value="_newCode" ValueChanged="AddRow" Label="Add a charge code" Dense="true" Variant="Variant.Outlined" data-testid="add-code">
             @foreach (var option in AvailableCodes)
             {
                 <MudSelectItem T="Guid?" Value="option.ChargeCode.WbsElementId">
@@ -103,7 +104,6 @@
                 </MudSelectItem>
             }
         </MudSelect>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Disabled="_newCode is null" OnClick="AddRow">Add row</MudButton>
     </MudStack>
 }
 
@@ -292,9 +292,9 @@
         }
     }
 
-    private void AddRow()
+    private void AddRow(Guid? wbsElementId)
     {
-        if (Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == _newCode) is { } code)
+        if (Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == wbsElementId) is { } code && _rows.All(r => r.Code.WbsElementId != wbsElementId))
         {
             _rows.Add(Row.For(code));
         }
