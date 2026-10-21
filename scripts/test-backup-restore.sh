@@ -14,7 +14,13 @@ container="${1:-$(cd "$root" && docker compose ps -q postgres)}"
 [[ -n "$container" ]] || { echo "No PostgreSQL container: run 'docker compose up -d' or pass a container name." >&2; exit 1; }
 shift || true
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# The backup container runs as root with umask 077, so on a Linux host the backup folders it writes belong to root and
+# only root can read them. Everything that touches them goes through the container, and cleanup hands them back first.
+cleanup() {
+  docker run --rm -v "$work:/work" --entrypoint chown workbench-backup:local -R "$(id -u):$(id -g)" /work > /dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
 mkdir -p "$work/keys" "$work/backups"
 
 docker build -q -t workbench-backup:local "$root/deploy/backup" > /dev/null
@@ -46,15 +52,17 @@ cmd=(/scripts/restore-test.sh "/backups/$run")
 tools
 
 echo "== A manifest that doesn't match the data is caught"
-cp -R "$work/backups/$run" "$work/backups/19990101T000000Z"
-first="$(grep -l '^table' "$work/backups/19990101T000000Z"/*.manifest | head -n 1)"
-awk -F'\t' 'BEGIN { OFS = "\t" } $1 == "table" && !done { $3 = $3 + 1; done = 1 } 1' "$first" > "$first.new" && mv "$first.new" "$first"
-cmd=(bash -c 'cd /backups/19990101T000000Z && sha256sum -- *.dump* *.manifest > SHA256SUMS && /scripts/restore-test.sh /backups/19990101T000000Z')
+cmd=(bash -c 'set -e; cp -R "/backups/$0" /backups/19990101T000000Z; cd /backups/19990101T000000Z
+  first="$(grep -l "^table" *.manifest | head -n 1)"
+  awk -F"\t" "BEGIN { OFS = \"\t\" } \$1 == \"table\" && !done { \$3 = \$3 + 1; done = 1 } 1" "$first" > "$first.new" && mv "$first.new" "$first"
+  sha256sum -- *.dump* *.manifest > SHA256SUMS' "$run")
+tools
+cmd=(/scripts/restore-test.sh /backups/19990101T000000Z)
 if tools; then echo "FAILED: a wrong manifest passed" >&2; exit 1; fi
 
 echo "== An altered backup file is refused"
-dump="$(ls "$work/backups/19990101T000000Z"/*.dump* | head -n 1)"
-printf 'x' >> "$dump"
+cmd=(bash -c 'set -e; dump="$(ls /backups/19990101T000000Z/*.dump* | head -n 1)"; printf x >> "$dump"')
+tools
 cmd=(/scripts/restore-test.sh /backups/19990101T000000Z)
 if tools; then echo "FAILED: an altered backup passed" >&2; exit 1; fi
 
