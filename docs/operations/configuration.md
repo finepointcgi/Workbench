@@ -45,13 +45,18 @@ MultiTenant deployment shares them.
 
 | Key | Default | Notes |
 | --- | --- | --- |
-| `Authentication:Oidc:Authority` | — | Issuer URL. Required outside Development. |
+| `Authentication:Oidc:Authority` | — | Issuer URL. Required in MultiTenant mode, and when built-in accounts are off; otherwise optional. |
 | `Authentication:Oidc:ClientId` | — | |
 | `Authentication:Oidc:ClientSecret` | — | **Secret.** |
 | `Authentication:Oidc:Audience` | — | API audience for bearer tokens (desktop app). |
 | `Authentication:Oidc:Scopes` | `[]` | Extra scopes beyond `openid profile email`. |
 | `Authentication:Oidc:RequireHttpsMetadata` | `true` | Must stay `true` outside Development. |
-| `Authentication:Admins` | `[]` | SingleTenant: bootstrap administrators (emails). Ignored in MultiTenant. |
+| `Authentication:Admins` | `[]` | SingleTenant: bootstrap administrators (emails). Ignored in MultiTenant. Without SSO they set a first password with **Forgot your password?**. |
+| `Authentication:Passwords:Enabled` | `true` | Built-in accounts: email and password sign-in with an authenticator app ([built-in-accounts.md](../security/built-in-accounts.md)). |
+| `Authentication:Passwords:MinimumLength` | `12` | Also refused: common passwords, ones containing the email, runs like `123456789012`. |
+| `Authentication:Passwords:MaxFailedAttempts` | `5` | Wrong passwords or codes in a row before the account locks. |
+| `Authentication:Passwords:LockoutDuration` | `00:15:00` | |
+| `Authentication:Passwords:ResetLinkLifetime` | `01:00:00` | Forgot-password links. Invite links last as long as the invite (7 days). |
 | `Authentication:RequireInvite` | `true` | Only invited or provisioned people may sign in. Must stay `true` in MultiTenant. |
 | `Authentication:Session:IdleTimeoutMinutes` | `30` | |
 | `Authentication:Session:AbsoluteLifetimeHours` | `12` | |

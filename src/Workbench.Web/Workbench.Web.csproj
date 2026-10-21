@@ -16,6 +16,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
     <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.3" />
+    <!-- Built-in accounts: the QR code for setting up an authenticator app, rendered as inline SVG. MIT. -->
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />

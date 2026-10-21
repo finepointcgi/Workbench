@@ -175,4 +175,7 @@ public interface ICurrentUserContext
 public interface ISignOutService
 {
     Task SignOutAsync();
+
+    /// <summary>The page for the signed-in person's password and authenticator app, when the host has one (the web host).</summary>
+    string? AccountSecurityUrl => null;
 }

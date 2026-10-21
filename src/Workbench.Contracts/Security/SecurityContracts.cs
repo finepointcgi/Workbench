@@ -20,7 +20,9 @@ public sealed record UserAdminDto(
     string? EmployeeName,
     EmployeeLinkMode EmployeeLink,
     bool ScimManaged,
-    IReadOnlyList<RoleRef>? AssignedRoles = null)
+    IReadOnlyList<RoleRef>? AssignedRoles = null,
+    bool HasPassword = false,
+    bool MfaEnabled = false)
 {
     public bool IsAdmin => Roles.HasFlag(OrgRoles.Admin);
 }
@@ -64,6 +66,15 @@ public interface IUserAdminService
     Task<UserAdminDto> SetEmployeeLinkAsync(string email, EmployeeLinkMode mode, Guid? employeeId = null, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<LinkableEmployeeDto>> ListLinkableEmployeesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes the user's authenticator app and recovery codes (built-in accounts), for a lost phone. When MFA is
+    /// required, their next sign-in asks them to set it up again. Their sessions end.
+    /// </summary>
+    Task<UserAdminDto> ResetMfaAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>Emails the user a one-time link to choose a new password (built-in accounts).</summary>
+    Task<UserAdminDto> SendPasswordResetAsync(string email, CancellationToken cancellationToken = default);
 }
 
 // ---- Invites ----

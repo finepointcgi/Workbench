@@ -67,7 +67,7 @@ else
         <MudStack Spacing="0">
             <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="Sign in with this provider" data-testid="sso-enabled" />
             <MudSwitch T="bool" @bind-Value="_requireOrgIdp" Color="Color.Primary" Disabled="!_enabled"
-                       Label="Only allow sign-in through this provider (refuse the server's sign-in)" />
+                       Label="Only allow sign-in through this provider (refuse Workbench passwords and the server's sign-in)" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary ml-12">
                 To avoid locking everyone out, you can turn this on only while you're signed in through this provider
                 (you're signed in with: @(env.CurrentSessionMethod ?? "unknown")).
@@ -85,8 +85,9 @@ else
     <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="mfa-policy">
         <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Multi-factor authentication</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-            Workbench doesn't ask for a second factor itself: your identity provider does, and reports it in the token
-            (<code>amr</code> or <code>acr</code>). Sign-ins without it are refused with an explanation.
+            With single sign-on, your identity provider asks for the second factor and reports it in the token
+            (<code>amr</code> or <code>acr</code>); sign-ins without it are refused with an explanation. People who sign in with a
+            Workbench password use an authenticator app instead: when it's required, their next sign-in asks them to set one up.
             Your current sign-in @(env.CurrentSessionMfa ? "used MFA" : "did not report MFA").
         </MudText>
         <MudRadioGroup T="MfaRequirement" @bind-Value="_mfa">

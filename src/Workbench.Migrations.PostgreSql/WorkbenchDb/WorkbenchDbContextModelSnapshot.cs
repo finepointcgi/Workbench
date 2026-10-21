@@ -8786,6 +8786,55 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("Position");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Identity.AccountToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("InviteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("AccountToken");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Identity.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8845,6 +8894,67 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("AppUser");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.PasswordCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("LastTotpStep")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("LockedOutUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PasswordChangedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ProtectedPendingTotpSecret")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ProtectedTotpSecret")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("RecoveryCodeHashes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("TotpEnabledAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("PasswordCredential");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Identity.RegisteredPermission", b =>
