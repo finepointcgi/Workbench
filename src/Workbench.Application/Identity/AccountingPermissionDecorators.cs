@@ -217,7 +217,7 @@ public sealed class PermissionCheckingAccountingReportService(IAccountingReportS
     public async Task<ReconciliationDto> GetReconciliationAsync(Guid? projectId = null, CancellationToken cancellationToken = default)
     {
         await access.RequireAsync(Permission.GlReportsView, What, cancellationToken);
-        return await inner.GetReconciliationAsync(projectId, cancellationToken);
+        return FieldMasker.Mask(await inner.GetReconciliationAsync(projectId, cancellationToken), await access.GetPermissionsAsync(cancellationToken)); // Burden columns need FieldsBurdenedCost.
     }
 
     public async Task<AccountingExportFile> ExportCsvAsync(AccountingExportRequest request, CancellationToken cancellationToken = default)

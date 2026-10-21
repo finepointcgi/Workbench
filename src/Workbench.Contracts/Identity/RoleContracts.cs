@@ -19,8 +19,58 @@ public sealed record RoleDto(
     public IReadOnlyList<PermissionConflict> Conflicts => PermissionCatalog.ConflictsIn(Permissions);
 }
 
-/// <summary>A role as it appears on a user, an invite, an API key or an approval step.</summary>
-public sealed record RoleRef(Guid Id, string Name, bool IsBuiltIn);
+/// <summary>
+/// A role as it appears on a user, an invite, an API key or an approval step. On a user, <paramref name="Scope"/> is
+/// where the role applies (null or <see cref="RoleScope.Everywhere"/>: everywhere) and <paramref name="ScopeText"/> says so
+/// in words ("company B", "org units ENG, OPS").
+/// </summary>
+public sealed record RoleRef(Guid Id, string Name, bool IsBuiltIn, RoleScope? Scope = null, string? ScopeText = null)
+{
+    /// <summary>"Finance" or "Finance (company B)".</summary>
+    public string Label => ScopeText is { Length: > 0 } s ? $"{Name} ({s})" : Name;
+}
+
+/// <summary>What a role assignment can be limited to.</summary>
+public enum RoleScopeKind
+{
+    /// <summary>No limit: the role applies everywhere.</summary>
+    Everywhere,
+
+    /// <summary>
+    /// Only while the person works in one of these companies (the company switcher). The company filters then show only
+    /// that company's records.
+    /// </summary>
+    Companies,
+
+    /// <summary>
+    /// Records of these org units and their sub-units: employees in them, and projects whose manager is in them (and those
+    /// projects' contracts).
+    /// </summary>
+    OrgUnits,
+
+    /// <summary>These projects (and their contracts, for contract-level permissions).</summary>
+    Projects,
+
+    /// <summary>These contracts and their projects.</summary>
+    Contracts,
+}
+
+/// <summary>Where a role assignment applies. <see cref="Ids"/> are company, org unit, project or contract ids.</summary>
+public sealed record RoleScope(RoleScopeKind Kind, IReadOnlyList<Guid> Ids)
+{
+    public static RoleScope Everywhere { get; } = new(RoleScopeKind.Everywhere, []);
+
+    public bool IsEverywhere => Kind == RoleScopeKind.Everywhere || Ids.Count == 0;
+
+    /// <summary>The same scope with ids in a stable order (for comparing).</summary>
+    public RoleScope Normalized => IsEverywhere ? Everywhere : this with { Ids = Ids.Distinct().Order().ToList() };
+
+    public bool SameAs(RoleScope? other) =>
+        Normalized.Kind == (other ?? Everywhere).Normalized.Kind && Normalized.Ids.SequenceEqual((other ?? Everywhere).Normalized.Ids);
+}
+
+/// <summary>One role to give someone, optionally limited (<see cref="Scope"/> null = everywhere).</summary>
+public sealed record RoleAssignment(Guid RoleId, RoleScope? Scope = null);
 
 /// <summary>Creates or replaces a custom role. Unknown permission keys are refused.</summary>
 public sealed record SaveRoleRequest(string Name, string? Description, IReadOnlyList<string> Permissions);
@@ -66,8 +116,27 @@ public interface IRoleService
     Task<UserRolesDto> GetUserRolesAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Replaces the roles a user holds. Refuses to leave the organization without an active administrator, and refuses to
-    /// remove your own Admin role.
+    /// Replaces the roles a user holds. Roles they keep keep their scope; new ones apply everywhere. Refuses to leave the
+    /// organization without an active administrator, and refuses to remove your own Admin role.
     /// </summary>
     Task<UserRolesDto> SetUserRolesAsync(string email, IReadOnlyList<Guid> roleIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the roles a user holds, each with its scope (a company, org unit, project or contract limit, or everywhere).
+    /// The built-in Admin role can't be limited.
+    /// </summary>
+    Task<UserRolesDto> SetUserRoleAssignmentsAsync(string email, IReadOnlyList<RoleAssignment> assignments, CancellationToken cancellationToken = default);
+
+    /// <summary>The companies, org units, projects and contracts a role can be limited to, for the scope picker.</summary>
+    Task<RoleScopeOptionsDto> GetScopeOptionsAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>Something a role can be limited to.</summary>
+public sealed record ScopeOption(Guid Id, string Code, string Name);
+
+/// <summary>Everything a role can be limited to, by kind.</summary>
+public sealed record RoleScopeOptionsDto(
+    IReadOnlyList<ScopeOption> Companies,
+    IReadOnlyList<ScopeOption> OrgUnits,
+    IReadOnlyList<ScopeOption> Projects,
+    IReadOnlyList<ScopeOption> Contracts);

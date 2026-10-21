@@ -1,8 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
 using Workbench.Contracts;
 using Workbench.Contracts.Identity;
-using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Reports;
 
@@ -55,7 +53,7 @@ public sealed record ReportAccessContext(
     public bool CanSeeEmployeeTime(Guid employeeId) => VisibleEmployees is null || VisibleEmployees.Contains(employeeId);
 }
 
-public sealed class ReportAccess(ProjectAccess projects, IWorkbenchDbContextFactory dbFactory)
+public sealed class ReportAccess(ProjectAccess projects)
 {
     public AccessControl Access => projects.Access;
 
@@ -68,19 +66,7 @@ public sealed class ReportAccess(ProjectAccess projects, IWorkbenchDbContextFact
         var visible = await projects.VisibleTimeEmployeeIdsAsync(ct);
         var contracts = await projects.ManagedContractIdsAsync(ct);
 
-        IReadOnlySet<Guid>? managedProjects = null;
-        if (!resolved.Permissions.Has(Permission.ProjectsFinancialsView))
-        {
-            if (me is null)
-            {
-                managedProjects = new HashSet<Guid>();
-            }
-            else
-            {
-                await using var db = await dbFactory.CreateAsync(ct);
-                managedProjects = (await db.Set<Project>().AsNoTracking().Where(p => p.ProjectManagerId == me).Select(p => p.Id).ToListAsync(ct)).ToHashSet();
-            }
-        }
+        var managedProjects = await projects.ManagedProjectIdsAsync(ct); // Managed, or covered by a limited role's scope.
 
         return new ReportAccessContext(access.Email, resolved.BuiltIn, me, visible, managedProjects, contracts, resolved.Permissions, resolved.Roles.Select(r => r.Id).ToList());
     }

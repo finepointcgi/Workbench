@@ -47,6 +47,51 @@ built-in roles (the API's role fields, SCIM, older tests); access is never decid
   the CSV export lists them, plus the changes to role definitions in the period.
 - **The dev and demo sign-in** labels people with every role they hold.
 
+## Where a role applies (scopes)
+
+Giving someone a role, an administrator can limit it to some **companies**, **org units**, **projects** or **contracts**:
+"Project controller for org unit ENG only", "Finance for company B only". An unlimited role applies everywhere, as before.
+Admin can't be limited.
+
+- **Companies**: the role applies while the person works in one of those companies (the company switcher, or their only
+  company). It composes with the multi-company access lists: they still only see companies they may use, and a
+  company-limited role adds nothing while they work in another one. Checks on a record follow the record's company.
+- **Org units**: people in the unit or any unit below it, and projects (and their contracts) whose manager is in it.
+  Projects have no org unit of their own.
+- **Projects** and **contracts**: those records (a contract covers its projects; a project its contract).
+- Scoped permissions apply where a check names a record: project financials, budgets and contract funding, project setup,
+  the projects hub, timekeeping reports (whose hours), HR records (full and job-level access) and the report writer's
+  project rows. A page-level check with no record in view only counts unlimited roles (and company roles in the current
+  company), so it fails closed. Project visibility rules (which projects someone sees at all) stay separate and apply
+  on top.
+- Users, the access review, dev sign-in and role members show a limited role as "Finance (company B)". Limiting or
+  widening an assignment is audited like any other role change.
+
+## Sensitive fields
+
+Some fields are permissions of their own, under **Sensitive fields**. A role that lacks one gets the field masked (shown
+as hidden, or 0 for a required number) or the read refused, everywhere it's read: pages, the API, exports built from those
+reads and the assistant's tools, which all go through the same permission decorators. Built-in roles hold each field
+exactly where they saw it before.
+
+| Field | Permission | Masked or refused | Always visible to |
+|---|---|---|---|
+| Salary ranges, compensation history and pay change amounts, merit budgets | See salaries | Masked | — |
+| Pay rates in payroll | View pay rates | Masked (unchanged) | — |
+| Employee cost rates and labor cost (reports, report writer) | See cost rates and labor cost | Masked (unchanged) | — |
+| Burdened cost and burdened financials; burden columns of the GL reconciliation | See burdened cost | Refused; reconciliation columns masked | The project's manager |
+| EEO and veteran self-identification; EEO-1 and VETS-4212 | See EEO data | Refused | The employee (their own) |
+| Fee, fee rate, margin, wrap rate and price in proposal pricing; the cost volume export | See fee and margin | Masked; export refused | — |
+| Vendor TINs and W-9s | See and set vendor tax ids | Masked (unchanged) | — |
+| Vendor bank details | Vendor bank details | Masked (unchanged) | — |
+
+Workbench stores no employee SSNs; "tax ids" are vendor TINs. Someone who can't see the fee can still save a price
+model's other settings; its fee terms are kept as they were.
+
+Developers mark a contract property with `[property: SensitiveField(Permission.X)]` and return reads through
+`FieldMasker.Mask(dto, permissions)` in the permission decorator; nested records and lists are handled. A relationship that
+reveals a field (the project's manager, the employee) is decided in the decorator.
+
 ## Segregation of duties
 
 Admin › Roles warns (it doesn't refuse: small organizations sometimes must combine duties) when a role, or the set of roles
@@ -82,6 +127,16 @@ security event.
 - To add a permission: a constant and a `PermissionDefinition` (area, name, description, the built-in roles that hold it)
   in `Contracts/Identity/Permissions.cs`, a row below and an entry in `BuiltInRoleParityTests`. Never rename a key:
   custom roles store them. Give a new page's menu entry `NavRule.Need(Permission.X)`.
+
+- **Run-time permissions.** Features whose permissions are defined by administrators (custom fields, automations,
+  configurable forms and dashboards) register them through `IPermissionRegistry` (`RegisterAsync`, `UnregisterAsync`,
+  `ListBySourceAsync`); everything reads the full catalog through `IPermissionCatalog` (`ListAsync`, `FindAsync`). A key is
+  lower-case and dotted (`custom_field.clearance.view`, `automation.3f2a.run`), at most 100 characters and never a
+  built-in key. `GrantedTo` gives it to built-in roles (as role rows); Admin always holds it; custom roles grant it from
+  Admin › Roles, where it's listed under its own area with its source. Unregistering removes it from every role.
+  Registering, updating and unregistering are audited (`RegisteredPermission`) and recorded (`permission.registered`,
+  `permission.unregistered`). The registry doesn't check who calls it: call it from your own permission-checked service.
+  Check a registered permission like any other: `AccessControl.RequireAsync(key, "...", ct)`.
 
 ## The permission catalog
 
@@ -134,7 +189,6 @@ reveals. Admin holds every permission.
 |---|---|---|---|---|
 | See everyone's time | `time.view_all` | Everyone's timesheets, hours, daily entries, leave requests and utilization. | Admin, Timekeeper, Finance | Timesheet flags |
 | Team time for everyone | `time.team` | The Team time page and timesheet approvals list for the whole organization. | Admin, Timekeeper | Team time, Approvals, Timesheet flags, Timesheet approvals, ODC approvals, Bill approvals |
-| See cost rates and labor cost ⚠ | `labor.cost.view` | Employee cost rates, labor cost in reports and the labor distribution. | Admin, Finance | — |
 | Change cost rates ⚠ | `labor.cost_rates.manage` | Add employee cost rates. | Admin, Finance | — |
 | Total time accounting | `time.total_time` | The labor cost method, uncompensated overtime and effective labor rates. | Admin, Finance | Total time accounting |
 | Manage leave balances | `leave.balances.manage` | See everyone's leave balances, adjust them, run accruals and the leave year end. | Admin, Finance | — |
@@ -186,8 +240,6 @@ reveals. Admin holds every permission.
 | Permission | Key | What it allows | Built-in roles | Opens |
 |---|---|---|---|---|
 | Manage vendors | `ap.vendors.manage` | Add and change vendors and subcontracts. | Admin, Finance | Vendors, Subcontracts |
-| See and set vendor tax ids ⚠ | `ap.vendors.tax_ids` | Set a vendor's TIN, see the full TIN and vendor W-9s. | Admin, Finance | — |
-| Vendor bank details ⚠ | `ap.vendors.bank` | See and change where vendors are paid. | Admin, Finance | — |
 | Enter and approve AP bills | `ap.bills.manage` | Every AP bill: enter, approve and post them. | Admin, Finance | Approvals, Bills, ODC approvals, Bill approvals |
 | Pay vendors | `ap.payments.manage` | Payment runs and bank payment files. | Admin, Finance | Payment runs |
 | See AP reports | `ap.reports.view` | Payables aging and 1099 reports. | Admin, Finance | AP reports |
@@ -208,7 +260,6 @@ reveals. Admin holds every permission.
 | Run payroll | `payroll.run` | Run, post and void payroll. | Admin, Finance | Payroll |
 | Set up payroll | `payroll.setup` | Pay groups, payroll providers and payroll file layouts. | Admin, Finance | — |
 | Manage payroll profiles | `payroll.profiles.manage` | Employees' payroll profiles, with pay rates masked. | Admin, Finance | — |
-| View pay rates ⚠ | `payroll.pay_rates.view` | Reveal what employees are paid. | Admin, Finance | — |
 
 ### Travel and cards
 
@@ -256,5 +307,18 @@ reveals. Admin holds every permission.
 | Permission | Key | What it allows | Built-in roles | Opens |
 |---|---|---|---|---|
 | See restricted columns ⚠ | `sheets.restricted_columns.view` | Sheet columns marked "Finance and owners only" in every workspace. | Admin, Finance | — |
+
+### Sensitive fields
+
+| Permission | Key | What it allows | Built-in roles | Opens |
+|---|---|---|---|---|
+| See cost rates and labor cost ⚠ | `labor.cost.view` | Employee cost rates, labor cost in reports and the labor distribution. | Admin, Finance | — |
+| See and set vendor tax ids ⚠ | `ap.vendors.tax_ids` | Set a vendor's TIN, see the full TIN and vendor W-9s. | Admin, Finance | — |
+| Vendor bank details ⚠ | `ap.vendors.bank` | See and change where vendors are paid. | Admin, Finance | — |
+| View pay rates ⚠ | `payroll.pay_rates.view` | Reveal what employees are paid. | Admin, Finance | — |
+| See salaries ⚠ | `fields.salaries` | Salary ranges on positions and the amounts in compensation history and pay changes. Without it they show as hidden. | Admin, HR, Finance | — |
+| See burdened cost ⚠ | `fields.burdened_cost` | Fringe, overhead and G&A applied to project cost (burdened cost and burdened financials). Project managers always see their own projects'. | Admin, Finance | — |
+| See EEO data ⚠ | `fields.eeo` | Employees' EEO and veteran self-identification and the EEO-1 and VETS-4212 reports. Employees always see their own. | Admin, HR | — |
+| See fee and margin ⚠ | `fields.pricing_fee` | Fee, fee rate, margin and price in proposal pricing, and the cost volume export. Without it pricing shows cost only. | Admin, Pricing, Finance | — |
 
 

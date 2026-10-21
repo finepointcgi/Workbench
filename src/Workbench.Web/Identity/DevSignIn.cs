@@ -41,10 +41,9 @@ public static class DevSignIn
             await using var db = await dbFactory.CreateAsync(http.RequestAborted);
             // Every role each person holds (built-in and custom), for the labels; administrators first.
             var users = await db.Set<AppUser>().AsNoTracking().ToListAsync(http.RequestAborted);
-            var held = (await db.Set<UserRole>().AsNoTracking().Select(r => new { r.UserId, r.RoleId }).ToListAsync(http.RequestAborted)).ToLookup(r => r.UserId, r => r.RoleId);
-            var refs = await RoleStore.RefsAsync(db, held.SelectMany(g => g), http.RequestAborted);
-            var labels = users.ToDictionary(u => u.Id, u => RoleStore.Describe(refs.Where(r => held[u.Id].Contains(r.Id))));
-            users = users.OrderByDescending(u => u.IsActive).ThenByDescending(u => held[u.Id].Contains(Contracts.Identity.BuiltInRoles.Admin.Id)).ThenBy(u => u.Email).ToList();
+            var held = await RoleStore.UserRefsAsync(db, users.Select(u => u.Id).ToList(), http.RequestAborted);
+            var labels = users.ToDictionary(u => u.Id, u => RoleStore.Describe(held[u.Id]));
+            users = users.OrderByDescending(u => u.IsActive).ThenByDescending(u => held[u.Id].Any(r => r.Id == Contracts.Identity.BuiltInRoles.Admin.Id)).ThenBy(u => u.Email).ToList();
             var now = clock.GetUtcNow().UtcDateTime;
 
             // Pending invites stand in for "first sign-in at the identity provider" in Development.

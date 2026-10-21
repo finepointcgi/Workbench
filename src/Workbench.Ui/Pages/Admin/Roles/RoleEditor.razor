@@ -1,7 +1,9 @@
 @* One role: its name, description and permissions (a grouped checklist that says what each allows and which pages it
-   opens), segregation-of-duties warnings, and the people who hold it. Built-in roles are read only. *@
+   opens, with permissions features registered at run time after the built-in areas), segregation-of-duties warnings,
+   and the people who hold it (with where they hold it). Built-in roles are read only. *@
 @using Workbench.Contracts
 @inject IRoleService Roles
+@inject IPermissionCatalog Catalog
 @inject IUserDirectory Users
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
@@ -65,7 +67,7 @@
                 <MudSwitch T="bool" @bind-Value="_onlyGranted" Color="Color.Primary" Label="Only what this role allows" />
             </div>
             <MudExpansionPanels MultiExpansion="true" Outlined="true" Dense="true">
-                @foreach (var area in PermissionCatalog.Areas)
+                @foreach (var area in Areas)
                 {
                     var items = Visible(area).ToList();
                     if (items.Count == 0)
@@ -73,7 +75,7 @@
                         continue;
                     }
 
-                    var all = PermissionCatalog.All.Where(p => p.Area == area).ToList();
+                    var all = _catalog.Where(p => p.Area == area).ToList();
                     var count = all.Count(p => _granted.Contains(p.Key));
                     <MudExpansionPanel Expanded="@(!string.IsNullOrWhiteSpace(_filter) || _onlyGranted)">
                         <TitleContent>
@@ -99,6 +101,10 @@
                                     <div class="pt-1">
                                         <div class="d-flex align-center flex-wrap gap-1">
                                             <span>@p.Name</span>
+                                            @if (p.Source is { } source)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Extension" title="Registered by a feature">@source</MudChip>
+                                            }
                                             @if (p.Sensitive)
                                             {
                                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.Shield">Sensitive</MudChip>
@@ -161,8 +167,12 @@
                                     <td>
                                         <div>@m.DisplayName @if (!m.IsActive) { <MudChip T="string" Size="Size.Small">Deactivated</MudChip> }</div>
                                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@m.Email</MudText>
+                                        @if (m.Roles.FirstOrDefault(r => r.Id == Role.Id)?.ScopeText is { Length: > 0 } where)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="d-block" data-testid="role-member-scope">Only for @where</MudText>
+                                        }
                                     </td>
-                                    <td>@(string.Join(", ", m.Roles.Where(r => r.Id != Role.Id).Select(r => r.Name)) is { Length: > 0 } others ? others : "Nothing else")</td>
+                                    <td>@(string.Join(", ", m.Roles.Where(r => r.Id != Role.Id).Select(r => r.Label)) is { Length: > 0 } others ? others : "Nothing else")</td>
                                     <td class="text-right">
                                         @if (CanAssign)
                                         {
@@ -218,9 +228,23 @@
 
     private IReadOnlyList<PermissionConflict> Conflicts => PermissionCatalog.ConflictsIn(_granted);
 
+    // The built-in catalog until the full one (with registered permissions) loads.
+    private IReadOnlyList<PermissionDefinition> _catalog = PermissionCatalog.All;
+
+    private IEnumerable<string> Areas => PermissionCatalog.Areas.Concat(_catalog.Select(p => p.Area).Distinct().Except(PermissionCatalog.Areas).Order(StringComparer.OrdinalIgnoreCase));
+
     protected override async Task OnInitializedAsync()
     {
         Reset();
+        try
+        {
+            _catalog = await Catalog.ListAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            // Registered permissions just don't show; built-in ones still do.
+        }
+
         _onlyGranted = Role.IsBuiltIn && Role.Permissions.Count > 0;
         await LoadMembersAsync();
     }
@@ -232,7 +256,7 @@
     }
 
     private IEnumerable<PermissionDefinition> Visible(string area) =>
-        PermissionCatalog.All.Where(p => p.Area == area
+        _catalog.Where(p => p.Area == area
             && (!_onlyGranted || _granted.Contains(p.Key))
             && (string.IsNullOrWhiteSpace(_filter)
                 || p.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)

@@ -29,12 +29,21 @@ public sealed record RoleGrant(OrgRoles BuiltIn, IReadOnlyList<Guid> Custom)
     }
 }
 
-/// <summary>A user's resolved access: the built-in roles they hold, every role they hold, and the union of their permissions.</summary>
-public sealed record ResolvedAccess(OrgRoles BuiltIn, IReadOnlyList<RoleRef> Roles, PermissionSet Permissions)
+/// <summary>
+/// A user's resolved access. <see cref="Permissions"/> is what they may do right now: their unscoped roles plus roles
+/// limited to the company they're working in. <see cref="Unscoped"/> holds everywhere; <see cref="ScopedGrants"/> are the
+/// roles limited to companies, org units, projects or contracts (see <see cref="RoleScopes"/>). <see cref="BuiltIn"/> lists
+/// the built-in roles held everywhere.
+/// </summary>
+public sealed record ResolvedAccess(OrgRoles BuiltIn, IReadOnlyList<RoleRef> Roles, PermissionSet Permissions, PermissionSet? Everywhere = null, IReadOnlyList<ScopedGrant>? Scoped = null)
 {
     public static ResolvedAccess None { get; } = new(OrgRoles.Employee, [], PermissionSet.Empty);
 
     public static ResolvedAccess Everything { get; } = new(OrgRoleChecks.Everything, [], PermissionSet.All);
+
+    public PermissionSet Unscoped => Everywhere ?? Permissions;
+
+    public IReadOnlyList<ScopedGrant> ScopedGrants => Scoped ?? [];
 }
 
 /// <summary>
@@ -101,16 +110,23 @@ public static class RoleStore
             return ResolvedAccess.None;
         }
 
+        var userId = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == email && u.IsActive).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+        if (userId is not { } id)
+        {
+            return ResolvedAccess.None;
+        }
+
         var held = await (
-            from u in db.Set<AppUser>().AsNoTracking()
-            where u.Email == email && u.IsActive
-            join ur in db.Set<UserRole>().AsNoTracking() on u.Id equals ur.UserId
+            from ur in db.Set<UserRole>().AsNoTracking()
+            where ur.UserId == id
             join r in db.Set<Role>().AsNoTracking() on ur.RoleId equals r.Id
-            select new { r.Id, r.Name, r.BuiltIn }).ToListAsync(ct);
-        return await ResolveRolesAsync(db, held.Select(h => (h.Id, h.Name, h.BuiltIn)), ct);
+            select new { r.Id, r.Name, r.BuiltIn, ur.ScopeKind, ur.ScopeIds }).ToListAsync(ct);
+        var rows = held.Select(h => new Held(h.Id, h.Name, h.BuiltIn, ScopeOf(h.ScopeKind, h.ScopeIds))).ToList();
+        var working = rows.Any(r => r.Scope.Kind == RoleScopeKind.Companies) ? await RoleScopes.WorkingCompanyAsync(db, id, ct) : null;
+        return await ResolveRolesAsync(db, rows, working, ct);
     }
 
-    /// <summary>The access the given role ids grant together (for invites, SSO mappings and API keys).</summary>
+    /// <summary>The access the given role ids grant together, everywhere (for invites, SSO mappings and API keys).</summary>
     public static async Task<ResolvedAccess> ResolveRoleIdsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> roleIds, CancellationToken ct)
     {
         if (roleIds.Count == 0)
@@ -120,34 +136,57 @@ public static class RoleStore
 
         var ids = roleIds.ToList();
         var roles = await db.Set<Role>().AsNoTracking().Where(r => ids.Contains(r.Id)).Select(r => new { r.Id, r.Name, r.BuiltIn }).ToListAsync(ct);
-        var found = roles.Select(r => (r.Id, r.Name, r.BuiltIn)).ToList();
+        var found = roles.Select(r => new Held(r.Id, r.Name, r.BuiltIn, RoleScope.Everywhere)).ToList();
 
         // Built-in roles count even before their rows exist (InMemory test databases).
         found.AddRange(ids.Where(id => roles.All(r => r.Id != id)).Select(BuiltInRoles.Find).OfType<BuiltInRoles.Definition>()
-            .Select(d => (d.Id, d.Name, (int?)(int)d.Role)));
-        return await ResolveRolesAsync(db, found, ct);
+            .Select(d => new Held(d.Id, d.Name, (int)d.Role, RoleScope.Everywhere)));
+        return await ResolveRolesAsync(db, found, null, ct);
     }
 
-    private static async Task<ResolvedAccess> ResolveRolesAsync(IWorkbenchDbContext db, IEnumerable<(Guid Id, string Name, int? BuiltIn)> held, CancellationToken ct)
+    private sealed record Held(Guid Id, string Name, int? BuiltIn, RoleScope Scope);
+
+    private static async Task<ResolvedAccess> ResolveRolesAsync(IWorkbenchDbContext db, IEnumerable<Held> held, Guid? workingCompany, CancellationToken ct)
     {
         var list = held.DistinctBy(h => h.Id).ToList();
-        var builtIn = list.Where(h => h.BuiltIn is not null).Aggregate(OrgRoles.Employee, (all, h) => all | (OrgRoles)h.BuiltIn!.Value);
-        var permissions = PermissionCatalog.ForBuiltInRoles(builtIn);
-        var custom = list.Where(h => h.BuiltIn is null).Select(h => h.Id).ToList();
-        if (custom.Count > 0)
-        {
-            var keys = await db.Set<RolePermission>().AsNoTracking().Where(p => custom.Contains(p.RoleId)).Select(p => p.Permission).Distinct().ToListAsync(ct);
-            permissions = permissions.Union(PermissionSet.Of(keys.Where(PermissionCatalog.Exists)));
-        }
+
+        // Custom roles' permissions, and run-time registered ones granted to built-in roles, are rows.
+        var ids = list.Where(h => h.BuiltIn != (int)OrgRoles.Admin).Select(h => h.Id).ToList();
+        var rows = ids.Count == 0
+            ? new Dictionary<Guid, PermissionSet>()
+            : (await db.Set<RolePermission>().AsNoTracking().Where(p => ids.Contains(p.RoleId)).Select(p => new { p.RoleId, p.Permission }).ToListAsync(ct))
+                .GroupBy(p => p.RoleId).ToDictionary(g => g.Key, g => PermissionSet.Of(g.Select(p => p.Permission)));
+        PermissionSet Grants(Held h) =>
+            (h.BuiltIn is { } b ? PermissionCatalog.ForBuiltInRoles((OrgRoles)b) : PermissionSet.Empty).Union(rows.GetValueOrDefault(h.Id) ?? PermissionSet.Empty);
+
+        var unscoped = list.Where(h => h.Scope.IsEverywhere).ToList();
+        var builtIn = unscoped.Where(h => h.BuiltIn is not null).Aggregate(OrgRoles.Employee, (all, h) => all | (OrgRoles)h.BuiltIn!.Value);
+        var everywhere = unscoped.Aggregate(PermissionSet.Empty, (all, h) => all.Union(Grants(h)));
+        var scoped = list.Where(h => !h.Scope.IsEverywhere).Select(h => new ScopedGrant(h.Scope, Grants(h))).ToList();
+
+        // Roles limited to companies apply while the person works in one of them.
+        var now = scoped.Where(g => g.Scope.Kind == RoleScopeKind.Companies && workingCompany is { } w && g.Scope.Ids.Contains(w))
+            .Aggregate(everywhere, (all, g) => all.Union(g.Permissions));
 
         var refs = list
             .OrderBy(h => h.BuiltIn is null)
             .ThenBy(h => h.BuiltIn is { } b ? BuiltInRoles.All.ToList().FindIndex(d => (int)d.Role == b) : 0)
             .ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(h => new RoleRef(h.Id, h.Name, h.BuiltIn is not null))
+            .Select(h => new RoleRef(h.Id, h.Name, h.BuiltIn is not null, h.Scope.IsEverywhere ? null : h.Scope))
             .ToList();
-        return new ResolvedAccess(builtIn, refs, permissions);
+        return new ResolvedAccess(builtIn, refs, now, everywhere, scoped);
     }
+
+    internal static RoleScope ScopeOf(int kind, string? ids)
+    {
+        var parsed = ParseIds(ids);
+        return kind == 0 || parsed.Count == 0 || !Enum.IsDefined((RoleScopeKind)kind) ? RoleScope.Everywhere : new RoleScope((RoleScopeKind)kind, parsed);
+    }
+
+    /// <summary>The roles the user holds, each with its scope (active or not).</summary>
+    public static async Task<List<RoleAssignment>> AssignmentsOfAsync(IWorkbenchDbContext db, Guid userId, CancellationToken ct) =>
+        (await db.Set<UserRole>().AsNoTracking().Where(r => r.UserId == userId).Select(r => new { r.RoleId, r.ScopeKind, r.ScopeIds }).ToListAsync(ct))
+            .Select(r => new RoleAssignment(r.RoleId, ScopeOf(r.ScopeKind, r.ScopeIds))).ToList();
 
     /// <summary>The built-in roles held by the active user with <paramref name="email"/>.</summary>
     public static async Task<OrgRoles> BuiltInRolesOfAsync(IWorkbenchDbContext db, string email, CancellationToken ct) =>
@@ -212,6 +251,7 @@ public static class RoleStore
     }
 
     /// <summary>True when an active user other than <paramref name="exceptEmail"/> holds the built-in Admin role.</summary>
+    /// <remarks>The Admin role can't be limited, so every Admin assignment applies everywhere.</remarks>
     public static Task<bool> AnotherActiveAdminAsync(IWorkbenchDbContext db, string exceptEmail, CancellationToken ct)
     {
         var admin = BuiltInRoles.Admin.Id;
@@ -219,30 +259,86 @@ public static class RoleStore
     }
 
     /// <summary>
-    /// Makes <paramref name="user"/> hold exactly <paramref name="roleIds"/> (Employee is implicit and dropped). Changes are
-    /// tracked, not saved. Unknown role ids throw <see cref="ArgumentException"/>. Returns the role ids held before and after.
+    /// Makes <paramref name="user"/> hold exactly <paramref name="roleIds"/> (Employee is implicit and dropped); roles they
+    /// keep keep their scope, new ones apply everywhere. Changes are tracked, not saved. Unknown role ids throw
+    /// <see cref="ArgumentException"/>. Returns the role ids held before and after.
     /// </summary>
     public static async Task<(IReadOnlyList<Guid> Before, IReadOnlyList<Guid> After)> ReplaceAsync(
         IWorkbenchDbContext db, AppUser user, IEnumerable<Guid> roleIds, string? actor, DateTime now, CancellationToken ct)
     {
-        var target = roleIds.Where(id => id != BuiltInRoles.Employee.Id).Distinct().ToList();
-        await EnsureBuiltInRolesAsync(db, ct);
-        var known = await db.Set<Role>().Where(r => target.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
-        known.AddRange(db.Set<Role>().Local.Where(r => target.Contains(r.Id)).Select(r => r.Id));
-        if (target.FirstOrDefault(id => !known.Contains(id)) is var missing && missing != Guid.Empty)
+        var current = await AssignmentsOfAsync(db, user.Id, ct);
+        var target = roleIds.Distinct().Select(id => current.FirstOrDefault(a => a.RoleId == id) ?? new RoleAssignment(id)).ToList();
+        var (before, after) = await ReplaceAssignmentsAsync(db, user, target, actor, now, ct);
+        return (before.Select(a => a.RoleId).ToList(), after.Select(a => a.RoleId).ToList());
+    }
+
+    /// <summary>
+    /// Makes <paramref name="user"/> hold exactly <paramref name="assignments"/>, each with its scope (tracked, not saved).
+    /// Unknown roles or scope targets, and a limited Admin role, throw <see cref="ArgumentException"/>.
+    /// </summary>
+    public static async Task<(IReadOnlyList<RoleAssignment> Before, IReadOnlyList<RoleAssignment> After)> ReplaceAssignmentsAsync(
+        IWorkbenchDbContext db, AppUser user, IEnumerable<RoleAssignment> assignments, string? actor, DateTime now, CancellationToken ct)
+    {
+        var target = new List<RoleAssignment>();
+        foreach (var a in assignments.Where(a => a.RoleId != BuiltInRoles.Employee.Id).DistinctBy(a => a.RoleId))
         {
-            throw new ArgumentException($"Role {missing} doesn't exist.", nameof(roleIds));
+            var scope = await RoleScopes.ValidateAsync(db, a.Scope, ct);
+            if (a.RoleId == BuiltInRoles.Admin.Id && !scope.IsEverywhere)
+            {
+                throw new ArgumentException("The Admin role applies everywhere; it can't be limited. Clone it to make a limited administrator role.", nameof(assignments));
+            }
+
+            target.Add(new RoleAssignment(a.RoleId, scope));
         }
 
-        var current = await db.Set<UserRole>().Where(r => r.UserId == user.Id).ToListAsync(ct);
-        var before = current.Select(r => r.RoleId).ToList();
-        db.Set<UserRole>().RemoveRange(current.Where(r => !target.Contains(r.RoleId)));
-        foreach (var id in target.Where(id => !before.Contains(id)))
+        var ids = target.Select(a => a.RoleId).ToList();
+        await EnsureBuiltInRolesAsync(db, ct);
+        var known = await db.Set<Role>().Where(r => ids.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
+        known.AddRange(db.Set<Role>().Local.Where(r => ids.Contains(r.Id)).Select(r => r.Id));
+        if (ids.FirstOrDefault(id => !known.Contains(id)) is var missing && missing != Guid.Empty)
         {
-            db.Set<UserRole>().Add(new UserRole { UserId = user.Id, RoleId = id, AssignedAtUtc = now, AssignedBy = actor });
+            throw new ArgumentException($"Role {missing} doesn't exist.", nameof(assignments));
+        }
+
+        var rows = await db.Set<UserRole>().Where(r => r.UserId == user.Id).ToListAsync(ct);
+        var before = rows.Select(r => new RoleAssignment(r.RoleId, ScopeOf(r.ScopeKind, r.ScopeIds))).ToList();
+        db.Set<UserRole>().RemoveRange(rows.Where(r => !ids.Contains(r.RoleId)));
+        foreach (var a in target)
+        {
+            var scope = a.Scope ?? RoleScope.Everywhere;
+            var (kind, scopeIds) = scope.IsEverywhere ? (0, null) : ((int)scope.Kind, FormatIds(scope.Ids));
+            if (rows.FirstOrDefault(r => r.RoleId == a.RoleId) is { } row)
+            {
+                if (row.ScopeKind != kind || row.ScopeIds != scopeIds)
+                {
+                    (row.ScopeKind, row.ScopeIds, row.AssignedAtUtc, row.AssignedBy) = (kind, scopeIds, now, actor);
+                }
+            }
+            else
+            {
+                db.Set<UserRole>().Add(new UserRole { UserId = user.Id, RoleId = a.RoleId, ScopeKind = kind, ScopeIds = scopeIds, AssignedAtUtc = now, AssignedBy = actor });
+            }
         }
 
         return (before, target);
+    }
+
+    /// <summary>True when both lists give the same roles with the same scopes.</summary>
+    public static bool SameAssignments(IReadOnlyList<RoleAssignment> a, IReadOnlyList<RoleAssignment> b) =>
+        a.Count == b.Count && a.All(x => b.Any(y => y.RoleId == x.RoleId && (y.Scope ?? RoleScope.Everywhere).SameAs(x.Scope)));
+
+    /// <summary>Role names with their scopes in words, for audit details and display.</summary>
+    public static async Task<List<RoleRef>> RefsAsync(IWorkbenchDbContext db, IReadOnlyList<RoleAssignment> assignments, CancellationToken ct)
+    {
+        var refs = await RefsAsync(db, assignments.Select(a => a.RoleId), ct);
+        var result = new List<RoleRef>();
+        foreach (var r in refs)
+        {
+            var scope = assignments.First(a => a.RoleId == r.Id).Scope;
+            result.Add(scope is null || scope.IsEverywhere ? r : r with { Scope = scope, ScopeText = await RoleScopes.DescribeAsync(db, scope, ct) });
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -258,6 +354,45 @@ public static class RoleStore
     }
 
     /// <summary>Names of roles by id, for audit details and display (unknown ids are left out).</summary>
+    /// <summary>Each user's roles with their scopes in words ("Finance (company B)"), built-in first.</summary>
+    public static async Task<ILookup<Guid, RoleRef>> UserRefsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> userIds, CancellationToken ct)
+    {
+        var ids = userIds.Distinct().ToList();
+        var rows = await db.Set<UserRole>().AsNoTracking().Where(r => ids.Contains(r.UserId)).Select(r => new { r.UserId, r.RoleId, r.ScopeKind, r.ScopeIds }).ToListAsync(ct);
+        var refs = (await RefsAsync(db, rows.Select(r => r.RoleId), ct)).ToDictionary(r => r.Id);
+        var texts = new Dictionary<(int, string?), string>();
+        var result = new List<(Guid UserId, RoleRef Ref)>();
+        foreach (var row in rows)
+        {
+            if (!refs.TryGetValue(row.RoleId, out var r))
+            {
+                continue;
+            }
+
+            var scope = ScopeOf(row.ScopeKind, row.ScopeIds);
+            if (!scope.IsEverywhere && !texts.ContainsKey((row.ScopeKind, row.ScopeIds)))
+            {
+                texts[(row.ScopeKind, row.ScopeIds)] = await RoleScopes.DescribeAsync(db, scope, ct);
+            }
+
+            result.Add((row.UserId, scope.IsEverywhere ? r : r with { Scope = scope, ScopeText = texts[(row.ScopeKind, row.ScopeIds)] }));
+        }
+
+        return result.OrderBy(x => !x.Ref.IsBuiltIn).ThenBy(x => x.Ref.Name, StringComparer.OrdinalIgnoreCase).ToLookup(x => x.UserId, x => x.Ref);
+    }
+
+    /// <summary>Fills in the scope text of resolved roles (resolving skips it: it's only for showing).</summary>
+    public static async Task<List<RoleRef>> WithScopeTextAsync(IWorkbenchDbContext db, IEnumerable<RoleRef> refs, CancellationToken ct)
+    {
+        var result = new List<RoleRef>();
+        foreach (var r in refs)
+        {
+            result.Add(r.Scope is { IsEverywhere: false } scope && r.ScopeText is null ? r with { ScopeText = await RoleScopes.DescribeAsync(db, scope, ct) } : r);
+        }
+
+        return result;
+    }
+
     public static async Task<List<RoleRef>> RefsAsync(IWorkbenchDbContext db, IEnumerable<Guid> roleIds, CancellationToken ct)
     {
         var ids = roleIds.Distinct().ToList();
@@ -279,8 +414,8 @@ public static class RoleStore
             EntityType = AuditUserRoles,
             EntityId = user.Id,
             Action = "RolesChanged",
-            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { user.Email, Roles = before.Select(r => r.Name) }, AuditJson),
-            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { user.Email, Roles = after.Select(r => r.Name) }, AuditJson),
+            BeforeJson = System.Text.Json.JsonSerializer.Serialize(new { user.Email, Roles = before.Select(r => r.Label) }, AuditJson),
+            AfterJson = System.Text.Json.JsonSerializer.Serialize(new { user.Email, Roles = after.Select(r => r.Label) }, AuditJson),
             Actor = actor.Length > 0 ? actor : "system",
             OccurredAtUtc = now,
         });
@@ -293,10 +428,10 @@ public static class RoleStore
 
     private static readonly System.Text.Json.JsonSerializerOptions AuditJson = new(System.Text.Json.JsonSerializerDefaults.Web);
 
-    /// <summary>"Finance, Approvers" or "Employee" when there are none.</summary>
+    /// <summary>"Finance, Approvers (company B)" or "Employee" when there are none.</summary>
     public static string Describe(IEnumerable<RoleRef> roles)
     {
-        var names = roles.Where(r => r.Id != BuiltInRoles.Employee.Id).Select(r => r.Name).ToList();
+        var names = roles.Where(r => r.Id != BuiltInRoles.Employee.Id).Select(r => r.Label).ToList();
         return names.Count == 0 ? "Employee" : string.Join(", ", names);
     }
 

@@ -150,6 +150,13 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
   their roles'. Decide access with a permission, never with `OrgRoles` flags (a compatibility view of the built-in roles).
   A new capability gets a new permission (plus its built-in grants and a parity-test entry); a new page's menu entry
   declares its permission (`NavRule.Need`).
+- A role assignment can be limited to companies, org units, projects or contracts. When a check is about a record, use
+  `HasForProjectAsync` / `HasForContractAsync` / `HasForEmployeeAsync` (or `ProjectsWithAsync` etc. for lists) so limited
+  roles count; plain `HasAsync` only counts roles that apply everywhere (fails closed).
+- Sensitive fields are permissions too: mark the contract property `[property: SensitiveField(Permission.X)]` and return
+  reads through `FieldMasker.Mask(dto, permissions)` in the permission decorator. Admin-defined things (custom fields,
+  automations, forms) register their permissions at run time with `IPermissionRegistry`; read the full catalog with
+  `IPermissionCatalog`. Details in `docs/security/permissions.md`.
 - Enforce on the server with decorators registered by `AddWorkbenchIdentity()`, which stays the **last** line of
   `AddWorkbenchApplication` so the permission checks wrap every other decorator. Put new feature registrations
   (and their own decorators) above it, and add the new service's permission decorator inside `AddWorkbenchIdentity`.

@@ -33,7 +33,7 @@ public sealed class ProjectHubService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var charged = await ProjectHubAccess.ChargedProjectIdsAsync(db, viewer.EmployeeId, cancellationToken);
         var me = viewer.EmployeeId;
-        var chargedIds = charged.ToList();
+        var chargedIds = charged.Concat(viewer.FinancialsIn ?? new HashSet<Guid>()).ToList();
         var query = db.Set<Project>().AsNoTracking();
         if (!viewer.IsFinance)
         {
@@ -89,7 +89,7 @@ public sealed class ProjectHubService(
             Ceilings: readsMoney,
             Costs: true, // Finance, admins and the PM see every ODC; everyone else only their own entries.
             Team: readsMoney,
-            Setup: viewer.SetsUpAll || (viewer.IsProjectManager && viewer.EmployeeId is { } pm && project.ProjectManagerId == pm));
+            Setup: viewer.SetsUp(project));
 
         var alerts = new List<ProjectAlertDto>();
         if (money is not null)
@@ -174,8 +174,7 @@ public sealed class ProjectHubService(
             .ToList();
     }
 
-    private static bool CanReadMoney(ProjectHubAccess.Viewer viewer, Project project) =>
-        viewer.IsFinance || (viewer.EmployeeId is { } me && project.ProjectManagerId == me);
+    private static bool CanReadMoney(ProjectHubAccess.Viewer viewer, Project project) => viewer.ReadsMoneyOn(project);
 
     private ProjectHubRowDto Row(ProjectHubAccess.Viewer viewer, Project project, HubContext context, HashSet<Guid> charged, bool showsOpenItems, ProjectMoneyDto? money)
     {

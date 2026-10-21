@@ -51,8 +51,8 @@ public sealed class RoleService(
 
     public async Task<RoleDto> CreateAsync(SaveRoleRequest request, CancellationToken cancellationToken = default)
     {
-        var (name, description, permissions) = Validate(request);
         await using var db = await OpenAsync(cancellationToken);
+        var (name, description, permissions) = Validate(request, await PermissionRegistry.KnownKeysAsync(db, cancellationToken));
         await RequireUniqueNameAsync(db, name, null, cancellationToken);
         var role = await AddAsync(db, name, description, permissions, cancellationToken);
         await securityLog.RecordAsync(SecurityEventTypes.RoleCreated, name, detail: Clip($"Permissions: {Describe(permissions)}"), cancellationToken: cancellationToken);
@@ -63,7 +63,7 @@ public sealed class RoleService(
     {
         await using var db = await OpenAsync(cancellationToken);
         var source = await LoadDtoAsync(db, roleId, cancellationToken);
-        var (clean, description, permissions) = Validate(new SaveRoleRequest(name, source.Description, source.Permissions));
+        var (clean, description, permissions) = Validate(new SaveRoleRequest(name, source.Description, source.Permissions), await PermissionRegistry.KnownKeysAsync(db, cancellationToken));
         await RequireUniqueNameAsync(db, clean, null, cancellationToken);
         var role = await AddAsync(db, clean, description, permissions, cancellationToken);
         await securityLog.RecordAsync(SecurityEventTypes.RoleCreated, clean, detail: Clip($"Cloned from {source.Name}; permissions: {Describe(permissions)}"), cancellationToken: cancellationToken);
@@ -72,8 +72,8 @@ public sealed class RoleService(
 
     public async Task<RoleDto> UpdateAsync(Guid roleId, SaveRoleRequest request, CancellationToken cancellationToken = default)
     {
-        var (name, description, permissions) = Validate(request);
         await using var db = await OpenAsync(cancellationToken);
+        var (name, description, permissions) = Validate(request, await PermissionRegistry.KnownKeysAsync(db, cancellationToken));
         var role = await LoadCustomAsync(db, roleId, "changed", cancellationToken);
         await RequireUniqueNameAsync(db, name, roleId, cancellationToken);
         var before = Snapshot(role);
@@ -170,6 +170,22 @@ public sealed class RoleService(
         return await GetUserRolesAsync(email, cancellationToken);
     }
 
+    public async Task<UserRolesDto> SetUserRoleAssignmentsAsync(string email, IReadOnlyList<RoleAssignment> assignments, CancellationToken cancellationToken = default)
+    {
+        await lifecycle.SetAssignmentsAsync(email, (assignments ?? []).ToList(), access.Email, cancellationToken);
+        return await GetUserRolesAsync(email, cancellationToken);
+    }
+
+    public async Task<RoleScopeOptionsDto> GetScopeOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var companies = await db.Set<Domain.Companies.Company>().AsNoTracking().OrderBy(c => c.Code).Select(c => new ScopeOption(c.Id, c.Code, c.LegalName)).ToListAsync(cancellationToken);
+        var units = await db.Set<Domain.ProjectAccounting.OrgUnit>().AsNoTracking().OrderBy(u => u.Code).Select(u => new ScopeOption(u.Id, u.Code, u.Name)).ToListAsync(cancellationToken);
+        var projects = await db.Set<Domain.ProjectAccounting.Project>().AsNoTracking().OrderBy(p => p.Code).Select(p => new ScopeOption(p.Id, p.Code, p.Name)).ToListAsync(cancellationToken);
+        var contracts = await db.Set<Domain.ProjectAccounting.Contract>().AsNoTracking().OrderBy(c => c.ContractNumber).Select(c => new ScopeOption(c.Id, c.ContractNumber, c.Name)).ToListAsync(cancellationToken);
+        return new RoleScopeOptionsDto(companies, units, projects, contracts);
+    }
+
     // ---- Internals ----
 
     private sealed record RoleSnapshot(string Name, string Description, IReadOnlyList<string> Permissions)
@@ -212,7 +228,7 @@ public sealed class RoleService(
         return role;
     }
 
-    private static (string Name, string Description, IReadOnlyList<string> Permissions) Validate(SaveRoleRequest? request)
+    private static (string Name, string Description, IReadOnlyList<string> Permissions) Validate(SaveRoleRequest? request, IReadOnlySet<string> known)
     {
         ArgumentNullException.ThrowIfNull(request);
         var name = request.Name?.Trim() ?? "";
@@ -233,7 +249,7 @@ public sealed class RoleService(
         }
 
         var permissions = (request.Permissions ?? []).Select(p => p?.Trim() ?? "").Where(p => p.Length > 0).Distinct(StringComparer.Ordinal).ToList();
-        if (permissions.FirstOrDefault(p => !PermissionCatalog.Exists(p)) is { } unknown)
+        if (permissions.FirstOrDefault(p => !known.Contains(p)) is { } unknown)
         {
             throw new ArgumentException($"There's no permission called {unknown}.", nameof(request));
         }
@@ -321,12 +337,12 @@ public sealed class RoleService(
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
         var everyone = roles.Any(r => r.Id == BuiltInRoles.Employee.Id) ? await db.Set<AppUser>().CountAsync(u => u.IsActive, ct) : 0;
+        var order = await KeyOrderAsync(db, ct);
         return roles.Select(r =>
         {
             var builtIn = r.BuiltIn is { } b ? (OrgRoles?)b : null;
-            IReadOnlyList<string> keys = builtIn is { } flags
-                ? PermissionCatalog.All.Where(p => PermissionCatalog.ForBuiltInRoles(flags).Has(p.Key)).Select(p => p.Key).ToList()
-                : PermissionCatalog.All.Where(p => permissions[r.Id].Contains(p.Key)).Select(p => p.Key).ToList();
+            var held = (builtIn is { } flags ? PermissionCatalog.ForBuiltInRoles(flags) : PermissionSet.Empty).Union(PermissionSet.Of(permissions[r.Id]));
+            IReadOnlyList<string> keys = builtIn == OrgRoles.Admin ? order : order.Where(held.Has).ToList();
             var users = r.Id == BuiltInRoles.Employee.Id ? everyone : counts.GetValueOrDefault(r.Id);
             return new RoleDto(r.Id, r.Name, r.Description, builtIn, keys, users, r.CreatedAtUtc, r.CreatedBy, r.UpdatedAtUtc, r.UpdatedBy);
         }).ToList();
@@ -334,11 +350,17 @@ public sealed class RoleService(
 
     private static async Task<UserRolesDto> UserDtoAsync(IWorkbenchDbContext db, AppUser user, CancellationToken ct)
     {
-        var ids = await RoleStore.RoleIdsOfAsync(db, user.Id, ct);
-        var resolved = await RoleStore.ResolveRoleIdsAsync(db, ids, ct);
-        var permissions = PermissionCatalog.All.Where(p => resolved.Permissions.Has(p.Key)).Select(p => p.Key).ToList();
-        return new UserRolesDto(user.Email, user.DisplayName, user.IsActive, resolved.Roles, permissions);
+        // Every permission any of their roles grants, wherever it applies; the roles carry their scopes.
+        var assignments = await RoleStore.AssignmentsOfAsync(db, user.Id, ct);
+        var resolved = await RoleStore.ResolveRoleIdsAsync(db, assignments.Select(a => a.RoleId).ToList(), ct);
+        var refs = await RoleStore.RefsAsync(db, assignments, ct);
+        var ordered = resolved.Roles.Select(r => refs.First(x => x.Id == r.Id)).ToList();
+        return new UserRolesDto(user.Email, user.DisplayName, user.IsActive, ordered, (await KeyOrderAsync(db, ct)).Where(resolved.Permissions.Has).ToList());
     }
+
+    /// <summary>Every permission a role may hold, in catalog order, then registered ones by area and name.</summary>
+    private static async Task<List<string>> KeyOrderAsync(IWorkbenchDbContext db, CancellationToken ct) =>
+        [.. PermissionCatalog.All.Select(p => p.Key), .. (await PermissionRegistry.RegisteredAsync(db, null, ct)).Select(p => p.Key)];
 
     private static string Describe(IEnumerable<string> permissions)
     {
