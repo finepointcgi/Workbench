@@ -2,18 +2,24 @@
 
 <MudDialog>
     <DialogContent>
-        <MudStack Spacing="3">
-            <MudTextField @bind-Value="_title" Label="Title" Placeholder="e.g. Site visit, Fort Belvoir" Required="true" AutoFocus="true" Immediate="true" />
-            <MudStack Row="true" Spacing="3">
-                <MudDatePicker Editable="true" Label="Trip start" @bind-Date="_start" DateFormat="MM/dd/yyyy" AutoClose="true" Clearable="true" />
-                <MudDatePicker Editable="true" Label="Trip end" @bind-Date="_end" DateFormat="MM/dd/yyyy" AutoClose="true" Clearable="true" />
-            </MudStack>
-            <MudTextField @bind-Value="_purpose" Label="Business purpose" Lines="2" />
-        </MudStack>
+        <ConfigurableForm EntityType="@CustomizableEntities.ExpenseReport" RecordId="Existing?.Id" Spacing="3" @ref="_layout">
+            <FormField Key="title">
+                <MudTextField @bind-Value="_title" Label="Title" Placeholder="e.g. Site visit, Fort Belvoir" Required="true" AutoFocus="true" Immediate="true" />
+            </FormField>
+            <FormField Key="tripStart" Sm="6" Context="field">
+                <MudDatePicker Editable="true" Label="Trip start" @bind-Date="_start" DateFormat="MM/dd/yyyy" AutoClose="true" Clearable="true" Required="field.Required" />
+            </FormField>
+            <FormField Key="tripEnd" Sm="6" Context="field">
+                <MudDatePicker Editable="true" Label="Trip end" @bind-Date="_end" DateFormat="MM/dd/yyyy" AutoClose="true" Clearable="true" Required="field.Required" />
+            </FormField>
+            <FormField Key="purpose" Context="field">
+                <MudTextField @bind-Value="_purpose" Label="Business purpose" Lines="2" Required="field.Required" />
+            </FormField>
+        </ConfigurableForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_title) || (_start > _end))" OnClick="Save">
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_title) || (_start > _end) || MissingRequired)" OnClick="Save">
             @(Existing is null ? "Create" : "Save")
         </MudButton>
     </DialogActions>
@@ -24,6 +30,20 @@
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter] public ExpenseReportDto? Existing { get; set; }
+
+    /// <summary>Filled with the custom field values on Save (the page saves them once the report exists).</summary>
+    [Parameter] public CustomFieldValues? CustomValues { get; set; }
+
+    private ConfigurableForm? _layout;
+
+    // Fields the layout makes required (the server checks them too).
+    private bool MissingRequired => _layout?.Effective is { } layout && layout.Sections.SelectMany(s => s.Fields).Any(f => f.Required && f.Key switch
+    {
+        "tripStart" => _start is null,
+        "tripEnd" => _end is null,
+        "purpose" => string.IsNullOrWhiteSpace(_purpose),
+        _ => false,
+    });
 
     private string? _title;
     private DateTime? _start;
@@ -41,6 +61,9 @@
         }
     }
 
-    private void Save() => MudDialog.Close(DialogResult.Ok(
-        new SaveExpenseReportRequest(_title!.Trim(), OdcFormat.ToDateOnly(_start), OdcFormat.ToDateOnly(_end), _purpose)));
+    private void Save()
+    {
+        CustomValues?.CopyFrom(_layout);
+        MudDialog.Close(DialogResult.Ok(new SaveExpenseReportRequest(_title!.Trim(), OdcFormat.ToDateOnly(_start), OdcFormat.ToDateOnly(_end), _purpose)));
+    }
 }

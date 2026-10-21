@@ -46,6 +46,9 @@ public sealed record ContractFundingData(
     public decimal? FundedShare => CeilingValue == 0 ? null : FundedValue / CeilingValue;
 }
 
+/// <summary>A KPI tile. <see cref="Detail"/> is a second line ("12 open orders", "8% over 90 days"); <see cref="Link"/> is app-relative.</summary>
+public sealed record KpiData(KpiKind Kind, string Label, decimal Value, bool IsCurrency, bool IsPercent, string? Detail, string? Link);
+
 /// <summary>
 /// Computed data for one widget. Exactly one of the typed parts is set for the widget's type, unless
 /// <paramref name="Error"/> explains why it couldn't be computed (e.g. the sheet or a column is gone).
@@ -64,7 +67,8 @@ public sealed record WidgetDataDto(
     string? Markdown = null,
     ContractFundingData? ContractFunding = null,
     ProjectFinancialSummaryDto? ProjectFinancials = null,
-    Evm.EvmWidgetData? EarnedValue = null);
+    Evm.EvmWidgetData? EarnedValue = null,
+    KpiData? Kpi = null);
 
 /// <summary>
 /// Computes widget data on the server. Sheet data is read through <c>ISheetService</c>/<c>IItemService</c>, the

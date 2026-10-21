@@ -28,34 +28,34 @@ else if (_loading)
 else
 {
     <MudPaper Outlined="true" Class="pa-4 mb-3">
-        <MudGrid Spacing="2">
-            <MudItem xs="12" md="4">
+        <ConfigurableForm EntityType="@CustomizableEntities.ApBill" RecordId="BillId" @ref="_layout">
+            <FormField Key="vendorId" Md="4">
                 <MudSelect T="Guid?" Value="_vendorId" ValueChanged="VendorChanged" Label="Vendor" Required="true" data-testid="bill-vendor">
                     @foreach (var v in _vendors.Where(v => v.Status != VendorState.Inactive || v.Id == _vendorId))
                     {
                         <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name@(v.Status == VendorState.OnHold ? " (on hold)" : "")</MudSelectItem>
                     }
                 </MudSelect>
-            </MudItem>
-            <MudItem xs="6" md="2">
+            </FormField>
+            <FormField Key="invoiceNumber" Xs="6" Md="2">
                 <MudTextField T="string" Value="_invoiceNumber" ValueChanged="InvoiceNumberChanged" Label="Invoice number" Required="true" DebounceInterval="400" Immediate="true" data-testid="bill-invoice" />
-            </MudItem>
-            <MudItem xs="6" md="2">
+            </FormField>
+            <FormField Key="invoiceDate" Xs="6" Md="2">
                 <MudDatePicker Date="_invoiceDate" DateChanged="InvoiceDateChanged" Label="Invoice date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
-            </MudItem>
-            <MudItem xs="6" md="2">
-                <MudDatePicker @bind-Date="_dueDate" Label="Due date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true"
+            </FormField>
+            <FormField Key="dueDate" Xs="6" Md="2" Context="field">
+                <MudDatePicker @bind-Date="_dueDate" Label="Due date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" Required="field.Required"
                                HelperText="@(_dueDate is null && Vendor is { } v ? $"Net {v.PaymentTermsDays}: {PurchasingFormat.Date(DefaultDue)}" : null)" />
-            </MudItem>
-            <MudItem xs="12" md="2">
+            </FormField>
+            <FormField Key="currencyCode" Md="2" Context="field">
                 <Workbench.Ui.Currencies.CurrencyPicker @bind-Value="_currency" Label="Invoice currency" ShowFunctional="true" TestId="bill-currency"
                                                         DefaultLabel="@(VendorCurrency is { } vc ? $"Vendor's currency ({vc})" : "Vendor's currency")" DefaultCode="@VendorCurrency"
                                                         Date="@(_invoiceDate is { } d ? DateOnly.FromDateTime(d) : null)" />
-            </MudItem>
-            <MudItem xs="12" md="10">
-                <MudTextField T="string" @bind-Value="_description" Label="Description" />
-            </MudItem>
-        </MudGrid>
+            </FormField>
+            <FormField Key="description" Md="10" Context="field">
+                <MudTextField T="string" @bind-Value="_description" Label="Description" Required="field.Required" />
+            </FormField>
+        </ConfigurableForm>
         @if (ForeignCode is { } fc)
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" data-testid="bill-currency-note">
@@ -301,6 +301,7 @@ else
     private DateTime? _invoiceDate = DateTime.Today;
     private DateTime? _dueDate;
     private string? _description;
+    private ConfigurableForm? _layout;
     private bool _confirmDuplicate;
     private bool _needsOverride;
     private string? _overrideReason;
@@ -588,6 +589,7 @@ else
         try
         {
             var saved = BillId is { } id ? await Bills.UpdateAsync(id, request) : await Bills.CreateAsync(request);
+            await (_layout?.SaveCustomFieldsAsync(saved.Bill.Id) ?? Task.CompletedTask);
             if (BillId is null)
             {
                 // Later saves on this page update the same draft.

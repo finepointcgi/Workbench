@@ -2,27 +2,29 @@
 <MudDialog>
     <DialogContent>
         <MudForm @ref="_form">
-            <MudStack Spacing="3">
-                <MudTextField @bind-Value="Code" Label="Code" Required="true" RequiredError="Code is required." AutoFocus="true" Immediate="true" />
-                <MudTextField @bind-Value="Name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" />
-                @if (CategoryLabel is not null)
-                {
-                    <MudTextField @bind-Value="Category" Label="@CategoryLabel" HelperText="@CategoryHelp" />
-                }
-                @if (ParentChoices is not null)
-                {
+            @* With an EntityType (customers), the fields follow that form's layout; otherwise they render as declared. *@
+            <ConfigurableForm EntityType="@(EntityType ?? "")" RecordId="RecordId" Spacing="3" @ref="_layout">
+                <FormField Key="code">
+                    <MudTextField @bind-Value="Code" Label="Code" Required="true" RequiredError="Code is required." AutoFocus="true" Immediate="true" />
+                </FormField>
+                <FormField Key="name">
+                    <MudTextField @bind-Value="Name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" />
+                </FormField>
+                <FormField Key="category" When="CategoryLabel is not null" Context="field">
+                    <MudTextField @bind-Value="Category" Label="@CategoryLabel" HelperText="@CategoryHelp" Required="field.Required" RequiredError="@($"{CategoryLabel} is required.")" />
+                </FormField>
+                <FormField Key="parentId" When="ParentChoices is not null">
                     <MudSelect T="Guid?" @bind-Value="ParentId" Label="Parent" Clearable="true">
-                        @foreach (var (id, label) in ParentChoices)
+                        @foreach (var (id, label) in ParentChoices ?? [])
                         {
                             <MudSelectItem T="Guid?" Value="id">@label</MudSelectItem>
                         }
                     </MudSelect>
-                }
-                @if (ShowActive)
-                {
+                </FormField>
+                <FormField Key="isActive" When="ShowActive">
                     <MudSwitch @bind-Value="IsActive" Label="Active" Color="Color.Primary" />
-                }
-            </MudStack>
+                </FormField>
+            </ConfigurableForm>
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -63,14 +65,23 @@
     [Parameter]
     public Guid? ParentId { get; set; }
 
+    /// <summary>The customizable form these fields belong to (<see cref="CustomizableEntities.Customer"/>), if any.</summary>
+    [Parameter]
+    public string? EntityType { get; set; }
+
+    /// <summary>The record being edited, for its custom field values.</summary>
+    [Parameter]
+    public Guid? RecordId { get; set; }
+
     private MudForm _form = default!;
+    private ConfigurableForm? _layout;
 
     private async Task SubmitAsync()
     {
         await _form.ValidateAsync();
         if (_form.IsValid)
         {
-            MudDialog.Close(DialogResult.Ok(new CodeNameResult(Code!.Trim(), Name!.Trim(), IsActive, Category, ParentId)));
+            MudDialog.Close(DialogResult.Ok(new CodeNameResult(Code!.Trim(), Name!.Trim(), IsActive, Category, ParentId, _layout?.CustomValues.ToDictionary())));
         }
     }
 }

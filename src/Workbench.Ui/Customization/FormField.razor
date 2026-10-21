@@ -1,0 +1,68 @@
+@implements IDisposable
+@* One field of a ConfigurableForm. It renders nothing itself: the form places its content where the layout says. *@
+@if (Form is null && When && ChildContent is not null)
+{
+    @ChildContent(new FormFieldContext(Key, Key, Required))
+}
+
+@code {
+    [CascadingParameter]
+    private ConfigurableForm? Form { get; set; }
+
+    /// <summary>The field's key in the field catalog (the save request's property, camel case).</summary>
+    [Parameter, EditorRequired]
+    public string Key { get; set; } = "";
+
+    /// <summary>The built-in section it's in (for rendering before the layout has loaded).</summary>
+    [Parameter]
+    public string Section { get; set; } = "details";
+
+    [Parameter]
+    public int Xs { get; set; } = 12;
+
+    [Parameter]
+    public int Sm { get; set; }
+
+    [Parameter]
+    public int Md { get; set; }
+
+    [Parameter]
+    public int Lg { get; set; }
+
+    /// <summary>Classes for the grid item (for example <c>d-flex align-center</c>).</summary>
+    [Parameter]
+    public string? ItemClass { get; set; }
+
+    /// <summary>False leaves the field out for now (a field that only applies sometimes, like the 1099 box).</summary>
+    [Parameter]
+    public bool When { get; set; } = true;
+
+    /// <summary>Starts a new row before the field (keeps a page's deliberate gaps).</summary>
+    [Parameter]
+    public bool NewRow { get; set; }
+
+    /// <summary>The page's own requirement, used until the layout is known.</summary>
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public RenderFragment<FormFieldContext>? ChildContent { get; set; }
+
+    private (bool When, bool NewRow, bool Required)? _last;
+
+    protected override void OnInitialized() => Form?.Register(this);
+
+    protected override void OnParametersSet()
+    {
+        // The form lays fields out before their parameters are refreshed, so a change to these needs another pass.
+        var now = (When, NewRow, Required);
+        if (_last is { } last && last != now)
+        {
+            Form?.Refresh();
+        }
+
+        _last = now;
+    }
+
+    public void Dispose() => Form?.Unregister(this);
+}

@@ -9,57 +9,50 @@
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="setup/contracts/new">New contract</MudButton>
 </SetupHeader>
 
-<MudDataGrid T="ContractDto" Items="_contracts" Loading="_loading" Dense="true" Hover="true" QuickFilter="Matches"
-             RowClick="@(a => Navigation.NavigateTo($"setup/contracts/{a.Item.Id}"))" Style="cursor:pointer">
-    <ToolBarContent>
-        <MudTextField aria-label="Search contracts" @bind-Value="_search" Placeholder="Search number, name or customer" Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Clearable="true" />
-    </ToolBarContent>
-    <Columns>
-        <PropertyColumn Property="c => c.ContractNumber" Title="Number">
-            <CellTemplate><MudLink Href="@($"setup/contracts/{context.Item.Id}")" Typo="Typo.body2">@context.Item.ContractNumber</MudLink></CellTemplate>
-        </PropertyColumn>
-        <PropertyColumn Property="c => c.Name" />
-        <PropertyColumn Property="c => c.CustomerName" Title="Customer" />
-        <TemplateColumn Title="Type" SortBy="@(c => c.Type)">
-            <CellTemplate><span title="@context.Item.Type">@SetupFormat.Label(context.Item.Type)</span></CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Period of performance" SortBy="@(c => c.PeriodStart)">
-            <CellTemplate>@SetupFormat.Date(context.Item.PeriodStart) – @SetupFormat.Date(context.Item.PeriodEnd)</CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Ceiling" SortBy="@(c => c.CeilingValue)" HeaderStyle="text-align:right" CellStyle="text-align:right">
-            <CellTemplate>@SetupFormat.Money(context.Item.CeilingValue)</CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Funded" SortBy="@(c => c.FundedValue)" HeaderStyle="text-align:right" CellStyle="text-align:right">
-            <CellTemplate>
-                @SetupFormat.Money(context.Item.FundedValue)
-                @if (context.Item.CeilingValue > 0)
-                {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@((context.Item.FundedValue / context.Item.CeilingValue).ToString("P0")) of ceiling</MudText>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Status" SortBy="@(c => c.Status)">
-            <CellTemplate><ContractStatusChip Status="context.Item.Status" /></CellTemplate>
-        </TemplateColumn>
-    </Columns>
+<ConfigurableList T="ContractDto" Definition="_definition" Items="_contracts" Loading="_loading" SearchLabel="Search number, name or customer"
+                  RowClick="@(c => Navigation.NavigateTo($"setup/contracts/{c.Id}"))" TestId="contracts-list">
     <NoRecordsContent><MudText>No contracts yet. Add your first contract with its value, funding and bill rates.</MudText></NoRecordsContent>
-</MudDataGrid>
+</ConfigurableList>
 
 @code {
     private IReadOnlyList<ContractDto> _contracts = [];
     private bool _loading = true;
-    private string? _search;
+
+    internal static readonly ListDefinition<ContractDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Contracts,
+        EntityType = CustomizableEntities.Contract,
+        Title = "Contracts",
+        Id = c => c.Id,
+        Columns =
+        [
+            new() { Key = "number", Title = "Number", Value = c => c.ContractNumber, Cell = c => @<MudLink Href="@($"setup/contracts/{c.Id}")" Typo="Typo.body2">@c.ContractNumber</MudLink> },
+            new() { Key = "name", Title = "Name", Value = c => c.Name },
+            new() { Key = "customer", Title = "Customer", Value = c => c.CustomerName },
+            new() { Key = "type", Title = "Type", Value = c => c.Type, Display = c => SetupFormat.Label(c.Type), Cell = c => @<span title="@c.Type">@SetupFormat.Label(c.Type)</span> },
+            new() { Key = "period", Title = "Period of performance", Value = c => c.PeriodStart, Kind = ListColumnKind.Date, Groupable = false,
+                    Display = c => $"{SetupFormat.Date(c.PeriodStart)} – {SetupFormat.Date(c.PeriodEnd)}" },
+            new() { Key = "periodEnd", Title = "Period end", Value = c => c.PeriodEnd, Kind = ListColumnKind.Date, Standard = false, Groupable = false },
+            new() { Key = "ceiling", Title = "Ceiling", Value = c => c.CeilingValue, Kind = ListColumnKind.Money, Groupable = false, PermissionKey = "setup.contracts",
+                    Cell = c => @<text>@SetupFormat.Money(c.CeilingValue)</text> },
+            new() { Key = "funded", Title = "Funded", Value = c => c.FundedValue, Kind = ListColumnKind.Money, Groupable = false, PermissionKey = "setup.contracts",
+                    Cell = c => @<text>
+                        @SetupFormat.Money(c.FundedValue)
+                        @if (c.CeilingValue > 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@((c.FundedValue / c.CeilingValue).ToString("P0")) of ceiling</MudText>
+                        }
+                    </text> },
+            new() { Key = "fundedShare", Title = "Funded share", Value = c => c.CeilingValue > 0 ? c.FundedValue / c.CeilingValue : null, Kind = ListColumnKind.Percent,
+                    Standard = false, Groupable = false, PermissionKey = "setup.contracts" },
+            new() { Key = "prime", Title = "Prime", Value = c => c.IsPrime, Kind = ListColumnKind.Bool, Standard = false },
+            new() { Key = "status", Title = "Status", Value = c => c.Status, Cell = c => @<ContractStatusChip Status="c.Status" /> },
+        ],
+    };
 
     protected override async Task OnInitializedAsync()
     {
         _contracts = await Contracts.ListContractsAsync();
         _loading = false;
     }
-
-    private bool Matches(ContractDto c) =>
-        string.IsNullOrWhiteSpace(_search)
-        || c.ContractNumber.Contains(_search, StringComparison.OrdinalIgnoreCase)
-        || c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
-        || c.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase);
 }

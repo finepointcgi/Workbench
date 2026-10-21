@@ -24,51 +24,51 @@ else if (_contracts is null)
 else
 {
     <MudPaper Outlined="true" Class="pa-4 mb-4">
-        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">1. Contract and period</MudText>
-        <MudGrid Spacing="2">
-            <MudItem xs="12" md="5">
+        <ConfigurableForm EntityType="@CustomizableEntities.Invoice" HeadingsInGrid="false" HeadingTypo="Typo.h6" @ref="_layout"
+                          SectionTitles="@(new Dictionary<string, string> { ["details"] = "1. Contract and period" })">
+            <FormField Key="contractId" Md="5">
                 <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChanged" Label="Contract" data-testid="wizard-contract">
                     @foreach (var c in _contracts)
                     {
                         <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name (@c.CustomerName)</MudSelectItem>
                     }
                 </MudSelect>
-            </MudItem>
-            <MudItem xs="12" md="3">
+            </FormField>
+            <FormField Key="type" Md="3">
                 <MudSelect T="InvoiceKind" Value="_type" ValueChanged="TypeChanged" Label="Invoice type" Disabled="_contract is null" data-testid="wizard-type">
                     @foreach (var t in Types)
                     {
                         <MudSelectItem T="InvoiceKind" Value="t">@BillingFormat.Label(t)</MudSelectItem>
                     }
                 </MudSelect>
-            </MudItem>
-            <MudItem xs="12" md="4">
+            </FormField>
+            <FormContent After="type" Md="4">
                 <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="mt-3">
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetPeriod(BillingFormat.PreviousMonth(Today))">Last month</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetPeriod(BillingFormat.CurrentMonth(Today))">This month</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="SetFiscalYear">Last fiscal year</MudButton>
                 </MudStack>
-            </MudItem>
-            <MudItem xs="6" md="3">
+            </FormContent>
+            <FormField Key="periodFrom" Xs="6" Md="3">
                 <MudDatePicker Label="Period from" Date="_from" DateChanged="d => { _from = d; _preview = null; }" DateFormat="yyyy-MM-dd" data-testid="wizard-from" />
-            </MudItem>
-            <MudItem xs="6" md="3">
+            </FormField>
+            <FormField Key="periodTo" Xs="6" Md="3">
                 <MudDatePicker Label="Period to" Date="_to" DateChanged="d => { _to = d; _preview = null; }" DateFormat="yyyy-MM-dd" data-testid="wizard-to" />
-            </MudItem>
-            <MudItem xs="6" md="3">
-                <MudDatePicker Label="Invoice date" @bind-Date="_invoiceDate" DateFormat="yyyy-MM-dd" />
-            </MudItem>
-            <MudItem xs="6" md="3">
+            </FormField>
+            <FormField Key="invoiceDate" Xs="6" Md="3" Context="field">
+                <MudDatePicker Label="Invoice date" @bind-Date="_invoiceDate" DateFormat="yyyy-MM-dd" Required="field.Required" RequiredError="Invoice date is required." />
+            </FormField>
+            <FormField Key="releaseWithhold" Xs="6" Md="3">
                 @if (_type == InvoiceKind.CostPlus)
                 {
                     <MudCheckBox T="bool" Value="_releaseWithhold" ValueChanged="v => { _releaseWithhold = v; _preview = null; }" Color="Color.Primary"
                                  Label="Final invoice: release withheld fee" Class="mt-3" />
                 }
-            </MudItem>
-            <MudItem xs="12">
-                <MudTextField T="string" @bind-Value="_notes" Label="Notes (printed on the invoice)" Lines="2" />
-            </MudItem>
-        </MudGrid>
+            </FormField>
+            <FormField Key="notes" Context="field">
+                <MudTextField T="string" @bind-Value="_notes" Label="Notes (printed on the invoice)" Lines="2" Required="field.Required" RequiredError="Notes are required." />
+            </FormField>
+        </ConfigurableForm>
         @if (_type == InvoiceKind.TrueUp)
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
@@ -134,6 +134,7 @@ else
     private DateTime? _invoiceDate = DateTime.Today;
     private bool _releaseWithhold;
     private string? _notes;
+    private ConfigurableForm? _layout;
     private InvoicePreviewDto? _preview;
     private bool _busy;
     private string? _error;
@@ -235,6 +236,7 @@ else
         try
         {
             var invoice = await Invoices.GenerateDraftAsync(Request());
+            await (_layout?.SaveCustomFieldsAsync(invoice.Summary.Id) ?? Task.CompletedTask);
             Snackbar.Add($"Draft {invoice.Summary.Number} saved.", Severity.Success);
             Navigation.NavigateTo($"billing/invoices/{invoice.Summary.Id}");
         }

@@ -1,0 +1,225 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Dashboards
+@using Workbench.Contracts.MyTodo
+@using Workbench.Ui.Dashboards
+@using Workbench.Ui.Home
+@inject IHomePageService Homes
+@inject IServiceProvider Services
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@*
+    Role home pages: pick a role, start its home page from the built-in widgets, then add, edit, drag to reorder, pin and
+    remove widgets. The preview shows the page a person with that role gets (with your own data in the personal widgets).
+*@
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudSelect T="string" Value="_roleKey" ValueChanged="RoleChangedAsync" Label="Role" data-testid="home-role">
+            @foreach (var role in Roles)
+            {
+                <MudSelectItem Value="role.Key">@role.Name@(_summaries.Any(s => s.RoleKey == role.Key) ? " ●" : "")</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">People get the home page of their first role that has one (most specific first), else Everyone's, else the built-in page.</MudText>
+    </MudItem>
+    <MudItem xs="12" md="8">
+        @if (_page is { } current)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
+                @if (current.IsBuiltIn)
+                {
+                    <MudChip T="string" Variant="Variant.Outlined" data-testid="home-status" Style="white-space:normal;height:auto;min-height:32px">@CustomizationRoles.NameOf(_roleKey) has no home page of its own: they get @(_preview?.Source ?? "the built-in page").</MudChip>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" data-testid="home-create">
+                        Create a home page for @CustomizationRoles.NameOf(_roleKey)
+                    </MudButton>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Bookmark" data-testid="home-status" Style="white-space:normal;height:auto;min-height:32px">@CustomizationRoles.NameOf(_roleKey)'s home page · @current.Widgets.Count widgets</MudChip>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeletePageAsync">Remove this home page</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync" data-testid="home-add-widget">Add widget</MudButton>
+                }
+            </MudStack>
+        }
+    </MudItem>
+</MudGrid>
+
+@if (_page is { IsBuiltIn: false } editable)
+{
+    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mt-4 mb-2" Style="font-weight:600">Widgets</MudText>
+    <MudDropContainer T="WidgetDto" @ref="_drop" Items="_widgets" ItemsSelector="@((_, _) => true)" ItemDropped="DroppedAsync">
+        <ChildContent>
+            <MudDropZone T="WidgetDto" Identifier="widgets" AllowReorder="true" Class="d-flex flex-column gap-1" />
+        </ChildContent>
+        <ItemRenderer>
+            <MudPaper Outlined="true" Class="d-flex align-center px-2 py-1 gap-1" data-home-editor-widget="@context.Title">
+                <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Size="Size.Small" Class="mud-text-secondary" aria-hidden="true" />
+                <div style="flex:1;min-width:0">
+                    <MudText Typo="Typo.body2">@context.Title</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@WidgetDialog.TypeLabel(context.Type) · @WidthLabel(context.Width)@(context.Config.Pinned ? " · pinned" : "")</MudText>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="@($"Move {context.Title} up")" Disabled="@(_widgets.IndexOf(context) == 0)" OnClick="() => MoveAsync(context, -1)" />
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" aria-label="@($"Move {context.Title} down")" Disabled="@(_widgets.IndexOf(context) == _widgets.Count - 1)" OnClick="() => MoveAsync(context, 1)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Settings" Size="Size.Small" aria-label="@($"Edit {context.Title}")" OnClick="() => EditAsync(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove {context.Title}")" OnClick="() => RemoveAsync(context)" />
+            </MudPaper>
+        </ItemRenderer>
+    </MudDropContainer>
+}
+
+@if (_preview is { } preview)
+{
+    <MudPaper Outlined="true" Class="pa-3 mt-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Style="font-weight:600">Preview as @CustomizationRoles.NameOf(_roleKey)</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@preview.Source layout · personal widgets show your own data</MudText>
+        </MudStack>
+        <MudGrid Spacing="3" data-testid="home-preview">
+            @foreach (var item in preview.Widgets)
+            {
+                <MudItem xs="12" md="@Math.Max(item.Widget.Width, 6)" lg="@item.Widget.Width" @key="item.Widget.Id">
+                    <HomeWidget Widget="item.Widget" Todo="_todo" />
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+}
+
+@code {
+    private static readonly (int Cols, string Label)[] Widths = [(3, "Quarter"), (4, "Third"), (6, "Half"), (8, "Two thirds"), (12, "Full width")];
+
+    [Parameter]
+    public IReadOnlyList<CustomizationRole> Roles { get; set; } = [];
+
+    private IReadOnlyList<RoleHomePageSummary> _summaries = [];
+    private string _roleKey = CustomizationRoles.Everyone;
+    private HomePageDto? _page;
+    private HomePageDto? _preview;
+    private List<WidgetDto> _widgets = [];
+    private MyTodoDto? _todo;
+    private MudDropContainer<WidgetDto>? _drop;
+
+    private static string WidthLabel(int width) => Widths.FirstOrDefault(w => w.Cols == width).Label ?? $"{width} columns";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService<IMyTodoService>() is { } todo)
+        {
+            try
+            {
+                _todo = await todo.GetAsync();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _todo = null;
+            }
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task RoleChangedAsync(string roleKey)
+    {
+        _roleKey = roleKey;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _summaries = await Homes.ListRoleHomePagesAsync();
+        _page = await Homes.GetRoleHomePageAsync(_roleKey);
+        _widgets = _page.IsBuiltIn ? [] : _page.Widgets.Select(w => w.Widget).ToList();
+        _preview = await Homes.PreviewAsync(_roleKey);
+        _drop?.Refresh();
+    }
+
+    private async Task RunAsync(Func<Task> action, string? done = null)
+    {
+        try
+        {
+            await action();
+            if (done is not null)
+            {
+                Snackbar.Add(done, Severity.Success);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await LoadAsync();
+    }
+
+    private Task CreateAsync() => RunAsync(() => Homes.CreateRoleHomePageAsync(_roleKey), $"{CustomizationRoles.NameOf(_roleKey)} has a home page now. Add widgets to it.");
+
+    private async Task DeletePageAsync()
+    {
+        if (await DialogService.ShowMessageBoxAsync("Remove home page", $"Remove {CustomizationRoles.NameOf(_roleKey)}'s home page? Its people get the next one that applies, and their own changes to it go too.",
+                yesText: "Remove", cancelText: "Cancel") == true)
+        {
+            await RunAsync(() => Homes.DeleteRoleHomePageAsync(_roleKey), "Home page removed.");
+        }
+    }
+
+    private async Task<SaveWidgetRequest?> AskAsync(WidgetDto? widget)
+    {
+        IReadOnlyList<SheetSummary> sheets = [];
+        if (Services.GetService<ISheetService>() is { } sheetService)
+        {
+            try
+            {
+                sheets = await sheetService.ListAsync();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                sheets = [];
+            }
+        }
+
+        var parameters = new DialogParameters<WidgetDialog> { { d => d.Widget, widget }, { d => d.Sheets, sheets }, { d => d.HomePage, true } };
+        var dialog = await DialogService.ShowAsync<WidgetDialog>(widget is null ? "Add widget" : "Edit widget", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        return await dialog.Result is { Canceled: false, Data: SaveWidgetRequest request } ? request : null;
+    }
+
+    private async Task AddAsync()
+    {
+        if (await AskAsync(null) is { } request)
+        {
+            await RunAsync(() => Homes.AddWidgetAsync(_roleKey, request), $"Added {request.Title}.");
+        }
+    }
+
+    private async Task EditAsync(WidgetDto widget)
+    {
+        if (await AskAsync(widget) is { } request)
+        {
+            await RunAsync(() => Homes.UpdateWidgetAsync(_roleKey, widget.Id, request));
+        }
+    }
+
+    private async Task RemoveAsync(WidgetDto widget) => await RunAsync(() => Homes.DeleteWidgetAsync(_roleKey, widget.Id), $"Removed {widget.Title}.");
+
+    private async Task MoveAsync(WidgetDto widget, int by)
+    {
+        var index = _widgets.IndexOf(widget);
+        _widgets.RemoveAt(index);
+        _widgets.Insert(Math.Clamp(index + by, 0, _widgets.Count), widget);
+        await RunAsync(() => Homes.ReorderWidgetsAsync(_roleKey, new ReorderWidgetsRequest(_widgets.Select(w => w.Id).ToList())));
+    }
+
+    private async Task DroppedAsync(MudItemDropInfo<WidgetDto> drop)
+    {
+        if (drop.Item is not { } widget)
+        {
+            return;
+        }
+
+        _widgets.Remove(widget);
+        _widgets.Insert(Math.Clamp(drop.IndexInZone, 0, _widgets.Count), widget);
+        await RunAsync(() => Homes.ReorderWidgetsAsync(_roleKey, new ReorderWidgetsRequest(_widgets.Select(w => w.Id).ToList())));
+    }
+}

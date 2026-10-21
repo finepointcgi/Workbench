@@ -25,7 +25,8 @@ public sealed class WidgetDataService(
     IProjectFinancialsService financials,
     IFinancialAccessService financialAccess,
     TimeProvider clock,
-    Contracts.Evm.IEvmService? evm = null) : IWidgetDataService
+    Contracts.Evm.IEvmService? evm = null,
+    Customization.HomeWidgetData? home = null) : IWidgetDataService
 {
     public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default)
     {
@@ -38,6 +39,13 @@ public sealed class WidgetDataService(
     public async Task<WidgetDataDto> ComputeAsync(WidgetDto widget, CancellationToken cancellationToken = default)
     {
         var config = widget.Config;
+        if (Customization.HomeWidgetData.Handles(widget.Type))
+        {
+            return home is null
+                ? new WidgetDataDto(widget.Id, widget.Type, null, null, "This widget isn't available here.")
+                : await home.ComputeAsync(widget, cancellationToken);
+        }
+
         switch (widget.Type)
         {
             case WidgetType.RichText:
@@ -211,6 +219,7 @@ public static class DashboardRegistration
     {
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IWidgetDataService, WidgetDataService>();
+        services.AddScoped<Customization.HomeWidgetData>();
         return services;
     }
 }

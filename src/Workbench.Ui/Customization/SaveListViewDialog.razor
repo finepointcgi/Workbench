@@ -1,0 +1,59 @@
+@* Name a view and choose who sees it. Sharing with a role or everyone needs permission to share views. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField T="string" @bind-Value="_name" Label="View name" Required="true" MaxLength="120" Immediate="true" AutoFocus="true" autocomplete="off" data-testid="view-name" />
+            @if (CanShare)
+            {
+                <MudRadioGroup T="ListViewVisibility" @bind-Value="_visibility" aria-label="Who sees this view">
+                    <MudRadio Value="ListViewVisibility.Personal" Color="Color.Primary">Only me</MudRadio>
+                    <MudRadio Value="ListViewVisibility.Role" Color="Color.Primary">People with a role</MudRadio>
+                    <MudRadio Value="ListViewVisibility.Everyone" Color="Color.Primary">Everyone</MudRadio>
+                </MudRadioGroup>
+                @if (_visibility == ListViewVisibility.Role)
+                {
+                    <MudSelect T="string" @bind-Value="_role" Label="Role" Required="true">
+                        @foreach (var role in Roles.Where(r => r.Key != CustomizationRoles.Everyone))
+                        {
+                            <MudSelectItem Value="role.Key">@role.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Only you will see this view.</MudText>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!Valid)" OnClick="Save" data-testid="view-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string? Name { get; set; }
+
+    [Parameter] public ListViewVisibility Visibility { get; set; }
+
+    [Parameter] public string? RoleKey { get; set; }
+
+    [Parameter] public bool CanShare { get; set; }
+
+    [Parameter] public IReadOnlyList<CustomizationRole> Roles { get; set; } = [];
+
+    public sealed record Result(string Name, ListViewVisibility Visibility, string? RoleKey);
+
+    private string? _name;
+    private ListViewVisibility _visibility;
+    private string? _role;
+
+    private bool Valid => !string.IsNullOrWhiteSpace(_name) && (_visibility != ListViewVisibility.Role || !string.IsNullOrWhiteSpace(_role));
+
+    protected override void OnInitialized() => (_name, _visibility, _role) = (Name, CanShare ? Visibility : ListViewVisibility.Personal, RoleKey);
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new Result(_name!.Trim(), _visibility, _visibility == ListViewVisibility.Role ? _role : null)));
+}

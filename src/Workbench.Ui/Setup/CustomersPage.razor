@@ -3,6 +3,7 @@
 @inject ISetupAdminService Setup
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>Customers · Setup · Workbench</PageTitle>
 
@@ -52,6 +53,8 @@
             { d => d.CategoryLabel, "Category" },
             { d => d.CategoryHelp, "For example DoD, Civilian, Commercial or Prime contractor." },
             { d => d.Category, customer?.Category },
+            { d => d.EntityType, CustomizableEntities.Customer },
+            { d => d.RecordId, customer?.Id },
         };
         var dialog = await DialogService.ShowAsync<CodeNameDialog>(customer is null ? "New customer" : "Edit customer", parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
@@ -63,7 +66,8 @@
         try
         {
             var request = new SaveCustomerRequest(result.Code, result.Name, result.Category);
-            _ = customer is null ? await Contracts.CreateCustomerAsync(request) : await Setup.UpdateCustomerAsync(customer.Id, request);
+            var saved = customer is null ? await Contracts.CreateCustomerAsync(request) : await Setup.UpdateCustomerAsync(customer.Id, request);
+            await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.Customer, saved.Id, result.CustomValues);
             _customers = await Contracts.ListCustomersAsync();
             Snackbar.Add($"Saved {result.Name}.", Severity.Success);
         }

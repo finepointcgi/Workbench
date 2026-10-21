@@ -216,6 +216,7 @@ public static class NavCatalog
         new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, AdminOnly, Keywords: "ai claude assistant usage audit bedrock govcloud"),
         new(Admin, "Integrations", "EDI", "admin/integrations/edi", Icons.Material.Filled.SwapHoriz, FinanceOnly, Keywords: "x12 850 855 856 810 edi trading partners vendors"),
         new(Admin, null, "Integrations", "admin/integrations", Icons.Material.Filled.Hub, AdminOnly, Keywords: "webhooks api keys teams slack quickbooks sftp export connector"),
+        new(Admin, "Customization", "Layouts", "admin/customization/layouts", Icons.Material.Filled.ViewQuilt, AdminOnly, Keywords: "forms fields sections required hidden home page widgets dashboard roles customize"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, AdminOnly, Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, FinanceOnly, Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),
         new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, FinanceOnly, Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency"),

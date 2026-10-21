@@ -21,39 +21,42 @@
     <MudButton Variant="Variant.Text" Href="time/approvals" StartIcon="@Icons.Material.Filled.FactCheck">Approvals</MudButton>
 </MudStack>
 
-<MudTable Items="_status?.Members ?? []" Dense="true" Hover="true" Loading="_status is null" data-testid="team">
-    <HeaderContent>
-        <MudTh>Employee</MudTh>
-        <MudTh>Status</MudTh>
-        <MudTh Style="text-align:right">Hours</MudTh>
-        <MudTh Style="text-align:right">Standard</MudTh>
-        <MudTh></MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd>@context.EmployeeName</MudTd>
-        <MudTd>
-            @if (context.IsMissing)
-            {
-                <MudChip T="string" Size="Size.Small" Color="Color.Error">Missing</MudChip>
-            }
-            <MudChip T="string" Size="Size.Small" Color="@ChipColor(context.Status)">@(context.Status?.ToString() ?? "Not started")</MudChip>
-        </MudTd>
-        <MudTd Style="text-align:right">@context.Hours.ToString("0.##")</MudTd>
-        <MudTd Style="text-align:right">@context.StandardHours.ToString("0.##")</MudTd>
-        <MudTd>
-            @if (context.TimesheetId is { } id)
-            {
-                <MudLink Href="@($"time/history/{id}")">History</MudLink>
-            }
-        </MudTd>
-    </RowTemplate>
+<ConfigurableList T="TeamMemberStatusDto" Definition="_definition" Items="_status?.Members" Loading="_status is null" SearchLabel="Search people" TestId="team">
     <NoRecordsContent>
         <MudText Class="mud-text-secondary">You don't approve anyone's timesheets.</MudText>
     </NoRecordsContent>
-</MudTable>
+</ConfigurableList>
 
 @code {
     private TeamStatusDto? _status;
+
+    private static string StatusLabel(TeamMemberStatusDto m) => (m.IsMissing ? "Missing · " : "") + (m.Status?.ToString() ?? "Not started");
+
+    internal static readonly ListDefinition<TeamMemberStatusDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Timesheets,
+        EntityType = CustomizableEntities.Timesheet,
+        Title = "Team time",
+        Id = m => m.TimesheetId ?? m.EmployeeId,
+        Columns =
+        [
+            new() { Key = "employee", Title = "Employee", Value = m => m.EmployeeName, Groupable = false },
+            new() { Key = "status", Title = "Status", Value = m => m.Status?.ToString() ?? "Not started", Display = StatusLabel,
+                    Cell = m => @<text>
+                        @if (m.IsMissing)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">Missing</MudChip>
+                        }
+                        <MudChip T="string" Size="Size.Small" Color="@ChipColor(m.Status)">@(m.Status?.ToString() ?? "Not started")</MudChip>
+                    </text> },
+            new() { Key = "hours", Title = "Hours", Value = m => m.Hours, Kind = ListColumnKind.Number, Groupable = false, Display = m => m.Hours.ToString("0.##", CultureInfo.InvariantCulture) },
+            new() { Key = "standard", Title = "Standard", Value = m => m.StandardHours, Kind = ListColumnKind.Number, Groupable = false,
+                    Display = m => m.StandardHours.ToString("0.##", CultureInfo.InvariantCulture) },
+            new() { Key = "missing", Title = "Missing", Value = m => m.IsMissing, Kind = ListColumnKind.Bool, Standard = false },
+            new() { Key = "history", Title = "History", Value = m => m.TimesheetId is null ? null : "History", Groupable = false,
+                    Cell = m => @<text>@if (m.TimesheetId is { } id) { <MudLink Href="@($"time/history/{id}")">History</MudLink> }</text> },
+        ],
+    };
 
     protected override Task OnInitializedAsync() => LoadAsync(DateOnly.FromDateTime(DateTime.Now));
 

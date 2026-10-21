@@ -26,46 +26,44 @@ else if (Loading)
 }
 else
 {
-    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-        <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Immediate="true" DebounceInterval="300" Label="Search name, number, title or email"
-                      Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:360px"
-                      autocomplete="off" data-testid="people-search" />
-        @if (_access?.IsHr == true)
-        {
-            <MudSwitch T="bool" Value="_includeTerminated" ValueChanged="TerminatedChangedAsync" Color="Color.Primary" Label="Include former employees" />
-        }
-    </MudStack>
-    <div class="mud-table mud-simple-table mud-table-dense mud-table-hover mud-table-outlined mud-elevation-0" data-testid="people">
-        <div class="mud-table-container">
-            <table aria-label="People">
-                <thead>
-                    <tr><th scope="col">Name</th><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Org unit</th><th scope="col">Supervisor</th><th scope="col">Status</th><th scope="col">Hired</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var p in _people)
-                    {
-                        <tr>
-                            <th scope="row"><a href="@($"hr/employees/{p.EmployeeId}")">@p.DisplayName</a></th>
-                            <td>@p.EmployeeNumber</td>
-                            <td>@p.JobTitle</td>
-                            <td>@p.OrgUnitName</td>
-                            <td>@p.SupervisorName</td>
-                            <td><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HrFormat.Color(p.Status)" Class="ma-0">@HrLabels.Label(p.Status)</MudChip></td>
-                            <td>@HrFormat.Date(p.HireDate)</td>
-                        </tr>
-                    }
-                    @if (_people.Count == 0)
-                    {
-                        <tr><td colspan="7" class="mud-text-secondary">No one matches.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
+    <ConfigurableList T="EmployeeSummaryDto" Definition="_definition" Items="_people" ShowSearch="false" TestId="people" AriaLabel="People" Elevation="0" Outlined="true"
+                      RowClick="@(p => Navigation.NavigateTo($"hr/employees/{p.EmployeeId}"))">
+        <ToolBarContent>
+            <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Immediate="true" DebounceInterval="300" Label="Search name, number, title or email"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:360px"
+                          autocomplete="off" data-testid="people-search" />
+            @if (_access?.IsHr == true)
+            {
+                <MudSwitch T="bool" Value="_includeTerminated" ValueChanged="TerminatedChangedAsync" Color="Color.Primary" Label="Include former employees" />
+            }
+        </ToolBarContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No one matches.</MudText></NoRecordsContent>
+    </ConfigurableList>
 }
 
 @code {
     private IReadOnlyList<EmployeeSummaryDto> _people = [];
+
+    internal static readonly ListDefinition<EmployeeSummaryDto> _definition = new()
+    {
+        ListKey = CustomizableLists.People,
+        EntityType = CustomizableEntities.Employee,
+        Title = "People",
+        Id = p => p.EmployeeId,
+        Columns =
+        [
+            new() { Key = "name", Title = "Name", Value = p => p.DisplayName, Groupable = false, Cell = p => @<a href="@($"hr/employees/{p.EmployeeId}")">@p.DisplayName</a> },
+            new() { Key = "number", Title = "Number", Value = p => p.EmployeeNumber, Groupable = false },
+            new() { Key = "title", Title = "Title", Value = p => p.JobTitle },
+            new() { Key = "orgUnit", Title = "Org unit", Value = p => p.OrgUnitName },
+            new() { Key = "supervisor", Title = "Supervisor", Value = p => p.SupervisorName },
+            new() { Key = "status", Title = "Status", Value = p => p.Status, Display = p => HrLabels.Label(p.Status),
+                    Cell = p => @<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HrFormat.Color(p.Status)" Class="ma-0">@HrLabels.Label(p.Status)</MudChip> },
+            new() { Key = "hired", Title = "Hired", Value = p => p.HireDate, Kind = ListColumnKind.Date, Groupable = false, Display = p => HrFormat.Date(p.HireDate) },
+            new() { Key = "email", Title = "Email", Value = p => p.Email, Standard = false, Groupable = false },
+            new() { Key = "terminated", Title = "Left", Value = p => p.TerminationDate, Kind = ListColumnKind.Date, Standard = false, Groupable = false, PermissionKey = "hr.records.manage" },
+        ],
+    };
     private HrAccessDto? _access;
     private string _search = "";
     private bool _includeTerminated;

@@ -1,0 +1,114 @@
+@using System.Globalization
+@* Saved filter conditions: every condition must match. *@
+<MudDialog>
+    <DialogContent>
+        @if (_rows.Count == 0)
+        {
+            <MudText Class="mud-text-secondary mb-2">No conditions: every row shows.</MudText>
+        }
+        @foreach (var row in _rows)
+        {
+            <MudGrid Spacing="1" Class="mb-1" @key="row">
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Value="row.Field" ValueChanged="v => FieldChanged(row, v)" Label="Column" Dense="true">
+                        @foreach (var c in Columns)
+                        {
+                            <MudSelectItem Value="c.Key">@c.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MudSelect T="ListFilterOperator" @bind-Value="row.Operator" Label="Condition" Dense="true">
+                        @foreach (var op in ListViewEngine.OperatorsFor(KindOf(row.Field)))
+                        {
+                            <MudSelectItem Value="op">@ListViewEngine.Label(op)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="5" sm="4">
+                    @if (ListViewEngine.NeedsValue(row.Operator))
+                    {
+                        @switch (KindOf(row.Field))
+                        {
+                            case ListColumnKind.Date:
+                                <MudDatePicker Date="AsDate(row.Value)" DateChanged="d => SetDate(row, d)" Label="Value" DateFormat="yyyy-MM-dd" Editable="true" />
+                                break;
+                            case ListColumnKind.Bool:
+                                <MudSelect T="string" @bind-Value="row.Value" Label="Value" Dense="true">
+                                    <MudSelectItem Value="@("true")">Yes</MudSelectItem>
+                                    <MudSelectItem Value="@("false")">No</MudSelectItem>
+                                </MudSelect>
+                                break;
+                            default:
+                                <MudTextField T="string" @bind-Value="row.Value" Label="Value" autocomplete="off"
+                                              HelperText="@(KindOf(row.Field) == ListColumnKind.Percent ? "As a fraction: 0.25 for 25%" : null)" />
+                                break;
+                        }
+                    }
+                </MudItem>
+                <MudItem xs="1" Class="d-flex align-center">
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="@($"Remove the condition on {TitleOf(row.Field)}")" OnClick="() => _rows.Remove(row)" />
+                </MudItem>
+            </MudGrid>
+        }
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" OnClick="Add" data-testid="filter-add">Add condition</MudButton>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _rows.Clear()">Clear all</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Apply" data-testid="filter-apply">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public IReadOnlyList<(string Key, string Title, ListColumnKind Kind)> Columns { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ListFilterCondition> Filters { get; set; } = [];
+
+    private List<Row> _rows = [];
+
+    private sealed class Row
+    {
+        public string Field { get; set; } = "";
+        public ListFilterOperator Operator { get; set; }
+        public string? Value { get; set; }
+    }
+
+    protected override void OnInitialized() =>
+        _rows = Filters.Select(f => new Row { Field = f.Field, Operator = f.Operator, Value = f.Value }).ToList();
+
+    private ListColumnKind KindOf(string key) => Columns.FirstOrDefault(c => c.Key == key).Kind;
+
+    private string TitleOf(string key) => Columns.FirstOrDefault(c => c.Key == key).Title ?? key;
+
+    private static DateTime? AsDate(string? value) =>
+        DateOnly.TryParse(value, CultureInfo.InvariantCulture, out var d) ? d.ToDateTime(TimeOnly.MinValue) : null;
+
+    private static void SetDate(Row row, DateTime? date) => row.Value = date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private void Add()
+    {
+        var first = Columns.FirstOrDefault();
+        _rows.Add(new Row { Field = first.Key ?? "", Operator = ListViewEngine.OperatorsFor(first.Kind)[0] });
+    }
+
+    private void FieldChanged(Row row, string key)
+    {
+        row.Field = key;
+        var ops = ListViewEngine.OperatorsFor(KindOf(key));
+        if (!ops.Contains(row.Operator))
+        {
+            row.Operator = ops[0];
+        }
+
+        row.Value = null;
+    }
+
+    private void Apply() => MudDialog.Close(DialogResult.Ok(_rows
+        .Where(r => r.Field.Length > 0 && (!ListViewEngine.NeedsValue(r.Operator) || !string.IsNullOrWhiteSpace(r.Value)))
+        .Select(r => new ListFilterCondition(r.Field, r.Operator, ListViewEngine.NeedsValue(r.Operator) ? r.Value?.Trim() : null))
+        .ToList()));
+}

@@ -3,6 +3,7 @@
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>Parts · Materials · Workbench</PageTitle>
 
@@ -20,48 +21,22 @@
 }
 else
 {
-    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
-        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search parts" DebounceInterval="300" Immediate="true"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:240px" />
-        <MudSelect T="PartSourceKind?" Value="_source" ValueChanged="v => SetAsync(() => _source = v)" Label="Make or buy" Clearable="true" Dense="true" Style="min-width:140px">
-            <MudSelectItem T="PartSourceKind?" Value="PartSourceKind.Buy">Buy</MudSelectItem>
-            <MudSelectItem T="PartSourceKind?" Value="PartSourceKind.Make">Make</MudSelectItem>
-        </MudSelect>
-        <MudSwitch T="bool" Value="_inactive" ValueChanged="v => SetAsync(() => _inactive = v)" Label="Show inactive" Color="Color.Primary" />
-        <MudSpacer />
-        <MudText>Inventory value <b>@MaterialsFormat.Amount(_parts.Sum(p => p.Value))</b></MudText>
-    </MudStack>
-    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
-        @if (_parts.Count == 0)
-        {
+    <ConfigurableList T="PartSummaryDto" Definition="_definition" Items="_parts" SearchLabel="Search parts" TestId="parts"
+                      RowClick="@(p => Navigation.NavigateTo($"materials/parts/{p.Id}"))">
+        <ToolBarContent>
+            <MudSelect T="PartSourceKind?" Value="_source" ValueChanged="v => SetAsync(() => _source = v)" Label="Make or buy" Clearable="true" Dense="true" Style="min-width:140px">
+                <MudSelectItem T="PartSourceKind?" Value="PartSourceKind.Buy">Buy</MudSelectItem>
+                <MudSelectItem T="PartSourceKind?" Value="PartSourceKind.Make">Make</MudSelectItem>
+            </MudSelect>
+            <MudSwitch T="bool" Value="_inactive" ValueChanged="v => SetAsync(() => _inactive = v)" Label="Show inactive" Color="Color.Primary" />
+        </ToolBarContent>
+        <NoRecordsContent>
             <MudText Class="mud-text-secondary">No parts yet.@(MaterialsFormat.CanEdit(User) ? " Add the parts you buy and build." : "")</MudText>
-        }
-        else
-        {
-            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="parts">
-<caption class="wb-sr-only">Parts</caption>
-                <thead><tr><th scope="col">Part</th><th scope="col">Description</th><th scope="col">Make/buy</th><th scope="col">Tracking</th><th scope="col">Costing</th><th scope="col" style="text-align:right">Unit cost</th><th scope="col" style="text-align:right">On hand</th><th scope="col" style="text-align:right">GFM</th><th scope="col" style="text-align:right">Value</th><th scope="col">Vendor</th><th scope="col" style="text-align:right">Lead (days)</th></tr></thead>
-                <tbody>
-                    @foreach (var p in _parts)
-                    {
-                        <tr data-testid="@($"part-{p.Number}")">
-                            <td style="white-space:nowrap"><MudLink Href="@($"materials/parts/{p.Id}")">@p.Display</MudLink>@if (!p.IsActive) { <span class="mud-text-secondary"> (inactive)</span> }</td>
-                            <td>@p.Description</td>
-                            <td>@p.Source@(p.HasBom ? " · BOM" : "")</td>
-                            <td>@MaterialsFormat.Label(p.Tracking)</td>
-                            <td>@MaterialsFormat.Label(p.CostMethod)</td>
-                            <td style="text-align:right">@MaterialsFormat.Cost(p.CostMethod == PartCostMethod.Standard ? p.StandardCost : p.AverageCost)</td>
-                            <td style="text-align:right">@MaterialsFormat.Qty(p.OnHand) @p.UnitOfMeasure</td>
-                            <td style="text-align:right">@(p.OnHandGovernment == 0 ? "" : MaterialsFormat.Qty(p.OnHandGovernment))</td>
-                            <td style="text-align:right">@MaterialsFormat.Amount(p.Value)</td>
-                            <td>@p.PreferredVendor</td>
-                            <td style="text-align:right">@p.LeadTimeDays</td>
-                        </tr>
-                    }
-                </tbody>
-            </MudSimpleTable>
-        }
-    </MudPaper>
+        </NoRecordsContent>
+        <Summary>
+            <MudText Class="mt-2 px-2" data-testid="inventory-value">Inventory value <b>@MaterialsFormat.Amount(context.Sum(p => p.Value))</b></MudText>
+        </Summary>
+    </ConfigurableList>
 }
 
 @code {
@@ -69,11 +44,37 @@ else
 
     private IReadOnlyList<PartSummaryDto> _parts = [];
     private MaterialsOptionsDto? _options;
-    private string? _search;
     private PartSourceKind? _source;
     private bool _inactive;
     private string? _error;
     private bool _forbidden;
+
+    internal static readonly ListDefinition<PartSummaryDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Parts,
+        EntityType = CustomizableEntities.Part,
+        Title = "Parts",
+        Id = p => p.Id,
+        Columns =
+        [
+            new() { Key = "part", Title = "Part", Value = p => p.Number, Display = p => p.Display, Groupable = false,
+                    Cell = p => @<span style="white-space:nowrap" data-testid="@($"part-{p.Number}")"><MudLink Href="@($"materials/parts/{p.Id}")">@p.Display</MudLink>@if (!p.IsActive) { <span class="mud-text-secondary"> (inactive)</span> }</span> },
+            new() { Key = "description", Title = "Description", Value = p => p.Description, Groupable = false },
+            new() { Key = "source", Title = "Make/buy", Value = p => p.Source, Display = p => $"{p.Source}{(p.HasBom ? " · BOM" : "")}" },
+            new() { Key = "tracking", Title = "Tracking", Value = p => p.Tracking, Display = p => MaterialsFormat.Label(p.Tracking) },
+            new() { Key = "costing", Title = "Costing", Value = p => p.CostMethod, Display = p => MaterialsFormat.Label(p.CostMethod) },
+            new() { Key = "unitCost", Title = "Unit cost", Value = p => p.CostMethod == PartCostMethod.Standard ? p.StandardCost : p.AverageCost, Kind = ListColumnKind.Money, Groupable = false,
+                    Cell = p => @<text>@MaterialsFormat.Cost(p.CostMethod == PartCostMethod.Standard ? p.StandardCost : p.AverageCost)</text> },
+            new() { Key = "onHand", Title = "On hand", Value = p => p.OnHand, Kind = ListColumnKind.Number, Groupable = false, Cell = p => @<text>@MaterialsFormat.Qty(p.OnHand) @p.UnitOfMeasure</text> },
+            new() { Key = "gfm", Title = "GFM", Value = p => p.OnHandGovernment == 0 ? null : p.OnHandGovernment, Kind = ListColumnKind.Number, Groupable = false,
+                    Cell = p => @<text>@(p.OnHandGovernment == 0 ? "" : MaterialsFormat.Qty(p.OnHandGovernment))</text> },
+            new() { Key = "value", Title = "Value", Value = p => p.Value, Kind = ListColumnKind.Money, Groupable = false, Cell = p => @<text>@MaterialsFormat.Amount(p.Value)</text> },
+            new() { Key = "vendor", Title = "Vendor", Value = p => p.PreferredVendor },
+            new() { Key = "lead", Title = "Lead (days)", Value = p => p.LeadTimeDays, Kind = ListColumnKind.Number, Groupable = false },
+            new() { Key = "uom", Title = "Unit", Value = p => p.UnitOfMeasure, Standard = false },
+            new() { Key = "active", Title = "Active", Value = p => p.IsActive, Kind = ListColumnKind.Bool, Standard = false },
+        ],
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -98,7 +99,7 @@ else
     {
         try
         {
-            _parts = await PartService.ListAsync(new PartQuery(_search, !_inactive, _source));
+            _parts = await PartService.ListAsync(new PartQuery(null, !_inactive, _source));
         }
         catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
         {
@@ -108,13 +109,15 @@ else
 
     private async Task NewAsync()
     {
-        var dialog = await DialogService.ShowAsync<PartDialog>("New part", new DialogParameters<PartDialog> { { d => d.Options, _options } },
+        var custom = new CustomFieldValues();
+        var dialog = await DialogService.ShowAsync<PartDialog>("New part", new DialogParameters<PartDialog> { { d => d.Options, _options }, { d => d.CustomValues, custom } },
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SavePartRequest request })
         {
             try
             {
                 var part = await PartService.CreateAsync(request);
+                await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.Part, part.Summary.Id, custom);
                 Navigation.NavigateTo($"materials/parts/{part.Summary.Id}");
             }
             catch (Exception ex) when (MaterialsFormat.IsExpected(ex))

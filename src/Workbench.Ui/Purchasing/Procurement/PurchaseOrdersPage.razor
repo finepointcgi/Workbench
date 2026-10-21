@@ -4,6 +4,7 @@
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>Purchase orders · Purchasing · Workbench</PageTitle>
 
@@ -60,17 +61,18 @@ else
         </MudPaper>
     }
 
-    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudSelect T="PurchaseOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
-            @foreach (var s in Enum.GetValues<PurchaseOrderState>())
-            {
-                <MudSelectItem T="PurchaseOrderState?" Value="s">@ProcurementFormat.Label(s)</MudSelectItem>
-            }
-        </MudSelect>
-        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
-    </MudStack>
-    <MudPaper Outlined="true" Class="pa-2"><OrderTable Orders="_orders" /></MudPaper>
+    <ConfigurableList T="PurchaseOrderSummaryDto" Definition="_definition" Items="_orders" SearchLabel="Search purchase orders" TestId="orders-list"
+                      RowClick="@(o => Navigation.NavigateTo($"purchasing/orders/{o.Id}"))">
+        <ToolBarContent>
+            <MudSelect T="PurchaseOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
+                @foreach (var s in Enum.GetValues<PurchaseOrderState>())
+                {
+                    <MudSelectItem T="PurchaseOrderState?" Value="s">@ProcurementFormat.Label(s)</MudSelectItem>
+                }
+            </MudSelect>
+        </ToolBarContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary" data-testid="orders-empty">No purchase orders yet. Approved requisitions become purchase orders here.</MudText></NoRecordsContent>
+    </ConfigurableList>
 }
 
 @code {
@@ -81,12 +83,33 @@ else
     private RequisitionOptionsDto? _options;
     private readonly HashSet<Guid> _selected = [];
     private PurchaseOrderState? _status;
-    private string? _search;
     private Guid? _vendorId;
     private string? _shipTo;
     private string? _receivers;
     private string? _error;
     private bool _forbidden;
+
+    internal static readonly ListDefinition<PurchaseOrderSummaryDto> _definition = new()
+    {
+        ListKey = CustomizableLists.PurchaseOrders,
+        EntityType = CustomizableEntities.PurchaseOrder,
+        Title = "Purchase orders",
+        Id = o => o.Id,
+        Columns =
+        [
+            new() { Key = "po", Title = "PO", Value = o => o.Number, Groupable = false,
+                    Cell = o => @<span style="white-space:nowrap"><MudLink Href="@($"purchasing/orders/{o.Id}")">@o.Number</MudLink></span> },
+            new() { Key = "vendor", Title = "Vendor", Value = o => $"{o.VendorCode} · {o.VendorName}" },
+            new() { Key = "date", Title = "Date", Value = o => o.OrderDate, Kind = ListColumnKind.Date, Groupable = false,
+                    Cell = o => @<span style="white-space:nowrap">@PurchasingFormat.Date(o.OrderDate)</span> },
+            new() { Key = "revision", Title = "Rev", Value = o => o.Revision, Kind = ListColumnKind.Number, Groupable = false },
+            new() { Key = "total", Title = "Total", Value = o => o.Total, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@PurchasingFormat.Amount(o.Total)</text> },
+            new() { Key = "received", Title = "Received", Value = o => o.Received, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@PurchasingFormat.Amount(o.Received)</text> },
+            new() { Key = "billed", Title = "Billed", Value = o => o.Billed, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@PurchasingFormat.Amount(o.Billed)</text> },
+            new() { Key = "committed", Title = "Committed", Value = o => o.Committed, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@PurchasingFormat.Amount(o.Committed)</text> },
+            new() { Key = "status", Title = "Status", Value = o => o.Status, Display = o => ProcurementFormat.Label(o.Status), Cell = o => @<OrderStatusChip Status="o.Status" /> },
+        ],
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -131,7 +154,7 @@ else
     {
         try
         {
-            _orders = await Orders.ListAsync(new PurchaseOrderQuery(_status, null, _search));
+            _orders = await Orders.ListAsync(new PurchaseOrderQuery(_status));
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
@@ -158,13 +181,15 @@ else
 
     private async Task NewOrderAsync()
     {
+        var custom = new CustomFieldValues();
         var dialog = await DialogService.ShowAsync<PurchaseOrderDialog>("New purchase order",
-            new DialogParameters<PurchaseOrderDialog> { { d => d.Options, _options! } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+            new DialogParameters<PurchaseOrderDialog> { { d => d.Options, _options! }, { d => d.CustomValues, custom } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SavePurchaseOrderRequest request })
         {
             try
             {
                 var po = await Orders.CreateAsync(request);
+                await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.PurchaseOrder, po.Order.Id, custom);
                 Navigation.NavigateTo($"purchasing/orders/{po.Order.Id}");
             }
             catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
