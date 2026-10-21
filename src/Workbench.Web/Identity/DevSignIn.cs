@@ -56,7 +56,7 @@ public static class DevSignIn
             var policy = await signInSettings.GetAsync(http.RequestAborted);
             var organizationIdp = policy.OrganizationIdpReady ? policy.Settings.DisplayName ?? "your organization's identity provider" : null;
             return Results.Content(RenderPage(users, labels, invites.Where(i => !known.Contains(i.Email)).ToList(), tokens, AccountEndpoints.SafeReturnUrl(returnUrl),
-                organizationIdp: organizationIdp, reauth: reauth == "1", demo: demo), "text/html; charset=utf-8");
+                organizationIdp: organizationIdp, reauth: reauth == "1", demo: demo, passwordSignIn: PasswordSignIn.Available(http)), "text/html; charset=utf-8");
         }).AllowAnonymous().ExcludeFromDescription();
 
         app.MapPost(Path, async (HttpContext http, SignInGate gate, TimeProvider clock, [Microsoft.AspNetCore.Mvc.FromForm] string email, [Microsoft.AspNetCore.Mvc.FromForm] string? returnUrl) =>
@@ -97,7 +97,7 @@ public static class DevSignIn
     }
 
     private static string RenderPage(IEnumerable<AppUser> users, IReadOnlyDictionary<Guid, string> labels, IReadOnlyList<UserInvite> invites, AntiforgeryTokenSet tokens, string returnUrl, bool host = false,
-        string? organizationIdp = null, bool reauth = false, bool demo = false)
+        string? organizationIdp = null, bool reauth = false, bool demo = false, bool passwordSignIn = false)
     {
         static string E(string? s) => WebUtility.HtmlEncode(s ?? string.Empty);
         var html = new StringBuilder("""
@@ -127,7 +127,13 @@ public static class DevSignIn
 
         if (organizationIdp is not null)
         {
-            html.Append($"""<p><a href="{AccountEndpoints.SignInPath}?returnUrl={E(Uri.EscapeDataString(returnUrl))}">Sign in with {E(organizationIdp)}</a></p>""");
+            html.Append($"""<p><a href="{AccountEndpoints.SignInPath}?provider=sso&returnUrl={E(Uri.EscapeDataString(returnUrl))}">Sign in with {E(organizationIdp)}</a></p>""");
+        }
+
+        if (passwordSignIn)
+        {
+            // Built-in accounts work here too (invite someone, then accept the emailed link).
+            html.Append($"""<p><a href="{AccountEndpoints.SignInPath}?returnUrl={E(Uri.EscapeDataString(returnUrl))}">Have a Workbench account? Sign in with email and password</a></p>""");
         }
 
         foreach (var user in users)

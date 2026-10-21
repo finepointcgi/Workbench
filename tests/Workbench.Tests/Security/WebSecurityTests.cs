@@ -170,7 +170,10 @@ public sealed partial class WebSecurityTests
         Assert.Contains(weak, p => p.Contains("Sqlite in Production"));
         Assert.Empty(strong);
         Assert.Empty(scimOff);
-        Assert.Contains(Problems("Production", new()), p => p.Contains("Authentication:Oidc"));
+        // Built-in accounts are enough for a SingleTenant server; without them (or in MultiTenant) an IdP is required.
+        Assert.DoesNotContain(Problems("Production", new()), p => p.Contains("Authentication:Oidc"));
+        Assert.Contains(Problems("Production", new() { ["Authentication:Passwords:Enabled"] = "false" }), p => p.Contains("Authentication:Oidc"));
+        Assert.Contains(Problems("Production", new() { ["Tenancy:Mode"] = "MultiTenant" }), p => p.Contains("Authentication:Oidc"));
         Assert.Empty(Problems("Development", new()));
     }
 

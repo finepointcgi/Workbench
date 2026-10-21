@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Components.Authorization;
 using Workbench.Application.Identity;
+using Workbench.Application.Identity.Passwords;
 using Workbench.Application.Security;
 using Workbench.Application.Tenancy;
 using Workbench.Contracts.Security;
@@ -32,13 +33,16 @@ public static class AuthenticationSetup
         var services = builder.Services;
         var oidc = builder.Configuration.GetSection(OidcSettings.SectionName).Get<OidcSettings>() ?? new OidcSettings();
         var devSignIn = DevSignIn.IsEnabled(builder.Environment, oidc, builder.Configuration);
-        if (!devSignIn && !oidc.IsConfigured)
+        var tenancy = builder.Configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new TenancyOptions();
+        var passwords = builder.Configuration.GetSection(PasswordOptions.SectionName).Get<PasswordOptions>() ?? new PasswordOptions();
+
+        // Built-in accounts (email and password) need nothing configured, but the MultiTenant host admin site has no user table.
+        if (!devSignIn && !oidc.IsConfigured && (!passwords.Enabled || tenancy.IsMultiTenant))
         {
             throw new InvalidOperationException(
-                $"Set {OidcSettings.SectionName}:Authority and :ClientId. The dev sign-in page is only available in Development and the public demo (Demo:Enabled).");
+                $"Set {OidcSettings.SectionName}:Authority and :ClientId{(tenancy.IsMultiTenant ? " (the MultiTenant host site signs in with it)" : $", or leave {PasswordOptions.SectionName}:Enabled on for built-in accounts")}. "
+                + "The dev sign-in page is only available in Development and the public demo (Demo:Enabled).");
         }
-
-        var tenancy = builder.Configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new TenancyOptions();
 
         // MultiTenant: a tenant's first admin comes from provisioning; a global admin list would be an admin of every tenant.
         var admins = tenancy.IsMultiTenant ? [] : builder.Configuration.GetSection("Authentication:Admins").Get<string[]>() ?? [];
@@ -106,6 +110,12 @@ public static class AuthenticationSetup
                 };
                 o.Events.OnValidatePrincipal = async context =>
                 {
+                    // The account emails' links need this server's address when Notifications:PublicBaseUrl isn't set.
+                    if (!tenancy.IsMultiTenant)
+                    {
+                        context.HttpContext.RequestServices.GetRequiredService<AccountLinks>().FallbackBaseUrl ??= PasswordSignIn.RequestBaseUrl(context.Request);
+                    }
+
                     await SessionValidation.ValidateCookieAsync(context);
                     await OrganizationSessionPolicy.ValidateCookieAsync(context);
                 };
@@ -115,6 +125,9 @@ public static class AuthenticationSetup
         {
             auth.AddScheme<AuthenticationSchemeOptions, ScimAuthenticationHandler>(ScimAuthenticationHandler.SchemeName, null);
         }
+
+        // Between the password and the second factor (built-in accounts): good only for the MFA pages.
+        auth.AddPendingCookie(builder.Environment.IsDevelopment());
 
         // Integration API keys (Admin › Integrations): service users with chosen roles and scopes, for /api only.
         auth.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null);
@@ -198,6 +211,7 @@ public static class AuthenticationSetup
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, SessionCircuitHandler>());
         services.AddSingleton(session);
         services.AddSingleton(signInPolicy);
+        services.AddSingleton(passwords);
         services.AddScoped<ISecurityEventContext, HttpSecurityEventContext>();
 
         services.AddHttpContextAccessor();

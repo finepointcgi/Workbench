@@ -11,6 +11,14 @@ public static class SecurityEventTypes
     public const string MfaRequired = "signin.mfa_required";
     public const string Reauthenticated = "signin.reauthenticated";
     public const string ReauthenticationRequired = "access.reauth_required";
+    public const string LockedOut = "signin.locked_out"; // Built-in account: too many wrong passwords or codes; detail has until when.
+    public const string RecoveryCodeUsed = "signin.recovery_code"; // Built-in account: signed in with an MFA recovery code instead of the app.
+
+    public const string PasswordSet = "user.password_set"; // Built-in account: password set from an invite or reset link, or changed; never the password.
+    public const string PasswordResetRequested = "user.password_reset_requested"; // Forgot password (or an admin) asked for a link; detail says whether one was sent.
+    public const string MfaEnabled = "user.mfa_enabled"; // Authenticator app (TOTP) set up.
+    public const string MfaDisabled = "user.mfa_disabled"; // Authenticator app removed, by the user or an administrator's reset.
+    public const string MfaRecoveryCodesRegenerated = "user.mfa_recovery_codes";
 
     public const string RolesChanged = "user.roles_changed";
     public const string UserCreated = "user.created";

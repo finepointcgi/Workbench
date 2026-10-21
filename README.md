@@ -88,8 +88,13 @@ dotnet build src/Workbench.Desktop -t:Run
 - `Costpoint:Csv:Folder`: folder with the Costpoint CSV exports (Development uses `samples/costpoint`)
 - `Costpoint:SyncInterval`: worker sync interval (default 24 hours)
 - `Authentication:Oidc:Authority`, `:ClientId`, `:ClientSecret`, `:Audience`, `:Scopes`: OpenID Connect sign-in (Entra ID
-  or any OIDC provider). Required outside Development; without an authority, Development uses the dev sign-in page.
-- `Authentication:Admins`: emails made administrators when they sign in (bootstrap for a new install)
+  or any OIDC provider). Optional for a SingleTenant server, which can run on built-in accounts (email, password and an
+  authenticator app; see `docs/security/built-in-accounts.md`); required in MultiTenant mode for the host site. Without
+  an authority, Development and the public demo also offer the dev user picker.
+- `Authentication:Passwords:*`: built-in accounts (`Enabled`, default `true`; `MinimumLength` 12; `MaxFailedAttempts` 5;
+  `LockoutDuration` 15 minutes; `ResetLinkLifetime` 1 hour)
+- `Authentication:Admins`: emails made administrators when they sign in (bootstrap for a new install; without SSO, they
+  use **Forgot your password?** on the sign-in page to set a first password)
 - Desktop sign-in: `WORKBENCH_OIDC_AUTHORITY`, `WORKBENCH_OIDC_CLIENT_ID` and optional `WORKBENCH_OIDC_SCOPE`
   (a public client that allows `http://127.0.0.1` loopback redirects)
 - `Email:Mode`: `Pickup` (write `.eml` files to `Email:PickupFolder`, default `App_Data/mail`; Development default) or `Smtp`

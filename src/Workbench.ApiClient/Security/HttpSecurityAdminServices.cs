@@ -49,6 +49,18 @@ public sealed class HttpUserAdminService(HttpClient http) : IUserAdminService
         return await response.ReadAsync<List<LinkableEmployeeDto>>(cancellationToken);
     }
 
+    public async Task<UserAdminDto> ResetMfaAsync(string email, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.PostAsync($"api/v1/admin/users/{E(email)}/reset-mfa", null, cancellationToken);
+        return await response.ReadAsync<UserAdminDto>(cancellationToken);
+    }
+
+    public async Task<UserAdminDto> SendPasswordResetAsync(string email, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.PostAsync($"api/v1/admin/users/{E(email)}/password-reset", null, cancellationToken);
+        return await response.ReadAsync<UserAdminDto>(cancellationToken);
+    }
+
     private static string E(string email) => Uri.EscapeDataString(email);
 }
 

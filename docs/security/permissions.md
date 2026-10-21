@@ -147,7 +147,7 @@ reveals. Admin holds every permission.
 
 | Permission | Key | What it allows | Built-in roles | Opens |
 |---|---|---|---|---|
-| Administer users ⚠ | `admin.users` | Invite people, deactivate and reactivate accounts, sign people out everywhere, link users to employees and assign roles. | Admin | Users and security |
+| Administer users ⚠ | `admin.users` | Invite people, deactivate and reactivate accounts, sign people out everywhere, email password reset links, reset someone's MFA (authenticator app), link users to employees and assign roles. | Admin | Users and security |
 | Manage roles ⚠ | `admin.roles` | Create, edit, clone and delete custom roles and choose their permissions. | Admin | Roles |
 | Manage sign-in and security ⚠ | `admin.security` | Sign-in settings (single sign-on, MFA, SCIM, sessions), the security event log and access reviews. | Admin | Users and security |
 | Manage retention and legal holds | `admin.retention` | Record retention policies and legal holds. | Admin | — |
