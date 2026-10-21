@@ -70,6 +70,8 @@ public static class DependencyInjection
         services.AddComplianceClients(serverBaseAddress);
         services.AddReceiptClients(serverBaseAddress);
         services.AddCustomizationClients(serverBaseAddress);
+        services.AddHttpClient<Contracts.Identity.IRoleService, HttpRoleService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<Contracts.Identity.IPermissionCatalog, HttpPermissionCatalog>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

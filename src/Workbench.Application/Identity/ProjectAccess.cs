@@ -11,6 +11,7 @@ namespace Workbench.Application.Identity;
 /// organization roles. Finance and Admin pass every check here; a project manager reads their own projects' financials
 /// and the funding of contracts their projects are on; a supervisor sees their direct reports' time. A project the user
 /// can't see at all (<see cref="ProjectVisibility"/>) is not found here, before any of these rules says forbidden.
+/// A role limited to some companies, org units, projects or contracts grants its permissions only on what its scope covers.
 /// </summary>
 public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access, ProjectVisibility? visibility = null) : IFinancialAccessService
 {
@@ -28,7 +29,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
             return false;
         }
 
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.HasForProjectAsync(Permission.ProjectsFinancialsView, projectId, cancellationToken))
         {
             return true;
         }
@@ -79,7 +80,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     /// <summary>Contracts with a project the user manages, or null for Finance and Admin (every contract).</summary>
     public async Task<IReadOnlySet<Guid>?> ManagedContractIdsAsync(CancellationToken cancellationToken = default)
     {
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.ContractsWithAsync(Permission.ProjectsFinancialsView, cancellationToken) is not { } inScope)
         {
             return null;
         }
@@ -87,7 +88,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
         var me = await access.GetEmployeeIdAsync(cancellationToken);
         if (me is null)
         {
-            return new HashSet<Guid>();
+            return inScope;
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -96,7 +97,21 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
             .Select(p => p.ContractId!.Value)
             .Distinct()
             .ToListAsync(cancellationToken);
-        return ids.ToHashSet();
+        return ids.Concat(inScope).ToHashSet();
+    }
+
+    /// <summary>
+    /// Burdened cost is a sensitive field (<see cref="Permission.FieldsBurdenedCost"/>): on top of reading the project's
+    /// financials, the user needs it for this project, or manages the project.
+    /// </summary>
+    public async Task RequireBurdenedCostAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        if (await ManagesProjectAsync(projectId, cancellationToken) || await access.HasForProjectAsync(Permission.FieldsBurdenedCost, projectId, cancellationToken))
+        {
+            return;
+        }
+
+        throw await access.DenyAsync($"You need the \"{PermissionCatalog.NameOf(Permission.FieldsBurdenedCost)}\" permission to see this project's burdened cost.", cancellationToken);
     }
 
     /// <summary>True when the user is the project's manager (<c>Project.ProjectManagerId</c> is their employee).</summary>
@@ -123,8 +138,8 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
             return false;
         }
 
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        return roles.IsFinance() || (roles.HasFlag(OrgRoles.ProjectManager) && await ManagesProjectAsync(projectId, cancellationToken));
+        return await access.HasForProjectAsync(Permission.SetupProjects, projectId, cancellationToken)
+            || (await access.HasForProjectAsync(Permission.ProjectsManageOwn, projectId, cancellationToken) && await ManagesProjectAsync(projectId, cancellationToken));
     }
 
     /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless <see cref="CanSetUpProjectAsync"/>.</summary>
@@ -157,18 +172,18 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     /// <summary>Projects the user manages, or null for Finance and Admin (every project).</summary>
     public async Task<IReadOnlySet<Guid>?> ManagedProjectIdsAsync(CancellationToken cancellationToken = default)
     {
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.ProjectsWithAsync(Permission.ProjectsFinancialsView, cancellationToken) is not { } inScope)
         {
             return null;
         }
 
         if (await access.GetEmployeeIdAsync(cancellationToken) is not { } me)
         {
-            return new HashSet<Guid>();
+            return inScope;
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return (await db.Set<Project>().AsNoTracking().Where(p => p.ProjectManagerId == me).Select(p => p.Id).ToListAsync(cancellationToken)).ToHashSet();
+        return (await db.Set<Project>().AsNoTracking().Where(p => p.ProjectManagerId == me).Select(p => p.Id).ToListAsync(cancellationToken)).Concat(inScope).ToHashSet();
     }
 
     /// <summary>The project a budget version belongs to, or null when the version doesn't exist.</summary>
@@ -188,7 +203,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     public async Task<IReadOnlySet<Guid>?> VisibleTimeEmployeeIdsAsync(CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(cancellationToken)).CanViewAllTimesheets())
+        if (await access.EmployeesWithAsync(Permission.TimeViewAll, cancellationToken) is not { } inScope)
         {
             return null;
         }
@@ -196,12 +211,12 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
         var me = await access.GetEmployeeIdAsync(cancellationToken);
         if (me is null)
         {
-            return new HashSet<Guid>();
+            return inScope;
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var reports = await db.Set<Employee>().AsNoTracking().Where(e => e.SupervisorId == me).Select(e => e.Id).ToListAsync(cancellationToken);
-        return reports.Append(me.Value).ToHashSet();
+        return reports.Append(me.Value).Concat(inScope).ToHashSet();
     }
 
     /// <summary>True when the user supervises the employee with this id or this email.</summary>

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
 
 namespace Workbench.Application.Identity;
@@ -32,11 +33,15 @@ public sealed class UserProvisioner(IWorkbenchDbContextFactory dbFactory, TimePr
             {
                 Email = email,
                 DisplayName = Truncate(displayName ?? DefaultName(email)),
-                IsAdmin = makeAdmin,
                 CreatedAtUtc = now,
                 LastSeenAtUtc = now,
             };
             db.Set<AppUser>().Add(user);
+            if (makeAdmin)
+            {
+                await GrantAdminAsync(db, user, now, cancellationToken);
+            }
+
             try
             {
                 await db.SaveChangesAsync(cancellationToken);
@@ -59,9 +64,10 @@ public sealed class UserProvisioner(IWorkbenchDbContextFactory dbFactory, TimePr
             changed = true;
         }
 
-        if (makeAdmin && !user.IsAdmin)
+        var adminRole = BuiltInRoles.Admin.Id;
+        if (makeAdmin && !await db.Set<UserRole>().AnyAsync(r => r.UserId == user.Id && r.RoleId == adminRole, cancellationToken))
         {
-            user.IsAdmin = true;
+            await GrantAdminAsync(db, user, now, cancellationToken);
             changed = true;
         }
 
@@ -73,6 +79,14 @@ public sealed class UserProvisioner(IWorkbenchDbContextFactory dbFactory, TimePr
         }
 
         return user;
+    }
+
+    // Configured bootstrap administrators get the built-in Admin role (never taken away here).
+    private static async Task GrantAdminAsync(IWorkbenchDbContext db, AppUser user, DateTime now, CancellationToken ct)
+    {
+        await RoleStore.EnsureBuiltInRolesAsync(db, ct);
+        db.Set<UserRole>().Add(new UserRole { UserId = user.Id, RoleId = BuiltInRoles.Admin.Id, AssignedAtUtc = now, AssignedBy = "bootstrap" });
+        RoleStore.RecordAssignmentAudit(db, user, [], [new RoleRef(BuiltInRoles.Admin.Id, BuiltInRoles.Admin.Name, true)], "bootstrap", now);
     }
 
     private static string DefaultName(string email) => email.Split('@')[0];

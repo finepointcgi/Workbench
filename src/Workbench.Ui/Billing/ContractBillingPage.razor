@@ -149,7 +149,7 @@ else
     private BillingContractDto? _contract;
     private IReadOnlyList<BillingMilestoneDto>? _milestones;
     private ContractBillingSettingsDto? _settings;
-    private bool _isFinance => Access?.IsFinance == true;
+    private bool _isFinance => Access?.Can(Workbench.Contracts.Identity.Permission.BillingInvoicesManage) == true;
     private bool _busy;
     private int _refresh;
     private string? _error;

@@ -99,7 +99,7 @@ public sealed class DateRuleAuthorTests
             var access = viewer.ServiceProvider.GetRequiredService<AccessControl>();
             Assert.Equal("viewer@example.com", access.Email);
             Assert.False(access.IsSystemReader);
-            Assert.False(await access.IsAdminAsync());
+            Assert.False(await access.HasAsync(Workbench.Contracts.Identity.Permission.AdminAllWorkspaces));
             Assert.Equal(Workbench.Contracts.Identity.WorkspaceRole.Viewer, await access.GetSheetRoleAsync(sheetId));
         }
 

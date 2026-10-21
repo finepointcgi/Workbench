@@ -79,7 +79,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _isAdmin = (await CurrentUser.GetAsync()).IsAdmin;
+        _isAdmin = (await CurrentUser.GetAsync()).Can(Permission.ApprovalWorkflowsManage);
         _workflows = await Workflows.ListAsync();
         _units = await Workflows.ListOrgUnitApproversAsync();
         _employees = (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName).ToList();

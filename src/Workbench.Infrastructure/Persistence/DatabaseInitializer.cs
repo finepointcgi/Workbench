@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Workbench.Application.Identity;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
 
@@ -222,13 +223,22 @@ public static class DatabaseInitializer
 
     private static async Task SeedUsersAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
     {
+        // The built-in roles (migrations seed them; a database made another way gets them here).
+        await RoleStore.EnsureBuiltInRolesAsync(db, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
         if (await db.Set<AppUser>().AnyAsync(cancellationToken))
         {
             return;
         }
 
         var now = DateTime.UtcNow;
-        db.Set<AppUser>().AddRange(DevUsers.Select(u => new AppUser { Email = u.Email, DisplayName = u.DisplayName, IsAdmin = u.IsAdmin, IsFinance = u.IsFinance, IsProjectManager = u.IsProjectManager, IsHr = u.IsHr, CreatedAtUtc = now }));
+        foreach (var u in DevUsers)
+        {
+            var roles = (u.IsAdmin ? Contracts.Identity.OrgRoles.Admin : 0) | (u.IsFinance ? Contracts.Identity.OrgRoles.Finance : 0)
+                | (u.IsProjectManager ? Contracts.Identity.OrgRoles.ProjectManager : 0) | (u.IsHr ? Contracts.Identity.OrgRoles.Hr : 0);
+            await RoleStore.AddUserAsync(db, new AppUser { Email = u.Email, DisplayName = u.DisplayName, CreatedAtUtc = now }, roles, cancellationToken);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 }

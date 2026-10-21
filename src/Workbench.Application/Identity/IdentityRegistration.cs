@@ -111,6 +111,7 @@ public static class IdentityRegistration
         services.AddWorkbenchIntegrationPermissions(); // Integrations: webhooks, API keys and connectors are Admin-only and closed to API keys themselves.
         services.AddWorkbenchReceiptPermissions(); // Receipt library: your own files; others' files only through a line you can see (approvers, Finance, the PM).
         services.AddWorkbenchCustomizationPermissions(); // Customization: definitions Admin; record values follow the record (sensitive fields through ICustomFieldAccessPolicy).
+        services.Decorate<IRoleService, PermissionCheckingRoleService>(); // Admin › Roles: "Manage roles"; assigning them "Administer users"; nobody grants more than they hold.
         return services;
     }
 

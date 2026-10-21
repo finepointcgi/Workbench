@@ -69,7 +69,7 @@ else
             var categories = await People.ListLaborCategoriesAsync();
             _context = new ResourcingContext(employees.OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToList(), projects, manageable, categories);
             var me = await CurrentUser.GetAsync();
-            _staffing = me.IsFinance || me.Roles.IsResourceManager() || manageable.Count > 0
+            _staffing = me.CanAny(Workbench.Contracts.Identity.Permission.ResourcingView, Workbench.Contracts.Identity.Permission.ResourcingManage) || manageable.Count > 0
                 || (me.EmployeeId is { } id && projects.Any(p => p.ProjectManagerId == id));
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))

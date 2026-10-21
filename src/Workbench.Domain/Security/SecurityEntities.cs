@@ -8,15 +8,12 @@ public sealed class UserInvite : Entity
 {
     public required string Email { get; set; }
     public required string DisplayName { get; set; }
-    public bool IsAdmin { get; set; }
-    public bool IsFinance { get; set; }
-    public bool IsTimekeeper { get; set; }
-    public bool IsResourceManager { get; set; }
-    public bool IsProjectManager { get; set; }
-    public bool IsHr { get; set; }
-    public bool IsMaterials { get; set; }
-    public bool IsBusinessDevelopment { get; set; }
-    public bool IsPricing { get; set; }
+    /// <summary>The built-in roles it grants (<c>OrgRoles</c> flags).</summary>
+    public int Roles { get; set; }
+
+    /// <summary>Custom roles it grants: comma-separated role ids.</summary>
+    public string? CustomRoleIds { get; set; }
+
     public required string InvitedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
@@ -85,8 +82,14 @@ public sealed class AccessReviewItem : Entity
     public required string UserEmail { get; set; }
     public required string DisplayName { get; set; }
 
-    /// <summary>Org roles at the start of the review, e.g. "Admin, Finance" or "Employee".</summary>
+    /// <summary>Roles (built-in and custom) at the start of the review, e.g. "Admin, Finance, Approvers" or "Employee".</summary>
     public required string OrgRoles { get; set; }
+
+    /// <summary>The effective permissions those roles grant at the start of the review (catalog keys, comma-separated).</summary>
+    public string? Permissions { get; set; }
+
+    /// <summary>Changes to the user's roles in the review period (since the previous review started, at most 90 days back).</summary>
+    public string? RoleChanges { get; set; }
 
     /// <summary>Workspace memberships at the start, e.g. "Program Office: Owner; Finance: Viewer".</summary>
     public required string WorkspaceRoles { get; set; }

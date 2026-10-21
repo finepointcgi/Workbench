@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Workbench.Application.Notifications;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Billing;
 using Workbench.Domain.Identity;
 using Workbench.Domain.Notifications;
@@ -134,7 +135,7 @@ public sealed class OverdueInvoiceCheck(IWorkbenchDbContextFactory dbFactory, IN
             return 0;
         }
 
-        var finance = await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive && (u.IsFinance || u.IsAdmin)).Select(u => u.Email).ToListAsync(cancellationToken);
+        var finance = await Identity.RoleStore.EmailsWithPermissionAsync(db, Permission.BillingReportsView, cancellationToken);
         if (finance.Count == 0)
         {
             return 0;

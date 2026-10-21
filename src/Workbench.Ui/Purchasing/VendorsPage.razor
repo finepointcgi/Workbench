@@ -6,7 +6,7 @@
 <PageTitle>Vendors · Purchasing · Workbench</PageTitle>
 
 <PurchasingHeader Title="Vendors" Subtitle="Suppliers and subcontractors. On hold blocks new bills and payments; TINs are stored encrypted and shown masked.">
-    <FinanceOnly>
+    <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.VendorsManage">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Disabled="_error is not null" data-testid="new-vendor">New vendor</MudButton>
     </FinanceOnly>
 </PurchasingHeader>

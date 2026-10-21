@@ -60,7 +60,10 @@ public sealed class ProjectVisibility(IWorkbenchDbContextFactory dbFactory, Acce
             return new HashSet<Guid>();
         }
 
-        var everything = access.IsSystemReader || SeesEveryProject(await access.GetOrgRolesAsync(cancellationToken));
+        // "See every project" (custom roles): everywhere, nowhere, or within a scoped role's companies, org units, projects
+        // or contracts. Built-in Finance and Resource managers hold it everywhere.
+        var granted = access.IsSystemReader ? null : await access.ProjectsWithAsync(Permission.ProjectsViewAll, cancellationToken);
+        var everything = access.IsSystemReader || granted is null;
         var inCompanies = companies is null ? null : await companies.VisibleCompanyIdsAsync(cancellationToken);
         if (everything && inCompanies is null)
         {
@@ -77,7 +80,7 @@ public sealed class ProjectVisibility(IWorkbenchDbContextFactory dbFactory, Acce
 
         if (!everything)
         {
-            var mine = (await OnProjectIdsAsync(db, cancellationToken)).ToList();
+            var mine = (await OnProjectIdsAsync(db, cancellationToken)).Concat(granted ?? new HashSet<Guid>()).Distinct().ToList();
             projects = projects.Where(p => mine.Contains(p.Id));
         }
 

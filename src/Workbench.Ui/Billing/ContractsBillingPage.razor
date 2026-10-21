@@ -32,7 +32,7 @@ else
                         <td>@string.Join(", ", c.Clins.Select(x => $"{x.Number} ({x.Pricing})"))</td>
                         <td style="text-align:right">@BillingFormat.Amount(c.Clins.Sum(x => x.FundedValue))</td>
                         <td style="text-align:right">@BillingFormat.Amount(c.Clins.Sum(x => x.BilledToDate))</td>
-                        <td><FinanceOnly><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"billing/new?contract={c.Id}")" Disabled="c.Clins.Count == 0" data-testid="new-invoice">New invoice</MudButton></FinanceOnly></td>
+                        <td><FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.BillingInvoicesManage"><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"billing/new?contract={c.Id}")" Disabled="c.Clins.Count == 0" data-testid="new-invoice">New invoice</MudButton></FinanceOnly></td>
                     </tr>
                 }
             </tbody>

@@ -219,14 +219,14 @@ public sealed partial class StandardReportService
             .Where(o => ids.Contains(o.WbsElementId) && o.Status == OdcStatus.Approved && !o.IsUnallowable && o.IncurredOn >= from && o.IncurredOn <= to)
             .ToListAsync(ct);
         var lookups = await TimeLookups.LoadAsync(db, time.Select(x => x.EmployeeId).Concat(odcs.Where(o => o.EmployeeId != null).Select(o => o.EmployeeId!.Value)),
-            elements, context.IsFinance, ct, time.Select(x => x.Id));
+            elements, context.SeesLaborCost, ct, time.Select(x => x.Id));
 
         b.Column("date", "Date", ReportColumnType.Date).Column("kind", "Kind").Column("wbs", "WBS").Column("who", "Employee / vendor")
             .Column("description", "Description").Column("hours", "Hours", ReportColumnType.Hours).Column("amount", "Amount", ReportColumnType.Money);
         foreach (var x in time.OrderBy(x => x.WorkDate))
         {
             b.Add(ReportRowKind.Detail, 0, null, null, x.WorkDate, "Labor", lookups.Wbs.GetValueOrDefault(x.WbsElementId)?.Code,
-                lookups.Employees.GetValueOrDefault(x.EmployeeId)?.DisplayName, x.Comment, x.Hours, context.IsFinance ? lookups.CostOf(x.EntryId, x.EmployeeId, x.WorkDate, x.Hours) : null);
+                lookups.Employees.GetValueOrDefault(x.EmployeeId)?.DisplayName, x.Comment, x.Hours, context.SeesLaborCost ? lookups.CostOf(x.EntryId, x.EmployeeId, x.WorkDate, x.Hours) : null);
         }
 
         foreach (var o in odcs.OrderBy(o => o.IncurredOn))
@@ -236,8 +236,8 @@ public sealed partial class StandardReportService
         }
 
         b.Add(ReportRowKind.Total, 0, null, null, null, "Total", null, null, null, time.Sum(x => x.Hours),
-            context.IsFinance ? time.Sum(x => lookups.CostOf(x.EntryId, x.EmployeeId, x.WorkDate, x.Hours) ?? 0m) + odcs.Sum(o => o.Amount) : odcs.Sum(o => o.Amount));
-        if (!context.IsFinance)
+            context.SeesLaborCost ? time.Sum(x => lookups.CostOf(x.EntryId, x.EmployeeId, x.WorkDate, x.Hours) ?? 0m) + odcs.Sum(o => o.Amount) : odcs.Sum(o => o.Amount));
+        if (!context.SeesLaborCost)
         {
             b.Note("Labor cost per entry is shown to Finance and administrators only; the total is ODCs only.");
         }

@@ -29,7 +29,7 @@ public sealed class EditableWorkspacePicker(AccessControl access, SheetWorkspace
             return await db.Workspaces.FirstAsync(w => w.Id == preferred, cancellationToken);
         }
 
-        if (await access.IsAdminAsync(db, cancellationToken))
+        if (await access.SeesAllWorkspacesAsync(db, cancellationToken))
         {
             return null;
         }

@@ -2,6 +2,7 @@ using System.Globalization;
 using Workbench.Contracts.Ceilings;
 using Workbench.Contracts.Contracts;
 using Workbench.Contracts.Evm;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.Revenue;
 using Workbench.Domain.ProjectAccounting;
@@ -46,7 +47,7 @@ public sealed class EacReviewTodoProvider : IMyTodoProvider
             }
         }
 
-        if (context.User.IsFinance)
+        if (context.User.Can(Permission.RevenueManage))
         {
             var pending = await revenue.ListEstimatesAsync(EstimateState.Submitted, cancellationToken);
             var others = pending.Where(e => !string.Equals(e.SubmittedBy, context.User.Email, StringComparison.OrdinalIgnoreCase)).ToList();

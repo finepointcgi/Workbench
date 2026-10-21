@@ -1,3 +1,5 @@
+using Workbench.Contracts.Identity;
+
 namespace Workbench.Contracts.Accounting;
 
 // General ledger contracts. Every later accounting module (indirect rates, billing/AR, AP, payroll) posts into the
@@ -366,10 +368,10 @@ public sealed record ReconciliationRowDto(
     decimal GlOdc,
 
     /// <summary>Burden applied in the GL by allocation runs and true-ups (applied-burden accounts); not part of <see cref="Difference"/>.</summary>
-    decimal GlAppliedBurden = 0,
+    [property: SensitiveField(Permission.FieldsBurdenedCost)] decimal GlAppliedBurden = 0,
 
     /// <summary>Burden at provisional rates on the financials actuals (filled in by indirect rates; 0 without rates).</summary>
-    decimal ExpectedBurden = 0)
+    [property: SensitiveField(Permission.FieldsBurdenedCost)] decimal ExpectedBurden = 0)
 {
     public decimal BurdenDifference => GlAppliedBurden - ExpectedBurden;
 

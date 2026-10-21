@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Identity;
@@ -44,13 +45,13 @@ public sealed class PermissionCheckingClinService(IClinService inner, ProjectAcc
 
     public async Task<ClinDto> CreateClinAsync(Guid contractId, SaveClinRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("set up CLINs", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "set up CLINs", cancellationToken);
         return await inner.CreateClinAsync(contractId, request, cancellationToken);
     }
 
     public async Task<ClinDto> UpdateClinAsync(Guid clinId, SaveClinRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("change CLINs", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "change CLINs", cancellationToken);
         return await inner.UpdateClinAsync(clinId, request, cancellationToken);
     }
 
@@ -68,7 +69,7 @@ public sealed class PermissionCheckingClinService(IClinService inner, ProjectAcc
 
     public async Task<WbsClinMappingDto> SetWbsClinAsync(Guid wbsElementId, Guid? clinId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("map the WBS to CLINs", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "map the WBS to CLINs", cancellationToken);
         return await inner.SetWbsClinAsync(wbsElementId, clinId, cancellationToken);
     }
 }
@@ -99,25 +100,25 @@ public sealed class PermissionCheckingContractModificationService(IContractModif
 
     public async Task<ContractModificationDto> CreateDraftAsync(Guid contractId, SaveModificationRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("draft contract modifications", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "draft contract modifications", cancellationToken);
         return await inner.CreateDraftAsync(contractId, request, cancellationToken);
     }
 
     public async Task<ContractModificationDto> UpdateDraftAsync(Guid modificationId, SaveModificationRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("edit contract modifications", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "edit contract modifications", cancellationToken);
         return await inner.UpdateDraftAsync(modificationId, request, cancellationToken);
     }
 
     public async Task DeleteDraftAsync(Guid modificationId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("delete draft modifications", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "delete draft modifications", cancellationToken);
         await inner.DeleteDraftAsync(modificationId, cancellationToken);
     }
 
     public async Task<ContractModificationDto> ExecuteAsync(Guid modificationId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("execute contract modifications", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "execute contract modifications", cancellationToken);
         return await inner.ExecuteAsync(modificationId, cancellationToken);
     }
 }
@@ -144,7 +145,7 @@ public sealed class PermissionCheckingFundingService(IFundingService inner, Proj
 
     public async Task<IReadOnlyList<FundingNoticeDto>> CheckNoticesAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("run the funding notice check", cancellationToken);
+        await projects.Access.RequireAsync(Permission.SetupContracts, "run the funding notice check", cancellationToken);
         return await inner.CheckNoticesAsync(contractId, cancellationToken);
     }
 }

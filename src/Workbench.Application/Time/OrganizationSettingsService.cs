@@ -28,14 +28,14 @@ public sealed class OrganizationSettingsService(
 
     public async Task<OrganizationSettingsDto> GetAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view organization settings", cancellationToken);
+        await access.RequireAsync(Permission.SetupOrganizationView, "view organization settings", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         return await BuildAsync(db, cancellationToken);
     }
 
     public async Task<TimesheetCadencePreviewDto> PreviewTimesheetCadenceAsync(ChangeTimesheetCadenceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("view organization settings", cancellationToken);
+        await access.RequireAsync(Permission.SetupOrganizationView, "view organization settings", cancellationToken);
         var settings = Validate(request);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var (_, effective, schedule) = await PlanAsync(db, settings, cancellationToken);
@@ -46,7 +46,7 @@ public sealed class OrganizationSettingsService(
 
     public async Task<OrganizationSettingsDto> ChangeTimesheetCadenceAsync(ChangeTimesheetCadenceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminOrganization, "change organization settings", cancellationToken);
         var settings = Validate(request);
         var reason = request.Reason.Required("Reason");
         await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -120,7 +120,7 @@ public sealed class OrganizationSettingsService(
         var pendingRule = rows.Where(r => r.EffectiveFrom > today).OrderBy(r => r.EffectiveFrom).FirstOrDefault();
         var (start, end) = TimesheetPeriods.For(today, schedule);
         var inForce = schedule.Where(r => r.EffectiveFrom <= today).ToList();
-        var canEdit = (await access.GetOrgRolesAsync(cancellationToken)).IsAdmin();
+        var canEdit = await access.HasAsync(Permission.AdminOrganization, cancellationToken);
         return new OrganizationSettingsDto(current, pendingRule is null ? null : ToDto(pendingRule), start, end, TimesheetPeriods.NextBoundary(today, inForce), history, canEdit);
     }
 

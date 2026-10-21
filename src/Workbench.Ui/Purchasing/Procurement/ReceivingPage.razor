@@ -13,7 +13,7 @@
 else
 {
     <MudPaper Outlined="true" Class="pa-2">
-        <OrderTable Orders="_orders" ShowAmounts="@(Access?.IsFinance == true)">
+        <OrderTable Orders="_orders" ShowAmounts="@(Access?.Can(Workbench.Contracts.Identity.Permission.PurchaseOrdersManage) == true)">
             <Empty>
                 <MudText Class="mud-text-secondary pa-2" data-testid="receiving-empty">
                     Nothing to receive right now. When an order names you as its receiver, it shows up here so you can record the delivery.

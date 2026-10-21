@@ -16,7 +16,7 @@ public sealed class WorkspaceMembershipService(IWorkbenchDbContextFactory dbFact
         var memberships = await db.Set<WorkspaceMember>().AsNoTracking()
             .Where(m => m.UserEmail == email)
             .ToDictionaryAsync(m => m.WorkspaceId, m => m.Role, cancellationToken);
-        var admin = await access.IsAdminAsync(db, cancellationToken);
+        var admin = await access.SeesAllWorkspacesAsync(db, cancellationToken);
         var workspaces = await db.Workspaces.AsNoTracking()
             .Where(w => admin || memberships.Keys.Contains(w.Id))
             .OrderBy(w => w.Name)

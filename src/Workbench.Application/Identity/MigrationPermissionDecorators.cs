@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Migration;
 
 namespace Workbench.Application.Identity;
@@ -17,7 +18,7 @@ public static class MigrationPermissionRegistration
 
 public sealed class PermissionCheckingMigrationService(IMigrationService inner, AccessControl access) : IMigrationService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("manage the cut-over checklist", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SetupImports, "manage the cut-over checklist", ct);
 
     public async Task<MigrationChecklistDto> GetChecklistAsync(CancellationToken cancellationToken = default)
     {
@@ -40,7 +41,7 @@ public sealed class PermissionCheckingMigrationService(IMigrationService inner, 
 
 public sealed class PermissionCheckingReconciliationService(IReconciliationService inner, AccessControl access) : IReconciliationService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("reconcile with Costpoint", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SetupImports, "reconcile with Costpoint", ct);
 
     public async Task<IReadOnlyList<ReconReportDto>> ListReportsAsync(CancellationToken cancellationToken = default)
     {
@@ -117,7 +118,7 @@ public sealed class PermissionCheckingReconciliationService(IReconciliationServi
 
 public sealed class PermissionCheckingPayrollLayoutService(Workbench.Contracts.Payroll.IPayrollLayoutService inner, AccessControl access) : Workbench.Contracts.Payroll.IPayrollLayoutService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("configure payroll file layouts", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.PayrollSetup, "configure payroll file layouts", ct);
 
     public async Task<Workbench.Contracts.Payroll.PayrollLayoutDto> GetAsync(string providerKey, CancellationToken cancellationToken = default)
     {

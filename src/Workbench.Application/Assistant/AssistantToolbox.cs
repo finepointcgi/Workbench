@@ -286,7 +286,7 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
         var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
         var contracts = await ContractsAsync(contractRef, ct);
         var funding = Get<IFundingService>();
-        var finance = (await Get<ICurrentUserContext>().GetAsync(ct)).IsFinance;
+        var finance = (await Get<ICurrentUserContext>().GetAsync(ct)).Can(Permission.ProjectsFinancialsView);
         var rows = new List<object>();
         var lines = new List<string>();
         var citations = new List<AssistantCitation>();

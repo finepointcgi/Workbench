@@ -178,7 +178,7 @@ public sealed class TenantProvisioner(
         {
             Email = email,
             DisplayName = name,
-            IsAdmin = true,
+            Roles = (int)Workbench.Contracts.Identity.OrgRoles.Admin,
             InvitedBy = actor,
             CreatedAtUtc = now,
             ExpiresAtUtc = now + lifetime,

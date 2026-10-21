@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Accounting;
 using Workbench.Application.Billing;
+using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
 using Workbench.Domain.Identity;
@@ -247,10 +249,9 @@ public sealed class InvoiceLifecycleTests
         var kit = await BillingKit.CreateAsync();
         await using (var db = await kit.Factory.CreateAsync())
         {
-            db.Set<AppUser>().AddRange(
-                new AppUser { Email = "finance@example.com", DisplayName = "Fin", IsFinance = true },
-                new AppUser { Email = "admin@example.com", DisplayName = "Admin", IsAdmin = true },
-                new AppUser { Email = "viewer@example.com", DisplayName = "Val" });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = "finance@example.com", DisplayName = "Fin" }, OrgRoles.Finance);
+            await RoleStore.AddUserAsync(db, new AppUser { Email = "admin@example.com", DisplayName = "Admin" }, OrgRoles.Admin);
+            await RoleStore.AddUserAsync(db, new AppUser { Email = "viewer@example.com", DisplayName = "Val" }, OrgRoles.Employee);
             await db.SaveChangesAsync();
         }
 

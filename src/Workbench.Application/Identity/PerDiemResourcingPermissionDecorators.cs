@@ -4,6 +4,7 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Resourcing;
 using Workbench.Contracts;
 using Workbench.Contracts.Financials;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.PerDiem;
 using Workbench.Contracts.Resourcing;
 using Workbench.Domain.Resourcing;
@@ -53,19 +54,19 @@ public sealed class PermissionCheckingPerDiemRateService(IPerDiemRateService inn
 
     public async Task<PerDiemImportResultDto> ImportFileAsync(ImportPerDiemFileRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupPerDiem, What, cancellationToken);
         return await inner.ImportFileAsync(request, cancellationToken);
     }
 
     public async Task<PerDiemImportResultDto> ImportFromGsaApiAsync(int fiscalYear, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupPerDiem, What, cancellationToken);
         return await inner.ImportFromGsaApiAsync(fiscalYear, cancellationToken);
     }
 
     public async Task<PerDiemImportResultDto> InstallSampleRatesAsync(int fiscalYear, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.SetupPerDiem, What, cancellationToken);
         return await inner.InstallSampleRatesAsync(fiscalYear, cancellationToken);
     }
 }

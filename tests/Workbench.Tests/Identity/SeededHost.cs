@@ -1,4 +1,6 @@
 using Workbench.Application;
+using Workbench.Application.Identity;
+using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
 using Workbench.Tests.Collaboration;
@@ -47,12 +49,11 @@ internal sealed class SeededHost : IAsyncDisposable
         var financeSheet = new Sheet { Workspace = finance, Name = "Budget" };
         db.Workspaces.AddRange(programOffice, finance);
         db.Sheets.AddRange(sheet, financeSheet);
-        db.Set<AppUser>().AddRange(
-            new AppUser { Email = Admin, DisplayName = "Admin", IsAdmin = true },
-            new AppUser { Email = Owner, DisplayName = "Pat" },
-            new AppUser { Email = Viewer, DisplayName = "Val" },
-            new AppUser { Email = Finance, DisplayName = "Fin", IsFinance = true },
-            new AppUser { Email = Timekeeper, DisplayName = "Tim", IsTimekeeper = true });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Admin, DisplayName = "Admin" }, OrgRoles.Admin);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Owner, DisplayName = "Pat" }, OrgRoles.Employee);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Viewer, DisplayName = "Val" }, OrgRoles.Employee);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Finance, DisplayName = "Fin" }, OrgRoles.Finance);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Timekeeper, DisplayName = "Tim" }, OrgRoles.Timekeeper);
         db.Set<WorkspaceMember>().AddRange(
             new WorkspaceMember { WorkspaceId = programOffice.Id, UserEmail = Owner, Role = WorkspaceRole.Owner },
             new WorkspaceMember { WorkspaceId = programOffice.Id, UserEmail = Editor, Role = WorkspaceRole.Editor },

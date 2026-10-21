@@ -21,7 +21,7 @@ else
     var b = bill.Bill;
     <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="@BackHref" BackLabel="@BackLabel">
         <BillStatusChip Status="b.Status" />
-        <FinanceOnly>
+        <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApBillsManage">
             @if (bill.CanEdit)
             {
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Edit" Href="@($"purchasing/bills/{b.Id}/edit")" data-testid="edit-bill">Edit</MudButton>
@@ -33,7 +33,7 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="RejectAsync" data-testid="reject">Reject</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(() => Bills.ApproveAsync(b.Id), "Approved."))" data-testid="approve">Approve</MudButton>
         }
-        <FinanceOnly>
+        <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApBillsManage">
             @if (b.Status == BillState.Approved)
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
@@ -105,7 +105,7 @@ else
         <BillLinesTable Lines="bill.Lines" CanCapitalize="@(_capitalizable.Count > 0 ? l => _capitalizable.Contains(l.Id) : null)" OnCapitalize="CapitalizeAsync" />
     </MudPaper>
 
-    @if (Access?.IsFinance == true && bill.Bill.Status is not (BillState.Void or BillState.Rejected))
+    @if (Access?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true && bill.Bill.Status is not (BillState.Void or BillState.Rejected))
     {
         <Workbench.Ui.SalesTax.BillTaxCard BillId="BillId" Status="bill.Bill.Status" />
     }
@@ -143,8 +143,8 @@ else
     public FinanceAccess? Access { get; set; }
 
     // Someone outside Finance gets here from Bill approvals; the bill list is Finance's.
-    private string BackHref => Access?.IsFinance == true ? "purchasing/bills" : "purchasing/approvals";
-    private string BackLabel => Access?.IsFinance == true ? "Bills" : "Bill approvals";
+    private string BackHref => Access?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true ? "purchasing/bills" : "purchasing/approvals";
+    private string BackLabel => Access?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true ? "Bills" : "Bill approvals";
 
     [Parameter] public Guid BillId { get; set; }
 

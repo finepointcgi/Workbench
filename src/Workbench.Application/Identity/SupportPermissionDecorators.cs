@@ -1,4 +1,5 @@
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Support;
 
 namespace Workbench.Application.Identity;
@@ -23,7 +24,7 @@ internal sealed class PermissionCheckingSupportService(ISupportService inner, Ac
 
     public async Task<IReadOnlyList<SupportRequestDto>> ListAllAsync(SupportStatus? status = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSupport, "handle everyone's support requests", cancellationToken);
         return await inner.ListAllAsync(status, cancellationToken);
     }
 
@@ -31,7 +32,7 @@ internal sealed class PermissionCheckingSupportService(ISupportService inner, Ac
     {
         access.RequireSignedIn();
         var request = await inner.GetAsync(id, cancellationToken);
-        if (!string.Equals(request.ReporterEmail, access.Email, StringComparison.OrdinalIgnoreCase) && !await access.IsAdminAsync(cancellationToken))
+        if (!string.Equals(request.ReporterEmail, access.Email, StringComparison.OrdinalIgnoreCase) && !await access.HasAsync(Permission.AdminSupport, cancellationToken))
         {
             throw WorkbenchNotFoundException.For("Support request", id);
         }
@@ -41,7 +42,7 @@ internal sealed class PermissionCheckingSupportService(ISupportService inner, Ac
 
     public async Task<SupportRequestDto> UpdateAsync(Guid id, UpdateSupportRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSupport, "handle everyone's support requests", cancellationToken);
         return await inner.UpdateAsync(id, request, cancellationToken);
     }
 

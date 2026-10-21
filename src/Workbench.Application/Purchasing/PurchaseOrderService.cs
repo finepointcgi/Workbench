@@ -63,7 +63,7 @@ public sealed class PurchaseOrderService(
     public async Task<IReadOnlyList<PurchaseOrderSummaryDto>> ListReceivableAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var finance = (await access.GetOrgRolesAsync(cancellationToken)).IsFinance();
+        var finance = await access.HasAsync(Permission.PurchaseOrdersManage, cancellationToken);
         var orders = await db.Set<PurchaseOrder>().AsNoTracking().Include(o => o.Lines)
             .Where(o => o.Status == PurchaseOrderStatus.Issued || o.Status == PurchaseOrderStatus.PartiallyReceived).ToListAsync(cancellationToken);
         var mine = orders.Where(o => finance || ProcurementSupport.SplitEmails(o.ReceiverEmails).Contains(Me)).OrderBy(o => o.OrderDate).ThenBy(o => o.Number).ToList();
@@ -611,7 +611,7 @@ public sealed class PurchaseOrderService(
         var billIds = await db.Set<ApBillLine>().AsNoTracking().Where(l => l.PurchaseOrderLineId != null && lineIds.Contains(l.PurchaseOrderLineId.Value))
             .Select(l => l.BillId).Distinct().ToListAsync(ct);
         var bills = await db.Set<ApBill>().AsNoTracking().Where(b => billIds.Contains(b.Id)).OrderBy(b => b.Number).ToListAsync(ct);
-        var roles = access.IsAuthenticated ? await access.GetOrgRolesAsync(ct) : OrgRoles.Employee;
+        var roles = access.IsAuthenticated ? await access.GetPermissionsAsync(ct) : PermissionSet.Empty;
         var receivers = ProcurementSupport.SplitEmails(o.ReceiverEmails);
         var lineById = o.Lines.ToDictionary(l => l.Id);
         return new PurchaseOrderDto(
@@ -638,7 +638,7 @@ public sealed class PurchaseOrderService(
                 r.Lines.Select(l => new ReceiptLineDto(l.PurchaseOrderLineId, lineById.GetValueOrDefault(l.PurchaseOrderLineId)?.LineNumber ?? 0,
                     lineById.GetValueOrDefault(l.PurchaseOrderLineId)?.Description ?? "(removed)", l.Quantity, l.IsAcceptance)).OrderBy(l => l.LineNumber).ToList())).ToList(),
             bills.Select(b => ApBillService.Summary(b, vendor)).ToList(),
-            o.Status == PurchaseOrderStatus.Draft && roles.IsFinance(),
-            o.Status is PurchaseOrderStatus.Issued or PurchaseOrderStatus.PartiallyReceived && (roles.IsFinance() || receivers.Contains(Me)));
+            o.Status == PurchaseOrderStatus.Draft && roles.Has(Permission.PurchaseOrdersManage),
+            o.Status is PurchaseOrderStatus.Issued or PurchaseOrderStatus.PartiallyReceived && (roles.Has(Permission.PurchaseOrdersManage) || receivers.Contains(Me)));
     }
 }

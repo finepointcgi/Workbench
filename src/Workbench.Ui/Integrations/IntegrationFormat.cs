@@ -19,8 +19,11 @@ internal static class IntegrationFormat
     public static string EventLabel(string key) =>
         key == "ping" ? "Test (ping)" : WebhookEventCatalog.All.FirstOrDefault(e => e.Key == key)?.Label ?? key;
 
-    public static string Roles(OrgRoles roles) =>
-        roles == OrgRoles.Employee ? "Employee only" : string.Join(", ", OrgRoleChecks.All.Where(r => roles.HasFlag(r)).Select(OrgRoleChecks.Label));
+    public static string Roles(OrgRoles roles, IReadOnlyList<RoleRef>? custom = null)
+    {
+        var names = OrgRoleChecks.All.Where(r => roles.HasFlag(r)).Select(OrgRoleChecks.Label).Concat((custom ?? []).Select(r => r.Name)).ToList();
+        return names.Count == 0 ? "Employee only" : string.Join(", ", names);
+    }
 
     public static string AreaLabel(string scope)
     {

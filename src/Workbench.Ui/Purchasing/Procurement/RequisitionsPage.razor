@@ -58,7 +58,7 @@ else
     {
         try
         {
-            _finance = (await UserContext.GetAsync()).IsFinance;
+            _finance = (await UserContext.GetAsync()).Can(Workbench.Contracts.Identity.Permission.PurchaseOrdersManage);
             _queue = await Requisitions.ListApprovalQueueAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

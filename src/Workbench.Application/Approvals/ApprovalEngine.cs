@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Identity;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.Approvals;
@@ -62,9 +63,9 @@ public sealed class ApprovalEngine(TimeProvider clock)
 {
     public sealed record Actionable(ApprovalTask Task, string? OnBehalfOf);
 
-    private sealed record Delegator(string Email, OrgRoles Roles, string? DocumentType);
+    private sealed record Delegator(string Email, ResolvedAccess Access, string? DocumentType);
 
-    private sealed record Actor(string Email, OrgRoles Roles, IReadOnlyList<Delegator> Delegators);
+    private sealed record Actor(string Email, ResolvedAccess Access, IReadOnlyList<Delegator> Delegators);
 
     public DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
@@ -164,7 +165,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
                     ScopeKey = draft.ScopeKey,
                     ScopeLabel = Clip(draft.ScopeLabel, 300),
                     AssigneesCsv = string.Join(",", draft.Assignees),
-                    AssigneeRole = draft.Role?.ToString(),
+                    AssigneeRole = draft.Role,
                     ExcludedCsv = string.Join(",", draft.Excluded),
                     AdminsMayAct = step.AdminsMayAct,
                     RemindAfterBusinessDays = step.RemindAfterBusinessDays,
@@ -486,9 +487,9 @@ public sealed class ApprovalEngine(TimeProvider clock)
     {
         var excluded = Split(task.ExcludedCsv);
         var people = Split(task.AssigneesCsv).ToList();
-        if (Enum.TryParse<ApprovalOrgRole>(task.AssigneeRole, out var role))
+        if (task.AssigneeRole is { } role)
         {
-            people.AddRange(await RoleMembersAsync(db, role, ct));
+            people.AddRange(await ApproverRoles.MembersAsync(db, role, ct));
         }
 
         return people.Where(p => !excluded.Contains(p)).Distinct().ToList();
@@ -497,44 +498,12 @@ public sealed class ApprovalEngine(TimeProvider clock)
     public static HashSet<string> Split(string? csv) =>
         (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Normalize).ToHashSet();
 
-    public static bool HasRole(OrgRoles roles, ApprovalOrgRole role) => role switch
-    {
-        ApprovalOrgRole.Finance => roles.IsFinance(),
-        ApprovalOrgRole.Admin => roles.IsAdmin(),
-        ApprovalOrgRole.ResourceManager => roles.IsResourceManager(),
-        ApprovalOrgRole.ProjectManager => roles.IsProjectManager(),
-        ApprovalOrgRole.Hr => roles.IsHr(),
-        ApprovalOrgRole.Materials => roles.IsMaterials(),
-        ApprovalOrgRole.BusinessDevelopment => roles.IsBusinessDevelopment(),
-        ApprovalOrgRole.Pricing => roles.CanPrice(),
-        _ => roles.HasFlag(OrgRoles.Timekeeper),
-    };
+    /// <summary>True when someone with the built-in <paramref name="roles"/> is a member of the org role.</summary>
+    public static bool HasRole(OrgRoles roles, ApprovalOrgRole role) => (roles & ApproverRoles.MembersOf(role)) != 0;
 
-    public static async Task<IReadOnlyList<string>> RoleMembersAsync(IWorkbenchDbContext db, ApprovalOrgRole role, CancellationToken ct)
-    {
-        var users = db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive);
-        users = role switch
-        {
-            ApprovalOrgRole.Finance => users.Where(u => u.IsFinance || u.IsAdmin),
-            ApprovalOrgRole.Admin => users.Where(u => u.IsAdmin),
-            ApprovalOrgRole.ResourceManager => users.Where(u => u.IsResourceManager || u.IsAdmin),
-            ApprovalOrgRole.ProjectManager => users.Where(u => u.IsProjectManager || u.IsAdmin),
-            ApprovalOrgRole.Hr => users.Where(u => u.IsHr || u.IsAdmin),
-            ApprovalOrgRole.Materials => users.Where(u => u.IsMaterials || u.IsAdmin),
-            ApprovalOrgRole.BusinessDevelopment => users.Where(u => u.IsBusinessDevelopment || u.IsAdmin),
-            ApprovalOrgRole.Pricing => users.Where(u => u.IsPricing || u.IsFinance || u.IsAdmin),
-            _ => users.Where(u => u.IsTimekeeper),
-        };
-        return (await users.Select(u => u.Email).ToListAsync(ct)).Select(Normalize).ToList();
-    }
-
-    public static async Task<OrgRoles> RolesOfAsync(IWorkbenchDbContext db, string email, CancellationToken ct)
-    {
-        var normalized = Normalize(email);
-        var user = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == normalized && u.IsActive)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment, u.IsPricing }).FirstOrDefaultAsync(ct);
-        return user is null ? OrgRoles.Employee : Identity.AccessControl.ToRoles(user.IsAdmin, user.IsFinance, user.IsTimekeeper, user.IsResourceManager, user.IsProjectManager, user.IsHr, user.IsMaterials, user.IsBusinessDevelopment, user.IsPricing);
-    }
+    /// <summary>Emails of the active members of an org role.</summary>
+    public static Task<IReadOnlyList<string>> RoleMembersAsync(IWorkbenchDbContext db, ApprovalOrgRole role, CancellationToken ct) =>
+        ApproverRoles.MembersAsync(db, role.ToString(), ct);
 
     public void AddAction(IWorkbenchDbContext db, ApprovalInstance instance, ApprovalTask? task, string action, string actor, string? onBehalfOf, string? comment) =>
         db.Set<ApprovalAction>().Add(new ApprovalAction
@@ -560,11 +529,14 @@ public sealed class ApprovalEngine(TimeProvider clock)
         var delegators = new List<Delegator>();
         foreach (var d in delegations)
         {
-            delegators.Add(new Delegator(Normalize(d.DelegatorEmail), await RolesOfAsync(db, d.DelegatorEmail, ct), d.DocumentType));
+            delegators.Add(new Delegator(Normalize(d.DelegatorEmail), await RoleStore.ResolveAsync(db, Normalize(d.DelegatorEmail), ct), d.DocumentType));
         }
 
-        return new Actor(me, await RolesOfAsync(db, me, ct), delegators);
+        return new Actor(me, await RoleStore.ResolveAsync(db, me, ct), delegators);
     }
+
+    private static bool Holds(ResolvedAccess access, string? role) =>
+        role is not null && ApproverRoles.Holds(access.Roles.Select(r => r.Id).ToList(), role);
 
     private static (bool Allowed, string? OnBehalfOf) CanAct(ApprovalTask task, Actor actor, string documentType)
     {
@@ -575,15 +547,15 @@ public sealed class ApprovalEngine(TimeProvider clock)
         }
 
         var assignees = Split(task.AssigneesCsv);
-        var hasRole = Enum.TryParse<ApprovalOrgRole>(task.AssigneeRole, out var role);
-        if (assignees.Contains(actor.Email) || (hasRole && HasRole(actor.Roles, role)) || (task.AdminsMayAct && actor.Roles.IsAdmin()))
+        var role = task.AssigneeRole;
+        if (assignees.Contains(actor.Email) || Holds(actor.Access, role) || (task.AdminsMayAct && actor.Access.Permissions.Has(Permission.ApprovalsActAsAdmin)))
         {
             return (true, null);
         }
 
         foreach (var d in actor.Delegators.Where(d => d.DocumentType is null || d.DocumentType == documentType))
         {
-            if (!excluded.Contains(d.Email) && (assignees.Contains(d.Email) || (hasRole && HasRole(d.Roles, role))))
+            if (!excluded.Contains(d.Email) && (assignees.Contains(d.Email) || Holds(d.Access, role)))
             {
                 return (true, d.Email);
             }
@@ -610,7 +582,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
 
     private static string? Clip(string? value, int max) => value is null ? null : value.Length <= max ? value : value[..max];
 
-    private sealed record Draft(string? ScopeKey, string? ScopeLabel, IReadOnlyList<string> Assignees, ApprovalOrgRole? Role,
+    private sealed record Draft(string? ScopeKey, string? ScopeLabel, IReadOnlyList<string> Assignees, string? Role,
         IReadOnlyCollection<string> Excluded, IReadOnlyList<string> Eligible, string? SkipReason);
 
     /// <summary>Resolves approver rules and conditions for one subject.</summary>
@@ -685,7 +657,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
 
         public async Task<IReadOnlyList<Draft>> ResolveAsync(IWorkbenchDbContext db, ApprovalStepDefinition step, CancellationToken ct)
         {
-            var scopes = new List<(string? Key, string? Label, IReadOnlyList<string> People, ApprovalOrgRole? Role, IReadOnlyList<ApprovalCharge> Charges)>();
+            var scopes = new List<(string? Key, string? Label, IReadOnlyList<string> People, string? Role, IReadOnlyList<ApprovalCharge> Charges)>();
             var rule = step.Approver;
             switch (rule.Kind)
             {
@@ -739,7 +711,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
                     (people, role) = WholeDocument(fallback);
                 }
 
-                var members = role is { } r ? await RoleMembersAsync(db, r, ct) : [];
+                var members = role is { } r ? await ApproverRoles.MembersAsync(db, r, ct) : [];
                 var excluded = scope.Charges.SelectMany(c => c.ExcludedEmails ?? []).Select(Normalize).ToHashSet();
                 if (step.WhenSubmitterIsApprover != SelfApprovalPolicy.Allow)
                 {
@@ -775,10 +747,10 @@ public sealed class ApprovalEngine(TimeProvider clock)
             return drafts;
         }
 
-        private (IReadOnlyList<string> People, ApprovalOrgRole? Role) WholeDocument(ApproverRule rule) => rule.Kind switch
+        private (IReadOnlyList<string> People, string? Role) WholeDocument(ApproverRule rule) => rule.Kind switch
         {
             ApproverRuleKind.Supervisor => (_supervisorEmail is { } s ? [Normalize(s)] : [], null),
-            ApproverRuleKind.OrgRole => ([], rule.Role ?? ApprovalOrgRole.Admin),
+            ApproverRuleKind.OrgRole => ([], ApproverRoles.KeyOf(rule)),
             ApproverRuleKind.AnyOf or ApproverRuleKind.SpecificPeople => ((rule.People ?? []).Select(Normalize).Where(p => p.Length > 0).Distinct().ToList(), null),
             // A project or org-unit rule used as a fallback has no single scope to follow: nobody.
             _ => ([], null),

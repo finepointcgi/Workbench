@@ -1,7 +1,8 @@
-@* Pages under /setup: Finance and administrators only. Others get a friendly 403; the server refuses their changes too. *@
+@* Pages under /setup: each needs the permission its menu entry names (Admin › Roles). Others get a friendly 403; the server refuses their changes too. *@
 @inherits LayoutComponentBase
 @layout MainLayout
 @inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
 
 @if (_allowed is null)
 {
@@ -13,18 +14,24 @@ else if (_allowed.Value)
 }
 else
 {
-    <ForbiddenNotice Title="You don't have access to Setup"
-                     Message="Setup (people, rates, contracts, projects, the fiscal calendar and the audit log) is for Finance and administrators. Ask an administrator if you need it." />
+    <ForbiddenNotice Title="You don't have access to this page"
+                     Message="@_message" />
 }
 
 @code {
     private bool? _allowed;
+    private CurrentUserInfo? _user;
+    private string _message = "";
 
-    protected override async Task OnInitializedAsync()
+    // Checked on every navigation (a layout instance outlives its pages): the menu entry that owns the page decides.
+    protected override async Task OnParametersSetAsync()
     {
         try
         {
-            _allowed = (await CurrentUser.GetAsync()).IsFinance;
+            _user ??= await CurrentUser.GetAsync();
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+            _allowed = NavCatalog.PageAllowed(path, _user, p => p.Any(k => PermissionCatalog.Find(k)?.Area is { } area && (area == PermissionCatalog.AreaSetup || area == PermissionCatalog.AreaApprovals || area == PermissionCatalog.AreaAdministration)));
+            _message = NavCatalog.Explain(path) ?? "This setup page needs a permission you don't have. Ask an administrator if you need it.";
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {
