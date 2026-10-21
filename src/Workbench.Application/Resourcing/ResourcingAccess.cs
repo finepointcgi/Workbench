@@ -16,10 +16,13 @@ namespace Workbench.Application.Resourcing;
 /// <item>Utilization follows timesheet visibility: everyone for Timekeeper/Finance/Admin/ResourceManager, direct reports for
 /// a supervisor, otherwise yourself.</item>
 /// </list>
+/// A project the user can't see at all (<see cref="ProjectVisibility"/>) is not found before any of these says forbidden.
 /// </summary>
-public sealed class ResourcingAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access)
+public sealed class ResourcingAccess(IWorkbenchDbContextFactory dbFactory, AccessControl access, ProjectVisibility? visibility = null)
 {
     public AccessControl Access => access;
+
+    public ProjectVisibility Visibility { get; } = visibility ?? new ProjectVisibility(dbFactory, access);
 
     public Task<OrgRoles> RolesAsync(CancellationToken ct) => access.GetOrgRolesAsync(ct);
 
@@ -51,7 +54,7 @@ public sealed class ResourcingAccess(IWorkbenchDbContextFactory dbFactory, Acces
 
     public async Task RequireManageProjectAsync(Guid projectId, CancellationToken ct)
     {
-        access.RequireSignedIn();
+        await Visibility.RequireVisibleAsync(projectId, ct);
         if (!await CanManageProjectAsync(projectId, ct))
         {
             throw new WorkbenchForbiddenException("Only resource managers, administrators and the project's manager can change its allocations.");
@@ -61,7 +64,7 @@ public sealed class ResourcingAccess(IWorkbenchDbContextFactory dbFactory, Acces
     /// <summary>Staffing and open demand: Finance, Admin, resource managers or the project's manager.</summary>
     public async Task RequireReadProjectAsync(Guid projectId, CancellationToken ct)
     {
-        access.RequireSignedIn();
+        await Visibility.RequireVisibleAsync(projectId, ct);
         if (!await ReadsAllAllocationsAsync(ct) && !(await ManagedProjectIdsAsync(ct)).Contains(projectId))
         {
             throw new WorkbenchForbiddenException("Only Finance, administrators, resource managers and the project's manager can see its staffing.");

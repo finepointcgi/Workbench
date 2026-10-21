@@ -334,7 +334,7 @@ public sealed class CeilingPermissionTests
         Assert.False(closeout.CanManage);
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => kit.Closeouts.MarkPhysicallyCompleteAsync(CloseoutScope.Contract, kit.Fx.Contract1, new PhysicallyCompleteRequest()));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => kit.Closeouts.ReopenAsync(CloseoutScope.Project, kit.Fx.Project1, new CloseoutReasonRequest("x")));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => kit.Closeouts.GetAsync(CloseoutScope.Project, kit.Fx.Project2));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => kit.Closeouts.GetAsync(CloseoutScope.Project, kit.Fx.Project2)); // not on 2002
 
         kit.As(Editor);
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => kit.Closeouts.GetAsync(CloseoutScope.Contract, kit.Fx.Contract1));

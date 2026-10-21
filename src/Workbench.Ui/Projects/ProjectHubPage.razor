@@ -10,7 +10,7 @@
 @if (_notFound)
 {
     <MudText Typo="Typo.h4" HtmlTag="h1">Project not found</MudText>
-    <MudText Class="mud-text-secondary mt-2">It doesn't exist, or you aren't on it (as its manager, by charging to it or as a member of its plan sheet).</MudText>
+    <MudText Class="mud-text-secondary mt-2">It doesn't exist, or you aren't on it. You're on a project when you manage it, are assigned to it, charge to it, belong to its plan's workspace or approve its timesheets and expenses.</MudText>
     <MudButton Href="projects" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">Back to Projects</MudButton>
 }
 else if (_error is not null)

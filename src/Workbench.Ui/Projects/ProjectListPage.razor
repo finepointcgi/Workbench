@@ -71,7 +71,7 @@ else
     {
         <MudPaper Outlined="true" Class="pa-6">
             <MudText Class="mud-text-secondary">
-                You aren't on any projects yet. Projects show here once you manage one, are assigned to it or record time on it.
+                You aren't on any projects yet. Projects show here once you manage one, are assigned to it, charge to it, belong to its plan's workspace or approve its timesheets and expenses.
             </MudText>
         </MudPaper>
     }
@@ -184,7 +184,7 @@ else
         </MudTable>
         @if (!_list.ShowsMoney)
         {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">These are the projects you're assigned to or record time on.</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">These are the projects you're on: you manage them, are assigned to them, charge to them, belong to their plan's workspace or approve their timesheets and expenses.</MudText>
         }
     }
 }

@@ -88,11 +88,13 @@ public sealed class FinancialPermissionTests
     }
 
     [Theory]
-    [InlineData(Editor)]
-    [InlineData(Timekeeper)]
-    [InlineData(Viewer)]
-    public async Task Others_get_403_on_project_financials_budgets_and_exports(string email)
+    [InlineData(Editor, true)]
+    [InlineData(Timekeeper, false)]
+    [InlineData(Viewer, true)]
+    public async Task Others_get_403_on_project_financials_budgets_and_exports(string email, bool onProject1)
     {
+        // Not on 1001 at all: not found; on it without the rule: forbidden.
+        Task Refused(Func<Task> call) => Assert.ThrowsAsync(onProject1 ? typeof(WorkbenchForbiddenException) : typeof(WorkbenchNotFoundException), call);
         await using var seeded = await CreateAsync();
         var f = await SeedAsync(seeded);
         var host = seeded.As(email).Host;
@@ -100,18 +102,18 @@ public sealed class FinancialPermissionTests
         var budgets = host.Get<IBudgetService>();
         var exports = host.Get<IFinancialExportService>();
 
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => financials.GetProjectSummaryAsync(f.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => financials.GetWbsFinancialsAsync(f.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => financials.GetTimePhasedBurnAsync(f.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => exports.ExportWbsCsvAsync(f.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => exports.ExportTimePhasedCsvAsync(f.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.ListVersionsAsync(f.Project1));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.GetVersionAsync(f.BudgetVersionId));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.CreateVersionAsync(f.Project1, new CreateBudgetVersionRequest("F1", BudgetVersionKind.Forecast)));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.SaveLinesAsync(f.BudgetVersionId, []));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.LockBaselineAsync(f.BudgetVersionId, "Approved"));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.PromoteToCurrentAsync(f.BudgetVersionId));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.RepriceAsync(f.BudgetVersionId));
+        await Refused(() => financials.GetProjectSummaryAsync(f.Project1));
+        await Refused(() => financials.GetWbsFinancialsAsync(f.Project1));
+        await Refused(() => financials.GetTimePhasedBurnAsync(f.Project1));
+        await Refused(() => exports.ExportWbsCsvAsync(f.Project1));
+        await Refused(() => exports.ExportTimePhasedCsvAsync(f.Project1));
+        await Refused(() => budgets.ListVersionsAsync(f.Project1));
+        await Refused(() => budgets.GetVersionAsync(f.BudgetVersionId));
+        await Refused(() => budgets.CreateVersionAsync(f.Project1, new CreateBudgetVersionRequest("F1", BudgetVersionKind.Forecast)));
+        await Refused(() => budgets.SaveLinesAsync(f.BudgetVersionId, []));
+        await Refused(() => budgets.LockBaselineAsync(f.BudgetVersionId, "Approved"));
+        await Refused(() => budgets.PromoteToCurrentAsync(f.BudgetVersionId));
+        await Refused(() => budgets.RepriceAsync(f.BudgetVersionId));
         Assert.False(await host.Get<IFinancialAccessService>().CanReadProjectFinancialsAsync(f.Project1));
     }
 
@@ -123,8 +125,8 @@ public sealed class FinancialPermissionTests
         var host = seeded.As(Owner).Host;
         var budgets = host.Get<IBudgetService>();
 
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IProjectFinancialsService>().GetProjectSummaryAsync(f.Project2));
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => budgets.CreateVersionAsync(f.Project2, new CreateBudgetVersionRequest("F", BudgetVersionKind.Forecast)));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => host.Get<IProjectFinancialsService>().GetProjectSummaryAsync(f.Project2)); // not on 2002
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => budgets.CreateVersionAsync(f.Project2, new CreateBudgetVersionRequest("F", BudgetVersionKind.Forecast)));
 
         var forecast = await budgets.CreateVersionAsync(f.Project1, new CreateBudgetVersionRequest("Forecast 1", BudgetVersionKind.Forecast));
         await budgets.SaveLinesAsync(forecast.Version.Id, []);
@@ -195,7 +197,7 @@ public sealed class FinancialPermissionTests
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => odcs.DeleteVendorOdcAsync(f.VendorOdcId));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => odcs.SubmitAsync(f.VendorOdcId));
 
-        Assert.Empty((await seeded.As(Outsider).Host.Get<IOdcService>().ListProjectOdcsAsync(f.Project1, query)).Entries);
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => seeded.As(Outsider).Host.Get<IOdcService>().ListProjectOdcsAsync(f.Project1, query)); // not on 1001
         Assert.NotNull(await seeded.As(Owner).Host.Get<IOdcService>().GetAsync(f.VendorOdcId));
     }
 }

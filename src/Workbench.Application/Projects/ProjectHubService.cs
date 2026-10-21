@@ -32,12 +32,11 @@ public sealed class ProjectHubService(
         var viewer = await hubAccess.GetViewerAsync(cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var charged = await ProjectHubAccess.ChargedProjectIdsAsync(db, viewer.EmployeeId, cancellationToken);
-        var me = viewer.EmployeeId;
-        var chargedIds = charged.ToList();
         var query = db.Set<Project>().AsNoTracking();
-        if (!viewer.IsFinance)
+        if (await hubAccess.Visibility.VisibleProjectIdsAsync(cancellationToken) is { } visible)
         {
-            query = query.Where(p => (me != null && p.ProjectManagerId == me) || chargedIds.Contains(p.Id));
+            var visibleIds = visible.ToList();
+            query = query.Where(p => visibleIds.Contains(p.Id));
         }
 
         var projects = (await query.ToListAsync(cancellationToken)).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();

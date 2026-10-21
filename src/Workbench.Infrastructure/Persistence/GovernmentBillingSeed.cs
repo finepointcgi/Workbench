@@ -66,7 +66,7 @@ internal static class GovernmentBillingSeed
             PeriodStart = kits.PeriodStart, PeriodEnd = kits.PeriodEnd, CeilingValue = 2_400_000m, FundedValue = 1_200_000m,
         };
         var kitProject = new Project { Code = "4101", Name = "Armor kit production", ContractId = kits.Id, ProjectManagerId = pm?.Id, Start = start, Finish = kits.PeriodEnd };
-        var kitWbs = new WbsElement { ProjectId = kitProject.Id, Code = "4101.01", Name = "Kit fabrication", ClinId = kitClin.Id, RequiresAssignment = false };
+        var kitWbs = new WbsElement { ProjectId = kitProject.Id, Code = "4101.01", Name = "Kit fabrication", ClinId = kitClin.Id };
         db.AddRange(army, kits, kitClin, kitProject, kitWbs);
         db.Add(new ContractBillingSettings
         {
@@ -97,8 +97,14 @@ internal static class GovernmentBillingSeed
             PeriodStart = tester.PeriodStart, PeriodEnd = tester.PeriodEnd, CeilingValue = 1_800_000m, FundedValue = 900_000m,
         };
         var testerProject = new Project { Code = "4201", Name = "Avionics test set", ContractId = tester.Id, ProjectManagerId = pm?.Id, Start = start, Finish = tester.PeriodEnd };
-        var testerWbs = new WbsElement { ProjectId = testerProject.Id, Code = "4201.01", Name = "Test set engineering", ClinId = testerClin.Id, RequiresAssignment = false };
+        var testerWbs = new WbsElement { ProjectId = testerProject.Id, Code = "4201.01", Name = "Test set engineering", ClinId = testerClin.Id };
         db.AddRange(navair, tester, testerClin, testerProject, testerWbs);
+
+        // Charge codes need an assignment, so only the program manager (and Finance) sees these projects (ProjectVisibility).
+        if (pm is not null)
+        {
+            db.AddRange(new ChargeAssignment { WbsElementId = kitWbs.Id, EmployeeId = pm.Id }, new ChargeAssignment { WbsElementId = testerWbs.Id, EmployeeId = pm.Id });
+        }
         db.Add(new ContractBillingSettings
         {
             ContractId = tester.Id, InvoicePrefix = InvoiceService.DefaultPrefix(tester.ContractNumber), PayingOffice = "DFAS Columbus, N68732",
