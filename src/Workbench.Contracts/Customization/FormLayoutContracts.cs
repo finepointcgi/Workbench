@@ -27,6 +27,23 @@ public static class CustomizableEntities
     public const string SalesOrder = "sales-order";
 }
 
+/// <summary>
+/// Field types as forms and lists show them (Text, LongText, Number, Money, Date, Bool, Select, MultiSelect, Person). The
+/// field catalog reports custom fields by their <see cref="CustomFieldType"/>; <see cref="Of"/> maps those to the form types.
+/// </summary>
+public static class FormFieldTypes
+{
+    public static string Of(string catalogType) => catalogType switch
+    {
+        nameof(CustomFieldType.Currency) => "Money",
+        nameof(CustomFieldType.YesNo) => "Bool",
+        nameof(CustomFieldType.Picklist) => "Select",
+        nameof(CustomFieldType.MultiPicklist) => "MultiSelect",
+        nameof(CustomFieldType.Url) or nameof(CustomFieldType.RecordLink) => "Text",
+        _ => catalogType,
+    };
+}
+
 /// <summary>One field's place in a section. <see cref="Required"/> adds a requirement; it never removes one.</summary>
 public sealed record FormFieldPlacement(string Key, bool Hidden = false, bool Required = false);
 
