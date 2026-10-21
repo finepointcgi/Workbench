@@ -77,6 +77,7 @@ public static class WorkbenchApi
         v1.MapReceiptEndpoints();
         v1.MapCustomizationEndpoints();
         v1.MapRoleEndpoints();
+        v1.MapAutomationBuilderEndpoints();
 
         return app;
     }

@@ -43,6 +43,7 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
         builder.UseSetting("DataProtection:CertificatePassword", Operations.TestCertificates.Password);
         builder.UseSetting("Retention:NightlyJobEnabled", "false");
         builder.UseSetting("Integrations:DispatcherEnabled", "false"); // Tests run the dispatcher themselves, with a fake transport.
+        builder.UseSetting("Automations:BackgroundEnabled", "false"); // Tests run the automation processor themselves.
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
         {
             builder.UseSetting(key, value);

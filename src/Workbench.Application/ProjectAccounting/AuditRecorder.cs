@@ -7,15 +7,20 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.Application.ProjectAccounting;
 
 /// <summary>Writes append-only <see cref="AuditEvent"/> rows in the caller's unit of work.</summary>
-public sealed class AuditRecorder(ICurrentUser currentUser, TimeProvider clock)
+public sealed class AuditRecorder(ICurrentUser currentUser, TimeProvider clock, Automations.AutomationCapture? automations = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public string Actor => currentUser.Email;
 
-    /// <summary>Adds an audit row to <paramref name="db"/>; it's saved with the caller's SaveChanges.</summary>
-    public void Record(IWorkbenchDbContext db, string entityType, Guid entityId, string action, object? before = null, object? after = null, string? reason = null) =>
-        db.Set<AuditEvent>().Add(new AuditEvent
+    /// <summary>
+    /// Adds an audit row to <paramref name="db"/>; it's saved with the caller's SaveChanges. Automations listening to the
+    /// record queue their runs in the same unit of work, and a validation automation may refuse the change here
+    /// (<see cref="Contracts.Automations.AutomationBlockedException"/>).
+    /// </summary>
+    public void Record(IWorkbenchDbContext db, string entityType, Guid entityId, string action, object? before = null, object? after = null, string? reason = null)
+    {
+        var row = new AuditEvent
         {
             EntityType = entityType,
             EntityId = entityId,
@@ -25,7 +30,10 @@ public sealed class AuditRecorder(ICurrentUser currentUser, TimeProvider clock)
             Actor = currentUser.Email,
             OccurredAtUtc = clock.GetUtcNow().UtcDateTime,
             Reason = reason,
-        });
+        };
+        db.Set<AuditEvent>().Add(row);
+        automations?.OnAudit(db, row);
+    }
 }
 
 public sealed class AuditLogService(IWorkbenchDbContextFactory dbFactory) : IAuditLogService

@@ -112,6 +112,7 @@ public static class IdentityRegistration
         services.AddWorkbenchReceiptPermissions(); // Receipt library: your own files; others' files only through a line you can see (approvers, Finance, the PM).
         services.AddWorkbenchCustomizationPermissions(); // Customization: definitions Admin; record values follow the record (sensitive fields through ICustomFieldAccessPolicy).
         services.Decorate<IRoleService, PermissionCheckingRoleService>(); // Admin › Roles: "Manage roles"; assigning them "Administer users"; nobody grants more than they hold.
+        services.Decorate<Workbench.Contracts.Automations.IAutomationService, Automations.PermissionCheckingAutomationService>(); // Automations: "manage automations" / "run automation" (IAutomationPermissions; Admin until the permission catalog).
         return services;
     }
 

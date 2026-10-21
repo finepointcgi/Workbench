@@ -3,6 +3,7 @@
 @inject IPeopleService People
 @inject ICurrentUserContext CurrentUser
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
 
 <PageTitle>Approval workflows · Setup · Workbench</PageTitle>
 
@@ -33,6 +34,14 @@ else
                 }
             </tbody>
         </MudSimpleTable>
+        @if (_isAdmin)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-4" Wrap="Wrap.Wrap">
+                <MudTextField @bind-Value="_newName" Label="New record approval workflow" Placeholder="e.g. Large requisition review" Margin="Margin.Dense" Style="max-width:340px"
+                              HelperText="For automations' &quot;Require an approval&quot; action, on any record type." data-testid="new-record-workflow" />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Disabled="string.IsNullOrWhiteSpace(_newName)" OnClick="CreateRecordWorkflowAsync">Create</MudButton>
+            </MudStack>
+        }
     </MudPaper>
 
     <MudPaper Outlined="true" Class="pa-4">
@@ -76,6 +85,7 @@ else
     private IReadOnlyList<OrgUnitApproverDto>? _units;
     private IReadOnlyList<EmployeeDto> _employees = [];
     private bool _isAdmin;
+    private string? _newName;
 
     protected override async Task OnInitializedAsync()
     {
@@ -83,6 +93,19 @@ else
         _workflows = await Workflows.ListAsync();
         _units = await Workflows.ListOrgUnitApproversAsync();
         _employees = (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName).ToList();
+    }
+
+    private async Task CreateRecordWorkflowAsync()
+    {
+        try
+        {
+            var created = await Workflows.CreateRecordWorkflowAsync(new CreateRecordApprovalWorkflowRequest(_newName ?? ""));
+            Navigation.NavigateTo($"setup/approval-workflows/{created.DocumentType}");
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
     }
 
     private async Task SetApproverAsync(OrgUnitApproverDto unit, Guid? employeeId)

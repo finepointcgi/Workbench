@@ -34,6 +34,7 @@ public static class ApprovalText
         ApprovalConditionKind.HasUnallowableCost => "Has an unallowable cost",
         ApprovalConditionKind.CostTypeIn => "Has one of these cost types",
         ApprovalConditionKind.HasAccountCharges => "Has GL-account charges",
+        ApprovalConditionKind.CompanyIn => "Belongs to one of these companies",
         _ => "Has charges no other project manager can approve",
     };
 

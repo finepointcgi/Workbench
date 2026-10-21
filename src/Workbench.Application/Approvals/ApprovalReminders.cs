@@ -65,6 +65,26 @@ public sealed class ApprovalReminderCheck(IWorkbenchDbContextFactory dbFactory, 
                     }
                 }
 
+                // Escalate to an org role or named people: they're added to the step, so they can decide it too.
+                var version = await db.Set<ApprovalWorkflowVersion>().AsNoTracking().FirstOrDefaultAsync(v => v.Id == instance.WorkflowVersionId, cancellationToken);
+                var step = version is null ? null : ApprovalDefaults.Deserialize(version.DefinitionJson).Steps.ElementAtOrDefault(task.StepIndex);
+                if (step?.EscalateTo is { } escalateTo)
+                {
+                    var people = escalateTo.Kind == ApproverRuleKind.OrgRole && escalateTo.Role is { } role
+                        ? await ApprovalEngine.RoleMembersAsync(db, role, cancellationToken)
+                        : (escalateTo.People ?? []).Select(ApprovalEngine.Normalize).ToList();
+                    var current = ApprovalEngine.Split(task.AssigneesCsv);
+                    var excluded = ApprovalEngine.Split(task.ExcludedCsv);
+                    var added = people.Where(p => p.Length > 0 && p != instance.SubmitterEmail && !excluded.Contains(p) && !current.Contains(p)).Distinct().ToList();
+                    if (added.Count > 0)
+                    {
+                        task.AssigneesCsv = string.Join(",", current.Concat(added));
+                        sent.Add((added, EscalationKind, $"Escalated to you: {instance.Title} has waited {waiting} business day(s)",
+                            $"{label}, {task.StepName}. You can now approve or reject it.", instance.Link));
+                        engine.AddAction(db, instance, task, "Escalated", "system", null, string.Join(", ", added));
+                    }
+                }
+
                 task.LastRemindedAtUtc = now;
                 task.RemindersSent++;
             }

@@ -1,0 +1,542 @@
+@page "/admin/automation/new"
+@page "/admin/automation/{Id:guid}"
+@inject IAutomationService Automations
+@inject NavigationManager Navigation
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>@(Id is null ? "New automation" : _name) · Automation · Workbench</PageTitle>
+
+<MudLink Href="admin/automation" Typo="Typo.caption" Class="mb-2 d-block">← All automations</MudLink>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_error</MudAlert>
+}
+else if (_catalog is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">@(Id is null ? "New automation" : _name)</MudText>
+        @if (_saved is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Version @_saved.Version</MudChip>
+        }
+        <MudSpacer />
+        <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="@(_enabled ? "On" : "Off")" data-testid="automation-enabled" />
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="8">
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudTextField @bind-Value="_name" Label="Name" Required="true" data-testid="automation-name" />
+                <MudTextField @bind-Value="_description" Label="Description" Lines="2" Sizing="InputSizing.Auto" />
+            </MudPaper>
+
+            @* 1. When *@
+            <MudPaper Outlined="true" Class="pa-4" data-testid="trigger-card">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudAvatar Size="Size.Small" Color="Color.Primary">1</MudAvatar>
+                    <MudText Typo="Typo.h6" HtmlTag="h2">When</MudText>
+                </MudStack>
+                <MudSelect T="AutomationTriggerKind" Value="_trigger.Kind" ValueChanged="SetTriggerKind" Label="Trigger" data-testid="trigger-kind">
+                    @foreach (var kind in Enum.GetValues<AutomationTriggerKind>())
+                    {
+                        <MudSelectItem Value="kind">@AutomationUi.Trigger(kind)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudGrid Spacing="2" Class="mt-1">
+                    @switch (_trigger.Kind)
+                    {
+                        case AutomationTriggerKind.RecordEvent:
+                            <MudItem xs="12" sm="5">@EntityPicker(required: true)</MudItem>
+                            <MudItem xs="12" sm="7">
+                                <MudSelect T="RecordEventKind" MultiSelection="true" SelectedValues="_trigger.Events" SelectedValuesChanged="v => _trigger.Events = v.ToList()" Label="Is" data-testid="trigger-events">
+                                    @foreach (var e in Enum.GetValues<RecordEventKind>())
+                                    {
+                                        <MudSelectItem Value="e">@AutomationUi.Event(e)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            break;
+                        case AutomationTriggerKind.FieldChanged:
+                            <MudItem xs="12" sm="4">@EntityPicker(required: true)</MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudSelect T="string" @bind-Value="_trigger.FieldKey" Label="Field">
+                                    @foreach (var field in Fields.Where(f => !IsComputed(f)))
+                                    {
+                                        <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="6" sm="2"><MudTextField @bind-Value="_trigger.FromValue" Label="From" Placeholder="any" /></MudItem>
+                            <MudItem xs="6" sm="2"><MudTextField @bind-Value="_trigger.ToValue" Label="To" Placeholder="any" /></MudItem>
+                            break;
+                        case AutomationTriggerKind.IntegrationEvent:
+                            <MudItem xs="12">
+                                <MudSelect T="string" @bind-Value="_trigger.EventKey" Label="Event">
+                                    @foreach (var e in _catalog.Events)
+                                    {
+                                        <MudSelectItem Value="e.Key">@e.Group: @e.Label</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            break;
+                        case AutomationTriggerKind.Schedule:
+                            <MudItem xs="12" sm="4">
+                                <MudSelect T="ScheduleFrequency" @bind-Value="_trigger.Frequency" Label="Every">
+                                    <MudSelectItem Value="ScheduleFrequency.Daily">Day</MudSelectItem>
+                                    <MudSelectItem Value="ScheduleFrequency.Weekly">Week</MudSelectItem>
+                                    <MudSelectItem Value="ScheduleFrequency.Monthly">Month</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            @if (_trigger.Frequency == ScheduleFrequency.Weekly)
+                            {
+                                <MudItem xs="6" sm="4">
+                                    <MudSelect T="DayOfWeek" @bind-Value="_trigger.DayOfWeek" Label="On">
+                                        @foreach (var day in Enum.GetValues<DayOfWeek>())
+                                        {
+                                            <MudSelectItem Value="day">@day</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                            }
+                            else if (_trigger.Frequency == ScheduleFrequency.Monthly)
+                            {
+                                <MudItem xs="6" sm="4"><MudNumericField T="int" @bind-Value="_trigger.DayOfMonth" Label="On day" Min="1" Max="31" /></MudItem>
+                            }
+                            <MudItem xs="6" sm="4"><MudNumericField T="int" @bind-Value="_trigger.Hour" Label="At hour (0–23)" Min="0" Max="23" /></MudItem>
+                            <MudItem xs="12">@EntityPicker(required: false, label: "For each record of (optional)")</MudItem>
+                            break;
+                        case AutomationTriggerKind.DateField:
+                            <MudItem xs="12" sm="4">@EntityPicker(required: true)</MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudSelect T="string" @bind-Value="_trigger.FieldKey" Label="Date field">
+                                    @foreach (var field in Fields.Where(f => f.FieldType is "date" or "datetime" && !f.IsCustom))
+                                    {
+                                        <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="4" sm="2"><MudNumericField T="int" @bind-Value="_trigger.OffsetDays" Label="Days" Min="0" Max="3650" /></MudItem>
+                            <MudItem xs="8" sm="2">
+                                <MudSelect T="bool" @bind-Value="_trigger.OffsetBefore" Label="Before or after">
+                                    <MudSelectItem Value="true">before</MudSelectItem>
+                                    <MudSelectItem Value="false">after</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="6" sm="4"><MudNumericField T="int" @bind-Value="_trigger.Hour" Label="At hour (0–23)" Min="0" Max="23" /></MudItem>
+                            break;
+                        case AutomationTriggerKind.Threshold:
+                            <MudItem xs="12" sm="7">
+                                <MudSelect T="ThresholdKind" @bind-Value="_trigger.Threshold" Label="Measure">
+                                    @foreach (var kind in Enum.GetValues<ThresholdKind>())
+                                    {
+                                        <MudSelectItem Value="kind">@AutomationUi.Threshold(kind)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            @if (_trigger.Threshold is ThresholdKind.ContractFundingBelow or ThresholdKind.ProjectBudgetOver)
+                            {
+                                <MudItem xs="6" sm="5"><MudNumericField T="decimal" @bind-Value="_trigger.Percent" Label="Percent" Min="0" Max="1000" Adornment="Adornment.End" AdornmentText="%" /></MudItem>
+                            }
+                            else
+                            {
+                                <MudItem xs="6" sm="5"><MudNumericField T="int" @bind-Value="_trigger.Days" Label="@(_trigger.Threshold == ThresholdKind.ApprovalWaiting ? "Business days waiting" : "Days after the period ends")" Min="0" Max="365" /></MudItem>
+                            }
+                            @if (_trigger.Threshold == ThresholdKind.ApprovalWaiting)
+                            {
+                                <MudItem xs="12">
+                                    <MudSelect T="string" @bind-Value="_trigger.EntityType" Label="Documents" Clearable="true" Placeholder="Any document">
+                                        @foreach (var entity in _catalog.EntityTypes.Where(e => e.ApprovalDocumentType is not null))
+                                        {
+                                            <MudSelectItem Value="entity.Key">@entity.Label</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                            }
+                            <MudItem xs="12"><MudText Typo="Typo.caption" Class="mud-text-secondary">Checked every few minutes. It fires once when a record crosses the line and again only after it has come back.</MudText></MudItem>
+                            break;
+                        default:
+                            <MudItem xs="12">@EntityPicker(required: false, label: "On a record of (optional)")</MudItem>
+                            break;
+                    }
+                </MudGrid>
+            </MudPaper>
+            <div class="d-flex justify-center my-1"><MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Class="mud-text-secondary" /></div>
+
+            @* 2. If *@
+            <MudPaper Outlined="true" Class="pa-4" data-testid="conditions-card">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudAvatar Size="Size.Small" Color="Color.Primary">2</MudAvatar>
+                    <MudText Typo="Typo.h6" HtmlTag="h2">If</MudText>
+                    @if (_conditions.Conditions.Count == 0 && _conditions.Groups.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No conditions: it acts every time.</MudText>
+                    }
+                </MudStack>
+                <ConditionGroupEditor Group="_conditions" Fields="Fields" Catalog="_catalog" />
+            </MudPaper>
+            <div class="d-flex justify-center my-1"><MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Class="mud-text-secondary" /></div>
+
+            @* 3. Then *@
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="actions-card">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudAvatar Size="Size.Small" Color="Color.Primary">3</MudAvatar>
+                    <MudText Typo="Typo.h6" HtmlTag="h2">Then</MudText>
+                </MudStack>
+                @foreach (var (action, index) in _actions.Select((a, i) => (a, i)))
+                {
+                    <ActionEditor Action="action" Index="index" IsLast="index == _actions.Count - 1" Catalog="_catalog" Entity="Entity" Fields="Fields" SelfId="@Id?.ToString()"
+                                  OnRemove="() => _actions.RemoveAt(index)" OnMove="by => Move(index, by)" />
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="() => _actions.Add(new ActionModel())" data-testid="add-action">Add action</MudButton>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4 mb-3">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Acts as</MudText>
+                <MudRadioGroup T="AutomationRunAs" @bind-Value="_runAs">
+                    <MudRadio T="AutomationRunAs" Value="AutomationRunAs.Actor" Color="Color.Primary">The person whose change fired it (schedules and thresholds: whoever publishes it)</MudRadio>
+                    <MudRadio T="AutomationRunAs" Value="AutomationRunAs.ServicePrincipal" Color="Color.Primary">A service user</MudRadio>
+                </MudRadioGroup>
+                @if (_runAs == AutomationRunAs.ServicePrincipal)
+                {
+                    <MudTextField @bind-Value="_principal" Label="Service user's email" InputType="InputType.Email" HelperText="An active user. The automation has exactly their roles; you can't pick someone with roles you don't have." />
+                }
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Each action is checked against this user's access. An action they couldn't do is refused and logged.</MudText>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudTextField @bind-Value="_note" Label="What changed (kept with the version)" />
+                <MudStack Row="true" Spacing="2" Class="mt-3" Wrap="Wrap.Wrap">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync" data-testid="automation-save">@(Id is null ? "Create" : "Publish new version")</MudButton>
+                    @if (Id is not null)
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="_busy" OnClick="DeleteAsync">Delete</MudButton>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="dry-run">
+                <MudText Typo="Typo.h6" HtmlTag="h2">Test it</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">A dry run against a record shows what would happen with the definition on this page. Nothing changes.</MudText>
+                @if (Entity is not null)
+                {
+                    <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Label="@($"Find a record ({Entity.Label.ToLowerInvariant()})")" Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" DebounceInterval="300" />
+                    <MudSelect T="string" @bind-Value="_recordId" Label="Record" data-testid="dry-run-record">
+                        @foreach (var record in _records)
+                        {
+                            <MudSelectItem Value="record.Id">@record.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Science" Disabled="_busy || (Entity is not null && _recordId is null)" OnClick="DryRunAsync" data-testid="dry-run-button">Dry run</MudButton>
+                    @if (Id is not null && _saved?.Definition.Trigger.Kind == AutomationTriggerKind.Manual)
+                    {
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PlayArrow" Disabled="_busy || (Entity is not null && _recordId is null)" OnClick="RunNowAsync">Run now</MudButton>
+                    }
+                </MudStack>
+                @if (_result is { } r)
+                {
+                    <MudDivider Class="my-3" />
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="AutomationUi.StatusColor(r.Status)">@AutomationUi.Status(r.Status)</MudChip>
+                    @if (r.Error is { } note)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@note</MudText>
+                    }
+                    @foreach (var c in r.Conditions)
+                    {
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Start" Class="mt-1">
+                            <MudIcon Size="Size.Small" Icon="@(c.Matched ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" Color="@(c.Matched ? Color.Success : Color.Default)" />
+                            <MudText Typo="Typo.body2">@c.Description <span class="mud-text-secondary">(@(c.Actual ?? "empty"))</span></MudText>
+                        </MudStack>
+                    }
+                    @if (r.Steps.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">Nothing would happen: the conditions don't match.</MudText>
+                    }
+                    @foreach (var step in r.Steps)
+                    {
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Start" Class="mt-2" data-testid="dry-run-step">
+                            <MudIcon Size="Size.Small" Icon="@AutomationUi.ActionIcon(step.Kind)" Color="AutomationUi.OutcomeColor(step.Outcome)" />
+                            <MudText Typo="Typo.body2">@step.Detail</MudText>
+                        </MudStack>
+                    }
+                }
+            </MudPaper>
+
+            @if (_saved is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Versions</MudText>
+                    @foreach (var v in _saved.Versions)
+                    {
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                            <MudText Typo="Typo.body2"><strong>v@(v.Version)</strong>@(v.IsCurrent ? " (current)" : "") · @AutomationUi.When(v.CreatedAtUtc) · @v.CreatedBy</MudText>
+                            <MudSpacer />
+                            @if (!v.IsCurrent)
+                            {
+                                <MudButton Size="Size.Small" OnClick="() => RestoreAsync(v.Version)">Restore</MudButton>
+                            }
+                        </MudStack>
+                        @if (v.Note is { } note)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-1">@note</MudText>
+                        }
+                    }
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+
+    @if (Id is { } id)
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-2">Run log</MudText>
+        <RunLog @ref="_log" AutomationId="id" />
+    }
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "template")]
+    public string? TemplateKey { get; set; }
+
+    private AutomationCatalogDto? _catalog;
+    private AutomationDto? _saved;
+    private AutomationRunDto? _result;
+    private RunLog? _log;
+    private string _name = "";
+    private string? _description;
+    private bool _enabled = true;
+    private TriggerModel _trigger = new() { EntityType = "expense-report" };
+    private GroupModel _conditions = new();
+    private List<ActionModel> _actions = [new()];
+    private AutomationRunAs _runAs;
+    private string? _principal;
+    private string? _note;
+    private string? _templateKey;
+    private string? _error;
+    private bool _busy;
+    private string? _search;
+    private string? _recordId;
+    private IReadOnlyList<AutomationOptionDto> _records = [];
+    private string? _recordsFor;
+
+    private AutomationEntityTypeDto? Entity => _catalog?.EntityTypes.FirstOrDefault(e => e.Key == _trigger.EffectiveEntityType);
+
+    private IReadOnlyList<EntityFieldDto> Fields => Entity?.Fields ?? [];
+
+    private static bool IsComputed(EntityFieldDto field) => field.FieldType is "money" or "number" && field.Label.Contains('(') ;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _catalog ??= await Automations.GetCatalogAsync();
+            if (Id is { } id)
+            {
+                Load(await Automations.GetAsync(id));
+            }
+            else if (TemplateKey is { } key && Automations.ListTemplates().FirstOrDefault(t => t.Key == key) is { } template)
+            {
+                LoadRequest(template.Request);
+                _templateKey = template.Key;
+            }
+
+            await LoadRecordsAsync();
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Load(AutomationDto automation)
+    {
+        _saved = automation;
+        LoadRequest(new SaveAutomationRequest(automation.Name, automation.Definition, automation.Description, automation.IsEnabled));
+    }
+
+    private void LoadRequest(SaveAutomationRequest request)
+    {
+        _name = request.Name;
+        _description = request.Description;
+        _enabled = request.IsEnabled;
+        _trigger = TriggerModel.From(request.Definition.Trigger);
+        _conditions = GroupModel.From(request.Definition.Conditions);
+        _actions = request.Definition.Actions.Select(ActionModel.From).ToList();
+        _runAs = request.Definition.RunAs;
+        _principal = request.Definition.ServicePrincipalEmail;
+    }
+
+    private RenderFragment EntityPicker(bool required, string label = "Record type") => __builder =>
+    {
+        <MudSelect T="string" Value="_trigger.EntityType" ValueChanged="SetEntityAsync" Label="@label" Clearable="!required" Required="required" data-testid="trigger-entity">
+            @foreach (var entity in _catalog!.EntityTypes)
+            {
+                <MudSelectItem Value="entity.Key">@entity.Label</MudSelectItem>
+            }
+        </MudSelect>
+    };
+
+    private async Task SetEntityAsync(string? entityType)
+    {
+        _trigger.EntityType = entityType;
+        _trigger.FieldKey = null;
+        await LoadRecordsAsync();
+    }
+
+    private async Task SetTriggerKind(AutomationTriggerKind kind)
+    {
+        _trigger.Kind = kind;
+        await LoadRecordsAsync();
+    }
+
+    private async Task SearchAsync(string? search)
+    {
+        _search = search;
+        _recordsFor = null;
+        await LoadRecordsAsync();
+    }
+
+    private async Task LoadRecordsAsync()
+    {
+        var entity = Entity?.Key;
+        if (entity is null || _recordsFor == $"{entity}|{_search}")
+        {
+            return;
+        }
+
+        _recordsFor = $"{entity}|{_search}";
+        _records = await Automations.ListRecordsAsync(entity, _search);
+        if (_recordId is not null && _records.All(r => r.Id != _recordId))
+        {
+            _recordId = null;
+        }
+    }
+
+    private void Move(int index, int by)
+    {
+        var action = _actions[index];
+        _actions.RemoveAt(index);
+        _actions.Insert(index + by, action);
+    }
+
+    private AutomationDefinition Definition() =>
+        new(_trigger.ToTrigger(), _conditions.ToGroup(), _actions.Select(a => a.ToAction()).ToList(), _runAs, _runAs == AutomationRunAs.ServicePrincipal ? _principal : null);
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = new SaveAutomationRequest(_name, Definition(), _description, _enabled, _note, _templateKey);
+            if (Id is { } id)
+            {
+                Load(await Automations.UpdateAsync(id, request));
+                _note = null;
+                Snackbar.Add($"Published version {_saved!.Version}", Severity.Success);
+                if (_log is not null)
+                {
+                    await _log.LoadAsync();
+                }
+            }
+            else
+            {
+                var created = await Automations.CreateAsync(request);
+                Snackbar.Add($"Created {created.Name}", Severity.Success);
+                Navigation.NavigateTo($"admin/automation/{created.Id}");
+            }
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DryRunAsync()
+    {
+        _busy = true;
+        try
+        {
+            _result = await Automations.DryRunAsync(new AutomationDryRunRequest(Id, Definition(), Guid.TryParse(_recordId, out var record) ? record : null, Entity?.Key, _name));
+            if (_log is not null)
+            {
+                await _log.LoadAsync();
+            }
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RunNowAsync()
+    {
+        _busy = true;
+        try
+        {
+            _result = await Automations.RunNowAsync(Id!.Value, new AutomationRunNowRequest(Guid.TryParse(_recordId, out var record) ? record : null));
+            Snackbar.Add($"Ran it: {AutomationUi.Status(_result.Status)}", _result.Status == AutomationRunStatus.Succeeded ? Severity.Success : Severity.Warning);
+            if (_log is not null)
+            {
+                await _log.LoadAsync();
+            }
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RestoreAsync(int version)
+    {
+        try
+        {
+            Load(await Automations.RestoreVersionAsync(Id!.Value, version));
+            Snackbar.Add($"Restored version {version} as version {_saved!.Version}", Severity.Success);
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Delete automation", $"Delete \"{_name}\"? It stops running; its versions and run log are kept.", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Automations.DeleteAsync(Id!.Value);
+            Navigation.NavigateTo("admin/automation");
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
