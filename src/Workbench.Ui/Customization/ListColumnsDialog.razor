@@ -1,0 +1,78 @@
+@* Choose and order a list's columns. Drag to reorder, or use the arrows (keyboard). *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Tick the columns to show. Drag them, or use the arrows, to change their order.</MudText>
+        <MudDropContainer T="ColumnChoice" Items="_choices" ItemsSelector="@((_, _) => true)" ItemDropped="Dropped" Class="d-flex flex-column">
+            <ChildContent>
+                <MudDropZone T="ColumnChoice" Identifier="columns" AllowReorder="true" Class="d-flex flex-column gap-1" />
+            </ChildContent>
+            <ItemRenderer>
+                <MudPaper Outlined="true" Class="d-flex align-center px-2 py-1" data-column-choice="@context.Key">
+                    <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Size="Size.Small" Class="mud-text-secondary mr-1" aria-hidden="true" />
+                    <MudCheckBox T="bool" Value="context.Shown" ValueChanged="v => context.Shown = v" Label="@context.Title" Dense="true" />
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="@($"Move {context.Title} up")"
+                                   Disabled="@(_choices.IndexOf(context) == 0)" OnClick="() => Move(context, -1)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" aria-label="@($"Move {context.Title} down")"
+                                   Disabled="@(_choices.IndexOf(context) == _choices.Count - 1)" OnClick="() => Move(context, 1)" />
+                </MudPaper>
+            </ItemRenderer>
+        </MudDropContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Standard">Standard columns</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!_choices.Any(c => c.Shown))" OnClick="Apply" data-testid="columns-apply">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Every column offered: (key, title, standard).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Key, string Title, bool Standard)> Columns { get; set; } = [];
+
+    /// <summary>The keys shown now, in order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> Shown { get; set; } = [];
+
+    private List<ColumnChoice> _choices = [];
+
+    public sealed class ColumnChoice(string key, string title, bool shown)
+    {
+        public string Key { get; } = key;
+        public string Title { get; } = title;
+        public bool Shown { get; set; } = shown;
+    }
+
+    protected override void OnInitialized() => Load(Shown);
+
+    private void Load(IReadOnlyList<string> shown)
+    {
+        var byKey = Columns.ToDictionary(c => c.Key);
+        _choices = shown.Where(byKey.ContainsKey).Select(k => new ColumnChoice(k, byKey[k].Title, true))
+            .Concat(Columns.Where(c => !shown.Contains(c.Key)).Select(c => new ColumnChoice(c.Key, c.Title, false)))
+            .ToList();
+    }
+
+    private void Standard() => Load(Columns.Where(c => c.Standard).Select(c => c.Key).ToList());
+
+    private void Move(ColumnChoice choice, int by)
+    {
+        var index = _choices.IndexOf(choice);
+        var target = Math.Clamp(index + by, 0, _choices.Count - 1);
+        _choices.RemoveAt(index);
+        _choices.Insert(target, choice);
+    }
+
+    private void Dropped(MudItemDropInfo<ColumnChoice> drop)
+    {
+        if (drop.Item is { } item)
+        {
+            _choices.Remove(item);
+            _choices.Insert(Math.Clamp(drop.IndexInZone, 0, _choices.Count), item);
+        }
+    }
+
+    private void Apply() => MudDialog.Close(DialogResult.Ok(_choices.Where(c => c.Shown).Select(c => c.Key).ToList()));
+}

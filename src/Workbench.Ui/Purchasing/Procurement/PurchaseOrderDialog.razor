@@ -1,31 +1,31 @@
 @* A new PO (entered directly by Finance) or a change order on an issued one: header fields and the full line list. *@
 <MudDialog>
     <DialogContent>
-        <MudGrid Spacing="2" Class="mb-2">
-            @if (Order is null)
-            {
-                <MudItem xs="12" md="6">
-                    <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Vendor" Required="true" Dense="true" data-testid="po-vendor">
-                        @foreach (var v in Options.Vendors)
-                        {
-                            <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="6" md="3">
-                    <MudDatePicker @bind-Date="_orderDate" Label="Order date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
-                </MudItem>
-                <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_shipTo" Label="Ship to" Margin="Margin.Dense" /></MudItem>
-                <MudItem xs="12" md="6"><MudTextField T="string" @bind-Value="_receivers" Label="Receivers (emails, comma separated)" Margin="Margin.Dense" /></MudItem>
-            }
-            else
-            {
-                <MudItem xs="12" md="8">
-                    <MudTextField T="string" @bind-Value="_reason" Label="Reason for the change order" Required="true" Margin="Margin.Dense" data-testid="co-reason" />
-                </MudItem>
-            }
-            <MudItem xs="12" md="4"><MudTextField T="string" @bind-Value="_terms" Label="Terms" Margin="Margin.Dense" /></MudItem>
-        </MudGrid>
+        <ConfigurableForm EntityType="@CustomizableEntities.PurchaseOrder" RecordId="Order?.Order.Id" Class="mb-2" @ref="_layout">
+            <FormField Key="vendorId" Md="6" When="Order is null">
+                <MudSelect T="Guid?" @bind-Value="_vendorId" Label="Vendor" Required="true" Dense="true" data-testid="po-vendor">
+                    @foreach (var v in Options.Vendors)
+                    {
+                        <MudSelectItem T="Guid?" Value="v.VendorId">@v.Code · @v.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </FormField>
+            <FormField Key="orderDate" Xs="6" Md="3" When="Order is null">
+                <MudDatePicker @bind-Date="_orderDate" Label="Order date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+            </FormField>
+            <FormField Key="shipTo" Md="6" When="Order is null" Context="field">
+                <MudTextField T="string" @bind-Value="_shipTo" Label="Ship to" Margin="Margin.Dense" Required="field.Required" />
+            </FormField>
+            <FormField Key="receivers" Md="6" When="Order is null" Context="field">
+                <MudTextField T="string" @bind-Value="_receivers" Label="Receivers (emails, comma separated)" Margin="Margin.Dense" Required="field.Required" />
+            </FormField>
+            <FormField Key="changeReason" Md="8" When="Order is not null">
+                <MudTextField T="string" @bind-Value="_reason" Label="Reason for the change order" Required="true" Margin="Margin.Dense" data-testid="co-reason" />
+            </FormField>
+            <FormField Key="terms" Md="4" Context="field">
+                <MudTextField T="string" @bind-Value="_terms" Label="Terms" Margin="Margin.Dense" Required="field.Required" />
+            </FormField>
+        </ConfigurableForm>
         @foreach (var line in _lines)
         {
             <MudPaper Outlined="true" Class="pa-2 mb-2">
@@ -97,6 +97,11 @@
     /// <summary>The order being changed; null for a new order.</summary>
     [Parameter] public PurchaseOrderDto? Order { get; set; }
 
+    /// <summary>Filled with the custom field values on Save (the page saves them once the order exists).</summary>
+    [Parameter] public CustomFieldValues? CustomValues { get; set; }
+
+    private ConfigurableForm? _layout;
+
     private sealed class LineModel
     {
         public Guid? LineId { get; set; }
@@ -152,6 +157,7 @@
             ? new SavePurchaseOrderRequest(_vendorId!.Value, DateOnly.FromDateTime(_orderDate!.Value), lines, _terms, _shipTo, null,
                 (_receivers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             : new ChangeOrderRequest(_reason!, lines, _terms);
+        CustomValues?.CopyFrom(_layout);
         MudDialog.Close(DialogResult.Ok(result));
     }
 }

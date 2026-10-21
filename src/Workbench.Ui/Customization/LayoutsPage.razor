@@ -1,0 +1,61 @@
+@page "/admin/customization/layouts"
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+<PageTitle>Layouts · Customization · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Layouts</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Arrange record forms and role home pages. A layout can be for everyone, a role, a company or a role in one company; the most
+    specific one applies and the page as built is the fallback. Fields the system needs can't be hidden, and the server checks every
+    field you make required.
+</MudText>
+
+@if (_caller is null && _loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_caller is not { CanManageLayouts: true })
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" data-testid="layouts-forbidden">Only administrators can change layouts.</MudAlert>
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Forms" Icon="@Icons.Material.Filled.ViewQuilt" data-testid="tab-forms">
+            <FormLayoutEditor Roles="_roles" />
+        </MudTabPanel>
+        <MudTabPanel Text="Home pages" Icon="@Icons.Material.Filled.Dashboard" data-testid="tab-home-pages">
+            <HomeLayoutEditor Roles="_roles" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    private CustomizationCaller? _caller;
+    private IReadOnlyList<CustomizationRole> _roles = [];
+    private bool _loading = true;
+    private int _tab;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tab = Tab == "home" ? 1 : 0;
+        if (Services.GetService<ICustomizationAccess>() is { } access)
+        {
+            try
+            {
+                _caller = await access.GetCallerAsync();
+                _roles = await access.ListRolesAsync();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _caller = null;
+            }
+        }
+
+        _loading = false;
+    }
+}

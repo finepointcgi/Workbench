@@ -43,46 +43,50 @@ else
     <MudTabs Elevation="0" Outlined="true" Rounded="true" @bind-ActivePanelIndex="_tab" TabPanelsClass="pa-4" Class="mt-2">
         <MudTabPanel Text="Details">
             <MudForm @ref="_form">
-                <MudGrid Spacing="2">
-                    <MudItem xs="12" sm="4">
+                <ConfigurableForm EntityType="@CustomizableEntities.Project" RecordId="_project?.Id" @ref="_layout">
+                    <FormField Key="code" Sm="4">
                         <MudTextField @bind-Value="_code" Label="Code" Required="true" RequiredError="Code is required." Immediate="true"
                                       HelperText="Top-level WBS codes start with this." data-testid="project-code" />
-                    </MudItem>
-                    <MudItem xs="12" sm="8">
+                    </FormField>
+                    <FormField Key="name" Sm="8">
                         <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" data-testid="project-name" />
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)">
+                    </FormField>
+                    <FormField Key="contractId" Sm="6" Context="field">
+                        <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)"
+                                   Required="field.Required" RequiredError="Contract is required.">
                             @foreach (var c in _contracts)
                             {
                                 <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
                             }
                         </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true" Disabled="!_isFinance">
+                    </FormField>
+                    <FormField Key="projectManagerId" Sm="6" Context="field">
+                        <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true" Disabled="!_isFinance"
+                                   Required="field.Required" RequiredError="Project manager is required.">
                             @foreach (var e in _employees)
                             {
                                 <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
                             }
                         </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
+                    </FormField>
+                    <FormField Key="status" Sm="4">
                         <MudSelect T="ProjectState" @bind-Value="_status" Label="Status" Disabled="@(!_isFinance && _contractId is not null && (_project is null || _project.Status == ProjectState.Planning))">
                             @foreach (var state in Enum.GetValues<ProjectState>())
                             {
                                 <MudSelectItem T="ProjectState" Value="state">@SetupFormat.Label(state)</MudSelectItem>
                             }
                         </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        <MudDatePicker @bind-Date="_start" Label="Start" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true" />
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
+                    </FormField>
+                    <FormField Key="start" Sm="4" Context="field">
+                        <MudDatePicker @bind-Date="_start" Label="Start" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                                       Required="field.Required" RequiredError="Start is required." />
+                    </FormField>
+                    <FormField Key="finish" Sm="4" Context="field">
                         <MudDatePicker @bind-Date="_finish" Label="Finish" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                                       Required="field.Required" RequiredError="Finish is required."
                                        Validation="@(new Func<DateTime?, string?>(f => f is { } x && _start is { } s && x < s ? "Finish can't be before start." : null))" />
-                    </MudItem>
-                </MudGrid>
+                    </FormField>
+                </ConfigurableForm>
             </MudForm>
             <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="project-save">
@@ -121,6 +125,7 @@ else
     private IReadOnlyList<ContractDto> _contracts = [];
     private IReadOnlyList<EmployeeDto> _employees = [];
     private MudForm _form = default!;
+    private ConfigurableForm? _layout;
     private bool _loading = true;
     private bool _saving;
     private int _tab;
@@ -181,6 +186,7 @@ else
                 }
 
                 var created = await Projects.CreateProjectAsync(request);
+                await (_layout?.SaveCustomFieldsAsync(created.Id) ?? Task.CompletedTask);
                 Snackbar.Add(created.Status == ProjectState.Planning && !_isFinance && created.ContractId is not null
                     ? $"Requested {created.Code}. Finance will activate it; build its WBS meanwhile."
                     : $"Created {created.Code}. Build its WBS next.", Severity.Success);
@@ -190,6 +196,7 @@ else
             else
             {
                 _project = await Projects.UpdateProjectAsync(_project.Id, request);
+                await (_layout?.SaveCustomFieldsAsync(_project.Id) ?? Task.CompletedTask);
                 Snackbar.Add("Project saved.", Severity.Success);
             }
         }

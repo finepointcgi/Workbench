@@ -28,7 +28,58 @@ public enum WidgetType
 
     /// <summary>CPI, SPI, EAC and the S-curve for the project whose plan sheet is <c>Config.SheetId</c> (Finance, Admin and its PM).</summary>
     EarnedValue,
+
+    // Home page widgets (role home pages; they work on any dashboard). Each shows the viewer's own data.
+
+    /// <summary>The viewer's to-do list (overdue, today, this week, coming up).</summary>
+    MyTodo,
+
+    /// <summary>The viewer's week: hours entered, timesheet status, leave balances, allocations.</summary>
+    ThisWeek,
+
+    /// <summary>The oldest approvals waiting on the viewer.</summary>
+    WaitingOnYou,
+
+    /// <summary>Sheet items assigned to the viewer.</summary>
+    MySheetItems,
+
+    /// <summary>One figure (<c>Config.Kpi</c>), computed with the viewer's permissions.</summary>
+    Kpi,
+
+    /// <summary>A saved report-writer report (<c>Config.SavedReportId</c>) charted: first text column by first numeric column.</summary>
+    ReportChart,
+
+    /// <summary>A saved list view (<c>Config.ListViewId</c>) charted: rows counted by its group-by column.</summary>
+    ListViewChart,
+
+    /// <summary>Links (<c>Config.Shortcuts</c>).</summary>
+    Shortcuts,
+
+    /// <summary>A message from the administrators (<c>Config.Markdown</c>), shown as a notice.</summary>
+    Announcement,
 }
+
+/// <summary>The figures a KPI tile can show. Each comes from the permission-checked services, so a viewer sees only what their pages show.</summary>
+public enum KpiKind
+{
+    /// <summary>Funded value not yet billed on active contracts the viewer can see.</summary>
+    FundingRemaining,
+
+    /// <summary>Direct utilization so far this month (the viewer's own, or everyone's for those who see utilization).</summary>
+    Utilization,
+
+    /// <summary>Open receivables and the share more than 90 days past due.</summary>
+    ArAging,
+
+    /// <summary>Open purchase orders and their value.</summary>
+    OpenPurchaseOrders,
+
+    /// <summary>Weighted open pipeline (Pwin × Pgo).</summary>
+    Pipeline,
+}
+
+/// <summary>A home page shortcut. <see cref="Href"/> is app-relative (<c>time</c>, <c>purchasing/bills/new</c>).</summary>
+public sealed record WidgetShortcut(string Label, string Href, string? Icon = null);
 
 public enum WidgetHeight
 {
@@ -62,6 +113,11 @@ public enum ChartKind
 /// <param name="MaxItems">Item list: how many rows to show.</param>
 /// <param name="Markdown">Rich text: the Markdown source.</param>
 /// <param name="ContractId">Contracts and funding: the contract to show.</param>
+/// <param name="Kpi">KPI tile: the figure to show.</param>
+/// <param name="SavedReportId">Report chart: the saved report-writer report.</param>
+/// <param name="ListViewId">List view chart: the saved list view.</param>
+/// <param name="Shortcuts">Shortcuts: the links, in order.</param>
+/// <param name="Pinned">Home pages: people can't hide the widget from their own home page.</param>
 public sealed record WidgetConfig(
     Guid? SheetId = null,
     MetricAggregate Aggregate = MetricAggregate.Count,
@@ -72,7 +128,12 @@ public sealed record WidgetConfig(
     Guid? GroupColumnId = null,
     int MaxItems = 10,
     string? Markdown = null,
-    Guid? ContractId = null);
+    Guid? ContractId = null,
+    KpiKind? Kpi = null,
+    Guid? SavedReportId = null,
+    Guid? ListViewId = null,
+    IReadOnlyList<WidgetShortcut>? Shortcuts = null,
+    bool Pinned = false);
 
 public sealed record WidgetDto(
     Guid Id,

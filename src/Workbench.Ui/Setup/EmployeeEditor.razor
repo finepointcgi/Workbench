@@ -1,60 +1,61 @@
 @* Create or edit an employee. Validates on the client, then calls Save; a service error shows inline. *@
 <MudForm @ref="_form" @bind-IsValid="_valid">
-    <MudGrid Spacing="2">
-        <MudItem xs="12" sm="4">
+    <ConfigurableForm EntityType="@CustomizableEntities.Employee" RecordId="Employee?.Id" @ref="_layout">
+        <FormField Key="employeeNumber" Sm="4">
             <MudTextField @bind-Value="_number" Label="Employee number" Required="true" RequiredError="Employee number is required."
                           Immediate="true" data-testid="employee-number" />
-        </MudItem>
-        <MudItem xs="12" sm="8">
+        </FormField>
+        <FormField Key="displayName" Sm="8">
             <MudTextField @bind-Value="_name" Label="Name" autocomplete="off" Required="true" RequiredError="Name is required." Immediate="true"
                           data-testid="employee-name" />
-        </MudItem>
-        <MudItem xs="12">
+        </FormField>
+        <FormField Key="email">
             <MudTextField @bind-Value="_email" Label="Email" autocomplete="off" Required="true" RequiredError="Email is required." Immediate="true"
                           Validation="@(new Func<string?, string?>(ValidateEmail))" InputType="InputType.Email"
                           HelperText="Matches the person's sign-in account." data-testid="employee-email" />
-        </MudItem>
-        <MudItem xs="12" sm="6">
-            <MudSelect T="Guid?" @bind-Value="_orgUnitId" Label="Org unit" Clearable="true">
+        </FormField>
+        <FormField Key="orgUnitId" Sm="6" Context="field">
+            <MudSelect T="Guid?" @bind-Value="_orgUnitId" Label="Org unit" Clearable="true" Required="field.Required" RequiredError="Org unit is required.">
                 @foreach (var (unit, depth) in SetupFormat.Flatten(OrgUnits, o => o.Id, o => o.ParentId, o => o.Code))
                 {
                     <MudSelectItem T="Guid?" Value="unit.Id">@(new string(' ', depth * 2))@unit.Code · @unit.Name</MudSelectItem>
                 }
             </MudSelect>
-        </MudItem>
-        <MudItem xs="12" sm="6">
-            <MudSelect T="Guid?" @bind-Value="_supervisorId" Label="Supervisor" Clearable="true"
+        </FormField>
+        <FormField Key="supervisorId" Sm="6" Context="field">
+            <MudSelect T="Guid?" @bind-Value="_supervisorId" Label="Supervisor" Clearable="true" Required="field.Required" RequiredError="Supervisor is required."
                        HelperText="Approves timesheets and expenses." data-testid="employee-supervisor">
                 @foreach (var e in Employees.Where(e => e.Id != Employee?.Id))
                 {
                     <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName (@e.EmployeeNumber)</MudSelectItem>
                 }
             </MudSelect>
-        </MudItem>
-        <MudItem xs="12" sm="6">
-            <MudSelect T="Guid?" @bind-Value="_laborCategoryId" Label="Default labor category" Clearable="true">
+        </FormField>
+        <FormField Key="defaultLaborCategoryId" Sm="6" Context="field">
+            <MudSelect T="Guid?" @bind-Value="_laborCategoryId" Label="Default labor category" Clearable="true" Required="field.Required" RequiredError="Labor category is required.">
                 @foreach (var c in LaborCategories.Where(c => c.IsActive || c.Id == _laborCategoryId))
                 {
                     <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
                 }
             </MudSelect>
-        </MudItem>
-        <MudItem xs="12" sm="6">
+        </FormField>
+        <FormField Key="standardHoursPerWeek" Sm="6">
             <MudNumericField T="decimal" @bind-Value="_hours" Label="Standard hours per week" Min="0" Max="80"
                              Validation="@(new Func<decimal, string?>(ValidateHours))" Immediate="true" data-testid="employee-hours" />
-        </MudItem>
-        <MudItem xs="12" sm="6">
+        </FormField>
+        <FormField Key="hireDate" Sm="6">
             <MudDatePicker @bind-Date="_hireDate" Label="Hire date" Required="true" RequiredError="Hire date is required."
                            DateFormat="yyyy-MM-dd" Editable="true" data-testid="employee-hire" />
-        </MudItem>
-        <MudItem xs="12" sm="6">
+        </FormField>
+        <FormField Key="terminationDate" Sm="6" Context="field">
             <MudDatePicker @bind-Date="_terminationDate" Label="Termination date" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                           Required="field.Required" RequiredError="Termination date is required."
                            Validation="@(new Func<DateTime?, string?>(ValidateTermination))" data-testid="employee-termination" />
-        </MudItem>
-        <MudItem xs="12">
+        </FormField>
+        <FormField Key="isExempt">
             <MudSwitch @bind-Value="_exempt" Label="Exempt (salaried, FLSA)" Color="Color.Primary" />
-        </MudItem>
-    </MudGrid>
+        </FormField>
+    </ConfigurableForm>
 </MudForm>
 
 @if (_error is not null)
@@ -94,6 +95,7 @@
     public EventCallback OnCancel { get; set; }
 
     private MudForm _form = default!;
+    private ConfigurableForm? _layout;
     private bool _valid;
     private bool _saving;
     private string? _error;
@@ -132,6 +134,9 @@
         _exempt = e?.IsExempt ?? true;
     }
 
+    /// <summary>Saves the custom field values for a just-created employee (the page knows its id).</summary>
+    public Task SaveCustomFieldsAsync(Guid employeeId) => _layout?.SaveCustomFieldsAsync(employeeId) ?? Task.CompletedTask;
+
     internal static string? ValidateEmail(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null
         : System.Text.RegularExpressions.Regex.IsMatch(value.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$") ? null
@@ -158,6 +163,10 @@
             await Save(new SaveEmployeeRequest(
                 _number!.Trim(), _email!.Trim(), _name!.Trim(), _orgUnitId, _supervisorId, _laborCategoryId,
                 SetupFormat.ToDateOnly(_hireDate)!.Value, SetupFormat.ToDateOnly(_terminationDate), _hours, _exempt));
+            if (Employee is { } existing)
+            {
+                await SaveCustomFieldsAsync(existing.Id);
+            }
         }
         catch (Exception ex)
         {

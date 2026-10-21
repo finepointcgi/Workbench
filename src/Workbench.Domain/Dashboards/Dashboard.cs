@@ -21,6 +21,15 @@ public enum WidgetType
     RichText,
     ContractFunding,
     EarnedValue,
+    MyTodo,
+    ThisWeek,
+    WaitingOnYou,
+    MySheetItems,
+    Kpi,
+    ReportChart,
+    ListViewChart,
+    Shortcuts,
+    Announcement,
 }
 
 public enum WidgetHeight

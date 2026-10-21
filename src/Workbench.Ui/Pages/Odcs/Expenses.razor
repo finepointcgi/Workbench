@@ -1,6 +1,7 @@
 @page "/expenses"
 @using Workbench.Contracts.Odcs
 @using Workbench.Ui.Odcs
+@inject IServiceProvider Services
 @inject IExpenseReportService Reports
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -16,28 +17,12 @@
 
 <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3" @bind-ActivePanelIndex="_tab">
     <MudTabPanel Text="Reports">
-        <MudTable T="ExpenseReportDto" Items="_reports" Loading="_loading" Hover="true" Dense="true" OnRowClick="@(e => { if (e.Item is { } r) Open(r); })" Style="cursor:pointer">
-            <HeaderContent>
-                <MudTh>Title</MudTh>
-                <MudTh>Trip</MudTh>
-                <MudTh Style="text-align:right">Lines</MudTh>
-                <MudTh Style="text-align:right">Total</MudTh>
-                <MudTh Style="text-align:right"><Term Key="allowable">Allowable</Term></MudTh>
-                <MudTh>Status</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Title"><MudLink Href="@($"expenses/{context.Id}")">@context.Title</MudLink></MudTd>
-                <MudTd DataLabel="Trip">@TripText(context)</MudTd>
-                <MudTd DataLabel="Lines" Style="text-align:right">@context.LineCount</MudTd>
-                <MudTd DataLabel="Total" Style="text-align:right">@OdcFormat.Money(context.Total)</MudTd>
-                <MudTd DataLabel="Allowable" Style="text-align:right">@OdcFormat.Money(context.AllowableTotal)</MudTd>
-                <MudTd DataLabel="Status"><OdcStatusChip Status="context.Status" /></MudTd>
-            </RowTemplate>
+        <ConfigurableList T="ExpenseReportDto" Definition="_definition" Items="_reports" Loading="_loading" SearchLabel="Search expense reports" RowClick="Open" TestId="expense-reports">
             <NoRecordsContent>
                 <MudText data-testid="expenses-empty">No expense reports yet. Start one for your next trip, or for anything you bought for a project.</MudText>
                 <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">Start an expense report</MudButton>
             </NoRecordsContent>
-        </MudTable>
+        </ConfigurableList>
     </MudTabPanel>
     <MudTabPanel Text="Card charges" data-testid="tab-card-charges">
         <Workbench.Ui.Travel.CardChargesTab />
@@ -68,6 +53,24 @@
         }
     }
 
+    internal static readonly ListDefinition<ExpenseReportDto> _definition = new()
+    {
+        ListKey = CustomizableLists.ExpenseReports,
+        EntityType = CustomizableEntities.ExpenseReport,
+        Title = "Expense reports",
+        Id = r => r.Id,
+        Columns =
+        [
+            new() { Key = "title", Title = "Title", Value = r => r.Title, Groupable = false, Cell = r => @<MudLink Href="@($"expenses/{r.Id}")">@r.Title</MudLink> },
+            new() { Key = "trip", Title = "Trip", Value = r => r.TripStart, Kind = ListColumnKind.Date, Groupable = false, Display = TripText },
+            new() { Key = "purpose", Title = "Purpose", Value = r => r.Purpose, Standard = false, Groupable = false },
+            new() { Key = "lines", Title = "Lines", Value = r => r.LineCount, Kind = ListColumnKind.Number, Groupable = false },
+            new() { Key = "total", Title = "Total", Value = r => r.Total, Kind = ListColumnKind.Money, Groupable = false, Cell = r => @<text>@OdcFormat.Money(r.Total)</text> },
+            new() { Key = "allowable", Title = "Allowable", Value = r => r.AllowableTotal, Kind = ListColumnKind.Money, Groupable = false, Cell = r => @<text>@OdcFormat.Money(r.AllowableTotal)</text> },
+            new() { Key = "status", Title = "Status", Value = r => r.Status, Cell = r => @<OdcStatusChip Status="r.Status" /> },
+        ],
+    };
+
     internal static string TripText(ExpenseReportDto r) => (r.TripStart, r.TripEnd) switch
     {
         ({ } s, { } e) => $"{s:MMM d} – {e:MMM d, yyyy}",
@@ -79,12 +82,15 @@
 
     private async Task CreateAsync()
     {
-        var dialog = await DialogService.ShowAsync<ExpenseReportDialog>("New expense report", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var custom = new CustomFieldValues();
+        var dialog = await DialogService.ShowAsync<ExpenseReportDialog>("New expense report", new DialogParameters<ExpenseReportDialog> { { d => d.CustomValues, custom } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SaveExpenseReportRequest request })
         {
             try
             {
                 var report = await Reports.CreateReportAsync(request);
+                await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.ExpenseReport, report.Id, custom);
                 Open(report);
             }
             catch (Exception ex) when (OdcFormat.IsExpected(ex))

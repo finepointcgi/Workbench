@@ -1,0 +1,448 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Companies
+@inject IFormLayoutService Layouts
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@*
+    The form layout editor: pick a form and who the layout is for, then drag fields between and within sections (or use the
+    arrows and "Move to"), rename section headings, hide optional fields and make fields required. The preview shows what a
+    person with the chosen role sees, with this draft applied.
+*@
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudSelect T="string" Value="_entityType" ValueChanged="EntityChangedAsync" Label="Form" data-testid="layout-form">
+            @foreach (var form in _forms)
+            {
+                <MudSelectItem Value="form.EntityType">@form.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_forms.FirstOrDefault(f => f.EntityType == _entityType) is { } shown)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">On @shown.ShownOn</MudText>
+        }
+    </MudItem>
+    <MudItem xs="6" md="4">
+        <MudSelect T="string" Value="_roleKey" ValueChanged="RoleChangedAsync" Label="For" data-testid="layout-role">
+            @foreach (var role in Roles)
+            {
+                <MudSelectItem Value="role.Key">@role.Name@(HasLayout(null, role.Key) || _saved.Any(l => l.RoleKey == RoleOrNull(role.Key)) ? " ●" : "")</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="6" md="4">
+        <MudSelect T="Guid?" Value="_companyId" ValueChanged="CompanyChangedAsync" Label="Company" Disabled="_companies.Count < 2" data-testid="layout-company">
+            <MudSelectItem T="Guid?" Value="null">Every company</MudSelectItem>
+            @foreach (var company in _companies)
+            {
+                <MudSelectItem T="Guid?" Value="company.Id">@company.Code · @company.LegalName</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
+@if (_loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" Class="my-3" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="my-3">
+        @if (_current is { } saved)
+        {
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Bookmark" data-testid="layout-status" Style="white-space:normal;height:auto;min-height:32px">
+                Saved layout for @ScopeName · changed by @saved.UpdatedBy
+            </MudChip>
+        }
+        else
+        {
+            <MudChip T="string" Variant="Variant.Outlined" data-testid="layout-status" Style="white-space:normal;height:auto;min-height:32px">No layout for @ScopeName yet: starting from what applies now (@_startedFrom)</MudChip>
+        }
+        @if (_dirty)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Unsaved changes</MudText>
+        }
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddSection" data-testid="layout-add-section">Add section</MudButton>
+        @if (_current is not null)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" data-testid="layout-delete">Remove this layout</MudButton>
+        }
+        <MudButton Variant="Variant.Outlined" OnClick="ReloadAsync" Disabled="!_dirty">Discard</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="_saving" data-testid="layout-save">Save layout</MudButton>
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="7">
+            <MudDropContainer T="FieldItem" @ref="_drop" Items="_items" ItemsSelector="@((item, zone) => item.Section == zone)" ItemDropped="Dropped"
+                              Class="d-flex flex-column gap-3" ItemDisabled="@(_ => false)">
+                <ChildContent>
+                    @for (var index = 0; index < _sections.Count; index++)
+                    {
+                        var section = _sections[index];
+                        var position = index;
+                        <MudPaper Outlined="true" Class="pa-3" @key="section.Key" data-layout-section="@section.Key">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                                <MudTextField T="string" Value="section.Title" ValueChanged="v => Rename(section, v)" Label="Section heading" Placeholder="(no heading)"
+                                              Margin="Margin.Dense" Immediate="true" DebounceInterval="300" Style="flex:1" MaxLength="100" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="@($"Move section {Name(section)} up")" Disabled="position == 0"
+                                               OnClick="() => MoveSection(position, -1)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" aria-label="@($"Move section {Name(section)} down")"
+                                               Disabled="position == _sections.Count - 1" OnClick="() => MoveSection(position, 1)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove section {Name(section)}")"
+                                               Disabled="@(_sections.Count == 1 || _items.Any(i => i.Section == section.Key))" OnClick="() => RemoveSection(section)" />
+                            </MudStack>
+                            <MudDropZone T="FieldItem" Identifier="@section.Key" AllowReorder="true" Class="d-flex flex-column gap-1" Style="min-height:40px" />
+                        </MudPaper>
+                    }
+                </ChildContent>
+                <ItemRenderer>
+                    <MudPaper Elevation="0" Outlined="true" Class="d-flex align-center px-2 py-1 gap-1" Style="@(context.Hidden ? "opacity:.6" : null)" data-layout-field="@context.Field.Key">
+                        <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Size="Size.Small" Class="mud-text-secondary" aria-hidden="true" />
+                        <div style="flex:1;min-width:0">
+                            <MudText Typo="Typo.body2">@context.Field.Label</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @context.Field.FieldType@(context.Field.IsCustom ? " · custom field" : "")@(context.Field.IsRequired ? " · needed by the system" : "")@(context.Field.PermissionKey is { } p ? $" · needs {p}" : "")
+                            </MudText>
+                        </div>
+                        <MudSwitch T="bool" Value="context.Hidden" ValueChanged="v => SetHidden(context, v)" Disabled="@(context.Field.IsRequired || context.Required)" Label="Hidden" Color="Color.Primary"
+                                   Size="Size.Small" aria-label="@($"Hide {context.Field.Label}")" />
+                        <MudSwitch T="bool" Value="@(context.Required || context.Field.IsRequired)" ValueChanged="v => SetRequired(context, v)"
+                                   Disabled="@(context.Field.IsRequired || context.Hidden || !CanRequire(context.Field))" Label="Required" Color="Color.Primary" Size="Size.Small"
+                                   aria-label="@($"Make {context.Field.Label} required")" />
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AriaLabel="@($"Move {context.Field.Label}")" Dense="true">
+                            <MudMenuItem OnClick="() => MoveField(context, -1)" Icon="@Icons.Material.Filled.ArrowUpward">Move up</MudMenuItem>
+                            <MudMenuItem OnClick="() => MoveField(context, 1)" Icon="@Icons.Material.Filled.ArrowDownward">Move down</MudMenuItem>
+                            <MudDivider />
+                            @foreach (var target in _sections.Where(s => s.Key != context.Section))
+                            {
+                                <MudMenuItem OnClick="() => MoveToSection(context, target.Key)">Move to "@Name(target)"</MudMenuItem>
+                            }
+                        </MudMenu>
+                    </MudPaper>
+                </ItemRenderer>
+            </MudDropContainer>
+        </MudItem>
+        <MudItem xs="12" lg="5">
+            <MudPaper Outlined="true" Class="pa-3" Style="position:sticky;top:72px">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2" Style="font-weight:600">Preview</MudText>
+                    <MudSpacer />
+                    <MudSelect T="string" Value="_previewRole" ValueChanged="PreviewRoleChangedAsync" Label="As" Dense="true" Style="max-width:220px" data-testid="layout-preview-role">
+                        @foreach (var role in Roles)
+                        {
+                            <MudSelectItem Value="role.Key">@role.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                @if (_preview is { } preview)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2" data-testid="layout-preview-source">
+                        Layout that applies: @preview.Source@(preview.HiddenKeys.Count > 0 ? $" · {preview.HiddenKeys.Count} field{(preview.HiddenKeys.Count == 1 ? "" : "s")} hidden" : "")
+                    </MudText>
+                    <div data-testid="layout-preview" inert>
+                        <ConfigurableForm EntityType="@_entityType" Layout="preview" PlaceholdersForMissing="true" ReadOnly="true" />
+                    </div>
+                }
+                @if (_previewError is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">@_previewError</MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<CustomizationRole> Roles { get; set; } = [];
+
+    private sealed class SectionItem
+    {
+        public required string Key { get; init; }
+        public string Title { get; set; } = "";
+    }
+
+    private sealed class FieldItem
+    {
+        public required EntityFieldDto Field { get; init; }
+        public required string Section { get; set; }
+        public bool Hidden { get; set; }
+        public bool Required { get; set; }
+    }
+
+    private IReadOnlyList<FormEntityTypeDto> _forms = [];
+    private IReadOnlyList<CompanyDto> _companies = [];
+    private IReadOnlyList<FormLayoutDto> _saved = [];
+    private IReadOnlyList<EntityFieldDto> _fields = [];
+    private FormLayoutDto? _current;
+    private string _entityType = CustomizableEntities.Project;
+    private string _roleKey = CustomizationRoles.Everyone;
+    private Guid? _companyId;
+    private string _previewRole = CustomizationRoles.Everyone;
+    private string _startedFrom = "Built-in";
+    private List<SectionItem> _sections = [];
+    private List<FieldItem> _items = [];
+    private EffectiveFormLayout? _preview;
+    private string? _previewError;
+    private MudDropContainer<FieldItem>? _drop;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _dirty;
+
+    private string ScopeName => FormLayoutNames.Describe(RoleOrNull(_roleKey), _companies.FirstOrDefault(c => c.Id == _companyId)?.Code);
+
+    private static string? RoleOrNull(string key) => key == CustomizationRoles.Everyone ? null : key;
+
+    private bool HasLayout(Guid? company, string role) => _saved.Any(l => l.CompanyId == company && l.RoleKey == RoleOrNull(role));
+
+    private static string Name(SectionItem section) => string.IsNullOrWhiteSpace(section.Title) ? "(no heading)" : section.Title;
+
+    private static bool CanRequire(EntityFieldDto field) => field.FieldType is not ("Bool" or "Display");
+
+    protected override async Task OnInitializedAsync()
+    {
+        _forms = await Layouts.ListEntityTypesAsync();
+        if (Services.GetService<ICompanyService>() is { } companies)
+        {
+            try
+            {
+                _companies = (await companies.ListAsync(includeInactive: false)).ToList();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _companies = [];
+            }
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task EntityChangedAsync(string entityType)
+    {
+        _entityType = entityType;
+        await ReloadAsync();
+    }
+
+    private async Task RoleChangedAsync(string roleKey)
+    {
+        _roleKey = roleKey;
+        _previewRole = roleKey;
+        await ReloadAsync();
+    }
+
+    private async Task CompanyChangedAsync(Guid? companyId)
+    {
+        _companyId = companyId;
+        await ReloadAsync();
+    }
+
+    private async Task PreviewRoleChangedAsync(string roleKey)
+    {
+        _previewRole = roleKey;
+        await PreviewAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _fields = await Layouts.ListFieldsAsync(_entityType);
+        _saved = await Layouts.ListAsync(_entityType);
+        _current = _saved.FirstOrDefault(l => l.CompanyId == _companyId && l.RoleKey == RoleOrNull(_roleKey));
+
+        // Without a layout of its own, the scope starts from the layout that applies to it now (the same fallback as the server).
+        IReadOnlyList<FormSectionLayout> start;
+        if (_current is { } saved)
+        {
+            start = saved.Sections;
+        }
+        else if (Fallback() is { } fallback)
+        {
+            start = fallback.Sections;
+            _startedFrom = FormLayoutNames.Describe(fallback.RoleKey, _companies.FirstOrDefault(c => c.Id == fallback.CompanyId)?.Code);
+        }
+        else
+        {
+            start = (await Layouts.GetBuiltInAsync(_entityType)).Sections;
+            _startedFrom = "Built-in";
+        }
+
+        Load(start);
+        _dirty = false;
+        _loading = false;
+        await PreviewAsync();
+    }
+
+    /// <summary>The saved layout this scope falls back to: the role in the company, everyone in it, the role everywhere, everyone.</summary>
+    private FormLayoutDto? Fallback()
+    {
+        var role = RoleOrNull(_roleKey);
+        (Guid? Company, string? Role)[] order = _companyId is null ? [(null, role), (null, null)] : [(_companyId, role), (_companyId, null), (null, role), (null, null)];
+        return order.Where(o => !(o.Company == _companyId && o.Role == role))
+            .Select(o => _saved.FirstOrDefault(l => l.CompanyId == o.Company && l.RoleKey == o.Role))
+            .FirstOrDefault(l => l is not null);
+    }
+
+    private void Load(IReadOnlyList<FormSectionLayout> sections)
+    {
+        var byKey = _fields.ToDictionary(f => f.Key);
+        _sections = sections.Select(s => new SectionItem { Key = s.Key, Title = s.Title }).ToList();
+        if (_sections.Count == 0)
+        {
+            _sections.Add(new SectionItem { Key = "details" });
+        }
+
+        _items = sections.SelectMany(s => s.Fields.Where(f => byKey.ContainsKey(f.Key))
+                .Select(f => new FieldItem { Field = byKey[f.Key], Section = s.Key, Hidden = f.Hidden, Required = f.Required }))
+            .ToList();
+        foreach (var missing in _fields.Where(f => _items.All(i => i.Field.Key != f.Key)))
+        {
+            _items.Add(new FieldItem { Field = missing, Section = _sections[^1].Key });
+        }
+
+        _drop?.Refresh();
+    }
+
+    private SaveFormLayoutRequest Draft() =>
+        new(_entityType, _companyId, RoleOrNull(_roleKey),
+            _sections.Select(s => new FormSectionLayout(s.Key, s.Title ?? "",
+                _items.Where(i => i.Section == s.Key).Select(i => new FormFieldPlacement(i.Field.Key, i.Hidden, i.Required && !i.Field.IsRequired)).ToList())).ToList());
+
+    private async Task ChangedAsync()
+    {
+        _dirty = true;
+        _drop?.Refresh();
+        await PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        try
+        {
+            _preview = await Layouts.PreviewAsync(new PreviewFormLayoutRequest(_entityType, _companyId, _previewRole, Draft()));
+            _previewError = null;
+        }
+        catch (ArgumentException ex)
+        {
+            _previewError = ex.Message;
+        }
+    }
+
+    private async Task Rename(SectionItem section, string? title)
+    {
+        section.Title = title ?? "";
+        await ChangedAsync();
+    }
+
+    private async Task MoveSection(int index, int by)
+    {
+        var section = _sections[index];
+        _sections.RemoveAt(index);
+        _sections.Insert(Math.Clamp(index + by, 0, _sections.Count), section);
+        await ChangedAsync();
+    }
+
+    private async Task AddSection()
+    {
+        var n = 1;
+        while (_sections.Any(s => s.Key == $"section{n}"))
+        {
+            n++;
+        }
+
+        _sections.Add(new SectionItem { Key = $"section{n}", Title = "New section" });
+        await ChangedAsync();
+    }
+
+    private async Task RemoveSection(SectionItem section)
+    {
+        _sections.Remove(section);
+        await ChangedAsync();
+    }
+
+    private async Task SetHidden(FieldItem item, bool hidden)
+    {
+        item.Hidden = hidden && !item.Field.IsRequired;
+        await ChangedAsync();
+    }
+
+    private async Task SetRequired(FieldItem item, bool required)
+    {
+        item.Required = required;
+        await ChangedAsync();
+    }
+
+    private async Task MoveField(FieldItem item, int by)
+    {
+        var inSection = _items.Where(i => i.Section == item.Section).ToList();
+        var index = inSection.IndexOf(item);
+        var target = index + by;
+        if (target < 0 || target >= inSection.Count)
+        {
+            return;
+        }
+
+        var other = inSection[target];
+        var a = _items.IndexOf(item);
+        var b = _items.IndexOf(other);
+        (_items[a], _items[b]) = (_items[b], _items[a]);
+        await ChangedAsync();
+    }
+
+    private async Task MoveToSection(FieldItem item, string section)
+    {
+        _items.Remove(item);
+        item.Section = section;
+        _items.Add(item);
+        await ChangedAsync();
+    }
+
+    private async Task Dropped(MudItemDropInfo<FieldItem> drop)
+    {
+        if (drop.Item is not { } item)
+        {
+            return;
+        }
+
+        _items.Remove(item);
+        item.Section = drop.DropzoneIdentifier;
+        var zone = _items.Where(i => i.Section == item.Section).ToList();
+        var at = drop.IndexInZone < zone.Count ? _items.IndexOf(zone[drop.IndexInZone]) : (zone.Count == 0 ? _items.Count : _items.IndexOf(zone[^1]) + 1);
+        _items.Insert(Math.Clamp(at, 0, _items.Count), item);
+        await ChangedAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            _current = await Layouts.SaveAsync(Draft());
+            _saved = await Layouts.ListAsync(_entityType);
+            _dirty = false;
+            Snackbar.Add($"Saved the {_forms.FirstOrDefault(f => f.EntityType == _entityType)?.Name.ToLowerInvariant()} layout for {ScopeName}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_current?.Id is not { } id
+            || await DialogService.ShowMessageBoxAsync("Remove layout", $"Remove the layout for {ScopeName}? Its people get the next layout that applies.", yesText: "Remove", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await Layouts.DeleteAsync(id);
+        Snackbar.Add("Layout removed.", Severity.Success);
+        await ReloadAsync();
+    }
+}

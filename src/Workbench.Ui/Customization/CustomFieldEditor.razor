@@ -1,0 +1,74 @@
+@using System.Globalization
+@* An input for a field the page doesn't render itself (custom fields, and placeholders in the layout preview). *@
+
+@switch (Field.FieldType)
+{
+    case "Number":
+    case "Money":
+        <MudNumericField T="decimal?" Value="Number" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Required="Field.Required"
+                         ReadOnly="ReadOnly" Adornment="MoneyAdornment" AdornmentText="$" />
+        break;
+    case "Date":
+        <MudDatePicker Date="DateValue" DateChanged="DateChangedAsync"
+                       Label="@Field.Label" Required="Field.Required" ReadOnly="ReadOnly" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" />
+        break;
+    case "Bool":
+        <MudSwitch T="bool" Value="Flag" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Color="Color.Primary" ReadOnly="ReadOnly" />
+        break;
+    case "Select" when Field.Options is { Count: > 0 } options:
+        <MudSelect T="string" Value="Text" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Required="Field.Required" ReadOnly="ReadOnly" Clearable="true">
+            @foreach (var option in options)
+            {
+                <MudSelectItem Value="option">@option</MudSelectItem>
+            }
+        </MudSelect>
+        break;
+    case "MultiSelect" when Field.Options is { Count: > 0 } options:
+        <MudSelect T="string" MultiSelection="true" SelectedValues="Many" SelectedValuesChanged="v => ChangedAsync(v.ToList())" Label="@Field.Label"
+                   Required="Field.Required" ReadOnly="ReadOnly">
+            @foreach (var option in options)
+            {
+                <MudSelectItem Value="option">@option</MudSelectItem>
+            }
+        </MudSelect>
+        break;
+    default:
+        <MudTextField T="string" Value="Text" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Required="Field.Required" ReadOnly="ReadOnly"
+                      Lines="@(Field.FieldType == "LongText" ? 2 : 1)" autocomplete="off" />
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public EffectiveFormField Field { get; set; } = default!;
+
+    [Parameter]
+    public object? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<object?> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    private string? Text => Value switch { null => null, System.Text.Json.JsonElement e => e.ToString(), _ => Convert.ToString(Value, CultureInfo.InvariantCulture) };
+
+    private decimal? Number => decimal.TryParse(Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private bool Flag => bool.TryParse(Text, out var b) && b;
+
+    private DateTime? DateValue => DateOnly.TryParse(Text, CultureInfo.InvariantCulture, out var d) ? d.ToDateTime(TimeOnly.MinValue) : null;
+
+    private IReadOnlyCollection<string> Many => Value is IEnumerable<string> list ? list.ToList() : (Text?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) ?? []);
+
+    private Adornment MoneyAdornment => Field.FieldType == "Money" ? Adornment.Start : Adornment.None;
+
+    private Task DateChangedAsync(DateTime? date) =>
+        ChangedAsync(date is { } d ? DateOnly.FromDateTime(d).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null);
+
+    private Task ChangedAsync(object? value)
+    {
+        Value = value;
+        return ValueChanged.InvokeAsync(value);
+    }
+}
