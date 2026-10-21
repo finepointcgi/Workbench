@@ -68,13 +68,23 @@ public sealed class PermissionCheckingHrPersonnelService(IHrPersonnelService inn
 
     public async Task<EeoRecordDto> GetEeoAsync(Guid employeeId, CancellationToken cancellationToken = default)
     {
-        await hr.RequireHrOrSelfAsync(employeeId, "see EEO and veteran information", cancellationToken);
+        var viewer = await hr.RequireHrOrSelfAsync(employeeId, "see EEO and veteran information", cancellationToken);
+        if (!viewer.IsSelf(employeeId))
+        {
+            await hr.Access.RequireAsync(Permission.FieldsEeo, "see EEO and veteran information", cancellationToken);
+        }
+
         return await inner.GetEeoAsync(employeeId, cancellationToken);
     }
 
     public async Task<EeoRecordDto> SaveEeoAsync(Guid employeeId, SaveEeoRequest request, CancellationToken cancellationToken = default)
     {
-        await hr.RequireHrOrSelfAsync(employeeId, "change EEO and veteran information", cancellationToken);
+        var viewer = await hr.RequireHrOrSelfAsync(employeeId, "change EEO and veteran information", cancellationToken);
+        if (!viewer.IsSelf(employeeId))
+        {
+            await hr.Access.RequireAsync(Permission.FieldsEeo, "change EEO and veteran information", cancellationToken);
+        }
+
         return await inner.SaveEeoAsync(employeeId, request, cancellationToken);
     }
 
@@ -147,100 +157,106 @@ public sealed class PermissionCheckingHrPersonnelService(IHrPersonnelService inn
 
 public sealed class PermissionCheckingPositionService(IPositionService inner, HrAccess hr) : IPositionService
 {
+    // Salaries are a sensitive field (Permission.FieldsSalaries): masked for anyone without it.
+    private async Task<T> MaskedAsync<T>(Task<T> read, CancellationToken ct) => FieldMasker.Mask(await read, await hr.Access.GetPermissionsAsync(ct));
+
     public async Task<IReadOnlyList<PositionDto>> ListAsync(bool includeClosed = false, CancellationToken cancellationToken = default)
     {
         hr.Access.RequireSignedIn();
-        return await inner.ListAsync(includeClosed, cancellationToken);
+        return await MaskedAsync(inner.ListAsync(includeClosed, cancellationToken), cancellationToken);
     }
 
     public async Task<PositionDto> GetAsync(Guid positionId, CancellationToken cancellationToken = default)
     {
         hr.Access.RequireSignedIn();
-        return await inner.GetAsync(positionId, cancellationToken);
+        return await MaskedAsync(inner.GetAsync(positionId, cancellationToken), cancellationToken);
     }
 
     public async Task<PositionDto> CreateAsync(SavePositionRequest request, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrPositionsManage, "change positions", cancellationToken);
-        return await inner.CreateAsync(request, cancellationToken);
+        return await MaskedAsync(inner.CreateAsync(request, cancellationToken), cancellationToken);
     }
 
     public async Task<PositionDto> UpdateAsync(Guid positionId, SavePositionRequest request, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrPositionsManage, "change positions", cancellationToken);
-        return await inner.UpdateAsync(positionId, request, cancellationToken);
+        return await MaskedAsync(inner.UpdateAsync(positionId, request, cancellationToken), cancellationToken);
     }
 }
 
 public sealed class PermissionCheckingCompensationService(ICompensationService inner, HrAccess hr) : ICompensationService
 {
+    // Salaries are a sensitive field (Permission.FieldsSalaries): masked for anyone without it.
+    private async Task<T> MaskedAsync<T>(Task<T> read, CancellationToken ct) => FieldMasker.Mask(await read, await hr.Access.GetPermissionsAsync(ct));
+
     private const string Read = "see compensation";
     private const string Change = "propose compensation changes";
 
     public async Task<CompensationHistoryDto> GetHistoryAsync(Guid employeeId, CancellationToken cancellationToken = default)
     {
         await hr.RequireHrOrFinanceAsync(Read, cancellationToken);
-        return await inner.GetHistoryAsync(employeeId, cancellationToken);
+        return await MaskedAsync(inner.GetHistoryAsync(employeeId, cancellationToken), cancellationToken);
     }
 
     public async Task<IReadOnlyList<CompensationChangeDto>> ListPendingAsync(CancellationToken cancellationToken = default)
     {
         await hr.RequireHrOrFinanceAsync(Read, cancellationToken);
-        return await inner.ListPendingAsync(cancellationToken);
+        return await MaskedAsync(inner.ListPendingAsync(cancellationToken), cancellationToken);
     }
 
     public async Task<CompensationChangeDto> ProposeAsync(Guid employeeId, ProposeCompensationRequest request, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrCompensationManage, Change, cancellationToken);
-        return await inner.ProposeAsync(employeeId, request, cancellationToken);
+        return await MaskedAsync(inner.ProposeAsync(employeeId, request, cancellationToken), cancellationToken);
     }
 
     public async Task<CompensationChangeDto> ApproveAsync(Guid changeId, CompensationDecisionRequest request, CancellationToken cancellationToken = default)
     {
         await hr.RequireHrOrFinanceAsync("approve compensation changes", cancellationToken);
-        return await inner.ApproveAsync(changeId, request, cancellationToken);
+        return await MaskedAsync(inner.ApproveAsync(changeId, request, cancellationToken), cancellationToken);
     }
 
     public async Task<CompensationChangeDto> RejectAsync(Guid changeId, CompensationDecisionRequest request, CancellationToken cancellationToken = default)
     {
         await hr.RequireHrOrFinanceAsync("reject compensation changes", cancellationToken);
-        return await inner.RejectAsync(changeId, request, cancellationToken);
+        return await MaskedAsync(inner.RejectAsync(changeId, request, cancellationToken), cancellationToken);
     }
 
     public async Task<CompensationChangeDto> CancelAsync(Guid changeId, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrCompensationManage, Change, cancellationToken);
-        return await inner.CancelAsync(changeId, cancellationToken);
+        return await MaskedAsync(inner.CancelAsync(changeId, cancellationToken), cancellationToken);
     }
 
     public async Task<IReadOnlyList<MeritCycleDto>> ListCyclesAsync(CancellationToken cancellationToken = default)
     {
         await hr.RequireHrOrFinanceAsync(Read, cancellationToken);
-        return await inner.ListCyclesAsync(cancellationToken);
+        return await MaskedAsync(inner.ListCyclesAsync(cancellationToken), cancellationToken);
     }
 
     public async Task<MeritCycleDto> GetCycleAsync(Guid cycleId, CancellationToken cancellationToken = default)
     {
         await hr.RequireHrOrFinanceAsync(Read, cancellationToken);
-        return await inner.GetCycleAsync(cycleId, cancellationToken);
+        return await MaskedAsync(inner.GetCycleAsync(cycleId, cancellationToken), cancellationToken);
     }
 
     public async Task<MeritCycleDto> CreateCycleAsync(SaveMeritCycleRequest request, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrCompensationManage, Change, cancellationToken);
-        return await inner.CreateCycleAsync(request, cancellationToken);
+        return await MaskedAsync(inner.CreateCycleAsync(request, cancellationToken), cancellationToken);
     }
 
     public async Task<MeritCycleDto> AddProposalsAsync(Guid cycleId, AddMeritProposalsRequest request, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrCompensationManage, Change, cancellationToken);
-        return await inner.AddProposalsAsync(cycleId, request, cancellationToken);
+        return await MaskedAsync(inner.AddProposalsAsync(cycleId, request, cancellationToken), cancellationToken);
     }
 
     public async Task<MeritCycleDto> SubmitCycleAsync(Guid cycleId, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrCompensationManage, Change, cancellationToken);
-        return await inner.SubmitCycleAsync(cycleId, cancellationToken);
+        return await MaskedAsync(inner.SubmitCycleAsync(cycleId, cancellationToken), cancellationToken);
     }
 }
 
@@ -427,24 +443,28 @@ public sealed class PermissionCheckingHrReportService(IHrReportService inner, Hr
     public async Task<Eeo1ReportDto> GetEeo1Async(DateOnly snapshotDate, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrRestrictedReports, Restricted, cancellationToken);
+        await hr.Access.RequireAsync(Permission.FieldsEeo, Restricted, cancellationToken);
         return await inner.GetEeo1Async(snapshotDate, cancellationToken);
     }
 
     public async Task<HrExportFile> ExportEeo1Async(DateOnly snapshotDate, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrRestrictedReports, Restricted, cancellationToken);
+        await hr.Access.RequireAsync(Permission.FieldsEeo, Restricted, cancellationToken);
         return await inner.ExportEeo1Async(snapshotDate, cancellationToken);
     }
 
     public async Task<Vets4212ReportDto> GetVets4212Async(DateOnly periodEnd, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrRestrictedReports, Restricted, cancellationToken);
+        await hr.Access.RequireAsync(Permission.FieldsEeo, Restricted, cancellationToken);
         return await inner.GetVets4212Async(periodEnd, cancellationToken);
     }
 
     public async Task<HrExportFile> ExportVets4212Async(DateOnly periodEnd, CancellationToken cancellationToken = default)
     {
         await hr.Access.RequireAsync(Permission.HrRestrictedReports, Restricted, cancellationToken);
+        await hr.Access.RequireAsync(Permission.FieldsEeo, Restricted, cancellationToken);
         return await inner.ExportVets4212Async(periodEnd, cancellationToken);
     }
 

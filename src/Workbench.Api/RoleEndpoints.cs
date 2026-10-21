@@ -23,9 +23,17 @@ internal static class RoleEndpoints
         var users = v1.MapGroup("/admin/user-roles").WithTags("Roles");
         users.MapGet("/{email}", (string email, IRoleService s, CancellationToken ct) => s.GetUserRolesAsync(email, ct));
         users.MapPut("/{email}", (string email, SetUserRolesBody r, IRoleService s, CancellationToken ct) => s.SetUserRolesAsync(email, r.RoleIds ?? [], ct));
+        users.MapPut("/{email}/assignments", (string email, SetAssignmentsBody r, IRoleService s, CancellationToken ct) => s.SetUserRoleAssignmentsAsync(email, r.Assignments ?? [], ct));
+        users.MapGet("/scope-options", (IRoleService s, CancellationToken ct) => s.GetScopeOptionsAsync(ct));
+
+        // Read only: registering run-time permissions is for features' own services, not the API.
+        var permissions = v1.MapGroup("/admin/permissions").WithTags("Roles");
+        permissions.MapGet("/", (IPermissionCatalog c, CancellationToken ct) => c.ListAsync(ct));
     }
 
     internal sealed record CloneRoleBody(string Name);
 
     internal sealed record SetUserRolesBody(IReadOnlyList<Guid>? RoleIds);
+
+    internal sealed record SetAssignmentsBody(IReadOnlyList<RoleAssignment>? Assignments);
 }

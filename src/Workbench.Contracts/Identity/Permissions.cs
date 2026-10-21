@@ -12,7 +12,12 @@ namespace Workbench.Contracts.Identity;
 /// <param name="Description">What it allows, in plain words.</param>
 /// <param name="GrantedTo">Built-in roles (besides Admin) that hold it.</param>
 /// <param name="Sensitive">Reveals pay, rates, tax ids, bank details or security settings: shown with a warning.</param>
-public sealed record PermissionDefinition(string Key, string Area, string Name, string Description, OrgRoles GrantedTo, bool Sensitive = false);
+/// <param name="Source">Null for the built-in catalog; otherwise the feature that registered it at run time
+/// (<see cref="IPermissionRegistry"/>), such as <c>custom-fields</c>.</param>
+public sealed record PermissionDefinition(string Key, string Area, string Name, string Description, OrgRoles GrantedTo, bool Sensitive = false, string? Source = null)
+{
+    public bool IsRegistered => Source is not null;
+}
 
 /// <summary>
 /// The permission catalog: every capability a role can grant, grouped by area. Each permission check on the server (the
@@ -144,6 +149,13 @@ public static class Permission
 
     // Sheets
     public const string RestrictedColumnsView = "sheets.restricted_columns.view";
+
+    // Sensitive fields: withheld fields are masked in reads, exports, reports, the API and the assistant
+    // ([SensitiveField] on contract properties). LaborCostView, PayRatesView, VendorTaxIds and VendorBankDetails are fields too.
+    public const string FieldsSalaries = "fields.salaries";
+    public const string FieldsBurdenedCost = "fields.burdened_cost";
+    public const string FieldsEeo = "fields.eeo";
+    public const string FieldsPricingFee = "fields.pricing_fee";
 }
 
 /// <summary>The catalog itself: definitions, built-in grants and separation-of-duties conflicts.</summary>
@@ -169,10 +181,11 @@ public static class PermissionCatalog
     public const string AreaGrowth = "Business development";
     public const string AreaMaterials = "Materials";
     public const string AreaSheets = "Sheets";
+    public const string AreaFields = "Sensitive fields";
 
     /// <summary>Areas in display order.</summary>
     public static IReadOnlyList<string> Areas { get; } =
-        [AreaAdministration, AreaApprovals, AreaSetup, AreaTime, AreaProjects, AreaAccounting, AreaBilling, AreaPayables, AreaCash, AreaPayroll, AreaTravel, AreaPeople, AreaGrowth, AreaMaterials, AreaSheets];
+        [AreaAdministration, AreaApprovals, AreaSetup, AreaTime, AreaProjects, AreaAccounting, AreaBilling, AreaPayables, AreaCash, AreaPayroll, AreaTravel, AreaPeople, AreaGrowth, AreaMaterials, AreaSheets, AreaFields];
 
     public static IReadOnlyList<PermissionDefinition> All { get; } =
     [
@@ -206,7 +219,7 @@ public static class PermissionCatalog
 
         new(Permission.TimeViewAll, AreaTime, "See everyone's time", "Everyone's timesheets, hours, daily entries, leave requests and utilization.", OrgRoles.Timekeeper | F),
         new(Permission.TimeTeam, AreaTime, "Team time for everyone", "The Team time page and timesheet approvals list for the whole organization.", OrgRoles.Timekeeper),
-        new(Permission.LaborCostView, AreaTime, "See cost rates and labor cost", "Employee cost rates, labor cost in reports and the labor distribution.", F, Sensitive: true),
+        new(Permission.LaborCostView, AreaFields, "See cost rates and labor cost", "Employee cost rates, labor cost in reports and the labor distribution.", F, Sensitive: true),
         new(Permission.LaborCostRatesManage, AreaTime, "Change cost rates", "Add employee cost rates.", F, Sensitive: true),
         new(Permission.TimeTotalTime, AreaTime, "Total time accounting", "The labor cost method, uncompensated overtime and effective labor rates.", F),
         new(Permission.LeaveBalancesManage, AreaTime, "Manage leave balances", "See everyone's leave balances, adjust them, run accruals and the leave year end.", F),
@@ -242,8 +255,8 @@ public static class PermissionCatalog
         new(Permission.BillingReportsView, AreaBilling, "See receivables", "AR aging and receivables reports.", F),
 
         new(Permission.VendorsManage, AreaPayables, "Manage vendors", "Add and change vendors and subcontracts.", F),
-        new(Permission.VendorTaxIds, AreaPayables, "See and set vendor tax ids", "Set a vendor's TIN, see the full TIN and vendor W-9s.", F, Sensitive: true),
-        new(Permission.VendorBankDetails, AreaPayables, "Vendor bank details", "See and change where vendors are paid.", F, Sensitive: true),
+        new(Permission.VendorTaxIds, AreaFields, "See and set vendor tax ids", "Set a vendor's TIN, see the full TIN and vendor W-9s.", F, Sensitive: true),
+        new(Permission.VendorBankDetails, AreaFields, "Vendor bank details", "See and change where vendors are paid.", F, Sensitive: true),
         new(Permission.ApBillsManage, AreaPayables, "Enter and approve AP bills", "Every AP bill: enter, approve and post them.", F),
         new(Permission.ApPaymentsManage, AreaPayables, "Pay vendors", "Payment runs and bank payment files.", F),
         new(Permission.ApReportsView, AreaPayables, "See AP reports", "Payables aging and 1099 reports.", F),
@@ -256,7 +269,7 @@ public static class PermissionCatalog
         new(Permission.PayrollRun, AreaPayroll, "Run payroll", "Run, post and void payroll.", F),
         new(Permission.PayrollSetup, AreaPayroll, "Set up payroll", "Pay groups, payroll providers and payroll file layouts.", F),
         new(Permission.PayrollProfilesManage, AreaPayroll, "Manage payroll profiles", "Employees' payroll profiles, with pay rates masked.", F),
-        new(Permission.PayRatesView, AreaPayroll, "View pay rates", "Reveal what employees are paid.", F, Sensitive: true),
+        new(Permission.PayRatesView, AreaFields, "View pay rates", "Reveal what employees are paid.", F, Sensitive: true),
 
         new(Permission.TravelManage, AreaTravel, "Manage everyone's travel", "Everyone's trips, travel advances and per diem.", F),
         new(Permission.CardsManage, AreaTravel, "Manage corporate cards", "Card programs, statement imports, everyone's card charges and card reconciliation.", F),
@@ -284,6 +297,11 @@ public static class PermissionCatalog
         new(Permission.SalesCreditHold, AreaMaterials, "Credit holds", "Put sales orders on or off credit hold.", F),
 
         new(Permission.RestrictedColumnsView, AreaSheets, "See restricted columns", "Sheet columns marked \"Finance and owners only\" in every workspace.", F, Sensitive: true),
+
+        new(Permission.FieldsSalaries, AreaFields, "See salaries", "Salary ranges on positions and the amounts in compensation history and pay changes. Without it they show as hidden.", H | F, Sensitive: true),
+        new(Permission.FieldsBurdenedCost, AreaFields, "See burdened cost", "Fringe, overhead and G&A applied to project cost (burdened cost and burdened financials). Project managers always see their own projects'.", F, Sensitive: true),
+        new(Permission.FieldsEeo, AreaFields, "See EEO data", "Employees' EEO and veteran self-identification and the EEO-1 and VETS-4212 reports. Employees always see their own.", H, Sensitive: true),
+        new(Permission.FieldsPricingFee, AreaFields, "See fee and margin", "Fee, fee rate, margin and price in proposal pricing, and the cost volume export. Without it pricing shows cost only.", OrgRoles.Pricing | F, Sensitive: true),
     ];
 
     private static readonly FrozenDictionary<string, PermissionDefinition> ByKey = All.ToFrozenDictionary(p => p.Key, StringComparer.Ordinal);
@@ -333,23 +351,31 @@ public sealed record PermissionConflict(string First, string Second, string Why)
 public sealed class PermissionSet : IReadOnlyCollection<string>
 {
     private readonly FrozenSet<string> _keys;
+    private readonly bool _everything;
 
-    private PermissionSet(FrozenSet<string> keys) => _keys = keys;
+    private PermissionSet(FrozenSet<string> keys, bool everything = false) => (_keys, _everything) = (keys, everything);
 
     public static PermissionSet Empty { get; } = new(FrozenSet<string>.Empty);
 
-    /// <summary>Every permission in the catalog (built-in Admin, and the background system user).</summary>
-    public static PermissionSet All { get; } = new(PermissionCatalog.All.Select(p => p.Key).ToFrozenSet(StringComparer.Ordinal));
+    /// <summary>
+    /// Every permission (built-in Admin, and the background system user), including ones features register at run time
+    /// (<see cref="IPermissionRegistry"/>). Enumerating it lists the built-in catalog.
+    /// </summary>
+    public static PermissionSet All { get; } = new(PermissionCatalog.All.Select(p => p.Key).ToFrozenSet(StringComparer.Ordinal), everything: true);
 
     public static PermissionSet Of(IEnumerable<string> keys) => new(keys.ToFrozenSet(StringComparer.Ordinal));
 
+    /// <summary>True for <see cref="All"/>: every permission, registered ones included.</summary>
+    public bool IsEverything => _everything;
+
     public int Count => _keys.Count;
 
-    public bool Has(string permission) => _keys.Contains(permission);
+    public bool Has(string permission) => _everything || _keys.Contains(permission);
 
-    public bool HasAny(params string[] permissions) => permissions.Any(_keys.Contains);
+    public bool HasAny(params string[] permissions) => permissions.Any(Has);
 
-    public PermissionSet Union(PermissionSet other) => other.Count == 0 ? this : Count == 0 ? other : Of(_keys.Concat(other._keys));
+    public PermissionSet Union(PermissionSet other) =>
+        _everything ? this : other._everything ? other : other.Count == 0 ? this : Count == 0 ? other : Of(_keys.Concat(other._keys));
 
     public IEnumerator<string> GetEnumerator() => ((IEnumerable<string>)_keys).GetEnumerator();
 

@@ -1,4 +1,5 @@
 using Workbench.Contracts.Payroll;
+using Workbench.Contracts.Identity;
 
 namespace Workbench.Contracts.Hr;
 
@@ -18,8 +19,8 @@ public sealed record PositionDto(
     EeoJobCategory? EeoJobCategory,
     bool IsExempt,
     EmploymentTypeKind EmploymentType,
-    decimal? SalaryMin,
-    decimal? SalaryMax,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? SalaryMin,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? SalaryMax,
     int Headcount,
     int Filled,
     PositionStatus Status,
@@ -67,10 +68,10 @@ public sealed record CompensationChangeDto(
     Guid? CycleId,
     DateOnly EffectiveFrom,
     PayTypeKind PayType,
-    decimal? AnnualSalary,
-    decimal? HourlyRate,
-    decimal? Annualized,
-    decimal? PreviousAnnualized,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? AnnualSalary,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? HourlyRate,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? Annualized,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal? PreviousAnnualized,
     CompensationReason Reason,
     string? Note,
     CompensationChangeStatus Status,
@@ -114,9 +115,9 @@ public sealed record MeritCycleDto(
     DateOnly EffectiveFrom,
     decimal BudgetPercent,
     MeritCycleStatus Status,
-    decimal CoveredPay,
-    decimal Budget,
-    decimal Proposed,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal CoveredPay,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal Budget,
+    [property: SensitiveField(Permission.FieldsSalaries)] decimal Proposed,
     IReadOnlyList<CompensationChangeDto> Proposals)
 {
     public decimal Remaining => Budget - Proposed;

@@ -32,9 +32,7 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
 
         var rows = await users.ToListAsync(cancellationToken);
         var userIds = rows.Select(u => u.Id).ToList();
-        var held = (await db.Set<UserRole>().AsNoTracking().Where(r => userIds.Contains(r.UserId)).Select(r => new { r.UserId, r.RoleId }).ToListAsync(cancellationToken))
-            .ToLookup(r => r.UserId, r => r.RoleId);
-        var roleRefs = (await RoleStore.RefsAsync(db, held.SelectMany(g => g), cancellationToken)).ToDictionary(r => r.Id);
+        var held = await RoleStore.UserRefsAsync(db, userIds, cancellationToken);
         var employees = await db.Set<Employee>().AsNoTracking().Select(e => new { e.Id, e.Email, e.DisplayName }).ToListAsync(cancellationToken);
         var byId = employees.ToDictionary(e => e.Id);
         var byEmail = employees.GroupBy(e => e.Email).ToDictionary(g => g.Key, g => g.First());
@@ -49,8 +47,7 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
                     EmployeeLinkMode.ByEmail => byEmail.GetValueOrDefault(u.Email),
                     _ => null,
                 };
-                var roles = held[u.Id].Select(roleRefs.GetValueOrDefault).OfType<RoleRef>()
-                    .OrderBy(r => !r.IsBuiltIn).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                var roles = held[u.Id].ToList();
                 return ToDto(u, employee?.Id, employee?.DisplayName, mode, roles);
             })
             .ToList();
@@ -108,7 +105,7 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
     }
 
     internal static UserAdminDto ToDto(AppUser u, Guid? employeeId, string? employeeName, EmployeeLinkMode mode, IReadOnlyList<RoleRef> roles) =>
-        new(u.Id, u.Email, u.DisplayName, BuiltInRoles.FlagsOf(roles.Select(r => r.Id)), u.IsActive, u.CreatedAtUtc,
+        new(u.Id, u.Email, u.DisplayName, BuiltInRoles.FlagsOf(roles.Where(r => r.Scope is null).Select(r => r.Id)), u.IsActive, u.CreatedAtUtc,
             u.LastSeenAtUtc, u.LastSignInAtUtc, u.DeactivatedAtUtc, u.DeactivatedBy, employeeId, employeeName, mode, u.ScimManaged, roles);
 }
 

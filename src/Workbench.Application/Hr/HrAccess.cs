@@ -13,7 +13,9 @@ namespace Workbench.Application.Hr;
 /// </summary>
 public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory dbFactory)
 {
-    public sealed record Viewer(string Email, PermissionSet Permissions, Guid? EmployeeId)
+    /// <param name="HrIn">Employees a role limited to some companies or org units manages the records of (null: none beyond <see cref="IsHr"/>).</param>
+    /// <param name="WorkforceIn">Employees a limited role shows job fields of.</param>
+    public sealed record Viewer(string Email, PermissionSet Permissions, Guid? EmployeeId, IReadOnlySet<Guid>? HrIn = null, IReadOnlySet<Guid>? WorkforceIn = null)
     {
         /// <summary>Manages personnel records: sees and changes everything.</summary>
         public bool IsHr => Permissions.Has(Permission.HrRecordsManage);
@@ -38,7 +40,9 @@ public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory db
         var roles = await access.GetPermissionsAsync(ct);
         await using var db = await dbFactory.CreateAsync(ct);
         var me = await EmployeeLinks.FindForUserAsync(db, access.Email, ct);
-        return new Viewer(access.Email, roles, me?.Id);
+        return new Viewer(access.Email, roles, me?.Id,
+            roles.Has(Permission.HrRecordsManage) ? null : await access.EmployeesWithAsync(Permission.HrRecordsManage, ct),
+            roles.Has(Permission.HrWorkforceView) ? null : await access.EmployeesWithAsync(Permission.HrWorkforceView, ct));
     }
 
     public async Task<Viewer> RequireHrAsync(string what, CancellationToken ct)
@@ -70,7 +74,7 @@ public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory db
 
     public static async Task<HrRecordAccess> LevelAsync(IWorkbenchDbContext db, Viewer viewer, Guid employeeId, CancellationToken ct)
     {
-        if (viewer.IsHr)
+        if (viewer.IsHr || viewer.HrIn?.Contains(employeeId) == true)
         {
             return HrRecordAccess.Full;
         }
@@ -80,7 +84,7 @@ public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory db
             return HrRecordAccess.Self;
         }
 
-        if (viewer.IsFinance || (viewer.EmployeeId is { } me && (await ReportsOfAsync(db, me, ct)).Contains(employeeId)))
+        if (viewer.IsFinance || viewer.WorkforceIn?.Contains(employeeId) == true || (viewer.EmployeeId is { } me && (await ReportsOfAsync(db, me, ct)).Contains(employeeId)))
         {
             return HrRecordAccess.Job;
         }

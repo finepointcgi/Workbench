@@ -60,6 +60,62 @@ public sealed class AccessControl(
         (await GetPermissionsAsync(cancellationToken)).Has(permission);
 
     /// <summary>
+    /// Where the user holds <paramref name="permission"/>: everywhere, nowhere, or within the companies, org units,
+    /// projects and contracts their scoped roles are limited to.
+    /// </summary>
+    public async Task<GrantScope> GetGrantScopeAsync(string permission, CancellationToken cancellationToken = default) =>
+        RoleScopes.ScopeOf(await GetAccessAsync(cancellationToken), permission);
+
+    /// <summary>True when the user holds <paramref name="permission"/> for this project (everywhere, or a scope covering it).</summary>
+    public Task<bool> HasForProjectAsync(string permission, Guid projectId, CancellationToken cancellationToken = default) =>
+        HasForAsync(permission, (db, ct) => RoleScopes.ForProjectAsync(db, projectId, ct), cancellationToken);
+
+    /// <summary>True when the user holds <paramref name="permission"/> for this contract.</summary>
+    public Task<bool> HasForContractAsync(string permission, Guid contractId, CancellationToken cancellationToken = default) =>
+        HasForAsync(permission, (db, ct) => RoleScopes.ForContractAsync(db, contractId, ct), cancellationToken);
+
+    /// <summary>True when the user holds <paramref name="permission"/> for this employee (their company or org unit).</summary>
+    public Task<bool> HasForEmployeeAsync(string permission, Guid employeeId, CancellationToken cancellationToken = default) =>
+        HasForAsync(permission, (db, ct) => RoleScopes.ForEmployeeAsync(db, employeeId, ct), cancellationToken);
+
+    /// <summary>The projects the user holds <paramref name="permission"/> for; null means every project.</summary>
+    public Task<IReadOnlySet<Guid>?> ProjectsWithAsync(string permission, CancellationToken cancellationToken = default) =>
+        InScopeAsync(permission, RoleScopes.ProjectIdsAsync, cancellationToken);
+
+    /// <summary>The contracts the user holds <paramref name="permission"/> for; null means every contract.</summary>
+    public Task<IReadOnlySet<Guid>?> ContractsWithAsync(string permission, CancellationToken cancellationToken = default) =>
+        InScopeAsync(permission, RoleScopes.ContractIdsAsync, cancellationToken);
+
+    /// <summary>The employees the user holds <paramref name="permission"/> for; null means everyone.</summary>
+    public Task<IReadOnlySet<Guid>?> EmployeesWithAsync(string permission, CancellationToken cancellationToken = default) =>
+        InScopeAsync(permission, RoleScopes.EmployeeIdsAsync, cancellationToken);
+
+    private async Task<bool> HasForAsync(string permission, Func<IWorkbenchDbContext, CancellationToken, Task<ResourceRef>> resource, CancellationToken cancellationToken)
+    {
+        var scope = await GetGrantScopeAsync(permission, cancellationToken);
+        if (scope.All || scope.IsNowhere)
+        {
+            return scope.All;
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return scope.Covers(await resource(db, cancellationToken));
+    }
+
+    private async Task<IReadOnlySet<Guid>?> InScopeAsync(
+        string permission, Func<IWorkbenchDbContext, GrantScope, CancellationToken, Task<IReadOnlySet<Guid>?>> ids, CancellationToken cancellationToken)
+    {
+        var scope = await GetGrantScopeAsync(permission, cancellationToken);
+        if (scope.All || scope.IsNowhere)
+        {
+            return scope.All ? null : new HashSet<Guid>();
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await ids(db, scope, cancellationToken);
+    }
+
+    /// <summary>
     /// The built-in roles the user holds, as flags (a compatibility view: custom roles aren't in it). Decide access with
     /// <see cref="HasAsync"/> or <see cref="RequireAsync(string, string, CancellationToken)"/> instead.
     /// </summary>

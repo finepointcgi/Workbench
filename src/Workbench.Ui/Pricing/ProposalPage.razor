@@ -71,6 +71,14 @@ else
         }
     </MudStack>
 
+    @if (_feeHidden)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.VisibilityOff" Class="mb-2" data-testid="fee-hidden-banner">
+            Fee, fee rate, margin and price are hidden (they show as 0). You need the
+            "@Workbench.Contracts.Identity.PermissionCatalog.NameOf(Workbench.Contracts.Identity.Permission.FieldsPricingFee)" permission to see them or export the cost volume.
+        </MudAlert>
+    }
+
     <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" data-testid="pricing-tabs">
         <MudTabPanel Text="Summary">
             @if (_result is not null)
@@ -113,6 +121,7 @@ else
     private string? _error;
     private bool _busy;
     private bool _canHandOff;
+    private bool _feeHidden;
     private int _tab;
 
     // Bumped after each change so the scenarios tab reloads its comparison.
@@ -127,7 +136,9 @@ else
             _model = await Pricing.GetModelAsync(modelId);
             _options ??= await Pricing.GetOptionsAsync(_model.Settings.RatesAsOf);
             _result = await Pricing.CalculateAsync(modelId);
-            _canHandOff = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.SetupContracts);
+            var me = await CurrentUser.GetAsync();
+            _canHandOff = me.Can(Workbench.Contracts.Identity.Permission.SetupContracts);
+            _feeHidden = !me.Can(Workbench.Contracts.Identity.Permission.FieldsPricingFee);
             _error = null;
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException || ex.GetType().Name.Contains("NotFound"))

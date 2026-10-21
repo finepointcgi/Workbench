@@ -1,6 +1,7 @@
 @page "/hr/positions"
 @inject IPositionService Positions
 @inject IHrAccessService HrAccess
+@inject ICurrentUserContext CurrentUser
 @inject Workbench.Contracts.ProjectAccounting.IPeopleService People
 
 <PageTitle>Positions · Workbench</PageTitle>
@@ -121,7 +122,8 @@ else
     protected override Task OnInitializedAsync() => LoadAsync(async () =>
     {
         var access = await HrAccess.GetAsync();
-        (_isHr, _showSalary) = (access.IsHr, access.IsHr || access.IsFinance);
+        var seesSalaries = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.FieldsSalaries);
+        (_isHr, _showSalary) = (access.IsHr, (access.IsHr || access.IsFinance) && seesSalaries);
         await ReloadAsync();
         if (_isHr)
         {

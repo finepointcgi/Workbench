@@ -77,6 +77,24 @@ public sealed class PermissionCheckingRoleService(IRoleService inner, AccessCont
         return await inner.SetUserRolesAsync(email, roleIds ?? [], cancellationToken);
     }
 
+    public async Task<UserRolesDto> SetUserRoleAssignmentsAsync(string email, IReadOnlyList<RoleAssignment> assignments, CancellationToken cancellationToken = default)
+    {
+        RequireNotApiKey();
+        await access.RequireAsync(Permission.AdminUsers, "change people's roles", cancellationToken);
+
+        // Nobody gives out more than they have: new roles, and roles whose scope changes, count as given.
+        var current = (await inner.GetUserRolesAsync(email, cancellationToken)).Roles;
+        var given = (assignments ?? []).Where(a => !current.Any(c => c.Id == a.RoleId && (c.Scope ?? RoleScope.Everywhere).SameAs(a.Scope))).Select(a => a.RoleId).ToList();
+        await access.RequireCanGrantRolesAsync(given, cancellationToken);
+        return await inner.SetUserRoleAssignmentsAsync(email, assignments ?? [], cancellationToken);
+    }
+
+    public async Task<RoleScopeOptionsDto> GetScopeOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        await RequireAnyAsync(cancellationToken);
+        return await inner.GetScopeOptionsAsync(cancellationToken);
+    }
+
     private async Task RequireManageAsync(CancellationToken ct)
     {
         RequireNotApiKey();

@@ -51,7 +51,7 @@
             <div class="d-flex align-center flex-wrap gap-1" data-testid="user-roles">
                 @foreach (var role in context.AssignedRoles ?? [])
                 {
-                    <MudChip T="string" Size="Size.Small" Variant="@(role.IsBuiltIn ? Variant.Outlined : Variant.Filled)" Color="@(role.Id == BuiltInRoles.Admin.Id ? Color.Primary : Color.Default)">@role.Name</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="@(role.IsBuiltIn ? Variant.Outlined : Variant.Filled)" Color="@(role.Id == BuiltInRoles.Admin.Id ? Color.Primary : Color.Default)">@role.Label</MudChip>
                 }
                 @if (context.AssignedRoles is not { Count: > 0 })
                 {
@@ -170,8 +170,8 @@
         }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: UserRolesDto saved })
         {
-            Replace(user with { Roles = BuiltInRoles.FlagsOf(saved.Roles.Select(r => r.Id)), AssignedRoles = saved.Roles });
-            Snackbar.Add($"{saved.DisplayName}'s roles saved: {(saved.Roles.Count == 0 ? "Employee" : string.Join(", ", saved.Roles.Select(r => r.Name)))}.", Severity.Success);
+            Replace(user with { Roles = BuiltInRoles.FlagsOf(saved.Roles.Where(r => r.Scope is null).Select(r => r.Id)), AssignedRoles = saved.Roles });
+            Snackbar.Add($"{saved.DisplayName}'s roles saved: {(saved.Roles.Count == 0 ? "Employee" : string.Join(", ", saved.Roles.Select(r => r.Label)))}.", Severity.Success);
         }
     }
 

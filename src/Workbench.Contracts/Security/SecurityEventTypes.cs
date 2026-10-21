@@ -22,6 +22,8 @@ public static class SecurityEventTypes
     public const string RoleCreated = "role.created"; // Admin › Roles: a custom role was created (or cloned); detail has its permissions.
     public const string RoleChanged = "role.changed"; // A custom role's name, description or permissions changed; detail has before → after.
     public const string RoleDeleted = "role.deleted";
+    public const string PermissionRegistered = "permission.registered"; // A feature registered a run-time permission (custom field, automation, form).
+    public const string PermissionUnregistered = "permission.unregistered";
 
     public const string InviteCreated = "invite.created";
     public const string InviteAccepted = "invite.accepted";

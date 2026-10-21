@@ -89,7 +89,7 @@ public sealed class AccessReviewService(
                 AccessReviewId = review.Id,
                 UserEmail = user.Email,
                 DisplayName = user.DisplayName,
-                OrgRoles = Clip(RoleStore.Describe(held.Roles), 1000),
+                OrgRoles = Clip(RoleStore.Describe(await RoleStore.WithScopeTextAsync(db, held.Roles, cancellationToken)), 1000),
                 Permissions = Clip(string.Join(", ", PermissionCatalog.All.Where(p => held.Permissions.Has(p.Key)).Select(p => p.Key)), 4000),
                 RoleChanges = changes.TryGetValue(user.Id, out var c) ? Clip(string.Join("; ", c), 4000) : null,
                 WorkspaceRoles = held.Permissions.Has(Permission.AdminAllWorkspaces)

@@ -122,6 +122,7 @@ public sealed class PermissionCheckingBurdenedCostService(IBurdenedCostService i
         if (!projects.Access.IsSystemReader)
         {
             await projects.RequireProjectFinancialsAsync(projectId, "see this project's burdened cost", cancellationToken);
+            await projects.RequireBurdenedCostAsync(projectId, cancellationToken);
         }
 
         return await inner.GetProjectCostAsync(projectId, from, to, basis, cancellationToken);
@@ -133,6 +134,7 @@ public sealed class PermissionCheckingBurdenedFinancialsService(IBurdenedFinanci
     public async Task<BurdenedFinancialsDto> GetProjectAsync(Guid projectId, Guid? budgetVersionId = null, Guid? forecastVersionId = null, CancellationToken cancellationToken = default)
     {
         await projects.RequireProjectFinancialsAsync(projectId, "see this project's financials", cancellationToken);
+        await projects.RequireBurdenedCostAsync(projectId, cancellationToken);
         return await inner.GetProjectAsync(projectId, budgetVersionId, forecastVersionId, cancellationToken);
     }
 }

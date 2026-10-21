@@ -1,4 +1,5 @@
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Financials;
 
 namespace Workbench.Contracts.Pricing;
@@ -30,7 +31,7 @@ public sealed record ProposalSummaryDto(
     ProposalState Status,
     decimal? TargetPrice,
     DateOnly? DueDate,
-    decimal? Price,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal? Price,
     int LockedVersions,
     DateTime UpdatedAtUtc);
 
@@ -139,7 +140,7 @@ public sealed record PriceSettingsDto(
     LaborRateSource DefaultRateMethod,
     decimal DefaultEscalation,
     FeeMethodKind FeeMethod,
-    decimal FeeRate,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal FeeRate,
     decimal WgTechnicalRisk,
     decimal WgManagementRisk,
     decimal WgContractTypeRisk,
@@ -222,8 +223,8 @@ public sealed record PriceFiguresDto(
     decimal Materials,
     decimal Subcontracts,
     decimal TotalCost,
-    decimal Fee,
-    decimal Price)
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Fee,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Price)
 {
     public static readonly PriceFiguresDto Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
@@ -293,12 +294,12 @@ public sealed record BillRateLineDto(
     decimal Fringe,
     decimal Overhead,
     decimal GeneralAndAdministrative,
-    decimal Fee,
-    decimal BillRate);
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Fee,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal BillRate);
 
 public sealed record WbsPriceDto(Guid WbsId, string Code, string Name, string? BasisOfEstimate, int Depth, PriceFiguresDto Figures);
 
-public sealed record PriceToWinDto(decimal TargetPrice, decimal Difference, decimal DifferencePercent, decimal? FeeRateAtTarget, bool UnderTarget);
+public sealed record PriceToWinDto(decimal TargetPrice, [property: SensitiveField(Permission.FieldsPricingFee)] decimal Difference, [property: SensitiveField(Permission.FieldsPricingFee)] decimal DifferencePercent, [property: SensitiveField(Permission.FieldsPricingFee)] decimal? FeeRateAtTarget, [property: SensitiveField(Permission.FieldsPricingFee)] bool UnderTarget);
 
 public sealed record PriceResultDto(
     Guid ModelId,
@@ -308,19 +309,19 @@ public sealed record PriceResultDto(
     DateTime ComputedAtUtc,
     PricingContractKind ContractType,
     RateBasis RateBasis,
-    decimal FeeRate,
-    string FeeExplanation,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal FeeRate,
+    [property: SensitiveField(Permission.FieldsPricingFee)] string FeeExplanation,
     PriceFiguresDto Totals,
     decimal UnallowableExcluded,
 
     /// <summary>Price of labor (burdened, with fee) per direct labor dollar.</summary>
-    decimal WrapRate,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal WrapRate,
 
     /// <summary>Burdened cost per direct labor dollar (no fee).</summary>
     decimal CostMultiplier,
 
     /// <summary>Fee ÷ price.</summary>
-    decimal Margin,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Margin,
     PriceToWinDto? PriceToWin,
     IReadOnlyList<CascadeStepDto> Cascade,
     IReadOnlyList<PeriodRatesDto> PeriodRates,
@@ -342,11 +343,11 @@ public sealed record ScenarioRowDto(
     decimal Hours,
     decimal DirectLabor,
     decimal TotalCost,
-    decimal Fee,
-    decimal Price,
-    decimal FeeRate,
-    decimal WrapRate,
-    decimal Margin,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Fee,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Price,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal FeeRate,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal WrapRate,
+    [property: SensitiveField(Permission.FieldsPricingFee)] decimal Margin,
     PriceToWinDto? PriceToWin);
 
 // ---- Lookups for the editor ----

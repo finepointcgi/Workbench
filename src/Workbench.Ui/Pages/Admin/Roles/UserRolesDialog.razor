@@ -1,5 +1,6 @@
-@* Chooses every role a person holds (built-in and custom). Shows what they'd be able to do and warns when the roles
-   together combine duties that are usually kept apart. Saves through IRoleService (audit logged on the server). *@
+@* Chooses every role a person holds (built-in and custom) and where each applies: everywhere, or only some companies,
+   org units, projects or contracts. Shows what they'd be able to do and warns when the roles together combine duties
+   that are usually kept apart. Saves through IRoleService (audit logged on the server). *@
 @using Workbench.Contracts
 @inject IRoleService Roles
 @inject ISnackbar Snackbar
@@ -32,15 +33,44 @@
                         <div class="pt-1">
                             <div>@role.Name</div>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                @(locked ? "You can't remove your own Admin role." : string.IsNullOrWhiteSpace(role.Description) ? $"{role.Permissions.Count} permissions" : role.Description)
+                                @(locked ? "You can't remove your own Admin role." : string.IsNullOrWhiteSpace(role.Description) ? $"{role.Permissions.Count} permission{(role.Permissions.Count == 1 ? "" : "s")}" : role.Description)
                             </MudText>
+                            @if (_chosen.Contains(role.Id) && role.BuiltIn != OrgRoles.Admin && _options is not null)
+                            {
+                                var scope = ScopeOf(role.Id);
+                                <div class="d-flex flex-wrap gap-2 mt-1 mb-1" style="max-width: 520px">
+                                    <MudSelect T="RoleScopeKind" Value="scope.Kind" ValueChanged="k => SetKind(role.Id, k)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                               Label="Applies to" Style="min-width: 150px; max-width: 170px" aria-label="@($"Where {role.Name} applies")" data-testid="@($"user-role-scope-{role.Name}")">
+                                        @foreach (var kind in Enum.GetValues<RoleScopeKind>())
+                                        {
+                                            <MudSelectItem T="RoleScopeKind" Value="kind">@KindLabel(kind)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    @if (scope.Kind != RoleScopeKind.Everywhere)
+                                    {
+                                        <MudSelect T="Guid" MultiSelection="true" SelectedValues="scope.Ids" SelectedValuesChanged="ids => SetIds(role.Id, ids)" Dense="true" Margin="Margin.Dense"
+                                                   Variant="Variant.Outlined" Label="@KindLabel(scope.Kind)" Style="min-width: 220px; flex: 1"
+                                                   ToStringFunc="@(id => OptionLabel(scope.Kind, id))" aria-label="@($"{KindLabel(scope.Kind)} for {role.Name}")"
+                                                   data-testid="@($"user-role-scope-ids-{role.Name}")">
+                                            @foreach (var option in OptionsOf(scope.Kind))
+                                            {
+                                                <MudSelectItem T="Guid" Value="option.Id">@option.Code · @option.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    }
+                                </div>
+                                @if (scope.Kind != RoleScopeKind.Everywhere && scope.Ids.Count == 0)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Warning">Pick at least one, or it applies everywhere.</MudText>
+                                }
+                            }
                         </div>
                     </div>
                 }
             }
 
             <MudDivider Class="my-3" />
-            <MudText Typo="Typo.subtitle2">@Effective.Count of @PermissionCatalog.All.Count permissions</MudText>
+            <MudText Typo="Typo.subtitle2">@Effective.Count permissions</MudText>
             @if (Conflicts.Count > 0)
             {
                 <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mt-2" data-testid="user-role-conflicts">
@@ -66,6 +96,8 @@
 
     private IReadOnlyList<RoleDto>? _roles;
     private HashSet<Guid> _chosen = [];
+    private readonly Dictionary<Guid, RoleScope> _scopes = [];
+    private RoleScopeOptionsDto? _options;
     private bool _busy;
 
     private HashSet<string> Effective =>
@@ -78,7 +110,14 @@
         try
         {
             _roles = await Roles.ListAsync();
-            _chosen = (await Roles.GetUserRolesAsync(Email)).Roles.Select(r => r.Id).ToHashSet();
+            var held = (await Roles.GetUserRolesAsync(Email)).Roles;
+            _chosen = held.Select(r => r.Id).ToHashSet();
+            foreach (var role in held.Where(r => r.Scope is { IsEverywhere: false }))
+            {
+                _scopes[role.Id] = role.Scope!;
+            }
+
+            _options = await Roles.GetScopeOptionsAsync();
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or WorkbenchNotFoundException)
         {
@@ -99,12 +138,39 @@
         }
     }
 
+    private RoleScope ScopeOf(Guid roleId) => _scopes.GetValueOrDefault(roleId) ?? RoleScope.Everywhere;
+
+    private void SetKind(Guid roleId, RoleScopeKind kind) => _scopes[roleId] = new RoleScope(kind, []);
+
+    private void SetIds(Guid roleId, IEnumerable<Guid> ids) => _scopes[roleId] = ScopeOf(roleId) with { Ids = ids.ToList() };
+
+    private IReadOnlyList<ScopeOption> OptionsOf(RoleScopeKind kind) => kind switch
+    {
+        RoleScopeKind.Companies => _options?.Companies ?? [],
+        RoleScopeKind.OrgUnits => _options?.OrgUnits ?? [],
+        RoleScopeKind.Projects => _options?.Projects ?? [],
+        RoleScopeKind.Contracts => _options?.Contracts ?? [],
+        _ => [],
+    };
+
+    private string OptionLabel(RoleScopeKind kind, Guid id) => OptionsOf(kind).FirstOrDefault(o => o.Id == id)?.Code ?? "";
+
+    private static string KindLabel(RoleScopeKind kind) => kind switch
+    {
+        RoleScopeKind.Companies => "Companies",
+        RoleScopeKind.OrgUnits => "Org units",
+        RoleScopeKind.Projects => "Projects",
+        RoleScopeKind.Contracts => "Contracts",
+        _ => "Everywhere",
+    };
+
     private async Task SaveAsync()
     {
         _busy = true;
         try
         {
-            var saved = await Roles.SetUserRolesAsync(Email, _chosen.ToList());
+            var assignments = _chosen.Select(id => new RoleAssignment(id, ScopeOf(id) is { IsEverywhere: false } scope ? scope : null)).ToList();
+            var saved = await Roles.SetUserRoleAssignmentsAsync(Email, assignments);
             MudDialog.Close(DialogResult.Ok(saved));
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)

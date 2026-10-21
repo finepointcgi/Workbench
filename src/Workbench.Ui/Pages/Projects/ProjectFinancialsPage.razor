@@ -87,6 +87,10 @@ else
         <MudToggleItem Value="false" Text="Direct" />
         <MudToggleItem Value="true" Text="Burdened" />
     </MudToggleGroup>
+    @if (_burdenedRefused is { } refused)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2" data-testid="burdened-refused">@refused</MudText>
+    }
     @if (_showBurdened && _burdened is not null)
     {
         @if (_committed is { } committed)
@@ -140,6 +144,7 @@ else
     private TimePhasedBurnDto? _burn;
     private Workbench.Contracts.IndirectRates.BurdenedFinancialsDto? _burdened;
     private bool _showBurdened;
+    private string? _burdenedRefused;
     private Guid? _budgetVersionId;
     private Guid? _forecastVersionId;
     private bool _loading = true;
@@ -212,10 +217,12 @@ else
         {
             _burdened = await Burdened.GetProjectAsync(ProjectId, _budgetVersionId, _forecastVersionId == AllocationEtc ? null : _forecastVersionId);
             _showBurdened = first ? _burdened.HasRates : _showBurdened && _forecastVersionId != AllocationEtc;
+            _burdenedRefused = null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ArgumentException or UnauthorizedAccessException)
         {
             (_burdened, _showBurdened) = (null, false);
+            _burdenedRefused = ex is UnauthorizedAccessException ? ex.Message : null; // Burdened cost is a sensitive field: say which permission it needs.
         }
     }
 

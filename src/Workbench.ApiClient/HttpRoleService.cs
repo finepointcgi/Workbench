@@ -34,4 +34,20 @@ public sealed class HttpRoleService(HttpClient http) : IRoleService
 
     public async Task<UserRolesDto> SetUserRolesAsync(string email, IReadOnlyList<Guid> roleIds, CancellationToken cancellationToken = default) =>
         await (await http.PutAsJsonAsync($"api/v1/admin/user-roles/{Uri.EscapeDataString(email)}", new { RoleIds = roleIds }, cancellationToken)).ReadAsync<UserRolesDto>(cancellationToken);
+
+    public async Task<UserRolesDto> SetUserRoleAssignmentsAsync(string email, IReadOnlyList<RoleAssignment> assignments, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"api/v1/admin/user-roles/{Uri.EscapeDataString(email)}/assignments", new { Assignments = assignments }, cancellationToken)).ReadAsync<UserRolesDto>(cancellationToken);
+
+    public async Task<RoleScopeOptionsDto> GetScopeOptionsAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync("api/v1/admin/user-roles/scope-options", cancellationToken)).ReadAsync<RoleScopeOptionsDto>(cancellationToken);
+}
+
+/// <summary>The permission catalog, built-in and registered (read only over HTTP).</summary>
+public sealed class HttpPermissionCatalog(HttpClient http) : IPermissionCatalog
+{
+    public async Task<IReadOnlyList<PermissionDefinition>> ListAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync("api/v1/admin/permissions", cancellationToken)).ReadAsync<List<PermissionDefinition>>(cancellationToken);
+
+    public async Task<PermissionDefinition?> FindAsync(string key, CancellationToken cancellationToken = default) =>
+        PermissionCatalog.Find(key) ?? (await ListAsync(cancellationToken)).FirstOrDefault(p => p.Key == key);
 }

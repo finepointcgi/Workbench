@@ -53,10 +53,8 @@ public sealed class UserDirectory(IWorkbenchDbContextFactory dbFactory, AccessCo
     internal static async Task<List<UserDto>> ToDtosAsync(IWorkbenchDbContext db, IReadOnlyList<AppUser> users, CancellationToken ct)
     {
         var ids = users.Select(u => u.Id).ToList();
-        var held = (await db.Set<UserRole>().AsNoTracking().Where(r => ids.Contains(r.UserId)).Select(r => new { r.UserId, r.RoleId }).ToListAsync(ct))
-            .ToLookup(r => r.UserId, r => r.RoleId);
-        var refs = (await RoleStore.RefsAsync(db, held.SelectMany(g => g), ct)).ToDictionary(r => r.Id);
-        return users.Select(u => new UserDto(u.Email, u.DisplayName, BuiltInRoles.FlagsOf(held[u.Id]), u.CreatedAtUtc, u.LastSeenAtUtc,
-            held[u.Id].Select(refs.GetValueOrDefault).OfType<RoleRef>().OrderBy(r => !r.IsBuiltIn).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList())).ToList();
+        var held = await RoleStore.UserRefsAsync(db, ids, ct);
+        return users.Select(u => new UserDto(u.Email, u.DisplayName, BuiltInRoles.FlagsOf(held[u.Id].Where(r => r.Scope is null).Select(r => r.Id)), u.CreatedAtUtc, u.LastSeenAtUtc,
+            held[u.Id].ToList())).ToList();
     }
 }

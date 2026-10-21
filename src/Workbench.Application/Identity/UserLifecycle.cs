@@ -151,35 +151,40 @@ public sealed class UserLifecycle(
         return user;
     }
 
-    /// <summary>Replaces the built-in roles a user holds with <paramref name="roles"/>; their custom roles stay.</summary>
+    /// <summary>Replaces the built-in roles a user holds with <paramref name="roles"/> (everywhere); their custom roles stay.</summary>
     public Task<AppUser> SetRolesAsync(string email, OrgRoles roles, string actor, CancellationToken cancellationToken = default) =>
-        ChangeRolesAsync(email, current => current.Where(id => !BuiltInRoles.IsBuiltIn(id)).Concat(BuiltInRoles.IdsOf(roles)), actor, cancellationToken);
+        ChangeRolesAsync(email, current => current.Where(a => !BuiltInRoles.IsBuiltIn(a.RoleId) || roles.HasFlag(BuiltInRoles.Find(a.RoleId)!.Role))
+            .Concat(BuiltInRoles.IdsOf(roles).Where(id => current.All(a => a.RoleId != id)).Select(id => new RoleAssignment(id))), actor, cancellationToken);
 
-    /// <summary>Replaces every role a user holds (built-in and custom) with <paramref name="roleIds"/>.</summary>
+    /// <summary>Replaces every role a user holds (built-in and custom) with <paramref name="roleIds"/>; roles they keep keep their scope.</summary>
     public Task<AppUser> SetRoleIdsAsync(string email, IReadOnlyCollection<Guid> roleIds, string actor, CancellationToken cancellationToken = default) =>
-        ChangeRolesAsync(email, _ => roleIds, actor, cancellationToken);
+        ChangeRolesAsync(email, current => roleIds.Distinct().Select(id => current.FirstOrDefault(a => a.RoleId == id) ?? new RoleAssignment(id)), actor, cancellationToken);
 
-    /// <summary>Adds the roles in <paramref name="grant"/> to those the user holds (invites, just-in-time sign-up).</summary>
+    /// <summary>Replaces every role a user holds with <paramref name="assignments"/>, each with its scope.</summary>
+    public Task<AppUser> SetAssignmentsAsync(string email, IReadOnlyCollection<RoleAssignment> assignments, string actor, CancellationToken cancellationToken = default) =>
+        ChangeRolesAsync(email, _ => assignments, actor, cancellationToken);
+
+    /// <summary>Adds the roles in <paramref name="grant"/> (everywhere) to those the user holds (invites, just-in-time sign-up).</summary>
     public Task<AppUser> GrantAsync(string email, RoleGrant grant, string actor, CancellationToken cancellationToken = default) =>
-        ChangeRolesAsync(email, current => current.Concat(grant.RoleIds), actor, cancellationToken);
+        ChangeRolesAsync(email, current => current.Concat(grant.RoleIds.Where(id => current.All(a => a.RoleId != id)).Select(id => new RoleAssignment(id))), actor, cancellationToken);
 
-    /// <summary>Makes the user hold exactly the roles in <paramref name="grant"/> (roles synced from identity provider groups).</summary>
+    /// <summary>Makes the user hold exactly the roles in <paramref name="grant"/>, everywhere (roles synced from identity provider groups).</summary>
     public Task<AppUser> SetGrantAsync(string email, RoleGrant grant, string actor, CancellationToken cancellationToken = default) =>
-        ChangeRolesAsync(email, _ => grant.RoleIds, actor, cancellationToken);
+        ChangeRolesAsync(email, _ => grant.RoleIds.Select(id => new RoleAssignment(id)), actor, cancellationToken);
 
     /// <summary>
     /// Every change to the roles a user holds goes through here: nobody removes their own Admin role, there is always an
-    /// active administrator, and the change is audit logged (before and after) and recorded as a security event.
+    /// active administrator, and the change is audit logged (before and after, with scopes) and recorded as a security event.
     /// </summary>
-    private async Task<AppUser> ChangeRolesAsync(string email, Func<IReadOnlyList<Guid>, IEnumerable<Guid>> target, string actor, CancellationToken cancellationToken)
+    private async Task<AppUser> ChangeRolesAsync(string email, Func<IReadOnlyList<RoleAssignment>, IEnumerable<RoleAssignment>> target, string actor, CancellationToken cancellationToken)
     {
         email = AccessControl.Normalize(email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var user = await LoadAsync(db, email, cancellationToken);
-        var current = await RoleStore.RoleIdsOfAsync(db, user.Id, cancellationToken);
-        var wanted = target(current).Where(id => id != BuiltInRoles.Employee.Id).Distinct().ToList();
+        var current = await RoleStore.AssignmentsOfAsync(db, user.Id, cancellationToken);
+        var wanted = target(current).Where(a => a.RoleId != BuiltInRoles.Employee.Id).DistinctBy(a => a.RoleId).ToList();
         var admin = BuiltInRoles.Admin.Id;
-        if (current.Contains(admin) && !wanted.Contains(admin))
+        if (current.Any(a => a.RoleId == admin) && wanted.All(a => a.RoleId != admin))
         {
             if (IsSelf(actor, email))
             {
@@ -190,16 +195,16 @@ public sealed class UserLifecycle(
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
-        var (before, after) = await RoleStore.ReplaceAsync(db, user, wanted, actor, now, cancellationToken);
-        var changed = !before.ToHashSet().SetEquals(after);
-        if (changed)
+        var (before, after) = await RoleStore.ReplaceAssignmentsAsync(db, user, wanted, actor, now, cancellationToken);
+        if (!RoleStore.SameAssignments(before, after))
         {
             var beforeRefs = await RoleStore.RefsAsync(db, before, cancellationToken);
             var afterRefs = await RoleStore.RefsAsync(db, after, cancellationToken);
             RoleStore.RecordAssignmentAudit(db, user, beforeRefs, afterRefs, actor, now);
 
             // Gaining "Run the projects you manage" makes them Owner of their projects' workspaces.
-            if (!await ManagesOwnProjectsAsync(db, before, cancellationToken) && await ManagesOwnProjectsAsync(db, after, cancellationToken))
+            if (!await ManagesOwnProjectsAsync(db, before.Select(a => a.RoleId).ToList(), cancellationToken)
+                && await ManagesOwnProjectsAsync(db, after.Select(a => a.RoleId).ToList(), cancellationToken))
             {
                 await ProjectWorkspaceOwnership.EnsureForManagerAsync(db, user, cancellationToken);
             }

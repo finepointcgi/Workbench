@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddIntegrationClients(serverBaseAddress);
         services.AddComplianceClients(serverBaseAddress);
         services.AddHttpClient<Contracts.Identity.IRoleService, HttpRoleService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<Contracts.Identity.IPermissionCatalog, HttpPermissionCatalog>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

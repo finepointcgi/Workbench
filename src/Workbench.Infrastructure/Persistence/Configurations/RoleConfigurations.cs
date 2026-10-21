@@ -51,9 +51,25 @@ internal sealed class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
     {
         b.ToTable("UserRoles");
         b.Property(r => r.AssignedBy).HasMaxLength(320);
+        b.Property(r => r.ScopeIds).HasMaxLength(4000);
         b.HasIndex(r => new { r.UserId, r.RoleId }).IsUnique();
         b.HasIndex(r => r.RoleId);
         b.HasOne<AppUser>().WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Role>().WithMany().HasForeignKey(r => r.RoleId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class RegisteredPermissionConfiguration : IEntityTypeConfiguration<RegisteredPermission>
+{
+    public void Configure(EntityTypeBuilder<RegisteredPermission> b)
+    {
+        b.ToTable("RegisteredPermissions");
+        b.Property(p => p.Key).HasMaxLength(100);
+        b.Property(p => p.Area).HasMaxLength(80);
+        b.Property(p => p.Name).HasMaxLength(120);
+        b.Property(p => p.Description).HasMaxLength(500);
+        b.Property(p => p.Source).HasMaxLength(100);
+        b.HasIndex(p => p.Key).IsUnique();
+        b.HasIndex(p => p.Source);
     }
 }
