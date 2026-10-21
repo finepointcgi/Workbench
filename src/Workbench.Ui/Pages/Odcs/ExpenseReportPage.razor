@@ -1,6 +1,7 @@
 @page "/expenses/{ReportId:guid}"
 @using Workbench.Contracts.Odcs
 @using Workbench.Ui.Odcs
+@inject IServiceProvider Services
 @inject IExpenseReportService Reports
 @inject IOdcService Odcs
 @inject IDialogService DialogService
@@ -270,11 +271,16 @@ else
 
     private async Task EditReportAsync()
     {
-        var parameters = new DialogParameters<ExpenseReportDialog> { { d => d.Existing, _detail!.Report } };
+        var custom = new FormCustomValues();
+        var parameters = new DialogParameters<ExpenseReportDialog> { { d => d.Existing, _detail!.Report }, { d => d.CustomValues, custom } };
         var dialog = await DialogService.ShowAsync<ExpenseReportDialog>("Edit expense report", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SaveExpenseReportRequest request })
         {
-            await RunAsync(() => Reports.UpdateReportAsync(ReportId, request));
+            await RunAsync(async () =>
+            {
+                await Reports.UpdateReportAsync(ReportId, request);
+                await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.ExpenseReport, ReportId, custom);
+            });
         }
     }
 

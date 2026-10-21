@@ -4,24 +4,29 @@
 
 <MudDialog>
     <DialogContent>
-        <MudStack Spacing="2">
-            <MudStack Row="true" Spacing="3">
-                <MudTextField T="string" @bind-Value="_code" Label="Code" Required="true" Immediate="true" Style="max-width:140px" data-testid="vendor-code" />
+        <ConfigurableForm EntityType="@CustomizableEntities.Vendor" RecordId="Vendor?.Id" @ref="_layout">
+            <FormField Key="code" Sm="3">
+                <MudTextField T="string" @bind-Value="_code" Label="Code" Required="true" Immediate="true" data-testid="vendor-code" />
+            </FormField>
+            <FormField Key="name" Sm="9">
                 <MudTextField T="string" Value="_name" ValueChanged="NameChanged" Label="Legal name" Required="true" Immediate="true" DebounceInterval="400" data-testid="vendor-name" />
-            </MudStack>
-            <MudStack Row="true" Spacing="3">
-                <MudTextField T="string" Value="_uei" ValueChanged="UeiChanged" Label="UEI (SAM.gov)" Immediate="true" DebounceInterval="400" MaxLength="12" Style="max-width:200px" />
-                <MudSelect T="VendorState" @bind-Value="_status" Label="Status" Style="max-width:160px"
+            </FormField>
+            <FormField Key="uei" Sm="4" Context="field">
+                <MudTextField T="string" Value="_uei" ValueChanged="UeiChanged" Label="UEI (SAM.gov)" Immediate="true" DebounceInterval="400" MaxLength="12" Required="field.Required" />
+            </FormField>
+            <FormField Key="status" Sm="4">
+                <MudSelect T="VendorState" @bind-Value="_status" Label="Status"
                            HelperText="@(_status == VendorState.OnHold ? "On hold blocks new bills and payments." : null)">
                     @foreach (var s in Enum.GetValues<VendorState>())
                     {
                         <MudSelectItem Value="s">@(s == VendorState.OnHold ? "On hold" : s.ToString())</MudSelectItem>
                     }
                 </MudSelect>
-                <MudNumericField T="int" @bind-Value="_terms" Label="Terms (net days)" Min="0" Max="365" Style="max-width:150px" />
-            </MudStack>
-            @if (_duplicates.Count > 0)
-            {
+            </FormField>
+            <FormField Key="paymentTermsDays" Sm="4">
+                <MudNumericField T="int" @bind-Value="_terms" Label="Terms (net days)" Min="0" Max="365" />
+            </FormField>
+            <FormContent After="paymentTermsDays" When="_duplicates.Count > 0">
                 <MudAlert Severity="Severity.Warning" Dense="true" data-testid="vendor-duplicates">
                     Possible duplicate: @string.Join("; ", _duplicates.Select(d => $"{d.Code} {d.Name} ({d.Reason.ToLowerInvariant()})"))
                     @if (_duplicates.All(d => !d.Reason.StartsWith("Same UEI", StringComparison.Ordinal)))
@@ -29,40 +34,48 @@
                         <MudCheckBox T="bool" @bind-Value="_confirmDuplicate" Label="This is a different vendor" Dense="true" />
                     }
                 </MudAlert>
-            }
-            <MudStack Row="true" Spacing="3">
-                <MudSelect T="string" @bind-Value="_size" Label="Business size" Clearable="true" Style="max-width:200px">
+            </FormContent>
+            <FormField Key="businessSize" Sm="4" Context="field">
+                <MudSelect T="string" @bind-Value="_size" Label="Business size" Clearable="true" Required="field.Required">
                     @foreach (var s in _sizes.Where(s => s.IsActive || s.Code == _size))
                     {
                         <MudSelectItem Value="s.Code">@s.Label</MudSelectItem>
                     }
                 </MudSelect>
-                <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_categories" Label="Socio-economic categories">
+            </FormField>
+            <FormField Key="socioEconomicCategories" Sm="8" Context="field">
+                <MudSelect T="string" MultiSelection="true" @bind-SelectedValues="_categories" Label="Socio-economic categories" Required="field.Required">
                     @foreach (var c in _socio.Where(c => c.IsActive || _categories.Contains(c.Code)))
                     {
                         <MudSelectItem Value="c.Code">@c.Label</MudSelectItem>
                     }
                 </MudSelect>
-            </MudStack>
-            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+            </FormField>
+            <FormField Key="is1099" Sm="4" ItemClass="d-flex align-center">
                 <MudSwitch T="bool" @bind-Value="_is1099" Label="1099 vendor" Color="Color.Primary" />
-                @if (_is1099)
-                {
-                    <MudSelect T="string" @bind-Value="_box" Label="1099 box">
-                        @foreach (var (box, label) in PurchasingCatalog.Form1099Boxes)
-                        {
-                            <MudSelectItem Value="box">@label</MudSelectItem>
-                        }
-                    </MudSelect>
-                }
-            </MudStack>
-            <MudTextField T="string" @bind-Value="_remitTo" Label="Remit-to address" Lines="3" />
-            <MudStack Row="true" Spacing="3">
-                <MudTextField T="string" @bind-Value="_contactName" Label="Contact" />
-                <MudTextField T="string" @bind-Value="_contactEmail" Label="Email" InputType="InputType.Email" autocomplete="off" />
-                <MudTextField T="string" @bind-Value="_contactPhone" Label="Phone" InputType="InputType.Telephone" autocomplete="off" Style="max-width:170px" />
-            </MudStack>
-            <CustomFieldsEditor @ref="_custom" EntityType="@CustomizableEntityTypes.Vendor" RecordId="Vendor?.Id" />
+            </FormField>
+            <FormField Key="form1099Box" Sm="8" When="_is1099">
+                <MudSelect T="string" @bind-Value="_box" Label="1099 box">
+                    @foreach (var (box, label) in PurchasingCatalog.Form1099Boxes)
+                    {
+                        <MudSelectItem Value="box">@label</MudSelectItem>
+                    }
+                </MudSelect>
+            </FormField>
+            <FormField Key="remitToAddress" Context="field">
+                <MudTextField T="string" @bind-Value="_remitTo" Label="Remit-to address" Lines="3" Required="field.Required" />
+            </FormField>
+            <FormField Key="contactName" Sm="4" Context="field">
+                <MudTextField T="string" @bind-Value="_contactName" Label="Contact" Required="field.Required" />
+            </FormField>
+            <FormField Key="contactEmail" Sm="5" Context="field">
+                <MudTextField T="string" @bind-Value="_contactEmail" Label="Email" InputType="InputType.Email" autocomplete="off" Required="field.Required" />
+            </FormField>
+            <FormField Key="contactPhone" Sm="3" Context="field">
+                <MudTextField T="string" @bind-Value="_contactPhone" Label="Phone" InputType="InputType.Telephone" autocomplete="off" Required="field.Required" />
+            </FormField>
+        </ConfigurableForm>
+        <MudStack Spacing="2" Class="mt-2">
             @if (_error is not null)
             {
                 <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
@@ -81,6 +94,7 @@
 
     [Parameter] public VendorDto? Vendor { get; set; }
 
+    private ConfigurableForm? _layout;
     private string? _code;
     private string? _name;
     private string? _uei;
@@ -181,11 +195,7 @@
             var id = _savedId ?? Vendor?.Id;
             var saved = id is null ? await Vendors.CreateAsync(request) : await Vendors.UpdateAsync(id.Value, request);
             _savedId = saved.Id;
-            if (_custom is not null && !await _custom.SaveAsync(saved.Id))
-            {
-                return; // The vendor is saved; the editor shows what's wrong with its details.
-            }
-
+            await (_layout?.SaveCustomFieldsAsync(saved.Id) ?? Task.CompletedTask);
             MudDialog.Close(DialogResult.Ok(saved));
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))

@@ -1,0 +1,32 @@
+@using Workbench.Contracts.Dashboards
+@* One KPI figure on a home page: the number, what it is, a second line and a link to the page behind it. *@
+
+@if (Data is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (Data.Error is { } error)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary" data-kpi-error>@error</MudText>
+}
+else if (Data.Kpi is { } kpi)
+{
+    <div data-kpi="@kpi.Kind">
+        <MudText Typo="Typo.h4" HtmlTag="p" Class="mb-0" data-kpi-value>@Format(kpi)</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">@kpi.Detail</MudText>
+        @if (kpi.Link is { } link)
+        {
+            <MudLink Href="@link" Typo="Typo.caption" aria-label="@($"View details: {kpi.Label}")">View details</MudLink>
+        }
+    </div>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo Us = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+
+    [Parameter]
+    public WidgetDataDto? Data { get; set; }
+
+    internal static string Format(KpiData kpi) =>
+        kpi.IsPercent ? kpi.Value.ToString("P0", Us) : kpi.IsCurrency ? kpi.Value.ToString("C0", Us) : kpi.Value.ToString("N0", Us);
+}

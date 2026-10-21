@@ -19,8 +19,10 @@ public sealed class DashboardService(IWorkbenchDbContextFactory dbFactory, ICurr
     public async Task<IReadOnlyList<DashboardSummary>> ListAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        // Role home pages are dashboards too, but they're managed from Admin › Customization, not listed here.
         var dashboards = await db.Set<Model.Dashboard>()
             .AsNoTracking()
+            .Where(d => !db.Set<Domain.Customization.RoleHomePage>().Any(h => h.DashboardId == d.Id))
             .OrderByDescending(d => d.UpdatedAtUtc)
             .Select(d => new DashboardSummary(d.Id, d.Name, d.Description, d.OwnerEmail, d.WorkspaceId, d.Widgets.Count,
                 d.CreatedAtUtc, d.UpdatedAtUtc))
@@ -181,6 +183,22 @@ public sealed class DashboardService(IWorkbenchDbContextFactory dbFactory, ICurr
         switch (request.Type)
         {
             case WidgetType.RichText:
+            case WidgetType.MyTodo:
+            case WidgetType.ThisWeek:
+            case WidgetType.WaitingOnYou:
+            case WidgetType.MySheetItems:
+            case WidgetType.Announcement:
+                break;
+            case WidgetType.Kpi when !(request.Config.Kpi is { } kpi && Enum.IsDefined(kpi)):
+                throw new ArgumentException("A KPI widget needs the figure to show.", nameof(request));
+            case WidgetType.ReportChart when request.Config.SavedReportId is null:
+                throw new ArgumentException("A report chart needs a saved report.", nameof(request));
+            case WidgetType.ListViewChart when request.Config.ListViewId is null:
+                throw new ArgumentException("A list view chart needs a saved list view.", nameof(request));
+            case WidgetType.Shortcuts:
+                ValidateShortcuts(request.Config.Shortcuts);
+                break;
+            case WidgetType.Kpi or WidgetType.ReportChart or WidgetType.ListViewChart:
                 break;
             case WidgetType.ContractFunding when request.Config.ContractId is null:
                 throw new ArgumentException("A contracts and funding widget needs a contract.", nameof(request));
@@ -193,6 +211,23 @@ public sealed class DashboardService(IWorkbenchDbContextFactory dbFactory, ICurr
         if (request.Config.MaxItems is < 1 or > 100)
         {
             throw new ArgumentException("An item list shows between 1 and 100 items.", nameof(request));
+        }
+    }
+
+    private static void ValidateShortcuts(IReadOnlyList<WidgetShortcut>? shortcuts)
+    {
+        if (shortcuts is null || shortcuts.Count is 0 or > 20)
+        {
+            throw new ArgumentException("A shortcuts widget has between 1 and 20 links.", nameof(shortcuts));
+        }
+
+        foreach (var link in shortcuts)
+        {
+            var href = link.Href?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(link.Label) || href.Contains(':', StringComparison.Ordinal) || href.StartsWith("//", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Each shortcut needs a label and a Workbench page (like time or purchasing/bills/new).", nameof(shortcuts));
+            }
         }
     }
 

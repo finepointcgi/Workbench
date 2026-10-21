@@ -53,7 +53,7 @@
         {
             <MudPaper Outlined="true" Class="pa-4 mb-3">
                 <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_selected is null ? "New employee" : _selected.DisplayName)</MudText>
-                <EmployeeEditor Employee="_selected" Employees="_employees" OrgUnits="_orgUnits" LaborCategories="_categories"
+                <EmployeeEditor @ref="_editor" Employee="_selected" Employees="_employees" OrgUnits="_orgUnits" LaborCategories="_categories"
                                 Save="SaveAsync" OnCancel="() => _editing = _selected is not null" />
             </MudPaper>
             @if (_selected is not null)
@@ -75,6 +75,7 @@
     private IReadOnlyList<OrgUnitDto> _orgUnits = [];
     private IReadOnlyList<LaborCategoryDto> _categories = [];
     private EmployeeDto? _selected;
+    private EmployeeEditor? _editor;
     private bool _editing;
     private bool _loading = true;
     private string? _search;
@@ -119,9 +120,15 @@
 
     private async Task SaveAsync(SaveEmployeeRequest request)
     {
+        var created = _selected is null;
         var saved = _selected is null
             ? await People.CreateEmployeeAsync(request)
             : await People.UpdateEmployeeAsync(_selected.Id, request);
+        if (created && _editor is not null)
+        {
+            await _editor.SaveCustomFieldsAsync(saved.Id);
+        }
+
         Snackbar.Add(_selected is null ? $"Created {saved.DisplayName}. Add a cost rate next." : $"Saved {saved.DisplayName}.", Severity.Success);
         await LoadAsync();
         _selected = _employees.FirstOrDefault(e => e.Id == saved.Id) ?? saved;

@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Identity.IRoleService, HttpRoleService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Identity.IPermissionCatalog, HttpPermissionCatalog>(client => client.BaseAddress = serverBaseAddress);
         services.AddAutomationBuilderClients(serverBaseAddress);
+        services.AddLayoutClients(serverBaseAddress);
         return services;
     }
 }

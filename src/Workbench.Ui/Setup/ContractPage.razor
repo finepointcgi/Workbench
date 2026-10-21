@@ -30,60 +30,60 @@ else
                     <MudAlert Severity="Severity.Info" Class="mb-3">Create a <MudLink Href="setup/customers">customer</MudLink> first.</MudAlert>
                 }
                 <MudForm @ref="_form">
-                    <MudGrid Spacing="2">
-                        <MudItem xs="12" sm="6">
+                    <ConfigurableForm EntityType="@CustomizableEntities.Contract" RecordId="_contract?.Id" @ref="_layout">
+                        <FormField Key="contractNumber" Sm="6">
                             <MudTextField @bind-Value="_number" Label="Contract number" Required="true" RequiredError="Contract number is required." Immediate="true" />
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="customerId" Sm="6">
                             <MudSelect T="Guid?" @bind-Value="_customerId" Label="Customer" Required="true" RequiredError="Customer is required.">
                                 @foreach (var c in _customers)
                                 {
                                     <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
                                 }
                             </MudSelect>
-                        </MudItem>
-                        <MudItem xs="12">
+                        </FormField>
+                        <FormField Key="name">
                             <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" />
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="type" Sm="6">
                             <MudSelect T="ContractKind" @bind-Value="_type" Label="Type">
                                 @foreach (var kind in Enum.GetValues<ContractKind>())
                                 {
                                     <MudSelectItem T="ContractKind" Value="kind">@SetupFormat.Label(kind) · @kind</MudSelectItem>
                                 }
                             </MudSelect>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="status" Sm="6">
                             <MudSelect T="ContractState" @bind-Value="_status" Label="Status">
                                 @foreach (var state in Enum.GetValues<ContractState>())
                                 {
                                     <MudSelectItem T="ContractState" Value="state">@state</MudSelectItem>
                                 }
                             </MudSelect>
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="periodStart" Sm="6">
                             <MudDatePicker @bind-Date="_start" Label="Period of performance start" Required="true" RequiredError="Start is required."
                                            DateFormat="yyyy-MM-dd" Editable="true" />
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="periodEnd" Sm="6">
                             <MudDatePicker @bind-Date="_end" Label="Period of performance end" Required="true" RequiredError="End is required."
                                            DateFormat="yyyy-MM-dd" Editable="true" Validation="@(new Func<DateTime?, string?>(ValidateEnd))" />
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="ceilingValue" Sm="6">
                             <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Ceiling value" Adornment="Adornment.Start" AdornmentText="$"
                                              Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(v => v < 0 ? "Can't be negative." : null))"
                                              Disabled="HasClins" HelperText="@(HasClins ? "Sum of exercised CLIN values." : "")" />
-                        </MudItem>
-                        <MudItem xs="12" sm="6">
+                        </FormField>
+                        <FormField Key="fundedValue" Sm="6">
                             <MudNumericField T="decimal" @bind-Value="_funded" Label="Funded value" Adornment="Adornment.Start" AdornmentText="$"
                                              Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(ValidateFunded))"
                                              HelperText="@(HasClins ? "Sum of CLIN funding; change it with a modification." : "Obligated to date. Can't exceed the ceiling.")"
                                              Disabled="HasClins" data-testid="contract-funded" />
-                        </MudItem>
-                        <MudItem xs="12">
+                        </FormField>
+                        <FormField Key="isPrime">
                             <MudSwitch @bind-Value="_isPrime" Label="We are the prime contractor" Color="Color.Primary" />
-                        </MudItem>
-                    </MudGrid>
+                        </FormField>
+                    </ConfigurableForm>
                 </MudForm>
                 <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="contract-save">
@@ -184,6 +184,7 @@ else
     private IReadOnlyList<LaborCategoryDto> _categories = [];
     private IReadOnlyList<BillRateDto> _rates = [];
     private MudForm _form = default!;
+    private ConfigurableForm? _layout;
     private bool _loading = true;
     private bool _saving;
 
@@ -264,12 +265,14 @@ else
             if (_contract is null)
             {
                 var created = await Contracts.CreateContractAsync(request);
+                await (_layout?.SaveCustomFieldsAsync(created.Id) ?? Task.CompletedTask);
                 Snackbar.Add($"Created {created.ContractNumber}. Add its bill rates next.", Severity.Success);
                 Navigation.NavigateTo($"setup/contracts/{created.Id}");
             }
             else
             {
                 _contract = await Contracts.UpdateContractAsync(_contract.Id, request);
+                await (_layout?.SaveCustomFieldsAsync(_contract.Id) ?? Task.CompletedTask);
                 Snackbar.Add("Contract saved.", Severity.Success);
             }
         }

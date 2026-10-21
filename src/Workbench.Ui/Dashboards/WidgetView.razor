@@ -26,7 +26,7 @@ else
             </div>
             break;
 
-        case WidgetType.Chart when Data.Chart is { } c:
+        case WidgetType.Chart or WidgetType.ReportChart or WidgetType.ListViewChart when Data.Chart is { } c:
             @if (c.Values.All(v => v == 0))
             {
                 <MudText Class="mud-text-secondary">No data to chart yet.</MudText>
@@ -146,6 +146,18 @@ else
 
         case WidgetType.RichText:
             <MarkdownView Source="@Data.Markdown" />
+            break;
+
+        case WidgetType.Kpi:
+            <Workbench.Ui.Home.KpiTile Data="Data" />
+            break;
+
+        case WidgetType.Announcement:
+            <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Campaign"><MarkdownView Source="@Data.Markdown" /></MudAlert>
+            break;
+
+        case WidgetType.MyTodo or WidgetType.ThisWeek or WidgetType.WaitingOnYou or WidgetType.MySheetItems or WidgetType.ListViewChart or WidgetType.Shortcuts:
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Shown on home pages, for each person.</MudText>
             break;
     }
 }

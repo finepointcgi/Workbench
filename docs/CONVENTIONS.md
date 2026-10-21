@@ -845,3 +845,20 @@ Checks:
   for the permission catalog; the default allows administrators. Record approval workflows (`ApprovalDocumentTypes.CustomPrefix`,
   `custom-…`) are created in Setup › Approval workflows and decided through `RecordApprovalHandler`.
 
+## Screen customization (form layouts, list views, role home pages)
+
+Full write-up: `docs/customization.md`.
+
+- **Forms** render their fields through `ConfigurableForm` (`<FormField Key="…">` per field, in the built order, with the
+  page's own grid widths; `<FormContent After="…">` for helper content that isn't a field). Keys are the camel-case save
+  request properties and must match `Application/Customization/BuiltInForms`. Domain-required fields keep their own
+  `Required="true"`; optional ones bind `Required="field.Required"`. Save custom field values after the record
+  (`SaveCustomFieldsAsync`, or `CustomFieldValues` for dialogs that return a request).
+- The server checks layout-required fields on every save through `FormRequirementProxy` (registered by
+  `AddWorkbenchCustomization`, above `AddWorkbenchIdentity`); a new form's save service goes in its `Guard<T>` list.
+- **Lists** render through `ConfigurableList<T>` with an `internal static readonly ListDefinition<T>`; leave out columns a
+  viewer may not see (or give them a field `PermissionKey`). Add a `ListSource<T>` in `Ui/Customization/ListSources.cs`.
+- **Home pages** are dashboards linked to a role (`RoleHomePage`); new widget types go in `WidgetType` (Contracts and
+  Domain), `WidgetDialog`, `WidgetView`/`HomeWidget` and, for server data, `HomeWidgetData`.
+- Managing layouts and sharing views are decided by `ICustomizationAccess` (Admin until the permission catalog lands); don't
+  check roles for them anywhere else.

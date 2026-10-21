@@ -1,7 +1,11 @@
 @using Workbench.Contracts.Dashboards
 @using Workbench.Contracts.ProjectAccounting
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Customization
+@using Workbench.Contracts.Reports
 @inject ISheetService SheetService
 @inject IContractService ContractService
+@inject IServiceProvider Services
 
 @* Configures a widget: type, title and size, then a sheet, then that sheet's columns. Closes with a SaveWidgetRequest. *@
 
@@ -30,7 +34,72 @@
                 </MudSelect>
             </MudStack>
 
-            @if (_type == WidgetType.RichText)
+            @if (HomePage)
+            {
+                <MudCheckBox T="bool" @bind-Value="_pinned" Label="Pinned: people can't hide it from their home page" Color="Color.Primary" Dense="true" data-field="pinned" />
+            }
+
+            @if (IsPersonal(_type))
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Each person sees their own @TypeLabel(_type).ToLowerInvariant(). Nothing to set up.</MudText>
+            }
+            else if (_type == WidgetType.Kpi)
+            {
+                <MudSelect T="KpiKind?" @bind-Value="_kpi" Label="Figure" data-field="kpi" HelperText="Computed with each viewer's own access: people see only figures their pages show.">
+                    @foreach (var kind in Enum.GetValues<KpiKind>())
+                    {
+                        <MudSelectItem T="KpiKind?" Value="kind">@KpiLabel(kind)</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else if (_type == WidgetType.ReportChart)
+            {
+                <MudSelect T="Guid?" @bind-Value="_reportId" Label="Saved report" data-field="report" HelperText="Charts the first text column against the first number column.">
+                    @foreach (var report in _reports)
+                    {
+                        <MudSelectItem T="Guid?" Value="report.Id">@report.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="ChartKind" @bind-Value="_chart" Label="Chart">
+                    @foreach (var kind in Enum.GetValues<ChartKind>())
+                    {
+                        <MudSelectItem T="ChartKind" Value="kind">@kind</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else if (_type == WidgetType.ListViewChart)
+            {
+                <MudSelect T="Guid?" @bind-Value="_viewId" Label="Saved list view" data-field="list-view" HelperText="Counts the view's rows by its group-by column. Share the view with the role first.">
+                    @foreach (var view in _views)
+                    {
+                        <MudSelectItem T="Guid?" Value="view.Id">@view.Name (@view.ListKey)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="ChartKind" @bind-Value="_chart" Label="Chart">
+                    @foreach (var kind in Enum.GetValues<ChartKind>())
+                    {
+                        <MudSelectItem T="ChartKind" Value="kind">@kind</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else if (_type == WidgetType.Shortcuts)
+            {
+                @foreach (var link in _shortcuts)
+                {
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" @key="link">
+                        <MudTextField T="string" @bind-Value="link.Label" Label="Label" Immediate="true" />
+                        <MudTextField T="string" @bind-Value="link.Href" Label="Page" Placeholder="time" Immediate="true" HelperText="A Workbench page, like time or purchasing/bills/new" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="@($"Remove the shortcut {link.Label}")" OnClick="() => _shortcuts.Remove(link)" />
+                    </MudStack>
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" OnClick="() => _shortcuts.Add(new ShortcutRow())" data-field="add-shortcut">Add shortcut</MudButton>
+            }
+            else if (_type == WidgetType.Announcement)
+            {
+                <MudTextField @bind-Value="_markdown" Label="Message (Markdown)" Lines="5" Variant="Variant.Outlined" data-field="announcement"
+                              HelperText="Shown as a notice. **bold**, *italic*, lists and [links](https://…). HTML is shown as text." />
+            }
+            else if (_type == WidgetType.RichText)
             {
                 <MudTextField @bind-Value="_markdown" Label="Text (Markdown)" Lines="8" Variant="Variant.Outlined"
                               HelperText="Headings (#), lists (-, 1.), **bold**, *italic*, `code` and [links](https://…). HTML is shown as text." />
@@ -144,6 +213,39 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<SheetSummary> Sheets { get; set; } = [];
 
+    /// <summary>For a role home page: offers the home widgets and pinning.</summary>
+    [Parameter]
+    public bool HomePage { get; set; }
+
+    private sealed class ShortcutRow
+    {
+        public string? Label { get; set; }
+        public string? Href { get; set; }
+    }
+
+    private bool _pinned;
+    private KpiKind? _kpi;
+    private Guid? _reportId;
+    private Guid? _viewId;
+    private List<ShortcutRow> _shortcuts = [new()];
+    private IReadOnlyList<SavedReportDto> _reports = [];
+    private IReadOnlyList<SavedListViewDto> _views = [];
+
+    private static bool IsPersonal(WidgetType type) => type is WidgetType.MyTodo or WidgetType.ThisWeek or WidgetType.WaitingOnYou or WidgetType.MySheetItems;
+
+    private static bool NeedsNoSheet(WidgetType type) =>
+        IsPersonal(type) || type is WidgetType.Kpi or WidgetType.ReportChart or WidgetType.ListViewChart or WidgetType.Shortcuts or WidgetType.Announcement;
+
+    public static string KpiLabel(KpiKind kind) => kind switch
+    {
+        KpiKind.FundingRemaining => "Funding remaining",
+        KpiKind.Utilization => "Utilization",
+        KpiKind.ArAging => "AR aging",
+        KpiKind.OpenPurchaseOrders => "Open purchase orders",
+        KpiKind.Pipeline => "Pipeline",
+        _ => kind.ToString(),
+    };
+
     private WidgetType _type = WidgetType.Metric;
     private string _title = string.Empty;
     private int _width = 6;
@@ -162,11 +264,25 @@
     private Guid? _contractId;
     private IReadOnlyList<ContractDto>? _contracts;
 
-    private static readonly WidgetType[] OfferedTypes = Enum.GetValues<WidgetType>();
+    // Dashboards get everything that works without a person behind it; home pages get the personal widgets too.
+    private IEnumerable<WidgetType> OfferedTypes => Enum.GetValues<WidgetType>()
+        .Where(t => HomePage || !(IsPersonal(t) || t is WidgetType.ListViewChart or WidgetType.Shortcuts));
 
     protected override async Task OnInitializedAsync()
     {
         _contracts = await ContractService.ListContractsAsync();
+        try
+        {
+            _reports = Services.GetService<ISavedReportService>() is { } saved ? await saved.ListAsync() : [];
+            _views = HomePage && Services.GetService<IListViewService>() is { } views
+                ? (await views.ListAllAsync()).Where(v => v.Visibility != ListViewVisibility.Personal).ToList()
+                : [];
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Optional choices: the widget types that need them just can't be saved.
+        }
+
         if (Widget is not { } w)
         {
             _title = TypeLabel(_type);
@@ -179,6 +295,8 @@
             (c.Aggregate, c.ValueColumnId, c.FilterColumnId, c.FilterValue, c.Chart, c.GroupColumnId, c.MaxItems, c.Markdown);
         _sheetId = c.SheetId;
         _contractId = c.ContractId;
+        (_pinned, _kpi, _reportId, _viewId) = (c.Pinned, c.Kpi, c.SavedReportId, c.ListViewId);
+        _shortcuts = (c.Shortcuts ?? []).Select(l => new ShortcutRow { Label = l.Label, Href = l.Href }).ToList();
         await LoadColumnsAsync();
     }
 
@@ -191,7 +309,15 @@
     private ColumnDto? FilterColumn => _sheet?.Columns.FirstOrDefault(c => c.Id == _filterColumnId);
 
     private bool CanSave =>
-        !string.IsNullOrWhiteSpace(_title) && (_type == WidgetType.RichText
+        !string.IsNullOrWhiteSpace(_title) && (_type switch
+        {
+            WidgetType.Kpi => _kpi is not null,
+            WidgetType.ReportChart => _reportId is not null,
+            WidgetType.ListViewChart => _viewId is not null,
+            WidgetType.Shortcuts => _shortcuts.Count > 0 && _shortcuts.All(l => !string.IsNullOrWhiteSpace(l.Label) && !string.IsNullOrWhiteSpace(l.Href)),
+            var t when NeedsNoSheet(t) => true,
+            _ => false,
+        } || _type == WidgetType.RichText
             || (_type == WidgetType.ContractFunding ? _contractId is not null : _sheet is not null && _type switch
         {
             WidgetType.Metric => _aggregate == MetricAggregate.Count || _valueColumnId is not null,
@@ -222,6 +348,15 @@
         WidgetType.ProjectFinancials => "Project financials",
         WidgetType.ContractFunding => "Contracts and funding",
         WidgetType.EarnedValue => "Earned value",
+        WidgetType.MyTodo => "To do",
+        WidgetType.ThisWeek => "This week",
+        WidgetType.WaitingOnYou => "Waiting on you",
+        WidgetType.MySheetItems => "My sheet items",
+        WidgetType.Kpi => "KPI tile",
+        WidgetType.ReportChart => "Report chart",
+        WidgetType.ListViewChart => "List view chart",
+        WidgetType.Shortcuts => "Shortcuts",
+        WidgetType.Announcement => "Announcement",
         _ => "Rich text",
     };
 
@@ -269,7 +404,14 @@
 
     private void Submit()
     {
-        var config = _type == WidgetType.RichText ? new WidgetConfig(Markdown: _markdown ?? string.Empty)
+        var config = NeedsNoSheet(_type) ? new WidgetConfig(
+                Markdown: _type == WidgetType.Announcement ? _markdown ?? string.Empty : null,
+                Chart: _chart,
+                Kpi: _type == WidgetType.Kpi ? _kpi : null,
+                SavedReportId: _type == WidgetType.ReportChart ? _reportId : null,
+                ListViewId: _type == WidgetType.ListViewChart ? _viewId : null,
+                Shortcuts: _type == WidgetType.Shortcuts ? _shortcuts.Select(l => new WidgetShortcut(l.Label!.Trim(), l.Href!.Trim().TrimStart('/'))).ToList() : null)
+            : _type == WidgetType.RichText ? new WidgetConfig(Markdown: _markdown ?? string.Empty)
             : _type == WidgetType.ContractFunding ? new WidgetConfig(ContractId: _contractId)
             : new WidgetConfig(
                 SheetId: _sheetId,
@@ -280,6 +422,6 @@
                 Chart: _chart,
                 GroupColumnId: _type == WidgetType.Chart ? _groupColumnId : null,
                 MaxItems: Math.Clamp(_maxItems, 1, 100));
-        MudDialog.Close(DialogResult.Ok(new SaveWidgetRequest(_title.Trim(), _type, _width, _height, config)));
+        MudDialog.Close(DialogResult.Ok(new SaveWidgetRequest(_title.Trim(), _type, _width, _height, config with { Pinned = HomePage && _pinned })));
     }
 }
