@@ -622,7 +622,7 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("AssigneeRole")
-                        .HasMaxLength(32)
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("AssigneesCsv")
@@ -1649,6 +1649,438 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("RuleId", "ItemId", "TriggerDate");
 
                     b.ToTable("RuleRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationApprovalRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ApprovalInstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AutomationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovalInstanceId")
+                        .IsUnique();
+
+                    b.HasIndex("DocumentType", "RecordId");
+
+                    b.ToTable("AutomationApprovalRequests", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationQueueItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Actor")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("AutomationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangesJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DedupKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Depth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ParentRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrincipalOverride")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceEventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerDetail")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DedupKey")
+                        .IsUnique();
+
+                    b.HasIndex("ProcessedAtUtc", "CreatedAtUtc");
+
+                    b.ToTable("AutomationQueue", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CurrentVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CurrentVersionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasBlockingAction")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TemplateKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerKeys")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsEnabled", "DeletedAtUtc");
+
+                    b.ToTable("Automations", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Actor")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AutomationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AutomationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConditionsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Depth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InputsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDryRun")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ParentRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Principal")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecordLabel")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StepsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerDetail")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAtUtc");
+
+                    b.HasIndex("AutomationId", "StartedAtUtc");
+
+                    b.HasIndex("AutomationId", "RecordId", "StartedAtUtc");
+
+                    b.ToTable("AutomationRuns", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EventCursorUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxChainDepth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxRunsPerRecordPerHour")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PausedAll")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("PausedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PausedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AutomationSettings", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssigneeEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AutomationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompletedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Link")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssigneeEmail", "CompletedAtUtc");
+
+                    b.ToTable("AutomationTasks", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationTriggerState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AutomationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FiredAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutomationId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("AutomationTriggerStates", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AutomationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutomationId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("AutomationVersions", (string)null);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Billing.BilledSource", b =>
@@ -5504,6 +5936,574 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("ExchangeRates", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Customization.CustomFieldDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultValue")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FieldType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HelpText")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsSensitive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LinkEntityType")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ReadOnlyAfterApproval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ValueListKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "Key")
+                        .IsUnique();
+
+                    b.ToTable("CustomFieldDefinitions", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.CustomFieldValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("BoolValue")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("DateValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("NumberValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SearchText")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TextValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "RecordId");
+
+                    b.HasIndex("FieldId", "RecordId")
+                        .IsUnique();
+
+                    b.HasIndex("FieldId", "SearchText");
+
+                    b.ToTable("CustomFieldValues", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.FormLayout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(140)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SectionsJson")
+                        .IsRequired()
+                        .HasMaxLength(100000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("FormLayout");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.HomePagePreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DashboardId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HiddenJson")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OrderJson")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail", "DashboardId")
+                        .IsUnique();
+
+                    b.ToTable("HomePagePreference");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.ListViewPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ListKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ViewId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail", "ListKey")
+                        .IsUnique();
+
+                    b.ToTable("ListViewPreference");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.NumberSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("NextValue")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentType", "ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("NumberSequences", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.NumberingScheme", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Pattern")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PerCompany")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ResetEachYear")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentType")
+                        .IsUnique();
+
+                    b.ToTable("NumberingSchemes", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.RecordSubStatus", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParentValue")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SetKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SetKey", "RecordId")
+                        .IsUnique();
+
+                    b.ToTable("RecordSubStatuses", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.RoleHomePage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DashboardId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DashboardId")
+                        .IsUnique();
+
+                    b.HasIndex("RoleKey")
+                        .IsUnique();
+
+                    b.ToTable("RoleHomePage");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.SavedListView", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ListKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListKey");
+
+                    b.HasIndex("OwnerEmail");
+
+                    b.ToTable("SavedListView");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.StatusLabel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SetKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SetKey", "Value")
+                        .IsUnique();
+
+                    b.ToTable("StatusLabels", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.SubStatus", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ParentValue")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SetKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SetKey", "Code")
+                        .IsUnique();
+
+                    b.ToTable("SubStatuses", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.ValueList", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("ValueLists", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.ValueListItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ValueListId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ValueListId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("ValueListItems", (string)null);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Dashboards.Dashboard", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6004,6 +7004,81 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("EvmWorkPackage");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Files.ReceiptDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("CheckIn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("CheckOut")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FirstAttachedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadSource")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadingJson")
+                        .HasMaxLength(16000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RemovedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RemovedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Vendor")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FileId")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerEmail", "CreatedAtUtc");
+
+                    b.ToTable("ReceiptDocument");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Files.StoredFile", b =>
@@ -7193,33 +8268,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("IsAdmin")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsBusinessDevelopment")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsFinance")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsHr")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsMaterials")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsPricing")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsProjectManager")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsResourceManager")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsTimekeeper")
-                        .HasColumnType("INTEGER");
-
                     b.Property<DateTime?>("LastSeenAtUtc")
                         .HasColumnType("TEXT");
 
@@ -7238,6 +8286,221 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("AppUser");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.RegisteredPermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Area")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("GrantedTo")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Sensitive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.HasIndex("Source");
+
+                    b.ToTable("RegisteredPermissions", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.Role", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BuiltIn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Roles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000004"),
+                            BuiltIn = 4,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Everything, including users, roles and every workspace.",
+                            Name = "Admin",
+                            NormalizedName = "admin"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000002"),
+                            BuiltIn = 2,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Rates, contracts, budgets, accounting, billing, payables, payroll and project setup.",
+                            Name = "Finance",
+                            NormalizedName = "finance"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000010"),
+                            BuiltIn = 16,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Runs the projects they manage: setup, budgets, staffing and approvals; creates projects.",
+                            Name = "Project manager",
+                            NormalizedName = "project manager"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000001"),
+                            BuiltIn = 1,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Sees everyone's timesheets and the Team time page.",
+                            Name = "Timekeeper",
+                            NormalizedName = "timekeeper"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000008"),
+                            BuiltIn = 8,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Staffs every project and sees capacity and utilization (no cost rates).",
+                            Name = "Resource manager",
+                            NormalizedName = "resource manager"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000020"),
+                            BuiltIn = 32,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Personnel records, EEO data, positions, compensation, benefits, onboarding and offboarding.",
+                            Name = "HR",
+                            NormalizedName = "hr"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000040"),
+                            BuiltIn = 64,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Parts, inventory, BOMs, work orders, MRP, quality and shipping.",
+                            Name = "Materials",
+                            NormalizedName = "materials"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000080"),
+                            BuiltIn = 128,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "The capture pipeline: leads, opportunities, accounts and forecast.",
+                            Name = "Business development",
+                            NormalizedName = "business development"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000000100"),
+                            BuiltIn = 256,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Builds, compares and locks proposal prices.",
+                            Name = "Pricing",
+                            NormalizedName = "pricing"
+                        },
+                        new
+                        {
+                            Id = new Guid("7b1e0000-0000-4000-8000-000000001000"),
+                            BuiltIn = 0,
+                            CreatedAtUtc = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Everyone: records their own time, expenses, travel and leave, and sees what's shared with them. Held by every user.",
+                            Name = "Employee",
+                            NormalizedName = "employee"
+                        });
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.RolePermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Permission");
+
+                    b.HasIndex("RoleId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("RolePermissions", (string)null);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Identity.SignInSettings", b =>
@@ -7342,6 +8605,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CustomRoleIds")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
@@ -7360,6 +8627,42 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("SsoGroupMapping");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.UserRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AssignedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssignedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScopeIds")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ScopeKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("UserId", "RoleId")
+                        .IsUnique();
+
+                    b.ToTable("UserRoles", (string)null);
                 });
 
             modelBuilder.Entity("Workbench.Domain.Identity.WorkspaceMember", b =>
@@ -7740,6 +9043,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<string>("CreatedBy")
                         .IsRequired()
                         .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CustomRoleIds")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
@@ -17639,7 +18946,7 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SharedWith")
-                        .HasMaxLength(200)
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("StandardKey")
@@ -18652,7 +19959,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.Property<string>("OrgRoles")
                         .IsRequired()
-                        .HasMaxLength(100)
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Permissions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleChanges")
+                        .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("UserEmail")
@@ -18871,6 +20186,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CustomRoleIds")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -18889,39 +20208,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsAdmin")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsBusinessDevelopment")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsFinance")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsHr")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsMaterials")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsPricing")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsProjectManager")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsResourceManager")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsTimekeeper")
-                        .HasColumnType("INTEGER");
-
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RevokedBy")
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Roles")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -19991,6 +21286,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Automations.AutomationVersion", b =>
+                {
+                    b.HasOne("Workbench.Domain.Automations.AutomationRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AutomationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.BilledSource", b =>
                 {
                     b.HasOne("Workbench.Domain.Billing.InvoiceLine", null)
@@ -20746,6 +22050,33 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Customization.CustomFieldValue", b =>
+                {
+                    b.HasOne("Workbench.Domain.Customization.CustomFieldDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("FieldId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.RoleHomePage", b =>
+                {
+                    b.HasOne("Workbench.Domain.Dashboards.Dashboard", null)
+                        .WithMany()
+                        .HasForeignKey("DashboardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Customization.ValueListItem", b =>
+                {
+                    b.HasOne("Workbench.Domain.Customization.ValueList", null)
+                        .WithMany("Items")
+                        .HasForeignKey("ValueListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Dashboards.Widget", b =>
                 {
                     b.HasOne("Workbench.Domain.Dashboards.Dashboard", null)
@@ -20881,6 +22212,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
                         .WithMany()
                         .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Files.ReceiptDocument", b =>
+                {
+                    b.HasOne("Workbench.Domain.Files.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -21117,6 +22457,30 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("ReportsToPositionId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.RolePermission", b =>
+                {
+                    b.HasOne("Workbench.Domain.Identity.Role", null)
+                        .WithMany("Permissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.UserRole", b =>
+                {
+                    b.HasOne("Workbench.Domain.Identity.Role", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Identity.WorkspaceMember", b =>
@@ -24192,6 +25556,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Customization.ValueList", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Dashboards.Dashboard", b =>
                 {
                     b.Navigation("Widgets");
@@ -24230,6 +25599,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
             modelBuilder.Entity("Workbench.Domain.Hr.EmployeeChecklist", b =>
                 {
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Identity.Role", b =>
+                {
+                    b.Navigation("Permissions");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Imports.ImportJob", b =>

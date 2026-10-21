@@ -47,8 +47,9 @@ public static class CustomRolesMigration
         foreach (var (column, role) in Flags)
         {
             migrationBuilder.Sql(
-                $"INSERT INTO \"UserRoles\" (\"Id\", \"UserId\", \"RoleId\", \"AssignedAtUtc\", \"AssignedBy\") " +
-                $"SELECT {newId}, u.\"Id\", {Id(BuiltInRoles.IdOf(role))}, {now}, 'migration' FROM \"AppUser\" u " +
+                // ScopeKind 0: the role applies everywhere, as the flag did.
+                $"INSERT INTO \"UserRoles\" (\"Id\", \"UserId\", \"RoleId\", \"ScopeKind\", \"AssignedAtUtc\", \"AssignedBy\") " +
+                $"SELECT {newId}, u.\"Id\", {Id(BuiltInRoles.IdOf(role))}, 0, {now}, 'migration' FROM \"AppUser\" u " +
                 $"WHERE u.\"{column}\" = {isTrue} AND NOT EXISTS (SELECT 1 FROM \"UserRoles\" r WHERE r.\"UserId\" = u.\"Id\" AND r.\"RoleId\" = {Id(BuiltInRoles.IdOf(role))});");
         }
 
