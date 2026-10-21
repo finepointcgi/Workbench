@@ -65,6 +65,7 @@ else
     private List<string> _tabs = [];
     private string _tab = "overview";
     private bool _notFound;
+    private int _reloads;
     private string? _error;
 
     private string TabLabel => ProjectsFormat.Tabs.FirstOrDefault(t => t.Slug == _tab).Label ?? "";
@@ -111,6 +112,7 @@ else
 
     private async Task ReloadAsync()
     {
+        _reloads++;
         await LoadAsync();
         StateHasChanged();
     }
@@ -130,7 +132,11 @@ else
             <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="ProjectId" Changed="ReloadAsync" />
         </div>,
         "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
-        "team" => @<ProjectTeamTab ProjectId="ProjectId" />,
+        "staffing" => @<div>
+            <Workbench.Ui.Resourcing.ProjectStaffingPanel ProjectId="ProjectId" Changed="ReloadAsync" />
+            <MudDivider Class="my-6" />
+            <ProjectTeamTab ProjectId="ProjectId" @key="_reloads" />
+        </div>,
         "setup" => @<ProjectSetupTab Hub="_hub!" />,
         _ => @<span />,
     };

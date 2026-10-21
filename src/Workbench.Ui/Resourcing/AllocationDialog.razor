@@ -1,9 +1,12 @@
-@* Create or edit an allocation: person, project (only those you may manage), optional WBS element, hours or percent per week. *@
+@* Create or edit staffed hours (an allocation): person, project (only those you may manage), optional WBS element, hours or percent per week. *@
 @inject IProjectService ProjectService
 
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Hours count against the labor category the person bills as. To staff against a project's budget, with checks, use the project's Staffing tab.
+            </MudText>
             <MudSelect T="Guid" Label="Person" @bind-Value="_employeeId" Required="true" data-testid="alloc-person">
                 @foreach (var e in Employees)
                 {

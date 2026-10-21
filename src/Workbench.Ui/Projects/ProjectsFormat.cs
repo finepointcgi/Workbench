@@ -8,19 +8,22 @@ namespace Workbench.Ui.Projects;
 /// <summary>Labels, colors and tab slugs for the Projects hub.</summary>
 public static class ProjectsFormat
 {
-    /// <summary>The project page's tabs in order, as URL slugs (<c>/projects/{id}/{slug}</c>) and labels.</summary>
+    /// <summary>
+    /// The project page's tabs in order, as URL slugs (<c>/projects/{id}/{slug}</c>) and labels. The first ones follow how a
+    /// project is set up: the plan (schedule), the budget by labor category, then staffing people into it.
+    /// </summary>
     public static readonly IReadOnlyList<(string Slug, string Label)> Tabs =
     [
         ("overview", "Overview"),
         ("plan", "Plan"),
+        ("budgets", "Budget"),
+        ("staffing", "Staffing"),
         ("financials", "Financials"),
-        ("budgets", "Budgets"),
+        ("costs", "Costs"),
         ("revenue", "Revenue"),
         ("evm", "Earned value"),
         ("narrative", "Monthly narrative"),
         ("ceilings", "Ceilings & closeout"),
-        ("costs", "Costs"),
-        ("team", "Team"),
         ("setup", "Setup"),
     ];
 
@@ -35,18 +38,20 @@ public static class ProjectsFormat
         "narrative" => tabs.Financials, // Same rule as financials: Finance, Admin or the project's manager.
         "ceilings" => tabs.Ceilings,
         "costs" => tabs.Costs,
-        "team" => tabs.Team,
+        "staffing" => tabs.Team, // budget against staffing, and who charges to the project
         "setup" => tabs.Setup,
         _ => false,
     };
 
-    /// <summary>The slug for a route segment, accepting the older names ("odcs" for Costs, "earned-value").</summary>
+    /// <summary>The slug for a route segment, accepting the older names ("odcs" for Costs, "earned-value", "team" for Staffing).</summary>
     public static string Normalize(string? tab) => tab?.Trim().ToLowerInvariant() switch
     {
         null or "" => "overview",
         "odcs" => "costs",
         "earned-value" => "evm",
         "closeout" => "ceilings",
+        "team" => "staffing",
+        "budget" => "budgets",
         var t => t,
     };
 

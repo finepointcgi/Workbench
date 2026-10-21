@@ -63,7 +63,7 @@ public sealed class ProjectHubPageTests
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
 
         page.WaitForAssertion(() => Assert.Equal(
-            ["Overview", "Financials", "Budgets", "Revenue", "Earned value", "Monthly narrative", "Ceilings & closeout", "Team"], TabLabels(page)));
+            ["Overview", "Budget", "Staffing", "Financials", "Revenue", "Earned value", "Monthly narrative", "Ceilings & closeout"], TabLabels(page)));
         foreach (var label in new[] { "Spent so far", "Budget", "Forecast at completion", "Funding left" })
         {
             Assert.Contains(label, page.Find("[data-testid=key-numbers]").TextContent);
@@ -102,6 +102,8 @@ public sealed class ProjectHubPageTests
     [InlineData("odcs", "costs")]
     [InlineData("EVM", "evm")]
     [InlineData("earned-value", "evm")]
+    [InlineData("team", "staffing")]
+    [InlineData("budget", "budgets")]
     public void Older_tab_names_still_work(string? segment, string slug) => Assert.Equal(slug, ProjectsFormat.Normalize(segment));
 
     [Fact]

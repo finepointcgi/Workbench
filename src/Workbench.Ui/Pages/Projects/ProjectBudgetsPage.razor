@@ -37,9 +37,35 @@ else
         {
             <MudButton Href="@($"projects/{ProjectId}/financials")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Insights">Financials</MudButton>
         }
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => NewVersionAsync(BudgetVersionSource.Empty, null)">New version</MudButton>
+        @if (_versions.Count > 0)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => NewVersionAsync(BudgetVersionSource.Empty, null)">New version</MudButton>
+        }
     </MudStack>
+    <MudText Typo="Typo.body2" HtmlTag="div" Class="mud-text-secondary mb-3" Style="max-width: 72ch">
+        Budget each WBS element in hours by <Term Key="labor-category">labor category</Term>, the way the contract is priced, plus dollars for other direct costs.
+        The Current version is the one staffing and financials compare against; a locked Baseline keeps the approved numbers.
+    </MudText>
 
+    @if (_versions.Count == 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="budget-empty">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">No budget yet</MudText>
+            <MudText Class="mud-text-secondary mb-3">
+                Start with an empty working budget and add hours by labor category to each WBS element, for example
+                1,200 Systems Engineer II hours on 1.2.@(_project.SheetId is not null ? " Or start from the plan sheet's Planned hours and Budget columns." : "")
+            </MudText>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartAsync" Disabled="_busy" data-testid="start-budget">Start the budget</MudButton>
+                @if (_project.SheetId is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.TableChart" Disabled="_busy" OnClick="() => NewVersionAsync(BudgetVersionSource.PlanSheet, null)">Start from the plan sheet</MudButton>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
     <MudSimpleTable Dense="true" Hover="true" Outlined="true" Class="mb-3">
         <thead>
             <tr><th>Version</th><th>Kind</th><th style="text-align: right">Hours</th><th style="text-align: right">Amount</th><th>Lines</th><th>Created</th><th>Status</th></tr>
@@ -64,10 +90,6 @@ else
                     </td>
                 </tr>
             }
-            @if (_versions.Count == 0)
-            {
-                <tr><td colspan="7" class="mud-text-secondary">No budget versions yet. Create one empty or from the plan sheet.</td></tr>
-            }
         </tbody>
     </MudSimpleTable>
 
@@ -80,6 +102,7 @@ else
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Upgrade" Disabled="!CanPromote || _busy" OnClick="PromoteAsync">Promote to Current</MudButton>
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PriceChange" Disabled="_selected is null || _selected.Version.IsLocked || _busy" OnClick="RepriceAsync">Reprice</MudButton>
     </MudStack>
+    }
 
     @if (_selected is not null)
     {
@@ -181,6 +204,15 @@ else
             Snackbar.Add($"Created {created.Version.Kind} \"{created.Version.Name}\" with {created.Lines.Count} lines.", Severity.Success);
         });
     }
+
+    /// <summary>The one-click start: an empty Current version, which staffing and financials compare against.</summary>
+    private async Task StartAsync() => await RunAsync(async () =>
+    {
+        var created = await Budgets.CreateVersionAsync(ProjectId, new CreateBudgetVersionRequest("Working budget", BudgetVersionKind.Current, BudgetVersionSource.Empty,
+            Description: "Hours by labor category on each WBS element."));
+        await RefreshAsync(created.Version.Id);
+        Snackbar.Add("Budget started. Add a row for each WBS element and labor category, then type the hours.", Severity.Success);
+    });
 
     private async Task SaveLinesAsync(IReadOnlyList<SaveBudgetLineRequest> lines)
     {

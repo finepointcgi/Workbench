@@ -1,131 +1,32 @@
-@* A project's remaining budget hours by labor category against allocated hours, with "generate allocations from plan". *@
-@inject IResourcePlanningService Planning
-@inject IResourceAllocationService Allocations
-@inject IDialogService DialogService
-@inject ISnackbar Snackbar
+@* Resourcing's Project staffing tab: pick a project and see the same budget-against-staffing panel as the project's own Staffing tab. *@
 
-<MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-2">
-    <MudSelect T="Guid?" Label="Project" Value="_projectId" ValueChanged="async v => { _projectId = v; await LoadAsync(); }" Style="min-width:280px" data-testid="staffing-project">
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
+    <MudSelect T="Guid?" Label="Project" Value="_projectId" ValueChanged="v => _projectId = v" Style="min-width:280px" data-testid="staffing-project">
         @foreach (var p in Lookups.Projects)
         {
             <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
         }
     </MudSelect>
-    <MudSpacer />
-    @if (_projectId is { } id && Lookups.ManageableProjects.Any(p => p.Id == id))
+    @if (_projectId is { } id)
     {
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AccountTree" OnClick="GenerateAsync" Disabled="_busy" data-testid="generate-from-plan">Generate allocations from plan</MudButton>
+        <MudButton Href="@($"projects/{id}/staffing")" Variant="Variant.Text" EndIcon="@Icons.Material.Filled.OpenInNew">Open the project</MudButton>
     }
 </MudStack>
 
-@if (_error is not null)
+@if (_projectId is { } projectId)
 {
-    <MudAlert Severity="Severity.Warning" Dense="true">@_error</MudAlert>
+    <ProjectStaffingPanel ProjectId="projectId" @key="projectId" />
 }
-else if (_staffing is not null)
+else
 {
-    @foreach (var note in _staffing.Notes)
-    {
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
-    }
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-        @(_staffing.BudgetVersionName is { } v ? $"Budget: {v}" : "No budget") · remaining @ResourcingFormat.Hours(_staffing.RemainingBudgetHours) h ·
-        allocated from this week @ResourcingFormat.Hours(_staffing.AllocatedHours) h
-    </MudText>
-    <MudSimpleTable Dense="true" Hover="true" data-testid="staffing-table">
-        <thead>
-            <tr>
-                <th>Labor category</th>
-                <th style="text-align:right">Budget h</th>
-                <th style="text-align:right">Actual h</th>
-                <th style="text-align:right">Remaining h</th>
-                <th style="text-align:right">Allocated h</th>
-                <th style="text-align:right">Gap h</th>
-                <th>Status</th>
-                <th>People</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var row in _staffing.Rows)
-            {
-                var (text, color) = ResourcingFormat.Gap(row.Status);
-                <tr data-category="@row.LaborCategory">
-                    <td>@row.LaborCategory</td>
-                    <td style="text-align:right">@ResourcingFormat.Hours(row.BudgetHours)</td>
-                    <td style="text-align:right">@ResourcingFormat.Hours(row.ActualHours)</td>
-                    <td style="text-align:right">@ResourcingFormat.Hours(row.RemainingBudgetHours)</td>
-                    <td style="text-align:right">@ResourcingFormat.Hours(row.AllocatedHours)</td>
-                    <td style="text-align:right" class="@(row.Gap < 0 ? "mud-error-text" : null)">@ResourcingFormat.Hours(row.Gap)</td>
-                    <td><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="color">@text</MudChip></td>
-                    <td class="mud-text-secondary" style="font-size:0.8rem">@string.Join(", ", row.People)</td>
-                </tr>
-            }
-        </tbody>
-    </MudSimpleTable>
+    <MudText Class="mud-text-secondary">Pick a project to compare its labor budget with the people staffed on it.</MudText>
 }
 
 @code {
     [Parameter, EditorRequired] public ResourcingContext Lookups { get; set; } = default!;
 
     private Guid? _projectId;
-    private ProjectStaffingDto? _staffing;
-    private string? _error;
-    private bool _busy;
 
-    protected override async Task OnInitializedAsync()
-    {
+    protected override void OnInitialized() =>
         _projectId = (Lookups.ManageableProjects.FirstOrDefault() ?? Lookups.Projects.FirstOrDefault())?.Id;
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
-    {
-        _error = null;
-        _staffing = null;
-        if (_projectId is not { } id)
-        {
-            return;
-        }
-
-        try
-        {
-            _staffing = await Planning.GetProjectStaffingAsync(id);
-        }
-        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
-        {
-            _error = ex.Message;
-        }
-    }
-
-    private async Task GenerateAsync()
-    {
-        var confirm = await DialogService.ShowMessageBoxAsync("Generate allocations from plan",
-            "Replace this project's plan-generated allocations from this week on with allocations from the plan sheet (Person assignments and task dates)? Manual allocations are kept.",
-            yesText: "Generate", cancelText: "Cancel");
-        if (confirm != true || _projectId is not { } id)
-        {
-            return;
-        }
-
-        _busy = true;
-        try
-        {
-            var result = await Allocations.GenerateFromPlanAsync(id);
-            Snackbar.Add($"Created {result.Created} weekly allocations ({ResourcingFormat.Hours(result.TotalHours)} h); replaced {result.Replaced}.", Severity.Success);
-            foreach (var skipped in result.Skipped.Take(5))
-            {
-                Snackbar.Add(skipped, Severity.Warning);
-            }
-        }
-        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _busy = false;
-        }
-
-        await LoadAsync();
-    }
 }

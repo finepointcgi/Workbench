@@ -21,7 +21,9 @@ public static class Glossary
         new("charge-code", "Charge code", "Charge code", "The project task you record your hours or costs against, for example \"Requirements review (1001.01.02)\"."),
         new("direct", "Direct", "Direct cost", "Work or spending for one specific project or contract, billed to that customer."),
         new("indirect", "Indirect", "Indirect cost", "Work or spending that supports the whole company (training, proposals, admin). It's spread over projects through overhead and G&A rates."),
-        new("labor-category", "Labor category", "Labor category", "A job title used for pricing and billing, such as \"Senior Engineer\". Contracts set a bill rate for each one."),
+        new("labor-category", "Labor category", "Labor category", "A job title the contract prices and bills by, such as \"Senior Engineer\" (contracts may call it a PLC or LCAT). The budget counts hours by labor category, and each person bills as one."),
+        new("budget", "Budget", "Budget", "How many hours of each labor category, and how many dollars of other costs, each WBS element may use. Set it before staffing people."),
+        new("plan", "Plan", "Plan", "The project's schedule: tasks, dates and who does them, in the plan sheet. Its tasks mirror the WBS."),
         new("standard-hours", "Standard hours", "Standard hours", "The hours you're expected to record in a period (usually 40 a week), less holidays."),
         new("burdened", "Burdened", "Burdened cost", "The full cost: raw labor or expense plus fringe, overhead and G&A added on top."),
         new("burden", "Burden", "Burden", "The fringe, overhead and G&A costs added on top of raw labor or expense to get its full cost."),
@@ -96,7 +98,8 @@ public static class Glossary
         new("ap", "AP", "Accounts payable", "Bills from vendors the company owes and hasn't paid yet."),
 
         // Resourcing
-        new("allocation-hours", "Allocation", "Allocation", "Hours a person is planned to work on a project in a week."),
+        new("allocation-hours", "Staffed hours", "Staffed hours", "Hours a person is staffed to work on a project in a week, in the labor category they bill as."),
+        new("staffing", "Staffing", "Staffing", "Named people's hours a week on a project, in the labor category they bill as. Staffing fills the budget's hours; timesheets record what was actually worked."),
         new("capacity", "Capacity", "Capacity", "The hours a person can work in a week: standard hours less holidays, approved leave and time for non-project work."),
         new("utilization", "Utilization", "Utilization", "The share of a person's available hours spent on billable or direct work."),
     ];

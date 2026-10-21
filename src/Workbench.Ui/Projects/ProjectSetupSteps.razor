@@ -1,0 +1,84 @@
+@* "Set up this project" on the Overview, for the people who budget and staff it: contract and WBS → budget by labor
+   category → staff people. Hidden once every step is done. Fails soft when the staffing service isn't available. *@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Resourcing
+@inject IServiceProvider Services
+
+@if (_progress is { IsComplete: false } progress)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="setup-steps">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Set up this project</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@progress.DoneCount of @progress.Steps.Count done</MudText>
+        </MudStack>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            Budget by labor category first, then staff people into those categories. Timesheets then charge actual hours, which are compared with the budget.
+        </MudText>
+        <MudProgressLinear Value="@(100.0 * progress.DoneCount / progress.Steps.Count)" Color="Color.Primary" Rounded="true" Size="Size.Small" Class="mb-3"
+                           aria-label="@($"Project setup: {progress.DoneCount} of {progress.Steps.Count} steps done")" />
+        <ol class="wb-setup-steps">
+            @for (var i = 0; i < progress.Steps.Count; i++)
+            {
+                var step = progress.Steps[i];
+                var isNext = step == progress.Next;
+                <li data-step="@step.Key" data-done="@(step.IsDone ? "true" : "false")">
+                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
+                        @if (step.IsDone)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" aria-hidden="true" />
+                        }
+                        else
+                        {
+                            <span class="wb-step-number @(isNext ? "next" : "")" aria-hidden="true">@(i + 1)</span>
+                        }
+                        <div style="flex: 1">
+                            <MudText Typo="Typo.subtitle2">
+                                @step.Title<span class="wb-sr-only">@(step.IsDone ? " (done)" : isNext ? " (next)" : " (to do)")</span>
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Explanation</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@step.Status</MudText>
+                        </div>
+                        @if (ProjectsFormat.Allows(Hub.Tabs, step.Tab))
+                        {
+                            <MudButton Href="@($"projects/{Hub.Project.Id}/{step.Tab}")" Size="Size.Small"
+                                       Variant="@(isNext ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                                       data-testid="@($"setup-step-{step.Key}")">@step.ActionLabel</MudButton>
+                        }
+                    </MudStack>
+                </li>
+            }
+        </ol>
+    </MudPaper>
+}
+
+<style>
+    .wb-setup-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+    .wb-step-number { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%;
+        border: 2px solid var(--mud-palette-lines-inputs); font-size: 0.8rem; font-weight: 600; flex: none; }
+    .wb-step-number.next { border-color: var(--mud-palette-primary); color: var(--mud-palette-primary); }
+</style>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectHubDto Hub { get; set; } = default!;
+
+    private ProjectSetupProgressDto? _progress;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _progress = null;
+        if (!Hub.Tabs.Team || Services.GetService<IProjectStaffingService>() is not { } staffing)
+        {
+            return;
+        }
+
+        try
+        {
+            _progress = await staffing.GetSetupProgressAsync(Hub.Project.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            _progress = null;
+        }
+    }
+}
