@@ -143,7 +143,14 @@ public sealed class ProjectVisibilityTests
         {
             db.Set<AppUser>().AddRange(new AppUser { Email = Approver, DisplayName = "Ann" }, new AppUser { Email = Delegate, DisplayName = "Dee" });
             var sheet = db.Set<Timesheet>().Single(t => t.EmployeeId == f.OutsiderId);
-            var instance = new ApprovalInstance { DocumentType = ApprovalDocumentTypes.Timesheet, DocumentId = sheet.Id, SubmitterEmail = Outsider, Title = "Timesheet", Link = $"time/{sheet.Id}" };
+            var workflow = new ApprovalWorkflow { DocumentType = ApprovalDocumentTypes.Timesheet, Name = "Timesheets" };
+            var version = new ApprovalWorkflowVersion { WorkflowId = workflow.Id, Version = 1, DefinitionJson = "{}", CreatedBy = Admin };
+            db.Set<ApprovalWorkflow>().Add(workflow);
+            db.Set<ApprovalWorkflowVersion>().Add(version);
+            var instance = new ApprovalInstance
+            {
+                DocumentType = ApprovalDocumentTypes.Timesheet, DocumentId = sheet.Id, WorkflowVersionId = version.Id, SubmitterEmail = Outsider, Title = "Timesheet", Link = $"time/{sheet.Id}",
+            };
             db.Set<ApprovalInstance>().Add(instance);
             db.Set<ApprovalTask>().AddRange(
                 new ApprovalTask { InstanceId = instance.Id, StepName = "Supervisor", Status = ApprovalTaskStatus.Pending, AssigneesCsv = $"someone@example.com,{Approver}" },
