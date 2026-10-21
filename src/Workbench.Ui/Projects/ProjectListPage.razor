@@ -30,43 +30,6 @@
 }
 else
 {
-    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudTextField T="string" @bind-Value="_search" aria-label="Search projects" Immediate="true" DebounceInterval="200" Placeholder="Search by code, name, manager or contract"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Style="min-width: 300px" data-testid="project-search" />
-        @if (_list.SeesAll)
-        {
-            <MudToggleGroup T="bool" @bind-Value="_mineOnly" Color="Color.Primary" Size="Size.Small" Style="max-width: 220px" data-testid="mine-toggle">
-                <MudToggleItem Value="true" Text="Mine" />
-                <MudToggleItem Value="false" Text="All" />
-            </MudToggleGroup>
-        }
-        <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Style="max-width: 180px" data-testid="status-filter">
-            <MudSelectItem T="string" Value="@OpenStatus">Open (not closed)</MudSelectItem>
-            <MudSelectItem T="string" Value="@AnyStatus">Any status</MudSelectItem>
-            @foreach (var state in Enum.GetValues<ProjectState>())
-            {
-                <MudSelectItem T="string" Value="@state.ToString()">@_labels.Label("project-status", state, ProjectsFormat.Status(state))</MudSelectItem>
-            }
-        </MudSelect>
-        <MudSpacer />
-        @if (_list.ShowsMoney)
-        {
-            <MudTooltip Arrow="true">
-                <ChildContent>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Outlined.Info">How health is judged</MudButton>
-                </ChildContent>
-                <TooltipContent>
-                    <div style="max-width: 340px; text-align: left">
-                        @foreach (var line in ProjectHealthRules.Explanation)
-                        {
-                            <MudText Typo="Typo.caption" Class="d-block">@line</MudText>
-                        }
-                    </div>
-                </TooltipContent>
-            </MudTooltip>
-        }
-    </MudStack>
-
     @if (_list.Projects.Count == 0)
     {
         <MudPaper Outlined="true" Class="pa-6">
@@ -77,111 +40,46 @@ else
     }
     else
     {
-        <MudTable SortLabel="Sort by" T="ProjectHubRowDto" Items="Visible" Dense="true" Hover="true" Outlined="true" Elevation="0" OnRowClick="Open" RowStyle="cursor: pointer"
-                  Breakpoint="Breakpoint.Sm" data-testid="project-table">
-            <HeaderContent>
-                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Code" InitialDirection="SortDirection.Ascending">Project</MudTableSortLabel></MudTh>
-                @if (_list.ShowsMoney)
+        <ConfigurableList T="ProjectHubRowDto" Definition="@(_list.ShowsMoney ? MoneyDefinition : PlainDefinition)" Items="Visible.ToList()" TestId="project-table"
+                          SearchLabel="Search by code, name, manager or contract" SearchTestId="project-search" AriaLabel="Projects" Elevation="0" Outlined="true"
+                          RowClick="@(p => Navigation.NavigateTo($"projects/{p.Id}"))">
+            <ToolBarContent>
+            @if (_list.SeesAll)
+            {
+                <MudToggleGroup T="bool" @bind-Value="_mineOnly" Color="Color.Primary" Size="Size.Small" Style="max-width: 220px" data-testid="mine-toggle">
+                    <MudToggleItem Value="true" Text="Mine" />
+                    <MudToggleItem Value="false" Text="All" />
+                </MudToggleGroup>
+            }
+            <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Style="max-width: 180px" data-testid="status-filter">
+                <MudSelectItem T="string" Value="@OpenStatus">Open (not closed)</MudSelectItem>
+                <MudSelectItem T="string" Value="@AnyStatus">Any status</MudSelectItem>
+                @foreach (var state in Enum.GetValues<ProjectState>())
                 {
-                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money == null ? -1 : (int)p.Money.Health">Health</MudTableSortLabel></MudTh>
+                    <MudSelectItem T="string" Value="@state.ToString()">@_labels.Label("project-status", state, ProjectsFormat.Status(state))</MudSelectItem>
                 }
-                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.ProjectManagerName ?? string.Empty">Manager</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.ContractNumber ?? string.Empty">Contract</MudTableSortLabel></MudTh>
-                @if (!_list.ShowsMoney)
-                {
-                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Status">Status</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Finish ?? DateOnly.MaxValue">Period</MudTableSortLabel></MudTh>
-                }
-                @if (_list.ShowsMoney)
-                {
-                    <MudTh>
-                        <MudTooltip Text="How much of the contract's funding is spent (all its projects). Hover a value for the funded share of the contract.">
-                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.PercentFundingUsed ?? -1m">Funding used</MudTableSortLabel>
-                        </MudTooltip>
-                    </MudTh>
-                    <MudTh>
-                        <MudTooltip Text="Spent so far (actual cost: labor at cost plus allowable ODCs, direct) against the budget.">
-                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.PercentSpent ?? -1m">Spent of budget</MudTableSortLabel>
-                        </MudTooltip>
-                    </MudTh>
-                    <MudTh>
-                        <MudTooltip Text="Forecast at completion (EAC = spent + estimate to complete) against the budget.">
-                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.Money?.ForecastVsBudget ?? -1m">Forecast vs budget</MudTableSortLabel>
-                        </MudTooltip>
-                    </MudTh>
-                    <MudTh>
-                        <MudTooltip Text="Tasks in the plan sheet that aren't Done.">
-                            <MudTableSortLabel T="ProjectHubRowDto" SortBy="p => p.OpenItems ?? -1">Open tasks</MudTableSortLabel>
-                        </MudTooltip>
-                    </MudTh>
-                }
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Project">
-                    <MudLink Href="@($"projects/{context.Id}")" Typo="Typo.body2"><b>@context.Code</b> · @context.Name</MudLink>
-                    @if (context.IsManager)
-                    {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">You manage</MudChip>
-                    }
-                    @if (_list.ShowsMoney)
-                    {
-                        @* Status and period ride under the name here, so the money columns fit a laptop screen. *@
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
-                            @_labels.Label("project-status", context.Status, ProjectsFormat.Status(context.Status)) · @ProjectsFormat.Period(context.Start, context.Finish)
-                        </MudText>
-                    }
-                </MudTd>
-                @if (_list.ShowsMoney)
-                {
-                    <MudTd DataLabel="Health">@if (context.Money is { } health) { <ProjectHealthChip Money="health" /> }</MudTd>
-                }
-                <MudTd DataLabel="Manager">@(context.ProjectManagerName ?? "—")</MudTd>
-                <MudTd DataLabel="Contract">@(context.ContractNumber ?? "No contract")</MudTd>
-                @if (!_list.ShowsMoney)
-                {
-                    <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(context.Status)">@_labels.Label("project-status", context.Status, ProjectsFormat.Status(context.Status))</MudChip></MudTd>
-                    <MudTd DataLabel="Period">@ProjectsFormat.Period(context.Start, context.Finish)</MudTd>
-                }
-                @if (_list.ShowsMoney)
-                {
-                    @if (context.Money is { } m)
-                    {
-                        <MudTd DataLabel="Funding used">
-                            @if (m.PercentFundingUsed is { } used)
+            </MudSelect>
+            @if (_list.ShowsMoney)
+            {
+                <MudTooltip Arrow="true">
+                    <ChildContent>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Outlined.Info">How health is judged</MudButton>
+                    </ChildContent>
+                    <TooltipContent>
+                        <div style="max-width: 340px; text-align: left">
+                            @foreach (var line in ProjectHealthRules.Explanation)
                             {
-                                <MudTooltip Text="@($"{FinancialFormat.Percent(m.PercentFunded)} of the contract is funded; {FinancialFormat.Money(m.FundingLeft ?? 0)} funding left")">
-                                    <span>@FinancialFormat.Percent(used)</span>
-                                </MudTooltip>
-                                <MudProgressLinear Value="ProjectsFormat.Bar(used)" Color="ProjectsFormat.BurnColor(used)" Size="Size.Small" Rounded="true" aria-label="@($"Funding used, {context.Name}")" />
+                                <MudText Typo="Typo.caption" Class="d-block">@line</MudText>
                             }
-                            else
-                            {
-                                <span class="mud-text-secondary">—</span>
-                            }
-                        </MudTd>
-                        <MudTd DataLabel="Spent of budget">
-                            <span>@FinancialFormat.Money(m.Spent) of @FinancialFormat.Money(m.Budget)</span>
-                            @if (m.PercentSpent is { } spent)
-                            {
-                                <MudProgressLinear Value="ProjectsFormat.Bar(spent)" Color="ProjectsFormat.BurnColor(spent)" Size="Size.Small" Rounded="true" aria-label="@($"Spent of budget, {context.Name}")" />
-                            }
-                        </MudTd>
-                        <MudTd DataLabel="Forecast vs budget">
-                            <span class="@(m.ForecastAtCompletion > m.Budget && m.Budget > 0 ? "mud-error-text" : "")">@FinancialFormat.Money(m.ForecastAtCompletion)</span>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@(m.ForecastVsBudget is { } r ? $"{FinancialFormat.Percent(r)} of budget" : "no budget")</MudText>
-                        </MudTd>
-                        <MudTd DataLabel="Open tasks">@(context.OpenItems?.ToString() ?? "—")</MudTd>
-                    }
-                    else
-                    {
-                        <MudTd DataLabel="Funding used" /><MudTd DataLabel="Spent of budget" /><MudTd DataLabel="Forecast vs budget" /><MudTd DataLabel="Open tasks" />
-                    }
-                }
-            </RowTemplate>
+                        </div>
+                    </TooltipContent>
+                </MudTooltip>
+            }
+            </ToolBarContent>
             <NoRecordsContent>
                 <MudText Class="mud-text-secondary">No projects match these filters.</MudText>
             </NoRecordsContent>
-        </MudTable>
+        </ConfigurableList>
         @if (!_list.ShowsMoney)
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">These are the projects you're on: you manage them, are assigned to them, charge to them, belong to their plan's workspace or approve their timesheets and expenses.</MudText>
@@ -195,7 +93,6 @@ else
 
     private ProjectHubListDto? _list;
     private string? _error;
-    private string? _search;
     private bool _mineOnly; // Finance sees every project by default; "Mine" narrows to what they manage or charge to.
     private string _status = OpenStatus;
     private bool _canCreate; // Finance, administrators and project managers (a project on a contract is then a request).
@@ -251,21 +148,118 @@ else
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(_search))
-        {
-            return true;
-        }
-
-        var term = _search.Trim();
-        return new[] { p.Code, p.Name, p.ProjectManagerName, p.ContractNumber }
-            .Any(v => v?.Contains(term, StringComparison.OrdinalIgnoreCase) == true);
+        return true;
     }
 
-    private void Open(TableRowClickEventArgs<ProjectHubRowDto> args)
+    private static ListColumn<ProjectHubRowDto> ProjectColumn(bool money) => new()
     {
-        if (args.Item is { } row)
-        {
-            Navigation.NavigateTo($"projects/{row.Id}");
-        }
-    }
+        Key = "project",
+        Title = "Project",
+        Value = p => p.Code,
+        Display = p => $"{p.Code} · {p.Name}",
+        Groupable = false,
+        Cell = p => @<text>
+            <MudLink Href="@($"projects/{p.Id}")" Typo="Typo.body2"><b>@p.Code</b> · @p.Name</MudLink>
+            @if (p.IsManager)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">You manage</MudChip>
+            }
+            @if (money)
+            {
+                @* Status and period ride under the name here, so the money columns fit a laptop screen. *@
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@ProjectsFormat.Status(p.Status) · @ProjectsFormat.Period(p.Start, p.Finish)</MudText>
+            }
+        </text>,
+    };
+
+    private static ListColumn<ProjectHubRowDto> Manager => new() { Key = "manager", Title = "Manager", Value = p => p.ProjectManagerName, Display = p => p.ProjectManagerName ?? "—" };
+
+    private static ListColumn<ProjectHubRowDto> Contract => new() { Key = "contract", Title = "Contract", Value = p => p.ContractNumber, Display = p => p.ContractNumber ?? "No contract" };
+
+    private static ListColumn<ProjectHubRowDto> Status(bool standard) => new()
+    {
+        Key = "status", Title = "Status", Value = p => p.Status, Display = p => ProjectsFormat.Status(p.Status), Standard = standard,
+        Cell = p => @<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ProjectsFormat.StatusColor(p.Status)">@ProjectsFormat.Status(p.Status)</MudChip>,
+    };
+
+    private static ListColumn<ProjectHubRowDto> Period(bool standard) => new()
+    {
+        Key = "period", Title = "Period", Value = p => p.Finish, Kind = ListColumnKind.Date, Groupable = false, Standard = standard,
+        Display = p => ProjectsFormat.Period(p.Start, p.Finish),
+    };
+
+    private static ListColumn<ProjectHubRowDto> Mine => new()
+    {
+        Key = "mine", Title = "Mine", Value = p => p.IsMine, Kind = ListColumnKind.Bool, Standard = false,
+    };
+
+    /// <summary>The list for people who see project money (Finance, administrators, managers of these projects).</summary>
+    internal static readonly ListDefinition<ProjectHubRowDto> MoneyDefinition = new()
+    {
+        ListKey = CustomizableLists.Projects,
+        EntityType = CustomizableEntities.Project,
+        Title = "Projects",
+        Id = p => p.Id,
+        StandardSort = [new ListSort("project")],
+        Columns =
+        [
+            ProjectColumn(true),
+            new() { Key = "health", Title = "Health", Value = p => p.Money is null ? null : (int)p.Money.Health,
+                    Display = p => p.Money is { } m ? ProjectHealthRules.Label(m.Health) : null, Cell = p => @<text>@if (p.Money is { } health) { <ProjectHealthChip Money="health" /> }</text> },
+            Manager,
+            Contract,
+            Status(false),
+            Period(false),
+            new() { Key = "fundingUsed", Title = "Funding used", Value = p => p.Money?.PercentFundingUsed, Kind = ListColumnKind.Percent, Groupable = false,
+                    Cell = p => @<text>
+                        @if (p.Money is { PercentFundingUsed: { } used } m)
+                        {
+                            <MudTooltip Text="@($"{FinancialFormat.Percent(m.PercentFunded)} of the contract is funded; {FinancialFormat.Money(m.FundingLeft ?? 0)} funding left")">
+                                <span>@FinancialFormat.Percent(used)</span>
+                            </MudTooltip>
+                            <MudProgressLinear Value="ProjectsFormat.Bar(used)" Color="ProjectsFormat.BurnColor(used)" Size="Size.Small" Rounded="true" aria-label="@($"Funding used, {p.Name}")" />
+                        }
+                        else if (p.Money is not null)
+                        {
+                            <span class="mud-text-secondary">—</span>
+                        }
+                    </text> },
+            new() { Key = "spent", Title = "Spent of budget", Value = p => p.Money?.PercentSpent, Kind = ListColumnKind.Percent, Groupable = false,
+                    Cell = p => @<text>
+                        @if (p.Money is { } m)
+                        {
+                            <span>@FinancialFormat.Money(m.Spent) of @FinancialFormat.Money(m.Budget)</span>
+                            @if (m.PercentSpent is { } spent)
+                            {
+                                <MudProgressLinear Value="ProjectsFormat.Bar(spent)" Color="ProjectsFormat.BurnColor(spent)" Size="Size.Small" Rounded="true" aria-label="@($"Spent of budget, {p.Name}")" />
+                            }
+                        }
+                    </text> },
+            new() { Key = "forecast", Title = "Forecast vs budget", Value = p => p.Money?.ForecastVsBudget, Kind = ListColumnKind.Percent, Groupable = false,
+                    Cell = p => @<text>
+                        @if (p.Money is { } m)
+                        {
+                            <span class="@(m.ForecastAtCompletion > m.Budget && m.Budget > 0 ? "mud-error-text" : "")">@FinancialFormat.Money(m.ForecastAtCompletion)</span>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@(m.ForecastVsBudget is { } r ? $"{FinancialFormat.Percent(r)} of budget" : "no budget")</MudText>
+                        }
+                    </text> },
+            new() { Key = "openTasks", Title = "Open tasks", Value = p => p.OpenItems, Kind = ListColumnKind.Number, Groupable = false, Display = p => p.Money is null ? null : p.OpenItems?.ToString() ?? "—" },
+            new() { Key = "budget", Title = "Budget", Value = p => p.Money?.Budget, Kind = ListColumnKind.Money, Standard = false, Groupable = false },
+            new() { Key = "actual", Title = "Spent", Value = p => p.Money?.Spent, Kind = ListColumnKind.Money, Standard = false, Groupable = false },
+            new() { Key = "eac", Title = "Forecast at completion", Value = p => p.Money?.ForecastAtCompletion, Kind = ListColumnKind.Money, Standard = false, Groupable = false },
+            new() { Key = "fundingLeft", Title = "Funding left", Value = p => p.Money?.FundingLeft, Kind = ListColumnKind.Money, Standard = false, Groupable = false },
+            Mine,
+        ],
+    };
+
+    /// <summary>The list for everyone else: no money columns are offered at all.</summary>
+    internal static readonly ListDefinition<ProjectHubRowDto> PlainDefinition = new()
+    {
+        ListKey = CustomizableLists.Projects,
+        EntityType = CustomizableEntities.Project,
+        Title = "Projects",
+        Id = p => p.Id,
+        StandardSort = [new ListSort("project")],
+        Columns = [ProjectColumn(false), Manager, Contract, Status(true), Period(true), Mine],
+    };
 }

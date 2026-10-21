@@ -2,6 +2,7 @@
 @page "/purchasing/bills"
 @inject IApBillService Bills
 @inject IVendorService Vendors
+@inject NavigationManager Navigation
 
 <PageTitle>Bills · Purchasing · Workbench</PageTitle>
 
@@ -19,27 +20,24 @@
 }
 else
 {
-    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudSelect T="BillState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
-            @foreach (var s in Enum.GetValues<BillState>())
-            {
-                <MudSelectItem T="BillState?" Value="s">@PurchasingFormat.Label(s)</MudSelectItem>
-            }
-        </MudSelect>
-        <MudSelect T="Guid?" Value="_vendorId" ValueChanged="v => SetAsync(() => _vendorId = v)" Label="Vendor" Clearable="true" Dense="true" Style="min-width:220px">
-            @foreach (var v in _vendors)
-            {
-                <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem>
-            }
-        </MudSelect>
-        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
-    </MudStack>
-    @if (_loading)
-    {
-        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
-    }
-    <MudPaper Outlined="true" Class="pa-2"><BillTable Bills="_bills" /></MudPaper>
+    <ConfigurableList T="BillSummaryDto" Definition="_definition" Items="_bills" Loading="_loading" SearchLabel="Search bills" TestId="bills-list"
+                      RowClick="@(b => Navigation.NavigateTo($"purchasing/bills/{b.Id}"))">
+        <ToolBarContent>
+            <MudSelect T="BillState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:170px">
+                @foreach (var s in Enum.GetValues<BillState>())
+                {
+                    <MudSelectItem T="BillState?" Value="s">@PurchasingFormat.Label(s)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" Value="_vendorId" ValueChanged="v => SetAsync(() => _vendorId = v)" Label="Vendor" Clearable="true" Dense="true" Style="min-width:220px">
+                @foreach (var v in _vendors)
+                {
+                    <MudSelectItem T="Guid?" Value="v.Id">@v.Code · @v.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </ToolBarContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No bills yet. Enter a vendor's invoice as a bill to approve and pay it.</MudText></NoRecordsContent>
+    </ConfigurableList>
 }
 
 @code {
@@ -47,10 +45,49 @@ else
     private IReadOnlyList<VendorDto> _vendors = [];
     private BillState? _status;
     private Guid? _vendorId;
-    private string? _search;
     private bool _loading = true;
     private string? _error;
     private bool _forbidden;
+
+    internal static readonly ListDefinition<BillSummaryDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Bills,
+        EntityType = CustomizableEntities.ApBill,
+        Title = "AP bills",
+        Id = b => b.Id,
+        Columns =
+        [
+            new() { Key = "voucher", Title = "Voucher", Value = b => b.Number, Groupable = false,
+                    Cell = b => @<span style="white-space:nowrap"><MudLink Href="@($"purchasing/bills/{b.Id}")">@b.Number</MudLink></span> },
+            new() { Key = "vendor", Title = "Vendor", Value = b => b.VendorCode },
+            new() { Key = "vendorName", Title = "Vendor name", Value = b => b.VendorName, Standard = false },
+            new() { Key = "invoice", Title = "Invoice", Value = b => b.InvoiceNumber, Groupable = false },
+            new() { Key = "invoiceDate", Title = "Invoice date", Value = b => b.InvoiceDate, Kind = ListColumnKind.Date, Groupable = false,
+                    Cell = b => @<span style="white-space:nowrap">@PurchasingFormat.Date(b.InvoiceDate)</span> },
+            new() { Key = "due", Title = "Due", Value = b => b.DueDate, Kind = ListColumnKind.Date, Groupable = false,
+                    Cell = b => @<span style="white-space:nowrap">@PurchasingFormat.Date(b.DueDate)</span> },
+            new() { Key = "amount", Title = "Amount", Value = b => b.Amount, Kind = ListColumnKind.Money, Groupable = false, Cell = b => @<text>@PurchasingFormat.Amount(b.Amount)</text> },
+            new() { Key = "retainage", Title = "Retainage", Value = b => b.RetainageAmount == 0 ? null : b.RetainageAmount, Kind = ListColumnKind.Money, Groupable = false,
+                    Cell = b => @<text>@(b.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(b.RetainageAmount))</text> },
+            new() { Key = "balance", Title = "Balance", Value = b => b.Status == BillState.Posted ? b.Balance : null, Kind = ListColumnKind.Money, Groupable = false,
+                    Cell = b => @<text>@(b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "")</text> },
+            new() { Key = "status", Title = "Status", Value = b => b.Status, Display = b => PurchasingFormat.Label(b.Status),
+                    Cell = b => @<text>
+                        <BillStatusChip Status="b.Status" />
+                        @if (b.IsPaid)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0 ml-1">Paid</MudChip>
+                        }
+                        @if (b.PostingProblem is not null)
+                        {
+                            <MudTooltip Text="@b.PostingProblem"><MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" /></MudTooltip>
+                        }
+                    </text> },
+            new() { Key = "paid", Title = "Paid", Value = b => b.PaidAmount, Kind = ListColumnKind.Money, Standard = false, Groupable = false },
+            new() { Key = "enteredBy", Title = "Entered by", Value = b => b.EnteredBy, Standard = false },
+            new() { Key = "currency", Title = "Currency", Value = b => b.CurrencyCode, Standard = false },
+        ],
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -77,7 +114,7 @@ else
         _loading = true;
         try
         {
-            _bills = await Bills.ListAsync(new BillQuery(_status, _vendorId, _search));
+            _bills = await Bills.ListAsync(new BillQuery(_status, _vendorId));
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {

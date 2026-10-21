@@ -17,42 +17,49 @@
 }
 else
 {
-    <MudStack Row="true" Spacing="3" Class="mb-3" AlignItems="AlignItems.Center">
-        <MudTextField T="string" @bind-Value="_search" Label="Search" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:280px" />
-        <MudSwitch T="bool" @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />
-    </MudStack>
-    <MudTable T="VendorDto" Items="Visible" Loading="_loading" Dense="true" Hover="true" OnRowClick="@(e => Navigation.NavigateTo($"purchasing/vendors/{e.Item!.Id}"))" RowStyle="cursor:pointer" data-testid="vendors">
-        <HeaderContent>
-            <MudTh>Code</MudTh><MudTh>Name</MudTh><MudTh>Status</MudTh><MudTh>Size</MudTh><MudTh>Categories</MudTh><MudTh>UEI</MudTh><MudTh>TIN</MudTh><MudTh>Terms</MudTh><MudTh>1099</MudTh><MudTh>W-9</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd><MudLink Href="@($"purchasing/vendors/{context.Id}")">@context.Code</MudLink></MudTd>
-            <MudTd>@context.Name</MudTd>
-            <MudTd><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@PurchasingFormat.Color(context.Status)" Class="ma-0">@(context.Status == VendorState.OnHold ? "On hold" : context.Status.ToString())</MudChip></MudTd>
-            <MudTd>@context.BusinessSize</MudTd>
-            <MudTd>@string.Join(", ", context.SocioEconomicCategories)</MudTd>
-            <MudTd>@context.Uei</MudTd>
-            <MudTd style="font-family:monospace">@context.TaxIdMasked</MudTd>
-            <MudTd>Net @context.PaymentTermsDays</MudTd>
-            <MudTd>@(context.Is1099 ? context.Form1099Box : "")</MudTd>
-            <MudTd>@(context.W9FileId is null ? "" : "On file")</MudTd>
-        </RowTemplate>
+    <ConfigurableList T="VendorDto" Definition="_definition" Items="Visible" Loading="_loading" SearchLabel="Search code, name or UEI"
+                      RowClick="@(v => Navigation.NavigateTo($"purchasing/vendors/{v.Id}"))" TestId="vendors">
+        <ToolBarContent>
+            <MudSwitch T="bool" @bind-Value="_showInactive" Label="Show inactive" Color="Color.Primary" />
+        </ToolBarContent>
         <NoRecordsContent><MudText Class="mud-text-secondary">No vendors match. Vendors are the companies you buy from; add one before entering its bills or purchase orders.</MudText></NoRecordsContent>
-    </MudTable>
+    </ConfigurableList>
 }
 
 @code {
     private IReadOnlyList<VendorDto> _vendors = [];
-    private string? _search;
     private bool _showInactive;
     private bool _loading = true;
     private string? _error;
     private bool _forbidden;
 
-    private IEnumerable<VendorDto> Visible => _vendors
-        .Where(v => _showInactive || v.Status != VendorState.Inactive)
-        .Where(v => string.IsNullOrWhiteSpace(_search) || v.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) || v.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
-            || (v.Uei ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private IReadOnlyList<VendorDto> Visible => _vendors.Where(v => _showInactive || v.Status != VendorState.Inactive).ToList();
+
+    private static string StatusLabel(VendorState status) => status == VendorState.OnHold ? "On hold" : status.ToString();
+
+    internal static readonly ListDefinition<VendorDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Vendors,
+        EntityType = CustomizableEntities.Vendor,
+        Title = "Vendors",
+        Id = v => v.Id,
+        Columns =
+        [
+            new() { Key = "code", Title = "Code", Value = v => v.Code, Groupable = false, Cell = v => @<MudLink Href="@($"purchasing/vendors/{v.Id}")">@v.Code</MudLink> },
+            new() { Key = "name", Title = "Name", Value = v => v.Name, Groupable = false },
+            new() { Key = "status", Title = "Status", Value = v => v.Status, Display = v => StatusLabel(v.Status),
+                    Cell = v => @<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@PurchasingFormat.Color(v.Status)" Class="ma-0">@StatusLabel(v.Status)</MudChip> },
+            new() { Key = "size", Title = "Size", Value = v => v.BusinessSize },
+            new() { Key = "categories", Title = "Categories", Value = v => string.Join(", ", v.SocioEconomicCategories) },
+            new() { Key = "uei", Title = "UEI", Value = v => v.Uei, Groupable = false },
+            new() { Key = "tin", Title = "TIN", Value = v => v.TaxIdMasked, Groupable = false, Cell = v => @<span style="font-family:monospace">@v.TaxIdMasked</span> },
+            new() { Key = "terms", Title = "Terms", Value = v => v.PaymentTermsDays, Kind = ListColumnKind.Number, Display = v => $"Net {v.PaymentTermsDays}" },
+            new() { Key = "form1099", Title = "1099", Value = v => v.Is1099 ? v.Form1099Box : null },
+            new() { Key = "w9", Title = "W-9", Value = v => v.W9FileId is null ? null : "On file" },
+            new() { Key = "contact", Title = "Contact", Value = v => v.ContactName, Standard = false, Groupable = false },
+            new() { Key = "contactEmail", Title = "Contact email", Value = v => v.ContactEmail, Standard = false, Groupable = false },
+        ],
+    };
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

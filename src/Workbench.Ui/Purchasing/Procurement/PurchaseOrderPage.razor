@@ -3,6 +3,7 @@
 @inject IRequisitionService Requisitions
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 @inject ICurrentUserContext UserContext
 
 <PageTitle>@(_po?.Order.Number ?? "Purchase order") · Purchasing · Workbench</PageTitle>
@@ -205,11 +206,13 @@ else
             return;
         }
 
+        var custom = new FormCustomValues();
         var dialog = await DialogService.ShowAsync<PurchaseOrderDialog>($"Change order: {_po!.Order.Number}",
-            new DialogParameters<PurchaseOrderDialog> { { d => d.Options, options }, { d => d.Order, _po } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+            new DialogParameters<PurchaseOrderDialog> { { d => d.Options, options }, { d => d.Order, _po }, { d => d.CustomValues, custom } }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: ChangeOrderRequest request })
         {
             await RunAsync(() => Orders.ChangeOrderAsync(OrderId, request), "Change order saved.");
+            await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.PurchaseOrder, OrderId, custom);
         }
     }
 

@@ -1,0 +1,316 @@
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+@*
+    Renders a record's fields in the order, sections and headings of the form layout that applies to the signed-in person
+    (Admin › Customization › Layouts), with optional fields hidden or made required as the layout says. Pages declare each
+    field once with <FormField Key="..."> in their built-in order; with no saved layout the page renders exactly as declared.
+    Custom fields from the field catalog are rendered here, after the built-in ones unless the layout places them.
+    Hidden fields keep their values: the page still sends them back unchanged.
+*@
+
+<CascadingValue Value="this" IsFixed="true">@ChildContent</CascadingValue>
+
+@if (HeadingsInGrid)
+{
+    <MudGrid Spacing="Spacing" Class="@Class" data-testid="@TestId">
+        @foreach (var section in Sections())
+        {
+            @if (!string.IsNullOrWhiteSpace(section.Title))
+            {
+                <MudItem xs="12" @key="@($"h:{section.Key}")">
+                    <MudText Typo="HeadingTypo" HtmlTag="@HeadingTag" data-form-section="@section.Key">@section.Title</MudText>
+                </MudItem>
+            }
+            @foreach (var field in section.Fields)
+            {
+                @Field(field)
+            }
+        }
+        @foreach (var content in _orphans)
+        {
+            @Content(content)
+        }
+    </MudGrid>
+}
+else
+{
+    <div class="@Class" data-testid="@TestId">
+        @foreach (var section in Sections())
+        {
+            @if (!string.IsNullOrWhiteSpace(section.Title))
+            {
+                <MudText Typo="HeadingTypo" HtmlTag="@HeadingTag" Class="@HeadingClass" data-form-section="@section.Key">@section.Title</MudText>
+            }
+            <MudGrid Spacing="Spacing">
+                @foreach (var field in section.Fields)
+                {
+                    @Field(field)
+                }
+            </MudGrid>
+        }
+        @if (_orphans.Count > 0)
+        {
+            <MudGrid Spacing="Spacing">
+                @foreach (var content in _orphans)
+                {
+                    @Content(content)
+                }
+            </MudGrid>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The entity type (<see cref="CustomizableEntities"/>).</summary>
+    [Parameter, EditorRequired]
+    public string EntityType { get; set; } = "";
+
+    /// <summary>The record, once it exists: custom field values are read for it.</summary>
+    [Parameter]
+    public Guid? RecordId { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public int Spacing { get; set; } = 2;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? TestId { get; set; }
+
+    /// <summary>Section headings as grid rows (true) or above each section's grid (false).</summary>
+    [Parameter]
+    public bool HeadingsInGrid { get; set; } = true;
+
+    [Parameter]
+    public Typo HeadingTypo { get; set; } = Typo.subtitle1;
+
+    [Parameter]
+    public string HeadingTag { get; set; } = "h2";
+
+    [Parameter]
+    public string? HeadingClass { get; set; } = "mb-2";
+
+    /// <summary>The built-in section headings by section key, used until the layout has loaded.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<string, string>? SectionTitles { get; set; }
+
+    /// <summary>Custom fields are read-only (a read-only page).</summary>
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    /// <summary>Renders this layout instead of loading one (the layout editor's preview).</summary>
+    [Parameter]
+    public EffectiveFormLayout? Layout { get; set; }
+
+    /// <summary>Shows a placeholder for fields the page didn't declare (the layout editor's preview).</summary>
+    [Parameter]
+    public bool PlaceholdersForMissing { get; set; }
+
+    private readonly List<FormField> _fields = [];
+    private readonly List<FormContent> _contents = [];
+    private EffectiveFormLayout? _loaded;
+    private string? _triedFor;
+    private Guid? _valuesFor;
+    private readonly Dictionary<string, object?> _custom = new(StringComparer.Ordinal);
+
+    /// <summary>The layout in use (null until loaded, or when no layout service is registered).</summary>
+    public EffectiveFormLayout? Effective => Layout ?? _loaded;
+
+    /// <summary>Custom field values as edited (to save after the record is created).</summary>
+    public IReadOnlyDictionary<string, object?> CustomValues => _custom;
+
+    internal void Register(FormField field)
+    {
+        if (!_fields.Contains(field))
+        {
+            _fields.Add(field);
+            StateHasChanged();
+        }
+    }
+
+    internal void Unregister(FormField field)
+    {
+        if (_fields.Remove(field))
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    internal void Register(FormContent content)
+    {
+        if (!_contents.Contains(content))
+        {
+            _contents.Add(content);
+            StateHasChanged();
+        }
+    }
+
+    internal void Unregister(FormContent content)
+    {
+        if (_contents.Remove(content))
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    internal void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Layout is null && EntityType.Length > 0 && _triedFor != EntityType && Services.GetService<IFormLayoutService>() is { } layouts)
+        {
+            _triedFor = EntityType;
+            try
+            {
+                _loaded = await layouts.GetEffectiveAsync(EntityType);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _loaded = null; // A layout that can't be read never stops the form: the page as built.
+            }
+        }
+
+        if (RecordId != _valuesFor)
+        {
+            _valuesFor = RecordId;
+            await LoadCustomValuesAsync();
+        }
+    }
+
+    /// <summary>Saves the custom field values for the record (call after saving the record itself).</summary>
+    public async Task SaveCustomFieldsAsync(Guid recordId)
+    {
+        if (Services.GetService<IEntityFieldCatalog>() is not { } catalog)
+        {
+            return;
+        }
+
+        foreach (var field in VisibleCustomFields())
+        {
+            await catalog.SetValueAsync(EntityType, recordId, field.Key, _custom.GetValueOrDefault(field.Key));
+        }
+
+        _valuesFor = recordId;
+    }
+
+    /// <summary>Saves custom field values captured by a form that has closed (dialogs that return a request).</summary>
+    public static async Task SaveCustomFieldsAsync(IServiceProvider services, string entityType, Guid recordId, IReadOnlyDictionary<string, object?>? values)
+    {
+        if (values is null || values.Count == 0 || services.GetService<IEntityFieldCatalog>() is not { } catalog)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in values)
+        {
+            await catalog.SetValueAsync(entityType, recordId, key, value);
+        }
+    }
+
+    private async Task LoadCustomValuesAsync()
+    {
+        _custom.Clear();
+        if (RecordId is not { } id || Services.GetService<IEntityFieldCatalog>() is not { } catalog)
+        {
+            return;
+        }
+
+        foreach (var field in VisibleCustomFields())
+        {
+            try
+            {
+                _custom[field.Key] = await catalog.GetValueAsync(EntityType, id, field.Key);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+            {
+                _custom[field.Key] = null;
+            }
+        }
+    }
+
+    private IEnumerable<EffectiveFormField> VisibleCustomFields() =>
+        Effective?.Sections.SelectMany(s => s.Fields).Where(f => f.IsCustom) ?? [];
+
+    private List<FormContent> _orphans = [];
+
+    private sealed record Placed(EffectiveFormField? Field, FormField? Declared, string Key);
+
+    private sealed record PlacedSection(string Key, string Title, IReadOnlyList<Placed> Fields);
+
+    private IEnumerable<PlacedSection> Sections()
+    {
+        var declared = _fields.ToDictionary(f => f.Key, StringComparer.Ordinal);
+        List<PlacedSection> sections;
+        if (Effective is not { } layout)
+        {
+            // Before the layout is known: the page as declared.
+            sections = _fields.GroupBy(f => f.Section).Select(g => new PlacedSection(g.Key, SectionTitles?.GetValueOrDefault(g.Key) ?? "",
+                g.Select(f => new Placed(null, f, f.Key)).ToList())).ToList();
+        }
+        else
+        {
+            sections = layout.Sections.Select(s => new PlacedSection(s.Key, s.Title,
+                s.Fields.Select(f => new Placed(f, declared.GetValueOrDefault(f.Key), f.Key)).ToList())).ToList();
+        }
+
+        // Content after a field that isn't shown goes at the end.
+        var shown = sections.SelectMany(s => s.Fields).Select(f => f.Key).ToHashSet(StringComparer.Ordinal);
+        _orphans = _contents.Where(c => !shown.Contains(c.After)).ToList();
+        return sections;
+    }
+
+    private RenderFragment Field(Placed placed) => __builder =>
+    {
+        __builder.AddContent(0, FieldOnly(placed));
+        foreach (var content in _contents.Where(c => c.After == placed.Key))
+        {
+            __builder.AddContent(1, Content(content));
+        }
+    };
+
+    private RenderFragment Content(FormContent content) => __builder =>
+    {
+        if (content.When && content.ChildContent is not null)
+        {
+            <MudItem xs="content.Xs" sm="content.Sm" md="content.Md" lg="content.Lg" Class="@content.ItemClass" @key="content">
+                @content.ChildContent
+            </MudItem>
+        }
+    };
+
+    private RenderFragment FieldOnly(Placed placed) => __builder =>
+    {
+        if (placed.Declared is { } declared)
+        {
+            if (!declared.When || declared.ChildContent is null)
+            {
+                return;
+            }
+
+            if (declared.NewRow)
+            {
+                <MudFlexBreak @key="@($"b:{placed.Key}")" />
+            }
+
+            <MudItem xs="declared.Xs" sm="declared.Sm" md="declared.Md" lg="declared.Lg" Class="@declared.ItemClass" @key="placed.Key" data-form-field="@placed.Key">
+                @declared.ChildContent(new FormFieldContext(placed.Key, placed.Field?.Label ?? placed.Key, placed.Field?.Required ?? declared.Required))
+            </MudItem>
+        }
+        else if (placed.Field is { IsCustom: true } custom)
+        {
+            <MudItem xs="12" sm="6" @key="placed.Key" data-form-field="@placed.Key">
+                <CustomFieldEditor Field="custom" ReadOnly="ReadOnly" Value="_custom.GetValueOrDefault(custom.Key)" ValueChanged="v => _custom[custom.Key] = v" />
+            </MudItem>
+        }
+        else if (PlaceholdersForMissing && placed.Field is { } missing)
+        {
+            <MudItem xs="12" sm="6" @key="placed.Key" data-form-field="@placed.Key">
+                <CustomFieldEditor Field="missing" ReadOnly="true" Value="null" />
+            </MudItem>
+        }
+    };
+}

@@ -4,6 +4,7 @@
 @inject IManufacturingService Manufacturing
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <PageTitle>@(_part?.Summary.Display ?? "Part") · Materials · Workbench</PageTitle>
 
@@ -139,13 +140,15 @@ else
 
     private async Task EditAsync()
     {
-        var dialog = await DialogService.ShowAsync<PartDialog>("Edit part", new DialogParameters<PartDialog> { { d => d.Options, _options }, { d => d.Part, _part } },
+        var custom = new FormCustomValues();
+        var dialog = await DialogService.ShowAsync<PartDialog>("Edit part", new DialogParameters<PartDialog> { { d => d.Options, _options }, { d => d.Part, _part }, { d => d.CustomValues, custom } },
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SavePartRequest request })
         {
             try
             {
                 _part = await PartService.UpdateAsync(PartId, request);
+                await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.Part, PartId, custom);
                 Snackbar.Add("Part saved.", Severity.Success);
             }
             catch (Exception ex) when (MaterialsFormat.IsExpected(ex))

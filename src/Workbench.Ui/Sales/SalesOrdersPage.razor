@@ -20,51 +20,16 @@
 }
 else
 {
-    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
-        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px" />
-        <MudSelect T="SalesOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:160px">
-            @foreach (var s in Enum.GetValues<SalesOrderState>()) { <MudSelectItem T="SalesOrderState?" Value="s">@SalesFormat.Label(s)</MudSelectItem> }
-        </MudSelect>
-        <MudSwitch T="bool" Value="_open" ValueChanged="v => SetAsync(() => _open = v)" Label="Open only" Color="Color.Primary" />
-    </MudStack>
-    <MudPaper Outlined="true" Class="pa-2" Style="overflow-x:auto">
-        @if (_orders is null)
-        {
-            <MudProgressLinear aria-label="Loading" Indeterminate="true" />
-        }
-        else if (_orders.Count == 0)
-        {
-            <MudText Class="mud-text-secondary">No sales orders.</MudText>
-        }
-        else
-        {
-            <MudSimpleTable Dense="true" Hover="true" Elevation="0" data-testid="sales-orders">
-                <caption class="wb-sr-only">Sales orders</caption>
-                <thead><tr><th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Contract / project</th><th scope="col">Customer ref.</th><th scope="col">Ordered</th><th scope="col">Next due</th><th scope="col" style="text-align:right">Value</th><th scope="col" style="text-align:right">Shipped</th><th scope="col">Status</th></tr></thead>
-                <tbody>
-                    @foreach (var o in _orders)
-                    {
-                        <tr>
-                            <td><MudLink Href="@($"materials/sales-orders/{o.Id}")">@o.Number</MudLink></td>
-                            <td>@o.CustomerName</td>
-                            <td>@(string.Join(" · ", new[] { o.ContractNumber, o.ProjectCode }.Where(x => x is not null)))</td>
-                            <td>@o.CustomerReference</td>
-                            <td>@MaterialsFormat.Date(o.OrderDate)</td>
-                            <td>@MaterialsFormat.Date(o.NextNeedDate)</td>
-                            <td style="text-align:right">@MaterialsFormat.Amount(o.Total)</td>
-                            <td style="text-align:right">@MaterialsFormat.Amount(o.ShippedValue)</td>
-                            <td>
-                                <MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(o.Status)" Class="my-0">@SalesFormat.Label(o.Status)</MudChip>
-                                @if (o.OnCreditHold) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="my-0">Credit hold</MudChip> }
-                                else if (o.OnHold) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="my-0">On hold</MudChip> }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </MudSimpleTable>
-        }
-    </MudPaper>
+    <ConfigurableList T="SalesOrderSummaryDto" Definition="_definition" Items="_orders" Loading="_orders is null" SearchLabel="Search sales orders" TestId="sales-orders"
+                      RowClick="@(o => Navigation.NavigateTo($"materials/sales-orders/{o.Id}"))">
+        <ToolBarContent>
+            <MudSelect T="SalesOrderState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:160px">
+                @foreach (var s in Enum.GetValues<SalesOrderState>()) { <MudSelectItem T="SalesOrderState?" Value="s">@SalesFormat.Label(s)</MudSelectItem> }
+            </MudSelect>
+            <MudSwitch T="bool" Value="_open" ValueChanged="v => SetAsync(() => _open = v)" Label="Open only" Color="Color.Primary" />
+        </ToolBarContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No sales orders.</MudText></NoRecordsContent>
+    </ConfigurableList>
 }
 
 @code {
@@ -72,11 +37,36 @@ else
 
     private IReadOnlyList<SalesOrderSummaryDto>? _orders;
     private SalesOptionsDto? _options;
-    private string? _search;
     private SalesOrderState? _status;
     private bool _open = true;
     private string? _error;
     private bool _forbidden;
+
+    internal static readonly ListDefinition<SalesOrderSummaryDto> _definition = new()
+    {
+        ListKey = CustomizableLists.SalesOrders,
+        EntityType = CustomizableEntities.SalesOrder,
+        Title = "Sales orders",
+        Id = o => o.Id,
+        Columns =
+        [
+            new() { Key = "order", Title = "Order", Value = o => o.Number, Groupable = false, Cell = o => @<MudLink Href="@($"materials/sales-orders/{o.Id}")">@o.Number</MudLink> },
+            new() { Key = "customer", Title = "Customer", Value = o => o.CustomerName },
+            new() { Key = "contractProject", Title = "Contract / project", Value = o => string.Join(" · ", new[] { o.ContractNumber, o.ProjectCode }.Where(x => x is not null)) },
+            new() { Key = "reference", Title = "Customer ref.", Value = o => o.CustomerReference, Groupable = false },
+            new() { Key = "ordered", Title = "Ordered", Value = o => o.OrderDate, Kind = ListColumnKind.Date, Groupable = false, Display = o => MaterialsFormat.Date(o.OrderDate) },
+            new() { Key = "nextDue", Title = "Next due", Value = o => o.NextNeedDate, Kind = ListColumnKind.Date, Groupable = false, Display = o => MaterialsFormat.Date(o.NextNeedDate) },
+            new() { Key = "value", Title = "Value", Value = o => o.Total, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@MaterialsFormat.Amount(o.Total)</text> },
+            new() { Key = "shipped", Title = "Shipped", Value = o => o.ShippedValue, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@MaterialsFormat.Amount(o.ShippedValue)</text> },
+            new() { Key = "status", Title = "Status", Value = o => o.Status, Display = o => SalesFormat.Label(o.Status),
+                    Cell = o => @<text>
+                        <MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(o.Status)" Class="my-0">@SalesFormat.Label(o.Status)</MudChip>
+                        @if (o.OnCreditHold) { <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="my-0">Credit hold</MudChip> }
+                        else if (o.OnHold) { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="my-0">On hold</MudChip> }
+                    </text> },
+            new() { Key = "lines", Title = "Lines", Value = o => o.LineCount, Kind = ListColumnKind.Number, Standard = false, Groupable = false },
+        ],
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -104,7 +94,7 @@ else
     {
         try
         {
-            _orders = await Orders.ListAsync(new SalesOrderQuery(_status, OpenOnly: _open, Search: _search));
+            _orders = await Orders.ListAsync(new SalesOrderQuery(_status, OpenOnly: _open));
         }
         catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
         {

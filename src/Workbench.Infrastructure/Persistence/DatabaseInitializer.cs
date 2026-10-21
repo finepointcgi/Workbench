@@ -205,6 +205,7 @@ public static class DatabaseInitializer
         await TaxBooksComplianceSeed.SeedAsync(db, services, cancellationToken); // Tax books on two assets, an asset transfer, three POs with partial CPSR files and a draft DS-1.
         await CustomizationSeed.SeedAsync(db, cancellationToken); // Customization: "Program office" and "Customer POC" on projects, "Clearance sponsor" and a sensitive "Badge number" on employees, sub-statuses under active projects.
         await AutomationSeed.SeedAsync(db, cancellationToken); // Admin › Automation: funding under 25% → PM, receipts over $75 (validation), timesheet approval escalation after 2 days.
+        await LayoutsSeed.SeedAsync(db, cancellationToken); // Customization: a shared "My open projects" view on Projects and a Finance home page (KPIs, to-dos, shortcuts, a chart of that view).
     }
 
     /// <summary>

@@ -113,6 +113,7 @@ public static class IdentityRegistration
         services.AddWorkbenchCustomizationPermissions(); // Customization: definitions Admin; record values follow the record (sensitive fields through ICustomFieldAccessPolicy).
         services.Decorate<IRoleService, PermissionCheckingRoleService>(); // Admin › Roles: "Manage roles"; assigning them "Administer users"; nobody grants more than they hold.
         services.Decorate<Workbench.Contracts.Automations.IAutomationService, Automations.PermissionCheckingAutomationService>(); // Automations: "manage automations" / "run automation" (IAutomationPermissions; Admin until the permission catalog).
+        services.AddWorkbenchLayoutPermissions(); // Layouts, list views, role home pages: managing layouts and sharing views behind ICustomizationAccess (Admin until the permission catalog).
         return services;
     }
 

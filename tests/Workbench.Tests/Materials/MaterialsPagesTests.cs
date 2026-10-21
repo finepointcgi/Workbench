@@ -27,8 +27,8 @@ public sealed class MaterialsPagesTests
 
         var finance = ctx.Render<PartsPage>(p => p.AddCascadingValue(new CurrentUserInfo("finance@example.com", "Fin", OrgRoles.Finance, null)));
         finance.WaitForAssertion(() => Assert.Equal(2, finance.FindAll("[data-testid^=part-]").Count));
-        Assert.Contains("25.00", finance.Find("[data-testid=part-BOLT]").TextContent);
-        Assert.Contains("3", finance.Find("[data-testid=part-SENSOR]").TextContent);
+        Assert.Contains("25.00", finance.Find("[data-testid=part-BOLT]").Closest("tr")!.TextContent);
+        Assert.Contains("3", finance.Find("[data-testid=part-SENSOR]").Closest("tr")!.TextContent);
         Assert.Empty(finance.FindAll("[data-testid=new-part]"));
         A11yAssert.Check(finance);
 

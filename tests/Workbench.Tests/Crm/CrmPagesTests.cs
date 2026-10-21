@@ -57,7 +57,7 @@ public sealed class CrmPagesTests
         page.WaitForAssertion(() => Assert.NotNull(page.Find("[data-testid=opportunity-table]")));
         Assert.Contains("OPP-0005", page.Markup);
         Assert.DoesNotContain("OPP-0009", page.Markup); // Lost: not an open pursuit.
-        Assert.Equal("Opportunities", page.Find("[data-testid=opportunity-table]").GetAttribute("aria-label"));
+        Assert.Equal("Opportunities", page.Find("[data-testid=opportunity-table] table").GetAttribute("aria-label"));
     }
 
     private sealed class FakePipeline : IPipelineService

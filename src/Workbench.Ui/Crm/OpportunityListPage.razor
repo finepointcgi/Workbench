@@ -26,80 +26,45 @@ else if (_all is null)
 }
 else
 {
-    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudTextField T="string" @bind-Value="_search" Label="Search" Immediate="true" DebounceInterval="200" Clearable="true"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width: 260px" data-testid="opportunity-search"
-                      HelperText="Name, number, solicitation, agency or NAICS" />
-        <MudSelect T="string" @bind-Value="_stage" Label="Stage" Dense="true" Style="max-width: 200px" data-testid="stage-filter">
-            <MudSelectItem T="string" Value="@OpenStages">Open pursuits</MudSelectItem>
-            <MudSelectItem T="string" Value="@AnyStage">Any stage</MudSelectItem>
-            @foreach (var stage in Enum.GetValues<OpportunityStage>())
+    <ConfigurableList T="OpportunityDto" Definition="_definition" Items="Visible.ToList()" ShowSearch="false" TestId="opportunity-table" AriaLabel="Opportunities"
+                      RowClick="@(o => Navigation.NavigateTo($"bd/opportunities/{o.Id}"))">
+        <ToolBarContent>
+            <MudTextField T="string" @bind-Value="_search" Label="Search" Immediate="true" DebounceInterval="200" Clearable="true"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width: 260px" data-testid="opportunity-search"
+                          HelperText="Name, number, solicitation, agency or NAICS" />
+            <MudSelect T="string" @bind-Value="_stage" Label="Stage" Dense="true" Style="max-width: 200px" data-testid="stage-filter">
+                <MudSelectItem T="string" Value="@OpenStages">Open pursuits</MudSelectItem>
+                <MudSelectItem T="string" Value="@AnyStage">Any stage</MudSelectItem>
+                @foreach (var stage in Enum.GetValues<OpportunityStage>())
+                {
+                    <MudSelectItem T="string" Value="@stage.ToString()">@CrmFormat.Stage(stage)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Guid?" @bind-Value="_agency" Label="Agency" Dense="true" Clearable="true" Style="min-width: 220px">
+                @foreach (var a in _agencies)
+                {
+                    <MudSelectItem T="Guid?" Value="a.Id">@(a.ParentName is { } parent ? $"{a.Name} ({parent})" : a.Name)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_kind" Label="Type" Dense="true" Style="max-width: 160px">
+                <MudSelectItem T="string" Value="@("")">New and recompete</MudSelectItem>
+                <MudSelectItem T="string" Value="@nameof(OpportunityKind.New)">New business</MudSelectItem>
+                <MudSelectItem T="string" Value="@nameof(OpportunityKind.Recompete)">Recompetes</MudSelectItem>
+            </MudSelect>
+            <MudSwitch T="bool" @bind-Value="_mine" Color="Color.Primary" Label="Mine only" />
+        </ToolBarContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No opportunities match.</MudText></NoRecordsContent>
+        <Summary>
+            @if (context.Count > 0)
             {
-                <MudSelectItem T="string" Value="@stage.ToString()">@CrmFormat.Stage(stage)</MudSelectItem>
+                <MudStack Row="true" Spacing="4" Class="mt-2 px-2" Wrap="Wrap.Wrap" data-testid="opportunity-totals">
+                    <MudText Typo="Typo.body2"><strong>@context.Count opportunities</strong></MudText>
+                    <MudText Typo="Typo.body2">Value <strong>@CrmFormat.Money(context.Sum(r => r.EstimatedValue))</strong></MudText>
+                    <MudText Typo="Typo.body2">Weighted <strong>@CrmFormat.Money(context.Sum(r => r.WeightedValue))</strong></MudText>
+                </MudStack>
             }
-        </MudSelect>
-        <MudSelect T="Guid?" @bind-Value="_agency" Label="Agency" Dense="true" Clearable="true" Style="min-width: 220px">
-            @foreach (var a in _agencies)
-            {
-                <MudSelectItem T="Guid?" Value="a.Id">@(a.ParentName is { } parent ? $"{a.Name} ({parent})" : a.Name)</MudSelectItem>
-            }
-        </MudSelect>
-        <MudSelect T="string" @bind-Value="_kind" Label="Type" Dense="true" Style="max-width: 160px">
-            <MudSelectItem T="string" Value="@("")">New and recompete</MudSelectItem>
-            <MudSelectItem T="string" Value="@nameof(OpportunityKind.New)">New business</MudSelectItem>
-            <MudSelectItem T="string" Value="@nameof(OpportunityKind.Recompete)">Recompetes</MudSelectItem>
-        </MudSelect>
-        <MudSwitch T="bool" @bind-Value="_mine" Color="Color.Primary" Label="Mine only" />
-    </MudStack>
-
-    var rows = Visible.ToList();
-    @if (rows.Count == 0)
-    {
-        <MudPaper Outlined="true" Class="pa-6"><MudText Class="mud-text-secondary">No opportunities match.</MudText></MudPaper>
-    }
-    else
-    {
-        <MudTable T="OpportunityDto" Items="rows" Dense="true" Hover="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" SortLabel="Sort by"
-                  aria-label="Opportunities" data-testid="opportunity-table">
-            <HeaderContent>
-                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.Number">Opportunity</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.AgencyName ?? string.Empty">Agency</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => (int)o.Stage">Stage</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="OpportunityDto" SortBy="o => o.EstimatedValue">Value</MudTableSortLabel></MudTh>
-                <MudTh Style="text-align:right">Pwin / Pgo</MudTh>
-                <MudTh Style="text-align:right"><MudTableSortLabel T="OpportunityDto" SortBy="o => o.WeightedValue">Weighted</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.ProposalDueOn ?? DateOnly.MaxValue">Proposal due</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="OpportunityDto" SortBy="o => o.EstimatedAwardDate ?? DateOnly.MaxValue">Award</MudTableSortLabel></MudTh>
-                <MudTh>Capture manager</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Opportunity">
-                    <a href="@($"bd/opportunities/{context.Id}")"><span class="mud-text-secondary">@context.Number</span> @context.Name</a>
-                    @if (context.Kind == OpportunityKind.Recompete)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Recompete@(context.IncumbentName is { } inc ? $" · incumbent {inc}" : "")</MudText>
-                    }
-                </MudTd>
-                <MudTd DataLabel="Agency">@context.AgencyName</MudTd>
-                <MudTd DataLabel="Stage">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@CrmFormat.StageColor(context.Stage)" Icon="@CrmFormat.StageIcon(context.Stage)" Class="ma-0">@CrmFormat.Stage(context.Stage)</MudChip>
-                </MudTd>
-                <MudTd DataLabel="Value" Style="text-align:right">@CrmFormat.Money(context.EstimatedValue)</MudTd>
-                <MudTd DataLabel="Pwin / Pgo" Style="text-align:right">@context.Pwin% / @context.Pgo%</MudTd>
-                <MudTd DataLabel="Weighted" Style="text-align:right">@CrmFormat.Money(context.WeightedValue)</MudTd>
-                <MudTd DataLabel="Proposal due">@CrmFormat.Date(context.ProposalDueOn)</MudTd>
-                <MudTd DataLabel="Award">@CrmFormat.Date(context.EstimatedAwardDate)</MudTd>
-                <MudTd DataLabel="Capture manager">@context.CaptureManagerName</MudTd>
-            </RowTemplate>
-            <FooterContent>
-                <MudTd colspan="3"><strong>@rows.Count opportunities</strong></MudTd>
-                <MudTd Style="text-align:right"><strong>@CrmFormat.Money(rows.Sum(r => r.EstimatedValue))</strong></MudTd>
-                <MudTd />
-                <MudTd Style="text-align:right"><strong>@CrmFormat.Money(rows.Sum(r => r.WeightedValue))</strong></MudTd>
-                <MudTd colspan="3" />
-            </FooterContent>
-        </MudTable>
-    }
+        </Summary>
+    </ConfigurableList>
 }
 
 @code {
@@ -140,6 +105,37 @@ else
             _error = ex.Message;
         }
     }
+
+    internal static readonly ListDefinition<OpportunityDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Opportunities,
+        EntityType = CustomizableEntities.Opportunity,
+        Title = "Opportunities",
+        Id = o => o.Id,
+        Columns =
+        [
+            new() { Key = "opportunity", Title = "Opportunity", Value = o => o.Number, Groupable = false, Display = o => $"{o.Number} {o.Name}",
+                    Cell = o => @<text>
+                        <a href="@($"bd/opportunities/{o.Id}")"><span class="mud-text-secondary">@o.Number</span> @o.Name</a>
+                        @if (o.Kind == OpportunityKind.Recompete)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Recompete@(o.IncumbentName is { } inc ? $" · incumbent {inc}" : "")</MudText>
+                        }
+                    </text> },
+            new() { Key = "agency", Title = "Agency", Value = o => o.AgencyName },
+            new() { Key = "stage", Title = "Stage", Value = o => o.Stage, Display = o => CrmFormat.Stage(o.Stage),
+                    Cell = o => @<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@CrmFormat.StageColor(o.Stage)" Icon="@CrmFormat.StageIcon(o.Stage)" Class="ma-0">@CrmFormat.Stage(o.Stage)</MudChip> },
+            new() { Key = "value", Title = "Value", Value = o => o.EstimatedValue, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@CrmFormat.Money(o.EstimatedValue)</text> },
+            new() { Key = "probability", Title = "Pwin / Pgo", Value = o => o.Pwin, Kind = ListColumnKind.Number, Groupable = false, Display = o => $"{o.Pwin}% / {o.Pgo}%" },
+            new() { Key = "weighted", Title = "Weighted", Value = o => o.WeightedValue, Kind = ListColumnKind.Money, Groupable = false, Cell = o => @<text>@CrmFormat.Money(o.WeightedValue)</text> },
+            new() { Key = "proposalDue", Title = "Proposal due", Value = o => o.ProposalDueOn, Kind = ListColumnKind.Date, Groupable = false, Display = o => CrmFormat.Date(o.ProposalDueOn) },
+            new() { Key = "award", Title = "Award", Value = o => o.EstimatedAwardDate, Kind = ListColumnKind.Date, Groupable = false, Display = o => CrmFormat.Date(o.EstimatedAwardDate) },
+            new() { Key = "captureManager", Title = "Capture manager", Value = o => o.CaptureManagerName },
+            new() { Key = "kind", Title = "New or recompete", Value = o => o.Kind, Standard = false },
+            new() { Key = "solicitation", Title = "Solicitation", Value = o => o.SolicitationNumber, Standard = false, Groupable = false },
+            new() { Key = "naics", Title = "NAICS", Value = o => o.NaicsCode, Standard = false },
+        ],
+    };
 
     private IEnumerable<OpportunityDto> Visible
     {

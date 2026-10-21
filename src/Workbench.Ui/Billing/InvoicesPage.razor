@@ -1,6 +1,7 @@
 @page "/billing"
 @page "/billing/invoices"
 @inject IInvoiceService Invoices
+@inject NavigationManager Navigation
 
 <PageTitle>Invoices · Billing · Workbench</PageTitle>
 
@@ -16,77 +17,42 @@
 }
 else
 {
-    <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudSelect T="Guid?" Value="_contractId" ValueChanged="v => SetAsync(() => _contractId = v)" Label="Contract" Clearable="true" Dense="true" Style="min-width:220px">
-            @foreach (var c in _contracts)
+    <ConfigurableList T="InvoiceSummaryDto" Definition="_definition" Items="_invoices" Loading="_loading" SearchLabel="Search invoices" TestId="invoices"
+                      RowClick="@(i => Navigation.NavigateTo($"billing/invoices/{i.Id}"))">
+        <ToolBarContent>
+            <MudSelect T="Guid?" Value="_contractId" ValueChanged="v => SetAsync(() => _contractId = v)" Label="Contract" Clearable="true" Dense="true" Style="min-width:200px">
+                @foreach (var c in _contracts)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="InvoiceState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:140px">
+                @foreach (var s in Enum.GetValues<InvoiceState>())
+                {
+                    <MudSelectItem T="InvoiceState?" Value="s">@BillingFormat.Label(s)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="InvoiceKind?" Value="_type" ValueChanged="v => SetAsync(() => _type = v)" Label="Type" Clearable="true" Dense="true" Style="min-width:150px">
+                @foreach (var t in Enum.GetValues<InvoiceKind>())
+                {
+                    <MudSelectItem T="InvoiceKind?" Value="t">@BillingFormat.Label(t)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => SetAsync(() => _openOnly = v)" Color="Color.Primary" Label="Open balance only" />
+        </ToolBarContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">No invoices match. Use New invoice to bill a contract for approved time and costs.</MudText></NoRecordsContent>
+        <Summary>
+            @if (context.Count > 0)
             {
-                <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
+                <MudStack Row="true" Spacing="4" Class="mt-2 px-2" Wrap="Wrap.Wrap" data-testid="invoice-totals">
+                    <MudText Typo="Typo.body2"><strong>@context.Count invoice@(context.Count == 1 ? "" : "s")</strong></MudText>
+                    <MudText Typo="Typo.body2">Total <strong>@BillingFormat.Amount(context.Where(i => i.Status != InvoiceState.Void && i.Status != InvoiceState.Draft).Sum(i => i.Total))</strong></MudText>
+                    <MudText Typo="Typo.body2">Balance <strong>@BillingFormat.Amount(context.Sum(i => i.Balance))</strong></MudText>
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary px-2">The total counts approved invoices and credit memos (not drafts or void).</MudText>
             }
-        </MudSelect>
-        <MudSelect T="InvoiceState?" Value="_status" ValueChanged="v => SetAsync(() => _status = v)" Label="Status" Clearable="true" Dense="true" Style="min-width:150px">
-            @foreach (var s in Enum.GetValues<InvoiceState>())
-            {
-                <MudSelectItem T="InvoiceState?" Value="s">@BillingFormat.Label(s)</MudSelectItem>
-            }
-        </MudSelect>
-        <MudSelect T="InvoiceKind?" Value="_type" ValueChanged="v => SetAsync(() => _type = v)" Label="Type" Clearable="true" Dense="true" Style="min-width:170px">
-            @foreach (var t in Enum.GetValues<InvoiceKind>())
-            {
-                <MudSelectItem T="InvoiceKind?" Value="t">@BillingFormat.Label(t)</MudSelectItem>
-            }
-        </MudSelect>
-        <MudTextField T="string" Value="_search" ValueChanged="v => SetAsync(() => _search = v)" Label="Search" DebounceInterval="300" Immediate="true"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:200px" />
-        <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => SetAsync(() => _openOnly = v)" Color="Color.Primary" Label="Open balance only" />
-    </MudStack>
-
-    @if (_loading)
-    {
-        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
-    }
-    else if (_invoices.Count == 0)
-    {
-        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No invoices match. Use New invoice to bill a contract for approved time and costs.</MudText></MudPaper>
-    }
-    else
-    {
-        <MudPaper Outlined="true" Style="overflow-x:auto">
-            <MudSimpleTable Dense="true" Hover="true" data-testid="invoices">
-                <thead>
-                    <tr><th>Invoice</th><th>Contract</th><th>Customer</th><th>Type</th><th>Period</th><th>Date</th><th>Due</th>
-                        <th style="text-align:right">Total</th><th style="text-align:right">Balance</th><th>Status</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var i in _invoices)
-                    {
-                        <tr>
-                            <td style="white-space:nowrap"><MudLink Href="@($"billing/invoices/{i.Id}")">@i.Number</MudLink></td>
-                            <td style="white-space:nowrap">@i.ContractNumber</td>
-                            <td>@i.CustomerName</td>
-                            <td>@BillingFormat.Label(i.Type)</td>
-                            <td style="white-space:nowrap">@BillingFormat.Date(i.PeriodFrom) – @BillingFormat.Date(i.PeriodTo)</td>
-                            <td style="white-space:nowrap">@BillingFormat.Date(i.InvoiceDate)</td>
-                            <td style="white-space:nowrap" class="@(i.DaysPastDue > 0 ? "mud-error-text" : "")">
-                                @BillingFormat.Date(i.DueDate)@(i.DaysPastDue > 0 ? $" ({i.DaysPastDue} d late)" : "")
-                            </td>
-                            <td style="text-align:right; white-space:nowrap">@BillingFormat.Amount(i.Total)</td>
-                            <td style="text-align:right; white-space:nowrap">@BillingFormat.Blank(i.Balance)</td>
-                            <td><InvoiceStatusChip Status="i.Status" /></td>
-                        </tr>
-                    }
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="7"><strong>@_invoices.Count invoice@(_invoices.Count == 1 ? "" : "s")</strong></td>
-                        <td style="text-align:right"><strong>@BillingFormat.Amount(_invoices.Where(i => i.Status != InvoiceState.Void && i.Status != InvoiceState.Draft).Sum(i => i.Total))</strong></td>
-                        <td style="text-align:right"><strong>@BillingFormat.Amount(_invoices.Sum(i => i.Balance))</strong></td>
-                        <td></td>
-                    </tr>
-                </tfoot>
-            </MudSimpleTable>
-        </MudPaper>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary">The total counts approved invoices and credit memos (not drafts or void).</MudText>
-    }
+        </Summary>
+    </ConfigurableList>
 }
 
 @code {
@@ -95,11 +61,35 @@ else
     private Guid? _contractId;
     private InvoiceState? _status;
     private InvoiceKind? _type;
-    private string? _search;
     private bool _openOnly;
     private bool _loading = true;
     private string? _error;
     private bool _forbidden;
+
+    internal static readonly ListDefinition<InvoiceSummaryDto> _definition = new()
+    {
+        ListKey = CustomizableLists.Invoices,
+        EntityType = CustomizableEntities.Invoice,
+        Title = "Invoices",
+        Id = i => i.Id,
+        Columns =
+        [
+            new() { Key = "invoice", Title = "Invoice", Value = i => i.Number, Groupable = false,
+                    Cell = i => @<span style="white-space:nowrap"><MudLink Href="@($"billing/invoices/{i.Id}")">@i.Number</MudLink></span> },
+            new() { Key = "contract", Title = "Contract", Value = i => i.ContractNumber, Cell = i => @<span style="white-space:nowrap">@i.ContractNumber</span> },
+            new() { Key = "customer", Title = "Customer", Value = i => i.CustomerName },
+            new() { Key = "type", Title = "Type", Value = i => i.Type, Display = i => BillingFormat.Label(i.Type) },
+            new() { Key = "period", Title = "Period", Value = i => i.PeriodFrom, Kind = ListColumnKind.Date, Groupable = false,
+                    Display = i => $"{BillingFormat.Date(i.PeriodFrom)} – {BillingFormat.Date(i.PeriodTo)}" },
+            new() { Key = "date", Title = "Date", Value = i => i.InvoiceDate, Kind = ListColumnKind.Date, Groupable = false, Display = i => BillingFormat.Date(i.InvoiceDate) },
+            new() { Key = "due", Title = "Due", Value = i => i.DueDate, Kind = ListColumnKind.Date, Groupable = false,
+                    Cell = i => @<span style="white-space:nowrap" class="@(i.DaysPastDue > 0 ? "mud-error-text" : "")">@BillingFormat.Date(i.DueDate)@(i.DaysPastDue > 0 ? $" ({i.DaysPastDue} d late)" : "")</span> },
+            new() { Key = "daysPastDue", Title = "Days past due", Value = i => i.DaysPastDue, Kind = ListColumnKind.Number, Standard = false, Groupable = false },
+            new() { Key = "total", Title = "Total", Value = i => i.Total, Kind = ListColumnKind.Money, Groupable = false, Cell = i => @<span style="white-space:nowrap">@BillingFormat.Amount(i.Total)</span> },
+            new() { Key = "balance", Title = "Balance", Value = i => i.Balance, Kind = ListColumnKind.Money, Groupable = false, Cell = i => @<span style="white-space:nowrap">@BillingFormat.Blank(i.Balance)</span> },
+            new() { Key = "status", Title = "Status", Value = i => i.Status, Display = i => BillingFormat.Label(i.Status), Cell = i => @<InvoiceStatusChip Status="i.Status" /> },
+        ],
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -131,7 +121,7 @@ else
         _loading = true;
         try
         {
-            _invoices = await Invoices.ListAsync(new InvoiceQuery(_contractId, null, _status, _type, _search, _openOnly));
+            _invoices = await Invoices.ListAsync(new InvoiceQuery(_contractId, null, _status, _type, null, _openOnly));
         }
         catch (Exception ex)
         {

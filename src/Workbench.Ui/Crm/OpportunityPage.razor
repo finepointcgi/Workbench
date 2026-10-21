@@ -28,7 +28,7 @@ else if (IsNew)
         <MudText Typo="Typo.h4" HtmlTag="h1">New opportunity</MudText>
     </MudStack>
     <MudPaper Outlined="true" Class="pa-4">
-        <OpportunityDetailsForm Model="_model" Accounts="_accounts" People="_people" />
+        <OpportunityDetailsForm @ref="_details" Model="_model" Accounts="_accounts" People="_people" />
         <MudStack Row="true" Class="mt-4">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="_busy" data-testid="opp-create">Add opportunity</MudButton>
             <MudButton Href="bd/opportunities" Variant="Variant.Text">Cancel</MudButton>
@@ -58,7 +58,7 @@ else if (_opportunity is { } o)
         <MudTabPanel Text="Details">
             @if (_tab == "details")
             {
-                <OpportunityDetailsForm Model="_model" Accounts="_accounts" People="_people" ReadOnly="!o.CanEdit" />
+                <OpportunityDetailsForm @ref="_details" Model="_model" Accounts="_accounts" People="_people" ReadOnly="!o.CanEdit" RecordId="o.Id" />
                 @if (o.CanEdit)
                 {
                     <MudStack Row="true" Class="mt-4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
@@ -219,12 +219,15 @@ else if (_opportunity is { } o)
     private void TabChanged(int index) =>
         Navigation.NavigateTo($"bd/opportunities/{Id}{(index == 0 ? "" : $"?tab={_tabs[index]}")}", replace: true);
 
+    private OpportunityDetailsForm? _details;
+
     private async Task CreateAsync()
     {
         _busy = true;
         try
         {
             var created = await Opportunities.CreateAsync(_model!.ToRequest());
+            await (_details?.SaveCustomFieldsAsync(created.Id) ?? Task.CompletedTask);
             Snackbar.Add($"Added {created.Number}.", Severity.Success);
             Navigation.NavigateTo($"bd/opportunities/{created.Id}");
         }
@@ -244,6 +247,7 @@ else if (_opportunity is { } o)
         try
         {
             Replace(await Opportunities.UpdateAsync(_opportunity!.Id, _model!.ToRequest()));
+            await (_details?.SaveCustomFieldsAsync(_opportunity!.Id) ?? Task.CompletedTask);
             Snackbar.Add("Saved.", Severity.Success);
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))

@@ -1,0 +1,155 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Customization
+@using Workbench.Contracts.Dashboards
+@using Workbench.Ui.Customization
+@using Workbench.Ui.Dashboards
+@inject IServiceProvider Services
+@*
+    One widget of a role home page. The personal widgets reuse the home page's own cards (to-dos, this week, waiting on you,
+    my sheet items); the others sit in a card with their title and get their data from the home page service (KPI tiles,
+    report charts) or, for a list view chart, from the list's own permission-checked services.
+*@
+
+@switch (Widget.Type)
+{
+    case WidgetType.MyTodo:
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@Widget.Title</MudText>
+        @if (Todo is not null)
+        {
+            <TodoList Items="Todo.Items" Today="Todo.Today" OnChanged="OnChanged" />
+        }
+        break;
+    case WidgetType.ThisWeek:
+        @if (Todo?.Week is { } week)
+        {
+            <ThisWeekStrip Week="week" />
+        }
+        break;
+    case WidgetType.WaitingOnYou:
+        @if (Todo?.Approvals is { Count: > 0 } approvals)
+        {
+            <WaitingOnYou Approvals="approvals" OnChanged="OnChanged" />
+        }
+        break;
+    case WidgetType.MySheetItems:
+        <MySheetItems OnChanged="OnChanged" />
+        break;
+    case WidgetType.Announcement:
+        <MudAlert Severity="Severity.Info" Class="mb-4" Icon="@Icons.Material.Filled.Campaign" data-widget="@Widget.Title">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Style="font-weight:600">@Widget.Title</MudText>
+            <MarkdownView Source="@(Widget.Config.Markdown ?? "")" />
+        </MudAlert>
+        break;
+    default:
+        <MudPaper Outlined="true" Class="pa-4 mb-4" data-widget="@Widget.Title">
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2" Style="font-weight:600">@Widget.Title</MudText>
+            @switch (Widget.Type)
+            {
+                case WidgetType.Kpi:
+                    <KpiTile Data="_data" />
+                    break;
+                case WidgetType.Shortcuts:
+                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2">
+                        @foreach (var link in Widget.Config.Shortcuts ?? [])
+                        {
+                            <MudButton Href="@link.Href" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@ShortcutIcon(link)">@link.Label</MudButton>
+                        }
+                    </MudStack>
+                    break;
+                case WidgetType.ListViewChart:
+                    <WidgetView Data="_data" ChartHeight="220px" />
+                    break;
+                default:
+                    <WidgetView Data="_data" ChartHeight="220px" />
+                    break;
+            }
+        </MudPaper>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public WidgetDto Widget { get; set; } = default!;
+
+    [Parameter]
+    public MyTodoDto? Todo { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private WidgetDataDto? _data;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Widget.Id && _data is not null)
+        {
+            return;
+        }
+
+        _loadedFor = Widget.Id;
+        _data = Widget.Type switch
+        {
+            WidgetType.Kpi or WidgetType.ReportChart or WidgetType.Chart or WidgetType.Metric or WidgetType.ItemList or WidgetType.ScheduleHealth
+                or WidgetType.ContractFunding or WidgetType.ProjectFinancials or WidgetType.EarnedValue or WidgetType.RichText => await ServerDataAsync(),
+            WidgetType.ListViewChart => await ListViewChartAsync(),
+            _ => null,
+        };
+    }
+
+    private async Task<WidgetDataDto?> ServerDataAsync()
+    {
+        if (Services.GetService<IHomePageService>() is not { } home)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await home.GetWidgetDataAsync(Widget.Id);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new WidgetDataDto(Widget.Id, Widget.Type, null, null, "This widget couldn't be loaded.");
+        }
+    }
+
+    private async Task<WidgetDataDto> ListViewChartAsync()
+    {
+        var empty = new WidgetDataDto(Widget.Id, Widget.Type, null, null, null);
+        if (Widget.Config.ListViewId is not { } viewId || Services.GetService<IListViewService>() is not { } views)
+        {
+            return empty with { Error = "Pick a saved list view." };
+        }
+
+        try
+        {
+            var view = await views.GetAsync(viewId);
+            if (ListSources.Find(view.ListKey) is not { } source)
+            {
+                return empty with { Error = "That list can't be charted." };
+            }
+
+            var chart = await source.ChartAsync(Services, view.Definition, Widget.Config.Chart);
+            return empty with { Type = WidgetType.Chart, Chart = chart, SheetName = view.Name };
+        }
+        catch (Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            return empty with { Error = "That list view no longer exists or isn't shared with you." };
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException or ArgumentException)
+        {
+            return empty with { Error = "You don't have access to that list." };
+        }
+    }
+
+    private static string ShortcutIcon(WidgetShortcut link) => link.Icon switch
+    {
+        "time" => Icons.Material.Filled.Schedule,
+        "expense" => Icons.Material.Filled.Receipt,
+        "approve" => Icons.Material.Filled.FactCheck,
+        "report" => Icons.Material.Filled.Assessment,
+        "add" => Icons.Material.Filled.Add,
+        _ => Icons.Material.Filled.ArrowForward,
+    };
+}
