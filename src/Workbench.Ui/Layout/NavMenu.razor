@@ -22,7 +22,7 @@
             // One page or one group: the section is a plain link (a group's other pages are tabs on the page).
             var only = items[0];
             <MudNavLink Href="@HrefOf(only)" Match="@MatchOf(only)" Icon="@section.Icon" data-testid="@($"nav-{section.Key}")" data-pages="@PagesOf(only)">
-                @(only.IsGroup || only.First.Title == title ? title : Label(only.First))
+                @(only.IsGroup ? title : Label(only.First) is var label && label != only.First.Title ? label : title)
                 @if (section.Key == NavCatalog.Approvals && _access.ApprovalCount > 0)
                 {
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2 my-0" data-testid="approvals-count"
