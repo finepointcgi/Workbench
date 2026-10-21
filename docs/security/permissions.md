@@ -157,6 +157,8 @@ reveals. Admin holds every permission.
 | Handle support requests | `admin.support` | See and answer everyone's support requests, and hear about new ones. | Admin | Support requests |
 | Change organization settings | `admin.organization` | Organization-wide settings such as the timesheet cadence. | Admin | — |
 | Own every workspace | `admin.all_workspaces` | Owner access to every workspace and sheet, and the right to change anyone's dashboards, saved reports and schedules. | Admin | — |
+| Manage customization | `admin.customization` | Custom fields, picklists, status labels, document numbering, form layouts, shared list views and role home pages. | Admin | Customization, Layouts |
+| Manage automations | `admin.automations` | Build, test, turn on and off automations, and see their run log. | Admin | Automation |
 
 ### Approvals
 

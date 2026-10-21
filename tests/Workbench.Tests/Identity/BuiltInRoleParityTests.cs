@@ -22,6 +22,8 @@ public sealed class BuiltInRoleParityTests
         [Permission.AdminSupport] = r => r.IsAdmin(),
         [Permission.AdminOrganization] = r => r.IsAdmin(),
         [Permission.AdminAllWorkspaces] = r => r.IsAdmin(),
+        [Permission.AdminCustomization] = r => r.IsAdmin(),
+        [Permission.AdminAutomations] = r => r.IsAdmin(),
         [Permission.ApprovalWorkflowsView] = r => r.IsFinance(),
         [Permission.ApprovalWorkflowsManage] = r => r.IsAdmin(),
         [Permission.ApprovalDelegationsManage] = r => r.IsAdmin(),

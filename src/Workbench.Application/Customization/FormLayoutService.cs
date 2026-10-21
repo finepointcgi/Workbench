@@ -9,8 +9,9 @@ namespace Workbench.Application.Customization;
 
 /// <summary>
 /// Form layouts. Reads are for everyone (a form needs its layout); who may preview, save and delete is checked by
-/// <c>PermissionCheckingFormLayoutService</c>. Fields come from <see cref="IEntityFieldCatalog"/>, so custom fields appear
-/// as soon as they exist.
+/// <c>PermissionCheckingFormLayoutService</c>. A form's built-in fields are its definition's (<see cref="BuiltInForms"/>,
+/// the save request's properties); its custom fields come from <see cref="IEntityFieldCatalog"/>, so they appear as soon
+/// as they exist.
 /// </summary>
 public sealed class FormLayoutService(
     IWorkbenchDbContextFactory dbFactory,
@@ -26,7 +27,14 @@ public sealed class FormLayoutService(
     public async Task<IReadOnlyList<EntityFieldDto>> ListFieldsAsync(string entityType, CancellationToken ct = default)
     {
         BuiltInForms.Get(entityType);
-        return await catalog.GetFieldsAsync(entityType, ct);
+        var builtIn = BuiltInEntityFieldCatalog.For(entityType);
+        if (catalog is BuiltInEntityFieldCatalog || !catalog.EntityTypes.Contains(entityType))
+        {
+            return builtIn;
+        }
+
+        var custom = (await catalog.GetFieldsAsync(entityType, ct)).Where(f => f.IsCustom);
+        return [.. builtIn, .. custom];
     }
 
     public Task<FormLayoutDto> GetBuiltInAsync(string entityType, CancellationToken ct = default) =>

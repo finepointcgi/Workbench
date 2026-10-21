@@ -233,7 +233,7 @@ public sealed class ProjectStaffingTests
                 await staffing.CheckAsync(new StaffingCheckRequest(host.Project1, host.DevId, null, null, ThisWeek, 8));
                 return true;
             }
-            catch (WorkbenchForbiddenException)
+            catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException) // Not found: they aren't on the project.
             {
                 return false;
             }

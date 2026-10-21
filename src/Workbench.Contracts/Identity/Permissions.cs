@@ -200,7 +200,7 @@ public static class PermissionCatalog
         new(Permission.AdminAssistant, AreaAdministration, "Administer the assistant", "AI assistant settings, usage and audit.", A),
         new(Permission.AdminSupport, AreaAdministration, "Handle support requests", "See and answer everyone's support requests, and hear about new ones.", A),
         new(Permission.AdminOrganization, AreaAdministration, "Change organization settings", "Organization-wide settings such as the timesheet cadence.", A),
-        new(Permission.AdminCustomization, AreaAdministration, "Manage customization", "Custom fields, picklists, status labels and document numbering (Admin › Customization).", A),
+        new(Permission.AdminCustomization, AreaAdministration, "Manage customization", "Custom fields, picklists, status labels, document numbering, form layouts, shared list views and role home pages (Admin › Customization).", A),
         new(Permission.AdminAutomations, AreaAdministration, "Manage automations", "Build, test, turn on and off the automations under Admin › Automation, and see their run log.", A),
         new(Permission.AdminAllWorkspaces, AreaAdministration, "Own every workspace", "Owner access to every workspace and sheet, and the right to change anyone's dashboards, saved reports and schedules.", A),
 
