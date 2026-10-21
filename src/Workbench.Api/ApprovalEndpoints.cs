@@ -28,6 +28,7 @@ internal static class ApprovalEndpoints
 
         var workflows = v1.MapGroup("/approval-workflows");
         workflows.MapGet("", (IApprovalWorkflowService s, CancellationToken ct) => s.ListAsync(ct));
+        workflows.MapPost("/record", (CreateRecordApprovalWorkflowRequest request, IApprovalWorkflowService s, CancellationToken ct) => s.CreateRecordWorkflowAsync(request, ct));
         workflows.MapGet("/org-unit-approvers", (IApprovalWorkflowService s, CancellationToken ct) => s.ListOrgUnitApproversAsync(ct));
         workflows.MapPut("/org-unit-approvers/{orgUnitId:guid}", (Guid orgUnitId, SetOrgUnitApproverRequest request, IApprovalWorkflowService s, CancellationToken ct) =>
             s.SetOrgUnitApproverAsync(orgUnitId, request.EmployeeId, ct));

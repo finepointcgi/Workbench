@@ -202,6 +202,7 @@ public static class DatabaseInitializer
         await SourcingSeed.SeedAsync(db, services, cancellationToken); // Sourcing: RFQ-000001 (three quotes, awarded to PRIMA on an issued PO), PRIMA's portal contact Jordan Reyes, DIGI as an EDI partner.
         await BankFilesTaxSeed.SeedAsync(db, services, cancellationToken); // Bank files and sales tax: ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice.
         await TaxBooksComplianceSeed.SeedAsync(db, services, cancellationToken); // Tax books on two assets, an asset transfer, three POs with partial CPSR files and a draft DS-1.
+        await AutomationSeed.SeedAsync(db, cancellationToken); // Admin › Automation: funding under 25% → PM, receipts over $75 (validation), timesheet approval escalation after 2 days.
     }
 
     /// <summary>

@@ -1,0 +1,73 @@
+@* One run of the log: what fired it, the inputs, each condition's result, each action's outcome and any error. *@
+
+<MudDialog>
+    <TitleContent><MudText Typo="Typo.h6" HtmlTag="h2">@Run.AutomationName</MudText></TitleContent>
+    <DialogContent>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="AutomationUi.StatusColor(Run.Status)">@AutomationUi.Status(Run.Status)</MudChip>
+            <MudText Typo="Typo.body2">Version @Run.Version · @AutomationUi.When(Run.StartedAtUtc)</MudText>
+            @if (Run.Depth > 0)
+            {
+                <MudText Typo="Typo.body2">Chain depth @Run.Depth</MudText>
+            }
+        </MudStack>
+        <MudSimpleTable Dense="true" Elevation="0" Class="mb-3">
+            <tbody>
+                <tr><th scope="row">Trigger</th><td>@AutomationUi.Trigger(Run.TriggerKind)@(Run.TriggerDetail is null ? "" : $": {Run.TriggerDetail}")</td></tr>
+                <tr><th scope="row">Record</th><td>@(Run.RecordLabel ?? "—")</td></tr>
+                <tr><th scope="row">Changed by</th><td>@(Run.Actor ?? "—")</td></tr>
+                <tr><th scope="row">Acted as</th><td>@Run.Principal</td></tr>
+            </tbody>
+        </MudSimpleTable>
+        @if (Run.Error is { } error)
+        {
+            <MudAlert Severity="@(Run.Status is AutomationRunStatus.Failed ? Severity.Error : Severity.Info)" Dense="true" Class="mb-3">@error</MudAlert>
+        }
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3">Conditions</MudText>
+        @if (Run.Conditions.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">None: it always runs.</MudText>
+        }
+        else
+        {
+            <MudList T="string" Dense="true" Class="mb-2">
+                @foreach (var c in Run.Conditions)
+                {
+                    <MudListItem T="string" Icon="@(c.Matched ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" IconColor="@(c.Matched ? Color.Success : Color.Default)">
+                        @c.Description <span class="mud-text-secondary">(was @(c.Actual ?? "empty"))</span>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3">Actions</MudText>
+        @if (Run.Steps.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">No actions ran.</MudText>
+        }
+        @foreach (var step in Run.Steps)
+        {
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="mb-1">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="AutomationUi.OutcomeColor(step.Outcome)">@step.Outcome</MudChip>
+                <MudText Typo="Typo.body2"><strong>@AutomationUi.Action(step.Kind)</strong>: @step.Detail</MudText>
+            </MudStack>
+        }
+        @if (Run.Inputs.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-3">Inputs</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <tbody>
+                    @foreach (var (key, value) in Run.Inputs)
+                    {
+                        <tr><th scope="row" style="width:30%">@key</th><td style="word-break:break-word">@value</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </DialogContent>
+    <DialogActions><MudButton OnClick="() => MudDialog.Close()">Close</MudButton></DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter, EditorRequired] public AutomationRunDto Run { get; set; } = default!;
+}

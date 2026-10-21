@@ -107,6 +107,7 @@ public static class IdentityRegistration
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         services.AddWorkbenchIntegrationPermissions(); // Integrations: webhooks, API keys and connectors are Admin-only and closed to API keys themselves.
+        services.Decorate<Workbench.Contracts.Automations.IAutomationService, Automations.PermissionCheckingAutomationService>(); // Automations: "manage automations" / "run automation" (IAutomationPermissions; Admin until the permission catalog).
         return services;
     }
 

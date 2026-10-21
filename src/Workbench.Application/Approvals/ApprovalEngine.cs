@@ -28,7 +28,8 @@ public sealed record ApprovalSubject(
     string? Summary = null,
     Guid? SubmitterEmployeeId = null,
     IReadOnlyList<ApprovalCharge>? Charges = null,
-    decimal? PolicyThreshold = null);
+    decimal? PolicyThreshold = null,
+    Guid? CompanyId = null);
 
 /// <summary>The route a submission got: every task (later steps waiting), and who to tell now.</summary>
 public sealed record ApprovalRoute(ApprovalInstance Instance, IReadOnlyList<ApprovalTask> Tasks, IReadOnlyList<string> NotifyEmails, bool HasUnassigned)
@@ -616,7 +617,7 @@ public sealed class ApprovalEngine(TimeProvider clock)
     /// <summary>Resolves approver rules and conditions for one subject.</summary>
     private sealed class Resolver
     {
-        private sealed record ProjectInfo(Guid Id, string Code, string Name, Guid? ContractId, string? ManagerEmail);
+        private sealed record ProjectInfo(Guid Id, string Code, string Name, Guid? ContractId, string? ManagerEmail, Guid CompanyId = default);
 
         private ApprovalSubject _subject = null!;
         private string _submitter = "";
@@ -638,11 +639,11 @@ public sealed class ApprovalEngine(TimeProvider clock)
 
             var projectIds = r._charges.Where(c => c.ProjectId is not null).Select(c => c.ProjectId!.Value).Distinct().ToList();
             var projects = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id))
-                .Select(p => new { p.Id, p.Code, p.Name, p.ContractId, p.ProjectManagerId }).ToListAsync(ct);
+                .Select(p => new { p.Id, p.Code, p.Name, p.ContractId, p.ProjectManagerId, p.CompanyId }).ToListAsync(ct);
             var managerIds = projects.Where(p => p.ProjectManagerId != null).Select(p => p.ProjectManagerId!.Value).Distinct().ToList();
             var managers = await db.Set<Employee>().AsNoTracking().Where(e => managerIds.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.Email, ct);
             r._projects = projects.ToDictionary(p => p.Id, p => new ProjectInfo(p.Id, p.Code, p.Name, p.ContractId,
-                p.ProjectManagerId is { } m && managers.TryGetValue(m, out var email) ? Normalize(email) : null));
+                p.ProjectManagerId is { } m && managers.TryGetValue(m, out var email) ? Normalize(email) : null, p.CompanyId));
             return r;
         }
 
@@ -677,6 +678,9 @@ public sealed class ApprovalEngine(TimeProvider clock)
                 ApprovalConditionKind.HasUnallowableCost => _charges.Any(x => x.IsUnallowable),
                 ApprovalConditionKind.CostTypeIn => _charges.Any(x => x.CostType is { } t && (c.Values ?? []).Contains(t, StringComparer.OrdinalIgnoreCase)),
                 ApprovalConditionKind.HasAccountCharges => _charges.Any(x => x.IsAccount),
+                ApprovalConditionKind.CompanyIn => (_subject.CompanyId is { } company && ids.Contains(company))
+                    || (_submitterEmployee?.CompanyId is { } own && ids.Contains(own))
+                    || _charges.Any(x => x.ProjectId is { } p && _projects.GetValueOrDefault(p)?.CompanyId is { } pc && ids.Contains(pc)),
                 ApprovalConditionKind.HasUnroutedCharges => _charges.Any(x => x.IsAccount || x.ProjectId is not { } p
                     || _projects.GetValueOrDefault(p)?.ManagerEmail is not { } pm || IsSelf(pm)),
                 _ => false,
