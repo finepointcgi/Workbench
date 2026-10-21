@@ -1,0 +1,54 @@
+@* Tabs across the top of a page that belongs to a group of related pages (Finance › Cash: accounts, reconcile, history,
+   forecast). The menu shows the group as one link; these tabs move between its pages. Detail pages (one record) don't
+   show them. Built from NavCatalog, so pages don't repeat it. *@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@if (_pages.Count > 1)
+{
+    <nav class="wb-group-tabs" aria-label="@_group" data-testid="group-tabs">
+        @foreach (var tab in _pages)
+        {
+            <NavLink href="@tab.Href" Match="@(tab.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)" class="wb-group-tab"
+                     ActiveClass="wb-group-tab-current" aria-current="@(tab == _current ? "page" : null)">@tab.Title</NavLink>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    private IReadOnlyList<NavEntry> _pages = [];
+    private NavEntry? _current;
+    private string? _group;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    protected override void OnParametersSet() => Build(Navigation.ToBaseRelativePath(Navigation.Uri));
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(() =>
+        {
+            Build(Navigation.ToBaseRelativePath(e.Location));
+            StateHasChanged();
+        });
+
+    private void Build(string relativePath)
+    {
+        var path = string.Join('/', NavCatalog.Segments(relativePath));
+        if (NavCatalog.Match(path, Access) is var (entry, tail) && tail.Length == 0)
+        {
+            _current = entry;
+            _group = entry.Group;
+            _pages = NavCatalog.GroupPages(entry, Access);
+        }
+        else
+        {
+            _current = null;
+            _group = null;
+            _pages = [];
+        }
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

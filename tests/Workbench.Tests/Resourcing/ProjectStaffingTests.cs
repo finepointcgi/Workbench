@@ -285,4 +285,19 @@ public sealed class ProjectStaffingTests
         Assert.Equal(("Budget 2 projects by labor category", "Start with 1001"), (item.Title, item.LinkLabel));
         Assert.StartsWith("1001 and 2002 have no labor budget yet.", item.Reason, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Staffing_someone_on_an_element_lets_them_charge_it_that_week()
+    {
+        await using var host = await CreateAsync();
+        var codes = host.As(Dev).Get<Workbench.Contracts.ProjectAccounting.IProjectService>();
+        Assert.DoesNotContain(await codes.ListChargeCodesAsync(host.DevId, Today), c => c.WbsElementId == host.Wbs2); // needs an assignment
+
+        await host.As(Pm2).Get<IResourceAllocationService>().CreateAsync(new SaveAllocationRequest(host.DevId, host.Project2, ThisWeek, 20, WbsElementId: host.Wbs2, LaborCategoryId: host.Ba2));
+
+        var thisWeek = await host.As(Dev).Get<Workbench.Contracts.ProjectAccounting.IProjectService>().ListChargeCodesAsync(host.DevId, Today);
+        var code = Assert.Single(thisWeek, c => c.WbsElementId == host.Wbs2);
+        Assert.Equal(host.Ba2, code.LaborCategoryId); // the staffed labor category
+        Assert.DoesNotContain(await host.As(Dev).Get<Workbench.Contracts.ProjectAccounting.IProjectService>().ListChargeCodesAsync(host.DevId, ThisWeek.AddDays(7)), c => c.WbsElementId == host.Wbs2); // not staffed next week
+    }
 }
