@@ -254,3 +254,16 @@
     margin-right: 4px;
     font-size: 0.85em;
 }
+
+/* Plan editor: MS Project-style outline numbers and bold summary tasks. */
+.wb-outline {
+    flex: none;
+    margin-right: 6px;
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.8em;
+    font-variant-numeric: tabular-nums;
+}
+
+.wb-title-link.wb-summary {
+    font-weight: 600;
+}

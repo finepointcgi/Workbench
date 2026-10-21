@@ -72,6 +72,9 @@ public sealed class DependencyService(IWorkbenchDbContextFactory dbFactory) : ID
         };
         db.Set<Dependency>().Add(dependency);
         await db.SaveChangesAsync(cancellationToken);
+
+        // The successor now starts no earlier than the link allows (and its successors after it).
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
         return ToDto(dependency);
     }
 

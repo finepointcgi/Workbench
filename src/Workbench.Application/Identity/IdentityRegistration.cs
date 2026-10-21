@@ -51,6 +51,7 @@ public static class IdentityRegistration
         services.Decorate<IColumnService, PermissionCheckingColumnService>();
         services.Decorate<IDependencyService, PermissionCheckingDependencyService>();
         services.Decorate<IBaselineService, PermissionCheckingBaselineService>();
+        services.Decorate<IPlanScheduleService, PermissionCheckingPlanScheduleService>(); // Plan editor: Viewers read and export, Editors indent, re-date, link and import.
         services.Decorate<ICommentService, PermissionCheckingCommentService>();
         services.Decorate<IAttachmentService, PermissionCheckingAttachmentService>();
         services.Decorate<IActivityService, PermissionCheckingActivityService>();

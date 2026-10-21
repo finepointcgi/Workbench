@@ -2,7 +2,10 @@
 @inherits SheetViewBase
 @implements IAsyncDisposable
 @using Microsoft.JSInterop
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Scheduling
 @inject IItemService ItemService
+@inject IServiceProvider Services
 @inject IColumnService ColumnService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -26,7 +29,7 @@
      aria-activedescendant="@(ActiveRow is not null && ActiveColumn is not null ? ActiveCellId : null)"
      aria-describedby="@($"{_gridId}-help")"
      @onkeydown="OnKeyDownAsync">
-    <span id="@($"{_gridId}-help")" class="wb-sr-only">Arrow keys move between cells. Enter or F2 edits a cell, Enter saves, Escape cancels. Space toggles a checkbox.</span>
+    <span id="@($"{_gridId}-help")" class="wb-sr-only">Arrow keys move between cells. Enter or F2 edits a cell, Enter saves, Escape cancels. Space toggles a checkbox.@(CanEdit ? " In the Title column, Tab indents a row and Shift+Tab outdents it; Insert adds a row above." : "")</span>
     <table class="wb-table" style="width:@(TableWidth)px" role="presentation">
         <colgroup>
             <col style="width:@(GutterWidth)px" />
@@ -105,7 +108,7 @@
                 <tr class="@RowClass(row)" role="row" aria-rowindex="@(IndexOf(row) + 2)">
                     <td class="wb-gutter wb-sticky" role="rowheader" aria-colindex="1">
                         <div class="wb-gutter-cell">
-                        <span class="wb-rownum">@(IndexOf(row) + 1)</span>
+                        <span class="wb-rownum" title="@(_plan.ContainsKey(row.Item.Id) ? "Task ID (for Predecessors)" : null)">@RowNumber(row)</span>
                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="wb-row-menu" AriaLabel="Row actions">
                             <MudMenuItem Icon="@Icons.Material.Filled.OpenInNew" Href="@DetailsHref(row.Item)">Open details</MudMenuItem>
                             @if (CanAssign)
@@ -115,6 +118,7 @@
                             @if (CanEdit)
                             {
                                 <MudDivider />
+                                <MudMenuItem Icon="@Icons.Material.Filled.VerticalAlignTop" OnClick="() => InsertRowAboveAsync(row.Item)">Insert row above</MudMenuItem>
                                 <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="() => AddRowBelowAsync(row.Item)">Add row below</MudMenuItem>
                                 <MudMenuItem Icon="@Icons.Material.Filled.SubdirectoryArrowRight" OnClick="() => AddChildAsync(row.Item)">Add child row</MudMenuItem>
                                 <MudMenuItem Icon="@Icons.Material.Filled.Flag" OnClick="() => ToggleMilestoneAsync(row.Item)" data-testid="toggle-milestone">@(row.Item.IsMilestone ? "Not a milestone" : "Mark as milestone")</MudMenuItem>
@@ -132,10 +136,11 @@
                         var column = _columns[c];
                         var active = IsActive(row, colIndex);
                         var editing = active && _editing;
-                        var raw = CellFormat.GetRaw(row.Item, column);
-                        <td class="@CellClass(column, active, editing)" data-col="@colIndex" role="gridcell"
-                            id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)"
-                            aria-selected="@(active ? "true" : "false")" aria-readonly="@(!column.ReadOnly && CanEdit ? null : "true")"
+                        var raw = Raw(row.Item, column);
+                        var locked = IsRolledUp(row, column);
+                        <td class="@CellClass(column, active, editing, locked)" data-col="@colIndex" role="gridcell"
+                            id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)" title="@(locked ? "Summary task: rolled up from its subtasks" : null)"
+                            aria-selected="@(active ? "true" : "false")" aria-readonly="@(!column.ReadOnly && !locked && CanEdit ? null : "true")"
                             @onclick="() => OnCellClickAsync(row, colIndex)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
                             @if (editing)
                             {
@@ -157,11 +162,15 @@
                                     {
                                         <span class="wb-toggle-spacer"></span>
                                     }
-                                    @if (row.Item.IsMilestone)
+                                    @if (_plan.TryGetValue(row.Item.Id, out var task))
+                                    {
+                                        <span class="wb-outline" data-testid="outline-number">@task.OutlineNumber</span>
+                                    }
+                                    @if (row.Item.IsMilestone && !row.HasChildren)
                                     {
                                         <span class="wb-milestone" title="Milestone" aria-label="Milestone" data-testid="milestone-mark">◆</span>
                                     }
-                                    <a class="wb-title-link" href="@DetailsHref(row.Item)" title="Open details">@row.Item.Title</a>
+                                    <a class="@(row.HasChildren && _plan.Count > 0 ? "wb-title-link wb-summary" : "wb-title-link")" href="@DetailsHref(row.Item)" title="Open details">@row.Item.Title</a>
                                 </div>
                             }
                             else if (column.Kind == GridColumnKind.Assignees)
@@ -176,6 +185,10 @@
                                     <MudIcon Icon="@(isChecked ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
                                              Size="Size.Small" Color="@(isChecked ? Color.Primary : Color.Default)" />
                                 </span>
+                            }
+                            else if (column.Kind == GridColumnKind.Duration)
+                            {
+                                @(int.TryParse(raw, out var days) ? PlanDuration.Format(days) : "")
                             }
                             else
                             {
@@ -201,7 +214,7 @@
                    OnClick="AddRowAtEndAsync">Add row</MudButton>
     }
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-        @Items.Count @(Items.Count == 1 ? "row" : "rows") · @(CanEdit ? "Enter or F2 to edit · Alt+Shift+→/← to indent or outdent" : "View only")
+        @Items.Count @(Items.Count == 1 ? "row" : "rows") · @(CanEdit ? "Enter or F2 to edit · Tab / Shift+Tab in Title (or Alt+Shift+→/←) to indent or outdent · Insert adds a row above" : "View only")
     </MudText>
 </div>
 
@@ -250,6 +263,13 @@
     private bool _myTasks;
     private IReadOnlySet<Guid> _mine = new HashSet<Guid>();
     private SheetTasksDto? _lastTasks;
+    private PlanScheduleDto? _lastPlan;
+    private Dictionary<Guid, PlanTaskDto> _plan = [];
+
+    /// <summary>The plan editor's service where it's registered (null in hosts and tests without it).</summary>
+    private IPlanScheduleService? PlanService => Services.GetService<IPlanScheduleService>();
+
+    private bool Scheduling => Sheet.Summary.SchedulingEnabled;
 
     private int TableWidth => GutterWidth + AddColumnWidth + _columns.Sum(WidthOf);
 
@@ -261,7 +281,7 @@
 
     protected override void OnParametersSet()
     {
-        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet) && ReferenceEquals(Tasks, _lastTasks))
+        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet) && ReferenceEquals(Tasks, _lastTasks) && ReferenceEquals(Plan, _lastPlan))
         {
             return;
         }
@@ -269,7 +289,9 @@
         _lastItems = Items;
         _lastSheet = Sheet;
         _lastTasks = Tasks;
-        _columns = GridColumn.For(Sheet, assignees: Tasks is not null);
+        _lastPlan = Plan;
+        _plan = Scheduling && Plan is not null ? Plan.Tasks.ToDictionary(t => t.ItemId) : [];
+        _columns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null);
         _mine = TaskView.MineWithAncestors(Tasks, Sheet, Items);
         _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
         _children = Items.ToLookup(i => i.ParentId);
@@ -570,6 +592,19 @@
             return;
         }
 
+        // MS Project and Smartsheet habits: Tab indents the row (Shift+Tab outdents) from the Title column; Insert adds a row above.
+        if (CanEdit && e.Key == "Tab" && column.Kind == GridColumnKind.Title && !e.AltKey && !e.CtrlKey && !e.MetaKey)
+        {
+            await (e.ShiftKey ? OutdentAsync(row) : IndentAsync(row));
+            return;
+        }
+
+        if (CanEdit && e.Key == "Insert")
+        {
+            await InsertRowAboveAsync(row.Item);
+            return;
+        }
+
         switch (e.Key)
         {
             case "ArrowUp":
@@ -644,12 +679,18 @@
             return;
         }
 
+        if (IsRolledUp(row, column))
+        {
+            Snackbar.Add($"\"{row.Item.Title}\" is a summary task: its {column.Name.ToLowerInvariant()} comes from its subtasks.", Severity.Info);
+            return;
+        }
+
         if (column.ValueKind == ColumnKind.Checkbox)
         {
             return;
         }
 
-        var raw = CellFormat.GetRaw(row.Item, column);
+        var raw = Raw(row.Item, column);
         var useInitial = initialText is not null && column.ValueKind is not (ColumnKind.Date or ColumnKind.Dropdown);
         _editText = useInitial ? initialText! : CellFormat.EditText(raw, column.ValueKind);
         _editDate = CellFormat.ToDateTime(raw);
@@ -676,6 +717,12 @@
         }
 
         var text = column.ValueKind == ColumnKind.Date && _datePicker is not null ? _datePicker.Text : _editText;
+        if (column.Kind == GridColumnKind.Duration && !PlanDuration.TryParse(text, out _))
+        {
+            Snackbar.Add("Duration is a number of working days, like 5 or 5d (0 for a milestone).", Severity.Warning);
+            return false;
+        }
+
         if (!CellFormat.TryNormalize(text, column.ValueKind, out var value, out var error))
         {
             Snackbar.Add(error!, Severity.Warning);
@@ -732,13 +779,13 @@
             return;
         }
 
-        var current = CellFormat.GetRaw(row.Item, column) == "true";
+        var current = Raw(row.Item, column) == "true";
         await SaveAsync(row.Item, column, current ? "false" : "true");
     }
 
     private async Task ClearCellAsync(GridRow row, GridColumn column)
     {
-        if (column.ReadOnly || column.Kind is GridColumnKind.Title or GridColumnKind.Assignees)
+        if (column.ReadOnly || column.Kind is GridColumnKind.Title or GridColumnKind.Assignees or GridColumnKind.Duration || IsRolledUp(row, column))
         {
             return;
         }
@@ -764,13 +811,28 @@
 
     private async Task SaveAsync(ItemDto item, GridColumn column, string? value)
     {
-        if (column.ReadOnly || !CanEdit || CellFormat.GetRaw(item, column) == value)
+        if (column.ReadOnly || !CanEdit || Raw(item, column) == value)
         {
             return;
         }
 
         try
         {
+            if (column.Kind is GridColumnKind.Duration or GridColumnKind.Predecessors && PlanService is { } plan)
+            {
+                if (column.Kind == GridColumnKind.Duration && PlanDuration.TryParse(value, out var days))
+                {
+                    await plan.SetDurationAsync(SheetId, item.Id, days);
+                }
+                else if (column.Kind == GridColumnKind.Predecessors)
+                {
+                    await plan.SetPredecessorsAsync(SheetId, item.Id, value);
+                }
+
+                await Changed.InvokeAsync();
+                return;
+            }
+
             var updated = await ItemService.UpdateAsync(SheetId, item.Id, CellFormat.WithValue(item, column, value));
             ReplaceItem(updated);
             await Changed.InvokeAsync();
@@ -848,13 +910,20 @@
 
     private Task AddRowAtEndAsync() => CreateRowAsync(new CreateItemRequest("New row"));
 
-    private Task AddRowBelowAsync(ItemDto item) => CreateRowAsync(new CreateItemRequest("New row", item.ParentId, item.Order + 1));
+    private Task AddRowBelowAsync(ItemDto item) => CreateRowAsync(WithStart(new CreateItemRequest("New row", item.ParentId, item.Order + 1), item));
+
+    /// <summary>A new row where this one is, pushing it (and the rows after it) down, like Insert in MS Project.</summary>
+    private Task InsertRowAboveAsync(ItemDto item) => CreateRowAsync(WithStart(new CreateItemRequest("New row", item.ParentId, item.Order), item));
 
     private Task AddChildAsync(ItemDto item)
     {
         _collapsed.Remove(item.Id);
-        return CreateRowAsync(new CreateItemRequest("New row", item.Id));
+        return CreateRowAsync(WithStart(new CreateItemRequest("New row", item.Id), item));
     }
+
+    /// <summary>On a plan, a new task starts with the task it was added next to (or under), as a one-day task.</summary>
+    private CreateItemRequest WithStart(CreateItemRequest request, ItemDto near) =>
+        _plan.Count > 0 && (near.Start ?? near.Finish) is { } start ? request with { Start = start, Finish = start } : request;
 
     private async Task CreateRowAsync(CreateItemRequest request)
     {
@@ -872,6 +941,17 @@
 
     private async Task IndentAsync(GridRow row)
     {
+        if (!CanEdit)
+        {
+            return;
+        }
+
+        if (PlanService is { } plan)
+        {
+            await RestructureAsync(row, () => plan.IndentAsync(SheetId, row.Item.Id), expand: row.HasPreviousSibling);
+            return;
+        }
+
         var previous = _children[row.Item.ParentId]
             .Where(i => i.Order < row.Item.Order)
             .OrderByDescending(i => i.Order)
@@ -887,6 +967,17 @@
 
     private async Task OutdentAsync(GridRow row)
     {
+        if (!CanEdit)
+        {
+            return;
+        }
+
+        if (PlanService is { } plan && row.Item.ParentId is not null)
+        {
+            await RestructureAsync(row, () => plan.OutdentAsync(SheetId, row.Item.Id), expand: false);
+            return;
+        }
+
         if (row.Item.ParentId is not { } parentId || !_rowIndex.TryGetValue(parentId, out var parentIndex))
         {
             return;
@@ -894,6 +985,28 @@
 
         var parent = _rows[parentIndex].Item;
         await MoveAsync(row.Item, new MoveItemRequest(parent.ParentId, parent.Order + 1));
+    }
+
+    /// <summary>Indent or outdent through the plan service, which also applies the date rules (see <see cref="IPlanScheduleService"/>).</summary>
+    private async Task RestructureAsync(GridRow row, Func<Task> action, bool expand)
+    {
+        if (expand && _children[row.Item.ParentId].Where(i => i.Order < row.Item.Order).OrderByDescending(i => i.Order).FirstOrDefault() is { } previous)
+        {
+            _collapsed.Remove(previous.Id);
+        }
+
+        try
+        {
+            await action();
+            _activeId = row.Item.Id;
+            _scrollToActive = true;
+            _focusGrid = true;
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add(ex is ArgumentException ? ex.Message : $"Couldn't move the row: {ex.Message}", ex is ArgumentException ? Severity.Info : Severity.Error);
+        }
     }
 
     private async Task MoveAsync(ItemDto item, MoveItemRequest request)
@@ -1041,10 +1154,27 @@
 
     private string RowClass(GridRow row) => row.HasChildren ? "wb-row wb-parent" : "wb-row";
 
-    private static string CellClass(GridColumn column, bool active, bool editing)
+    /// <summary>MS Project's task ID on a plan (what Predecessors refer to); otherwise the visible row number.</summary>
+    private int RowNumber(GridRow row) => _plan.TryGetValue(row.Item.Id, out var task) ? task.TaskNumber : IndexOf(row) + 1;
+
+    /// <summary>The stored value of a cell; Duration and Predecessors come from the plan.</summary>
+    private string? Raw(ItemDto item, GridColumn column) => column.Kind switch
+    {
+        GridColumnKind.Duration => _plan.TryGetValue(item.Id, out var t) && t.DurationDays is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+        GridColumnKind.Predecessors => _plan.TryGetValue(item.Id, out var t) && t.Predecessors.Length > 0 ? t.Predecessors : null,
+        _ => CellFormat.GetRaw(item, column),
+    };
+
+    /// <summary>A summary task's dates, duration and % complete come from its subtasks on a plan, so they aren't edited.</summary>
+    private bool IsRolledUp(GridRow row, GridColumn column) =>
+        _plan.Count > 0 && row.HasChildren
+        && (column.Kind is GridColumnKind.Start or GridColumnKind.Finish or GridColumnKind.Duration
+            || (column.Column is { } custom && Tasks?.PercentColumn?.Id == custom.Id));
+
+    private static string CellClass(GridColumn column, bool active, bool editing, bool locked = false)
     {
         var css = column.Kind == GridColumnKind.Title ? "wb-cell wb-title wb-sticky" : "wb-cell";
-        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency)
+        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency || column.Kind == GridColumnKind.Duration)
         {
             css += " wb-num";
         }
@@ -1054,7 +1184,7 @@
             css += " wb-center";
         }
 
-        if (column.ReadOnly)
+        if (column.ReadOnly || locked)
         {
             css += " wb-readonly";
         }

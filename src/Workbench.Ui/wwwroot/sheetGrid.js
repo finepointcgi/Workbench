@@ -3,7 +3,7 @@
 
 const navigationKeys = new Set([
     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'F2', 'Delete', 'Backspace',
-    ' ', 'Home', 'End', 'PageUp', 'PageDown', 'Tab',
+    ' ', 'Home', 'End', 'PageUp', 'PageDown', 'Tab', 'Insert',
 ]);
 
 export function init(container, dotNet) {
