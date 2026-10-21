@@ -1,0 +1,182 @@
+@* One action of an automation: its kind and what it needs. *@
+
+<MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="action">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudIcon Icon="@AutomationUi.ActionIcon(Action.Kind)" Color="Color.Primary" />
+        <MudSelect T="AutomationActionKind" @bind-Value="Action.Kind" Dense="true" Label="@($"Action {Index + 1}")" Style="max-width:320px" ReadOnly="ReadOnly" data-testid="action-kind">
+            @foreach (var kind in Enum.GetValues<AutomationActionKind>())
+            {
+                <MudSelectItem Value="kind">@AutomationUi.Action(kind)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSpacer />
+        @if (!ReadOnly)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="Index == 0" aria-label="Move action up" title="Move up" OnClick="() => OnMove.InvokeAsync(-1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="IsLast" aria-label="Move action down" title="Move down" OnClick="() => OnMove.InvokeAsync(1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove action" title="Remove action" OnClick="OnRemove" />
+        }
+    </MudStack>
+
+    @switch (Action.Kind)
+    {
+        case AutomationActionKind.Notify or AutomationActionKind.CreateTask:
+            <MudText Typo="Typo.body2" Class="mt-2 mb-1">@(Action.Kind == AutomationActionKind.Notify ? "Tell" : "Give a to-do to")</MudText>
+            @foreach (var (recipient, ri) in Action.Recipients.Select((r, i) => (r, i)))
+            {
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="RecipientKind" Value="recipient.Kind" ValueChanged="k => SetRecipientKind(recipient, k)" Dense="true" Label="Who" ReadOnly="ReadOnly">
+                            @foreach (var kind in Enum.GetValues<RecipientKind>())
+                            {
+                                <MudSelectItem Value="kind">@AutomationUi.Recipient(kind)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="10" sm="7">
+                        @switch (recipient.Kind)
+                        {
+                            case RecipientKind.Person:
+                                <MudTextField @bind-Value="recipient.Value" Margin="Margin.Dense" Label="Email" InputType="InputType.Email" ReadOnly="ReadOnly" />
+                                break;
+                            case RecipientKind.Role:
+                                <MudSelect T="string" @bind-Value="recipient.Value" Dense="true" Label="Role" ReadOnly="ReadOnly">
+                                    @foreach (var role in Catalog.Roles.Where(r => r != "Employee"))
+                                    {
+                                        <MudSelectItem Value="role">@role</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+                            case RecipientKind.Field:
+                                <MudSelect T="string" @bind-Value="recipient.Value" Dense="true" Label="Field (an employee or an email)" ReadOnly="ReadOnly" ToStringFunc="@(key => Fields.FirstOrDefault(f => f.Key == key)?.Label ?? key)">
+                                    @foreach (var field in Fields.Where(f => f.FieldType is "reference" or "text"))
+                                    {
+                                        <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+                            default:
+                                <MudSelect T="string" @bind-Value="recipient.Value" Dense="true" Label="Who, for this record" ReadOnly="ReadOnly" ToStringFunc="AutomationRelationships.Label">
+                                    @foreach (var relationship in Entity?.Relationships ?? AutomationRelationships.All)
+                                    {
+                                        <MudSelectItem Value="relationship">@AutomationRelationships.Label(relationship)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+                        }
+                    </MudItem>
+                    <MudItem xs="2" sm="1" Class="d-flex align-center">
+                        @if (!ReadOnly && Action.Recipients.Count > 1)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Remove recipient" OnClick="() => Action.Recipients.RemoveAt(ri)" />
+                        }
+                    </MudItem>
+                </MudGrid>
+            }
+            @if (!ReadOnly)
+            {
+                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => Action.Recipients.Add(new RecipientModel())">Recipient</MudButton>
+            }
+            <MudTextField @bind-Value="Action.Title" Label="Title" Placeholder="{automation}: {record}" Margin="Margin.Dense" Class="mt-2" ReadOnly="ReadOnly" />
+            <MudTextField @bind-Value="Action.Message" Label="Message" Lines="2" Sizing="InputSizing.Auto" Margin="Margin.Dense" ReadOnly="ReadOnly" HelperText="@TokenHint" />
+            @if (Action.Kind == AutomationActionKind.CreateTask)
+            {
+                <MudNumericField T="int?" @bind-Value="Action.DueInDays" Label="Due in (days)" Min="0" Max="365" Clearable="true" Margin="Margin.Dense" Style="max-width:200px" ReadOnly="ReadOnly" />
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">In the app right away; by email as each person prefers (immediately, in the daily digest, or not).</MudText>
+            }
+            break;
+
+        case AutomationActionKind.SetField:
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="12" sm="5">
+                    <MudSelect T="string" @bind-Value="Action.FieldKey" Dense="true" Label="Field" ReadOnly="ReadOnly" HelperText="Only fields automations may change are listed">
+                        @foreach (var field in WritableFields)
+                        {
+                            <MudSelectItem Value="field.Key">@field.Label@(field.IsCustom ? " (custom)" : "")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="Action.Value" Margin="Margin.Dense" Label="New value" ReadOnly="ReadOnly" HelperText="@TokenHint" />
+                </MudItem>
+            </MudGrid>
+            break;
+
+        case AutomationActionKind.RequireApproval:
+            <MudSelect T="string" @bind-Value="Action.WorkflowKey" Dense="true" Label="Approval workflow" Class="mt-2" ReadOnly="ReadOnly"
+                       HelperText="Record approval workflows from Setup › Approval workflows. Approvers decide in their Approvals inbox.">
+                @foreach (var workflow in Catalog.ApprovalWorkflows)
+                {
+                    <MudSelectItem Value="workflow.Id">@workflow.Label</MudSelectItem>
+                }
+            </MudSelect>
+            @if (Catalog.ApprovalWorkflows.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">Create a record approval workflow first, under Approval workflows.</MudAlert>
+            }
+            break;
+
+        case AutomationActionKind.PostToChat:
+            <MudSelect T="string" @bind-Value="Action.ConnectorId" Dense="true" Label="Teams or Slack connector" Class="mt-2" ReadOnly="ReadOnly">
+                @foreach (var connector in Catalog.ChatConnectors)
+                {
+                    <MudSelectItem Value="connector.Id">@connector.Label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="Action.Title" Label="Title" Placeholder="{automation}: {record}" Margin="Margin.Dense" ReadOnly="ReadOnly" />
+            <MudTextField @bind-Value="Action.Message" Label="Message" Lines="2" Sizing="InputSizing.Auto" Margin="Margin.Dense" ReadOnly="ReadOnly" HelperText="@TokenHint" />
+            break;
+
+        case AutomationActionKind.CallWebhook:
+            <MudSelect T="string" @bind-Value="Action.WebhookEndpointId" Dense="true" Label="Webhook endpoint" Class="mt-2" ReadOnly="ReadOnly"
+                       HelperText="A signed POST (event automation.webhook) with the record's fields the automation may read; retried like other deliveries.">
+                @foreach (var endpoint in Catalog.WebhookEndpoints)
+                {
+                    <MudSelectItem Value="endpoint.Id">@endpoint.Label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="Action.Title" Label="Title (sent as title)" Margin="Margin.Dense" ReadOnly="ReadOnly" />
+            break;
+
+        case AutomationActionKind.StartAutomation:
+            <MudSelect T="string" @bind-Value="Action.TargetAutomationId" Dense="true" Label="Automation to start" Class="mt-2" ReadOnly="ReadOnly"
+                       HelperText="Only automations whose trigger is &quot;Run by hand or by another automation&quot;. It runs on the same record, as this run's user.">
+                @foreach (var automation in Catalog.Automations.Where(a => a.Id != SelfId))
+                {
+                    <MudSelectItem Value="automation.Id">@automation.Label</MudSelectItem>
+                }
+            </MudSelect>
+            break;
+
+        default:
+            <MudTextField @bind-Value="Action.Message" Label="Message people see" Lines="2" Sizing="InputSizing.Auto" Margin="Margin.Dense" Class="mt-2" ReadOnly="ReadOnly"
+                          Placeholder="Expense over $75 needs a receipt" HelperText="The change is refused before it's saved. A validation rule has no other actions." />
+            break;
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public ActionModel Action { get; set; } = default!;
+    [Parameter] public int Index { get; set; }
+    [Parameter] public bool IsLast { get; set; }
+    [Parameter, EditorRequired] public AutomationCatalogDto Catalog { get; set; } = default!;
+    [Parameter] public AutomationEntityTypeDto? Entity { get; set; }
+    [Parameter] public IReadOnlyList<EntityFieldDto> Fields { get; set; } = [];
+    [Parameter] public string? SelfId { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback<int> OnMove { get; set; }
+
+    private const string TokenHint = "Use {fieldKey} for the record's values, plus {record}, {link}, {actor} and {today}.";
+
+    private IEnumerable<EntityFieldDto> WritableFields => Fields.Where(f => Entity?.SettableFields.Contains(f.Key) == true);
+
+    private static void SetRecipientKind(RecipientModel recipient, RecipientKind kind)
+    {
+        recipient.Kind = kind;
+        recipient.Value = kind == RecipientKind.Relationship ? AutomationRelationships.ProjectManager : kind == RecipientKind.Role ? "Finance" : "";
+    }
+}

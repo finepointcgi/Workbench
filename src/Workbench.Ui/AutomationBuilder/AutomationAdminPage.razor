@@ -1,0 +1,191 @@
+@page "/admin/automation"
+@inject IAutomationService Automations
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Automation · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Automation</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    When something happens anywhere in Workbench, check your conditions and act: notify people, set a field, create a to-do, route an
+    approval, post to a channel, call a webhook, or refuse the change with a message. Automations act with their user's access, never more.
+</MudText>
+
+@if (_forbidden is not null)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_forbidden</MudAlert>
+}
+else
+{
+    @if (_settings is { PausedAll: true })
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="paused-banner">
+            Every automation is paused@(_settings.PausedBy is null ? "" : $" (by {_settings.PausedBy})"). Validation rules don't refuse changes and nothing runs until you resume.
+        </MudAlert>
+    }
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4" ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged" KeepPanelsAlive="false">
+        <MudTabPanel Text="Automations" Icon="@Icons.Material.Filled.Bolt">
+            <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="admin/automation/new" data-testid="automation-new">New automation</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="() => OnTabChanged(2)">Start from a template</MudButton>
+            </MudStack>
+            <MudTable T="AutomationSummaryDto" Items="_automations" Loading="_automations is null" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                      OnRowClick="Open" RowStyle="cursor:pointer" aria-label="Automations" data-testid="automations-table">
+                <HeaderContent>
+                    <MudTh>Name</MudTh>
+                    <MudTh>When</MudTh>
+                    <MudTh>On</MudTh>
+                    <MudTh>Last run</MudTh>
+                    <MudTh>Last 7 days</MudTh>
+                    <MudTh>Version</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Name">
+                        <MudText Typo="Typo.body2"><strong>@context.Name</strong></MudText>
+                        @if (context.Description is { } description)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@description</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="When">@context.TriggerSummary</MudTd>
+                    <MudTd DataLabel="On">
+                        <MudSwitch T="bool" Value="context.IsEnabled" ValueChanged="v => SetEnabledAsync(context, v)" Color="Color.Primary" aria-label="@($"Turn {context.Name} on or off")"
+                                   @onclick:stopPropagation="true" />
+                    </MudTd>
+                    <MudTd DataLabel="Last run">
+                        @if (context.LastRunAtUtc is { } at && Enum.TryParse<AutomationRunStatus>(context.LastRunStatus, out var status))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="AutomationUi.StatusColor(status)">@AutomationUi.Status(status)</MudChip>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@AutomationUi.When(at)</MudText>
+                        }
+                        else
+                        {
+                            <span class="mud-text-secondary">Never</span>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Last 7 days">@context.RunsLast7Days run@(context.RunsLast7Days == 1 ? "" : "s")@(context.FailuresLast7Days > 0 ? $", {context.FailuresLast7Days} failed" : "")</MudTd>
+                    <MudTd DataLabel="Version">v@(context.Version)</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><MudText>No automations yet. Start from a template or build one.</MudText></NoRecordsContent>
+            </MudTable>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Run log" Icon="@Icons.Material.Filled.History">
+            <RunLog />
+        </MudTabPanel>
+
+        <MudTabPanel Text="Templates" Icon="@Icons.Material.Filled.AutoAwesome">
+            <MudGrid Spacing="3">
+                @foreach (var template in Automations.ListTemplates())
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Outlined="true" Style="height:100%" data-testid="@($"template-{template.Key}")">
+                            <MudCardContent>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Class="ml-0">@template.Category</MudChip>
+                                <MudText Typo="Typo.subtitle1" HtmlTag="h2">@template.Name</MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">@template.Description</MudText>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"admin/automation/new?template={template.Key}")">Use this template</MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Approval workflows" Icon="@Icons.Material.Filled.AltRoute">
+            <Workbench.Ui.Setup.Approvals.ApprovalWorkflowsPage />
+        </MudTabPanel>
+
+        <MudTabPanel Text="Settings" Icon="@Icons.Material.Filled.Tune">
+            @if (_settings is { } s)
+            {
+                <MudPaper Outlined="true" Class="pa-4" Style="max-width:640px">
+                    <MudSwitch T="bool" @bind-Value="_paused" Color="Color.Warning" Label="Pause every automation" data-testid="pause-all" />
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">The disable switch for all of them at once: nothing runs and validation rules stop refusing changes until you turn it off.</MudText>
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2">Loop protection</MudText>
+                    <MudNumericField T="int" @bind-Value="_depth" Label="Longest chain of automations triggering each other" Min="1" Max="20" Class="mb-2" />
+                    <MudNumericField T="int" @bind-Value="_rate" Label="Most runs of one automation on one record per hour" Min="1" Max="1000" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettingsAsync" data-testid="save-settings">Save</MudButton>
+                </MudPaper>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private static readonly string[] Tabs = ["automations", "runs", "templates", "approvals", "settings"];
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabQuery { get; set; }
+
+    private IReadOnlyList<AutomationSummaryDto>? _automations;
+    private AutomationSettingsDto? _settings;
+    private string? _forbidden;
+    private int _tab;
+    private bool _paused;
+    private int _depth;
+    private int _rate;
+
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "automations"));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _automations = await Automations.ListAsync();
+            LoadSettings(await Automations.GetSettingsAsync());
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _forbidden = ex.Message;
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void LoadSettings(AutomationSettingsDto settings)
+    {
+        _settings = settings;
+        (_paused, _depth, _rate) = (settings.PausedAll, settings.MaxChainDepth, settings.MaxRunsPerRecordPerHour);
+    }
+
+    private void Open(TableRowClickEventArgs<AutomationSummaryDto> args) => Navigation.NavigateTo($"admin/automation/{args.Item!.Id}");
+
+    private void OnTabChanged(int index)
+    {
+        _tab = index;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", Tabs[index]), replace: true);
+    }
+
+    private async Task SetEnabledAsync(AutomationSummaryDto automation, bool enabled)
+    {
+        try
+        {
+            await Automations.SetEnabledAsync(automation.Id, enabled);
+            _automations = await Automations.ListAsync();
+            Snackbar.Add(enabled ? $"{automation.Name} is on" : $"{automation.Name} is off", Severity.Success);
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        try
+        {
+            LoadSettings(await Automations.SaveSettingsAsync(new SaveAutomationSettingsRequest(_paused, _depth, _rate)));
+            Snackbar.Add(_paused ? "Every automation is paused" : "Automation settings saved", Severity.Success);
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

@@ -23,6 +23,14 @@ public static class ApprovalDocumentTypes
     public const string EngineeringChange = "engineering-change";
     public const string VendorBankChange = "vendor-bank-change";
 
+    /// <summary>
+    /// Record approval workflows admins add (Setup › Approval workflows) for automations' "require approval" action. Their
+    /// keys start with this prefix; they aren't in <see cref="All"/>, which lists the built-in document types.
+    /// </summary>
+    public const string CustomPrefix = "custom-";
+
+    public static bool IsCustom(string? documentType) => documentType is not null && documentType.StartsWith(CustomPrefix, StringComparison.Ordinal) && documentType.Length > CustomPrefix.Length;
+
     public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, BudgetSubmission, TravelAuthorization, NcrDisposition, EngineeringChange, VendorBankChange];
 
     public static string Label(string documentType) => documentType switch
@@ -43,6 +51,7 @@ public static class ApprovalDocumentTypes
         NcrDisposition => "NCR disposition (material review)",
         EngineeringChange => "Engineering change",
         VendorBankChange => "Vendor bank details change",
+        _ when IsCustom(documentType) => char.ToUpperInvariant(documentType[CustomPrefix.Length]) + documentType[(CustomPrefix.Length + 1)..].Replace('-', ' '),
         _ => documentType,
     };
 
@@ -123,6 +132,9 @@ public enum ApprovalConditionKind
 
     /// <summary>A project charge has no project manager able to approve it (none, or the submitter).</summary>
     HasUnroutedCharges,
+
+    /// <summary>The document's company (or the submitter's, or a charged project's) is one of <see cref="ApprovalCondition.Ids"/>.</summary>
+    CompanyIn,
 }
 
 public enum ConditionMatch { All, Any }
@@ -134,6 +146,8 @@ public sealed record ApprovalCondition(ApprovalConditionKind Kind, decimal? Amou
 /// <summary>
 /// One step. Steps run in order of <see cref="Sequence"/>; steps sharing a sequence run in parallel (all must approve).
 /// A step with conditions applies only when they match. <see cref="Fallback"/> is used when the approver rule finds nobody.
+/// With <see cref="RemindAfterBusinessDays"/>, a waiting step reminds its approvers; <see cref="EscalateTo"/> (an org role or
+/// people) then also adds those approvers to the step, so the escalation can decide it.
 /// </summary>
 public sealed record ApprovalStepDefinition(
     string Name,
@@ -145,7 +159,8 @@ public sealed record ApprovalStepDefinition(
     SelfApprovalPolicy WhenSubmitterIsApprover = SelfApprovalPolicy.Skip,
     bool AdminsMayAct = false,
     int? RemindAfterBusinessDays = null,
-    bool EscalateToApproverSupervisor = false);
+    bool EscalateToApproverSupervisor = false,
+    ApproverRule? EscalateTo = null);
 
 public sealed record ApprovalWorkflowDefinition(IReadOnlyList<ApprovalStepDefinition> Steps);
 
@@ -166,6 +181,9 @@ public sealed record ApprovalWorkflowDto(
 
 public sealed record SaveApprovalWorkflowRequest(string Name, ApprovalWorkflowDefinition Definition, string? Note = null);
 
+/// <summary>A new record approval workflow (key <c>custom-…</c> from the name), starting with one Administrators step.</summary>
+public sealed record CreateRecordApprovalWorkflowRequest(string Name);
+
 public sealed record SetOrgUnitApproverRequest(Guid? EmployeeId);
 
 public sealed record OrgUnitApproverDto(Guid OrgUnitId, string OrgUnitCode, string OrgUnitName, Guid? EmployeeId, string? EmployeeName);
@@ -185,6 +203,9 @@ public interface IApprovalWorkflowService
 
     /// <summary>Publishes the built-in default (today's fixed rules) as a new version.</summary>
     Task<ApprovalWorkflowDto> ResetToDefaultAsync(string documentType, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a record approval workflow for automations' "require approval" action (Admin).</summary>
+    Task<ApprovalWorkflowDto> CreateRecordWorkflowAsync(CreateRecordApprovalWorkflowRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<OrgUnitApproverDto>> ListOrgUnitApproversAsync(CancellationToken cancellationToken = default);
 

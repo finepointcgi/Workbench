@@ -76,6 +76,7 @@ public static class NotificationsHosting
         Workbench.Application.Planning.PlanningRegistration.AddWorkbenchPlanningHosting(services); // Recurring journal entries every six hours, when turned on.
         Workbench.Application.Quality.QualityRegistration.AddWorkbenchQualityHosting(services); // Approved engineering changes become effective on their date (hourly).
         Workbench.Application.Integrations.IntegrationRegistration.AddWorkbenchIntegrationsHosting(services); // Webhook deliveries and scheduled connectors (Integrations:DispatchIntervalSeconds).
+        Workbench.Application.Automations.AutomationBuilderRegistration.AddWorkbenchAutomationBuilderHosting(services); // Admin › Automation: queued runs, schedules and thresholds.
         return services;
     }
 

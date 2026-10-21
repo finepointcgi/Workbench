@@ -14,6 +14,11 @@ public static class ApprovalDefaults
 
     public static string Name(string documentType) => $"{ApprovalDocumentTypes.Label(documentType)} approval";
 
+    /// <summary>A new record approval workflow (automations): one step for the administrators, who never approve their own.</summary>
+    public static ApprovalWorkflowDefinition Record { get; } = new([
+        new("Administrators", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Admin), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
+    ]);
+
     public static ApprovalWorkflowDefinition For(string documentType) => documentType switch
     {
         // DCAA: the supervisor approves; employees without one go to the administrators. Nobody approves their own.
@@ -108,6 +113,7 @@ public static class ApprovalDefaults
             new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
         ]),
 
+        _ when ApprovalDocumentTypes.IsCustom(documentType) => Record,
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
 
