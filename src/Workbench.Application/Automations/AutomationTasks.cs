@@ -1,3 +1,4 @@
+using Workbench.Contracts.Identity;
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Approvals;
 using Workbench.Application.Identity;
@@ -31,7 +32,7 @@ public sealed class AutomationTaskService(IWorkbenchDbContextFactory dbFactory, 
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var task = await db.Set<AutomationTask>().FirstOrDefaultAsync(t => t.Id == taskId, cancellationToken) ?? throw WorkbenchNotFoundException.For("To-do", taskId);
-        if (task.AssigneeEmail != Me && !await access.IsAdminAsync(cancellationToken))
+        if (task.AssigneeEmail != Me && !await access.HasAsync(Permission.AdminAutomations, cancellationToken))
         {
             throw WorkbenchNotFoundException.For("To-do", taskId);
         }

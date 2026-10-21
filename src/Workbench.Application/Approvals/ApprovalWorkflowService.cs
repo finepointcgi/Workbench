@@ -385,7 +385,7 @@ public sealed class PermissionCheckingApprovalWorkflowService(IApprovalWorkflowS
 
     public async Task<ApprovalWorkflowDto> CreateRecordWorkflowAsync(CreateRecordApprovalWorkflowRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.ApprovalWorkflowsManage, "change approval workflows", cancellationToken);
         return await inner.CreateRecordWorkflowAsync(request, cancellationToken);
     }
 

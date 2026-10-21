@@ -22,7 +22,7 @@ public sealed record AutomationPrincipal(string Email, OrgRoles Roles, Guid? Emp
     {
         var normalized = ApprovalEngine.Normalize(email);
         var active = await db.Set<Domain.Identity.AppUser>().AsNoTracking().AnyAsync(u => u.Email == normalized && u.IsActive, ct);
-        var roles = active ? await ApprovalEngine.RolesOfAsync(db, normalized, ct) : OrgRoles.Employee;
+        var roles = active ? await Identity.RoleStore.BuiltInRolesOfAsync(db, normalized, ct) : OrgRoles.Employee;
         var employee = active ? await EmployeeLinks.FindForUserAsync(db, normalized, ct) : null;
         return new AutomationPrincipal(normalized, roles, employee?.Id, active);
     }
@@ -183,7 +183,7 @@ public sealed class AutomationScope
     }
 
     public async Task<OrgRoles> ActorRolesAsync() =>
-        _actorRoles ??= Actor is null ? OrgRoles.Employee : await ApprovalEngine.RolesOfAsync(Db, Actor, Ct);
+        _actorRoles ??= Actor is null ? OrgRoles.Employee : await Identity.RoleStore.BuiltInRolesOfAsync(Db, Actor, Ct);
 
     public async Task<Guid?> CompanyAsync() =>
         Prop(Entity?.CompanyProperty) ?? (await EmployeeAsync())?.CompanyId

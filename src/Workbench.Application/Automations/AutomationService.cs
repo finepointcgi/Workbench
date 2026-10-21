@@ -596,9 +596,9 @@ public sealed class AutomationService(
             }
 
             // Nobody designates a principal with access they don't have themselves.
-            var mine = await ApprovalEngine.RolesOfAsync(db, Me, ct);
-            var theirs = await ApprovalEngine.RolesOfAsync(db, email, ct);
-            if (!mine.IsAdmin() && (theirs & ~mine) != 0)
+            var mine = await Identity.RoleStore.ResolveAsync(db, Me, ct);
+            var theirs = await Identity.RoleStore.ResolveAsync(db, email, ct);
+            if (!mine.BuiltIn.IsAdmin() && theirs.Permissions.Except(mine.Permissions).Any())
             {
                 throw new WorkbenchForbiddenException("You can't have an automation act as a user with roles you don't have.");
             }
