@@ -2,7 +2,7 @@
 // fonts, icons) for a faster start. It never caches pages, API responses or receipts: everything with business or
 // financial data comes from the server every time. Pages need a live connection (Blazor Server), so a navigation
 // that fails offline gets a static "you're offline" page instead.
-const VERSION = "workbench-shell-v1";
+const VERSION = "workbench-shell-v2";
 const OFFLINE_URL = "offline.html";
 const PRECACHE = [OFFLINE_URL, "icons/icon-192.png", "manifest.webmanifest"];
 
@@ -41,9 +41,13 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Pages: always the network; offline, the static offline page. Never stored.
+  // Pages: the browser loads them itself (never stored). Re-fetching navigations here broke redirect chains such as
+  // sign-out (Chrome rejected the worker's response with a network error page), so the worker only answers a
+  // navigation when the device is offline, with the static offline page.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+    if (self.navigator && self.navigator.onLine === false) {
+      event.respondWith(caches.match(OFFLINE_URL).then(page => page || Response.error()));
+    }
     return;
   }
 
