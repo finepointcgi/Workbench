@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
 using Workbench.Application.Automations;
+using Workbench.Application.Identity;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Automations;
 using Workbench.Contracts.Odcs;
 using Workbench.Domain.Automations;
@@ -56,9 +58,9 @@ internal sealed class AutomationKit : IAsyncDisposable
     private async Task SeedAsync()
     {
         await using var db = await Factory.CreateAsync();
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Admin, DisplayName = "Ada Admin" }, OrgRoles.Admin);
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Finance, DisplayName = "Fin" }, OrgRoles.Finance);
         db.Set<AppUser>().AddRange(
-            new AppUser { Email = Admin, DisplayName = "Ada Admin", IsAdmin = true },
-            new AppUser { Email = Finance, DisplayName = "Fin", IsFinance = true },
             new AppUser { Email = Pm, DisplayName = "Pat Morgan" },
             new AppUser { Email = Dev, DisplayName = "Dana Lee" },
             new AppUser { Email = Viewer, DisplayName = "Val Viewer" });

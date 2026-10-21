@@ -35,9 +35,9 @@ public interface IAutomationPermissions
 
 public sealed class AdminAutomationPermissions(AccessControl access) : IAutomationPermissions
 {
-    public Task<bool> CanManageAsync(CancellationToken cancellationToken = default) => access.IsAdminAsync(cancellationToken);
+    public Task<bool> CanManageAsync(CancellationToken cancellationToken = default) => access.HasAsync(Permission.AdminAutomations, cancellationToken);
 
-    public Task<bool> CanRunAsync(Guid automationId, CancellationToken cancellationToken = default) => access.IsAdminAsync(cancellationToken);
+    public Task<bool> CanRunAsync(Guid automationId, CancellationToken cancellationToken = default) => access.HasAsync(Permission.AdminAutomations, cancellationToken);
 
     public bool PrincipalHas(AutomationPrincipal principal, string permissionKey) => permissionKey switch
     {
