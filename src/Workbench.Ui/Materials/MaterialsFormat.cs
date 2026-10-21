@@ -28,7 +28,7 @@ public static class MaterialsFormat
     public static bool IsForbidden(Exception ex) => PurchasingFormat.IsForbidden(ex);
 
     /// <summary>Materials and administrators change things; Finance only reads.</summary>
-    public static bool CanEdit(CurrentUserInfo? user) => user is null || user.Roles.IsMaterials();
+    public static bool CanEdit(CurrentUserInfo? user) => user is null || user.Can(Workbench.Contracts.Identity.Permission.MaterialsManage);
 
     public static string Label(StockOwnership o) => o switch
     {

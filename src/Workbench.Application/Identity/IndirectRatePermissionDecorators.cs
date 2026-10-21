@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.IndirectRates;
 
 namespace Workbench.Application.Identity;
@@ -26,7 +27,7 @@ public sealed class PermissionCheckingIndirectRateService(IIndirectRateService i
 {
     private const string What = "manage indirect rates";
 
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.IndirectRatesManage, What, ct);
 
     public async Task<IReadOnlyList<PoolSetupDto>> ListPoolSetupsAsync(CancellationToken cancellationToken = default)
     {

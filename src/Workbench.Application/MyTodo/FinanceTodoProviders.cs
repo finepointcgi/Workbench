@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts.Accounting;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.Payroll;
 using Workbench.Domain.ProjectAccounting;
@@ -23,7 +24,7 @@ public sealed class PeriodCloseTodoProvider : IMyTodoProvider
 
     public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
     {
-        if (!context.User.IsFinance || context.Service<IPeriodCloseService>() is not { } close)
+        if (!context.User.Can(Permission.GlClose) || context.Service<IPeriodCloseService>() is not { } close)
         {
             return [];
         }
@@ -98,7 +99,7 @@ public sealed class PayrollTodoProvider : IMyTodoProvider
 
     public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
     {
-        if (!context.User.IsFinance || context.Service<IPayrollRunService>() is not { } runs)
+        if (!context.User.Can(Permission.PayrollRun) || context.Service<IPayrollRunService>() is not { } runs)
         {
             return [];
         }

@@ -293,7 +293,7 @@ public sealed class CeilingService(
         await guard.AlertAsync(db, await CeilingEngine.ForIdsAsync(db, [ceiling.Id], UtcNow, ct), ct);
     }
 
-    private async Task<bool> IsFinanceAsync(CancellationToken ct) => (await access.GetOrgRolesAsync(ct)).IsFinance();
+    private async Task<bool> IsFinanceAsync(CancellationToken ct) => await access.HasAsync(Permission.CeilingsManage, ct);
 
     private static async Task SetTargetAsync(IWorkbenchDbContext db, Ceiling c, SaveCeilingRequest r, CancellationToken ct)
     {

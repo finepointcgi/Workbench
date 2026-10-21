@@ -48,19 +48,19 @@ public sealed class PermissionCheckingCeilingService(ICeilingService inner, Proj
 
     public async Task<CeilingDto> CreateAsync(SaveCeilingRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.CreateAsync(request, cancellationToken);
     }
 
     public async Task<CeilingDto> UpdateAsync(Guid ceilingId, SaveCeilingRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.UpdateAsync(ceilingId, request, cancellationToken);
     }
 
     public async Task<CeilingDto> DeactivateAsync(Guid ceilingId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.DeactivateAsync(ceilingId, cancellationToken);
     }
 
@@ -97,19 +97,19 @@ public sealed class PermissionCheckingCeilingService(ICeilingService inner, Proj
 
     public async Task<RateCeilingDto> CreateRateCeilingAsync(Guid contractId, SaveRateCeilingRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.CreateRateCeilingAsync(contractId, request, cancellationToken);
     }
 
     public async Task<RateCeilingDto> DeactivateRateCeilingAsync(Guid rateCeilingId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.DeactivateRateCeilingAsync(rateCeilingId, cancellationToken);
     }
 
     public async Task<int> CheckAlertsAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("check ceiling alerts", cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, "check ceiling alerts", cancellationToken);
         return await inner.CheckAlertsAsync(contractId, cancellationToken);
     }
 
@@ -136,7 +136,7 @@ public sealed class PermissionCheckingCeilingService(ICeilingService inner, Proj
     private async Task RequireOverrideAsync(Guid ceilingId, CancellationToken ct)
     {
         var c = await LoadAsync(ceilingId, ct);
-        if ((await projects.Access.GetOrgRolesAsync(ct)).IsFinance())
+        if (await projects.Access.HasAsync(Permission.CeilingsManage, ct))
         {
             return;
         }
@@ -184,55 +184,55 @@ public sealed class PermissionCheckingCloseoutService(ICloseoutService inner, Pr
 
     public async Task<CloseoutDto> MarkPhysicallyCompleteAsync(CloseoutScope scope, Guid id, PhysicallyCompleteRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.MarkPhysicallyCompleteAsync(scope, id, request, cancellationToken);
     }
 
     public async Task<CloseoutDto> StartClosingAsync(CloseoutScope scope, Guid id, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.StartClosingAsync(scope, id, cancellationToken);
     }
 
     public async Task<CloseoutDto> CloseAsync(CloseoutScope scope, Guid id, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.CloseAsync(scope, id, cancellationToken);
     }
 
     public async Task<CloseoutDto> ReopenAsync(CloseoutScope scope, Guid id, CloseoutReasonRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.ReopenAsync(scope, id, request, cancellationToken);
     }
 
     public async Task<CloseoutDto> SaveRecordsAsync(CloseoutScope scope, Guid id, SaveCloseoutRecordsRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.SaveRecordsAsync(scope, id, request, cancellationToken);
     }
 
     public async Task<CloseoutDto> WaiveAsync(CloseoutScope scope, Guid id, WaiveCloseoutItemRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.WaiveAsync(scope, id, request, cancellationToken);
     }
 
     public async Task<CloseoutDto> RemoveWaiverAsync(CloseoutScope scope, Guid id, CloseoutCheck check, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.RemoveWaiverAsync(scope, id, check, cancellationToken);
     }
 
     public async Task<CloseoutDto> MarkFinalInvoiceAsync(Guid contractId, MarkFinalInvoiceRequest request, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.MarkFinalInvoiceAsync(contractId, request, cancellationToken);
     }
 
     public async Task<CloseoutDto> RecordDeobligationAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync(Manage, cancellationToken);
+        await projects.Access.RequireAsync(Permission.CeilingsManage, Manage, cancellationToken);
         return await inner.RecordDeobligationAsync(contractId, cancellationToken);
     }
 }

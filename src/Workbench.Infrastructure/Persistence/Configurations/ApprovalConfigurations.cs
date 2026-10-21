@@ -53,7 +53,7 @@ internal sealed class ApprovalTaskConfiguration : IEntityTypeConfiguration<Appro
         b.Property(t => t.ScopeLabel).HasMaxLength(300);
         b.Property(t => t.Status).HasConversion<string>().HasMaxLength(16);
         b.Property(t => t.AssigneesCsv).HasMaxLength(4000);
-        b.Property(t => t.AssigneeRole).HasMaxLength(32);
+        b.Property(t => t.AssigneeRole).HasMaxLength(64); // An org role name, or role:{id} for a custom role.
         b.Property(t => t.ExcludedCsv).HasMaxLength(2000);
         b.Property(t => t.DecidedBy).HasMaxLength(320);
         b.Property(t => t.OnBehalfOf).HasMaxLength(320);

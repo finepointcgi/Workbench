@@ -118,7 +118,7 @@ else
     [Parameter]
     public Guid ContractId { get; set; }
 
-    private bool _isFinance => Access?.IsFinance == true;
+    private bool _isFinance => Access?.Can(Workbench.Contracts.Identity.Permission.BillingInvoicesManage) == true;
     private GovernmentBillingSettingsDto? _settings;
     private IReadOnlyList<ProgressPaymentRequestDto>? _requests;
     private Sf1443Dto? _preview;

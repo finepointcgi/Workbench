@@ -13,13 +13,19 @@ namespace Workbench.Application.Hr;
 /// </summary>
 public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory dbFactory)
 {
-    public sealed record Viewer(string Email, OrgRoles Roles, Guid? EmployeeId)
+    public sealed record Viewer(string Email, PermissionSet Permissions, Guid? EmployeeId)
     {
-        public bool IsHr => Roles.IsHr();
+        /// <summary>Manages personnel records: sees and changes everything.</summary>
+        public bool IsHr => Permissions.Has(Permission.HrRecordsManage);
 
-        public bool IsFinance => Roles.IsFinance();
+        /// <summary>Sees job fields of everyone, salaries, benefit costs and workforce reports (Finance's view of HR).</summary>
+        public bool IsFinance => Permissions.Has(Permission.HrWorkforceView);
 
-        public bool IsAdmin => Roles.IsAdmin();
+        /// <summary>Works the IT tasks of onboarding and offboarding (accounts).</summary>
+        public bool IsAdmin => Permissions.Has(Permission.AdminUsers);
+
+        /// <summary>Works the Finance tasks of onboarding and offboarding (employee setup, asset recovery).</summary>
+        public bool DoesFinanceTasks => Permissions.Has(Permission.SetupPeople);
 
         public bool IsSelf(Guid employeeId) => EmployeeId == employeeId;
     }
@@ -29,7 +35,7 @@ public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory db
     public async Task<Viewer> ViewerAsync(CancellationToken ct)
     {
         access.RequireSignedIn();
-        var roles = await access.GetOrgRolesAsync(ct);
+        var roles = await access.GetPermissionsAsync(ct);
         await using var db = await dbFactory.CreateAsync(ct);
         var me = await EmployeeLinks.FindForUserAsync(db, access.Email, ct);
         return new Viewer(access.Email, roles, me?.Id);
@@ -37,7 +43,7 @@ public sealed class HrAccess(AccessControl access, IWorkbenchDbContextFactory db
 
     public async Task<Viewer> RequireHrAsync(string what, CancellationToken ct)
     {
-        await access.RequireHrAsync(what, ct);
+        await access.RequireAsync(Permission.HrRecordsManage, what, ct);
         return await ViewerAsync(ct);
     }
 

@@ -3,8 +3,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
 using Workbench.Application.Accounting;
 using Workbench.Application.Collaboration;
+using Workbench.Application.Identity;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -57,7 +59,7 @@ public sealed class FiscalCalendarCloseTests
         Guid october;
         await using (var db = await Get<IWorkbenchDbContextFactory>().CreateAsync())
         {
-            db.Set<AppUser>().Add(new AppUser { Email = SeededHost.Admin, DisplayName = "Admin", IsAdmin = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = SeededHost.Admin, DisplayName = "Admin" }, OrgRoles.Admin);
             var year = new FiscalYear { Year = 2027, Start = new DateOnly(2026, 10, 1), End = new DateOnly(2027, 9, 30) };
             var period = new FiscalPeriod { FiscalYearId = year.Id, Name = "2026-10", Number = 1, Start = new DateOnly(2026, 10, 1), End = new DateOnly(2026, 10, 31) };
             db.Set<FiscalYear>().Add(year);

@@ -271,17 +271,20 @@ else
     {
         public ApproverRuleKind Kind { get; set; }
         public ApprovalOrgRole? Role { get; set; } = ApprovalOrgRole.Finance;
+        public Guid? CustomRoleId { get; set; }
         public string? People { get; set; }
 
         public static RuleModel From(ApproverRule? rule) => rule is null ? new RuleModel() : new RuleModel
         {
             Kind = rule.Kind,
             Role = rule.Role ?? ApprovalOrgRole.Finance,
+            CustomRoleId = rule.CustomRoleId,
             People = rule.People is null ? null : string.Join(", ", rule.People),
         };
 
         public ApproverRule ToRule() => new(Kind, Kind == ApproverRuleKind.OrgRole ? Role : null,
-            Kind is ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf ? (People ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : null);
+            Kind is ApproverRuleKind.SpecificPeople or ApproverRuleKind.AnyOf ? (People ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : null,
+            Kind == ApproverRuleKind.OrgRole ? CustomRoleId : null);
     }
 
     public sealed class ConditionModel
@@ -340,7 +343,7 @@ else
         };
 
         public ApprovalStepDefinition ToDefinition() => new(Name, Sequence, Approver.ToRule(),
-            FallbackKind is { } fk ? new RuleModel { Kind = fk, Role = Fallback.Role, People = Fallback.People }.ToRule() : null,
+            FallbackKind is { } fk ? new RuleModel { Kind = fk, Role = Fallback.Role, CustomRoleId = Fallback.CustomRoleId, People = Fallback.People }.ToRule() : null,
             Conditions.Select(c => c.ToCondition()).ToList(), Match, Self, AdminsMayAct, RemindAfter, Escalate && RemindAfter is not null);
     }
 }

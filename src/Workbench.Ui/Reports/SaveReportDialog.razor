@@ -19,13 +19,14 @@
                     <MudSelectItem T="OrgRoles" Value="OrgRoles.Pricing">Pricing</MudSelectItem>
                     <MudSelectItem T="OrgRoles" Value="OrgRoles.Admin">Administrators</MudSelectItem>
                 </MudSelect>
+                <Workbench.Ui.Pages.Admin.Roles.CustomRolePicker @bind-Selected="_custom" Label="Also shared with (custom roles)" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Readers run the report with their own access: sharing never shares data they can't see.</MudText>
             }
         </MudStack>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_name) || (_shared && !_roles.Any()))" OnClick="Save" data-testid="save-confirm">Save</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_name) || (_shared && !_roles.Any() && _custom.Count == 0))" OnClick="Save" data-testid="save-confirm">Save</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -40,15 +41,17 @@
     private string? _description;
     private bool _shared;
     private IReadOnlyCollection<OrgRoles> _roles = [];
+    private IReadOnlyCollection<Guid> _custom = [];
 
     protected override void OnInitialized()
     {
         if (Existing is not null)
         {
             (_name, _description, _shared, _roles) = (Existing.Name, Existing.Description, Existing.Visibility == ReportVisibility.Shared, Existing.SharedWith.ToList());
+            _custom = (Existing.SharedWithRoles ?? []).Select(r => r.Id).ToList();
         }
     }
 
     private void Save() => MudDialog.Close(DialogResult.Ok(new SaveReportRequest(_name!.Trim(), _description,
-        _shared ? ReportVisibility.Shared : ReportVisibility.Private, _shared ? _roles.ToList() : null, null, null, null)));
+        _shared ? ReportVisibility.Shared : ReportVisibility.Private, _shared ? _roles.ToList() : null, null, null, null, _shared ? _custom.ToList() : null)));
 }

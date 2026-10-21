@@ -24,13 +24,13 @@ public static class SalesShippingPermissionRegistration
 
 internal static class SalesAccess
 {
-    public static bool CanReadOrders(OrgRoles r) => r.CanViewMaterials() || r.IsBusinessDevelopment();
+    public static bool CanReadOrders(PermissionSet p) => p.Has(Permission.SalesOrdersView);
 
     public static Task RequireOrderReadAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(CanReadOrders, "Only Materials, Finance, Business development and administrators can see sales orders.", ct);
+        access.RequireAsync(CanReadOrders, "Only Materials, Finance, Business development and administrators can see sales orders.", ct);
 
     public static Task RequireShippingAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(r => r.CanViewMaterials(), "Only the Materials role, Finance and administrators can enter sales orders and ship them.", ct);
+        access.RequireAsync(p => p.Has(Permission.SalesOrdersManage), "Only the Materials role, Finance and administrators can enter sales orders and ship them.", ct);
 }
 
 public sealed class PermissionCheckingSalesOrderService(ISalesOrderService inner, AccessControl access, CompanyGuard companies) : ISalesOrderService
@@ -92,7 +92,7 @@ public sealed class PermissionCheckingSalesOrderService(ISalesOrderService inner
         await RequireChangeAsync(salesOrderId, cancellationToken);
         if (request.OnCreditHold != (await inner.GetAsync(salesOrderId, cancellationToken)).Summary.OnCreditHold)
         {
-            await access.RequireFinanceAsync("put orders on or off credit hold", cancellationToken);
+            await access.RequireAsync(Permission.SalesCreditHold, "put orders on or off credit hold", cancellationToken);
         }
 
         return await inner.SetHoldAsync(salesOrderId, request, cancellationToken);
@@ -234,7 +234,7 @@ public sealed class PermissionCheckingShippingService(IShippingService inner, Ac
 
     public async Task<ShipmentDto> CreateInvoiceAsync(Guid shipmentId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("create delivery invoices", cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, "create delivery invoices", cancellationToken);
         await companies.EnsureAsync<Shipment>(shipmentId, Kind, cancellationToken);
         return await inner.CreateInvoiceAsync(shipmentId, cancellationToken);
     }

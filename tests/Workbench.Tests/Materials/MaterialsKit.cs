@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Identity;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Materials;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Accounting;
@@ -38,7 +40,7 @@ internal sealed class MaterialsKit : IAsyncDisposable
         var kit = new MaterialsKit(await ProcurementKit.CreateAsync());
         await using (var db = await kit.Kit.Factory.CreateAsync())
         {
-            db.Set<AppUser>().Add(new AppUser { Email = MaterialsUser, DisplayName = "Mia", IsMaterials = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = MaterialsUser, DisplayName = "Mia" }, OrgRoles.Materials);
             var employee = new Employee
             {
                 EmployeeNumber = "E9", Email = MaterialsUser, DisplayName = "Mia Materials", OrgUnitId = kit.Kit.OrgId, HireDate = new DateOnly(2024, 1, 1),

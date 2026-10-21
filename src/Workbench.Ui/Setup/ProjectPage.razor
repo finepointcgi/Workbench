@@ -139,7 +139,7 @@ else
     {
         _loading = true;
         var me = await CurrentUser.GetAsync();
-        _isFinance = me.IsFinance;
+        _isFinance = me.Can(Workbench.Contracts.Identity.Permission.SetupProjects);
         _contracts = await Contracts.ListContractsAsync();
         _employees = await People.ListEmployeesAsync();
         _project = ProjectId is { } id ? await Projects.GetProjectAsync(id) : null;
@@ -154,8 +154,8 @@ else
             _pmId = _isFinance ? _pmId : me.EmployeeId;
         }
 
-        // Finance and admins: any project. The Project manager role: a new project, or one they manage.
-        _allowed = _isFinance || (me.Roles.HasFlag(OrgRoles.ProjectManager) && (_project is null ? ProjectId is null : _project.ProjectManagerId == me.EmployeeId));
+        // "Set up every project": any project. Otherwise a new project ("Create projects") or one they manage ("Run the projects you manage").
+        _allowed = _isFinance || (_project is null ? ProjectId is null && me.Can(Workbench.Contracts.Identity.Permission.ProjectsCreate) : me.Can(Workbench.Contracts.Identity.Permission.ProjectsManageOwn) && _project.ProjectManagerId == me.EmployeeId);
         _loading = false;
     }
 

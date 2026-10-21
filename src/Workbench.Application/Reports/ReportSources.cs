@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Financials;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Reports;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
@@ -51,8 +52,8 @@ public abstract class ReportSource
 
     public bool CanSee(SourceField field, ReportAccessContext access) => field.Restriction switch
     {
-        FieldRestriction.Finance => access.IsFinance,
-        FieldRestriction.ProjectFinancials => access.IsFinance || access.ManagesAnyProject,
+        FieldRestriction.Finance => access.SeesLaborCost,
+        FieldRestriction.ProjectFinancials => access.ManagesAnyProject,
         _ => true,
     };
 
@@ -99,7 +100,7 @@ public sealed class GlLineSource : ReportSource
     ];
 
     public override string? Unavailable(ReportAccessContext access) =>
-        access.IsFinance ? null : "The general ledger is for Finance and administrators.";
+        access.Can(Permission.GlReportsView) ? null : "The general ledger needs the \"See financial statements\" permission.";
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
@@ -192,14 +193,14 @@ public sealed class TimeEntrySource : ReportSource
         var loaded = await query.OrderBy(x => x.e.WorkDate).ThenBy(x => x.e.Id).Take(RowLimit + 1)
             .Select(x => new { x.e.Id, x.e.TimesheetId, x.t.EmployeeId, x.e.WorkDate, x.t.PeriodStart, x.t.Status, x.e.WbsElementId, x.e.LaborCategoryId, x.e.Hours, x.e.Comment, x.e.EnteredAtUtc })
             .ToListAsync(ct);
-        var lookups = await TimeLookups.LoadAsync(db, loaded.Select(x => x.EmployeeId), loaded.Select(x => x.WbsElementId), access.IsFinance, ct, loaded.Select(x => x.TimesheetId));
+        var lookups = await TimeLookups.LoadAsync(db, loaded.Select(x => x.EmployeeId), loaded.Select(x => x.WbsElementId), access.SeesLaborCost, ct, loaded.Select(x => x.TimesheetId));
         return Rows(loaded, x =>
         {
             var emp = lookups.Employees.GetValueOrDefault(x.EmployeeId);
             var w = lookups.Wbs.GetValueOrDefault(x.WbsElementId);
             var p = w is null ? null : lookups.Projects.GetValueOrDefault(w.ProjectId);
-            var rate = access.IsFinance ? lookups.RateOf(x.Id, x.EmployeeId, x.WorkDate) : null;
-            var cost = access.IsFinance ? lookups.CostOf(x.Id, x.EmployeeId, x.WorkDate, x.Hours) : null;
+            var rate = access.SeesLaborCost ? lookups.RateOf(x.Id, x.EmployeeId, x.WorkDate) : null;
+            var cost = access.SeesLaborCost ? lookups.CostOf(x.Id, x.EmployeeId, x.WorkDate, x.Hours) : null;
             return [emp?.EmployeeNumber, emp?.DisplayName, emp?.OrgUnitId is { } o ? lookups.Orgs.GetValueOrDefault(o) : null, x.WorkDate, lookups.Period(x.WorkDate), x.PeriodStart, x.Status,
                 p?.Code, p?.Name, w?.Code, w?.Name, w?.Kind, lookups.Categories.GetValueOrDefault(x.LaborCategoryId), x.Hours, x.Comment, x.EnteredAtUtc,
                 rate, cost];
@@ -286,7 +287,7 @@ public sealed class OdcSource : ReportSource
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
         var query = db.Set<OdcEntry>().AsNoTracking();
-        if (!access.IsFinance)
+        if (!access.Can(Permission.ProjectsFinancialsView))
         {
             var managed = (access.FinancialProjects ?? new HashSet<Guid>()).ToList();
             var me = access.EmployeeId;
@@ -344,7 +345,7 @@ public sealed class InvoiceSource : ReportSource
     ];
 
     public override string? Unavailable(ReportAccessContext access) =>
-        access.IsFinance || access.FinancialContracts is not { Count: 0 } ? null : "Invoices are for Finance, administrators and project managers (for their contracts).";
+        access.Can(Permission.BillingInvoicesManage) || access.FinancialContracts is not { Count: 0 } ? null : "Invoices are for Finance, administrators and project managers (for their contracts).";
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
@@ -404,7 +405,7 @@ public sealed class ApBillSource : ReportSource
     ];
 
     public override string? Unavailable(ReportAccessContext access) =>
-        access.IsFinance ? null : "AP bills are for Finance and administrators.";
+        access.Can(Permission.ApBillsManage) ? null : "AP bills need the \"Enter and approve AP bills\" permission.";
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
@@ -519,7 +520,7 @@ public sealed class EmployeeSource : ReportSource
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
         var loaded = await db.Set<Employee>().AsNoTracking().OrderBy(e => e.EmployeeNumber).Take(RowLimit + 1).ToListAsync(ct);
-        var lookups = await TimeLookups.LoadAsync(db, loaded.Select(e => e.Id), [], access.IsFinance, ct);
+        var lookups = await TimeLookups.LoadAsync(db, loaded.Select(e => e.Id), [], access.SeesLaborCost, ct);
         var names = loaded.ToDictionary(e => e.Id, e => e.DisplayName);
         return Rows(loaded, e =>
         [
@@ -527,7 +528,7 @@ public sealed class EmployeeSource : ReportSource
             e.SupervisorId is { } s ? names.GetValueOrDefault(s) : null,
             e.DefaultLaborCategoryId is { } c ? lookups.Categories.GetValueOrDefault(c) : null,
             e.HireDate, e.TerminationDate, e.StandardHoursPerWeek, e.IsExempt, e.IsActiveOn(today),
-            access.IsFinance ? lookups.CostRates.Find(e.Id, today) : null,
+            access.SeesLaborCost ? lookups.CostRates.Find(e.Id, today) : null,
         ]);
     }
 }

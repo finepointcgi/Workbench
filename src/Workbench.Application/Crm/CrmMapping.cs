@@ -73,7 +73,7 @@ internal static class CrmMapping
     }
 
     /// <summary>Opportunity DTOs with the names they show (accounts, managers, B&amp;P code) and team, loaded in a few queries.</summary>
-    public static async Task<List<OpportunityDto>> ToDtosAsync(IWorkbenchDbContext db, IReadOnlyList<D.Opportunity> opportunities, OrgRoles roles, string viewer, CancellationToken ct)
+    public static async Task<List<OpportunityDto>> ToDtosAsync(IWorkbenchDbContext db, IReadOnlyList<D.Opportunity> opportunities, PermissionSet roles, string viewer, CancellationToken ct)
     {
         if (opportunities.Count == 0)
         {

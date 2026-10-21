@@ -1,7 +1,9 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Identity;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Materials;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Identity;
@@ -40,7 +42,7 @@ internal sealed class SalesKit : IAsyncDisposable
             var ffp = new Clin { ContractId = c1, Number = "0001", Description = "Sensor units", Pricing = ClinPricing.FirmFixedPrice, PeriodStart = Day.AddYears(-1), PeriodEnd = Day.AddYears(1), CeilingValue = 50_000m, FundedValue = 50_000m };
             var cost = new Clin { ContractId = c1, Number = "0002", Description = "Spares (cost)", Pricing = ClinPricing.CostPlusFixedFee, FeeRate = 0.07m, PeriodStart = Day.AddYears(-1), PeriodEnd = Day.AddYears(1), CeilingValue = 100_000m, FundedValue = 100_000m, Order = 1 };
             db.Set<Clin>().AddRange(ffp, cost);
-            db.Set<AppUser>().Add(new AppUser { Email = Bd, DisplayName = "Blake", IsBusinessDevelopment = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = Bd, DisplayName = "Blake" }, OrgRoles.BusinessDevelopment);
             await db.SaveChangesAsync();
             (kit.FfpClin, kit.CostClin) = (ffp.Id, cost.Id);
             kit.CustomerId = await db.Set<Contract>().Where(c => c.Id == c1).Select(c => c.CustomerId).SingleAsync();

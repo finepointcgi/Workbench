@@ -32,7 +32,8 @@ public sealed class SavedReportService(
         var reports = (await db.Set<SavedReport>().AsNoTracking().ToListAsync(cancellationToken)).Where(r => CanSee(r, context)).ToList();
         var ids = reports.Select(r => r.Id).ToList();
         var schedules = await db.Set<ReportSchedule>().AsNoTracking().Where(s => ids.Contains(s.SavedReportId)).ToListAsync(cancellationToken);
-        return reports.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => ToDto(r, schedules, context)).ToList();
+        var names = await RoleNamesAsync(db, reports, cancellationToken);
+        return reports.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => ToDto(r, schedules, context, names)).ToList();
     }
 
     public async Task<SavedReportDto> GetAsync(Guid reportId, CancellationToken cancellationToken = default)
@@ -41,7 +42,7 @@ public sealed class SavedReportService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var report = await FindVisibleAsync(db, reportId, context, cancellationToken);
         var schedules = await db.Set<ReportSchedule>().AsNoTracking().Where(s => s.SavedReportId == reportId).ToListAsync(cancellationToken);
-        return ToDto(report, schedules, context);
+        return ToDto(report, schedules, context, await RoleNamesAsync(db, [report], cancellationToken));
     }
 
     public async Task<SavedReportDto> CreateAsync(SaveReportRequest request, CancellationToken cancellationToken = default)
@@ -53,7 +54,7 @@ public sealed class SavedReportService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         db.Set<SavedReport>().Add(report);
         await db.SaveChangesAsync(cancellationToken);
-        return ToDto(report, [], context);
+        return ToDto(report, [], context, await RoleNamesAsync(db, [report], cancellationToken));
     }
 
     public async Task<SavedReportDto> UpdateAsync(Guid reportId, SaveReportRequest request, CancellationToken cancellationToken = default)
@@ -64,7 +65,7 @@ public sealed class SavedReportService(
         Apply(report, request, clock.UtcNow);
         await db.SaveChangesAsync(cancellationToken);
         var schedules = await db.Set<ReportSchedule>().AsNoTracking().Where(s => s.SavedReportId == reportId).ToListAsync(cancellationToken);
-        return ToDto(report, schedules, context);
+        return ToDto(report, schedules, context, await RoleNamesAsync(db, [report], cancellationToken));
     }
 
     public async Task DeleteAsync(Guid reportId, CancellationToken cancellationToken = default)
@@ -151,10 +152,11 @@ public sealed class SavedReportService(
     // ---- Rules ----
 
     internal static bool CanSee(SavedReport report, ReportAccessContext context) =>
-        report.OwnerEmail == context.Email || context.IsAdmin
-        || (report.Visibility == SavedReportVisibility.Shared && ParseRoles(report.SharedWith).Any(r => r == OrgRoles.Employee || context.Roles.HasFlag(r)));
+        report.OwnerEmail == context.Email || context.OwnsAllReports
+        || (report.Visibility == SavedReportVisibility.Shared
+            && (ParseRoles(report.SharedWith).Any(r => r == OrgRoles.Employee || context.Roles.HasFlag(r)) || ParseRoleIds(report.SharedWith).Any(context.HoldsRole)));
 
-    private static bool CanEdit(SavedReport report, ReportAccessContext context) => report.OwnerEmail == context.Email || context.IsAdmin;
+    private static bool CanEdit(SavedReport report, ReportAccessContext context) => report.OwnerEmail == context.Email || context.OwnsAllReports;
 
     private static async Task<SavedReport> FindVisibleAsync(IWorkbenchDbContext db, Guid id, ReportAccessContext context, CancellationToken ct)
     {
@@ -177,7 +179,7 @@ public sealed class SavedReportService(
             throw WorkbenchNotFoundException.For("Report schedule", id);
         }
 
-        return schedule.OwnerEmail == context.Email || (allowAdmin && context.IsAdmin)
+        return schedule.OwnerEmail == context.Email || (allowAdmin && context.OwnsAllReports)
             ? schedule
             : throw new WorkbenchForbiddenException("Only the schedule's owner can do that.");
     }
@@ -222,7 +224,9 @@ public sealed class SavedReportService(
             throw new ArgumentException("The report definition is too large.");
         }
 
-        var roles = (request.SharedWith ?? []).Distinct().ToList();
+        var roles = (request.SharedWith ?? []).Distinct().Select(r => r.ToString())
+            .Concat((request.SharedWithRoleIds ?? []).Where(id => !BuiltInRoles.IsBuiltIn(id)).Distinct().Select(Approvals.ApproverRoles.CustomKey))
+            .ToList();
         if (request.Visibility == ReportVisibility.Shared && roles.Count == 0)
         {
             throw new ArgumentException("Choose who to share the report with.");
@@ -297,19 +301,28 @@ public sealed class SavedReportService(
         schedule.NextRunUtc = ReportScheduleMath.Next(schedule, clock.UtcNow);
     }
 
+    private static async Task<Dictionary<Guid, string>> RoleNamesAsync(IWorkbenchDbContext db, IEnumerable<SavedReport> reports, CancellationToken ct) =>
+        (await Identity.RoleStore.RefsAsync(db, reports.SelectMany(r => ParseRoleIds(r.SharedWith)), ct)).ToDictionary(r => r.Id, r => r.Name);
+
+    /// <summary>Custom roles a report is shared with (stored as <c>role:{id}</c> next to built-in role names).</summary>
+    internal static IReadOnlyList<Guid> ParseRoleIds(string? text) =>
+        (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Approvals.ApproverRoles.CustomRoleId).OfType<Guid>().ToList();
+
     internal static IReadOnlyList<OrgRoles> ParseRoles(string? text) =>
         (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(r => Enum.TryParse<OrgRoles>(r, out var role) ? role : (OrgRoles?)null)
             .OfType<OrgRoles>()
             .ToList();
 
-    private static SavedReportDto ToDto(SavedReport r, IReadOnlyList<ReportSchedule> schedules, ReportAccessContext context) => new(
+    private static SavedReportDto ToDto(SavedReport r, IReadOnlyList<ReportSchedule> schedules, ReportAccessContext context, IReadOnlyDictionary<Guid, string>? roleNames = null) => new(
         r.Id, r.Name, r.Description, r.OwnerEmail, r.OwnerEmail == context.Email, CanEdit(r, context),
         r.Visibility == SavedReportVisibility.Shared ? ReportVisibility.Shared : ReportVisibility.Private, ParseRoles(r.SharedWith), r.StandardKey,
         r.StandardKey is null ? null : JsonSerializer.Deserialize<ReportParameters>(r.DefinitionJson, Json),
         r.StandardKey is null ? JsonSerializer.Deserialize<ReportDefinition>(r.DefinitionJson, Json) : null,
         r.UpdatedAtUtc,
-        schedules.Where(s => s.SavedReportId == r.Id && (s.OwnerEmail == context.Email || context.IsAdmin)).OrderBy(s => s.CreatedAtUtc).Select(s => ToDto(s, context)).ToList());
+        schedules.Where(s => s.SavedReportId == r.Id && (s.OwnerEmail == context.Email || context.OwnsAllReports)).OrderBy(s => s.CreatedAtUtc).Select(s => ToDto(s, context)).ToList(),
+        ParseRoleIds(r.SharedWith).Select(id => new RoleRef(id, roleNames?.GetValueOrDefault(id) ?? "Custom role", false)).ToList());
 
     internal static ReportScheduleDto ToDto(ReportSchedule s, ReportAccessContext context) => new(
         s.Id, s.SavedReportId, s.OwnerEmail, s.OwnerEmail == context.Email, (ReportFrequency)(int)s.Frequency, s.DayOfWeek, s.DayOfMonth, s.HourUtc,

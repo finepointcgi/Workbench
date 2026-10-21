@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application;
+using Workbench.Application.Identity;
 using Workbench.Contracts.Hr;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Identity;
 using Workbench.Tests.Identity;
 using Workbench.Tests.Payroll;
@@ -47,7 +49,7 @@ internal sealed class HrKit : IAsyncDisposable
     {
         var kit = new HrKit(await PayrollKit.CreateAsync());
         await using var db = await kit.Factory.CreateAsync();
-        db.Set<AppUser>().Add(new AppUser { Email = Hr, DisplayName = "Harper", IsHr = true });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Hr, DisplayName = "Harper" }, OrgRoles.Hr);
         await db.SaveChangesAsync();
         return kit;
     }

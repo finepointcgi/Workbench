@@ -118,7 +118,7 @@ public sealed class CrmPermissionTests
         Assert.True(OrgRoles.Finance.CanViewPipeline());
         Assert.False(OrgRoles.ProjectManager.CanViewPipeline());
         Assert.True(Application.Approvals.ApprovalEngine.HasRole(OrgRoles.BusinessDevelopment, Contracts.Approvals.ApprovalOrgRole.BusinessDevelopment));
-        Assert.Equal(OrgRoles.BusinessDevelopment, AccessControl.ToRoles(false, false, false, businessDevelopment: true));
+        Assert.Equal(OrgRoles.BusinessDevelopment, BuiltInRoles.FlagsOf([BuiltInRoles.IdOf(OrgRoles.BusinessDevelopment)]));
     }
 
     [Fact]

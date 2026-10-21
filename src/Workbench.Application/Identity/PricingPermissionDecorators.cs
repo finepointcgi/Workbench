@@ -24,7 +24,7 @@ public static class PricingPermissionRegistration
     internal static async Task RequirePricingAsync(AccessControl access, SecurityEventLog log, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(ct)).CanPrice())
+        if (!await access.HasAsync(Permission.PricingManage, ct))
         {
             const string message = "Only Finance, administrators and the Pricing role can work with proposal prices.";
             await log.RecordAsync(SecurityEventTypes.PermissionDenied, "pricing", SecurityOutcomes.Denied, message, cancellationToken: ct);
@@ -174,7 +174,7 @@ public sealed class PermissionCheckingPricingService(IProposalPricingService inn
 
     public async Task<HandoffResultDto> HandOffAsync(Guid modelId, HandoffRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("hand a won proposal off to its contract and budget", cancellationToken);
+        await access.RequireAsync(Permission.SetupContracts, "hand a won proposal off to its contract and budget", cancellationToken);
         return await inner.HandOffAsync(modelId, request, cancellationToken);
     }
 }

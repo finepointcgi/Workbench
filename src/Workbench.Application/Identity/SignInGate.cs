@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Security;
+using Workbench.Contracts;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Identity;
@@ -91,9 +92,10 @@ public sealed class SignInGate(
 
             // Bearer tokens come with every API call: read roles only when a rule needs them.
             var needRoles = syncRoles || policy.Settings.MfaRequirement == MfaRequirementLevel.AdminsOnly;
-            var roles = (needRoles ? await CurrentRolesAsync(email, cancellationToken) : OrgRoles.Employee) | (isBootstrapAdmin ? OrgRoles.Admin : OrgRoles.Employee);
-            var target = syncRoles ? SignInRules.RolesFromIdp(policy, claims!.Groups) | (isBootstrapAdmin ? OrgRoles.Admin : OrgRoles.Employee) : roles;
-            if (await RefuseWithoutMfaAsync(email, method, roles | target, policy, claims, interactive, cancellationToken) is { } refused)
+            var bootstrap = isBootstrapAdmin ? OrgRoles.Admin : OrgRoles.Employee;
+            var roles = (needRoles ? await CurrentRolesAsync(email, cancellationToken) : RoleGrant.None).With(bootstrap);
+            var target = syncRoles ? SignInRules.RolesFromIdp(policy, claims!.Groups).With(bootstrap) : roles;
+            if (await RefuseWithoutMfaAsync(email, method, roles.Union(target), policy, claims, interactive, cancellationToken) is { } refused)
             {
                 return refused;
             }
@@ -101,7 +103,7 @@ public sealed class SignInGate(
             var user = await provisioner.EnsureUserAsync(email, displayName, isBootstrapAdmin, cancellationToken);
             if (interactive)
             {
-                if (syncRoles && target != roles)
+                if (syncRoles && !target.SameRolesAs(roles))
                 {
                     user = await SyncRolesAsync(email, target, cancellationToken) ?? user;
                 }
@@ -120,12 +122,12 @@ public sealed class SignInGate(
             return await DenyAsync(email, method, "No pending invitation for this email.", cancellationToken);
         }
 
-        var newRoles = invite is not null ? AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager, invite.IsProjectManager, invite.IsHr, invite.IsMaterials, invite.IsBusinessDevelopment, invite.IsPricing)
+        var newRoles = invite is not null ? InviteRoles(invite)
             : justInTime ? SignInRules.RolesFromIdp(policy, claims?.Groups)
-            : OrgRoles.Employee;
+            : RoleGrant.None;
         if (isBootstrapAdmin)
         {
-            newRoles |= OrgRoles.Admin;
+            newRoles = newRoles.With(OrgRoles.Admin);
         }
 
         if (await RefuseWithoutMfaAsync(email, method, newRoles, policy, claims, interactive, cancellationToken) is { } refusedNew)
@@ -138,7 +140,7 @@ public sealed class SignInGate(
         {
             await AcceptInviteAsync(invite.Id, email, cancellationToken);
         }
-        else if (justInTime && newRoles != OrgRoles.Employee)
+        else if (justInTime && newRoles.RoleIds.Count > 0)
         {
             created = await SetInitialRolesAsync(email, newRoles, cancellationToken) ?? created;
         }
@@ -146,7 +148,7 @@ public sealed class SignInGate(
         statusCache.Invalidate(email);
         var how = invite is not null ? "Accepted an invitation"
             : isBootstrapAdmin ? "Bootstrap administrator"
-            : justInTime ? $"Just-in-time from an allowed domain; roles: {UserLifecycle.RoleText(newRoles)}"
+            : justInTime ? $"Just-in-time from an allowed domain; roles: {await DescribeAsync(newRoles, cancellationToken)}"
             : "Self sign-up (invites not required)";
         await securityLog.RecordAsync(SecurityEventTypes.UserCreated, email, detail: how, actor: email, cancellationToken: cancellationToken);
         if (interactive)
@@ -154,8 +156,8 @@ public sealed class SignInGate(
             if (invite is not null && syncRoles)
             {
                 // The IdP manages roles: the invite let them in, the groups decide what they can do.
-                var target = SignInRules.RolesFromIdp(policy, claims!.Groups) | (isBootstrapAdmin ? OrgRoles.Admin : OrgRoles.Employee);
-                if (target != newRoles)
+                var target = SignInRules.RolesFromIdp(policy, claims!.Groups).With(isBootstrapAdmin ? OrgRoles.Admin : OrgRoles.Employee);
+                if (!target.SameRolesAs(newRoles))
                 {
                     created = await SyncRolesAsync(email, target, cancellationToken) ?? created;
                 }
@@ -169,13 +171,22 @@ public sealed class SignInGate(
     }
 
     /// <summary>The refusal when the organization requires MFA for these roles and the IdP didn't report it; null when fine.</summary>
-    private async Task<SignInDecision?> RefuseWithoutMfaAsync(string email, string method, OrgRoles roles, SignInPolicySnapshot policy, SignInClaims? claims,
+    private async Task<SignInDecision?> RefuseWithoutMfaAsync(string email, string method, RoleGrant roles, SignInPolicySnapshot policy, SignInClaims? claims,
         bool interactive, CancellationToken cancellationToken)
     {
         // The dev sign-in exists only in Development and has no second factor to check.
-        if (method == "dev" || !SignInRules.MfaRequired(policy.Settings, roles) || SignInRules.MfaSatisfied(policy.Settings, claims ?? SignInClaims.None))
+        if (method == "dev" || policy.Settings.MfaRequirement == MfaRequirementLevel.Off || SignInRules.MfaSatisfied(policy.Settings, claims ?? SignInClaims.None))
         {
             return null;
+        }
+
+        if (policy.Settings.MfaRequirement != MfaRequirementLevel.Everyone)
+        {
+            await using var db = await dbFactory.CreateAsync(cancellationToken);
+            if (!SignInRules.MfaRequired(policy.Settings, (await RoleStore.ResolveRoleIdsAsync(db, roles.RoleIds, cancellationToken)).Permissions))
+            {
+                return null;
+            }
         }
 
         var seen = claims is null ? "none" : $"amr={string.Join(",", claims.Amr.Take(8))}; acr={string.Join(",", claims.Acr.Take(4))}";
@@ -198,20 +209,18 @@ public sealed class SignInGate(
             cancellationToken: cancellationToken);
     }
 
-    private async Task<OrgRoles> CurrentRolesAsync(string email, CancellationToken cancellationToken)
+    private async Task<RoleGrant> CurrentRolesAsync(string email, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var row = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == email)
-            .Select(u => new { u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment, u.IsPricing })
-            .FirstOrDefaultAsync(cancellationToken);
-        return row is null ? OrgRoles.Employee : AccessControl.ToRoles(row.IsAdmin, row.IsFinance, row.IsTimekeeper, row.IsResourceManager, row.IsProjectManager, row.IsHr, row.IsMaterials, row.IsBusinessDevelopment, row.IsPricing);
+        var userId = await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == email).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(cancellationToken);
+        return userId is { } id ? RoleGrant.FromIds(await RoleStore.RoleIdsOfAsync(db, id, cancellationToken)) : RoleGrant.None;
     }
 
-    private async Task<AppUser?> SyncRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken)
+    private async Task<AppUser?> SyncRolesAsync(string email, RoleGrant roles, CancellationToken cancellationToken)
     {
         try
         {
-            return await lifecycle.SetRolesAsync(email, roles, SsoActor, cancellationToken);
+            return await lifecycle.SetGrantAsync(email, roles, SsoActor, cancellationToken);
         }
         catch (ArgumentException ex)
         {
@@ -222,26 +231,25 @@ public sealed class SignInGate(
         }
     }
 
-    private async Task<AppUser?> SetInitialRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken)
+    private async Task<AppUser?> SetInitialRolesAsync(string email, RoleGrant roles, CancellationToken cancellationToken)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var user = await db.Set<AppUser>().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
-        if (user is null)
+        try
+        {
+            return await lifecycle.GrantAsync(email, roles, SsoActor, cancellationToken);
+        }
+        catch (WorkbenchNotFoundException)
         {
             return null;
         }
+    }
 
-        user.IsAdmin |= roles.IsAdmin();
-        user.IsFinance |= roles.HasFlag(OrgRoles.Finance);
-        user.IsTimekeeper |= roles.HasFlag(OrgRoles.Timekeeper);
-        user.IsResourceManager |= roles.HasFlag(OrgRoles.ResourceManager);
-        user.IsProjectManager |= roles.HasFlag(OrgRoles.ProjectManager);
-        user.IsHr |= roles.HasFlag(OrgRoles.Hr);
-        user.IsMaterials |= roles.HasFlag(OrgRoles.Materials);
-        user.IsBusinessDevelopment |= roles.HasFlag(OrgRoles.BusinessDevelopment);
-        user.IsPricing |= roles.HasFlag(OrgRoles.Pricing);
-        await db.SaveChangesAsync(cancellationToken);
-        return user;
+    /// <summary>The roles an invite grants: built-in flags plus custom roles that still exist.</summary>
+    internal static RoleGrant InviteRoles(UserInvite invite) => RoleGrant.Of((OrgRoles)invite.Roles, RoleStore.ParseIds(invite.CustomRoleIds));
+
+    private async Task<string> DescribeAsync(RoleGrant roles, CancellationToken cancellationToken)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return RoleStore.Describe(await RoleStore.RefsAsync(db, roles.RoleIds, cancellationToken));
     }
 
     private async Task<UserInvite?> FindPendingInviteAsync(string email, CancellationToken cancellationToken)
@@ -256,22 +264,25 @@ public sealed class SignInGate(
 
     private async Task AcceptInviteAsync(Guid inviteId, string email, CancellationToken cancellationToken)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var invite = await db.Set<UserInvite>().FirstAsync(i => i.Id == inviteId, cancellationToken);
-        var user = await db.Set<AppUser>().FirstAsync(u => u.Email == email, cancellationToken);
-        invite.AcceptedAtUtc = clock.GetUtcNow().UtcDateTime;
-        user.IsAdmin |= invite.IsAdmin;
-        user.IsFinance |= invite.IsFinance;
-        user.IsTimekeeper |= invite.IsTimekeeper;
-        user.IsResourceManager |= invite.IsResourceManager;
-        user.IsProjectManager |= invite.IsProjectManager;
-        user.IsHr |= invite.IsHr;
-        user.IsMaterials |= invite.IsMaterials;
-        user.IsBusinessDevelopment |= invite.IsBusinessDevelopment;
-        user.IsPricing |= invite.IsPricing;
-        await db.SaveChangesAsync(cancellationToken);
-        var roles = AccessControl.ToRoles(invite.IsAdmin, invite.IsFinance, invite.IsTimekeeper, invite.IsResourceManager, invite.IsProjectManager, invite.IsHr, invite.IsMaterials, invite.IsBusinessDevelopment, invite.IsPricing);
-        await securityLog.RecordAsync(SecurityEventTypes.InviteAccepted, email, detail: $"Invited by {invite.InvitedBy}; roles: {UserLifecycle.RoleText(roles)}", actor: email, cancellationToken: cancellationToken);
+        UserInvite invite;
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            invite = await db.Set<UserInvite>().FirstAsync(i => i.Id == inviteId, cancellationToken);
+            invite.AcceptedAtUtc = clock.GetUtcNow().UtcDateTime;
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        // Custom roles deleted since the invite was sent are skipped.
+        var roles = InviteRoles(invite);
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            var existing = await db.Set<Role>().AsNoTracking().Where(r => roles.Custom.Contains(r.Id)).Select(r => r.Id).ToListAsync(cancellationToken);
+            roles = roles with { Custom = existing };
+        }
+
+        await lifecycle.GrantAsync(email, roles, invite.InvitedBy, cancellationToken);
+        await securityLog.RecordAsync(SecurityEventTypes.InviteAccepted, email, detail: $"Invited by {invite.InvitedBy}; roles: {await DescribeAsync(roles, cancellationToken)}", actor: email,
+            cancellationToken: cancellationToken);
     }
 
     private async Task MarkSignedInAsync(string email, CancellationToken cancellationToken)

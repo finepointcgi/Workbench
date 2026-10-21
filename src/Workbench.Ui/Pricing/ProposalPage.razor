@@ -127,7 +127,7 @@ else
             _model = await Pricing.GetModelAsync(modelId);
             _options ??= await Pricing.GetOptionsAsync(_model.Settings.RatesAsOf);
             _result = await Pricing.CalculateAsync(modelId);
-            _canHandOff = (await CurrentUser.GetAsync()).IsFinance;
+            _canHandOff = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.SetupContracts);
             _error = null;
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException || ex.GetType().Name.Contains("NotFound"))

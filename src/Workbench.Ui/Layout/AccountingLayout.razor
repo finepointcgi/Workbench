@@ -1,7 +1,8 @@
-@* Pages under /accounting: Finance and administrators only. Others get a friendly 403; the server refuses their calls too. *@
+@* Finance pages (accounting, cash, assets, revenue, planning): each needs the permission its menu entry names. Others get a friendly 403; the server refuses their calls too. *@
 @inherits LayoutComponentBase
 @layout MainLayout
 @inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
 
 @if (_allowed is null)
 {
@@ -13,18 +14,24 @@ else if (_allowed.Value)
 }
 else
 {
-    <ForbiddenNotice Title="You don't have access to Accounting"
-                     Message="The general ledger, journal entries, posting rules, period close and financial statements are for Finance and administrators. Ask an administrator if you need them." />
+    <ForbiddenNotice Title="You don't have access to this page"
+                     Message="@_message" />
 }
 
 @code {
     private bool? _allowed;
+    private CurrentUserInfo? _user;
+    private string _message = "";
 
-    protected override async Task OnInitializedAsync()
+    // Checked on every navigation (a layout instance outlives its pages): the menu entry that owns the page decides.
+    protected override async Task OnParametersSetAsync()
     {
         try
         {
-            _allowed = (await CurrentUser.GetAsync()).IsFinance;
+            _user ??= await CurrentUser.GetAsync();
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+            _allowed = NavCatalog.PageAllowed(path, _user, p => p.Any(k => PermissionCatalog.Find(k)?.Area is { } area && (area == PermissionCatalog.AreaAccounting || area == PermissionCatalog.AreaBilling || area == PermissionCatalog.AreaPayables || area == PermissionCatalog.AreaCash || area == PermissionCatalog.AreaPayroll || area == PermissionCatalog.AreaTravel)));
+            _message = NavCatalog.Explain(path) ?? "This page needs a Finance permission you don't have. Ask an administrator if you need it.";
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {

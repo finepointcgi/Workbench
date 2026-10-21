@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Identity;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Materials;
 using Workbench.Contracts.Quality;
 using Workbench.Domain.Identity;
@@ -29,7 +31,7 @@ internal sealed class QualityKit : IAsyncDisposable
     {
         var kit = new QualityKit(await MaterialsKit.CreateAsync());
         await using var db = await kit.M.Kit.Factory.CreateAsync();
-        db.Set<AppUser>().Add(new AppUser { Email = QualityUser, DisplayName = "Quinn", IsMaterials = true });
+        await RoleStore.AddUserAsync(db, new AppUser { Email = QualityUser, DisplayName = "Quinn" }, OrgRoles.Materials);
         db.Set<Employee>().Add(new Employee
         {
             EmployeeNumber = "E10", Email = QualityUser, DisplayName = "Quinn Quality", OrgUnitId = kit.M.Kit.OrgId, HireDate = new DateOnly(2024, 1, 1),

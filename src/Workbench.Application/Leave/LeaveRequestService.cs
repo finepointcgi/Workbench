@@ -198,7 +198,7 @@ public sealed class LeaveRequestService(
             return true;
         }
 
-        return (await access.GetOrgRolesAsync(cancellationToken)).IsAdmin()
+        return await access.HasAsync(Permission.ApprovalsActAsAdmin, cancellationToken)
             || (await _approvals.ActionableAsync(db, ApprovalDocumentTypes.LeaveRequest, access.Email, cancellationToken)).Count > 0;
     }
 
@@ -246,7 +246,7 @@ public sealed class LeaveRequestService(
 
         if (leave.Status != LeaveRequestStatus.Pending)
         {
-            if (!await TimesheetQueries.CanApproveAsync(db, owner, access.Email, await access.GetOrgRolesAsync(ct), ct)
+            if (!await TimesheetQueries.CanApproveAsync(db, owner, access.Email, await access.GetPermissionsAsync(ct), ct)
                 && !await _approvals.IsParticipantAsync(db, ApprovalDocumentTypes.LeaveRequest, leave.Id, access.Email, ct))
             {
                 throw new WorkbenchForbiddenException(notYours);
@@ -322,7 +322,7 @@ public sealed class LeaveRequestService(
         var (rangeFrom, rangeTo) = (from, to);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var me = await EmployeeLinks.FindForUserAsync(db, access.Email, cancellationToken);
-        var everyone = (await access.GetOrgRolesAsync(cancellationToken)).CanViewAllTimesheets();
+        var everyone = await access.HasAsync(Permission.TimeViewAll, cancellationToken);
         HashSet<Guid>? team = null;
         if (!everyone)
         {

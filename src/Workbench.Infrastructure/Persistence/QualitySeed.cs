@@ -10,6 +10,7 @@ using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
 using Workbench.Application.Quality;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Materials;
 using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Quality;
@@ -49,7 +50,7 @@ internal static class QualitySeed
 
         if (!await db.Set<AppUser>().AnyAsync(u => u.Email == MorganEmail, cancellationToken))
         {
-            db.Add(new AppUser { Email = MorganEmail, DisplayName = "Morgan Lee", IsMaterials = true, CreatedAtUtc = DateTime.UtcNow });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = MorganEmail, DisplayName = "Morgan Lee", CreatedAtUtc = DateTime.UtcNow }, OrgRoles.Materials, cancellationToken);
         }
 
         var morgan = new Employee

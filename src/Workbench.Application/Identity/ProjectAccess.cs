@@ -22,7 +22,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
             return false;
         }
 
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.HasAsync(Permission.ProjectsFinancialsView, cancellationToken))
         {
             return true;
         }
@@ -70,7 +70,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     /// <summary>Contracts with a project the user manages, or null for Finance and Admin (every contract).</summary>
     public async Task<IReadOnlySet<Guid>?> ManagedContractIdsAsync(CancellationToken cancellationToken = default)
     {
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.HasAsync(Permission.ProjectsFinancialsView, cancellationToken))
         {
             return null;
         }
@@ -114,8 +114,8 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
             return false;
         }
 
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        return roles.IsFinance() || (roles.HasFlag(OrgRoles.ProjectManager) && await ManagesProjectAsync(projectId, cancellationToken));
+        var permissions = await access.GetPermissionsAsync(cancellationToken);
+        return permissions.Has(Permission.SetupProjects) || (permissions.Has(Permission.ProjectsManageOwn) && await ManagesProjectAsync(projectId, cancellationToken));
     }
 
     /// <summary>Throws <see cref="WorkbenchForbiddenException"/> unless <see cref="CanSetUpProjectAsync"/>.</summary>
@@ -148,7 +148,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     /// <summary>Projects the user manages, or null for Finance and Admin (every project).</summary>
     public async Task<IReadOnlySet<Guid>?> ManagedProjectIdsAsync(CancellationToken cancellationToken = default)
     {
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.HasAsync(Permission.ProjectsFinancialsView, cancellationToken))
         {
             return null;
         }
@@ -179,7 +179,7 @@ public sealed class ProjectAccess(IWorkbenchDbContextFactory dbFactory, AccessCo
     public async Task<IReadOnlySet<Guid>?> VisibleTimeEmployeeIdsAsync(CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(cancellationToken)).CanViewAllTimesheets())
+        if (await access.HasAsync(Permission.TimeViewAll, cancellationToken))
         {
             return null;
         }

@@ -21,16 +21,16 @@ public sealed class ResourcingAccess(IWorkbenchDbContextFactory dbFactory, Acces
 {
     public AccessControl Access => access;
 
-    public Task<OrgRoles> RolesAsync(CancellationToken ct) => access.GetOrgRolesAsync(ct);
+    public Task<PermissionSet> RolesAsync(CancellationToken ct) => access.GetPermissionsAsync(ct);
 
     public Task<Guid?> MeAsync(CancellationToken ct) => access.GetEmployeeIdAsync(ct);
 
-    public async Task<bool> ManagesAllAsync(CancellationToken ct) => (await RolesAsync(ct)).IsResourceManager();
+    public async Task<bool> ManagesAllAsync(CancellationToken ct) => (await RolesAsync(ct)).Has(Permission.ResourcingManage);
 
     public async Task<bool> ReadsAllAllocationsAsync(CancellationToken ct)
     {
         var roles = await RolesAsync(ct);
-        return roles.IsResourceManager() || roles.IsFinance();
+        return roles.HasAny(Permission.ResourcingManage, Permission.ResourcingView);
     }
 
     /// <summary>Projects the user manages (as project manager).</summary>
@@ -72,14 +72,14 @@ public sealed class ResourcingAccess(IWorkbenchDbContextFactory dbFactory, Acces
     public async Task<bool> SeesEveryoneAsync(CancellationToken ct)
     {
         var roles = await RolesAsync(ct);
-        return roles.IsResourceManager() || roles.CanViewAllTimesheets() || (await ManagedProjectIdsAsync(ct)).Count > 0;
+        return roles.HasAny(Permission.ResourcingManage, Permission.TimeViewAll) || (await ManagedProjectIdsAsync(ct)).Count > 0;
     }
 
     /// <summary>Employees whose utilization the user may see; null means everyone.</summary>
     public async Task<IReadOnlySet<Guid>?> UtilizationEmployeeIdsAsync(CancellationToken ct)
     {
         var roles = await RolesAsync(ct);
-        if (roles.IsResourceManager() || roles.CanViewAllTimesheets())
+        if (roles.HasAny(Permission.ResourcingManage, Permission.TimeViewAll))
         {
             return null;
         }

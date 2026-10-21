@@ -27,7 +27,7 @@ public sealed class PersonnelPermissionTests
 
         var context = await kit.As(HrKit.Hr).Get<ICurrentUserContext>().GetAsync();
         Assert.Equal(OrgRoles.Hr, context.Roles);
-        Assert.True(context.IsHr);
+        Assert.True(context.Can(Permission.HrRecordsManage));
 
         var dto = await kit.As(Admin).Get<IUserDirectory>().SetRolesAsync(Viewer, OrgRoles.Hr | OrgRoles.Timekeeper);
         Assert.Equal(OrgRoles.Hr | OrgRoles.Timekeeper, dto.Roles);

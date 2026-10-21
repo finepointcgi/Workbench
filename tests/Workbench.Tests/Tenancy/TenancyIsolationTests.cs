@@ -240,7 +240,7 @@ public sealed class TenancyIsolationTests
         });
         Assert.True(accounts > 10);
         Assert.Equal(2, years);
-        Assert.Equal(("owner@gamma.example", true, MultiTenantWeb.HostAdmin), (invite.Email, invite.IsAdmin, invite.InvitedBy));
+        Assert.Equal(("owner@gamma.example", true, MultiTenantWeb.HostAdmin), (invite.Email, ((Workbench.Contracts.Identity.OrgRoles)invite.Roles).HasFlag(Workbench.Contracts.Identity.OrgRoles.Admin), invite.InvitedBy));
         Assert.Equal(0, sheets);
         Assert.Equal(HttpStatusCode.OK, (await web.Client("gamma", "owner@gamma.example").GetAsync("api/v1/sheets")).StatusCode);
 

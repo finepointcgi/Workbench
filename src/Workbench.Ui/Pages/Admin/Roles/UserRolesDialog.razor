@@ -1,0 +1,119 @@
+@* Chooses every role a person holds (built-in and custom). Shows what they'd be able to do and warns when the roles
+   together combine duties that are usually kept apart. Saves through IRoleService (audit logged on the server). *@
+@using Workbench.Contracts
+@inject IRoleService Roles
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_roles is null)
+        {
+            <MudProgressLinear aria-label="Loading roles" Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                @Email holds everything any chosen role allows. Everyone is an Employee too.
+            </MudText>
+            @foreach (var (heading, group) in new[] { ("Built-in roles", _roles.Where(r => r.IsBuiltIn && r.BuiltIn != OrgRoles.Employee).ToList()), ("Custom roles", _roles.Where(r => !r.IsBuiltIn).ToList()) })
+            {
+                if (group.Count == 0)
+                {
+                    continue;
+                }
+
+                <MudText Typo="Typo.overline" Class="mud-text-secondary d-block mt-2">@heading</MudText>
+                @foreach (var role in group)
+                {
+                    var locked = IsMe && role.BuiltIn == OrgRoles.Admin && _chosen.Contains(role.Id);
+                    <div class="d-flex align-start">
+                        <MudCheckBox T="bool" Value="_chosen.Contains(role.Id)" ValueChanged="on => Toggle(role.Id, on)" Disabled="locked" Color="Color.Primary" Dense="true"
+                                     aria-label="@role.Name" data-testid="@($"user-role-{role.Name}")" />
+                        <div class="pt-1">
+                            <div>@role.Name</div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @(locked ? "You can't remove your own Admin role." : string.IsNullOrWhiteSpace(role.Description) ? $"{role.Permissions.Count} permissions" : role.Description)
+                            </MudText>
+                        </div>
+                    </div>
+                }
+            }
+
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2">@Effective.Count of @PermissionCatalog.All.Count permissions</MudText>
+            @if (Conflicts.Count > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mt-2" data-testid="user-role-conflicts">
+                    Together these roles combine duties usually kept apart:
+                    @string.Join("; ", Conflicts.Select(c => $"{PermissionCatalog.NameOf(c.First)} with {PermissionCatalog.NameOf(c.Second)}")).
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_roles is null || _busy" OnClick="SaveAsync" data-testid="user-roles-save">Save roles</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string Email { get; set; } = "";
+
+    [Parameter] public bool IsMe { get; set; }
+
+    private IReadOnlyList<RoleDto>? _roles;
+    private HashSet<Guid> _chosen = [];
+    private bool _busy;
+
+    private HashSet<string> Effective =>
+        _roles?.Where(r => _chosen.Contains(r.Id)).SelectMany(r => r.Permissions).ToHashSet(StringComparer.Ordinal) ?? [];
+
+    private IReadOnlyList<PermissionConflict> Conflicts => PermissionCatalog.ConflictsIn(Effective);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _roles = await Roles.ListAsync();
+            _chosen = (await Roles.GetUserRolesAsync(Email)).Roles.Select(r => r.Id).ToHashSet();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't load roles: {ex.Message}", Severity.Error);
+            MudDialog.Cancel();
+        }
+    }
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on)
+        {
+            _chosen.Add(id);
+        }
+        else
+        {
+            _chosen.Remove(id);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var saved = await Roles.SetUserRolesAsync(Email, _chosen.ToList());
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

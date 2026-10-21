@@ -21,6 +21,7 @@
             {
                 <MudCheckBox T="bool" Value="_roles.HasFlag(role)" ValueChanged="on => _roles = on ? _roles | role : _roles & ~role" Label="@OrgRoleChecks.Label(role)" Dense="true" Color="Color.Primary" />
             }
+            <Workbench.Ui.Pages.Admin.Roles.CustomRolePicker @bind-Selected="_custom" />
         </MudItem>
         <MudItem xs="12" md="2" Class="d-flex align-center">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="InviteAsync"
@@ -51,7 +52,7 @@
     <RowTemplate>
         <MudTd DataLabel="Email">@context.Email</MudTd>
         <MudTd DataLabel="Name">@context.DisplayName</MudTd>
-        <MudTd DataLabel="Roles">@RoleText(context.Roles)</MudTd>
+        <MudTd DataLabel="Roles">@RoleText(context.Roles, context.CustomRoles)</MudTd>
         <MudTd DataLabel="Status">
             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@StatusColor(context.Status)">@context.Status</MudChip>
             @if (context.AcceptedAtUtc is { } accepted)
@@ -79,6 +80,7 @@
     private string? _email;
     private string? _name;
     private OrgRoles _roles;
+    private IReadOnlyCollection<Guid> _custom = [];
     private InviteStatus? _status;
 
     protected override async Task OnInitializedAsync()
@@ -104,12 +106,13 @@
         _busy = true;
         try
         {
-            var invite = await Invites.CreateAsync(new CreateInviteRequest(_email!, _name!, _roles));
+            var invite = await Invites.CreateAsync(new CreateInviteRequest(_email!, _name!, _roles, _custom.ToList()));
             _invites = await Invites.ListAsync();
             Snackbar.Add($"Invited {invite.Email}. The invitation expires {invite.ExpiresAtUtc:MMM d HH:mm} UTC.", Severity.Success);
             _email = null;
             _name = null;
             _roles = OrgRoles.Employee;
+            _custom = [];
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -135,9 +138,9 @@
         }
     }
 
-    internal static string RoleText(OrgRoles roles)
+    internal static string RoleText(OrgRoles roles, IReadOnlyList<RoleRef>? custom = null)
     {
-        var names = OrgRoleChecks.All.Where(r => roles.HasFlag(r)).Select(r => r.ToString()).ToList();
+        var names = OrgRoleChecks.All.Where(r => roles.HasFlag(r)).Select(OrgRoleChecks.Label).Concat((custom ?? []).Select(r => r.Name)).ToList();
         return names.Count == 0 ? "Employee" : string.Join(", ", names);
     }
 

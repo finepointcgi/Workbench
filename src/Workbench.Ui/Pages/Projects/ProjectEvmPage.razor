@@ -132,7 +132,7 @@ else
     {
         try
         {
-            _isFinance = (await CurrentUser.GetAsync()).IsFinance;
+            _isFinance = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.EvmManage);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {

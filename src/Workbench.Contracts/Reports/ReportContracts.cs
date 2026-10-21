@@ -227,8 +227,8 @@ public sealed record ReportScheduleDto(
     string? LastStatus);
 
 /// <summary>
-/// A saved report. <see cref="SharedWith"/> lists the organization roles it's shared with (<see cref="OrgRoles.Employee"/> =
-/// everyone). Exactly one of <see cref="Parameters"/> (with <see cref="StandardKey"/>) and <see cref="Definition"/> is set.
+/// A saved report. <see cref="SharedWith"/> lists the built-in roles it's shared with (<see cref="OrgRoles.Employee"/> =
+/// everyone) and <see cref="SharedWithRoles"/> the custom roles. Exactly one of <see cref="Parameters"/> (with <see cref="StandardKey"/>) and <see cref="Definition"/> is set.
 /// </summary>
 public sealed record SavedReportDto(
     Guid Id,
@@ -243,8 +243,10 @@ public sealed record SavedReportDto(
     ReportParameters? Parameters,
     ReportDefinition? Definition,
     DateTime UpdatedAtUtc,
-    IReadOnlyList<ReportScheduleDto> Schedules);
+    IReadOnlyList<ReportScheduleDto> Schedules,
+    IReadOnlyList<RoleRef>? SharedWithRoles = null);
 
+/// <param name="SharedWithRoleIds">Custom roles to share with, besides the built-in <paramref name="SharedWith"/>.</param>
 public sealed record SaveReportRequest(
     string Name,
     string? Description,
@@ -252,7 +254,8 @@ public sealed record SaveReportRequest(
     IReadOnlyList<OrgRoles>? SharedWith,
     string? StandardKey,
     ReportParameters? Parameters,
-    ReportDefinition? Definition);
+    ReportDefinition? Definition,
+    IReadOnlyList<Guid>? SharedWithRoleIds = null);
 
 /// <summary><see cref="HourUtc"/> 0–23; weekly needs <see cref="DayOfWeek"/>, monthly <see cref="DayOfMonth"/> 1–28.</summary>
 public sealed record SaveReportScheduleRequest(

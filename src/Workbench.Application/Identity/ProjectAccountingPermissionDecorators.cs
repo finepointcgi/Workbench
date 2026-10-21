@@ -31,13 +31,13 @@ public sealed class PermissionCheckingPeopleService(IPeopleService inner, Access
 
     public async Task<EmployeeDto> CreateEmployeeAsync(SaveEmployeeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("add employees", cancellationToken);
+        await access.RequireAsync(Permission.SetupPeople, "add employees", cancellationToken);
         return await inner.CreateEmployeeAsync(request, cancellationToken);
     }
 
     public async Task<EmployeeDto> UpdateEmployeeAsync(Guid employeeId, SaveEmployeeRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("change employees", cancellationToken);
+        await access.RequireAsync(Permission.SetupPeople, "change employees", cancellationToken);
         return await inner.UpdateEmployeeAsync(employeeId, request, cancellationToken);
     }
 
@@ -49,7 +49,7 @@ public sealed class PermissionCheckingPeopleService(IPeopleService inner, Access
 
     public async Task<OrgUnitDto> CreateOrgUnitAsync(CreateOrgUnitRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("add organization units", cancellationToken);
+        await access.RequireAsync(Permission.SetupPeople, "add organization units", cancellationToken);
         return await inner.CreateOrgUnitAsync(request, cancellationToken);
     }
 
@@ -61,25 +61,25 @@ public sealed class PermissionCheckingPeopleService(IPeopleService inner, Access
 
     public async Task<LaborCategoryDto> CreateLaborCategoryAsync(SaveLaborCategoryRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("set up labor categories", cancellationToken);
+        await access.RequireAsync(Permission.SetupPeople, "set up labor categories", cancellationToken);
         return await inner.CreateLaborCategoryAsync(request, cancellationToken);
     }
 
     public async Task<LaborCategoryDto> UpdateLaborCategoryAsync(Guid laborCategoryId, SaveLaborCategoryRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("set up labor categories", cancellationToken);
+        await access.RequireAsync(Permission.SetupPeople, "set up labor categories", cancellationToken);
         return await inner.UpdateLaborCategoryAsync(laborCategoryId, request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<CostRateDto>> ListCostRatesAsync(Guid employeeId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see cost rates", cancellationToken);
+        await access.RequireAsync(Permission.LaborCostView, "see cost rates", cancellationToken);
         return await inner.ListCostRatesAsync(employeeId, cancellationToken);
     }
 
     public async Task<CostRateDto> AddCostRateAsync(Guid employeeId, AddCostRateRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("change cost rates", cancellationToken);
+        await access.RequireAsync(Permission.LaborCostRatesManage, "change cost rates", cancellationToken);
         return await inner.AddCostRateAsync(employeeId, request, cancellationToken);
     }
 }
@@ -99,7 +99,7 @@ public sealed class PermissionCheckingContractService(IContractService inner, Ac
 
     public async Task<CustomerDto> CreateCustomerAsync(SaveCustomerRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("set up customers", cancellationToken);
+        await access.RequireAsync(Permission.SetupContracts, "set up customers", cancellationToken);
         return await inner.CreateCustomerAsync(request, cancellationToken);
     }
 
@@ -124,25 +124,25 @@ public sealed class PermissionCheckingContractService(IContractService inner, Ac
 
     public async Task<ContractDto> CreateContractAsync(SaveContractRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("set up contracts", cancellationToken);
+        await access.RequireAsync(Permission.SetupContracts, "set up contracts", cancellationToken);
         return await inner.CreateContractAsync(request, cancellationToken);
     }
 
     public async Task<ContractDto> UpdateContractAsync(Guid contractId, SaveContractRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("change contracts", cancellationToken);
+        await access.RequireAsync(Permission.SetupContracts, "change contracts", cancellationToken);
         return await inner.UpdateContractAsync(contractId, request, cancellationToken);
     }
 
     public async Task<IReadOnlyList<BillRateDto>> ListBillRatesAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see bill rates", cancellationToken);
+        await access.RequireAsync(Permission.SetupBillRates, "see bill rates", cancellationToken);
         return await inner.ListBillRatesAsync(contractId, cancellationToken);
     }
 
     public async Task<BillRateDto> AddBillRateAsync(Guid contractId, AddBillRateRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("change bill rates", cancellationToken);
+        await access.RequireAsync(Permission.SetupBillRates, "change bill rates", cancellationToken);
         return await inner.AddBillRateAsync(contractId, request, cancellationToken);
     }
 }
@@ -178,13 +178,13 @@ public sealed class PermissionCheckingProjectService(
     public async Task<ProjectDto> CreateProjectAsync(SaveProjectRequest request, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        if (roles.IsFinance())
+        var roles = await access.GetPermissionsAsync(cancellationToken);
+        if (roles.Has(Permission.SetupProjects))
         {
             return await AfterSaveAsync(await inner.CreateProjectAsync(request, cancellationToken), cancellationToken);
         }
 
-        if (!roles.HasFlag(OrgRoles.ProjectManager))
+        if (!roles.Has(Permission.ProjectsCreate))
         {
             throw new WorkbenchForbiddenException("Only Finance, administrators and project managers can set up projects.");
         }
@@ -211,7 +211,7 @@ public sealed class PermissionCheckingProjectService(
     public async Task<ProjectDto> UpdateProjectAsync(Guid projectId, SaveProjectRequest request, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (!await access.HasAsync(Permission.SetupProjects, cancellationToken))
         {
             await projects.RequireProjectSetupAsync(projectId, "change project setup", cancellationToken);
             var current = await inner.GetProjectAsync(projectId, cancellationToken) ?? throw WorkbenchNotFoundException.For("Project", projectId);
@@ -307,7 +307,7 @@ public sealed class PermissionCheckingProjectService(
         var me = access.Email;
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
-            finance = await db.Set<Domain.Identity.AppUser>().AsNoTracking().Where(u => u.IsActive && u.IsFinance).Select(u => u.Email).ToListAsync(cancellationToken);
+            finance = await RoleStore.EmailsWithPermissionAsync(db, Permission.SetupProjects, cancellationToken, includeAdmins: false);
             name = await db.Set<Domain.Identity.AppUser>().AsNoTracking().Where(u => u.Email == me).Select(u => u.DisplayName).FirstOrDefaultAsync(cancellationToken) ?? me;
         }
 
@@ -331,7 +331,7 @@ public sealed class PermissionCheckingPlanSyncService(
     public async Task<ProjectDto> CreatePlanSheetAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         await projects.RequireProjectSetupAsync(projectId, "create the plan sheet", cancellationToken);
-        if (!(await projects.Access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (!await projects.Access.HasAsync(Permission.SetupProjects, cancellationToken))
         {
             preference.WorkspaceId = await ProjectWorkspaceAsync(projectId, cancellationToken);
         }
@@ -399,13 +399,13 @@ public sealed class PermissionCheckingFiscalCalendarService(IFiscalCalendarServi
 
     public async Task<IReadOnlyList<FiscalPeriodDto>> CreateFiscalYearAsync(int fiscalYear, DateOnly start, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("set up fiscal years", cancellationToken);
+        await access.RequireAsync(Permission.SetupFiscalCalendar, "set up fiscal years", cancellationToken);
         return await inner.CreateFiscalYearAsync(fiscalYear, start, cancellationToken);
     }
 
     public async Task<FiscalPeriodDto> SetPeriodStatusAsync(Guid periodId, FiscalPeriodState status, string reason, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("close or reopen fiscal periods", cancellationToken);
+        await access.RequireAsync(Permission.SetupFiscalCalendar, "close or reopen fiscal periods", cancellationToken);
         return await inner.SetPeriodStatusAsync(periodId, status, reason, cancellationToken);
     }
 }
@@ -414,7 +414,7 @@ public sealed class PermissionCheckingAuditLogService(IAuditLogService inner, Ac
 {
     public async Task<IReadOnlyList<AuditEventDto>> ListAsync(string? entityType = null, Guid? entityId = null, int limit = 200, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("read the audit log", cancellationToken);
+        await access.RequireAsync(Permission.SetupAuditLog, "read the audit log", cancellationToken);
         return await inner.ListAsync(entityType, entityId, limit, cancellationToken);
     }
 }

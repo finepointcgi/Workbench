@@ -1,0 +1,375 @@
+@* One role: its name, description and permissions (a grouped checklist that says what each allows and which pages it
+   opens), segregation-of-duties warnings, and the people who hold it. Built-in roles are read only. *@
+@using Workbench.Contracts
+@inject IRoleService Roles
+@inject IUserDirectory Users
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4" data-testid="role-editor">
+    <div class="d-flex align-center flex-wrap gap-2 mb-3">
+        <MudText Typo="Typo.h5" HtmlTag="h2">@Role.Name</MudText>
+        @if (Role.IsBuiltIn)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Lock">Built-in</MudChip>
+        }
+        <MudSpacer />
+        @if (CanManage)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="() => Clone.InvokeAsync(Role)" data-testid="role-clone">Clone</MudButton>
+            @if (!Role.IsBuiltIn)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" data-testid="role-delete">Delete</MudButton>
+            }
+        }
+    </div>
+
+    @if (Role.IsBuiltIn)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Text" Dense="true" Class="mb-3">
+            @(Role.BuiltIn == OrgRoles.Employee
+                ? "Everyone holds Employee: their own time, expenses, travel, leave and what's shared with them. It grants no extra permissions."
+                : Role.BuiltIn == OrgRoles.Admin
+                    ? "Admin holds every permission and can't be changed, so there is always someone who can manage users and roles."
+                    : "Built-in roles can't be changed. Clone this one to make a role you can edit.")
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="2" Class="mb-2">
+        <MudItem xs="12" sm="5">
+            <MudTextField T="string" @bind-Value="_name" Label="Name" MaxLength="80" ReadOnly="ReadOnly" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" data-testid="role-edit-name" />
+        </MudItem>
+        <MudItem xs="12" sm="7">
+            <MudTextField T="string" @bind-Value="_description" Label="Description" MaxLength="500" ReadOnly="ReadOnly" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        </MudItem>
+    </MudGrid>
+
+    @if (Conflicts.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3" data-testid="role-conflicts">
+            <MudText Typo="Typo.subtitle2">This role combines duties that are usually kept apart</MudText>
+            <ul class="mt-1 mb-0" style="padding-left:1.25rem">
+                @foreach (var c in Conflicts)
+                {
+                    <li><strong>@PermissionCatalog.NameOf(c.First)</strong> with <strong>@PermissionCatalog.NameOf(c.Second)</strong>: @c.Why</li>
+                }
+            </ul>
+        </MudAlert>
+    }
+
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3">
+        <MudTabPanel Text="@($"Permissions ({_granted.Count})")" Icon="@Icons.Material.Filled.Checklist">
+            <div class="d-flex align-center flex-wrap gap-3 mb-2">
+                <MudTextField T="string" @bind-Value="_filter" Immediate="true" Placeholder="Find a permission" aria-label="Find a permission" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:320px" />
+                <MudSwitch T="bool" @bind-Value="_onlyGranted" Color="Color.Primary" Label="Only what this role allows" />
+            </div>
+            <MudExpansionPanels MultiExpansion="true" Outlined="true" Dense="true">
+                @foreach (var area in PermissionCatalog.Areas)
+                {
+                    var items = Visible(area).ToList();
+                    if (items.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var all = PermissionCatalog.All.Where(p => p.Area == area).ToList();
+                    var count = all.Count(p => _granted.Contains(p.Key));
+                    <MudExpansionPanel Expanded="@(!string.IsNullOrWhiteSpace(_filter) || _onlyGranted)">
+                        <TitleContent>
+                            <div class="d-flex align-center gap-2">
+                                <MudText Typo="Typo.subtitle1" HtmlTag="h3">@area</MudText>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(count > 0 ? Color.Primary : Color.Default)">@count of @all.Count</MudChip>
+                            </div>
+                        </TitleContent>
+                        <ChildContent>
+                            @if (!ReadOnly)
+                            {
+                                <div class="d-flex gap-2 mb-1">
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetArea(all, true)" aria-label="@($"Allow everything in {area}")">Allow all</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetArea(all, false)" aria-label="@($"Allow nothing in {area}")">Clear</MudButton>
+                                </div>
+                            }
+                            @foreach (var p in items)
+                            {
+                                var pages = NavCatalog.PagesRevealedBy(p.Key);
+                                <div class="d-flex align-start py-1" data-permission="@p.Key">
+                                    <MudCheckBox T="bool" Value="_granted.Contains(p.Key)" ValueChanged="on => Toggle(p.Key, on)" ReadOnly="ReadOnly" Color="Color.Primary"
+                                                 Dense="true" aria-label="@p.Name" />
+                                    <div class="pt-1">
+                                        <div class="d-flex align-center flex-wrap gap-1">
+                                            <span>@p.Name</span>
+                                            @if (p.Sensitive)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Filled.Shield">Sensitive</MudChip>
+                                            }
+                                        </div>
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@p.Description</MudText>
+                                        @if (pages.Count > 0)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Opens @string.Join(", ", pages.Select(e => e.Title))</MudText>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </ChildContent>
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+            @if (!ReadOnly)
+            {
+                <div class="d-flex align-center gap-2 mt-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Disabled="!Dirty || _busy || string.IsNullOrWhiteSpace(_name)"
+                               OnClick="SaveAsync" data-testid="role-save">Save role</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="!Dirty || _busy" OnClick="Reset">Discard changes</MudButton>
+                    @if (Dirty)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Unsaved changes</MudText>
+                    }
+                </div>
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="@($"People ({Role.UserCount})")" Icon="@Icons.Material.Filled.People">
+            @if (Role.BuiltIn == OrgRoles.Employee)
+            {
+                <MudText Class="mud-text-secondary">Everyone who can sign in holds Employee.</MudText>
+            }
+            else
+            {
+                @if (CanAssign)
+                {
+                    <MudAutocomplete @ref="_search" T="UserDto" Value="_pick" ValueChanged="AddAsync" SearchFunc="SearchAsync" OpenOnFocus="false" MinCharacters="1" DebounceInterval="200"
+                                     ToStringFunc="@(u => u is null ? "" : $"{u.DisplayName} ({u.Email})")" Label="Give this role to…" Placeholder="Search by name or email"
+                                     ResetValueOnEmptyText="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" data-testid="role-add-person" />
+                }
+                @if (_members is null)
+                {
+                    <MudProgressLinear aria-label="Loading people" Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_members.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary">Nobody holds this role.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true" aria-label="@($"People with the {Role.Name} role")">
+                        <thead><tr><th>Name</th><th>Also holds</th><th><span class="wb-sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in _members)
+                            {
+                                <tr>
+                                    <td>
+                                        <div>@m.DisplayName @if (!m.IsActive) { <MudChip T="string" Size="Size.Small">Deactivated</MudChip> }</div>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@m.Email</MudText>
+                                    </td>
+                                    <td>@(string.Join(", ", m.Roles.Where(r => r.Id != Role.Id).Select(r => r.Name)) is { Length: > 0 } others ? others : "Nothing else")</td>
+                                    <td class="text-right">
+                                        @if (CanAssign)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Size="Size.Small" aria-label="@($"Take {Role.Name} from {m.DisplayName}")"
+                                                           OnClick="() => RemoveAsync(m)" />
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            }
+        </MudTabPanel>
+    </MudTabs>
+    @if (Role.UpdatedAtUtc is { } updated)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3">Last changed @updated.ToString("yyyy-MM-dd HH:mm") UTC by @Role.UpdatedBy</MudText>
+    }
+    else if (!Role.IsBuiltIn)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3">Created @Role.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC by @Role.CreatedBy</MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public RoleDto Role { get; set; } = null!;
+
+    [Parameter] public bool CanManage { get; set; }
+
+    [Parameter] public bool CanAssign { get; set; }
+
+    [Parameter] public EventCallback<RoleDto> Saved { get; set; }
+
+    [Parameter] public EventCallback Deleted { get; set; }
+
+    [Parameter] public EventCallback<RoleDto> Clone { get; set; }
+
+    private HashSet<string> _granted = new(StringComparer.Ordinal);
+    private string? _name;
+    private string? _description;
+    private string? _filter;
+    private bool _onlyGranted;
+    private bool _busy;
+    private IReadOnlyList<UserRolesDto>? _members;
+    private UserDto? _pick;
+    private MudAutocomplete<UserDto>? _search;
+
+    private bool ReadOnly => Role.IsBuiltIn || !CanManage;
+
+    private bool Dirty =>
+        !_granted.SetEquals(Role.Permissions) || (_name ?? "").Trim() != Role.Name || (_description ?? "").Trim() != Role.Description;
+
+    private IReadOnlyList<PermissionConflict> Conflicts => PermissionCatalog.ConflictsIn(_granted);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Reset();
+        _onlyGranted = Role.IsBuiltIn && Role.Permissions.Count > 0;
+        await LoadMembersAsync();
+    }
+
+    private void Reset()
+    {
+        _granted = Role.Permissions.ToHashSet(StringComparer.Ordinal);
+        (_name, _description) = (Role.Name, Role.Description);
+    }
+
+    private IEnumerable<PermissionDefinition> Visible(string area) =>
+        PermissionCatalog.All.Where(p => p.Area == area
+            && (!_onlyGranted || _granted.Contains(p.Key))
+            && (string.IsNullOrWhiteSpace(_filter)
+                || p.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+                || p.Description.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+                || NavCatalog.PagesRevealedBy(p.Key).Any(e => e.Title.Contains(_filter, StringComparison.OrdinalIgnoreCase))));
+
+    private void Toggle(string key, bool on)
+    {
+        if (on)
+        {
+            _granted.Add(key);
+        }
+        else
+        {
+            _granted.Remove(key);
+        }
+    }
+
+    private void SetArea(IEnumerable<PermissionDefinition> permissions, bool on)
+    {
+        foreach (var p in permissions)
+        {
+            Toggle(p.Key, on);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var saved = await Roles.UpdateAsync(Role.Id, new SaveRoleRequest(_name ?? "", _description, _granted.ToList()));
+            Snackbar.Add($"Role {saved.Name} saved.", Severity.Success);
+            await Saved.InvokeAsync(saved);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync($"Delete {Role.Name}?",
+            Role.UserCount == 0
+                ? "Nobody holds this role. Deleting it can't be undone (the audit log keeps what it was)."
+                : $"{Role.UserCount} {(Role.UserCount == 1 ? "person loses" : "people lose")} it and everything it allowed that their other roles don't. The audit log keeps what it was.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Roles.DeleteAsync(Role.Id);
+            Snackbar.Add($"Role {Role.Name} deleted.", Severity.Success);
+            await Deleted.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        if (Role.BuiltIn == OrgRoles.Employee)
+        {
+            _members = [];
+            return;
+        }
+
+        try
+        {
+            _members = await Roles.ListMembersAsync(Role.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or WorkbenchNotFoundException)
+        {
+            _members = [];
+            Snackbar.Add($"Couldn't load people: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task<IEnumerable<UserDto>> SearchAsync(string? text, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var users = await Users.SearchAsync(text, 10, cancellationToken);
+            return users.Where(u => _members?.All(m => !string.Equals(m.Email, u.Email, StringComparison.OrdinalIgnoreCase)) != false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private async Task AddAsync(UserDto? user)
+    {
+        if (user is null)
+        {
+            return;
+        }
+
+        await ChangeAsync(user.Email, ids => ids.Append(Role.Id), $"{user.DisplayName} now holds {Role.Name}.");
+        _pick = null;
+        if (_search is not null)
+        {
+            await _search.ClearAsync(); // ready for the next name
+        }
+    }
+
+    private Task RemoveAsync(UserRolesDto member) =>
+        ChangeAsync(member.Email, ids => ids.Where(id => id != Role.Id), $"{member.DisplayName} no longer holds {Role.Name}.");
+
+    private async Task ChangeAsync(string email, Func<IEnumerable<Guid>, IEnumerable<Guid>> change, string done)
+    {
+        try
+        {
+            var current = await Roles.GetUserRolesAsync(email);
+            var updated = await Roles.SetUserRolesAsync(email, change(current.Roles.Select(r => r.Id)).Distinct().ToList());
+            Snackbar.Add(done, Severity.Success);
+            if (updated.Conflicts.Count > 0)
+            {
+                Snackbar.Add($"{updated.DisplayName}'s roles together combine duties that are usually kept apart ({string.Join("; ", updated.Conflicts.Select(c => $"{PermissionCatalog.NameOf(c.First)} with {PermissionCatalog.NameOf(c.Second)}"))}).", Severity.Warning);
+            }
+
+            await LoadMembersAsync();
+            await Saved.InvokeAsync(Role);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+}

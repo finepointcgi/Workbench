@@ -259,7 +259,7 @@ else
     {
         var s = _order!.Summary;
         var dialog = await DialogService.ShowAsync<HoldDialog>($"Hold {s.Number}",
-            new DialogParameters<HoldDialog> { { d => d.OnHold, s.OnHold }, { d => d.OnCreditHold, s.OnCreditHold }, { d => d.Reason, _order.HoldReason }, { d => d.CanCredit, SalesFormat.IsFinance(User) } },
+            new DialogParameters<HoldDialog> { { d => d.OnHold, s.OnHold }, { d => d.OnCreditHold, s.OnCreditHold }, { d => d.Reason, _order.HoldReason }, { d => d.CanCredit, SalesFormat.CanCreditHold(User) } },
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false, Data: SetHoldRequest request })
         {

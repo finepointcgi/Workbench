@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Workbench.Application.Identity;
 using Workbench.Contracts;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Notifications;
 using Workbench.Domain.ProjectAccounting;
@@ -75,7 +76,7 @@ public sealed class RetentionService(
 
     public async Task<IReadOnlyList<RetentionPolicyDto>> ListPoliciesAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var overrides = await LoadOverridesAsync(db, cancellationToken);
         return Definitions.Select(d => ToDto(d, overrides)).ToList();
@@ -83,7 +84,7 @@ public sealed class RetentionService(
 
     public async Task<RetentionPolicyDto> SetPolicyAsync(string recordType, int retentionDays, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         var definition = Definitions.FirstOrDefault(d => d.RecordType == recordType)
             ?? throw new ArgumentException($"Unknown record type {recordType}.", nameof(recordType));
         var minimum = Math.Max(definition.MinimumDays, definition.Protected ? definition.Default(options) : 0);
@@ -111,13 +112,13 @@ public sealed class RetentionService(
 
     public async Task<RetentionReportDto> PreviewAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         return await RunAsync(dryRun: true, access.Email, cancellationToken);
     }
 
     public async Task<RetentionReportDto> RunNowAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         return await RunAsync(dryRun: false, access.Email, cancellationToken);
     }
 
@@ -201,7 +202,7 @@ public sealed class RetentionService(
 
     public async Task<IReadOnlyList<LegalHoldDto>> ListHoldsAsync(bool includeReleased = false, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var holds = db.Set<LegalHold>().AsNoTracking();
         if (!includeReleased)
@@ -215,7 +216,7 @@ public sealed class RetentionService(
 
     public async Task<IReadOnlyList<HoldableRecordDto>> ListHoldableAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var contracts = await db.Set<Contract>().AsNoTracking().Select(c => new { c.Id, c.ContractNumber, c.Name }).ToListAsync(cancellationToken);
         var projects = await db.Set<Project>().AsNoTracking().Select(p => new { p.Id, p.Code, p.Name }).ToListAsync(cancellationToken);
@@ -226,7 +227,7 @@ public sealed class RetentionService(
 
     public async Task<LegalHoldDto> PlaceHoldAsync(PlaceLegalHoldRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         var reason = request.Reason?.Trim();
         if (string.IsNullOrEmpty(reason))
         {
@@ -258,7 +259,7 @@ public sealed class RetentionService(
 
     public async Task<LegalHoldDto> ReleaseHoldAsync(Guid holdId, string reason, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminRetention, "manage retention and legal holds", cancellationToken);
         if (string.IsNullOrWhiteSpace(reason))
         {
             throw new ArgumentException("Say why the hold is released.", nameof(reason));

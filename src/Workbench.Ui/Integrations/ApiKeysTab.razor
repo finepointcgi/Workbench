@@ -26,7 +26,7 @@
             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Created by @context.CreatedBy, @IntegrationFormat.When(context.CreatedAtUtc)</MudText>
         </MudTd>
         <MudTd DataLabel="Key starts with"><code>@context.Prefix…</code></MudTd>
-        <MudTd DataLabel="Roles">@IntegrationFormat.Roles(context.Roles)</MudTd>
+        <MudTd DataLabel="Roles">@IntegrationFormat.Roles(context.Roles, context.CustomRoles)</MudTd>
         <MudTd DataLabel="Access">@string.Join("; ", context.Scopes.Select(IntegrationFormat.AreaLabel))</MudTd>
         <MudTd DataLabel="Last used">
             @IntegrationFormat.When(context.LastUsedAtUtc)

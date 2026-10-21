@@ -3,6 +3,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Contracts;
 using Workbench.Contracts.Financials;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -47,20 +48,20 @@ public sealed partial class StandardReportService(
         new(StandardReportKeys.IndirectRateVariance, "Indirect rate variance",
             "Actual (from the GL) vs provisional vs target rates by pool and period, with under/over-applied burden.",
             "Indirect rates", [FiscalYear], "accounting/indirect-rates",
-            a => a.IsFinance ? null : "Indirect rates are for Finance and administrators."),
+            a => a.Can(Permission.IndirectRatesManage) ? null : "Indirect rates need the \"Manage indirect rates\" permission."),
         new(StandardReportKeys.FundingStatus, "Contract funding and ceiling status",
             "Ceiling, funded value, incurred and committed cost, remaining funding and projected exhaustion by contract and CLIN.",
             "Contracts", [Contract], "setup/contracts",
-            a => a.IsFinance || a.FinancialContracts is not { Count: 0 } ? null : "Contract funding is for Finance, administrators and the managers of a contract's projects."),
+            a => a.FinancialContracts is not { Count: 0 } ? null : "Contract funding is for Finance, administrators and the managers of a contract's projects."),
         new(StandardReportKeys.TimesheetCompliance, "Timesheet compliance",
             "Missing and late timesheets, days entered late and entries revised after submission (DCAA).",
             "Labor", [DateRange, Employee], "time/team", _ => null),
         new(StandardReportKeys.ArAging, "AR aging summary",
             "Open receivables by customer and days past due.", "Billing", [AsOf], "billing/aging",
-            a => a.IsFinance ? null : "Receivables are for Finance and administrators."),
+            a => a.Can(Permission.BillingReportsView) ? null : "Receivables need the \"See receivables\" permission."),
         new(StandardReportKeys.ApAging, "AP aging summary",
             "Open payables by vendor and days past due.", "Purchasing", [AsOf], "purchasing/reports",
-            a => a.IsFinance ? null : "Payables are for Finance and administrators."),
+            a => a.Can(Permission.ApReportsView) ? null : "Payables need the \"See AP reports\" permission."),
     ];
 
     public async Task<IReadOnlyList<StandardReportDto>> ListAsync(CancellationToken cancellationToken = default)

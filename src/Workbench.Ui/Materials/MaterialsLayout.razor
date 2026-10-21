@@ -1,4 +1,4 @@
-@* Pages under /materials: the Materials role, Finance and administrators. Others get a friendly 403; the server refuses their calls too. *@
+@* Pages under /materials: "See materials" (the Materials role, Finance and administrators). Others get a friendly 403; the server refuses their calls too. *@
 @inherits LayoutComponentBase
 @layout Workbench.Ui.Layout.MainLayout
 @inject ICurrentUserContext CurrentUser
@@ -26,7 +26,7 @@ else
         try
         {
             _user = await CurrentUser.GetAsync();
-            _allowed = _user.Roles.CanViewMaterials();
+            _allowed = _user.Can(Workbench.Contracts.Identity.Permission.MaterialsView);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {

@@ -150,13 +150,20 @@ public static class SignInRules
         return claims.Acr.Any(a => acr.Contains(a, StringComparer.OrdinalIgnoreCase));
     }
 
-    /// <summary>Whether MFA is required for someone with <paramref name="roles"/>.</summary>
-    public static bool MfaRequired(SignInSettings settings, OrgRoles roles) => settings.MfaRequirement switch
+    /// <summary>
+    /// Whether MFA is required for someone with <paramref name="permissions"/>. "Administrators" are those holding any
+    /// Administration permission (the built-in Admin role, or a custom role with one).
+    /// </summary>
+    public static bool MfaRequired(SignInSettings settings, PermissionSet permissions) => settings.MfaRequirement switch
     {
         MfaRequirementLevel.Everyone => true,
-        MfaRequirementLevel.AdminsOnly => roles.IsAdmin(),
+        MfaRequirementLevel.AdminsOnly => IsAdministrative(permissions),
         _ => false,
     };
+
+    /// <summary>True when <paramref name="permissions"/> include any permission in the Administration area.</summary>
+    public static bool IsAdministrative(PermissionSet permissions) =>
+        permissions.Any(p => PermissionCatalog.Find(p)?.Area == PermissionCatalog.AreaAdministration);
 
     public static bool DomainAllowed(SignInSettings settings, string email)
     {
@@ -171,9 +178,9 @@ public static class SignInRules
     }
 
     /// <summary>The roles the groups grant (case-sensitive: Entra object ids and Okta group names are exact).</summary>
-    public static OrgRoles MappedRoles(IReadOnlyList<SsoGroupMapping> mappings, IReadOnlyCollection<string>? groups)
+    public static RoleGrant MappedRoles(IReadOnlyList<SsoGroupMapping> mappings, IReadOnlyCollection<string>? groups)
     {
-        var roles = OrgRoles.Employee;
+        var roles = RoleGrant.None;
         if (groups is null)
         {
             return roles;
@@ -181,13 +188,13 @@ public static class SignInRules
 
         foreach (var mapping in mappings.Where(m => groups.Contains(m.GroupValue, StringComparer.Ordinal)))
         {
-            roles |= (OrgRoles)mapping.Roles;
+            roles = roles.Union(RoleGrant.Of((OrgRoles)mapping.Roles, RoleStore.ParseIds(mapping.CustomRoleIds)));
         }
 
         return roles;
     }
 
     /// <summary>The roles the IdP decides: the default roles plus every mapped group's.</summary>
-    public static OrgRoles RolesFromIdp(SignInPolicySnapshot policy, IReadOnlyCollection<string>? groups) =>
-        (OrgRoles)policy.Settings.JitDefaultRoles | MappedRoles(policy.Mappings, groups);
+    public static RoleGrant RolesFromIdp(SignInPolicySnapshot policy, IReadOnlyCollection<string>? groups) =>
+        MappedRoles(policy.Mappings, groups).With((OrgRoles)policy.Settings.JitDefaultRoles);
 }

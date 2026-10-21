@@ -91,13 +91,13 @@ public sealed class OrgRoleTests
         var admin = await seeded.As(Admin).Host.Get<ICurrentUserContext>().GetAsync();
         var current = await seeded.As(Editor).Host.Get<IPeopleService>().GetCurrentEmployeeAsync();
 
-        Assert.Equal((OrgRoles.Employee, (Guid?)employeeId, false), (analyst.Roles, analyst.EmployeeId, analyst.CanViewAllTimesheets));
+        Assert.Equal((OrgRoles.Employee, (Guid?)employeeId, false), (analyst.Roles, analyst.EmployeeId, analyst.Can(Permission.TimeViewAll)));
         Assert.Equal(employeeId, current!.Id);
-        Assert.True(finance.IsFinance);
+        Assert.True(finance.Roles.IsFinance() && finance.Can(Permission.LaborCostView));
         Assert.Null(finance.EmployeeId);
-        Assert.True(timekeeper.CanViewAllTimesheets);
-        Assert.False(timekeeper.IsFinance);
-        Assert.True(admin.IsAdmin && admin.IsFinance && admin.CanViewAllTimesheets);
+        Assert.True(timekeeper.Can(Permission.TimeViewAll));
+        Assert.False(timekeeper.Roles.IsFinance() || timekeeper.Can(Permission.LaborCostView));
+        Assert.True(admin.IsAdmin && admin.Roles.IsFinance() && admin.Can(Permission.LaborCostView) && admin.Can(Permission.TimeViewAll));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.As(string.Empty).Host.Get<ICurrentUserContext>().GetAsync());
     }
 

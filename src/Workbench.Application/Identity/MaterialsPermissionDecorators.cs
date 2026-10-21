@@ -27,10 +27,10 @@ public static class MaterialsPermissionRegistration
 internal static class MaterialsAccess
 {
     public static Task RequireReadAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(r => r.CanViewMaterials(), "Only Materials, Finance and administrators can see inventory and manufacturing.", ct);
+        access.RequireAsync(p => p.Has(Permission.MaterialsView), "Only Materials, Finance and administrators can see inventory and manufacturing.", ct);
 
     public static Task RequireWriteAsync(this AccessControl access, CancellationToken ct) =>
-        access.RequireRoleAsync(r => r.IsMaterials(), "Only the Materials role and administrators can change parts, inventory, BOMs, work orders and MRP.", ct);
+        access.RequireAsync(p => p.Has(Permission.MaterialsManage), "Only the Materials role and administrators can change parts, inventory, BOMs, work orders and MRP.", ct);
 }
 
 public sealed class PermissionCheckingPartService(IPartService inner, AccessControl access) : IPartService
@@ -191,7 +191,7 @@ public sealed class PermissionCheckingInventoryService(IInventoryService inner, 
 
     public async Task<InventoryTransactionDto> ChangeStandardCostAsync(Guid partId, ChangeStandardCostRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("revalue inventory at a new standard cost", cancellationToken);
+        await access.RequireAsync(Permission.MaterialsCosting, "revalue inventory at a new standard cost", cancellationToken);
         return await inner.ChangeStandardCostAsync(partId, request, cancellationToken);
     }
 
@@ -207,7 +207,7 @@ public sealed class PermissionCheckingManufacturingService(IManufacturingService
     /// <summary>Labor cost reveals cost rates: only Finance and administrators see it (and the WIP balance that includes it).</summary>
     private async Task<WorkOrderDto> MaskAsync(WorkOrderDto dto, CancellationToken ct)
     {
-        if ((await access.GetOrgRolesAsync(ct)).IsFinance())
+        if (await access.HasAsync(Permission.LaborCostView, ct))
         {
             return dto;
         }
@@ -319,7 +319,7 @@ public sealed class PermissionCheckingManufacturingService(IManufacturingService
     public async Task<WorkOrderDto> ReportLaborAsync(Guid workOrderId, ReportLaborRequest request, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(cancellationToken)).IsMaterials())
+        if (!await access.HasAsync(Permission.MaterialsManage, cancellationToken))
         {
             var me = await access.GetEmployeeIdAsync(cancellationToken);
             if (me is null || (request?.EmployeeId is { } other && other != me))
@@ -401,7 +401,7 @@ public sealed class PermissionCheckingMaterialReportService(IMaterialReportServi
 
     public async Task<WipReportDto> WipAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see work-in-process cost (it includes labor cost)", cancellationToken);
+        await access.RequireAsync(Permission.MaterialsCosting, "see work-in-process cost (it includes labor cost)", cancellationToken);
         return await inner.WipAsync(cancellationToken);
     }
 
@@ -409,7 +409,7 @@ public sealed class PermissionCheckingMaterialReportService(IMaterialReportServi
     public async Task<ProjectMaterialCostDto> ProjectMaterialCostAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(cancellationToken)).CanViewMaterials())
+        if (!await access.HasAsync(Permission.MaterialsView, cancellationToken))
         {
             await projects.RequireProjectFinancialsAsync(projectId, "see the project's material cost", cancellationToken);
         }

@@ -5,8 +5,10 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
 using Workbench.Application.Collaboration;
+using Workbench.Application.Identity;
 using Workbench.Application.Imports.Smartsheet;
 using Workbench.Contracts.Collaboration;
+using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Contracts.Imports;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain;
@@ -58,9 +60,8 @@ internal sealed class ImportHost : IAsyncDisposable
         {
             var workspace = new Workspace { Name = "Projects" };
             db.Workspaces.Add(workspace);
-            db.Set<AppUser>().AddRange(
-                new AppUser { Email = Finance, DisplayName = "Fin", IsFinance = true },
-                new AppUser { Email = Employee, DisplayName = "Emp" });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = Finance, DisplayName = "Fin" }, OrgRoles.Finance);
+            await RoleStore.AddUserAsync(db, new AppUser { Email = Employee, DisplayName = "Emp" }, OrgRoles.Employee);
             db.Set<WorkspaceMember>().Add(new WorkspaceMember { WorkspaceId = workspace.Id, UserEmail = Finance, Role = WorkspaceRole.Owner });
             await db.SaveChangesAsync();
         }

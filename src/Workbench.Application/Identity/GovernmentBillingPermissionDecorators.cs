@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Billing;
 
 namespace Workbench.Application.Identity;
@@ -32,7 +33,7 @@ public sealed class PermissionCheckingGovernmentBillingService(IGovernmentBillin
 
     public async Task<GovernmentBillingSettingsDto> SaveSettingsAsync(Guid contractId, SaveGovernmentBillingSettingsRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.SaveSettingsAsync(contractId, request, cancellationToken);
     }
 
@@ -50,25 +51,25 @@ public sealed class PermissionCheckingGovernmentBillingService(IGovernmentBillin
 
     public async Task<PieeStatusDto> GetPieeAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.GetPieeAsync(invoiceId, cancellationToken);
     }
 
     public async Task<BillingExportFile> ExportPieeAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.ExportPieeAsync(invoiceId, cancellationToken);
     }
 
     public async Task<PieeSubmitResultDto> SubmitPieeAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.SubmitPieeAsync(invoiceId, cancellationToken);
     }
 
     public async Task<PieeStatusDto> SetPieeStatusAsync(Guid invoiceId, SetPieeStatusRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.SetPieeStatusAsync(invoiceId, request, cancellationToken);
     }
 }
@@ -95,19 +96,19 @@ public sealed class PermissionCheckingProgressPaymentService(IProgressPaymentSer
 
     public async Task<Sf1443Dto> PreviewAsync(ProgressPaymentPreviewRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.PreviewAsync(request, cancellationToken);
     }
 
     public async Task<ProgressPaymentRequestDto> CreateAsync(ProgressPaymentPreviewRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.CreateAsync(request, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid requestId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         await inner.DeleteAsync(requestId, cancellationToken);
     }
 }
@@ -122,31 +123,31 @@ public sealed class PermissionCheckingPerformanceBasedPaymentService(IPerformanc
 
     public async Task<PerformanceEventDto> CreateAsync(Guid contractId, SavePerformanceEventRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.CreateAsync(contractId, request, cancellationToken);
     }
 
     public async Task<PerformanceEventDto> UpdateAsync(Guid eventId, SavePerformanceEventRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.UpdateAsync(eventId, request, cancellationToken);
     }
 
     public async Task<PerformanceEventDto> CompleteAsync(Guid eventId, CompletePerformanceEventRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.CompleteAsync(eventId, request, cancellationToken);
     }
 
     public async Task<PerformanceEventDto> ReopenAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.ReopenAsync(eventId, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid eventId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         await inner.DeleteAsync(eventId, cancellationToken);
     }
 }

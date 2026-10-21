@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts.Compliance;
+using Workbench.Contracts.Identity;
 
 namespace Workbench.Application.Identity;
 
@@ -17,7 +18,7 @@ public static class CompliancePermissionRegistration
 
 public sealed class PermissionCheckingCpsrService(ICpsrService inner, AccessControl access) : ICpsrService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with purchasing system review files", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.CasCpsrManage, "work with purchasing system review files", ct);
 
     public async Task<CpsrReadinessDto> GetReadinessAsync(CpsrReviewRequest request, CancellationToken cancellationToken = default)
     {
@@ -58,7 +59,7 @@ public sealed class PermissionCheckingCpsrService(ICpsrService inner, AccessCont
 
 public sealed class PermissionCheckingCasDisclosureService(ICasDisclosureService inner, AccessControl access) : ICasDisclosureService
 {
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync("work with the CAS disclosure statement", ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.CasCpsrManage, "work with the CAS disclosure statement", ct);
 
     public async Task<IReadOnlyList<DisclosureVersionDto>> ListVersionsAsync(DisclosureFormType? form = null, CancellationToken cancellationToken = default)
     {

@@ -74,6 +74,7 @@ public static class WorkbenchApi
         v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
         v1.MapComplianceEndpoints();
+        v1.MapRoleEndpoints();
 
         return app;
     }

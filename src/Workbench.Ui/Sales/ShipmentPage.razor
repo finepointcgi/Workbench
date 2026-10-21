@@ -32,7 +32,7 @@ else
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.LocalShipping" Disabled="_busy" OnClick="ConfirmAsync" data-testid="shipment-confirm">Ship it</MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="CancelAsync">Cancel shipment</MudButton>
         }
-        @if (sh.CanInvoice && SalesFormat.IsFinance(User))
+        @if (sh.CanInvoice && SalesFormat.CanInvoice(User))
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.RequestQuote" Disabled="_busy" OnClick="InvoiceAsync" data-testid="shipment-invoice">Create delivery invoice</MudButton>
         }

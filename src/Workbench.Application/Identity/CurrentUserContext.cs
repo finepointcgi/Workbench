@@ -8,10 +8,13 @@ public sealed class CurrentUserContext(AccessControl access, ICurrentUser curren
     public async Task<CurrentUserInfo> GetAsync(CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
+        var resolved = await access.GetAccessAsync(cancellationToken);
         return new CurrentUserInfo(
             access.Email,
             currentUser.DisplayName,
-            await access.GetOrgRolesAsync(cancellationToken),
-            await access.GetEmployeeIdAsync(cancellationToken));
+            resolved.BuiltIn,
+            await access.GetEmployeeIdAsync(cancellationToken),
+            resolved.Permissions.ToList(),
+            resolved.Roles);
     }
 }

@@ -1,4 +1,4 @@
-@* Pages under /pricing: Finance, administrators and the Pricing role (cost and indirect rates). Others get a friendly 403; the server refuses their calls too.
+@* Pages under /pricing: "Price proposals" (Finance, administrators and the Pricing role; cost and indirect rates). Others get a friendly 403; the server refuses their calls too.
    Kept in Ui/Layout so the Pricing folder's _Imports layout doesn't nest it in itself. *@
 @inherits LayoutComponentBase
 @layout MainLayout
@@ -25,7 +25,7 @@ else
     {
         try
         {
-            _allowed = (await CurrentUser.GetAsync()).Roles.CanPrice();
+            _allowed = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.PricingManage);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {

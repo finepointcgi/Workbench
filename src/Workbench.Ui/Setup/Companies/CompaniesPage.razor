@@ -252,7 +252,7 @@ else
     {
         try
         {
-            _isAdmin = (await CurrentUser.GetAsync()).IsAdmin;
+            _isAdmin = (await CurrentUser.GetAsync()).Can(Permission.AdminUsers);
             _periods = await Calendar.ListPeriodsAsync();
             var today = DateOnly.FromDateTime(DateTime.Today);
             _period = _periods.FirstOrDefault(p => p.Start <= today && today <= p.End) ?? _periods.MaxBy(p => p.Start);

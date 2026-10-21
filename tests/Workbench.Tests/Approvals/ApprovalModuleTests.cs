@@ -128,7 +128,7 @@ public sealed class ApprovalModuleTests
         var host = await OdcTestHost.CreateAsync();
         await using (var db = await host.Factory.CreateAsync())
         {
-            db.Set<AppUser>().Add(new AppUser { Email = "finance@example.com", DisplayName = "Finance", IsFinance = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = "finance@example.com", DisplayName = "Finance" }, OrgRoles.Finance);
             await db.SaveChangesAsync();
         }
 
@@ -161,9 +161,8 @@ public sealed class ApprovalModuleTests
         host.As("finance@example.com");
         await using (var db = await host.Factory.CreateAsync())
         {
-            db.Set<AppUser>().AddRange(
-                new AppUser { Email = "finance@example.com", DisplayName = "Finance", IsFinance = true },
-                new AppUser { Email = "controller@example.com", DisplayName = "Controller", IsFinance = true });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = "finance@example.com", DisplayName = "Finance" }, OrgRoles.Finance);
+            await RoleStore.AddUserAsync(db, new AppUser { Email = "controller@example.com", DisplayName = "Controller" }, OrgRoles.Finance);
             await db.SaveChangesAsync();
         }
 

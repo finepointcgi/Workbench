@@ -23,7 +23,7 @@ public sealed partial class SignInSettingsService(
 
     public async Task<SignInSettingsDto> GetAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSecurity, "change sign-in settings", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         return await ToDtoAsync(db, cancellationToken);
     }
@@ -162,7 +162,8 @@ public sealed partial class SignInSettingsService(
         }
 
         var groupsClaim = Clean(request.GroupsClaim, 100, "The groups claim") ?? "groups";
-        var mappings = (request.Mappings ?? []).Select(m => (Group: m.GroupValue?.Trim() ?? string.Empty, m.Roles, Description: Clean(m.Description, 200, "A description"))).ToList();
+        var mappings = (request.Mappings ?? []).Select(m => (Group: m.GroupValue?.Trim() ?? string.Empty, m.Roles, Description: Clean(m.Description, 200, "A description"),
+            Custom: (IReadOnlyList<Guid>)(m.CustomRoleIds ?? []).Distinct().ToList())).ToList();
         if (mappings.Count > MaxGroupMappings)
         {
             throw new ArgumentException($"At most {MaxGroupMappings} group mappings.", nameof(request));
@@ -184,12 +185,24 @@ public sealed partial class SignInSettingsService(
             throw new ArgumentException("Unknown role.", nameof(request));
         }
 
-        if (request.DefaultRoles.IsAdmin())
+        if (request.DefaultRoles.HasFlag(OrgRoles.Admin))
         {
             throw new ArgumentException("New people can't become administrators by default; map an administrators group instead.", nameof(request));
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
+        foreach (var m in mappings)
+        {
+            await RoleStore.ValidateCustomAsync(db, m.Custom, cancellationToken);
+        }
+
+        // Nobody can map a group to more than they have themselves.
+        await access.RequireCanGrantRolesAsync(mappings.SelectMany(m => RoleGrant.Of(m.Roles, m.Custom).RoleIds).Distinct().ToList(), cancellationToken);
+        var names = (await RoleStore.RefsAsync(db, mappings.SelectMany(m => m.Custom).Concat(existingCustomIds(await db.Set<SsoGroupMapping>().AsNoTracking().ToListAsync(cancellationToken))), cancellationToken))
+            .ToDictionary(r => r.Id, r => r.Name);
+        string Text(OrgRoles roles, IEnumerable<Guid> custom) =>
+            string.Join(", ", new[] { UserLifecycle.RoleText(roles) }.Where(t => t != "Employee" || !custom.Any()).Concat(custom.Select(id => names.GetValueOrDefault(id) ?? "?")));
+        static IEnumerable<Guid> existingCustomIds(List<SsoGroupMapping> rows) => rows.SelectMany(r => RoleStore.ParseIds(r.CustomRoleIds));
         var settings = await LoadOrCreateAsync(db, cancellationToken);
         var changes = new List<string>();
         Track(changes, "JIT", settings.JitMode, (JitProvisioning)request.Mode);
@@ -211,22 +224,24 @@ public sealed partial class SignInSettingsService(
             changes.Add($"unmapped {old.GroupValue}");
         }
 
-        foreach (var (group, roles, description) in mappings)
+        foreach (var (group, roles, description, custom) in mappings)
         {
             var row = existing.FirstOrDefault(e => e.GroupValue == group);
+            var customText = RoleStore.FormatIds(custom);
             if (row is null)
             {
-                db.Set<SsoGroupMapping>().Add(new SsoGroupMapping { GroupValue = group, Roles = (int)roles, Description = description });
-                changes.Add($"mapped {group} → {UserLifecycle.RoleText(roles)}");
+                db.Set<SsoGroupMapping>().Add(new SsoGroupMapping { GroupValue = group, Roles = (int)roles, CustomRoleIds = customText, Description = description });
+                changes.Add($"mapped {group} → {Text(roles, custom)}");
             }
-            else if (row.Roles != (int)roles || row.Description != description)
+            else if (row.Roles != (int)roles || row.CustomRoleIds != customText || row.Description != description)
             {
-                if (row.Roles != (int)roles)
+                if (row.Roles != (int)roles || row.CustomRoleIds != customText)
                 {
-                    changes.Add($"{group}: {UserLifecycle.RoleText((OrgRoles)row.Roles)} → {UserLifecycle.RoleText(roles)}");
+                    changes.Add($"{group}: {Text((OrgRoles)row.Roles, RoleStore.ParseIds(row.CustomRoleIds))} → {Text(roles, custom)}");
                 }
 
                 row.Roles = (int)roles;
+                row.CustomRoleIds = customText;
                 row.Description = description;
             }
         }
@@ -260,7 +275,7 @@ public sealed partial class SignInSettingsService(
 
     private async Task RequireAdminRecentAsync(CancellationToken cancellationToken)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminSecurity, "change sign-in settings", cancellationToken);
         await reauthentication.RequireRecentAsync(SensitiveActions.SignInSettingsChange, cancellationToken);
     }
 
@@ -294,13 +309,15 @@ public sealed partial class SignInSettingsService(
     {
         var s = await db.Set<SignInSettings>().AsNoTracking().OrderBy(x => x.Id).FirstOrDefaultAsync(cancellationToken) ?? new SignInSettings();
         var mappings = await db.Set<SsoGroupMapping>().AsNoTracking().OrderBy(m => m.GroupValue).ToListAsync(cancellationToken);
+        var roleNames = (await RoleStore.RefsAsync(db, mappings.SelectMany(m => RoleStore.ParseIds(m.CustomRoleIds)), cancellationToken)).ToDictionary(r => r.Id);
         var facts = signIn.Current;
         return new SignInSettingsDto(
             s.SsoEnabled, (IdentityProviderKind)s.ProviderKind, s.DisplayName, s.Authority, s.ClientId, s.ProtectedClientSecret is not null, s.ClientSecretSetAtUtc,
             s.Scopes, s.RequireOrganizationIdp,
             (MfaRequirement)s.MfaRequirement, s.AcceptedAmrValues, s.AcceptedAcrValues, s.RequestedAcrValues,
             (JitProvisioningMode)s.JitMode, s.AllowedEmailDomains, (OrgRoles)s.JitDefaultRoles, s.GroupsClaim, s.SyncRolesFromGroups,
-            mappings.Select(m => new SsoGroupMappingDto(m.Id, m.GroupValue, (OrgRoles)m.Roles, m.Description)).ToList(),
+            mappings.Select(m => new SsoGroupMappingDto(m.Id, m.GroupValue, (OrgRoles)m.Roles, m.Description,
+                RoleStore.ParseIds(m.CustomRoleIds).Select(id => roleNames.GetValueOrDefault(id)).OfType<RoleRef>().ToList())).ToList(),
             s.ReauthenticationMinutes, s.SessionMaxHours, s.UpdatedAtUtc, s.UpdatedBy,
             new SignInEnvironmentDto(server.ServerOidcConfigured, tenancy?.IsMultiTenant == true, server.IdleTimeoutMinutes, server.AbsoluteLifetimeHours,
                 facts?.Method, facts?.MfaPerformed ?? false));

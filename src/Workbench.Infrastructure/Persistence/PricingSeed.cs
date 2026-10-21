@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.Application.Identity;
 using Workbench.Application.Pricing;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Pricing;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Identity;
@@ -48,7 +50,7 @@ internal static class PricingSeed
         var today = DateOnly.FromDateTime(now);
         if (!await db.Set<AppUser>().AnyAsync(u => u.Email == PricerEmail, cancellationToken))
         {
-            db.Set<AppUser>().Add(new AppUser { Email = PricerEmail, DisplayName = "Riley Quinn", IsPricing = true, CreatedAtUtc = now });
+            await RoleStore.AddUserAsync(db, new AppUser { Email = PricerEmail, DisplayName = "Riley Quinn", CreatedAtUtc = now }, OrgRoles.Pricing, cancellationToken);
         }
 
         // Forward pricing rates: this fiscal year and the next two.

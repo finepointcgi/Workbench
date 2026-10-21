@@ -62,7 +62,7 @@ else
                             <td><MudLink Href="@($"reports/saved/{s.Id}")">@s.Name</MudLink></td>
                             <td>@(s.StandardKey is { } k ? _reports.FirstOrDefault(r => r.Key == k)?.Name ?? k : "Report writer")</td>
                             <td>@(s.IsMine ? "You" : s.OwnerEmail)</td>
-                            <td>@(s.Visibility == ReportVisibility.Shared ? string.Join(", ", s.SharedWith.Select(r => r == OrgRoles.Employee ? "Everyone" : r.ToString())) : "Private")</td>
+                            <td>@(s.Visibility == ReportVisibility.Shared ? string.Join(", ", s.SharedWith.Select(r => r == OrgRoles.Employee ? "Everyone" : OrgRoleChecks.Label(r)).Concat((s.SharedWithRoles ?? []).Select(r => r.Name))) : "Private")</td>
                             <td>@s.Schedules.Count</td>
                             <td>@s.UpdatedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
                         </tr>

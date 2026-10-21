@@ -111,7 +111,7 @@ else
     {
         try
         {
-            _canEdit = (await CurrentUser.GetAsync()).Roles.CanViewPipeline();
+            _canEdit = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.PipelineView);
             await LoadAsync();
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))

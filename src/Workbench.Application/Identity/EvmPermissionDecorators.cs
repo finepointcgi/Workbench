@@ -3,6 +3,7 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Evm;
 using Workbench.Contracts;
 using Workbench.Contracts.Evm;
+using Workbench.Contracts.Identity;
 
 namespace Workbench.Application.Identity;
 
@@ -118,7 +119,7 @@ public sealed class PermissionCheckingEvmService(IEvmService inner, EvmAccess ac
 
     public async Task<EvmPeriodRefDto> ReopenPeriodAsync(Guid projectId, Guid fiscalPeriodId, ReopenEvmPeriodRequest request, CancellationToken cancellationToken = default)
     {
-        await access.Access.RequireFinanceAsync("reopen a closed earned value period", cancellationToken);
+        await access.Access.RequireAsync(Permission.EvmManage, "reopen a closed earned value period", cancellationToken);
         return await inner.ReopenPeriodAsync(projectId, fiscalPeriodId, request, cancellationToken);
     }
 
@@ -157,13 +158,13 @@ public sealed class PermissionCheckingEvmChangeRequestService(IEvmChangeRequestS
 
     public async Task<EvmChangeRequestDto> ApproveAsync(Guid changeRequestId, DecideChangeRequestRequest request, CancellationToken cancellationToken = default)
     {
-        await access.Access.RequireFinanceAsync("approve baseline changes", cancellationToken);
+        await access.Access.RequireAsync(Permission.EvmManage, "approve baseline changes", cancellationToken);
         return await inner.ApproveAsync(changeRequestId, request, cancellationToken);
     }
 
     public async Task<EvmChangeRequestDto> RejectAsync(Guid changeRequestId, DecideChangeRequestRequest request, CancellationToken cancellationToken = default)
     {
-        await access.Access.RequireFinanceAsync("reject baseline changes", cancellationToken);
+        await access.Access.RequireAsync(Permission.EvmManage, "reject baseline changes", cancellationToken);
         return await inner.RejectAsync(changeRequestId, request, cancellationToken);
     }
 }

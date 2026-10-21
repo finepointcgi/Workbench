@@ -67,8 +67,8 @@ public static class Tours
 
     /// <summary>The tour for a user's strongest role: administrator, then Finance, then anyone who manages or approves, then everyone else.</summary>
     public static Tour For(NavAccess access) =>
-        access.IsAdmin ? Administrator
-        : access.IsFinance ? Finance
+        access.IsAdministrator ? Administrator
+        : access.Can(Workbench.Contracts.Identity.Permission.GlJournalsPost) ? Finance
         : access.IsPm || access.IsTimesheetApprover || access.IsLeaveApprover || access.IsResourceManager ? Manager
         : Employee;
 }

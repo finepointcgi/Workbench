@@ -34,56 +34,56 @@ public sealed class PermissionCheckingVendorService(IVendorService inner, Access
 
     public async Task<IReadOnlyList<VendorDto>> ListAsync(bool includeInactive = true, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorsManage, What, cancellationToken);
         return await inner.ListAsync(includeInactive, cancellationToken);
     }
 
     public async Task<VendorDto> GetAsync(Guid vendorId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorsManage, What, cancellationToken);
         return await inner.GetAsync(vendorId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<VendorDuplicateDto>> FindDuplicatesAsync(string name, string? uei, Guid? excludeVendorId = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorsManage, What, cancellationToken);
         return await inner.FindDuplicatesAsync(name, uei, excludeVendorId, cancellationToken);
     }
 
     public async Task<VendorDto> CreateAsync(SaveVendorRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorsManage, What, cancellationToken);
         return await inner.CreateAsync(request, cancellationToken);
     }
 
     public async Task<VendorDto> UpdateAsync(Guid vendorId, SaveVendorRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorsManage, What, cancellationToken);
         return await inner.UpdateAsync(vendorId, request, cancellationToken);
     }
 
     public async Task<VendorDto> SetTaxIdAsync(Guid vendorId, SetVendorTaxIdRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("set a vendor's TIN", cancellationToken);
+        await access.RequireAsync(Permission.VendorTaxIds, "set a vendor's TIN", cancellationToken);
         return await inner.SetTaxIdAsync(vendorId, request, cancellationToken);
     }
 
     public async Task<VendorTaxIdDto> RevealTaxIdAsync(Guid vendorId, CancellationToken cancellationToken = default)
     {
         // A refusal is recorded as access.denied by AccessControl; a reveal as vendor.tax_id_revealed by the service.
-        await access.RequireFinanceAsync("see a vendor's full TIN", cancellationToken);
+        await access.RequireAsync(Permission.VendorTaxIds, "see a vendor's full TIN", cancellationToken);
         return await inner.RevealTaxIdAsync(vendorId, cancellationToken);
     }
 
     public async Task<VendorDto> AttachW9Async(Guid vendorId, string fileName, Stream content, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(What, cancellationToken);
+        await access.RequireAsync(Permission.VendorsManage, What, cancellationToken);
         return await inner.AttachW9Async(vendorId, fileName, content, cancellationToken);
     }
 
     public async Task<ReceiptContent> OpenW9Async(Guid vendorId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync("see vendor W-9s", cancellationToken);
+        await access.RequireAsync(Permission.VendorTaxIds, "see vendor W-9s", cancellationToken);
         return await inner.OpenW9Async(vendorId, cancellationToken);
     }
 
@@ -94,7 +94,7 @@ public sealed class PermissionCheckingSubcontractService(ISubcontractService inn
 {
     private const string What = "manage subcontracts";
 
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.VendorsManage, What, ct);
 
     public async Task<IReadOnlyList<SubcontractDto>> ListAsync(Guid? vendorId = null, CancellationToken cancellationToken = default)
     {
@@ -161,7 +161,7 @@ public sealed class PermissionCheckingApBillService(IApBillService inner, Access
 {
     private const string What = "work with AP bills";
 
-    private Task RequireFinanceAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireFinanceAsync(CancellationToken ct) => access.RequireAsync(Permission.ApBillsManage, What, ct);
 
     public async Task<IReadOnlyList<BillSummaryDto>> ListAsync(BillQuery query, CancellationToken cancellationToken = default)
     {
@@ -173,7 +173,7 @@ public sealed class PermissionCheckingApBillService(IApBillService inner, Access
     public async Task<BillDto> GetAsync(Guid billId, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if (!(await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (!await access.HasAsync(Permission.ApBillsManage, cancellationToken))
         {
             var me = access.Email;
             await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -255,7 +255,7 @@ public sealed class PermissionCheckingApBillService(IApBillService inner, Access
     public async Task<IReadOnlyList<OdcBillLinkDto>> GetOdcLinksAsync(IReadOnlyCollection<Guid> odcEntryIds, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        if ((await access.GetOrgRolesAsync(cancellationToken)).IsFinance())
+        if (await access.HasAsync(Permission.ApBillsManage, cancellationToken))
         {
             return await inner.GetOdcLinksAsync(odcEntryIds, cancellationToken);
         }
@@ -281,7 +281,7 @@ public sealed class PermissionCheckingApPaymentService(IApPaymentService inner, 
 {
     private const string What = "work with AP payments";
 
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.ApPaymentsManage, What, ct);
 
     public async Task<IReadOnlyList<DueBillDto>> ListDueBillsAsync(DueBillQuery query, CancellationToken cancellationToken = default)
     {
@@ -348,7 +348,7 @@ public sealed class PermissionCheckingApReportService(IApReportService inner, Ac
 {
     private const string What = "see AP reports";
 
-    private Task RequireAsync(CancellationToken ct) => access.RequireFinanceAsync(What, ct);
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.ApReportsView, What, ct);
 
     public async Task<AgingReportDto> GetAgingAsync(DateOnly asOf, CancellationToken cancellationToken = default)
     {

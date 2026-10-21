@@ -7,6 +7,7 @@ using Workbench.Application.Notifications;
 using Workbench.Application.Tenancy;
 using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Support;
 using Workbench.Domain.Identity;
 using Workbench.Domain.Support;
@@ -320,7 +321,7 @@ public sealed class SupportService(
     private async Task NotifyAdminsAsync(SupportRequestDto dto, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var admins = await db.Set<AppUser>().AsNoTracking().Where(u => u.IsAdmin && u.IsActive).Select(u => u.Email).ToListAsync(cancellationToken);
+        var admins = await Identity.RoleStore.EmailsWithPermissionAsync(db, Permission.AdminSupport, cancellationToken);
         var recipients = admins.Where(a => !string.Equals(a, dto.ReporterEmail, StringComparison.OrdinalIgnoreCase)).ToList();
         if (recipients.Count == 0)
         {

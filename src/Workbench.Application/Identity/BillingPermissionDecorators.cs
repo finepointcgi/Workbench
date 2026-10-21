@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Collaboration;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
+using Workbench.Contracts.Identity;
 using Workbench.Domain.Billing;
 
 namespace Workbench.Application.Identity;
@@ -29,12 +30,17 @@ public sealed class BillingAccess(ProjectAccess projects, IWorkbenchDbContextFac
 {
     public const string Finance = "work with billing and receivables";
 
-    public Task RequireFinanceAsync(CancellationToken ct) => projects.Access.RequireFinanceAsync(Finance, ct);
+    public Task RequireAsync(string permission, CancellationToken ct) => projects.Access.RequireAsync(permission, Finance, ct);
+
+    // Billing people read every contract's invoices; others, the contracts of projects they manage (every contract with
+    // "See every project's financials").
+    private async Task<IReadOnlySet<Guid>?> ManagedAsync(CancellationToken ct) =>
+        await projects.Access.HasAsync(Permission.BillingInvoicesManage, ct) ? null : await projects.ManagedContractIdsAsync(ct);
 
     public async Task RequireContractReadAsync(Guid contractId, CancellationToken ct)
     {
         projects.Access.RequireSignedIn();
-        var managed = await projects.ManagedContractIdsAsync(ct);
+        var managed = await ManagedAsync(ct);
         if (managed is not null && !managed.Contains(contractId))
         {
             throw new WorkbenchForbiddenException("Only Finance, administrators and the managers of the contract's projects can see its invoices.");
@@ -44,7 +50,7 @@ public sealed class BillingAccess(ProjectAccess projects, IWorkbenchDbContextFac
     public async Task RequireInvoiceReadAsync(Guid invoiceId, CancellationToken ct)
     {
         projects.Access.RequireSignedIn();
-        var managed = await projects.ManagedContractIdsAsync(ct);
+        var managed = await ManagedAsync(ct);
         if (managed is null)
         {
             return;
@@ -63,7 +69,7 @@ public sealed class BillingAccess(ProjectAccess projects, IWorkbenchDbContextFac
     public async Task<IReadOnlySet<Guid>?> ReadableContractsAsync(CancellationToken ct)
     {
         projects.Access.RequireSignedIn();
-        var managed = await projects.ManagedContractIdsAsync(ct);
+        var managed = await ManagedAsync(ct);
         return managed is { Count: 0 }
             ? throw new WorkbenchForbiddenException("Billing is for Finance, administrators and project managers (for their contracts).")
             : managed;
@@ -103,67 +109,67 @@ public sealed class PermissionCheckingInvoiceService(IInvoiceService inner, Bill
 
     public async Task<InvoicePreviewDto> PreviewAsync(GenerateInvoiceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.PreviewAsync(request, cancellationToken);
     }
 
     public async Task<InvoiceDto> GenerateDraftAsync(GenerateInvoiceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.GenerateDraftAsync(request, cancellationToken);
     }
 
     public async Task<InvoiceDto> RegenerateDraftAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.RegenerateDraftAsync(invoiceId, cancellationToken);
     }
 
     public async Task<InvoiceDto> UpdateDraftAsync(Guid invoiceId, UpdateInvoiceDraftRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.UpdateDraftAsync(invoiceId, request, cancellationToken);
     }
 
     public async Task<InvoiceDto> AddLineAsync(Guid invoiceId, AddInvoiceLineRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.AddLineAsync(invoiceId, request, cancellationToken);
     }
 
     public async Task<InvoiceDto> RemoveLineAsync(Guid invoiceId, Guid lineId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.RemoveLineAsync(invoiceId, lineId, cancellationToken);
     }
 
     public async Task DeleteDraftAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         await inner.DeleteDraftAsync(invoiceId, cancellationToken);
     }
 
     public async Task<InvoiceDto> ApproveAsync(Guid invoiceId, ApproveInvoiceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.ApproveAsync(invoiceId, request, cancellationToken);
     }
 
     public async Task<InvoiceDto> MarkSentAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.MarkSentAsync(invoiceId, cancellationToken);
     }
 
     public async Task<InvoiceDto> VoidAsync(Guid invoiceId, VoidInvoiceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.VoidAsync(invoiceId, request, cancellationToken);
     }
 
     public async Task<InvoiceDto> CreateCreditMemoAsync(Guid invoiceId, CreditMemoRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.CreateCreditMemoAsync(invoiceId, request, cancellationToken);
     }
 
@@ -175,7 +181,7 @@ public sealed class PermissionCheckingInvoiceService(IInvoiceService inner, Bill
 
     public async Task<BillingExportFile> ExportWawfCsvAsync(Guid invoiceId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.ExportWawfCsvAsync(invoiceId, cancellationToken);
     }
 
@@ -187,25 +193,25 @@ public sealed class PermissionCheckingInvoiceService(IInvoiceService inner, Bill
 
     public async Task<ContractBillingSettingsDto> GetSettingsAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.GetSettingsAsync(contractId, cancellationToken);
     }
 
     public async Task<ContractBillingSettingsDto> SaveSettingsAsync(Guid contractId, SaveContractBillingSettingsRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.SaveSettingsAsync(contractId, request, cancellationToken);
     }
 
     public async Task<UnbilledAccrualDto> GetUnbilledAccrualAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.GetUnbilledAccrualAsync(fiscalPeriodId, cancellationToken);
     }
 
     public async Task<UnbilledAccrualDto> PostUnbilledAccrualAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.PostUnbilledAccrualAsync(fiscalPeriodId, cancellationToken);
     }
 }
@@ -220,31 +226,31 @@ public sealed class PermissionCheckingBillingMilestoneService(IBillingMilestoneS
 
     public async Task<BillingMilestoneDto> CreateAsync(Guid contractId, SaveMilestoneRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.CreateAsync(contractId, request, cancellationToken);
     }
 
     public async Task<BillingMilestoneDto> UpdateAsync(Guid milestoneId, SaveMilestoneRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.UpdateAsync(milestoneId, request, cancellationToken);
     }
 
     public async Task<BillingMilestoneDto> CompleteAsync(Guid milestoneId, CompleteMilestoneRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.CompleteAsync(milestoneId, request, cancellationToken);
     }
 
     public async Task<BillingMilestoneDto> ReopenAsync(Guid milestoneId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         return await inner.ReopenAsync(milestoneId, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid milestoneId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
         await inner.DeleteAsync(milestoneId, cancellationToken);
     }
 }
@@ -253,31 +259,31 @@ public sealed class PermissionCheckingPaymentService(IPaymentService inner, Bill
 {
     public async Task<IReadOnlyList<PaymentDto>> ListAsync(PaymentQuery query, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingPaymentsRecord, cancellationToken);
         return await inner.ListAsync(query, cancellationToken);
     }
 
     public async Task<PaymentDto> GetAsync(Guid paymentId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingPaymentsRecord, cancellationToken);
         return await inner.GetAsync(paymentId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<InvoiceSummaryDto>> ListOpenInvoicesAsync(Guid customerId, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingPaymentsRecord, cancellationToken);
         return await inner.ListOpenInvoicesAsync(customerId, cancellationToken);
     }
 
     public async Task<PaymentDto> RecordAsync(RecordPaymentRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingPaymentsRecord, cancellationToken);
         return await inner.RecordAsync(request, cancellationToken);
     }
 
     public async Task<PaymentDto> VoidAsync(Guid paymentId, VoidInvoiceRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingPaymentsRecord, cancellationToken);
         return await inner.VoidAsync(paymentId, request, cancellationToken);
     }
 }
@@ -286,25 +292,25 @@ public sealed class PermissionCheckingArReportService(IArReportService inner, Bi
 {
     public async Task<ArAgingDto> GetAgingAsync(DateOnly? asOf = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingReportsView, cancellationToken);
         return await inner.GetAgingAsync(asOf, cancellationToken);
     }
 
     public async Task<CustomerStatementDto> GetStatementAsync(Guid customerId, DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingReportsView, cancellationToken);
         return await inner.GetStatementAsync(customerId, from, to, cancellationToken);
     }
 
     public async Task<IReadOnlyList<BillingCustomerDto>> ListCustomersAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingReportsView, cancellationToken);
         return await inner.ListCustomersAsync(cancellationToken);
     }
 
     public async Task<int> SendOverdueRemindersAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireFinanceAsync(cancellationToken);
+        await access.RequireAsync(Permission.BillingReportsView, cancellationToken);
         return await inner.SendOverdueRemindersAsync(cancellationToken);
     }
 }

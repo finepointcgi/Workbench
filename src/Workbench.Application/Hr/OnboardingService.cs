@@ -14,8 +14,8 @@ using Workbench.Domain.Assets;
 using Workbench.Domain.Identity;
 using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
-using D = Workbench.Domain.Hr;
 using Workbench.Application.Integrations;
+using D = Workbench.Domain.Hr;
 
 namespace Workbench.Application.Hr;
 
@@ -414,7 +414,7 @@ public sealed class OnboardingService(
             owners.Add(D.ChecklistOwner.It);
         }
 
-        if (viewer.IsFinance)
+        if (viewer.DoesFinanceTasks)
         {
             owners.Add(D.ChecklistOwner.Finance);
         }
@@ -443,7 +443,7 @@ public sealed class OnboardingService(
         {
             D.ChecklistOwner.Hr => viewer.IsHr,
             D.ChecklistOwner.It => viewer.IsAdmin,
-            D.ChecklistOwner.Finance => viewer.IsFinance,
+            D.ChecklistOwner.Finance => viewer.DoesFinanceTasks,
             _ => viewer.IsHr,
         };
     }

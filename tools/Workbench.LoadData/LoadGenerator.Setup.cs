@@ -10,6 +10,8 @@ using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 using Workbench.Infrastructure.Persistence;
+using BuiltInRoles = Workbench.Contracts.Identity.BuiltInRoles;
+using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 
 namespace Workbench.LoadData;
 
@@ -405,22 +407,27 @@ internal sealed partial class LoadGenerator(GeneratorOptions options, IDbContext
         var now = DateTime.UtcNow;
         var financeStaff = _people.Where(p => p.E.OrgUnitId == fin.Id).Take(7).ToHashSet();
         var hrStaff = _people.Where(p => p.E.OrgUnitId == hr.Id).Take(2).ToHashSet();
+        var roles = new List<UserRole>();
         foreach (var p in _people)
         {
-            await _bulk.AddAsync(new AppUser
+            var user = new AppUser
             {
                 Email = p.Email,
                 DisplayName = p.E.DisplayName,
-                IsAdmin = p == ceo || p == itManager,
-                IsFinance = financeStaff.Contains(p),
-                IsTimekeeper = hrStaff.Contains(p),
-                IsResourceManager = p == vps[0],
                 CreatedAtUtc = Utc(p.E.HireDate, 14),
                 IsActive = p.E.TerminationDate is null,
                 DeactivatedAtUtc = p.E.TerminationDate is { } t ? Utc(t, 22) : null,
                 DeactivatedBy = p.E.TerminationDate is null ? null : itManager.Email,
-            });
+            };
+            await _bulk.AddAsync(user);
+
+            // Built-in roles (their rows are seeded by the migrations).
+            var held = (p == ceo || p == itManager ? OrgRoles.Admin : 0) | (financeStaff.Contains(p) ? OrgRoles.Finance : 0)
+                | (hrStaff.Contains(p) ? OrgRoles.Timekeeper : 0) | (p == vps[0] ? OrgRoles.ResourceManager : 0);
+            roles.AddRange(BuiltInRoles.IdsOf(held).Select(id => new UserRole { UserId = user.Id, RoleId = id, AssignedAtUtc = user.CreatedAtUtc, AssignedBy = "load-data" }));
         }
+
+        await _bulk.AddRangeAsync(roles);
 
         // Org-unit approvers for the divisions (the "org-unit manager" rule).
         for (var d = 0; d < vps.Count; d++)

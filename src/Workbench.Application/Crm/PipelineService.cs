@@ -18,7 +18,7 @@ public sealed class PipelineService(IWorkbenchDbContextFactory dbFactory, CrmAcc
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         await GateDefaults.EnsureAsync(db, cancellationToken);
         var query = db.Set<D.Opportunity>().AsNoTracking();
-        if (!roles.CanViewPipeline())
+        if (!roles.Has(Permission.PipelineView))
         {
             query = query.Where(o => o.CaptureManagerEmail == me || o.ProposalManagerEmail == me);
         }
@@ -118,7 +118,7 @@ public sealed class PipelineService(IWorkbenchDbContextFactory dbFactory, CrmAcc
             query = query.Where(o => o.Id == id);
         }
 
-        if (!roles.CanViewPipeline())
+        if (!roles.Has(Permission.PipelineView))
         {
             query = query.Where(o => o.CaptureManagerEmail == me || o.ProposalManagerEmail == me);
         }
@@ -134,7 +134,7 @@ public sealed class PipelineService(IWorkbenchDbContextFactory dbFactory, CrmAcc
 
         // Labor cost (approved hours at each employee's cost rate on the work date) is for Finance and administrators only.
         Dictionary<Guid, List<EmployeeCostRate>>? rates = null;
-        if (roles.IsFinance())
+        if (roles.Has(Permission.LaborCostView))
         {
             var employees = entries.Select(e => e.EmployeeId).Distinct().ToList();
             rates = (await db.Set<EmployeeCostRate>().AsNoTracking().Where(r => employees.Contains(r.EmployeeId)).ToListAsync(cancellationToken))

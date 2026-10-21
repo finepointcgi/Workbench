@@ -16,7 +16,7 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
 {
     public async Task<IReadOnlyList<UserAdminDto>> ListUsersAsync(string? query = null, bool includeInactive = true, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var users = db.Set<AppUser>().AsNoTracking();
         if (!includeInactive)
@@ -31,6 +31,10 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
         }
 
         var rows = await users.ToListAsync(cancellationToken);
+        var userIds = rows.Select(u => u.Id).ToList();
+        var held = (await db.Set<UserRole>().AsNoTracking().Where(r => userIds.Contains(r.UserId)).Select(r => new { r.UserId, r.RoleId }).ToListAsync(cancellationToken))
+            .ToLookup(r => r.UserId, r => r.RoleId);
+        var roleRefs = (await RoleStore.RefsAsync(db, held.SelectMany(g => g), cancellationToken)).ToDictionary(r => r.Id);
         var employees = await db.Set<Employee>().AsNoTracking().Select(e => new { e.Id, e.Email, e.DisplayName }).ToListAsync(cancellationToken);
         var byId = employees.ToDictionary(e => e.Id);
         var byEmail = employees.GroupBy(e => e.Email).ToDictionary(g => g.Key, g => g.First());
@@ -45,49 +49,52 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
                     EmployeeLinkMode.ByEmail => byEmail.GetValueOrDefault(u.Email),
                     _ => null,
                 };
-                return ToDto(u, employee?.Id, employee?.DisplayName, mode);
+                var roles = held[u.Id].Select(roleRefs.GetValueOrDefault).OfType<RoleRef>()
+                    .OrderBy(r => !r.IsBuiltIn).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                return ToDto(u, employee?.Id, employee?.DisplayName, mode, roles);
             })
             .ToList();
     }
 
     public async Task<UserAdminDto> SetRolesAsync(string email, OrgRoles roles, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
+        await access.RequireCanGrantNewRolesAsync(email, BuiltInRoles.IdsOf(roles), cancellationToken);
         await lifecycle.SetRolesAsync(email, roles, access.Email, cancellationToken);
         return await GetAsync(email, cancellationToken);
     }
 
     public async Task<UserAdminDto> DeactivateAsync(string email, string? reason = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await lifecycle.SetActiveAsync(email, false, access.Email, reason, cancellationToken);
         return await GetAsync(email, cancellationToken);
     }
 
     public async Task<UserAdminDto> ReactivateAsync(string email, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await lifecycle.SetActiveAsync(email, true, access.Email, cancellationToken: cancellationToken);
         return await GetAsync(email, cancellationToken);
     }
 
     public async Task<UserAdminDto> SignOutEverywhereAsync(string email, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await lifecycle.RevokeSessionsAsync(email, access.Email, cancellationToken);
         return await GetAsync(email, cancellationToken);
     }
 
     public async Task<UserAdminDto> SetEmployeeLinkAsync(string email, EmployeeLinkMode mode, Guid? employeeId = null, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await lifecycle.SetEmployeeLinkAsync(email, mode, employeeId, access.Email, cancellationToken);
         return await GetAsync(email, cancellationToken);
     }
 
     public async Task<IReadOnlyList<LinkableEmployeeDto>> ListLinkableEmployeesAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var rows = await db.Set<Employee>().AsNoTracking().ToListAsync(cancellationToken);
         return rows.OrderBy(e => e.DisplayName).Select(e => new LinkableEmployeeDto(e.Id, e.EmployeeNumber, e.DisplayName, e.Email)).ToList();
@@ -100,9 +107,9 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
         return all.FirstOrDefault(u => u.Email == email) ?? throw new WorkbenchNotFoundException($"User {email} was not found.");
     }
 
-    internal static UserAdminDto ToDto(AppUser u, Guid? employeeId, string? employeeName, EmployeeLinkMode mode) =>
-        new(u.Id, u.Email, u.DisplayName, AccessControl.ToRoles(u.IsAdmin, u.IsFinance, u.IsTimekeeper, u.IsResourceManager, u.IsProjectManager, u.IsHr, u.IsMaterials, u.IsBusinessDevelopment, u.IsPricing), u.IsActive, u.CreatedAtUtc,
-            u.LastSeenAtUtc, u.LastSignInAtUtc, u.DeactivatedAtUtc, u.DeactivatedBy, employeeId, employeeName, mode, u.ScimManaged);
+    internal static UserAdminDto ToDto(AppUser u, Guid? employeeId, string? employeeName, EmployeeLinkMode mode, IReadOnlyList<RoleRef> roles) =>
+        new(u.Id, u.Email, u.DisplayName, BuiltInRoles.FlagsOf(roles.Select(r => r.Id)), u.IsActive, u.CreatedAtUtc,
+            u.LastSeenAtUtc, u.LastSignInAtUtc, u.DeactivatedAtUtc, u.DeactivatedBy, employeeId, employeeName, mode, u.ScimManaged, roles);
 }
 
 public sealed class InviteService(
@@ -117,17 +124,20 @@ public sealed class InviteService(
 {
     public async Task<IReadOnlyList<InviteDto>> ListAsync(CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var rows = await db.Set<UserInvite>().AsNoTracking().ToListAsync(cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
-        return rows.OrderByDescending(i => i.CreatedAtUtc).Select(i => ToDto(i, now)).ToList();
+        var names = (await RoleStore.RefsAsync(db, rows.SelectMany(i => RoleStore.ParseIds(i.CustomRoleIds)), cancellationToken)).ToDictionary(r => r.Id);
+        return rows.OrderByDescending(i => i.CreatedAtUtc).Select(i => ToDto(i, now, names)).ToList();
     }
 
     public async Task<InviteDto> CreateAsync(CreateInviteRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         var email = UserLifecycle.ValidEmail(request.Email);
+        var grant = RoleGrant.Of(request.Roles, request.CustomRoleIds);
+        await access.RequireCanGrantRolesAsync(grant.RoleIds, cancellationToken);
         var name = UserLifecycle.CleanName(request.DisplayName) ?? throw new ArgumentException("Enter the person's name.", nameof(request));
         var now = clock.GetUtcNow().UtcDateTime;
 
@@ -147,39 +157,34 @@ public sealed class InviteService(
             old.RevokedBy = access.Email;
         }
 
+        var custom = await RoleStore.ValidateCustomAsync(db, request.CustomRoleIds, cancellationToken);
         var invite = new UserInvite
         {
             Email = email,
             DisplayName = name,
-            IsAdmin = request.Roles.IsAdmin(),
-            IsFinance = request.Roles.HasFlag(OrgRoles.Finance),
-            IsTimekeeper = request.Roles.HasFlag(OrgRoles.Timekeeper),
-            IsResourceManager = request.Roles.HasFlag(OrgRoles.ResourceManager),
-            IsProjectManager = request.Roles.HasFlag(OrgRoles.ProjectManager),
-            IsHr = request.Roles.HasFlag(OrgRoles.Hr),
-            IsMaterials = request.Roles.HasFlag(OrgRoles.Materials),
-            IsBusinessDevelopment = request.Roles.HasFlag(OrgRoles.BusinessDevelopment),
-            IsPricing = request.Roles.HasFlag(OrgRoles.Pricing),
+            Roles = (int)(request.Roles & OrgRoleChecks.Everything),
+            CustomRoleIds = RoleStore.FormatIds(custom),
             InvitedBy = access.Email,
             CreatedAtUtc = now,
             ExpiresAtUtc = now + options.InviteLifetime,
         };
         db.Set<UserInvite>().Add(invite);
         await db.SaveChangesAsync(cancellationToken);
+        var refs = await RoleStore.RefsAsync(db, grant.RoleIds, cancellationToken);
         await securityLog.RecordAsync(SecurityEventTypes.InviteCreated, email,
-            detail: $"Roles: {UserLifecycle.RoleText(request.Roles)}; expires {invite.ExpiresAtUtc:yyyy-MM-dd HH:mm} UTC", cancellationToken: cancellationToken);
+            detail: $"Roles: {RoleStore.Describe(refs)}; expires {invite.ExpiresAtUtc:yyyy-MM-dd HH:mm} UTC", cancellationToken: cancellationToken);
         await SendInviteEmailAsync(invite, cancellationToken);
-        return ToDto(invite, now);
+        return ToDto(invite, now, refs.ToDictionary(r => r.Id));
     }
 
     public async Task<InviteDto> RevokeAsync(Guid inviteId, CancellationToken cancellationToken = default)
     {
-        await access.RequireAdminAsync(cancellationToken);
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var invite = await db.Set<UserInvite>().FirstOrDefaultAsync(i => i.Id == inviteId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Invite", inviteId);
-        if (ToDto(invite, now).Status != InviteStatus.Pending)
+        if (ToDto(invite, now, new Dictionary<Guid, RoleRef>()).Status != InviteStatus.Pending)
         {
             throw new ArgumentException("Only pending invites can be revoked.", nameof(inviteId));
         }
@@ -188,7 +193,7 @@ public sealed class InviteService(
         invite.RevokedBy = access.Email;
         await db.SaveChangesAsync(cancellationToken);
         await securityLog.RecordAsync(SecurityEventTypes.InviteRevoked, invite.Email, cancellationToken: cancellationToken);
-        return ToDto(invite, now);
+        return ToDto(invite, now, (await RoleStore.RefsAsync(db, RoleStore.ParseIds(invite.CustomRoleIds), cancellationToken)).ToDictionary(r => r.Id));
     }
 
     private async Task SendInviteEmailAsync(UserInvite invite, CancellationToken cancellationToken)
@@ -210,11 +215,12 @@ public sealed class InviteService(
         }
     }
 
-    internal static InviteDto ToDto(UserInvite i, DateTime now) =>
-        new(i.Id, i.Email, i.DisplayName, AccessControl.ToRoles(i.IsAdmin, i.IsFinance, i.IsTimekeeper, i.IsResourceManager, i.IsProjectManager, i.IsHr, i.IsMaterials, i.IsBusinessDevelopment, i.IsPricing), i.InvitedBy, i.CreatedAtUtc, i.ExpiresAtUtc,
+    internal static InviteDto ToDto(UserInvite i, DateTime now, IReadOnlyDictionary<Guid, RoleRef> roleNames) =>
+        new(i.Id, i.Email, i.DisplayName, (OrgRoles)i.Roles, i.InvitedBy, i.CreatedAtUtc, i.ExpiresAtUtc,
             i.AcceptedAtUtc, i.RevokedAtUtc,
             i.AcceptedAtUtc is not null ? InviteStatus.Accepted
             : i.RevokedAtUtc is not null ? InviteStatus.Revoked
             : i.ExpiresAtUtc <= now ? InviteStatus.Expired
-            : InviteStatus.Pending);
+            : InviteStatus.Pending,
+            RoleStore.ParseIds(i.CustomRoleIds).Select(roleNames.GetValueOrDefault).OfType<RoleRef>().ToList());
 }

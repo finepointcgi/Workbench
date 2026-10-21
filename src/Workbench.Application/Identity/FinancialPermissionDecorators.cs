@@ -1,5 +1,6 @@
 using Workbench.Contracts;
 using Workbench.Contracts.Financials;
+using Workbench.Contracts.Identity;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.Time;
 
@@ -30,7 +31,7 @@ public sealed class PermissionCheckingTimeReportService(ITimeReportService inner
 
     public async Task<string> ExportLaborDistributionCsvAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
     {
-        await projects.Access.RequireFinanceAsync("export the labor distribution", cancellationToken);
+        await projects.Access.RequireAsync(Permission.LaborCostView, "export the labor distribution", cancellationToken);
         return await inner.ExportLaborDistributionCsvAsync(from, to, cancellationToken);
     }
 }
