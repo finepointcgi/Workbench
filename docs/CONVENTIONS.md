@@ -217,6 +217,9 @@ Workbench replaces Costpoint, Unanet and Asana; it is not an add-on to them. Cos
   are tenant settings (`SignInSettings`, `ISignInSettingsService`, **Admin › Users and security › Sign-in**), read through
   the cached `SignInSettingsStore`. Every sign-in goes through `SignInGate.EvaluateAsync(..., claims)`; don't add sign-in
   paths that bypass it. Guides: `docs/security/sso-entra.md`, `sso-okta.md`.
+- Built-in accounts (email and password, `Application/Identity/Passwords`, `Web/Identity/PasswordSignIn.cs`) call the same
+  gate with method `password` once the password (and authenticator code) checked out; `amr` `otp` means the app was used.
+  Passwords, codes and link tokens are never logged; only hashes are stored. See `docs/security/built-in-accounts.md`.
 - A **sensitive action** (revealing pay, bank or tax data; changing bank accounts, approval workflows or sign-in settings)
   calls `ReauthenticationGuard.RequireRecentAsync(SensitiveActions.X)` in a decorator registered by
   `AddWorkbenchReauthentication` (above `AddWorkbenchIdentity`, so permission checks run first). It throws

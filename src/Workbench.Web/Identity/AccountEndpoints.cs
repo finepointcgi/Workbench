@@ -15,7 +15,7 @@ public static class AccountEndpoints
     public const string SessionPingPath = "/account/session/ping";
     public const string ReauthenticatePath = "/account/reauthenticate";
 
-    /// <summary>Sign-in and sign-out endpoints, and the dev sign-in page when it's enabled.</summary>
+    /// <summary>Sign-in and sign-out endpoints, built-in accounts (<see cref="PasswordSignIn"/>), and the dev sign-in page when it's enabled.</summary>
     public static IEndpointRouteBuilder MapWorkbenchAccountEndpoints(this IEndpointRouteBuilder app)
     {
         var options = app.ServiceProvider.GetRequiredService<AccountOptions>();
@@ -24,12 +24,34 @@ public static class AccountEndpoints
             DevSignIn.Map(app);
         }
 
-        // The organization's own IdP when it has one; else the server's; else (Development) the dev sign-in page.
-        // ?provider=server picks the server's IdP explicitly (refused at sign-in when the organization requires its own).
-        app.MapGet(SignInPath, async (HttpContext http, SignInSettingsStore store, Application.Tenancy.ITenantContext tenants, string? returnUrl, string? provider) =>
+        PasswordSignIn.Map(app);
+
+        // The email and password page (built-in accounts), with buttons for the organization's IdP and, in Development and
+        // the demo, the user picker. When the organization requires its own IdP, straight there. ?provider=sso and
+        // ?provider=server pick the organization's or the server's IdP (the latter refused when the organization requires its own).
+        // Without built-in accounts (Authentication:Passwords:Enabled=false, or the MultiTenant host site): the organization's
+        // IdP, else the server's, else (Development) the dev sign-in page, as before.
+        app.MapGet(SignInPath, async (HttpContext http, SignInSettingsStore store, Application.Tenancy.ITenantContext tenants, string? returnUrl, string? provider, string? reauth) =>
             {
                 var properties = new AuthenticationProperties { RedirectUri = SafeReturnUrl(returnUrl) };
-                if (provider != "server" && !tenants.IsHost && (await store.GetAsync(http.RequestAborted)).OrganizationIdpReady)
+                var policy = tenants.IsHost ? null : await store.GetAsync(http.RequestAborted);
+                var organizationIdp = policy?.OrganizationIdpReady == true;
+                if (provider == "sso" && organizationIdp)
+                {
+                    return Results.Challenge(properties, [OrganizationSso.Scheme]);
+                }
+
+                if (provider == "server" && options.Oidc)
+                {
+                    return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
+                }
+
+                if (PasswordSignIn.Available(http) && !(organizationIdp && policy!.Settings.RequireOrganizationIdp))
+                {
+                    return await PasswordSignIn.SignInPageAsync(http, SafeReturnUrl(returnUrl), reauth == "1");
+                }
+
+                if (provider != "server" && organizationIdp)
                 {
                     return Results.Challenge(properties, [OrganizationSso.Scheme]);
                 }
@@ -51,6 +73,7 @@ public static class AccountEndpoints
                 {
                     "sso" => Results.Challenge(properties, [OrganizationSso.Scheme]),
                     "oidc" when options.Oidc => Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]),
+                    SignInGate.PasswordMethod => Results.LocalRedirect($"{SignInPath}?returnUrl={Uri.EscapeDataString(target)}&reauth=1"),
                     _ when options.DevSignIn => Results.LocalRedirect($"{DevSignIn.Path}?returnUrl={Uri.EscapeDataString(target)}&reauth=1"),
                     _ => Results.LocalRedirect($"{SignInPath}?returnUrl={Uri.EscapeDataString(target)}"),
                 };
@@ -67,11 +90,12 @@ public static class AccountEndpoints
 
                 // Also end the session at the IdP the user signed in with.
                 var method = http.User.FindFirst(OrganizationSso.MethodClaim)?.Value;
+                await http.SignOutAsync(PasswordSignIn.PendingScheme); // a sign-in abandoned at the MFA step
                 var properties = new AuthenticationProperties { RedirectUri = "/" };
                 return method switch
                 {
                     "sso" => Results.SignOut(properties, [CookieAuthenticationDefaults.AuthenticationScheme, OrganizationSso.Scheme]),
-                    _ when options.Oidc && method != "dev" => Results.SignOut(properties,
+                    _ when options.Oidc && method is not ("dev" or SignInGate.PasswordMethod) => Results.SignOut(properties,
                         [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]),
                     _ => Results.SignOut(properties, [CookieAuthenticationDefaults.AuthenticationScheme]),
                 };

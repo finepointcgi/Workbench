@@ -11,4 +11,6 @@ internal sealed class WebSignOutService(NavigationManager navigation) : ISignOut
         navigation.NavigateTo(AccountEndpoints.SignOutPath, forceLoad: true);
         return Task.CompletedTask;
     }
+
+    public string? AccountSecurityUrl => PasswordSignIn.SecurityPath;
 }

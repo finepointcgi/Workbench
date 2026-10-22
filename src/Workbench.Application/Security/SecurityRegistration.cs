@@ -27,6 +27,9 @@ public static class SecurityRegistration
         services.AddSingleton<UserStatusCache>();
         services.AddScoped<UserLifecycle>();
         services.AddScoped<SignInGate>();
+        services.TryAddSingleton(new Identity.Passwords.PasswordOptions());
+        services.TryAddSingleton<Identity.Passwords.AccountLinks>();
+        services.AddScoped<Identity.Passwords.PasswordAccounts>();
         services.AddScoped<IUserAdminService, UserAdminService>();
         services.AddScoped<IInviteService, InviteService>();
         services.AddScoped<IAccessReviewService, AccessReviewService>();
