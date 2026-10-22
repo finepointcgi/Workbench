@@ -59,7 +59,8 @@ public sealed partial class DemoModeTests
         var problems = Problems(Environments.Production, DemoSettings());
 
         Assert.Contains(problems, p => p.Contains(DemoMode.EnabledKey) && p.Contains("Production"));
-        Assert.Contains(problems, p => p.Contains("dev sign-in page is enabled") || p.Contains("Authentication:Oidc:Authority"));
+        // No IdP is fine (built-in accounts); the dev picker must stay off, checked below.
+        Assert.DoesNotContain(problems, p => p.Contains("dev sign-in page is enabled"));
         Assert.Contains(problems, p => p.Contains("EnableFakeProvider"));
         Assert.False(DemoMode.IsActive(Config(DemoSettings()), new FakeEnvironment(Environments.Production)));
         Assert.False(DevSignIn.IsEnabled(new FakeEnvironment(Environments.Production), new OidcSettings(), Config(DemoSettings())));
@@ -70,7 +71,6 @@ public sealed partial class DemoModeTests
     {
         var problems = Problems(DemoMode.EnvironmentName, DemoSettings((DemoMode.EnabledKey, null)));
 
-        Assert.Contains(problems, p => p.Contains("Authentication:Oidc:Authority"));
         Assert.Contains(problems, p => p.Contains("EnableFakeProvider"));
         Assert.False(DevSignIn.IsEnabled(new FakeEnvironment(DemoMode.EnvironmentName), new OidcSettings(), Config(DemoSettings((DemoMode.EnabledKey, "false")))));
     }
