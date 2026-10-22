@@ -1,5 +1,6 @@
 @page "/projects/{ProjectId:guid}"
 @page "/projects/{ProjectId:guid}/{Tab}"
+@page "/projects/{ProjectId:guid}/{Tab}/{Section}"
 @* One project's page. Tabs reuse the feature pages (rendered Embedded); each shows only when the server would allow it.
    The older routes (/projects/{id}/financials, /budgets, /revenue, /evm) land here with that tab selected. *@
 @inject IProjectHubService Hub
@@ -40,6 +41,19 @@ else
         · @ProjectsFormat.Period(p.Start, p.Finish)
     </MudText>
 
+    @* The everyday tabs, then "More" for the occasional ones (revenue, earned value, narrative, ceilings and closeout). *@
+    @if (_more.Count > 0)
+    {
+        <div class="d-flex justify-end mb-n2">
+            <MudMenu Label="More" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Text" Size="Size.Small" Dense="true"
+                     AriaLabel="More project pages" data-testid="project-more">
+                @foreach (var slug in _more)
+                {
+                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@ProjectsFormat.Tabs.First(t => t.Slug == slug).Label</MudMenuItem>
+                }
+            </MudMenu>
+        </div>
+    }
     <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" KeepPanelsAlive="false"
              ActivePanelIndex="_tabs.IndexOf(_tab)" ActivePanelIndexChanged="OnTabChanged" data-testid="project-tabs">
         @foreach (var slug in _tabs)
@@ -60,6 +74,13 @@ else
 
     [Parameter]
     public string? Tab { get; set; }
+
+    /// <summary>A section within the tab, e.g. <c>/projects/{id}/setup/charge-codes</c>.</summary>
+    [Parameter]
+    public string? Section { get; set; }
+
+    private List<string> _allowed = [];
+    private List<string> _more = [];
 
     private ProjectHubDto? _hub;
     private Guid _loadedProject;
@@ -86,7 +107,11 @@ else
         }
 
         var requested = ProjectsFormat.Normalize(Tab);
-        _tab = _tabs.Contains(requested) ? requested : "overview";
+        _tab = _allowed.Contains(requested) ? requested : "overview";
+
+        // An occasional tab shows in the bar while it's open; otherwise it's under More.
+        _tabs = _allowed.Where(s => !ProjectsFormat.IsOccasional(s) || s == _tab).ToList();
+        _more = _allowed.Where(s => ProjectsFormat.IsOccasional(s) && s != _tab).ToList();
     }
 
     private async Task LoadAsync()
@@ -97,7 +122,8 @@ else
         {
             _hub = await Hub.GetProjectAsync(ProjectId);
             _loadedProject = ProjectId;
-            _tabs = ProjectsFormat.Tabs.Select(t => t.Slug).Where(s => ProjectsFormat.Allows(_hub.Tabs, s)).ToList();
+            _allowed = ProjectsFormat.Tabs.Select(t => t.Slug).Where(s => ProjectsFormat.Allows(_hub.Tabs, s)).ToList();
+            _tabs = _allowed.Where(s => !ProjectsFormat.IsOccasional(s)).ToList();
         }
         catch (WorkbenchNotFoundException)
         {
@@ -128,7 +154,13 @@ else
     private RenderFragment TabContent(string slug) => slug switch
     {
         "overview" => @<ProjectOverviewTab Hub="_hub!" />,
-        "plan" => @<Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />,
+        "plan" => @<div>
+            @if (_hub!.Tabs.Setup)
+            {
+                <PlanChargeCodesBanner ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value" />
+            }
+            <Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />
+        </div>,
         "financials" => @<Workbench.Ui.Pages.Projects.ProjectFinancialsPage ProjectId="ProjectId" Embedded="true" />,
         "budgets" => @<Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />,
         "revenue" => @<Workbench.Ui.Revenue.ProjectRevenueView ProjectId="ProjectId" Embedded="true" />,
@@ -140,12 +172,30 @@ else
             <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="ProjectId" Changed="ReloadAsync" />
         </div>,
         "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
+        // Budget and staffing on one screen: hours by labor category, then the people staffed into them.
         "staffing" => @<div>
-            <Workbench.Ui.Resourcing.ProjectStaffingPanel ProjectId="ProjectId" Changed="ReloadAsync" />
-            <MudDivider Class="my-6" />
-            <ProjectTeamTab ProjectId="ProjectId" @key="_reloads" />
+            @if (_hub!.Tabs.Budgets)
+            {
+                <section aria-labelledby="budget-heading" data-testid="budget-section">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" id="budget-heading" Class="mb-2">Budget</MudText>
+                    <Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />
+                </section>
+            }
+            @if (_hub!.Tabs.Team)
+            {
+                @if (_hub!.Tabs.Budgets)
+                {
+                    <MudDivider Class="my-6" />
+                }
+                <section aria-labelledby="staffing-heading" data-testid="staffing-section">
+                    <MudText Typo="Typo.h6" HtmlTag="h2" id="staffing-heading" Class="mb-2">Staffing</MudText>
+                    <Workbench.Ui.Resourcing.ProjectStaffingPanel ProjectId="ProjectId" Changed="ReloadAsync" />
+                    <MudDivider Class="my-6" />
+                    <ProjectTeamTab ProjectId="ProjectId" @key="_reloads" />
+                </section>
+            }
         </div>,
-        "setup" => @<ProjectSetupTab Hub="_hub!" />,
+        "setup" => @<ProjectSetupTab Hub="_hub!" Section="@Section" Changed="ReloadAsync" />,
         _ => @<span />,
     };
 }

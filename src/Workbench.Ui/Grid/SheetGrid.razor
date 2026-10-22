@@ -6,6 +6,7 @@
 @using Workbench.Contracts.Scheduling
 @inject IItemService ItemService
 @inject IServiceProvider Services
+@inject NavigationManager Navigation
 @inject IColumnService ColumnService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -170,7 +171,12 @@
                                     {
                                         <span class="wb-milestone" title="Milestone" aria-label="Milestone" data-testid="milestone-mark">◆</span>
                                     }
-                                    <a class="@(row.HasChildren && _plan.Count > 0 ? "wb-title-link wb-summary" : "wb-title-link")" href="@DetailsHref(row.Item)" title="Open details">@row.Item.Title</a>
+                                    @* The title selects the cell (so Tab indents); the icon opens the details panel on this page. *@
+                                    <span class="@(row.HasChildren && _plan.Count > 0 ? "wb-title-link wb-summary" : "wb-title-link")">@row.Item.Title</span>
+                                    <a class="wb-details-link" href="@DetailsHref(row.Item)" title="Open details" aria-label="@($"Open details of {row.Item.Title}")"
+                                       @onclick:stopPropagation="true" data-testid="open-details">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
+                                    </a>
                                 </div>
                             }
                             else if (column.Kind == GridColumnKind.Assignees)
@@ -212,6 +218,15 @@
     {
         <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                    OnClick="AddRowAtEndAsync">Add row</MudButton>
+        @if (ActiveRow is { } selected)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.SubdirectoryArrowRight" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                       OnClick="() => AddChildAsync(selected.Item)" data-testid="grid-add-child"
+                       title="@($"Add a row under \"{selected.Item.Title}\"")">Add subtask</MudButton>
+        }
+        <input class="wb-quick-add" placeholder="Type a task and press Enter" aria-label="Add a task: type its name and press Enter"
+               value="@_quickTitle" @oninput="e => _quickTitle = e.Value?.ToString() ?? string.Empty" @onkeydown="QuickAddKeyAsync"
+               data-testid="grid-quick-add" />
     }
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
         @Items.Count @(Items.Count == 1 ? "row" : "rows") · @(CanEdit ? "Enter or F2 to edit · Tab / Shift+Tab in Title (or Alt+Shift+→/←) to indent or outdent · Insert adds a row above" : "View only")
@@ -286,6 +301,7 @@
             return;
         }
 
+        var rowsChanged = !ReferenceEquals(Items, _lastItems) || !ReferenceEquals(Sheet, _lastSheet);
         _lastItems = Items;
         _lastSheet = Sheet;
         _lastTasks = Tasks;
@@ -295,7 +311,13 @@
         _mine = TaskView.MineWithAncestors(Tasks, Sheet, Items);
         _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
         _children = Items.ToLookup(i => i.ParentId);
-        _editing = false;
+        // A reload (our own save echoed back by live refresh, or someone else's change) keeps an open edit while its row is
+        // still there; the typed text is kept separately.
+        if (rowsChanged && _editing && (_activeId is not { } editingId || Items.All(i => i.Id != editingId)))
+        {
+            _editing = false;
+        }
+
         RebuildRows();
 
         if (_editWhenLoaded is { } newId && _rowIndex.ContainsKey(newId))
@@ -479,7 +501,7 @@
         }
     }
 
-    private string DetailsHref(ItemDto item) => $"sheets/{SheetId}?item={item.Id}";
+    private string DetailsHref(ItemDto item) => ItemLinks.Details(Navigation, item.Id);
 
     // ---- Selection and keyboard ----
 
@@ -566,9 +588,19 @@
                     CancelEdit();
                     break;
                 case "Enter":
+                    var wasTitle = ActiveColumn?.Kind == GridColumnKind.Title;
+                    var atEnd = _activeRow == _rows.Count - 1 && ActiveRow is { } last ? last.Item : null;
                     if (await CommitEditAsync())
                     {
-                        Move(1, 0);
+                        // Typing a list of tasks: Enter on the last title starts the next row, like a new line in a list.
+                        if (wasTitle && atEnd is not null && CanEdit)
+                        {
+                            await AddRowBelowAsync(atEnd);
+                        }
+                        else
+                        {
+                            Move(1, 0);
+                        }
                     }
 
                     break;
@@ -909,6 +941,32 @@
     // ---- Row actions ----
 
     private Task AddRowAtEndAsync() => CreateRowAsync(new CreateItemRequest("New row"));
+
+    private string _quickTitle = string.Empty;
+
+    /// <summary>The quick-add box: each Enter adds a top-level task with that name and keeps the box ready for the next.</summary>
+    private async Task QuickAddKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_quickTitle))
+        {
+            return;
+        }
+
+        var title = _quickTitle.Trim();
+        _quickTitle = string.Empty;
+        var last = _children[null].OrderBy(i => i.Order).LastOrDefault();
+        try
+        {
+            var request = new CreateItemRequest(title);
+            await ItemService.CreateAsync(SheetId, last is null ? request : WithStart(request, last));
+            await Changed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _quickTitle = title;
+            Snackbar.Add($"Couldn't add the task: {ex.Message}", Severity.Error);
+        }
+    }
 
     private Task AddRowBelowAsync(ItemDto item) => CreateRowAsync(WithStart(new CreateItemRequest("New row", item.ParentId, item.Order + 1), item));
 

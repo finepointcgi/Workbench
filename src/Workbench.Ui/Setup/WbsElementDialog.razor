@@ -8,7 +8,7 @@
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">Under <b>@Parent.Code</b> · @Parent.Name</MudText>
                 }
                 <MudTextField @bind-Value="_code" Label="Code" Required="true" RequiredError="Code is required." Immediate="true"
-                              Validation="@(new Func<string?, string?>(ValidateCode))" HelperText="Unique across all projects." data-testid="wbs-code" />
+                              Validation="@(new Func<string?, string?>(ValidateCode))" HelperText="Numbered for you; change it if you need to. Unique across all projects." data-testid="wbs-code" />
                 <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." AutoFocus="true" Immediate="true"
                               data-testid="wbs-name" />
                 <MudSelect T="ChargeCodeKind" @bind-Value="_kind" Label="Kind">
@@ -52,6 +52,14 @@
     [Parameter]
     public string ProjectCode { get; set; } = "";
 
+    /// <summary>On a contract new top-level elements are Direct (billable); without one they're Indirect.</summary>
+    [Parameter]
+    public bool OnContract { get; set; } = true;
+
+    /// <summary>Codes already used under the new element's parent, so the code can be suggested in full.</summary>
+    [Parameter]
+    public IReadOnlyList<string> SiblingCodes { get; set; } = [];
+
     private MudForm _form = default!;
     private string? _code;
     private string? _name;
@@ -70,8 +78,10 @@
         }
         else
         {
-            _code = Prefix;
-            _kind = Parent?.Kind ?? ChargeCodeKind.Direct;
+            // The next number under the parent: 1001.02.04 after 1001.02.03. Change it if the contract needs another code.
+            var prefix = Prefix.TrimEnd('.');
+            _code = prefix.Length > 0 ? Workbench.Contracts.ProjectAccounting.WbsCodes.Next(prefix, SiblingCodes) : Prefix;
+            _kind = Parent?.Kind ?? (OnContract ? ChargeCodeKind.Direct : ChargeCodeKind.Indirect);
             _requiresAssignment = Parent?.RequiresAssignment ?? true;
         }
     }

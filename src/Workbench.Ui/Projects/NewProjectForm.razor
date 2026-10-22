@@ -1,0 +1,214 @@
+@* Starting a project: only a name is needed. The code is suggested, the creator manages it, the contract is optional.
+   Four starts: blank, from a contract, a copy of a project or a starter outline, or an Excel plan. Creating it opens the
+   project's plan, where its WBS elements are added and numbered. Used by the New project dialog and /setup/projects/new. *@
+@using Workbench.Contracts.Scheduling
+@inject IProjectStartService Start
+@inject IProjectService Projects
+@inject IContractService Contracts
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudForm @ref="_form">
+    <MudStack Spacing="3">
+        <MudTextField @bind-Value="_name" Label="Project name" Required="true" RequiredError="Give the project a name." Immediate="true"
+                      AutoFocus="true" data-testid="start-name" />
+
+        <MudRadioGroup T="ProjectStartFrom" Value="_from" ValueChanged="SetFrom" aria-label="Start from">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Start from</MudText>
+            <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.Blank" Color="Color.Primary" data-testid="start-blank">Nothing (a blank plan)</MudRadio>
+            <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.Contract" Color="Color.Primary" Disabled="_contracts.Count == 0" data-testid="start-contract">A contract</MudRadio>
+            <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.CopyProject" Color="Color.Primary" data-testid="start-copy">A copy of a project or a starter outline</MudRadio>
+            <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.ImportExcel" Color="Color.Primary" data-testid="start-import">An Excel plan</MudRadio>
+        </MudRadioGroup>
+
+        @if (_from == ProjectStartFrom.Contract)
+        {
+            <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Required="true" RequiredError="Pick the contract." data-testid="start-contract-pick"
+                       HelperText="Its dates set the project's, its CLINs become the top of the WBS, and its labor-category hours start the budget.">
+                @foreach (var c in _contracts)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else if (_from == ProjectStartFrom.CopyProject)
+        {
+            <MudSelect T="string" @bind-Value="_copyFrom" Label="Copy" Required="true" RequiredError="Pick what to copy." data-testid="start-copy-pick"
+                       HelperText="A project's WBS, durations and links move to the new start; its people, budget and costs aren't copied.">
+                @foreach (var t in _templates)
+                {
+                    <MudSelectItem T="string" Value="@($"t:{t.Key}")">Starter outline: @t.Name</MudSelectItem>
+                }
+                @foreach (var p in _projects)
+                {
+                    <MudSelectItem T="string" Value="@($"p:{p.Id}")">Project @p.Code · @p.Name</MudSelectItem>
+                }
+            </MudSelect>
+            @if (TemplateKey is { } key && _templates.FirstOrDefault(t => t.Key == key) is { } template)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@template.Description</MudText>
+                <MudPaper Outlined="true" Class="pa-2">
+                    @foreach (var line in template.Outline)
+                    {
+                        <div style="padding-left:@((line.Length - line.TrimStart().Length) * 8)px">@line.Trim()</div>
+                    }
+                </MudPaper>
+            }
+        }
+        else if (_from == ProjectStartFrom.ImportExcel)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".xlsx,.xlsm,.csv">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync"
+                                   data-testid="start-import-choose">Choose an Excel file</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate />
+                </MudFileUpload>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@(_import?.FileName ?? "Any plan exported from Workbench, or the blank template.")</MudText>
+            </MudStack>
+            @if (_check is { } check)
+            {
+                @if (check.HasErrors)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true">Fix these rows and choose the file again.</MudAlert>
+                    <MudSimpleTable Dense="true" data-testid="start-import-issues">
+                        <tbody>
+                            @foreach (var issue in check.Issues.Where(i => i.IsError))
+                            {
+                                <tr><td>Row @issue.Row</td><td>@issue.Message</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" data-testid="start-import-ok">@check.Rows task@(check.Rows == 1 ? "" : "s") ready to import.</MudAlert>
+                }
+            }
+        }
+
+        @if (_from != ProjectStartFrom.Contract)
+        {
+            <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract (optional)" Clearable="true"
+                       HelperText="Leave it empty for internal work; you can add it later.">
+                @foreach (var c in _contracts)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        <MudTextField @bind-Value="_code" Label="Project code" Required="true" RequiredError="The project needs a code." Immediate="true"
+                      HelperText="Suggested: the next free number. Its WBS codes start with it." Style="max-width:240px" data-testid="start-code" />
+    </MudStack>
+</MudForm>
+<MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+    @if (OnCancel.HasDelegate)
+    {
+        <MudButton OnClick="OnCancel">Cancel</MudButton>
+    }
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="@(_busy || (_from == ProjectStartFrom.ImportExcel && _check is not { HasErrors: false }))"
+               data-testid="start-create">Create and open the plan</MudButton>
+</MudStack>
+
+@code {
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    /// <summary>Called with the new project before the page moves to its plan.</summary>
+    [Parameter]
+    public EventCallback<ProjectDto> OnCreated { get; set; }
+
+    private MudForm _form = default!;
+    private string? _code;
+    private string? _name;
+    private ProjectStartFrom _from = ProjectStartFrom.Blank;
+    private string? _copyFrom;
+    private Guid? _contractId;
+    private PlanImportRequest? _import;
+    private PlanImportPreview? _check;
+    private bool _busy;
+    private IReadOnlyList<ProjectTemplateDto> _templates = [];
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private IReadOnlyList<ContractDto> _contracts = [];
+
+    private string? TemplateKey => _copyFrom is { } c && c.StartsWith("t:", StringComparison.Ordinal) ? c[2..] : null;
+
+    private Guid? SourceProjectId => _copyFrom is { } c && c.StartsWith("p:", StringComparison.Ordinal) && Guid.TryParse(c[2..], out var id) ? id : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _code = await Start.SuggestCodeAsync();
+            _templates = await Start.ListTemplatesAsync();
+            _projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+            _contracts = await Contracts.ListContractsAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load everything: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private void SetFrom(ProjectStartFrom from)
+    {
+        _from = from;
+        _copyFrom ??= _templates.FirstOrDefault() is { } t ? $"t:{t.Key}" : null;
+    }
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _import = new PlanImportRequest(file.Name, buffer.ToArray());
+            _check = await Start.CheckImportAsync(_import);
+        }
+        catch (IOException)
+        {
+            Snackbar.Add("That file is too large (20 MB at most).", Severity.Error);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            (_import, _check) = (null, null);
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var from = _from == ProjectStartFrom.CopyProject && TemplateKey is not null ? ProjectStartFrom.Template : _from;
+            var project = await Start.StartAsync(new StartProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, from,
+                TemplateKey, SourceProjectId, Import: _from == ProjectStartFrom.ImportExcel ? _import : null));
+            Snackbar.Add($"Created {project.Code}. Add its WBS: type a task and press Enter; Tab makes a subtask.", Severity.Success);
+            await OnCreated.InvokeAsync(project);
+            Navigation.NavigateTo($"projects/{project.Id}/plan");
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

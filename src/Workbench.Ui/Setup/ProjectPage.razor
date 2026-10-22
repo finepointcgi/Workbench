@@ -1,212 +1,54 @@
 @page "/setup/projects/new"
 @page "/setup/projects/{ProjectId:guid}"
-@inject IProjectService Projects
-@inject IContractService Contracts
-@inject IPeopleService People
+@* Starting a project (the short form), and the old address of a project's setup, which now lives on the project page. *@
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 @inject ICurrentUserContext CurrentUser
-@* Not SetupLayout: project managers (the org role) set up the projects they manage here too. The server checks the same rules. *@
+@* Not SetupLayout: project managers (the org role) start the projects they manage here too. The server checks the same rules. *@
 @layout Workbench.Ui.Layout.MainLayout
 
-<PageTitle>@(_project?.Code ?? "New project") · Setup · Workbench</PageTitle>
+<PageTitle>New project · Workbench</PageTitle>
 
-<SetupHeader Title="@(_project is null ? "New project" : $"{_project.Code} · {_project.Name}")">
-    @if (_project?.SheetId is { } sheetId)
-    {
-        <MudButton Variant="Variant.Outlined" Href="@($"sheets/{sheetId}")" StartIcon="@Icons.Material.Filled.ViewTimeline">Open plan sheet</MudButton>
-    }
-    <MudButton Variant="Variant.Outlined" Href="@(_isFinance ? "setup/projects" : "projects")" StartIcon="@Icons.Material.Filled.ArrowBack">All projects</MudButton>
-</SetupHeader>
-
-@if (_loading)
+@if (ProjectId is null)
 {
-    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
-}
-else if (!_allowed)
-{
-    <ForbiddenNotice Title="You can't set up this project"
-                     Message="Project setup is for Finance, administrators and the project's manager (with the Project manager role). Ask Finance if you need it." />
-}
-else
-{
-    @if (!_isFinance && _project is null)
+    <SetupHeader Title="New project" Subtitle="Only a name is needed. You'll manage it; Finance activates a project on a contract before anyone charges it.">
+        <MudButton Variant="Variant.Outlined" Href="projects" StartIcon="@Icons.Material.Filled.ArrowBack">All projects</MudButton>
+    </SetupHeader>
+    @if (_allowed is null)
     {
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="pm-request-note">
-            You'll be the project's manager. A project on a contract is a request: it stays in Planning until Finance activates it.
-        </MudAlert>
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
     }
-    else if (!_isFinance && _project is { ContractId: not null, Status: ProjectState.Planning })
+    else if (_allowed == false)
     {
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Waiting for Finance to activate this project. You can build its WBS and plan meanwhile.</MudAlert>
+        <ForbiddenNotice Title="You can't start projects"
+                         Message="Starting a project is for Finance, administrators and project managers. Ask Finance if you need one." />
     }
-    <MudTabs Elevation="0" Outlined="true" Rounded="true" @bind-ActivePanelIndex="_tab" TabPanelsClass="pa-4" Class="mt-2">
-        <MudTabPanel Text="Details">
-            <MudForm @ref="_form">
-                <ConfigurableForm EntityType="@CustomizableEntities.Project" RecordId="_project?.Id" @ref="_layout">
-                    <FormField Key="code" Sm="4">
-                        <MudTextField @bind-Value="_code" Label="Code" Required="true" RequiredError="Code is required." Immediate="true"
-                                      HelperText="Top-level WBS codes start with this." data-testid="project-code" />
-                    </FormField>
-                    <FormField Key="name" Sm="8">
-                        <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" data-testid="project-name" />
-                    </FormField>
-                    <FormField Key="contractId" Sm="6" Context="field">
-                        <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)"
-                                   Required="field.Required" RequiredError="Contract is required.">
-                            @foreach (var c in _contracts)
-                            {
-                                <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </FormField>
-                    <FormField Key="projectManagerId" Sm="6" Context="field">
-                        <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true" Disabled="!_isFinance"
-                                   Required="field.Required" RequiredError="Project manager is required.">
-                            @foreach (var e in _employees)
-                            {
-                                <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </FormField>
-                    <FormField Key="status" Sm="4">
-                        <MudSelect T="ProjectState" @bind-Value="_status" Label="Status" Disabled="@(!_isFinance && _contractId is not null && (_project is null || _project.Status == ProjectState.Planning))">
-                            @foreach (var state in Enum.GetValues<ProjectState>())
-                            {
-                                <MudSelectItem T="ProjectState" Value="state">@SetupFormat.Label(state)</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </FormField>
-                    <FormField Key="start" Sm="4" Context="field">
-                        <MudDatePicker @bind-Date="_start" Label="Start" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
-                                       Required="field.Required" RequiredError="Start is required." />
-                    </FormField>
-                    <FormField Key="finish" Sm="4" Context="field">
-                        <MudDatePicker @bind-Date="_finish" Label="Finish" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
-                                       Required="field.Required" RequiredError="Finish is required."
-                                       Validation="@(new Func<DateTime?, string?>(f => f is { } x && _start is { } s && x < s ? "Finish can't be before start." : null))" />
-                    </FormField>
-                </ConfigurableForm>
-            </MudForm>
-            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="project-save">
-                    @(_project is null ? "Create project" : "Save")
-                </MudButton>
-            </MudStack>
-        </MudTabPanel>
-        <MudTabPanel Text="WBS and assignments" Disabled="_project is null">
-            @if (_project is not null)
-            {
-                <WbsEditor Project="_project" Employees="_employees" />
-            }
-        </MudTabPanel>
-        <MudTabPanel Text="Plan sheet" Disabled="_project is null">
-            @if (_project is not null)
-            {
-                <PlanSyncPanel Project="_project" ProjectChanged="p => _project = p" />
-            }
-        </MudTabPanel>
-        <MudTabPanel Text="Ceilings and closeout" Disabled="_project is null" data-testid="tab-project-ceilings">
-            @if (_project is not null)
-            {
-                <Workbench.Ui.Ceilings.CeilingsPanel ProjectId="_project.Id" />
-                <MudDivider Class="my-6" />
-                <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="_project.Id" />
-            }
-        </MudTabPanel>
-    </MudTabs>
+    else
+    {
+        <MudPaper Outlined="true" Class="pa-4" Style="max-width:640px">
+            <Workbench.Ui.Projects.NewProjectForm />
+        </MudPaper>
+    }
 }
 
 @code {
     [Parameter]
     public Guid? ProjectId { get; set; }
 
-    private ProjectDto? _project;
-    private IReadOnlyList<ContractDto> _contracts = [];
-    private IReadOnlyList<EmployeeDto> _employees = [];
-    private MudForm _form = default!;
-    private ConfigurableForm? _layout;
-    private bool _loading = true;
-    private bool _saving;
-    private int _tab;
+    [SupplyParameterFromQuery(Name = "section")]
+    public string? Section { get; set; }
 
-    private string? _code;
-    private string? _name;
-    private Guid? _contractId;
-    private Guid? _pmId;
-    private ProjectState _status = ProjectState.Active;
-    private DateTime? _start;
-    private DateTime? _finish;
-    private bool _isFinance;
-    private bool _allowed;
+    private bool? _allowed;
 
     protected override async Task OnParametersSetAsync()
     {
-        _loading = true;
-        var me = await CurrentUser.GetAsync();
-        _isFinance = me.Can(Workbench.Contracts.Identity.Permission.SetupProjects);
-        _contracts = await Contracts.ListContractsAsync();
-        _employees = await People.ListEmployeesAsync();
-        _project = ProjectId is { } id ? await Projects.GetProjectAsync(id) : null;
-        if (_project is { } p)
+        if (ProjectId is { } id)
         {
-            (_code, _name, _contractId, _pmId, _status) = (p.Code, p.Name, p.ContractId, p.ProjectManagerId, p.Status);
-            (_start, _finish) = (SetupFormat.ToDateTime(p.Start), SetupFormat.ToDateTime(p.Finish));
-        }
-        else
-        {
-            _tab = 0;
-            _pmId = _isFinance ? _pmId : me.EmployeeId;
-        }
-
-        // "Set up every project": any project. Otherwise a new project ("Create projects") or one they manage ("Run the projects you manage").
-        _allowed = _isFinance || (_project is null ? ProjectId is null && me.Can(Workbench.Contracts.Identity.Permission.ProjectsCreate) : me.Can(Workbench.Contracts.Identity.Permission.ProjectsManageOwn) && _project.ProjectManagerId == me.EmployeeId);
-        _loading = false;
-    }
-
-    private async Task SaveAsync()
-    {
-        await _form.ValidateAsync();
-        if (!_form.IsValid)
-        {
+            // A project's setup is its page's Setup tab now.
+            Navigation.NavigateTo($"projects/{id}/setup{(string.IsNullOrEmpty(Section) ? "" : $"/{Uri.EscapeDataString(Section)}")}", replace: true);
             return;
         }
 
-        _saving = true;
-        try
-        {
-            var status = !_isFinance && _project is null && _contractId is not null ? ProjectState.Planning : _status;
-            var request = new SaveProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, _pmId, status, SetupFormat.ToDateOnly(_start), SetupFormat.ToDateOnly(_finish));
-            if (_project is null)
-            {
-                // Default the dates to the contract's period of performance.
-                if (request.Start is null && _contracts.FirstOrDefault(c => c.Id == _contractId) is { } contract)
-                {
-                    request = request with { Start = contract.PeriodStart, Finish = request.Finish ?? contract.PeriodEnd };
-                }
-
-                var created = await Projects.CreateProjectAsync(request);
-                await (_layout?.SaveCustomFieldsAsync(created.Id) ?? Task.CompletedTask);
-                Snackbar.Add(created.Status == ProjectState.Planning && !_isFinance && created.ContractId is not null
-                    ? $"Requested {created.Code}. Finance will activate it; build its WBS meanwhile."
-                    : $"Created {created.Code}. Build its WBS next.", Severity.Success);
-                Navigation.NavigateTo($"setup/projects/{created.Id}");
-                _tab = 1;
-            }
-            else
-            {
-                _project = await Projects.UpdateProjectAsync(_project.Id, request);
-                await (_layout?.SaveCustomFieldsAsync(_project.Id) ?? Task.CompletedTask);
-                Snackbar.Add("Project saved.", Severity.Success);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
-        }
-        finally
-        {
-            _saving = false;
-        }
+        var me = await CurrentUser.GetAsync();
+        _allowed = me.Can(Workbench.Contracts.Identity.Permission.SetupProjects) || me.Can(Workbench.Contracts.Identity.Permission.ProjectsCreate);
     }
 }

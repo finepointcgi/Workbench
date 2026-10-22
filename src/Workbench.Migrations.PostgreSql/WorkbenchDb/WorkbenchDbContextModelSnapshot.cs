@@ -10226,6 +10226,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("WbsCodeIsAuto")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SheetId", "ParentId", "Order");

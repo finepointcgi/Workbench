@@ -1,3 +1,4 @@
+using Workbench.Contracts;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Scheduling;
 
@@ -61,5 +62,47 @@ public sealed class PermissionCheckingPlanScheduleService(IPlanScheduleService i
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
         return await inner.ApplyImportAsync(sheetId, request, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Starting a project needs what "New project" needs: Set up every project, or Create projects (as their manager). The
+/// steps inside go through the permission-checked project, plan and item services too.
+/// </summary>
+public sealed class PermissionCheckingProjectStartService(Contracts.ProjectAccounting.IProjectStartService inner, AccessControl access)
+    : Contracts.ProjectAccounting.IProjectStartService
+{
+    public async Task<IReadOnlyList<Contracts.ProjectAccounting.ProjectTemplateDto>> ListTemplatesAsync(CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.ListTemplatesAsync(cancellationToken);
+    }
+
+    public async Task<PlanImportPreview> CheckImportAsync(PlanImportRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.CheckImportAsync(request, cancellationToken);
+    }
+
+    public async Task<string> SuggestCodeAsync(CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.SuggestCodeAsync(cancellationToken);
+    }
+
+    public async Task<Contracts.ProjectAccounting.ProjectDto> StartAsync(Contracts.ProjectAccounting.StartProjectRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.StartAsync(request, cancellationToken);
+    }
+
+    private async Task RequireAsync(CancellationToken cancellationToken)
+    {
+        access.RequireSignedIn();
+        var permissions = await access.GetPermissionsAsync(cancellationToken);
+        if (!permissions.Has(Permission.SetupProjects) && !permissions.Has(Permission.ProjectsCreate))
+        {
+            throw new WorkbenchForbiddenException("Only Finance, administrators and project managers can start projects.");
+        }
     }
 }

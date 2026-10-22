@@ -105,6 +105,33 @@ public sealed class PlanGridTests
         Assert.Equal((_build.Start, _build.Start), (created.Start, created.Finish)); // a one-day task starting with Build
     }
 
+    [Fact]
+    public async Task Typing_a_list_of_tasks_needs_no_dialogs()
+    {
+        await using var ctx = CreateContext(out var items, out _);
+        var grid = Render(ctx);
+        grid.WaitForAssertion(() => Assert.Equal(3, grid.FindAll("tr.wb-row").Count));
+
+        // The quick-add box: type a name, press Enter.
+        grid.Find("[data-testid='grid-quick-add']").Input("Deliver");
+        grid.Find("[data-testid='grid-quick-add']").KeyDown("Enter");
+        grid.WaitForAssertion(() => Assert.Single(items.Creates));
+        Assert.Equal(("Deliver", (Guid?)null), (items.Creates[0].Title, items.Creates[0].ParentId));
+
+        // Enter after renaming the last row starts the next one below it.
+        grid.FindAll("tr.wb-row")[2].QuerySelector("td[data-col='0']")!.DoubleClick();
+        grid.Find("input.wb-editor").Input("Build it");
+        grid.Find(".wb-grid").KeyDown("Enter");
+        grid.WaitForAssertion(() => Assert.Equal(2, items.Creates.Count));
+        Assert.Equal((null, 2), (items.Creates[1].ParentId, items.Creates[1].Order));
+
+        // Add subtask under the selected row.
+        grid.FindAll("tr.wb-row")[0].QuerySelector("td[data-col='0']")!.Click();
+        grid.Find("[data-testid='grid-add-child']").Click();
+        grid.WaitForAssertion(() => Assert.Equal(3, items.Creates.Count));
+        Assert.Equal(_phase.Id, items.Creates[2].ParentId);
+    }
+
     private static BunitContext CreateContext(out FakeItems items, out FakePlan plan)
     {
         var ctx = new BunitContext();

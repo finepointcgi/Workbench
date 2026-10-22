@@ -4,6 +4,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IServiceProvider Services
+@inject IDialogService DialogService
 
 <PageTitle>Projects · Workbench</PageTitle>
 
@@ -12,7 +13,7 @@
     <MudSpacer />
     @if (_canCreate)
     {
-        <MudButton Href="setup/projects/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" data-testid="new-project">New project</MudButton>
+        <MudButton OnClick="NewProjectAsync" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" data-testid="new-project">New project</MudButton>
     }
     <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
 </MudStack>
@@ -262,4 +263,8 @@ else
         StandardSort = [new ListSort("project")],
         Columns = [ProjectColumn(false), Manager, Contract, Status(true), Period(true), Mine],
     };
+
+    /// <summary>The quick start: code, name and where the plan comes from; it opens the new project's plan.</summary>
+    private Task NewProjectAsync() =>
+        DialogService.ShowAsync<NewProjectDialog>("New project", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
 }
