@@ -247,7 +247,7 @@ internal static class PostgresTemplates
         return template;
     }
 
-    private static void DropDatabases(string filter)
+    internal static void DropDatabases(string filter)
     {
         using var connection = new NpgsqlConnection(ConnectionString("postgres"));
         connection.Open();
