@@ -30,11 +30,13 @@ public sealed class OrganizationSsoWebTests
         await using var web = await ProductionAsync(s => s.MfaRequirement = MfaRequirementLevel.Everyone);
         using var browser = web.Browser();
 
-        var challenge = await browser.GetAsync("/account/signin?returnUrl=/sheets");
+        var page = await browser.GetStringAsync("/account/signin?returnUrl=/sheets");
+        var challenge = await browser.GetAsync("/account/signin?provider=sso&returnUrl=%2Fsheets");
         var (redirectUri, form) = web.Idp.Authorize(challenge.Headers.Location!, new MockOidcProvider.User(Admin, "Ada Admin", ["pwd", "mfa"]));
         using var callback = await browser.PostAsync(redirectUri, new FormUrlEncodedContent(form));
         using var me = await browser.GetAsync("/api/v1/users/me/context");
 
+        Assert.Contains("Sign in with Acme Okta", page); // next to the email and password form
         Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
         Assert.Equal("https://localhost/signin-sso", redirectUri);
         Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
@@ -128,8 +130,8 @@ public sealed class OrganizationSsoWebTests
         using var acme = web.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new Uri("https://acme.localhost/") });
         using var beta = web.Factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new Uri("https://beta.localhost/") });
 
-        var acmeChallenge = await acme.GetAsync("/account/signin");
-        var betaChallenge = await beta.GetAsync("/account/signin");
+        var acmeChallenge = await acme.GetAsync("/account/signin?provider=sso");
+        var betaPage = await beta.GetStringAsync("/account/signin?provider=sso");
         var (redirectUri, form) = idp.Authorize(acmeChallenge.Headers.Location!, new MockOidcProvider.User(MultiTenantWeb.DevAdmin, "Dev", ["mfa"]));
 
         // Beta has no IdP of its own: acme's authorization response is worthless there and never reaches the IdP.
@@ -141,7 +143,8 @@ public sealed class OrganizationSsoWebTests
 
         Assert.Equal("https://acme.localhost/signin-sso", redirectUri);
         Assert.StartsWith("https://idp.test/acme/authorize", acmeChallenge.Headers.Location!.ToString());
-        Assert.Contains(DevSignIn.Path, betaChallenge.Headers.Location!.ToString());
+        Assert.DoesNotContain("Sign in with", betaPage); // beta has only its built-in accounts (and the dev picker)
+        Assert.Contains(DevSignIn.Path, betaPage);
         Assert.NotEqual(HttpStatusCode.OK, replayed.StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, signedIn.StatusCode);
         Assert.Equal(HttpStatusCode.OK, acmeMe.StatusCode);
@@ -195,7 +198,7 @@ public sealed class OrganizationSsoWebTests
             factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new Uri("https://localhost/") });
 
         /// <summary>Follows a sign-in from <paramref name="start"/> through the IdP; returns Workbench's response to the IdP's post-back.</summary>
-        public async Task<HttpResponseMessage> SignInAsync(HttpClient browser, MockOidcProvider.User user, string start = "/account/signin")
+        public async Task<HttpResponseMessage> SignInAsync(HttpClient browser, MockOidcProvider.User user, string start = "/account/signin?provider=sso")
         {
             using var challenge = await browser.GetAsync(start);
             Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);

@@ -174,6 +174,8 @@ public sealed class TenantProvisioner(
         var now = clock.GetUtcNow().UtcDateTime;
         await using var scope = services.CreateAsyncScope();
         var lifetime = scope.ServiceProvider.GetService<SignInPolicyOptions>()?.InviteLifetime ?? TimeSpan.FromDays(7);
+        var passwordsEnabled = scope.ServiceProvider.GetService<Workbench.Application.Identity.Passwords.PasswordOptions>()?.Enabled ?? true;
+        string? acceptToken = null;
         var invite = new UserInvite
         {
             Email = email,
@@ -191,6 +193,15 @@ public sealed class TenantProvisioner(
             }
 
             db.Set<UserInvite>().Add(invite);
+            if (passwordsEnabled)
+            {
+                // The first admin chooses a password from the email, like any invite (or signs in with the organization's SSO later).
+                var (raw, token) = Workbench.Application.Identity.Passwords.PasswordAccounts.NewToken(email, AccountTokenPurpose.Invite, invite.ExpiresAtUtc, now);
+                token.InviteId = invite.Id;
+                db.Set<AccountToken>().Add(token);
+                acceptToken = raw;
+            }
+
             db.Set<SecurityEvent>().Add(new SecurityEvent
             {
                 EventType = Contracts.Security.SecurityEventTypes.InviteCreated,
@@ -204,9 +215,11 @@ public sealed class TenantProvisioner(
         }
 
         var signIn = $"https://{tenant.Slug}.{tenancy.BaseDomain}/account/signin";
-        var text = $"Hello {name},\n\nYour Workbench organization {tenant.DisplayName} is ready. Sign in as its administrator with this email address ({email}) at {signIn} before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.\n";
+        var start = acceptToken is null ? signIn : $"https://{tenant.Slug}.{tenancy.BaseDomain}/account/accept-invite?token={acceptToken}";
+        var how = acceptToken is null ? "Sign in as its administrator with this email address" : "Choose your administrator password for this email address";
+        var text = $"Hello {name},\n\nYour Workbench organization {tenant.DisplayName} is ready. {how} ({email}) at {start} before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.\n";
         var html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p><p>Your Workbench organization {WebUtility.HtmlEncode(tenant.DisplayName)} is ready. "
-            + $"Sign in as its administrator with this email address ({WebUtility.HtmlEncode(email)}) at {WebUtility.HtmlEncode(signIn)} before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.</p>";
+            + $"{how} ({WebUtility.HtmlEncode(email)}) at <a href=\"{WebUtility.HtmlEncode(start)}\">{WebUtility.HtmlEncode(start)}</a> before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.</p>";
         try
         {
             await scope.ServiceProvider.GetRequiredService<IEmailSender>().SendAsync(new EmailMessage(email, "Your Workbench organization is ready", text, html), cancellationToken);

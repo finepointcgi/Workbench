@@ -19,6 +19,8 @@ internal static class SecurityAdminEndpoints
         users.MapPost("/{email}/deactivate", (string email, ReasonBody? r, IUserAdminService s, CancellationToken ct) => s.DeactivateAsync(email, r?.Reason, ct));
         users.MapPost("/{email}/reactivate", (string email, IUserAdminService s, CancellationToken ct) => s.ReactivateAsync(email, ct));
         users.MapPost("/{email}/sign-out-everywhere", (string email, IUserAdminService s, CancellationToken ct) => s.SignOutEverywhereAsync(email, ct));
+        users.MapPost("/{email}/reset-mfa", (string email, IUserAdminService s, CancellationToken ct) => s.ResetMfaAsync(email, ct));
+        users.MapPost("/{email}/password-reset", (string email, IUserAdminService s, CancellationToken ct) => s.SendPasswordResetAsync(email, ct));
         users.MapPut("/{email}/employee", (string email, EmployeeLinkBody r, IUserAdminService s, CancellationToken ct) => s.SetEmployeeLinkAsync(email, r.Mode, r.EmployeeId, ct));
         admin.MapGet("/linkable-employees", (IUserAdminService s, CancellationToken ct) => s.ListLinkableEmployeesAsync(ct));
 

@@ -45,6 +45,11 @@
             }
             <MudMenuItem Icon="@Icons.Material.Filled.BugReport" OnClick="() => Workbench.Ui.Support.SupportDialogs.ShowAsync(Dialogs, Navigation)" data-testid="report-problem">Report a problem / Send feedback</MudMenuItem>
             <MudMenuItem Icon="@Icons.Material.Filled.SupportAgent" Href="support" data-testid="my-support">My support requests</MudMenuItem>
+            @if (SignOut.AccountSecurityUrl is { } security)
+            {
+                @* A server-rendered page outside the circuit: changing a password or MFA needs real HTTP responses. *@
+                <MudMenuItem Icon="@Icons.Material.Filled.Security" OnClick="@(() => Navigation.NavigateTo(security, forceLoad: true))" data-testid="account-security">Password and sign-in</MudMenuItem>
+            }
             <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOutAsync">Sign out</MudMenuItem>
         </ChildContent>
     </MudMenu>

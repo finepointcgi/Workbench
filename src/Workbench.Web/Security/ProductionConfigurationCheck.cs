@@ -28,9 +28,14 @@ public static class ProductionConfigurationCheck
         }
 
         var oidc = configuration.GetSection(OidcSettings.SectionName).Get<OidcSettings>() ?? new OidcSettings();
-        if (!oidc.IsConfigured && !demo)
+        var passwordsEnabled = configuration.GetValue($"{Application.Identity.Passwords.PasswordOptions.SectionName}:Enabled", true);
+        var multiTenant = (configuration.GetSection(TenancyOptions.SectionName).Get<TenancyOptions>() ?? new TenancyOptions()).IsMultiTenant;
+        if (!oidc.IsConfigured && !demo && (!passwordsEnabled || multiTenant))
         {
-            problems.Add($"Set {OidcSettings.SectionName}:Authority and :ClientId (single sign-on is required outside Development).");
+            // SingleTenant servers can run on built-in accounts alone (bootstrap admins set a password with "Forgot password").
+            problems.Add(multiTenant
+                ? $"Set {OidcSettings.SectionName}:Authority and :ClientId (the MultiTenant host site signs in with them)."
+                : $"Set {OidcSettings.SectionName}:Authority and :ClientId, or turn built-in accounts back on ({Application.Identity.Passwords.PasswordOptions.SectionName}:Enabled).");
         }
 
         if (DevSignIn.IsEnabled(environment, oidc, configuration) && !demo)

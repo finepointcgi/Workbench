@@ -42,9 +42,15 @@ public sealed class SignInGate(
     /// <summary>The actor name for role changes made from IdP groups at sign-in.</summary>
     public const string SsoActor = "sso";
 
+    /// <summary>The <c>method</c> of a built-in account (email and password) sign-in.</summary>
+    public const string PasswordMethod = "password";
+
+    /// <summary>The <c>amr</c> value a built-in account sign-in carries after the authenticator app's code was checked.</summary>
+    public const string OtpAmr = "otp";
+
     /// <param name="method">
     /// How they signed in, for the log and the rules: <c>sso</c> (the organization's IdP), <c>oidc</c> (the server's IdP),
-    /// <c>dev</c> or <c>bearer</c>.
+    /// <c>password</c> (a built-in account; <paramref name="claims"/> has amr <c>otp</c> when the authenticator app was used), <c>dev</c> or <c>bearer</c>.
     /// </param>
     /// <param name="interactive">
     /// A sign-in (records success and the sign-in time). False for bearer tokens, checked on every API call, which
@@ -73,8 +79,8 @@ public sealed class SignInGate(
         }
 
         var policy = await settingsStore.GetAsync(cancellationToken);
-        // Bearer tokens (the desktop app) always come from the server's IdP, so they're refused too.
-        if (method is "oidc" or "bearer" && policy.OrganizationIdpReady && policy.Settings.RequireOrganizationIdp)
+        // Bearer tokens (the desktop app) always come from the server's IdP, so they're refused too; so are passwords.
+        if (method is "oidc" or "bearer" or PasswordMethod && policy.OrganizationIdpReady && policy.Settings.RequireOrganizationIdp)
         {
             return await DenyAsync(email, method, "This organization only allows sign-in through its own identity provider.", cancellationToken, SignInDenials.OrganizationIdp);
         }
@@ -170,23 +176,54 @@ public sealed class SignInGate(
         return new SignInDecision(true, null, created);
     }
 
+    /// <summary>
+    /// Whether this organization requires MFA of <paramref name="email"/>: their current roles (or a pending invite's)
+    /// against the MFA setting. Built-in accounts ask before signing in, to send people without an app to set one up.
+    /// </summary>
+    public async Task<bool> RequiresMfaAsync(string email, CancellationToken cancellationToken = default)
+    {
+        email = AccessControl.Normalize(email);
+        var policy = await settingsStore.GetAsync(cancellationToken);
+        if (policy.Settings.MfaRequirement == MfaRequirementLevel.Off)
+        {
+            return false;
+        }
+
+        var roles = (await CurrentRolesAsync(email, cancellationToken)).With(options.BootstrapAdmins.Contains(email) ? OrgRoles.Admin : OrgRoles.Employee);
+        if (await FindPendingInviteAsync(email, cancellationToken) is { } invite)
+        {
+            roles = roles.Union(InviteRoles(invite));
+        }
+
+        return await MfaRequiredAsync(policy, roles, cancellationToken);
+    }
+
+    private async Task<bool> MfaRequiredAsync(SignInPolicySnapshot policy, RoleGrant roles, CancellationToken cancellationToken)
+    {
+        if (policy.Settings.MfaRequirement == MfaRequirementLevel.Off)
+        {
+            return false;
+        }
+
+        if (policy.Settings.MfaRequirement == MfaRequirementLevel.Everyone)
+        {
+            return true;
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return SignInRules.MfaRequired(policy.Settings, (await RoleStore.ResolveRoleIdsAsync(db, roles.RoleIds, cancellationToken)).Permissions);
+    }
+
     /// <summary>The refusal when the organization requires MFA for these roles and the IdP didn't report it; null when fine.</summary>
     private async Task<SignInDecision?> RefuseWithoutMfaAsync(string email, string method, RoleGrant roles, SignInPolicySnapshot policy, SignInClaims? claims,
         bool interactive, CancellationToken cancellationToken)
     {
-        // The dev sign-in exists only in Development and has no second factor to check.
-        if (method == "dev" || policy.Settings.MfaRequirement == MfaRequirementLevel.Off || SignInRules.MfaSatisfied(policy.Settings, claims ?? SignInClaims.None))
+        // The dev sign-in exists only in Development and has no second factor to check. Built-in accounts prove MFA with
+        // Workbench's own authenticator check, whatever amr values the organization accepts from its IdP.
+        var satisfied = method == PasswordMethod ? claims?.Amr.Contains(OtpAmr) == true : SignInRules.MfaSatisfied(policy.Settings, claims ?? SignInClaims.None);
+        if (method == "dev" || satisfied || !await MfaRequiredAsync(policy, roles, cancellationToken))
         {
             return null;
-        }
-
-        if (policy.Settings.MfaRequirement != MfaRequirementLevel.Everyone)
-        {
-            await using var db = await dbFactory.CreateAsync(cancellationToken);
-            if (!SignInRules.MfaRequired(policy.Settings, (await RoleStore.ResolveRoleIdsAsync(db, roles.RoleIds, cancellationToken)).Permissions))
-            {
-                return null;
-            }
         }
 
         var seen = claims is null ? "none" : $"amr={string.Join(",", claims.Amr.Take(8))}; acr={string.Join(",", claims.Acr.Take(4))}";
@@ -195,6 +232,11 @@ public sealed class SignInGate(
         if (!interactive)
         {
             return SignInDecision.Deny("Multi-factor authentication is required.", SignInDenials.Mfa);
+        }
+
+        if (method == PasswordMethod)
+        {
+            return SignInDecision.Deny("Your organization requires multi-factor authentication. Set up an authenticator app and sign in with its code.", SignInDenials.Mfa);
         }
 
         return SignInDecision.Deny(

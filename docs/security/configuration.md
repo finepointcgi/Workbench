@@ -97,11 +97,18 @@ not in configuration:
 Register the redirect URIs `https://<host>/signin-sso` and `https://<host>/signout-callback-sso` at the IdP (shown on the
 page). The desktop app's bearer tokens still come from the server-wide provider. Changes are `settings.sso` security events.
 
+## Built-in accounts
+
+Email and password sign-in with an authenticator app, for organizations without single sign-on (or alongside it). See
+[built-in-accounts.md](built-in-accounts.md) for the flows, the lockout and MFA rules, and the security events.
+**Only allow sign-in through this provider** also refuses Workbench passwords.
+
 ## Startup check
 
 Outside Development, the web host lists every problem and refuses to start when:
 
-- no OIDC authority is configured (the dev sign-in page would be the only way in), or the dev sign-in is enabled;
+- no OIDC authority is configured and built-in accounts are off (`Authentication:Passwords:Enabled=false`) or the server
+  is MultiTenant (its host site signs in only with OIDC), or the dev sign-in is enabled outside the public demo;
 - `Authentication:Oidc:RequireHttpsMetadata` is `false`;
 - it only listens on plain HTTP and `Security:TlsTerminatedByProxy` isn't set;
 - SCIM is enabled and `Scim:BearerToken` is empty or shorter than 32 characters;

@@ -46,6 +46,12 @@
             {
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text">SCIM</MudChip>
             }
+            @if (context.HasPassword)
+            {
+                <MudTooltip Text="@(context.MfaEnabled ? "Signs in with a Workbench password and an authenticator app" : "Signs in with a Workbench password, no authenticator app")">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@(context.MfaEnabled ? "Password + MFA" : "Password")</MudChip>
+                </MudTooltip>
+            }
         </MudTd>
         <MudTd DataLabel="Roles">
             <div class="d-flex align-center flex-wrap gap-1" data-testid="user-roles">
@@ -89,6 +95,11 @@
             <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Actions for {context.Email}")" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <MudMenuItem Icon="@Icons.Material.Filled.Badge" OnClick="() => LinkEmployeeAsync(context)">Link employee…</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="() => SignOutEverywhereAsync(context)" Disabled="!context.IsActive">Sign out everywhere</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Password" OnClick="() => SendPasswordResetAsync(context)" Disabled="!context.IsActive">Email a password reset link</MudMenuItem>
+                @if (context.MfaEnabled)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.PhonelinkErase" OnClick="() => ResetMfaAsync(context)">Reset MFA…</MudMenuItem>
+                }
                 @if (context.IsActive)
                 {
                     <MudMenuItem Icon="@Icons.Material.Filled.PersonOff" OnClick="() => DeactivateAsync(context)" Disabled="IsMe(context)">Deactivate…</MudMenuItem>
@@ -199,6 +210,20 @@
         if (confirmed == true)
         {
             await RunAsync(() => UserAdmin.SignOutEverywhereAsync(user.Email), u => $"{u.DisplayName} was signed out everywhere.");
+        }
+    }
+
+    private Task SendPasswordResetAsync(UserAdminDto user) =>
+        RunAsync(() => UserAdmin.SendPasswordResetAsync(user.Email), u => $"A reset link was emailed to {u.Email}. It works once, for an hour.");
+
+    private async Task ResetMfaAsync(UserAdminDto user)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Reset MFA?",
+            $"Removes {user.DisplayName}'s authenticator app and recovery codes, and signs them out everywhere. Check who's asking first: "
+            + "if your organization requires MFA, their next sign-in asks them to set up an app again.", yesText: "Reset MFA", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await RunAsync(() => UserAdmin.ResetMfaAsync(user.Email), u => $"{u.DisplayName}'s MFA was reset.");
         }
     }
 

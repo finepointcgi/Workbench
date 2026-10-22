@@ -12,7 +12,7 @@ using Workbench.Domain.Security;
 
 namespace Workbench.Application.Security;
 
-public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, AccessControl access, UserLifecycle lifecycle) : IUserAdminService
+public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, AccessControl access, UserLifecycle lifecycle, Identity.Passwords.PasswordAccounts passwords) : IUserAdminService
 {
     public async Task<IReadOnlyList<UserAdminDto>> ListUsersAsync(string? query = null, bool includeInactive = true, CancellationToken cancellationToken = default)
     {
@@ -36,6 +36,10 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
         var employees = await db.Set<Employee>().AsNoTracking().Select(e => new { e.Id, e.Email, e.DisplayName }).ToListAsync(cancellationToken);
         var byId = employees.ToDictionary(e => e.Id);
         var byEmail = employees.GroupBy(e => e.Email).ToDictionary(g => g.Key, g => g.First());
+        var emails = rows.Select(u => u.Email).ToList();
+        var credentials = (await db.Set<PasswordCredential>().AsNoTracking().Where(c => emails.Contains(c.Email))
+            .Select(c => new { c.Email, HasPassword = c.PasswordHash != null, Mfa = c.ProtectedTotpSecret != null }).ToListAsync(cancellationToken))
+            .ToDictionary(c => c.Email);
         return rows
             .OrderByDescending(u => u.IsActive).ThenBy(u => u.DisplayName).ThenBy(u => u.Email)
             .Select(u =>
@@ -48,7 +52,8 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
                     _ => null,
                 };
                 var roles = held[u.Id].ToList();
-                return ToDto(u, employee?.Id, employee?.DisplayName, mode, roles);
+                var credential = credentials.GetValueOrDefault(u.Email);
+                return ToDto(u, employee?.Id, employee?.DisplayName, mode, roles) with { HasPassword = credential?.HasPassword == true, MfaEnabled = credential?.Mfa == true };
             })
             .ToList();
     }
@@ -89,6 +94,38 @@ public sealed class UserAdminService(IWorkbenchDbContextFactory dbFactory, Acces
         return await GetAsync(email, cancellationToken);
     }
 
+    public async Task<UserAdminDto> ResetMfaAsync(string email, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
+        var user = await GetAsync(email, cancellationToken);
+        if (!await passwords.RemoveTotpAsync(user.Email, access.Email, cancellationToken))
+        {
+            throw new ArgumentException($"{user.Email} has no authenticator app set up in Workbench. MFA for single sign-on is managed at the identity provider.", nameof(email));
+        }
+
+        // Whoever has the old phone shouldn't keep a session either.
+        await lifecycle.RevokeSessionsAsync(user.Email, access.Email, cancellationToken);
+        return await GetAsync(email, cancellationToken);
+    }
+
+    public async Task<UserAdminDto> SendPasswordResetAsync(string email, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
+        var user = await GetAsync(email, cancellationToken);
+        if (!user.IsActive)
+        {
+            throw new ArgumentException("Reactivate the user first.", nameof(email));
+        }
+
+        if (!passwords.Options.Enabled)
+        {
+            throw new ArgumentException("Built-in accounts are turned off on this server (Authentication:Passwords:Enabled).", nameof(email));
+        }
+
+        await passwords.RequestPasswordResetAsync(user.Email, requestedBy: access.Email, cancellationToken: cancellationToken);
+        return user;
+    }
+
     public async Task<IReadOnlyList<LinkableEmployeeDto>> ListLinkableEmployeesAsync(CancellationToken cancellationToken = default)
     {
         await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
@@ -117,7 +154,9 @@ public sealed class InviteService(
     IEmailSender email,
     NotificationOptions notificationOptions,
     ILogger<InviteService> logger,
-    TimeProvider clock) : IInviteService
+    TimeProvider clock,
+    Identity.Passwords.PasswordAccounts passwords,
+    Identity.Passwords.AccountLinks links) : IInviteService
 {
     public async Task<IReadOnlyList<InviteDto>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -195,13 +234,26 @@ public sealed class InviteService(
 
     private async Task SendInviteEmailAsync(UserInvite invite, CancellationToken cancellationToken)
     {
-        var signIn = string.IsNullOrWhiteSpace(notificationOptions.PublicBaseUrl)
+        var signIn = string.IsNullOrWhiteSpace(notificationOptions.PublicBaseUrl) && links.FallbackBaseUrl is null
             ? "Workbench"
-            : notificationOptions.PublicBaseUrl.TrimEnd('/') + "/account/signin";
+            : links.Absolute("/account/signin");
         var expires = $"{invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC";
-        var text = $"Hello {invite.DisplayName},\n\n{invite.InvitedBy} invited you to Workbench. Sign in with this email address ({invite.Email}) at {signIn} before {expires}.\n";
-        var html = $"<p>Hello {WebUtility.HtmlEncode(invite.DisplayName)},</p><p>{WebUtility.HtmlEncode(invite.InvitedBy)} invited you to Workbench. "
-            + $"Sign in with this email address ({WebUtility.HtmlEncode(invite.Email)}) at {WebUtility.HtmlEncode(signIn)} before {expires}.</p>";
+        var text = $"Hello {invite.DisplayName},\n\n{invite.InvitedBy} invited you to Workbench.";
+        var html = $"<p>Hello {WebUtility.HtmlEncode(invite.DisplayName)},</p><p>{WebUtility.HtmlEncode(invite.InvitedBy)} invited you to Workbench.</p>";
+        if (passwords.Options.Enabled)
+        {
+            // A one-time link to set a password (the invite's lifetime); organization SSO still works with the same email.
+            var accept = links.Absolute($"/account/accept-invite?token={await passwords.IssueInviteTokenAsync(invite, cancellationToken)}");
+            text += $" Choose your password here before {expires}:\n\n{accept}\n\nIf your organization signs in with its own account (single sign-on), you can instead sign in with this email address ({invite.Email}) at {signIn}.\n";
+            html += $"<p>Choose your password before {expires}:</p><p><a href=\"{WebUtility.HtmlEncode(accept)}\">Accept the invitation</a></p>"
+                + $"<p>If your organization signs in with its own account (single sign-on), you can instead sign in with this email address ({WebUtility.HtmlEncode(invite.Email)}) at {WebUtility.HtmlEncode(signIn)}.</p>";
+        }
+        else
+        {
+            text += $" Sign in with this email address ({invite.Email}) at {signIn} before {expires}.\n";
+            html += $"<p>Sign in with this email address ({WebUtility.HtmlEncode(invite.Email)}) at {WebUtility.HtmlEncode(signIn)} before {expires}.</p>";
+        }
+
         try
         {
             await email.SendAsync(new EmailMessage(invite.Email, "You're invited to Workbench", text, html), cancellationToken);

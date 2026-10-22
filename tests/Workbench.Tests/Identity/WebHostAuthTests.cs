@@ -96,9 +96,24 @@ public sealed class WebHostAuthTests
     }
 
     [Fact]
-    public void Production_without_an_authority_refuses_to_start()
+    public async Task Production_without_an_authority_signs_in_with_built_in_accounts()
     {
-        using var factory = new WorkbenchWebFactory("Production");
+        await using var factory = new WorkbenchWebFactory("Production");
+        using var client = factory.CreateClient(new() { AllowAutoRedirect = false, BaseAddress = new Uri("https://localhost/") });
+
+        using var page = await client.GetAsync("/sheets");
+        var signIn = await client.GetStringAsync(page.Headers.Location!);
+
+        Assert.Equal(HttpStatusCode.Redirect, page.StatusCode);
+        Assert.StartsWith("https://localhost/account/signin", page.Headers.Location!.ToString());
+        Assert.Contains("name=\"password\"", signIn);
+        Assert.DoesNotContain(DevSignIn.Path, signIn);
+    }
+
+    [Fact]
+    public void Production_without_an_authority_or_built_in_accounts_refuses_to_start()
+    {
+        using var factory = new WorkbenchWebFactory("Production", settings: new Dictionary<string, string> { ["Authentication:Passwords:Enabled"] = "false" });
 
         var error = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
 
