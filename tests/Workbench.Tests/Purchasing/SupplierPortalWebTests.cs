@@ -8,13 +8,14 @@ namespace Workbench.Tests.Purchasing;
 /// <summary>The supplier portal through the real web host: its own sign-in, kept apart from the internal app both ways.</summary>
 public sealed class SupplierPortalWebTests
 {
-    private const string Password = "portal-test-password-1";
+    // SupplierPortal:DemoContactPassword in appsettings.Development.json, which the seeded sample data uses.
+    private const string Password = "portal-demo-2026";
     private const string Contact = "jordan.reyes@primavera.example";
 
     [Fact]
     public async Task A_vendor_signs_in_to_the_portal_and_gets_nothing_internal()
     {
-        await using var factory = new WorkbenchWebFactory("Development", settings: new Dictionary<string, string> { ["SupplierPortal:DemoContactPassword"] = Password });
+        await using var factory = new WorkbenchWebFactory("Development");
         using var vendor = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = true });
 
         // Signed out: portal pages go to the portal's sign-in, not the internal one.

@@ -20,14 +20,17 @@ namespace Workbench.Tests.Identity;
 /// <remarks>
 /// Seeding the sample data takes most of a minute, so a Development host without extra <c>settings</c> starts from a
 /// copy of a database (and blob folder) seeded once per run (see <see cref="SeededWebTemplate"/>); the startup seed then
-/// finds the data there and does nothing. Hosts with <c>settings</c> may change what is seeded, so they seed their own.
+/// finds the data there and does nothing. Hosts with <c>settings</c> may change what is seeded, so they seed their own
+/// unless <c>seededTemplate</c> says the settings don't touch the seed (it also lets a Demo host, which seeds the same
+/// sample data, start from the copy).
 /// </remarks>
-internal sealed class WorkbenchWebFactory(string environment, bool testAuth = false, string? oidcAuthority = null, IReadOnlyDictionary<string, string>? settings = null)
+internal sealed class WorkbenchWebFactory(string environment, bool testAuth = false, string? oidcAuthority = null, IReadOnlyDictionary<string, string>? settings = null,
+    bool? seededTemplate = null)
     : WebApplicationFactory<Program>
 {
     public const string UserHeader = "X-Test-User";
     public const string ScimToken = "test-scim-token-0123456789abcdef0123456789";
-    private readonly bool _seeded = environment == "Development" && settings is null && !SeededWebTemplate.Seeding;
+    private readonly bool _seeded = (seededTemplate ?? (environment == "Development" && settings is null)) && !SeededWebTemplate.Seeding;
     // A migrated database on the suite's provider (WORKBENCH_TEST_DB): a SQLite file unless PostgreSQL was chosen.
     private (string Provider, string ConnectionString)? _database;
     private string? _storageRoot;
