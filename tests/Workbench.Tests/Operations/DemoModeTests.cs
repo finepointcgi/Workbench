@@ -222,7 +222,7 @@ public sealed partial class DemoModeTests
         [DemoMode.EnabledKey] = "true",
         ["Demo:NightlyReset"] = "false",
         ["Email:PickupFolder"] = Path.Combine(Path.GetTempPath(), $"workbench-demo-mail-{Guid.NewGuid():N}"),
-    });
+    }, seededTemplate: true); // the demo seeds the Development sample data, then its own settings
 
     private static Task<HttpResponseMessage> SignInAsync(HttpClient client, string page, string email) =>
         client.PostAsync(DevSignIn.Path, new FormUrlEncodedContent(new Dictionary<string, string>

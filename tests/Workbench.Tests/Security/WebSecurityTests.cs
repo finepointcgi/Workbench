@@ -113,7 +113,7 @@ public sealed partial class WebSecurityTests
         {
             ["RateLimiting:ApiPerMinute"] = "3",
             ["RateLimiting:SignInPerMinute"] = "2",
-        });
+        }, seededTemplate: true);
         using var viewer = factory.CreateClientAs("viewer@example.com");
         using var other = factory.CreateClientAs("analyst@example.com");
         using var anonymous = factory.CreateClientAs(null);
@@ -329,7 +329,7 @@ public sealed partial class WebSecurityTests
     [Fact]
     public async Task Sign_ins_sign_outs_denials_exports_and_period_close_are_logged()
     {
-        await using var factory = new WorkbenchWebFactory("Development", testAuth: true, settings: new Dictionary<string, string> { ["Authentication:RequireInvite"] = "true" });
+        await using var factory = new WorkbenchWebFactory("Development", testAuth: true, settings: new Dictionary<string, string> { ["Authentication:RequireInvite"] = "true" }, seededTemplate: true);
         using var browser = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = true });
         using var pm = factory.CreateClientAs("pm@example.com");
         using var analyst = factory.CreateClientAs("analyst@example.com");

@@ -28,7 +28,7 @@ jobs:
     # always there.
     name: Build and test (${{ matrix.database }})
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +69,12 @@ jobs:
                 --project "src/Workbench.Migrations.$provider" --startup-project "src/Workbench.Migrations.$provider" --context "$context"
             done
           done
+      - name: Test PostgreSQL skips durability
+        # A throwaway server: every test database is a CREATE DATABASE ... TEMPLATE copy, so don't wait on the disk.
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U workbench -d workbench -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
       - name: Test
         run: dotnet test Workbench.Server.slnf --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory test-results
       - name: Upload test results
