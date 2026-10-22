@@ -120,7 +120,7 @@ public sealed partial class DemoModeTests
     [Fact]
     public async Task The_demo_host_seeds_the_sample_people_and_lets_testers_pick_one()
     {
-        await using var factory = DemoHost();
+        await using var factory = DemoHost(seedItself: true);
         using var browser = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = true, BaseAddress = new Uri("https://localhost") });
 
         using var home = await browser.GetAsync("/");
@@ -181,7 +181,7 @@ public sealed partial class DemoModeTests
         await DemoReset.DeleteDemoDataAsync(factory.Services);
 
         await using var db = await factory.Services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync();
-        Assert.False(await db.Database.CanConnectAsync() && await db.Set<AppUser>().AnyAsync());
+        Assert.False(await HasUsersAsync(db));
         Assert.True(Directory.Exists(blobs));
         Assert.Empty(Directory.EnumerateFileSystemEntries(blobs));
     }
@@ -200,7 +200,7 @@ public sealed partial class DemoModeTests
         await lifetime.Stopped.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         await using var db = await factory.Services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync();
-        Assert.False(await db.Database.CanConnectAsync() && await db.Set<AppUser>().AnyAsync());
+        Assert.False(await HasUsersAsync(db));
     }
 
     private sealed class ClockAt(DateTimeOffset now) : TimeProvider
@@ -217,12 +217,37 @@ public sealed partial class DemoModeTests
         public void StopApplication() => Stopped.TrySetResult();
     }
 
-    private static WorkbenchWebFactory DemoHost() => new(DemoMode.EnvironmentName, testAuth: true, settings: new Dictionary<string, string>
+    /// <summary>
+    /// A demo host. It starts from a copy of the suite's seeded sample data (the demo seeds the same data) unless
+    /// <paramref name="seedItself"/>, which runs the demo's own startup seed on an empty database (about a minute).
+    /// </summary>
+    private static WorkbenchWebFactory DemoHost(bool seedItself = false) => new(DemoMode.EnvironmentName, testAuth: true, settings: new Dictionary<string, string>
     {
         [DemoMode.EnabledKey] = "true",
         ["Demo:NightlyReset"] = "false",
         ["Email:PickupFolder"] = Path.Combine(Path.GetTempPath(), $"workbench-demo-mail-{Guid.NewGuid():N}"),
-    });
+    }, seededCopy: !seedItself);
+
+    /// <summary>
+    /// Whether the database still has users. After a reset the SQLite file is gone, but anything still running on the
+    /// host (a background job, a pooled connection) can open it again and leave an empty file with no tables.
+    /// </summary>
+    private static async Task<bool> HasUsersAsync(WorkbenchDbContext db)
+    {
+        if (!await db.Database.CanConnectAsync())
+        {
+            return false;
+        }
+
+        try
+        {
+            return await db.Set<AppUser>().AnyAsync();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("no such table", StringComparison.Ordinal))
+        {
+            return false;
+        }
+    }
 
     private static Task<HttpResponseMessage> SignInAsync(HttpClient client, string page, string email) =>
         client.PostAsync(DevSignIn.Path, new FormUrlEncodedContent(new Dictionary<string, string>
