@@ -9,6 +9,8 @@
 @inject Workbench.Contracts.ProjectAccounting.IProjectService ProjectService
 @inject Workbench.Contracts.Financials.IFinancialAccessService FinancialAccess
 @inject IServiceProvider Services
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 
 @if (!Embedded)
 {
@@ -41,6 +43,19 @@ else
         {
             <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Outlined.Visibility">@(_access.CanComment ? "Can comment" : "View only")</MudChip>
         }
+        @if (_planService is not null && _sheet.Summary.SchedulingEnabled)
+        {
+            @* Excel round trip for PMs who plan in MS Project or Excel. *@
+            <MudMenu Label="Excel" StartIcon="@Icons.Material.Filled.TableView" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined"
+                     Size="Size.Small" AriaLabel="Excel import and export" data-testid="plan-excel-menu">
+                <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportPlanAsync" data-testid="plan-export">Export plan to Excel</MudMenuItem>
+                @if (_access.CanEdit)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Upload" OnClick="ImportPlanAsync" data-testid="plan-import">Import plan from Excel…</MudMenuItem>
+                }
+                <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="DownloadTemplateAsync" data-testid="plan-template">Download blank template</MudMenuItem>
+            </MudMenu>
+        }
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
     </MudStack>
@@ -53,6 +68,8 @@ else
     <CascadingValue Value="_access">
     @* Task assignment (Assignees, "My tasks"): null where the service isn't registered, which hides those affordances. *@
     <CascadingValue Value="_tasks">
+    @* The plan editor's outline (task IDs, durations, predecessors) on scheduled sheets; null hides those columns. *@
+    <CascadingValue Value="_plan">
     <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-4" KeepPanelsAlive="false">
         <MudTabPanel Text="Grid" Icon="@Icons.Material.Filled.GridOn">
             <SheetGridView Sheet="_sheet" Items="_items" Changed="LoadAsync" />
@@ -87,6 +104,7 @@ else
     <ItemDetailsDrawer Sheet="_sheet" Items="_items" Version="_liveVersion" Changed="LoadAsync" />
     </CascadingValue>
     </CascadingValue>
+    </CascadingValue>
 }
 <SheetLiveRefresher SheetId="SheetId" Changed="OnLiveChangeAsync" />
 
@@ -105,6 +123,10 @@ else
     private SheetAccess _access = new(null);
     private Workbench.Contracts.ProjectAccounting.ProjectDto? _project;
     private SheetTasksDto? _tasks;
+    private Workbench.Contracts.Scheduling.PlanScheduleDto? _plan;
+
+    private Workbench.Contracts.Scheduling.IPlanScheduleService? _planService =>
+        Services.GetService(typeof(Workbench.Contracts.Scheduling.IPlanScheduleService)) as Workbench.Contracts.Scheduling.IPlanScheduleService;
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -118,6 +140,7 @@ else
             _access = new SheetAccess(_sheet is null ? null : await Permissions.GetMyRoleAsync(SheetId));
             _tasks = _sheet is not null && Services.GetService(typeof(ITaskAssignmentService)) is ITaskAssignmentService tasks
                 ? await tasks.GetSheetAsync(SheetId) : null;
+            _plan = _sheet is { Summary.SchedulingEnabled: true } && _planService is { } plans ? await plans.GetAsync(SheetId) : null;
             var project = _sheet is null ? null : await ProjectService.GetProjectForSheetAsync(SheetId);
 
             // The Financials tab only for those who may read the project's financials (Finance, Admin, its manager).
@@ -130,6 +153,47 @@ else
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task ExportPlanAsync()
+    {
+        if (_planService is { } plans)
+        {
+            await DownloadAsync(() => plans.ExportAsync(SheetId));
+        }
+    }
+
+    private async Task DownloadTemplateAsync()
+    {
+        if (_planService is { } plans)
+        {
+            await DownloadAsync(() => plans.TemplateAsync());
+        }
+    }
+
+    private async Task DownloadAsync(Func<Task<Workbench.Contracts.Scheduling.PlanFile>> load)
+    {
+        try
+        {
+            var file = await load();
+            await using var module = await JS.InvokeAsync<Microsoft.JSInterop.IJSObjectReference>("import", "./_content/Workbench.Ui/plan.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or Microsoft.JSInterop.JSException)
+        {
+            Snackbar.Add($"Couldn't download the file: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ImportPlanAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Plan.PlanImportDialog> { { d => d.SheetId, SheetId } };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Plan.PlanImportDialog>("Import plan from Excel", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
         }
     }
 

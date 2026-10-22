@@ -27,6 +27,13 @@ public abstract class SheetViewBase : ComponentBase
     [CascadingParameter]
     public Contracts.Tasks.SheetTasksDto? Tasks { get; set; }
 
+    /// <summary>
+    /// The plan editor's outline (task IDs, outline numbers, durations, predecessors) on a scheduled sheet, from the sheet
+    /// page. Null hides the plan columns.
+    /// </summary>
+    [CascadingParameter]
+    public Contracts.Scheduling.PlanScheduleDto? Plan { get; set; }
+
     protected bool CanEdit => Access?.CanEdit ?? true;
 
     /// <summary>Editors assign; without the cascade nobody does.</summary>

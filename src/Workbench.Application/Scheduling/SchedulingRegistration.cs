@@ -6,11 +6,12 @@ namespace Workbench.Application;
 
 public static class SchedulingRegistration
 {
-    /// <summary>Dependencies, critical-path analysis and baselines.</summary>
+    /// <summary>Dependencies, critical-path analysis, baselines and the plan editor (outline, durations, Excel import/export).</summary>
     public static IServiceCollection AddWorkbenchScheduling(this IServiceCollection services)
     {
         services.AddScoped<IDependencyService, DependencyService>();
         services.AddScoped<IBaselineService, BaselineService>();
+        services.AddScoped<IPlanScheduleService, PlanScheduleService>();
         return services;
     }
 }

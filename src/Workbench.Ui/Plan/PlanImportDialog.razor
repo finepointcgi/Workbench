@@ -1,0 +1,171 @@
+@* Imports a plan from Excel: choose a file, see what it adds, changes and removes (and any row errors), then apply. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Scheduling
+@inject IPlanScheduleService Plans
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-3">
+            The file replaces the plan: its rows are the tasks, in order, and tasks that aren't in it are removed.
+            Nothing changes until you choose Import.
+        </MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+            <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".xlsx,.xlsm,.csv">
+                <CustomContent>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync"
+                               Disabled="_busy" data-testid="plan-import-choose">Choose an Excel file</MudButton>
+                </CustomContent>
+                <SelectedTemplate />
+            </MudFileUpload>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@(_fileName ?? "No file chosen")</MudText>
+        </MudStack>
+
+        @if (_busy)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Reading the file" />
+        }
+
+        @if (_preview is { } preview)
+        {
+            <div role="status" data-testid="plan-import-summary" class="mb-2">
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@preview.Count(PlanImportChangeKind.Added) to add</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@preview.Count(PlanImportChangeKind.Changed) to change</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="@(preview.Count(PlanImportChangeKind.Removed) > 0 ? Color.Warning : Color.Default)" Variant="Variant.Outlined">@preview.Count(PlanImportChangeKind.Removed) to remove</MudChip>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@preview.Unchanged unchanged</MudChip>
+            </div>
+
+            @if (preview.Issues.Count > 0)
+            {
+                <MudAlert Severity="@(preview.HasErrors ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">
+                    @(preview.HasErrors ? "Fix these rows in the file and choose it again. Nothing has been imported." : "Check these rows; they won't stop the import.")
+                </MudAlert>
+                <MudSimpleTable Dense="true" Striped="true" Class="mb-3" data-testid="plan-import-issues">
+                    <thead><tr><th scope="col">Row</th><th scope="col">Problem</th></tr></thead>
+                    <tbody>
+                        @foreach (var issue in preview.Issues)
+                        {
+                            <tr>
+                                <td>@issue.Row</td>
+                                <td>
+                                    <MudIcon Icon="@(issue.IsError ? Icons.Material.Filled.Error : Icons.Material.Filled.Warning)" Size="Size.Small"
+                                             Color="@(issue.IsError ? Color.Error : Color.Warning)" aria-label="@(issue.IsError ? "Error" : "Warning")" />
+                                    @issue.Message
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+
+            @if (preview.Changes.Count == 0 && !preview.HasErrors)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true">The file matches the plan. Importing it changes nothing.</MudAlert>
+            }
+            else if (preview.Changes.Count > 0)
+            {
+                <MudSimpleTable Dense="true" Class="plan-import-changes" data-testid="plan-import-changes">
+                    <thead><tr><th scope="col">Row</th><th scope="col">Change</th><th scope="col">Task</th><th scope="col">What</th></tr></thead>
+                    <tbody>
+                        @foreach (var change in preview.Changes)
+                        {
+                            <tr>
+                                <td>@(change.Row?.ToString() ?? "—")</td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small" Color="@KindColor(change.Kind)">@change.Kind</MudChip>
+                                </td>
+                                <td>@change.Title</td>
+                                <td>@string.Join("; ", change.Details)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyAsync" data-testid="plan-import-apply"
+                   Disabled="@(_busy || _preview is null || _preview.HasErrors || _preview.Changes.Count == 0)">
+            Import@(_preview is { HasErrors: false } p && p.Changes.Count > 0 ? $" {p.Changes.Count} change{(p.Changes.Count == 1 ? "" : "s")}" : "")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private const long MaxBytes = 20 * 1024 * 1024;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    private string? _fileName;
+    private byte[]? _content;
+    private PlanImportPreview? _preview;
+    private bool _busy;
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _preview = null;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _fileName = file.Name;
+            _content = buffer.ToArray();
+            _preview = await Plans.PreviewImportAsync(SheetId, new PlanImportRequest(_fileName, _content));
+        }
+        catch (IOException)
+        {
+            Snackbar.Add("That file is too large (20 MB at most).", Severity.Error);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_content is null || _fileName is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var applied = await Plans.ApplyImportAsync(SheetId, new PlanImportRequest(_fileName, _content));
+            Snackbar.Add($"Imported {_fileName}: {applied.Count(PlanImportChangeKind.Added)} added, {applied.Count(PlanImportChangeKind.Changed)} changed, {applied.Count(PlanImportChangeKind.Removed)} removed.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color KindColor(PlanImportChangeKind kind) => kind switch
+    {
+        PlanImportChangeKind.Added => Color.Success,
+        PlanImportChangeKind.Removed => Color.Warning,
+        _ => Color.Info,
+    };
+}

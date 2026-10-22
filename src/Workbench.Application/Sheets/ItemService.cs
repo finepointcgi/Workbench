@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Formulas;
+using Workbench.Application.Scheduling;
 using Workbench.Contracts;
 using Workbench.Contracts.Sheets;
 using Workbench.Domain;
@@ -62,6 +63,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         db.Items.Add(item);
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
         return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
@@ -82,6 +84,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         item.Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken);
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
         return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
@@ -123,6 +126,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
 
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
         return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
@@ -149,6 +153,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         Renumber(items.Where(i => i.ParentId == item.ParentId && !doomed.Contains(i.Id)));
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
     }
 
     /// <summary>Copies request values, dropping formula columns: their values are computed on read, never stored.</summary>
