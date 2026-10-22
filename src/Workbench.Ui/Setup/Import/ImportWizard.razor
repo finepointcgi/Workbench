@@ -410,7 +410,7 @@
                 yield return ("Open sheets", "sheets");
                 if (_options.ProjectId is { } project)
                 {
-                    yield return ("Open the project", $"setup/projects/{project}");
+                    yield return ("Open the project", $"projects/{project}/setup");
                 }
 
                 break;

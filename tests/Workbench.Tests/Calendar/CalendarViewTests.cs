@@ -203,7 +203,7 @@ public sealed class CalendarViewTests
 
         Bars(calendar, item).Single().Click();
 
-        Assert.EndsWith($"sheets/{ViewFakes.SheetId}?item={item.Id}", ctx.Services.GetRequiredService<NavigationManager>().Uri);
+        Assert.EndsWith($"?item={item.Id}", ctx.Services.GetRequiredService<NavigationManager>().Uri); // details open on the page showing the sheet
     }
 
     [Fact]

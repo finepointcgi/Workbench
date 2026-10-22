@@ -286,7 +286,13 @@ public sealed class PlanScheduleService(
             item.ParentId = task.ParentId;
             item.Order = task.Order;
             item.Title = task.Title;
-            item.CostpointWbsId = string.IsNullOrWhiteSpace(task.WbsCode) ? null : task.WbsCode;
+            var code = string.IsNullOrWhiteSpace(task.WbsCode) ? null : task.WbsCode;
+            if (code != item.CostpointWbsId)
+            {
+                // A code typed in the file is kept as typed; a cleared one is numbered automatically.
+                item.WbsCodeIsAuto = code is null;
+                item.CostpointWbsId = code;
+            }
             var values = new Dictionary<string, string?>(item.Values);
             if (task.IsSummary)
             {
@@ -405,6 +411,8 @@ public sealed class PlanScheduleService(
         {
             ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.RollupPercentId);
         }
+
+        await PlanReflow.NumberAsync(db, await PlanReflow.ProjectForAsync(db, state.Sheet.Id, cancellationToken), state.Items, cancellationToken);
 
         state.Sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);

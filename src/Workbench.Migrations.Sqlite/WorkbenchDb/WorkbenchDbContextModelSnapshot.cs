@@ -9661,6 +9661,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("WbsCodeIsAuto")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SheetId", "ParentId", "Order");

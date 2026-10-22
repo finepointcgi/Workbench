@@ -70,6 +70,12 @@ public sealed class Item : Entity
     /// <summary>Costpoint WBS element / charge code this item rolls up to.</summary>
     public string? CostpointWbsId { get; set; }
 
+    /// <summary>
+    /// True when Workbench numbered <see cref="CostpointWbsId"/> from the outline (on a project's plan), so it follows the
+    /// task when it's indented, outdented or moved. A code someone typed is false and kept as typed.
+    /// </summary>
+    public bool WbsCodeIsAuto { get; set; }
+
     /// <summary>Custom cell values keyed by column id, stored as JSON.</summary>
     public Dictionary<string, string?> Values { get; set; } = [];
 

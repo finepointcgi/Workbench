@@ -80,7 +80,13 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         item.Finish = request.Finish;
         item.IsMilestone = request.IsMilestone ?? item.IsMilestone;
         PinMilestoneDate(item);
-        item.CostpointWbsId = string.IsNullOrWhiteSpace(request.CostpointWbsId) ? null : request.CostpointWbsId.Trim();
+        var code = string.IsNullOrWhiteSpace(request.CostpointWbsId) ? null : request.CostpointWbsId.Trim();
+        if (code != item.CostpointWbsId)
+        {
+            // A typed code is kept; clearing it hands the task back to automatic numbering (on a project's plan).
+            item.WbsCodeIsAuto = code is null;
+            item.CostpointWbsId = code;
+        }
         item.Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken);
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
