@@ -114,11 +114,22 @@ internal static class DatabaseReaper
         {
             if (provider == DatabaseProvider.PostgreSql)
             {
+                using (var pooled = new NpgsqlConnection(connectionString))
+                {
+                    NpgsqlConnection.ClearPool(pooled);
+                }
+
                 var name = new NpgsqlConnectionStringBuilder(connectionString).Database;
                 PostgresTemplates.Execute($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)");
             }
             else
             {
+                // Closes the idle pooled connections, or the deleted file's space isn't freed until they're pruned.
+                using (var pooled = new SqliteConnection(connectionString))
+                {
+                    SqliteConnection.ClearPool(pooled);
+                }
+
                 var path = new SqliteConnectionStringBuilder(connectionString).DataSource;
                 foreach (var file in new[] { path, $"{path}-journal", $"{path}-wal", $"{path}-shm" })
                 {
@@ -138,7 +149,11 @@ internal static class DatabaseReaper
     }
 }
 
-/// <summary>Migrates one SQLite file per test run, then copies it for every test (much faster than migrating each time).</summary>
+/// <summary>
+/// Migrates one SQLite file per test run, then copies it for every test (much faster than migrating each time). Test
+/// connections are pooled: opening a connection to this schema costs more than the queries most tests run, and without a
+/// pool the SQLite suite was many times slower than InMemory.
+/// </summary>
 internal static class SqliteTemplates
 {
     private static readonly string Folder = Path.Combine(Path.GetTempPath(), $"workbench-tests-{Environment.ProcessId}");
@@ -152,7 +167,7 @@ internal static class SqliteTemplates
         var path = Path.Combine(Folder, $"{Guid.NewGuid():N}.db");
         Directory.CreateDirectory(Folder);
         File.Copy(template, path);
-        return $"Data Source={path};Pooling=False";
+        return $"Data Source={path}";
     }
 
     private static string CreateTemplate()
@@ -209,8 +224,18 @@ internal static class PostgresTemplates
         return ConnectionString(name);
     }
 
+    /// <summary>
+    /// A pooled connection string for <paramref name="database"/>: a new PostgreSQL connection is a new server process.
+    /// Idle connections close within seconds, so the run's thousands of databases don't hold connections for long.
+    /// </summary>
     public static string ConnectionString(string database) =>
-        new NpgsqlConnectionStringBuilder(Server) { Database = database, Pooling = false, IncludeErrorDetail = true }.ConnectionString;
+        new NpgsqlConnectionStringBuilder(Server)
+        {
+            Database = database,
+            IncludeErrorDetail = true,
+            ConnectionIdleLifetime = 2,
+            ConnectionPruningInterval = 1,
+        }.ConnectionString;
 
     /// <summary>Runs a command on the server's <c>postgres</c> database.</summary>
     public static void Execute(string sql)
@@ -247,7 +272,7 @@ internal static class PostgresTemplates
         return template;
     }
 
-    private static void DropDatabases(string filter)
+    internal static void DropDatabases(string filter)
     {
         using var connection = new NpgsqlConnection(ConnectionString("postgres"));
         connection.Open();

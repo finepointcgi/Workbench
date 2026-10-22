@@ -19,10 +19,12 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
     public const string HostAdmin = "host@workbench.local";
     public const string DevAdmin = "dev@workbench.local";
 
-    private MultiTenantWeb(WorkbenchWebFactory factory, string baseDomain)
+    private MultiTenantWeb(WorkbenchWebFactory factory, string baseDomain, string id, string storageRoot)
     {
         Factory = factory;
         BaseDomain = baseDomain;
+        Id = id;
+        StorageRoot = storageRoot;
     }
 
     public WorkbenchWebFactory Factory { get; }
@@ -31,8 +33,16 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
 
     public IServiceProvider Services => Factory.Services;
 
-    /// <summary>Development: tenants acme and beta exist with the sample data, the X-Tenant header works.</summary>
-    public static Task<MultiTenantWeb> DevelopmentAsync() => CreateAsync("Development", "localhost", ["acme", "beta"]);
+    /// <summary>Names this host's catalog and tenant databases (and its SQLite folder).</summary>
+    private string Id { get; }
+
+    private string StorageRoot { get; }
+
+    /// <summary>
+    /// Development: tenants acme and beta exist with the sample data, the X-Tenant header works. The catalog, both tenant
+    /// databases and the blob folder are copied from ones seeded once per run (see <see cref="MultiTenantTemplate"/>).
+    /// </summary>
+    public static Task<MultiTenantWeb> DevelopmentAsync() => Task.FromResult(MultiTenantTemplate.NewHost());
 
     /// <summary>
     /// Staging (the production startup checks apply): nothing is migrated on startup, so this runs the migrator the way
@@ -40,7 +50,7 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
     /// </summary>
     public static async Task<MultiTenantWeb> StagingAsync()
     {
-        var web = await CreateAsync("Staging", "workbench.test", []);
+        var web = Start("Staging", "workbench.test", [], NewId());
         await web.Services.GetRequiredService<Workbench.Infrastructure.Persistence.DatabaseMigrator>().MigrateAsync();
         var provisioner = web.Services.GetRequiredService<TenantProvisioner>();
         await provisioner.CreateAsync(new CreateTenantRequest("acme", "Acme Federal", "admin@acme.example"), HostAdmin);
@@ -48,39 +58,44 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
         return web;
     }
 
-    private static Task<MultiTenantWeb> CreateAsync(string environment, string baseDomain, string[] developmentTenants)
+    internal static string NewId() => Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>The catalog's connection string for host <paramref name="id"/>.</summary>
+    internal static string CatalogConnectionString(string id) => TestDb.Provider == TestDatabase.PostgreSql
+        ? PostgresTemplates.ConnectionString($"{PostgresTemplates.RunId}_{id}_catalog")
+        : $"Data Source={Path.Combine(SqliteFolder(id), "catalog.db")};Pooling=False";
+
+    /// <summary>Tenant databases' connection string for host <paramref name="id"/>, with the <c>{tenant}</c> placeholder.</summary>
+    internal static string TenantConnectionString(string id) => TestDb.Provider == TestDatabase.PostgreSql
+        ? PostgresTemplates.ConnectionString($"{PostgresTemplates.RunId}_{id}_{{tenant}}")
+        : $"Data Source={Path.Combine(SqliteFolder(id), "{tenant}.db")};Pooling=False";
+
+    internal static string SqliteFolder(string id) => Path.Combine(Path.GetTempPath(), $"workbench-tenants-{id}");
+
+    /// <summary>Starts a host on the databases named by <paramref name="id"/> (which may already exist) and <paramref name="storageRoot"/>.</summary>
+    internal static MultiTenantWeb Start(string environment, string baseDomain, string[] developmentTenants, string id, string? storageRoot = null)
     {
-        var id = Guid.NewGuid().ToString("N")[..8];
+        storageRoot ??= Path.Combine(Path.GetTempPath(), $"workbench-blobs-{id}");
         var settings = new Dictionary<string, string>
         {
             ["Tenancy:Mode"] = "MultiTenant",
             ["Tenancy:BaseDomain"] = baseDomain,
             ["Tenancy:HostAdmins:0"] = HostAdmin,
             ["Database:MigrateOnStartup"] = environment == "Development" ? "true" : "false",
+            ["Database:Provider"] = TestDb.Provider == TestDatabase.PostgreSql ? "PostgreSQL" : "Sqlite",
+            ["ConnectionStrings:Catalog"] = CatalogConnectionString(id),
+            ["Tenancy:TenantConnectionString"] = TenantConnectionString(id),
+            ["Storage:Root"] = storageRoot,
         };
         for (var i = 0; i < developmentTenants.Length; i++)
         {
             settings[$"Tenancy:DevelopmentTenants:{i}"] = developmentTenants[i];
         }
 
-        if (TestDb.Provider == TestDatabase.PostgreSql)
-        {
-            settings["Database:Provider"] = "PostgreSQL";
-            settings["ConnectionStrings:Catalog"] = PostgresTemplates.ConnectionString($"{PostgresTemplates.RunId}_{id}_catalog");
-            settings["Tenancy:TenantConnectionString"] = PostgresTemplates.ConnectionString($"{PostgresTemplates.RunId}_{id}_{{tenant}}");
-        }
-        else
-        {
-            var folder = Path.Combine(Path.GetTempPath(), $"workbench-tenants-{id}");
-            settings["Database:Provider"] = "Sqlite";
-            settings["ConnectionStrings:Catalog"] = $"Data Source={Path.Combine(folder, "catalog.db")};Pooling=False";
-            settings["Tenancy:TenantConnectionString"] = $"Data Source={Path.Combine(folder, "{tenant}.db")};Pooling=False";
-        }
-
         var factory = new WorkbenchWebFactory(environment, testAuth: true,
             oidcAuthority: environment == "Development" ? null : "https://login.example.test/", settings: settings);
         _ = factory.Server; // start the host (and, in Development, provision the tenants)
-        return Task.FromResult(new MultiTenantWeb(factory, baseDomain));
+        return new MultiTenantWeb(factory, baseDomain, id, storageRoot);
     }
 
     /// <summary>A client for a tenant's address (or the host site when <paramref name="tenant"/> is null), signed in as <paramref name="email"/>.</summary>
@@ -125,5 +140,10 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
 
-    public ValueTask DisposeAsync() => Factory.DisposeAsync();
+    /// <summary>Stops the host and deletes its catalog, tenant databases and blob folder.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        await Factory.DisposeAsync();
+        MultiTenantTemplate.Delete(Id, StorageRoot);
+    }
 }
