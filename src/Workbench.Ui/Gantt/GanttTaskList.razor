@@ -1,4 +1,5 @@
 @using System.Globalization
+@inject NavigationManager Navigation
 
 <div class="@(Assignees is null ? "gantt-task-list" : "gantt-task-list with-assignees")" role="table" aria-label="Tasks">
     <div class="gantt-task-header" role="row" style="height:@(Px(GanttLayout.HeaderHeight))">
@@ -31,7 +32,7 @@
                     <MudIcon Icon="@Icons.Material.Filled.Diamond" Size="Size.Small" Class="gantt-milestone-icon" aria-hidden="true" />
                     <span class="wb-sr-only">Milestone:</span>
                 }
-                <a href="@($"sheets/{SheetId}?item={row.Item.Id}")" class="@(Critical.Contains(row.Item.Id) ? "gantt-task-link critical" : "gantt-task-link")"
+                <a href="@Workbench.Ui.Views.ItemLinks.Details(Navigation, row.Item.Id)" class="@(Critical.Contains(row.Item.Id) ? "gantt-task-link critical" : "gantt-task-link")"
                    title="@row.Item.Title">@row.Item.Title</a>
                 @if (Critical.Contains(row.Item.Id))
                 {

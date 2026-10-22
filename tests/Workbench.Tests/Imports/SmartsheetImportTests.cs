@@ -294,6 +294,7 @@ public sealed class SmartsheetImportTests
         Assert.Equal(items["Task A1"].Id, items["Sub A1a"].ParentId);
         Assert.Equal(items["Phase A"].Id, items["Task A2"].ParentId);
         Assert.Null(items["Phase B"].ParentId);
-        Assert.Equal(new DateOnly(2026, 11, 3), items["Task A1"].Start);
+        // Task A1 is a summary on a scheduled sheet: its dates roll up from Sub A1a (Nov 4 – Nov 8).
+        Assert.Equal(new DateOnly(2026, 11, 4), items["Task A1"].Start);
     }
 }

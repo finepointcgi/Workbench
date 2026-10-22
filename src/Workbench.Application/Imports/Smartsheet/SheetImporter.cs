@@ -251,6 +251,18 @@ public abstract class SheetImporter : IImporter
         {
             var byId = existingItems.ToDictionary(i => i.Id);
             var keys = await KeysAsync(RowScope);
+
+            // A scheduled sheet computes some dates itself: a summary row's dates and % complete roll up from its subtasks, and
+            // links push successors later. The source's own values for those aren't changes, or every re-import would "update" them.
+            var detail = await _sheets.GetAsync(sheetId, cancellationToken);
+            var scheduled = detail?.Summary.SchedulingEnabled == true;
+            var summaries = source.Rows.Where(r => r.ParentId is not null).Select(r => r.ParentId!).ToHashSet();
+            var percentKey = detail?.Columns
+                .Where(c => c.Type == ColumnKind.Number && c.Formula is null)
+                .FirstOrDefault(c => Tasks.TaskRules.PercentColumnNames.Contains(c.Name, StringComparer.OrdinalIgnoreCase))?.Id.ToString();
+            var linked = scheduled && !_run.CreatedIds.Contains(sheetId)
+                ? (await _dependencies.ListAsync(sheetId, cancellationToken)).Select(d => d.SuccessorId).ToHashSet()
+                : [];
             var titles = new Dictionary<string, string>();
             var links = new List<(Guid, string, SourceRow)>();
             foreach (var row in source.Rows.OrderBy(r => r.Number))
@@ -311,12 +323,14 @@ public abstract class SheetImporter : IImporter
                     var newCode = code ?? item.CostpointWbsId;
                     var changed = new List<string>();
                     if (item.Title != title) changed.Add("title");
-                    if (item.Start != start) changed.Add("start");
-                    if (item.Finish != finish && !(isMilestone && item.Finish == (finish ?? start))) changed.Add("finish");
-                    if (item.IsMilestone != isMilestone) changed.Add("milestone");
+                    var rolledUp = scheduled && summaries.Contains(row.Id);
+                    var pushed = linked.Contains(item.Id) && item.Start is { } kept && start is { } typed && kept > typed;
+                    if (!rolledUp && !pushed && item.Start != start) changed.Add("start");
+                    if (!rolledUp && !pushed && item.Finish != finish && !(isMilestone && item.Finish == (finish ?? start))) changed.Add("finish");
+                    if (!rolledUp && item.IsMilestone != isMilestone) changed.Add("milestone");
                     if (item.ParentId != parentItem) changed.Add("parent");
                     if (newCode != item.CostpointWbsId) changed.Add("WBS");
-                    if (values.Any(kv => item.Values.GetValueOrDefault(kv.Key) != kv.Value)) changed.Add("values");
+                    if (values.Any(kv => item.Values.GetValueOrDefault(kv.Key) != kv.Value && !(rolledUp && kv.Key == percentKey))) changed.Add("values");
                     if (code is not null)
                     {
                         links.Add((item.Id, code, row));

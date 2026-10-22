@@ -14,6 +14,13 @@ internal static class SetupEndpoints
         plan.MapGet("/diff", (Guid id, IPlanSyncService s, CancellationToken ct) => s.DiffAsync(id, ct));
         plan.MapPost("/apply", (Guid id, ApplyPlanSyncRequest r, IPlanSyncService s, CancellationToken ct) => s.ApplyAsync(id, r, ct));
 
+        // Starting a project in one step (project, WBS and plan sheet).
+        var start = v1.MapGroup("/project-start").WithTags("Plan sync");
+        start.MapGet("/templates", (IProjectStartService s, CancellationToken ct) => s.ListTemplatesAsync(ct));
+        start.MapGet("/suggested-code", async (IProjectStartService s, CancellationToken ct) => new SuggestedProjectCode(await s.SuggestCodeAsync(ct)));
+        start.MapPost("", (StartProjectRequest r, IProjectStartService s, CancellationToken ct) => s.StartAsync(r, ct));
+        start.MapPost("/check-import", (Workbench.Contracts.Scheduling.PlanImportRequest r, IProjectStartService s, CancellationToken ct) => s.CheckImportAsync(r, ct));
+
         var setup = v1.MapGroup("/setup").WithTags("Setup");
         setup.MapPut("/org-units/{id:guid}", (Guid id, CreateOrgUnitRequest r, ISetupAdminService s, CancellationToken ct) => s.UpdateOrgUnitAsync(id, r, ct));
         setup.MapPut("/customers/{id:guid}", (Guid id, SaveCustomerRequest r, ISetupAdminService s, CancellationToken ct) => s.UpdateCustomerAsync(id, r, ct));
@@ -23,3 +30,6 @@ internal static class SetupEndpoints
         setup.MapGet("/checklist", (ISetupAdminService s, CancellationToken ct) => s.GetChecklistAsync(ct));
     }
 }
+
+/// <summary>Response of <c>GET /project-start/suggested-code</c>.</summary>
+public sealed record SuggestedProjectCode(string Code);

@@ -81,7 +81,9 @@ public sealed class SheetGridTests
         grid.FindAll(".wb-toggle")[0].Click();
 
         Assert.Equal(["Phase 1", "Phase 2"], Titles(grid));
-        Assert.Equal($"sheets/{SheetId}?item={phase.Id}", grid.Find(".wb-title-link").GetAttribute("href"));
+        // The title selects the cell; the details link opens the panel on the page showing the sheet.
+        Assert.Null(grid.Find(".wb-title-link").GetAttribute("href"));
+        Assert.EndsWith($"?item={phase.Id}", grid.Find("[data-testid=open-details]").GetAttribute("href"));
     }
 
     [Fact]

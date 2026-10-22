@@ -173,7 +173,7 @@
 
     private void StartAdd(DateOnly day) => _addingDate = CanEdit ? day : null;
 
-    private void Open(ItemDto item) => Navigation.NavigateTo($"sheets/{SheetId}?item={item.Id}");
+    private void Open(ItemDto item) => Navigation.NavigateTo(ItemLinks.Details(Navigation, item.Id));
 
     private async Task QuickAddAsync(string title)
     {

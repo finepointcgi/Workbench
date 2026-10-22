@@ -1,20 +1,114 @@
-@* The Setup tab (Finance and administrators): where the project's setup, WBS and contract are edited. *@
+@* The Setup tab: everything about setting the project up, on the project's own page (it used to be under Setup › Projects).
+   Shown to those who set the project up (Finance, administrators, its manager with the Project manager role); the
+   server checks every change the same way. Sections open from links like /projects/{id}/setup/charge-codes. *@
+@inject IProjectService Projects
+@inject IPeopleService People
 
-<MudPaper Outlined="true" Class="pa-4">
-    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Project setup</MudText>
-    <MudText Class="mud-text-secondary mb-3">
-        The project's code, manager, dates and status, its WBS (charge codes and who may charge them) and plan sheet syncing are edited under Setup.
-    </MudText>
-    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
-        <MudButton Href="@($"setup/projects/{Hub.Project.Id}")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Settings" data-testid="setup-link">Open in Setup › Projects</MudButton>
-        @if (Hub.Project.ContractId is { } contractId)
-        {
-            <MudButton Href="@($"setup/contracts/{contractId}")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description">Contract @Hub.Project.ContractNumber</MudButton>
-        }
-    </MudStack>
-</MudPaper>
+@if (_project is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudExpansionPanels MultiExpansion="true" Outlined="true" data-testid="project-setup">
+        <MudExpansionPanel Text="Details" Expanded="@_open.Contains("details")" ExpandedChanged="@(e => Toggle("details", e))" data-testid="setup-details">
+            @if (_open.Contains("details"))
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Code, name, contract, manager, status and dates.</MudText>
+                <Workbench.Ui.Setup.ProjectDetailsForm Project="_project" ProjectChanged="SavedAsync" />
+            }
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="Charge codes and who can charge" Expanded="@_open.Contains("charge-codes")" ExpandedChanged="@(e => Toggle("charge-codes", e))" data-testid="setup-charge-codes">
+            @if (_open.Contains("charge-codes"))
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    The WBS elements people charge time and costs to, their CLINs, and who may charge each one. Add tasks on the Plan tab and
+                    make them charge codes there; this is for the finer settings.
+                </MudText>
+                <Workbench.Ui.Setup.WbsEditor Project="_project" Employees="_employees" />
+            }
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="Sync with the plan" Expanded="@_open.Contains("sync")" ExpandedChanged="@(e => Toggle("sync", e))" data-testid="setup-sync">
+            @if (_open.Contains("sync"))
+            {
+                <Workbench.Ui.Setup.PlanSyncPanel Project="_project" ProjectChanged="p => _project = p" />
+            }
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="More: ceilings and closeout" Expanded="@_open.Contains("more")" ExpandedChanged="@(e => Toggle("more", e))" data-testid="setup-more">
+            @if (_open.Contains("more"))
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    Limits on hours, cost or billing, and closing the project out. Most projects don't need these until late in the work.
+                </MudText>
+                <Workbench.Ui.Ceilings.CeilingsPanel ProjectId="_project.Id" />
+                <MudDivider Class="my-6" />
+                <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="_project.Id" Changed="Changed" />
+                @if (_project.ContractId is { } contractId)
+                {
+                    <MudButton Href="@($"setup/contracts/{contractId}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" Class="mt-4">
+                        Contract @_project.ContractNumber (rates, CLINs and funding)
+                    </MudButton>
+                }
+            }
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
 
 @code {
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
+
+    /// <summary>The section to open: details, charge-codes, sync or more. Details when none is given.</summary>
+    [Parameter]
+    public string? Section { get; set; }
+
+    /// <summary>Raised after the project's details are saved, so the page header shows them.</summary>
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private ProjectDto? _project;
+    private IReadOnlyList<EmployeeDto> _employees = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var section = Section?.ToLowerInvariant() switch
+        {
+            "wbs" => "charge-codes",
+            null or "" => "details",
+            var other => other,
+        };
+        if (_openedFor != section)
+        {
+            _openedFor = section;
+            _open.Add(section);
+        }
+
+        if (_project?.Id != Hub.Project.Id)
+        {
+            _project = await Projects.GetProjectAsync(Hub.Project.Id);
+            _employees = await People.ListEmployeesAsync();
+        }
+    }
+
+    // Sections render when opened, so a closed one loads nothing.
+    private readonly HashSet<string> _open = [];
+    private string? _openedFor;
+
+    private void Toggle(string section, bool expanded)
+    {
+        if (expanded)
+        {
+            _open.Add(section);
+        }
+        else
+        {
+            _open.Remove(section);
+        }
+    }
+
+    private async Task SavedAsync(ProjectDto project)
+    {
+        _project = project;
+        await Changed.InvokeAsync();
+    }
 }

@@ -113,7 +113,9 @@ public sealed class PlanSyncService(
                 var item = itemsById[d.ItemId!.Value];
                 Guid? parentElementId = item.ParentId is { } p && elementForItem.TryGetValue(p, out var pe) ? pe : null;
                 var prefix = parentElementId is { } pid ? elements[pid].Code : state.Project.Code;
-                var element = await CreateElementAsync(projectId, parentElementId, prefix, item.Title, codes, cancellationToken);
+                // Smart default: a subtask takes its parent's kind; a top-level element is Direct (billable) on a contract, else Indirect.
+                var kind = parentElementId is { } pk ? elements[pk].Kind : state.Project.ContractId is null ? ChargeCodeKind.Indirect : ChargeCodeKind.Direct;
+                var element = await CreateElementAsync(projectId, parentElementId, prefix, item.Title, codes, cancellationToken, item.CostpointWbsId, kind);
                 elements[element.Id] = element;
                 elementForItem[item.Id] = element.Id;
                 links[element.Id] = item.Id;
@@ -169,9 +171,26 @@ public sealed class PlanSyncService(
         return await items.UpdateAsync(sheetId, item.Id, new UpdateItemRequest(item.Title, item.Start, item.Finish, element.Code, item.Values), cancellationToken);
     }
 
-    /// <summary>Creates an element with the next free two-digit code under <paramref name="prefix"/>.</summary>
-    private async Task<WbsElementDto> CreateElementAsync(Guid projectId, Guid? parentId, string prefix, string name, HashSet<string> codes, CancellationToken cancellationToken)
+    /// <summary>
+    /// Creates an element with the task's own code when it's free and under <paramref name="prefix"/> (the plan numbers
+    /// tasks automatically), else the next free two-digit code under it.
+    /// </summary>
+    private async Task<WbsElementDto> CreateElementAsync(
+        Guid projectId, Guid? parentId, string prefix, string name, HashSet<string> codes, CancellationToken cancellationToken, string? preferred = null,
+        ChargeCodeKind kind = ChargeCodeKind.Direct)
     {
+        if (preferred is not null && preferred.StartsWith(prefix + ".", StringComparison.Ordinal) && codes.Add(preferred))
+        {
+            try
+            {
+                return await projects.CreateWbsElementAsync(projectId, new SaveWbsElementRequest(parentId, preferred, name, kind), cancellationToken);
+            }
+            catch (ArgumentException)
+            {
+                // Used by another project: fall through to the next free code.
+            }
+        }
+
         var next = codes
             .Where(c => c.StartsWith(prefix + ".", StringComparison.Ordinal))
             .Select(c => c[(prefix.Length + 1)..])
@@ -190,7 +209,7 @@ public sealed class PlanSyncService(
 
             try
             {
-                return await projects.CreateWbsElementAsync(projectId, new SaveWbsElementRequest(parentId, code, name), cancellationToken);
+                return await projects.CreateWbsElementAsync(projectId, new SaveWbsElementRequest(parentId, code, name, kind), cancellationToken);
             }
             catch (ArgumentException) when (attempt < 50)
             {

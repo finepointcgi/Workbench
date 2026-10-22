@@ -16,8 +16,7 @@ public static class ProjectsFormat
     [
         ("overview", "Overview"),
         ("plan", "Plan"),
-        ("budgets", "Budget"),
-        ("staffing", "Staffing"),
+        ("staffing", "Budget & staffing"),
         ("financials", "Financials"),
         ("costs", "Costs"),
         ("revenue", "Revenue"),
@@ -26,6 +25,12 @@ public static class ProjectsFormat
         ("ceilings", "Ceilings & closeout"),
         ("setup", "Setup"),
     ];
+
+    /// <summary>Tabs used now and then, kept under "More" until opened.</summary>
+    public static bool IsOccasional(string slug) => slug is "revenue" or "evm" or "narrative" or "ceilings";
+
+    /// <summary>Whether a link's tab (the part before any "/section", e.g. <c>setup/charge-codes</c>) is open to the viewer.</summary>
+    public static bool AllowsLink(ProjectHubTabsDto tabs, string link) => Allows(tabs, Normalize(link.Split('/')[0]));
 
     public static bool Allows(ProjectHubTabsDto tabs, string slug) => slug switch
     {
@@ -38,7 +43,7 @@ public static class ProjectsFormat
         "narrative" => tabs.Financials, // Same rule as financials: Finance, Admin or the project's manager.
         "ceilings" => tabs.Ceilings,
         "costs" => tabs.Costs,
-        "staffing" => tabs.Team, // budget against staffing, and who charges to the project
+        "staffing" => tabs.Team || tabs.Budgets, // the budget, staffing against it, and who charges to the project
         "setup" => tabs.Setup,
         _ => false,
     };
@@ -51,7 +56,7 @@ public static class ProjectsFormat
         "earned-value" => "evm",
         "closeout" => "ceilings",
         "team" => "staffing",
-        "budget" => "budgets",
+        "budget" or "budgets" => "staffing", // Budget and Staffing are one tab
         var t => t,
     };
 
