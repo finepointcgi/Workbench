@@ -1,5 +1,6 @@
-@* The main menu, shaped by task and role (Ui/Navigation/NavCatalog): a handful of sections, everything else nested
-   and collapsed until you're on one of its pages. It is cosmetic; every page and the server check again. *@
+@* The main menu, shaped by task and role (Ui/Navigation/NavCatalog): a handful of sections, each a short list. A group of
+   related pages is one link; its pages show as tabs across the top (GroupTabs). It is cosmetic; every page and the
+   server check again. *@
 @using Workbench.Ui.Navigation
 @using Workbench.Contracts.Notifications
 @implements IAsyncDisposable
@@ -9,17 +10,19 @@
 <MudNavMenu Class="pt-2" data-testid="nav-menu" aria-label="Main menu">
     @foreach (var section in NavCatalog.Sections)
     {
-        var entries = NavCatalog.MenuEntries(_access).Where(e => e.Section == section.Key).ToList();
-        if (entries.Count == 0)
+        var items = NavCatalog.MenuItems(section.Key, _access);
+        if (items.Count == 0)
         {
             continue;
         }
 
         var title = NavCatalog.TitleFor(section, _access);
-        if (section.Href is not null && entries.Count == 1 && entries[0].Href == section.Href)
+        if (items.Count == 1)
         {
-            <MudNavLink Href="@section.Href" Match="@(entries[0].MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@section.Icon" data-testid="@($"nav-{section.Key}")">
-                @title
+            // One page or one group: the section is a plain link (a group's other pages are tabs on the page).
+            var only = items[0];
+            <MudNavLink Href="@HrefOf(only)" Match="@MatchOf(only)" Icon="@section.Icon" data-testid="@($"nav-{section.Key}")" data-pages="@PagesOf(only)">
+                @(only.IsGroup ? title : Label(only.First) is var label && label != only.First.Title ? label : title)
                 @if (section.Key == NavCatalog.Approvals && _access.ApprovalCount > 0)
                 {
                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2 my-0" data-testid="approvals-count"
@@ -32,22 +35,15 @@
         var sectionKey = section.Key;
         <MudNavGroup Title="@title" Icon="@section.Icon" data-testid="@($"nav-{section.Key}")"
                      Expanded="@IsExpanded(sectionKey)" ExpandedChanged="@(open => SetExpanded(sectionKey, open))">
-            @foreach (var part in Parts(entries))
+            @foreach (var item in items)
             {
-                if (part.Group is null || part.Entries.Count == 1)
+                if (item.IsGroup)
                 {
-                    @Link(part.Entries[0])
+                    <MudNavLink Href="@HrefOf(item)" Match="NavLinkMatch.Prefix" Icon="@item.First.Icon" data-testid="@($"nav-group-{item.Group}")" data-pages="@PagesOf(item)">@item.Group</MudNavLink>
                 }
                 else
                 {
-                    var groupKey = $"{sectionKey}/{part.Group}";
-                    <MudNavGroup Title="@part.Group" data-testid="@($"nav-group-{part.Group}")"
-                                 Expanded="@IsExpanded(groupKey)" ExpandedChanged="@(open => SetExpanded(groupKey, open))">
-                        @foreach (var entry in part.Entries)
-                        {
-                            @Link(entry)
-                        }
-                    </MudNavGroup>
+                    @Link(item.First)
                 }
             }
         </MudNavGroup>
@@ -57,6 +53,7 @@
 @code {
     private NavAccess _access = NavAccess.Anonymous;
     private readonly Dictionary<string, bool> _expanded = [];
+    private NavEntry? _current;
     private IAsyncDisposable? _feed;
     private bool _disposed;
 
@@ -120,46 +117,31 @@
         StateHasChanged();
     }
 
-    /// <summary>Opens the section and sub-group holding the current page; leaves the rest as the user left them.</summary>
+    /// <summary>Opens the section holding the current page; leaves the rest as the user left them.</summary>
     private void ExpandCurrent()
     {
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);
-        if (NavCatalog.Match(path, _access) is not ({ InMenu: true } entry, _) || entry.Href.Length == 0)
+        _current = NavCatalog.Match(path, _access) is ({ InMenu: true } found, _) ? found : null;
+        if (_current is not { } entry || entry.Href.Length == 0)
         {
             return;
         }
 
         _expanded[entry.Section] = true;
-        if (entry.Group is not null)
-        {
-            _expanded[$"{entry.Section}/{entry.Group}"] = true;
-        }
     }
 
     private bool IsExpanded(string key) => _expanded.GetValueOrDefault(key);
 
     private void SetExpanded(string key, bool open) => _expanded[key] = open;
 
-    private sealed record Part(string? Group, List<NavEntry> Entries);
+    // A group links to the page of it you're on (so the link shows as current), else its first page.
+    private string HrefOf(NavItem item) =>
+        item.IsGroup && _current is { } current && item.Pages.Contains(current) ? current.Href : item.First.Href;
 
-    // Entries in catalog order; a sub-group appears where its first entry does.
-    private static IEnumerable<Part> Parts(IEnumerable<NavEntry> entries)
-    {
-        var parts = new List<Part>();
-        foreach (var entry in entries)
-        {
-            if (entry.Group is not null && parts.FirstOrDefault(p => p.Group == entry.Group) is { } existing)
-            {
-                existing.Entries.Add(entry);
-            }
-            else
-            {
-                parts.Add(new Part(entry.Group, [entry]));
-            }
-        }
+    private static NavLinkMatch MatchOf(NavItem item) => !item.IsGroup && item.First.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix;
 
-        return parts;
-    }
+    // The pages a group link stands for, for tests and assistive tooling.
+    private static string? PagesOf(NavItem item) => item.IsGroup ? string.Join(' ', item.Pages.Select(p => p.Href)) : null;
 
     public async ValueTask DisposeAsync()
     {

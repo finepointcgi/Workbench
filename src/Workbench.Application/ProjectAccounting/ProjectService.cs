@@ -167,13 +167,19 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         // Each date is then checked exactly as before.
         var (first, last) = (active.Min(), active.Max());
         var assigned = db.Set<ChargeAssignment>().Where(a => a.EmployeeId == employeeId && (a.From == null || a.From <= last) && (a.To == null || a.To >= first));
+
+        // Staffing someone on a WBS element for a week (Resourcing, or the project's Staffing tab) also lets them charge it
+        // that week, with the staffed labor category: the project manager staffing them is the authorization.
+        var weeksFrom = first.AddDays(-6);
+        var staffed = db.Set<Domain.Resourcing.ResourceAllocation>().Where(r => r.EmployeeId == employeeId && r.WbsElementId != null
+            && r.WeekStart >= weeksFrom && r.WeekStart <= last && (r.Hours > 0 || r.Percent > 0));
         var elements = await (
                 from w in db.Set<WbsElement>().AsNoTracking()
                 join p in db.Set<Project>() on w.ProjectId equals p.Id
                 where w.IsOpen && w.IsChargeable && p.Status == ProjectStatus.Active
                       && (p.Start == null || p.Start <= last) && (p.Finish == null || p.Finish >= first)
                       && !db.Set<WbsElement>().Any(c => c.ParentId == w.Id)
-                      && (!w.RequiresAssignment || assigned.Any(a => a.WbsElementId == w.Id))
+                      && (!w.RequiresAssignment || assigned.Any(a => a.WbsElementId == w.Id) || staffed.Any(r => r.WbsElementId == w.Id))
                 select w)
             .ToListAsync(cancellationToken);
         var projectIds = elements.Select(w => w.ProjectId).Distinct().ToList();
@@ -182,6 +188,7 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         var assignments = await db.Set<ChargeAssignment>().AsNoTracking()
             .Where(a => a.EmployeeId == employeeId && elementIds.Contains(a.WbsElementId))
             .ToListAsync(cancellationToken);
+        var staffing = await staffed.AsNoTracking().Where(r => elementIds.Contains(r.WbsElementId!.Value)).ToListAsync(cancellationToken);
         var clinIds = elements.Where(w => w.ClinId != null).Select(w => w.ClinId!.Value).Distinct().ToList();
         var clins = await db.Set<Clin>().AsNoTracking().Where(c => clinIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, cancellationToken);
 
@@ -206,13 +213,14 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
 
                 var assignment = assignments.FirstOrDefault(a => a.WbsElementId == element.Id
                     && (a.From is null || a.From <= date) && (a.To is null || a.To >= date));
-                if (element.RequiresAssignment && assignment is null)
+                var staffedThatWeek = staffing.FirstOrDefault(r => r.WbsElementId == element.Id && r.WeekStart <= date && date < r.WeekStart.AddDays(7));
+                if (element.RequiresAssignment && assignment is null && staffedThatWeek is null)
                 {
                     continue;
                 }
 
-                // An employee with no default labor category can only charge codes whose assignment names one.
-                if ((assignment?.LaborCategoryId ?? employee.DefaultLaborCategoryId) is not { } laborCategoryId)
+                // An employee with no default labor category can only charge codes whose assignment (or staffing) names one.
+                if ((assignment?.LaborCategoryId ?? staffedThatWeek?.LaborCategoryId ?? employee.DefaultLaborCategoryId) is not { } laborCategoryId)
                 {
                     continue;
                 }
