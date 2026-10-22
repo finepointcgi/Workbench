@@ -42,6 +42,12 @@
             return [];
         }
 
+        // A group's own pages show its tabs (GroupTabs), which say where you are; the trail would repeat them.
+        if (tail.Length == 0 && NavCatalog.GroupPages(entry, access).Count > 1)
+        {
+            return [];
+        }
+
         var nested = entry.Group is not null || entry.Section is NavCatalog.Finance or NavCatalog.Admin;
         if (tail.Length == 0 && !nested)
         {

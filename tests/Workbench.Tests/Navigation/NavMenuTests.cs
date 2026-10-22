@@ -3,6 +3,7 @@ using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Identity;
 using Workbench.Ui.Layout;
+using Workbench.Ui.Navigation;
 
 namespace Workbench.Tests.Navigation;
 
@@ -23,8 +24,16 @@ public sealed class NavMenuTests
         return (nav, ctx);
     }
 
-    private static List<string> Links(IRenderedComponent<NavMenu> nav) =>
-        nav.FindAll("a[href]").Select(a => a.GetAttribute("href")!).ToList();
+    // Every page the menu reaches: plain links, and each group link's pages (its tabs).
+    private static List<string> Links(IRenderedComponent<NavMenu> nav)
+    {
+        var groups = nav.FindAll("[data-pages]").ToList();
+        var plain = nav.FindAll("a[href]").Where(a => !groups.Any(g => g == a || g.Contains(a))).Select(a => a.GetAttribute("href")!);
+        return [.. plain, .. groups.SelectMany(g => g.GetAttribute("data-pages")!.Split(' '))];
+    }
+
+    // What the user actually sees in the menu: one link per page or group.
+    private static int MenuLinkCount(IRenderedComponent<NavMenu> nav) => nav.FindAll("a[href]").Count;
 
     private static List<string> Sections(IRenderedComponent<NavMenu> nav) =>
         nav.FindAll("[data-testid^='nav-']").Where(e => !e.GetAttribute("data-testid")!.StartsWith("nav-group-") && e.GetAttribute("data-testid") != "nav-menu")
@@ -188,19 +197,52 @@ public sealed class NavMenuTests
     }
 
     [Fact]
-    public async Task Groups_start_collapsed_except_the_one_holding_the_current_page()
+    public async Task Groups_are_one_link_and_the_current_section_opens()
     {
         var ctx = NavTestKit.NewContext(new NavUser(OrgRoles.Finance));
         await using var _ = ctx;
-        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("purchasing/bills/" + Guid.NewGuid());
+        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("cash/reconcile");
 
         var nav = ctx.Render<NavMenu>();
-        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("a[href='purchasing/bills']")), TimeSpan.FromSeconds(5));
+        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("[data-testid='nav-group-Cash']")), TimeSpan.FromSeconds(5));
 
         Assert.True(Expanded(nav, "nav-finance"));
-        Assert.True(Expanded(nav, "nav-group-Payables & purchasing"));
-        Assert.False(Expanded(nav, "nav-group-Cash"));
         Assert.False(Expanded(nav, "nav-my-work"));
+        var cash = nav.Find("[data-testid='nav-group-Cash']");
+        Assert.Equal("cash cash/reconcile cash/reconciliations cash/forecast", cash.GetAttribute("data-pages"));
+        Assert.Contains("href=\"cash/reconcile\"", cash.OuterHtml); // links to the group page you're on, so it shows as current
+        Assert.Empty(nav.FindAll("a[href='cash/forecast']")); // a tab, not a menu link
+    }
+
+    [Fact]
+    public async Task Finance_sees_a_short_menu_that_still_reaches_every_page()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Finance));
+        await using var _ = ctx;
+
+        Assert.True(MenuLinkCount(nav) <= 40, $"{MenuLinkCount(nav)} menu links");
+        Assert.True(Links(nav).Count > 80, "every page is still reachable through its group");
+        Assert.Contains(">Businessdevelopment<", nav.Find("[data-testid='nav-growth']").OuterHtml.Replace(" ", "")); // one group: a plain link
+    }
+
+    [Fact]
+    public async Task A_page_in_a_group_shows_its_siblings_as_tabs_and_detail_pages_do_not()
+    {
+        var ctx = NavTestKit.NewContext(new NavUser(OrgRoles.Finance));
+        await using var _ = ctx;
+        var navigation = ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("cash/forecast");
+        var access = await NavAccess.LoadAsync(ctx.Services);
+
+        var tabs = ctx.Render<GroupTabs>(p => p.Add(t => t.Access, access));
+        Assert.Equal(["cash", "cash/reconcile", "cash/reconciliations", "cash/forecast"], tabs.FindAll("a").Select(a => a.GetAttribute("href")!).ToList());
+        Assert.Equal("Cash", tabs.Find("nav").GetAttribute("aria-label"));
+
+        navigation.NavigateTo("purchasing/bills/" + Guid.NewGuid());
+        tabs.WaitForAssertion(() => Assert.Empty(tabs.FindAll("a")));
+
+        navigation.NavigateTo("time"); // not in a group
+        tabs.WaitForAssertion(() => Assert.Empty(tabs.FindAll("a")));
     }
 
     private static bool Expanded(IRenderedComponent<NavMenu> nav, string testId) =>
