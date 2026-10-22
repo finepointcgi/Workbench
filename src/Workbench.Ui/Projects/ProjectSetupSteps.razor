@@ -38,7 +38,7 @@
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Explanation</MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@step.Status</MudText>
                         </div>
-                        @if (ProjectsFormat.Allows(Hub.Tabs, step.Tab))
+                        @if (ProjectsFormat.AllowsLink(Hub.Tabs, step.Tab))
                         {
                             <MudButton Href="@($"projects/{Hub.Project.Id}/{step.Tab}")" Size="Size.Small"
                                        Variant="@(isNext ? Variant.Filled : Variant.Text)" Color="Color.Primary"

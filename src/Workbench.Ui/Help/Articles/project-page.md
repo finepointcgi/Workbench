@@ -8,18 +8,34 @@ order: 21
 ---
 Open **Projects** and pick a project. The list shows the projects you manage or charge to; project managers and Finance also see the money.
 
+## Start a project
+
+Choose **New project** on the Projects page. Only a name is needed: the code is suggested (the next free number), you're the project's manager, and the contract is optional. Pick where it starts from:
+
+- **Nothing**: a blank plan to fill in.
+- **A contract**: its period of performance sets the dates, its CLINs become the top of the WBS, and its labor-category hours start the budget when the contract has them.
+- **A copy of a project or a starter outline**: a project's tasks, durations and links move to the new start date (people, budgets and costs aren't copied), or common phases to rename and fill in.
+- **An Excel plan**: a plan workbook (an export, or the blank template). It's checked before the project is created.
+
+On a contract, a project manager's new project waits for Finance to activate it before anyone can charge. You land on the **Plan** tab:
+
+- Type a task in **Type a task and press Enter**, or press Enter after the last task's name to start the next one.
+- **Tab** makes a task a subtask of the one above; **Shift+Tab** moves it back out. **Add subtask** adds one under the selected task.
+- WBS codes are numbered for you under the parent (the third subtask of 1001.02 is 1001.02.03) and follow tasks when you move them. A code you type yourself is kept; clear it to get the automatic one back. Tasks that are already charge codes keep their codes.
+- When the plan is ready, **Make charge codes** turns its tasks into charge codes so people can charge time to them.
+
 ## The tabs
 
 | Tab | What it shows |
 | --- | --- |
-| Overview | Health (on track, at risk or over), spend against budget, funding used and what needs your attention. |
-| Plan | The project's plan: tasks, durations, predecessors and the Gantt chart. It works like MS Project (Tab indents) and imports and exports Excel. |
+| Overview | Health (on track, at risk or over), spend against budget, funding used, what needs your attention, and the setup steps with a button for each. |
+| Plan | The project's plan and WBS: tasks, durations, predecessors and the Gantt chart. It works like MS Project (Tab indents) and imports and exports Excel. |
+| Budget & staffing | The budget by labor category and your [EAC](term:eac) (estimate at completion), then the people staffed into each category and who charged hours. |
 | Financials | Cost, revenue and margin by task, direct and [burdened](term:burdened). |
-| Budgets | The approved budget and your [EAC](term:eac) (estimate at completion). |
-| Earned value | [CPI](term:cpi), [SPI](term:spi) and variance reports, for projects that report earned value. |
-| Ceilings | Limits on hours, cost or billing, and how close you are. |
 | Costs | Other direct costs ([ODCs](term:odc)) such as vendor invoices and travel. |
-| Team | Who charged hours, and how many. |
+| Setup | For those who set the project up: its details, charge codes and who can charge them, syncing with the plan, and (under More) ceilings and closeout. |
+
+**More** (top right) holds the pages used now and then: revenue, earned value ([CPI](term:cpi), [SPI](term:spi)), the monthly narrative, and ceilings and closeout.
 
 ## Health, in plain words
 

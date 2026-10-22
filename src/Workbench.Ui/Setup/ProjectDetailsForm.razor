@@ -1,0 +1,126 @@
+@* A project's details (code, name, contract, manager, status, dates and custom fields) on its Setup tab. The server
+   enforces who may change what: Finance and administrators everything; a project manager their own project, except its
+   contract and manager. *@
+@inject IProjectService Projects
+@inject IContractService Contracts
+@inject IPeopleService People
+@inject ISnackbar Snackbar
+@inject ICurrentUserContext CurrentUser
+
+<MudForm @ref="_form">
+    <ConfigurableForm EntityType="@CustomizableEntities.Project" RecordId="_project?.Id" @ref="_layout">
+        <FormField Key="code" Sm="4">
+            <MudTextField @bind-Value="_code" Label="Code" Required="true" RequiredError="Code is required." Immediate="true"
+                          HelperText="Top-level WBS codes start with this." data-testid="project-code" />
+        </FormField>
+        <FormField Key="name" Sm="8">
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" data-testid="project-name" />
+        </FormField>
+        <FormField Key="contractId" Sm="6" Context="field">
+            <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)"
+                       Required="field.Required" RequiredError="Contract is required.">
+                @foreach (var c in _contracts)
+                {
+                    <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </FormField>
+        <FormField Key="projectManagerId" Sm="6" Context="field">
+            <MudSelect T="Guid?" @bind-Value="_pmId" Label="Project manager" Clearable="true" Disabled="!_isFinance"
+                       Required="field.Required" RequiredError="Project manager is required.">
+                @foreach (var e in _employees)
+                {
+                    <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
+                }
+            </MudSelect>
+        </FormField>
+        <FormField Key="status" Sm="4">
+            <MudSelect T="ProjectState" @bind-Value="_status" Label="Status" Disabled="@(!_isFinance && _contractId is not null && (_project is null || _project.Status == ProjectState.Planning))">
+                @foreach (var state in Enum.GetValues<ProjectState>())
+                {
+                    <MudSelectItem T="ProjectState" Value="state">@SetupFormat.Label(state)</MudSelectItem>
+                }
+            </MudSelect>
+        </FormField>
+        <FormField Key="start" Sm="4" Context="field">
+            <MudDatePicker @bind-Date="_start" Label="Start" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                           Required="field.Required" RequiredError="Start is required." />
+        </FormField>
+        <FormField Key="finish" Sm="4" Context="field">
+            <MudDatePicker @bind-Date="_finish" Label="Finish" Clearable="true" DateFormat="yyyy-MM-dd" Editable="true"
+                           Required="field.Required" RequiredError="Finish is required."
+                           Validation="@(new Func<DateTime?, string?>(f => f is { } x && _start is { } s && x < s ? "Finish can't be before start." : null))" />
+        </FormField>
+    </ConfigurableForm>
+</MudForm>
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="project-save">
+        Save
+    </MudButton>
+</MudStack>
+@code {
+    [Parameter, EditorRequired]
+    public ProjectDto Project { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<ProjectDto> ProjectChanged { get; set; }
+
+    private ProjectDto? _project;
+    private IReadOnlyList<ContractDto> _contracts = [];
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private MudForm _form = default!;
+    private ConfigurableForm? _layout;
+    private bool _saving;
+
+    private string? _code;
+    private string? _name;
+    private Guid? _contractId;
+    private Guid? _pmId;
+    private ProjectState _status = ProjectState.Active;
+    private DateTime? _start;
+    private DateTime? _finish;
+    private bool _isFinance;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_project?.Id == Project.Id)
+        {
+            return;
+        }
+
+        _project = Project;
+        _isFinance = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.SetupProjects);
+        _contracts = await Contracts.ListContractsAsync();
+        _employees = await People.ListEmployeesAsync();
+        var p = Project;
+        (_code, _name, _contractId, _pmId, _status) = (p.Code, p.Name, p.ContractId, p.ProjectManagerId, p.Status);
+        (_start, _finish) = (SetupFormat.ToDateTime(p.Start), SetupFormat.ToDateTime(p.Finish));
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || _project is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var request = new SaveProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, _pmId, _status, SetupFormat.ToDateOnly(_start), SetupFormat.ToDateOnly(_finish));
+            _project = await Projects.UpdateProjectAsync(_project.Id, request);
+            await (_layout?.SaveCustomFieldsAsync(_project.Id) ?? Task.CompletedTask);
+            Snackbar.Add("Project saved.", Severity.Success);
+            await ProjectChanged.InvokeAsync(_project);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

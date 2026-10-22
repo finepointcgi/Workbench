@@ -60,7 +60,7 @@
                 }
             </ChildContent>
             <ItemRenderer>
-                <BoardCard Item="context" Person="@PersonOf(context)" Today="Today" OnOpen="Open" Href="@($"sheets/{SheetId}?item={context.Id}")"
+                <BoardCard Item="context" Person="@PersonOf(context)" Today="Today" OnOpen="Open" Href="@ItemLinks.Details(Navigation, context.Id)"
                            Lanes="@(CanEdit ? Lanes : [])" CurrentLane="@(_laneColumn is null ? null : BoardLanes.ValueOf(context, _laneColumn))"
                            OnMove="m => MoveToLaneAsync(m.Item, m.LaneValue)" TakeFocus="@(context.Id == _focusItemId)"
                            Assignees="@(Tasks?.For(context.Id) ?? [])" CanAssign="CanAssign" OnAssign="AssignAsync" />
@@ -155,7 +155,7 @@
         _lanesChanged = true;
     }
 
-    private void Open(ItemDto item) => Navigation.NavigateTo($"sheets/{SheetId}?item={item.Id}");
+    private void Open(ItemDto item) => Navigation.NavigateTo(ItemLinks.Details(Navigation, item.Id));
 
     private async Task OnItemDroppedAsync(MudItemDropInfo<ItemDto> drop)
     {

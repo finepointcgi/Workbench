@@ -38,11 +38,12 @@ public sealed class ProjectHubPageTests
             Task.FromResult<IReadOnlyList<ActivityDto>>([]);
     }
 
-    private static BunitContext NewContext(ProjectHubDto hub, ProjectHubListDto? list = null)
+    private static BunitContext NewContext(ProjectHubDto hub, ProjectHubListDto? list = null, Action<IServiceCollection>? configure = null)
     {
         var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ctx.Services.AddMudServices();
+        configure?.Invoke(ctx.Services);
         ctx.Services.AddSingleton<IProjectHubService>(new FakeHub(hub, list ?? new ProjectHubListDto(false, [hub.Project])));
         ctx.Services.AddSingleton<IActivityService>(new NoActivity());
         ctx.Render<MudBlazor.MudPopoverProvider>();
@@ -62,8 +63,9 @@ public sealed class ProjectHubPageTests
 
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
 
-        page.WaitForAssertion(() => Assert.Equal(
-            ["Overview", "Budget", "Staffing", "Financials", "Revenue", "Earned value", "Monthly narrative", "Ceilings & closeout"], TabLabels(page)));
+        // The everyday tabs; the occasional ones wait under More.
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget & staffing", "Financials"], TabLabels(page)));
+        Assert.NotEmpty(page.FindAll("[data-testid=project-more]"));
         foreach (var label in new[] { "Spent so far", "Budget", "Forecast at completion", "Funding left" })
         {
             Assert.Contains(label, page.Find("[data-testid=key-numbers]").TextContent);
@@ -89,12 +91,38 @@ public sealed class ProjectHubPageTests
     [Fact]
     public async Task The_route_picks_the_tab()
     {
-        await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: true)));
+        var project = new ProjectDto(ProjectId, "1001", "Modernization", null, null, null, ProjectState.Active, null, null, null);
+        await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: true)), configure: services =>
+        {
+            services.AddSingleton(NullService<IProjectService>.Create(project));
+            services.AddSingleton(NullService<IPeopleService>.Create());
+            services.AddSingleton(NullService<IContractService>.Create());
+            services.AddSingleton(NullService<IPlanSyncService>.Create(new PlanSyncReport(ProjectId, null, [])));
+            services.AddSingleton(NullService<Workbench.Contracts.Identity.ICurrentUserContext>.Create(
+                new Workbench.Contracts.Identity.CurrentUserInfo("pm@example.com", "Pat", Workbench.Contracts.Identity.OrgRoles.Employee, null)));
+        });
 
-        var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "setup"));
+        // Setup lives on the project page now; /setup/{section} opens that section.
+        var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "setup").Add(c => c.Section, "sync"));
 
-        page.WaitForAssertion(() => Assert.Equal($"setup/projects/{ProjectId}", page.Find("[data-testid=setup-link]").GetAttribute("href")));
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("[data-testid=project-setup]")));
         Assert.Contains("Setup", TabLabels(page));
+        Assert.Contains("Sync with the plan", page.Find("[data-testid=setup-sync]").TextContent);
+        Assert.Empty(page.FindAll("[data-testid=setup-details] [data-testid=project-code]")); // closed sections render nothing
+    }
+
+    [Fact]
+    public async Task An_occasional_tab_shows_in_the_bar_while_it_is_open()
+    {
+        await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: false)), configure: services =>
+        {
+            services.AddSingleton(NullService<Workbench.Contracts.Ceilings.ICeilingService>.Create());
+            services.AddSingleton(NullService<Workbench.Contracts.Closeout.ICloseoutService>.Create());
+        });
+
+        var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "ceilings"));
+
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget & staffing", "Financials", "Ceilings & closeout"], TabLabels(page)));
     }
 
     [Theory]
@@ -103,7 +131,8 @@ public sealed class ProjectHubPageTests
     [InlineData("EVM", "evm")]
     [InlineData("earned-value", "evm")]
     [InlineData("team", "staffing")]
-    [InlineData("budget", "budgets")]
+    [InlineData("budget", "staffing")]
+    [InlineData("budgets", "staffing")]
     public void Older_tab_names_still_work(string? segment, string slug) => Assert.Equal(slug, ProjectsFormat.Normalize(segment));
 
     [Fact]

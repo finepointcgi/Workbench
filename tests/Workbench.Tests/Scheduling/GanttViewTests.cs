@@ -45,7 +45,7 @@ public sealed class GanttViewTests
         view.WaitForAssertion(() => Assert.Single(view.FindAll(".gantt-link.critical")));
         var names = view.FindAll(".gantt-task-link").Select(a => a.TextContent).ToList();
         Assert.Equal(["Phase 1", "Kickoff", "Design", "Docs"], names);
-        Assert.Equal($"sheets/{sheetId}?item={design.Id}", view.FindAll(".gantt-task-link")[2].GetAttribute("href"));
+        Assert.EndsWith($"?item={design.Id}", view.FindAll(".gantt-task-link")[2].GetAttribute("href")); // on the page showing the sheet
         Assert.Single(view.FindAll($".gantt-summary[data-item='{phase.Id}']"));
         Assert.Single(view.FindAll($".gantt-milestone.critical[data-item='{kickoff.Id}']"));
         Assert.Single(view.FindAll($".gantt-task.critical[data-item='{design.Id}']"));

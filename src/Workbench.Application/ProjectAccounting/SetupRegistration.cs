@@ -9,6 +9,7 @@ public static class SetupRegistration
     public static IServiceCollection AddWorkbenchSetup(this IServiceCollection services)
     {
         services.AddScoped<IPlanSyncService, PlanSyncService>();
+        services.AddScoped<IProjectStartService, ProjectStartService>();
         services.AddScoped<ISetupAdminService, SetupAdminService>();
         return services;
     }

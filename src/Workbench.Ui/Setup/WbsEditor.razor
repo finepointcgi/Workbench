@@ -200,7 +200,8 @@
 
     private async Task AddAsync(WbsElementDto? parent)
     {
-        var parameters = new DialogParameters<WbsElementDialog> { { d => d.Parent, parent }, { d => d.ProjectCode, Project.Code } };
+        var siblings = _wbs.Where(w => w.ParentId == parent?.Id).Select(w => w.Code).ToList();
+        var parameters = new DialogParameters<WbsElementDialog> { { d => d.Parent, parent }, { d => d.ProjectCode, Project.Code }, { d => d.SiblingCodes, siblings }, { d => d.OnContract, Project.ContractId is not null } };
         var dialog = await DialogService.ShowAsync<WbsElementDialog>(parent is null ? "Add top-level element" : "Add child element", parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
         if (await dialog.Result is not { Canceled: false, Data: SaveWbsElementRequest request })

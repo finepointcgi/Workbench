@@ -41,11 +41,29 @@ public sealed class HttpSetupAdminService(HttpClient http) : ISetupAdminService
         await (await http.GetAsync("api/v1/setup/checklist", cancellationToken)).ReadAsync<SetupChecklistDto>(cancellationToken);
 }
 
+public sealed class HttpProjectStartService(HttpClient http) : IProjectStartService
+{
+    public async Task<IReadOnlyList<ProjectTemplateDto>> ListTemplatesAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync("api/v1/project-start/templates", cancellationToken)).ReadAsync<List<ProjectTemplateDto>>(cancellationToken);
+
+    public async Task<string> SuggestCodeAsync(CancellationToken cancellationToken = default) =>
+        (await (await http.GetAsync("api/v1/project-start/suggested-code", cancellationToken)).ReadAsync<SuggestedCode>(cancellationToken)).Code;
+
+    public async Task<Workbench.Contracts.Scheduling.PlanImportPreview> CheckImportAsync(Workbench.Contracts.Scheduling.PlanImportRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync("api/v1/project-start/check-import", request, cancellationToken)).ReadAsync<Workbench.Contracts.Scheduling.PlanImportPreview>(cancellationToken);
+
+    public async Task<ProjectDto> StartAsync(StartProjectRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync("api/v1/project-start", request, cancellationToken)).ReadAsync<ProjectDto>(cancellationToken);
+
+    private sealed record SuggestedCode(string Code);
+}
+
 public static class SetupClientRegistration
 {
     public static IServiceCollection AddSetupClients(this IServiceCollection services, Uri serverBaseAddress)
     {
         services.AddHttpClient<IPlanSyncService, HttpPlanSyncService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IProjectStartService, HttpProjectStartService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ISetupAdminService, HttpSetupAdminService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }

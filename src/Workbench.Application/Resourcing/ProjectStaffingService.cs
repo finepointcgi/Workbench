@@ -383,25 +383,25 @@ public static class SetupSteps
 
         return new ProjectSetupProgressDto(projectId,
         [
-            new ProjectSetupStepDto("wbs", "Contract and WBS",
-                "Link the contract that pays for the work and break the work into WBS elements people can charge to.",
+            new ProjectSetupStepDto("wbs", "Plan the work",
+                "List the work on the Plan tab: type a task and press Enter, Tab makes it a subtask, and codes are numbered for you. Then make the tasks charge codes so people can charge time.",
                 chargeCodes > 0,
                 $"{(contractNumber is null ? "No contract (internal work)" : $"Contract {contractNumber}")} · {(chargeCodes == 1 ? "1 charge code" : $"{chargeCodes} charge codes")}",
-                "setup", "Edit setup"),
+                "plan", chargeCodes > 0 ? "Open the plan" : "Plan the work"),
             new ProjectSetupStepDto("budget", "Budget by labor category",
                 "The contract is priced by labor category, so budget each WBS element in labor-category hours (for example, 1,200 Systems Engineer II hours on 1.2).",
                 hasBudget,
                 hasBudget
                     ? $"{H(budgeted.Sum(c => c.BudgetHours))} hours in {(budgeted.Count == 1 ? "1 labor category" : $"{budgeted.Count} labor categories")}"
                     : "No labor budget yet",
-                "budgets", hasBudget ? "Open budget" : "Start the budget"),
+                "staffing/budget", hasBudget ? "Open the budget" : "Start the budget"),
             new ProjectSetupStepDto("staff", "Staff people",
                 "Fill each labor category's budgeted hours with named people who bill as that category, week by week.",
                 staffedDone,
                 !hasBudget ? "Budget first, then staff people into it"
                     : staffedDone ? $"{H(staffed)} of {H(left)} hours left are staffed"
                     : $"{H(staffed)} of {H(left)} hours left are staffed; {H(unstaffed.Sum(c => c.Gap))} have nobody yet",
-                "staffing", "Staff people"),
+                "staffing/staff", "Staff people"),
         ]);
     }
 }

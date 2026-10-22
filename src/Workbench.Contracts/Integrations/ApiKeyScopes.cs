@@ -17,9 +17,9 @@ public static class ApiKeyScopes
     public static IReadOnlyList<ApiKeyAreaDto> Areas { get; } =
     [
         new("sheets", "Sheets, dashboards and tasks", "Sheets, items, columns, comments, workspaces, dashboards and assigned work.",
-            ["sheets", "workspaces", "dashboards", "my-work", "my-tasks", "my-todo"]),
+            ["sheets", "workspaces", "dashboards", "my-work", "my-tasks", "my-todo", "plan-template"]),
         new("projects", "Projects and contracts", "Projects, WBS, contracts, CLINs, funding, ceilings, closeout, resourcing and earned value.",
-            ["projects", "project-hub", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "closeout", "resourcing", "evm", "ceilings", "ceiling-overrides", "rate-ceilings"]),
+            ["projects", "project-hub", "project-start", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "closeout", "resourcing", "evm", "ceilings", "ceiling-overrides", "rate-ceilings"]),
         new("time", "Time and expenses", "Timesheets, ODCs, expense reports and receipts, leave, per diem and total time.",
             ["time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "total-time", "travel", "cards", "receipts"]),
         new("billing", "Billing and revenue", "Invoices, receipts, receivables and revenue recognition.", ["billing", "revenue"]),

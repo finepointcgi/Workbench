@@ -121,7 +121,7 @@ public sealed class SetupComponentTests
     }
 
     [Fact]
-    public async Task Adding_a_child_wbs_element_prefills_the_parent_code()
+    public async Task Adding_a_child_wbs_element_suggests_the_next_code_under_the_parent()
     {
         await using var ctx = NewContext();
         var provider = ctx.Render<MudDialogProvider>();
@@ -131,11 +131,13 @@ public sealed class SetupComponentTests
         var parameters = new DialogParameters<WbsElementDialog> { { d => d.Parent, parent }, { d => d.ProjectCode, "1001" } };
         var reference = await provider.InvokeAsync(() => dialogs.ShowAsync<WbsElementDialog>("Add child", parameters));
 
+        // The next number under the parent is suggested in full.
         var code = provider.Find("input[data-testid='wbs-code'], [data-testid='wbs-code'] input");
-        Assert.Equal("1001.01.", code.GetAttribute("value"));
+        Assert.Equal("1001.01.01", code.GetAttribute("value"));
         provider.Find("input[data-testid='wbs-name'], [data-testid='wbs-name'] input").Input("Design");
 
-        // The bare prefix isn't a valid code: it needs the child's own number.
+        // A bare prefix isn't a valid code: it needs the child's own number.
+        provider.Find("input[data-testid='wbs-code'], [data-testid='wbs-code'] input").Input("1001.01.");
         await provider.Find("[data-testid='wbs-submit']").ClickAsync(new());
         provider.WaitForAssertion(() => Assert.Contains("Code must start with", provider.Markup));
 
@@ -148,7 +150,7 @@ public sealed class SetupComponentTests
     }
 
     [Fact]
-    public async Task A_top_level_wbs_element_prefills_the_project_code()
+    public async Task A_top_level_wbs_element_suggests_the_next_code_under_the_project()
     {
         await using var ctx = NewContext();
         var provider = ctx.Render<MudDialogProvider>();
@@ -157,7 +159,7 @@ public sealed class SetupComponentTests
         var parameters = new DialogParameters<WbsElementDialog> { { d => d.ProjectCode, "2002" } };
         await provider.InvokeAsync(() => dialogs.ShowAsync<WbsElementDialog>("Add", parameters));
 
-        Assert.Equal("2002.", provider.Find("input[data-testid='wbs-code'], [data-testid='wbs-code'] input").GetAttribute("value"));
+        Assert.Equal("2002.01", provider.Find("input[data-testid='wbs-code'], [data-testid='wbs-code'] input").GetAttribute("value"));
     }
 
     [Fact]

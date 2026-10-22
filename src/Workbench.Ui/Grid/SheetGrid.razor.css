@@ -181,9 +181,22 @@
     text-decoration: none;
 }
 
-.wb-title-link:hover {
+.wb-details-link {
+    flex: none;
+    display: inline-flex;
+    margin-left: 4px;
+    color: var(--mud-palette-text-secondary);
+    opacity: 0;
+}
+
+.wb-row:hover .wb-details-link,
+.wb-active .wb-details-link,
+.wb-details-link:focus-visible {
+    opacity: 1;
+}
+
+.wb-details-link:hover {
     color: var(--mud-palette-primary);
-    text-decoration: underline;
 }
 
 .wb-check {
@@ -247,6 +260,7 @@
     align-items: center;
     gap: 16px;
     padding-top: 8px;
+    flex-wrap: wrap;
 }
 
 .wb-milestone {
@@ -266,4 +280,20 @@
 
 .wb-title-link.wb-summary {
     font-weight: 600;
+}
+
+.wb-quick-add {
+    flex: 1 1 220px;
+    max-width: 360px;
+    padding: 4px 8px;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+}
+
+.wb-quick-add:focus {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 1px;
 }
