@@ -3,11 +3,13 @@
 @using Workbench.Contracts
 @using Workbench.Contracts.Scheduling
 @using Workbench.Ui.Gantt
+@using Microsoft.Extensions.DependencyInjection
 @inject IItemService ItemService
 @inject IDependencyService DependencyService
 @inject IBaselineService BaselineService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IServiceProvider Services
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3" Class="mb-3">
     <MudToggleGroup T="GanttZoom" Value="_zoom" ValueChanged="SetZoom" Size="Size.Small" Color="Color.Primary" Outlined="true" aria-label="Zoom">
@@ -23,10 +25,24 @@
             <MudSelectItem Value="baseline.Id">@baseline.Name (@baseline.CapturedAtUtc.ToLocalTime().ToString("MMM d", CultureInfo.InvariantCulture))</MudSelectItem>
         }
     </MudSelect>
+    @if (CanEdit && _baselineId != Guid.Empty)
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="DeleteBaselineAsync"
+                       aria-label="Delete this baseline" title="Delete this baseline" data-testid="gantt-baseline-delete" />
+    }
     @if (CanEdit)
     {
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CameraAlt" OnClick="CaptureBaselineAsync">
-            Capture baseline
+            Save baseline
+        </MudButton>
+    }
+    @if (PlanService is not null)
+    {
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.EventBusy" OnClick="CalendarAsync" data-testid="gantt-calendar">
+            Working calendar
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="PdfAsync" data-testid="gantt-pdf">
+            PDF
         </MudButton>
     }
     <MudSpacer />
@@ -35,6 +51,10 @@
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
             <span class="gantt-legend critical" aria-hidden="true"></span>Critical path: @_analysis.CriticalPath.Count task@(_analysis.CriticalPath.Count == 1 ? "" : "s")
             · Finish @projectFinish.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)
+            @if (_comparison?.FinishVarianceDays is { } slip)
+            {
+                <span data-testid="gantt-finish-variance">&nbsp;· @(slip == 0 ? "on the baseline finish" : slip > 0 ? $"{slip} working day{(slip == 1 ? "" : "s")} later than the baseline" : $"{-slip} working day{(slip == -1 ? "" : "s")} earlier than the baseline")</span>
+            }
         </MudText>
     }
 </MudStack>
@@ -47,13 +67,17 @@ else
 {
     <div class="gantt">
         <GanttTaskList Rows="_rows" SheetId="SheetId" Collapsed="_collapsed" Critical="_critical" OnToggle="ToggleAsync"
-                       Assignees="@(Tasks is { } tasks ? tasks.For : null)" CanAssign="CanAssign" OnAssign="AssignAsync" />
+                       Assignees="@(Tasks is { } tasks ? tasks.For : null)" CanAssign="CanAssign" OnAssign="AssignAsync"
+                       Comparison="_comparison" Constraints="_constraints" Conflicts="_conflicts" CanConstrain="@(CanEdit && Plan is not null)"
+                       OnConstrain="ConstrainAsync" />
         <GanttTimeline Rows="_rows" Scale="_scale" Dependencies="_dependencies" Analysis="_analysis" Baseline="_baseline"
-                       Today="_today" OnBarDropped="MoveBarAsync" OnLinkDropped="LinkAsync" OnDependencyClick="UnlinkAsync" />
+                       Today="_today" OnBarDropped="MoveBarAsync" OnLinkDropped="LinkAsync" OnDependencyClick="UnlinkAsync"
+                       IsWorkingDay="@(Plan is { } plan ? plan.IsWorkingDay : null)" Constraints="_constraints" Conflicts="_conflicts" />
     </div>
     <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" hidden="@(!CanEdit)">
         Drag a bar to move it or its right edge to change the finish. Drag the dot after a bar onto another task to link them; click an arrow to remove the link.
-        Without a mouse, change dates in the Grid view.
+        Use the pin beside a task for a date constraint (Start No Earlier Than, Must Start On, a deadline). Without a mouse, change dates in the Grid view.
+        Shaded days are days off on the plan's working calendar.
     </MudText>
 
     @* The accessible alternative to the timeline (WCAG 1.1.1, 1.3.1): the whole schedule, links and critical path as a table. *@
@@ -71,10 +95,15 @@ else
                         <th scope="col">Depends on</th>
                         <th scope="col">Critical path</th>
                         <th scope="col">Slack (days)</th>
+                        @if (Plan is not null)
+                        {
+                            <th scope="col">Constraint</th>
+                        }
                         @if (_baseline is not null)
                         {
                             <th scope="col">Baseline start</th>
                             <th scope="col">Baseline finish</th>
+                            <th scope="col">Finish variance (days)</th>
                         }
                     </tr>
                 </thead>
@@ -88,15 +117,24 @@ else
                             </th>
                             <td>@TableDate(row.Start)</td>
                             <td>@TableDate(row.Finish)</td>
-                            <td>@(row.Start is { } s0 && row.Finish is { } f0 ? (f0.DayNumber - s0.DayNumber + 1).ToString(CultureInfo.CurrentCulture) : "—")</td>
+                            <td>@Days(row)</td>
                             <td style="text-align:left; white-space:normal">@Predecessors(row.Item.Id)</td>
                             <td>@(_critical.Contains(row.Item.Id) ? "Yes" : "No")</td>
                             <td>@(slack?.SlackDays.ToString(CultureInfo.CurrentCulture) ?? "—")</td>
+                            @if (Plan is not null)
+                            {
+                                var constraint = _constraints?.GetValueOrDefault(row.Item.Id);
+                                var conflict = _conflicts?.GetValueOrDefault(row.Item.Id);
+                                <td style="text-align:left; white-space:normal">
+                                    @(constraint is null ? "—" : $"{constraint.Label} {TableDate(constraint.Date)}")@(conflict is null ? "" : $". Conflict: {conflict.Message}")
+                                </td>
+                            }
                             @if (_baseline is not null)
                             {
                                 var b = _baseline.TryGetValue(row.Item.Id, out var span) ? span : (null, null);
                                 <td>@TableDate(b.Start)</td>
                                 <td>@TableDate(b.Finish)</td>
+                                <td>@(_comparison?.For(row.Item.Id)?.FinishVarianceDays?.ToString("+0;-0;0", CultureInfo.InvariantCulture) ?? "—")</td>
                             }
                         </tr>
                     }
@@ -119,10 +157,17 @@ else
     private Guid _baselineId;
     private BaselineDetail? _baselineDetail;
     private Dictionary<Guid, (DateOnly? Start, DateOnly? Finish)>? _baseline;
+    private BaselineComparison? _comparison;
+    private Dictionary<Guid, PlanConstraintDto>? _constraints;
+    private Dictionary<Guid, PlanConflictDto>? _conflicts;
     private Guid _loadedSheetId;
+
+    private IPlanScheduleService? PlanService => Services.GetService<IPlanScheduleService>();
 
     protected override async Task OnParametersSetAsync()
     {
+        _constraints = Plan?.Tasks.Where(t => t.Constraint is not null).ToDictionary(t => t.ItemId, t => t.Constraint!);
+        _conflicts = Plan?.AllConflicts.GroupBy(c => c.ItemId).ToDictionary(g => g.Key, g => g.First());
         Layout();
         await RunAsync(async () =>
         {
@@ -143,6 +188,7 @@ else
         _dependencies = await DependencyService.ListAsync(SheetId);
         _analysis = await DependencyService.AnalyzeAsync(SheetId);
         _critical = _analysis.CriticalPath.ToHashSet();
+        _comparison = _baselineId == Guid.Empty ? null : await BaselineService.CompareAsync(SheetId, _baselineId);
     }
 
     /// <summary>Rebuilds rows, baseline spans and the time scale from the current items.</summary>
@@ -166,6 +212,11 @@ else
     }
 
     private static string TableDate(DateOnly? date) => date?.ToString("ddd MMM d, yyyy", CultureInfo.InvariantCulture) ?? "—";
+
+    /// <summary>Working days on the plan's calendar (from the plan editor), else calendar days.</summary>
+    private string Days(GanttRow row) =>
+        Plan?.For(row.Item.Id)?.DurationDays is { } days ? days.ToString(CultureInfo.CurrentCulture)
+        : row.Start is { } s0 && row.Finish is { } f0 ? (f0.DayNumber - s0.DayNumber + 1).ToString(CultureInfo.CurrentCulture) : "—";
 
     private string Predecessors(Guid itemId)
     {
@@ -196,13 +247,66 @@ else
     {
         _baselineId = baselineId;
         await RunAsync(async () =>
-            _baselineDetail = baselineId == Guid.Empty ? null : await BaselineService.GetAsync(SheetId, baselineId));
+        {
+            _baselineDetail = baselineId == Guid.Empty ? null : await BaselineService.GetAsync(SheetId, baselineId);
+            _comparison = baselineId == Guid.Empty ? null : await BaselineService.CompareAsync(SheetId, baselineId);
+        });
         Layout();
+    }
+
+    private async Task DeleteBaselineAsync()
+    {
+        var baseline = _baselines.FirstOrDefault(b => b.Id == _baselineId);
+        if (baseline is null || await DialogService.ShowMessageBoxAsync("Delete baseline", $"Delete the baseline \"{baseline.Name}\"? The plan doesn't change.",
+                yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await BaselineService.DeleteAsync(SheetId, baseline.Id);
+            _baselines = await BaselineService.ListAsync(SheetId);
+            Snackbar.Add($"Deleted \"{baseline.Name}\".", Severity.Success);
+        });
+        await SelectBaselineAsync(Guid.Empty);
+    }
+
+    private async Task CalendarAsync()
+    {
+        var parameters = new DialogParameters<PlanCalendarDialog> { { d => d.SheetId, SheetId }, { d => d.CanEdit, CanEdit } };
+        var dialog = await DialogService.ShowAsync<PlanCalendarDialog>("Working calendar", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await Changed.InvokeAsync();
+        }
+    }
+
+    private async Task PdfAsync()
+    {
+        var parameters = new DialogParameters<GanttPdfDialog>
+        {
+            { d => d.SheetId, SheetId },
+            { d => d.BaselineId, _baselineId == Guid.Empty ? null : _baselineId },
+            { d => d.BaselineName, _baselines.FirstOrDefault(b => b.Id == _baselineId)?.Name },
+        };
+        await DialogService.ShowAsync<GanttPdfDialog>("Gantt to PDF", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+    }
+
+    private async Task ConstrainAsync(GanttRow row)
+    {
+        if (!CanEdit)
+        {
+            return;
+        }
+
+        await TaskConstraintEditor.EditAsync(DialogService, SheetId, row.Item.Id, row.Item.Title, Plan, row.Start);
+        await Changed.InvokeAsync();
     }
 
     private async Task CaptureBaselineAsync()
     {
-        var dialog = await DialogService.ShowAsync<CaptureBaselineDialog>("Capture baseline");
+        var dialog = await DialogService.ShowAsync<CaptureBaselineDialog>("Save a baseline");
         if (await dialog.Result is not { Canceled: false, Data: string name })
         {
             return;
@@ -212,7 +316,7 @@ else
         {
             var captured = await BaselineService.CaptureAsync(SheetId, new CaptureBaselineRequest(name));
             _baselines = await BaselineService.ListAsync(SheetId);
-            Snackbar.Add($"Captured \"{captured.Name}\".", Severity.Success);
+            Snackbar.Add($"Saved the baseline \"{captured.Name}\". Its bars show under the plan's.", Severity.Success);
             await SelectBaselineAsync(captured.Id);
         });
     }

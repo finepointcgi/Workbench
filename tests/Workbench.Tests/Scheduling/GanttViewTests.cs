@@ -102,6 +102,11 @@ public sealed class GanttViewTests
 
         public Task<BaselineDetail> GetAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<BaselineComparison> CompareAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task DeleteAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class NoItemService : IItemService

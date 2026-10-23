@@ -26,6 +26,8 @@
   <ItemGroup>
     <!-- Sample hotel folios and receipts for the receipt reading tests. -->
     <None Include="Receipts\Samples\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- MS Project XML files for the import and export tests. -->
+    <None Include="Scheduling\Samples\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

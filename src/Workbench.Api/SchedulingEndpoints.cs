@@ -32,6 +32,15 @@ internal static class SchedulingEndpoints
         sheet.MapGet("/baselines/{baselineId:guid}", (Guid sheetId, Guid baselineId, IBaselineService service, CancellationToken ct) =>
             service.GetAsync(sheetId, baselineId, ct));
 
+        sheet.MapGet("/baselines/{baselineId:guid}/variance", (Guid sheetId, Guid baselineId, IBaselineService service, CancellationToken ct) =>
+            service.CompareAsync(sheetId, baselineId, ct));
+
+        sheet.MapDelete("/baselines/{baselineId:guid}", async (Guid sheetId, Guid baselineId, IBaselineService service, CancellationToken ct) =>
+        {
+            await service.DeleteAsync(sheetId, baselineId, ct);
+            return Results.NoContent();
+        });
+
         // The plan editor (MS Project-style outline, durations, predecessors) and its Excel export and import.
         sheet.MapGet("/plan", (Guid sheetId, IPlanScheduleService service, CancellationToken ct) => service.GetAsync(sheetId, ct));
 
@@ -72,6 +81,35 @@ internal static class SchedulingEndpoints
 
         sheet.MapPost("/plan/import", (Guid sheetId, PlanImportRequest request, IPlanScheduleService service, CancellationToken ct) =>
             service.ApplyImportAsync(sheetId, request, ct));
+
+        sheet.MapPut("/plan/items/{itemId:guid}/constraint", (Guid sheetId, Guid itemId, SetPlanConstraintRequest body, IPlanScheduleService service, CancellationToken ct) =>
+            service.SetConstraintAsync(sheetId, itemId, body, ct));
+
+        sheet.MapGet("/plan/calendar", (Guid sheetId, IPlanScheduleService service, CancellationToken ct) => service.GetCalendarAsync(sheetId, ct));
+
+        sheet.MapPut("/plan/calendar", (Guid sheetId, SetPlanCalendarRequest body, IPlanScheduleService service, CancellationToken ct) =>
+            service.SetCalendarAsync(sheetId, body, ct));
+
+        sheet.MapDelete("/plan/calendar", (Guid sheetId, IPlanScheduleService service, CancellationToken ct) => service.SetCalendarAsync(sheetId, null, ct));
+
+        // MS Project XML (.xml; .mpp is MS Project's closed format) and the Gantt as a PDF.
+        sheet.MapGet("/plan/export/msproject", (Guid sheetId, IPlanScheduleService service, CancellationToken ct) => service.ExportMsProjectAsync(sheetId, ct));
+
+        sheet.MapGet("/plan.xml", async (Guid sheetId, IPlanScheduleService service, CancellationToken ct) =>
+        {
+            var file = await service.ExportMsProjectAsync(sheetId, ct);
+            return Results.File(file.Content, file.ContentType, file.FileName);
+        });
+
+        sheet.MapPost("/plan/export/gantt-pdf", (Guid sheetId, GanttPdfRequest request, IPlanScheduleService service, CancellationToken ct) =>
+            service.ExportGanttPdfAsync(sheetId, request, ct));
+
+        sheet.MapGet("/gantt.pdf", async (Guid sheetId, DateOnly? from, DateOnly? to, bool? fit, bool? table, GanttPaperSize? paper, Guid? baseline,
+            IPlanScheduleService service, CancellationToken ct) =>
+        {
+            var file = await service.ExportGanttPdfAsync(sheetId, new GanttPdfRequest(from, to, fit ?? true, table ?? true, paper ?? GanttPaperSize.Letter, baseline), ct);
+            return Results.File(file.Content, file.ContentType, file.FileName);
+        });
 
         v1.MapGet("/plan-template", (IPlanScheduleService service, CancellationToken ct) => service.TemplateAsync(ct)).WithTags("Scheduling");
 

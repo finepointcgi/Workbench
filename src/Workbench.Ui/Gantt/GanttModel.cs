@@ -187,6 +187,43 @@ public sealed class GanttScale
         }
     }
 
+    /// <summary>
+    /// Days the plan doesn't work (weekends, holidays, a plan's own days off), merged into runs, shaded in day and week zoom.
+    /// Without a calendar these are the weekends.
+    /// </summary>
+    public IEnumerable<GanttTick> DaysOff(Func<DateOnly, bool>? isWorkingDay)
+    {
+        if (isWorkingDay is null)
+        {
+            foreach (var weekend in Weekends())
+            {
+                yield return weekend;
+            }
+
+            yield break;
+        }
+
+        if (Zoom == GanttZoom.Month)
+        {
+            yield break;
+        }
+
+        DateOnly? runStart = null;
+        for (var d = Start; d <= End; d = d.AddDays(1))
+        {
+            var off = d < End && !isWorkingDay(d);
+            if (off && runStart is null)
+            {
+                runStart = d;
+            }
+            else if (!off && runStart is { } from)
+            {
+                yield return new GanttTick(X(from), X(d) - X(from), string.Empty, true);
+                runStart = null;
+            }
+        }
+    }
+
     private List<GanttTick> Bands(Func<DateOnly, DateOnly> floor, Func<DateOnly, DateOnly> next, Func<DateOnly, string> label)
     {
         var ticks = new List<GanttTick>();

@@ -1,12 +1,13 @@
 <MudDialog>
     <DialogContent>
-        <MudText Class="mud-text-secondary mb-3">Saves today's start and finish of every task so you can compare against them later.</MudText>
+        <MudText Class="mud-text-secondary mb-3">Saves today's start and finish of every task under a name, so the Gantt can show them under the plan's bars and the
+            variance in working days. A plan can keep several baselines (for example the proposal, the award and a re-plan).</MudText>
         <MudTextField @bind-Value="_name" Label="Name" AutoFocus="true" Immediate="true" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">Capture</MudButton>
+                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">Save baseline</MudButton>
     </DialogActions>
 </MudDialog>
 

@@ -1,0 +1,85 @@
+@* Prints the Gantt to a PDF: a date range, one page wide or at a readable scale across pages, with or without the task table. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Scheduling
+@using Microsoft.JSInterop
+@inject IPlanScheduleService Plans
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudDatePicker Editable="true" Placeholder="MM/DD/YYYY" DateFormat="MM/dd/yyyy" @bind-Date="_from" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="max-width:180px"
+                               HelperText="Blank: the plan's start" data-testid="pdf-from" />
+                <MudDatePicker Editable="true" Placeholder="MM/DD/YYYY" DateFormat="MM/dd/yyyy" @bind-Date="_to" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="max-width:180px"
+                               HelperText="Blank: the plan's finish" data-testid="pdf-to" />
+            </MudStack>
+            <MudSwitch T="bool" @bind-Value="_fit" Color="Color.Primary" Label="Fit to one page wide" data-testid="pdf-fit" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="margin-top:-8px">
+                @(_fit ? "The dates shrink to fit the page; long plans continue on more pages down." : "Days keep a readable width; long date ranges continue on more pages across.")
+            </MudText>
+            <MudSwitch T="bool" @bind-Value="_table" Color="Color.Primary" Label="Include the task table (ID, name, duration, start, finish)" data-testid="pdf-table" />
+            <MudSelect T="GanttPaperSize" @bind-Value="_paper" Label="Paper (landscape)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:240px">
+                <MudSelectItem Value="GanttPaperSize.Letter">Letter (8.5 × 11 in)</MudSelectItem>
+                <MudSelectItem Value="GanttPaperSize.Tabloid">Tabloid (11 × 17 in)</MudSelectItem>
+                <MudSelectItem Value="GanttPaperSize.A4">A4</MudSelectItem>
+            </MudSelect>
+            @if (BaselineName is not null)
+            {
+                <MudSwitch T="bool" @bind-Value="_baseline" Color="Color.Primary" Label="@($"Show the baseline \"{BaselineName}\" under the bars")" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="DownloadAsync"
+                   Disabled="_busy" data-testid="pdf-download">Download PDF</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    /// <summary>The baseline the Gantt is comparing with, if any.</summary>
+    [Parameter]
+    public Guid? BaselineId { get; set; }
+
+    [Parameter]
+    public string? BaselineName { get; set; }
+
+    private DateTime? _from;
+    private DateTime? _to;
+    private bool _fit = true;
+    private bool _table = true;
+    private bool _baseline = true;
+    private GanttPaperSize _paper = GanttPaperSize.Letter;
+    private bool _busy;
+
+    private async Task DownloadAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = new GanttPdfRequest(
+                _from is { } f ? DateOnly.FromDateTime(f) : null, _to is { } t ? DateOnly.FromDateTime(t) : null, _fit, _table, _paper,
+                _baseline ? BaselineId : null);
+            var file = await Plans.ExportGanttPdfAsync(SheetId, request);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/plan.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException or JSException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

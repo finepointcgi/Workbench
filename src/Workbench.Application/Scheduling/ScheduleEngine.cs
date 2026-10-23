@@ -106,16 +106,24 @@ public sealed class PlanOutline
 /// </summary>
 public static class ScheduleEngine
 {
-    /// <summary>Rolls summaries up and pushes successors until nothing moves. True when anything changed.</summary>
-    public static bool Reflow(IReadOnlyCollection<Item> items, IReadOnlyCollection<PlanLink> links, WorkCalendar calendar, Guid? percentColumnId)
+    /// <summary>
+    /// Rolls summaries up, pushes successors and applies date constraints until nothing moves. True when anything changed.
+    /// Constraints apply to tasks without subtasks; see <see cref="ApplyConstraints"/>.
+    /// </summary>
+    public static bool Reflow(
+        IReadOnlyCollection<Item> items, IReadOnlyCollection<PlanLink> links, WorkCalendar calendar, Guid? percentColumnId,
+        IReadOnlyDictionary<Guid, PlanConstraintDto>? constraints = null)
     {
+        constraints ??= NoConstraints;
         var outline = new PlanOutline(items);
         var changed = false;
         var maxPasses = items.Count + links.Count + 10;
         for (var pass = 0; pass < maxPasses; pass++)
         {
             changed |= Rollup(outline, calendar, percentColumnId);
-            if (!Push(outline, links, calendar))
+            var moved = ApplyConstraints(outline, constraints, calendar);
+            moved |= Push(outline, links, calendar, constraints);
+            if (!moved)
             {
                 break;
             }
@@ -125,6 +133,165 @@ public static class ScheduleEngine
 
         return changed;
     }
+
+    private static readonly IReadOnlyDictionary<Guid, PlanConstraintDto> NoConstraints = new Dictionary<Guid, PlanConstraintDto>();
+
+    /// <summary>True for Must Start On and Must Finish On: the task stays on its date whatever its links say.</summary>
+    public static bool IsPinned(PlanConstraintKind kind) => kind is PlanConstraintKind.MustStartOn or PlanConstraintKind.MustFinishOn;
+
+    /// <summary>The constraint that applies to a task: none on summaries and As Soon/Late As Possible.</summary>
+    private static PlanConstraintDto? ConstraintOf(PlanOutline outline, Item item, IReadOnlyDictionary<Guid, PlanConstraintDto> constraints) =>
+        constraints.TryGetValue(item.Id, out var c) && c.Kind is not (PlanConstraintKind.AsSoonAsPossible or PlanConstraintKind.AsLateAsPossible)
+            && !outline.IsSummary(item.Id) ? c : null;
+
+    /// <summary>
+    /// The working day a constraint means: start constraints and Finish No Earlier Than move a day off forward, the other
+    /// finish constraints move it back (a deadline on a Saturday is met by Friday).
+    /// </summary>
+    public static DateOnly EffectiveDate(PlanConstraintDto constraint, WorkCalendar calendar) => constraint.Kind switch
+    {
+        PlanConstraintKind.MustFinishOn or PlanConstraintKind.FinishNoLaterThan => calendar.OnOrBefore(constraint.Date),
+        _ => calendar.OnOrAfter(constraint.Date),
+    };
+
+    /// <summary>
+    /// Moves tasks to meet their constraints: Must Start/Finish On pins the task to the date; Start/Finish No Earlier Than
+    /// moves it later when it's earlier. The No Later Than kinds never move a task (they are deadlines; see
+    /// <see cref="Conflicts"/>). An undated task takes the date as a one-day task. True when anything moved.
+    /// </summary>
+    public static bool ApplyConstraints(PlanOutline outline, IReadOnlyDictionary<Guid, PlanConstraintDto> constraints, WorkCalendar calendar)
+    {
+        var moved = false;
+        foreach (var item in outline.Ordered)
+        {
+            if (ConstraintOf(outline, item, constraints) is not { } constraint)
+            {
+                continue;
+            }
+
+            var date = EffectiveDate(constraint, calendar);
+            if ((item.Start ?? item.Finish) is null)
+            {
+                if (constraint.Kind is PlanConstraintKind.StartNoLaterThan or PlanConstraintKind.FinishNoLaterThan)
+                {
+                    continue;
+                }
+
+                item.Start = date;
+                item.Finish = date;
+                moved = true;
+                continue;
+            }
+
+            var start = (item.Start ?? item.Finish)!.Value;
+            var finish = (item.Finish ?? item.Start)!.Value;
+            var days = calendar.Duration(start, finish, item.IsMilestone);
+            DateOnly? target = constraint.Kind switch
+            {
+                PlanConstraintKind.MustStartOn => date,
+                PlanConstraintKind.MustFinishOn => calendar.StartFor(date, days),
+                PlanConstraintKind.StartNoEarlierThan when start < date => date,
+                PlanConstraintKind.FinishNoEarlierThan when finish < date => calendar.StartFor(date, days),
+                _ => null,
+            };
+            if (target is { } t && t != start)
+            {
+                MoveLeaf(item, t, calendar);
+                moved = true;
+            }
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// Every task whose constraint its schedule doesn't meet: a pinned task its links would push later, or a No Later Than
+    /// date the task has moved past. Run it after <see cref="Reflow"/>.
+    /// </summary>
+    public static IReadOnlyList<PlanConflictDto> Conflicts(
+        IReadOnlyCollection<Item> items, IReadOnlyCollection<PlanLink> links, WorkCalendar calendar, IReadOnlyDictionary<Guid, PlanConstraintDto> constraints)
+    {
+        var outline = new PlanOutline(items);
+        var incoming = links.ToLookup(l => l.SuccessorId);
+        var conflicts = new List<PlanConflictDto>();
+        foreach (var item in outline.Ordered)
+        {
+            if (ConstraintOf(outline, item, constraints) is not { } constraint || (item.Start ?? item.Finish) is null)
+            {
+                continue;
+            }
+
+            var start = (item.Start ?? item.Finish)!.Value;
+            var finish = (item.Finish ?? item.Start)!.Value;
+            var date = EffectiveDate(constraint, calendar);
+            var label = PlanConstraints.Label(constraint.Kind);
+            var number = outline.TaskNumber[item.Id];
+
+            // What the links ask for, and which predecessor asks for the most.
+            var (required, driver) = LinkStart(outline, item, incoming[item.Id], calendar);
+            var driverName = driver is null ? "" : $"\"{driver.Title}\" (task {outline.TaskNumber[driver.Id]})";
+            var binding = driver is not null && required >= start; // the link, not a typed date, holds the task there
+            var because = binding ? $" because of its predecessor {driverName}" : "";
+            switch (constraint.Kind)
+            {
+                case PlanConstraintKind.MustStartOn or PlanConstraintKind.MustFinishOn when required is { } r && r > start:
+                {
+                    var late = calendar.Between(start, r);
+                    conflicts.Add(new PlanConflictDto(item.Id, number, item.Title, constraint.Kind, late,
+                        $"{label} {Day(constraint.Date)}, but its predecessor {driverName} doesn't let it start until {Day(r)}: {Days(late)} of conflict. "
+                        + "Change the link or the constraint.", driver?.Id));
+                    break;
+                }
+
+                case PlanConstraintKind.StartNoLaterThan when start > date:
+                {
+                    var late = calendar.Between(date, start);
+                    conflicts.Add(new PlanConflictDto(item.Id, number, item.Title, constraint.Kind, late,
+                        $"Starts {Day(start)}{because}, {Days(late)} after its {label} {Day(constraint.Date)}.", binding ? driver?.Id : null));
+                    break;
+                }
+
+                case PlanConstraintKind.FinishNoLaterThan when finish > date:
+                {
+                    var late = calendar.Between(date, finish);
+                    conflicts.Add(new PlanConflictDto(item.Id, number, item.Title, constraint.Kind, late,
+                        $"Finishes {Day(finish)}{because}, {Days(late)} after its {label} {Day(constraint.Date)}.", binding ? driver?.Id : null));
+                    break;
+                }
+            }
+        }
+
+        return conflicts;
+    }
+
+    /// <summary>The latest start the task's links ask for, and the predecessor asking for it (null without dated links).</summary>
+    private static (DateOnly? Start, Item? Driver) LinkStart(PlanOutline outline, Item succ, IEnumerable<PlanLink> links, WorkCalendar calendar)
+    {
+        DateOnly? best = null;
+        Item? driver = null;
+        foreach (var link in links)
+        {
+            if (outline.Find(link.PredecessorId) is not { } pred || pred.Id == succ.Id || outline.IsAncestor(pred.Id, succ.Id) || outline.IsAncestor(succ.Id, pred.Id)
+                || (pred.Start ?? pred.Finish) is not { } ps || (pred.Finish ?? pred.Start) is not { } pf
+                || (succ.Start ?? succ.Finish) is not { } ss || (succ.Finish ?? succ.Start) is not { } sf)
+            {
+                continue;
+            }
+
+            var required = RequiredStart(link, ps, pf, ss, sf, pred.IsMilestone && !outline.IsSummary(pred.Id), succ.IsMilestone, calendar);
+            if (best is null || required > best)
+            {
+                best = required;
+                driver = pred;
+            }
+        }
+
+        return (best, driver);
+    }
+
+    private static string Day(DateOnly date) => date.ToString("ddd MMM d", CultureInfo.InvariantCulture);
+
+    private static string Days(int days) => days == 1 ? "1 working day" : $"{days.ToString(CultureInfo.InvariantCulture)} working days";
 
     /// <summary>Sets every summary task's dates (and % complete, with a percent column) from its subtasks. True when anything changed.</summary>
     public static bool Rollup(PlanOutline outline, WorkCalendar calendar, Guid? percentColumnId)
@@ -196,8 +363,8 @@ public static class ScheduleEngine
     public static decimal? Percent(string? value) =>
         decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var p) ? p : null;
 
-    /// <summary>One pass over the links. True when a successor moved.</summary>
-    private static bool Push(PlanOutline outline, IReadOnlyCollection<PlanLink> links, WorkCalendar calendar)
+    /// <summary>One pass over the links. True when a successor moved. Pinned tasks (Must Start/Finish On) aren't pushed.</summary>
+    private static bool Push(PlanOutline outline, IReadOnlyCollection<PlanLink> links, WorkCalendar calendar, IReadOnlyDictionary<Guid, PlanConstraintDto> constraints)
     {
         var moved = false;
         foreach (var link in links.OrderBy(l => outline.TaskNumber.GetValueOrDefault(l.PredecessorId)))
@@ -210,6 +377,11 @@ public static class ScheduleEngine
 
             if ((pred.Start ?? pred.Finish) is not { } ps || (pred.Finish ?? pred.Start) is not { } pf
                 || (succ.Start ?? succ.Finish) is not { } ss || (succ.Finish ?? succ.Start) is not { } sf)
+            {
+                continue;
+            }
+
+            if (ConstraintOf(outline, succ, constraints) is { } pin && IsPinned(pin.Kind))
             {
                 continue;
             }
@@ -227,19 +399,25 @@ public static class ScheduleEngine
         return moved;
     }
 
-    /// <summary>The earliest start a link allows its successor. A milestone takes no time: its successor may start that day.</summary>
+    /// <summary>
+    /// The earliest start a link allows its successor, by working days on the calendar (lag can be negative, a lead):
+    /// FS starts the working day after the predecessor finishes, SS on its start, FF finishes on its finish, and SF finishes
+    /// the working day before it starts, each moved by the lag. A milestone takes no time: its FS successor may start that day.
+    /// </summary>
     public static DateOnly RequiredStart(
         PlanLink link, DateOnly ps, DateOnly pf, DateOnly ss, DateOnly sf, bool predMilestone, bool succMilestone, WorkCalendar calendar)
     {
         DateOnly Lag(DateOnly date) => link.LagDays == 0 ? date : calendar.AddWorkingDays(calendar.OnOrAfter(date), link.LagDays);
         var duration = calendar.Duration(ss, sf, succMilestone);
-        DateOnly StartFor(DateOnly finish) => duration <= 1 ? finish : calendar.AddWorkingDays(calendar.OnOrAfter(finish), -(duration - 1));
+        DateOnly StartFor(DateOnly finish) => duration <= 1 ? calendar.OnOrAfter(finish) : calendar.AddWorkingDays(calendar.OnOrAfter(finish), -(duration - 1));
 
         return link.Type switch
         {
             DependencyKind.StartToStart => Lag(calendar.OnOrAfter(ps)),
             DependencyKind.FinishToFinish => StartFor(Lag(pf)),
-            DependencyKind.StartToFinish => StartFor(Lag(ps)),
+            // As in MS Project and the critical path: the successor finishes by the end of the working day before the
+            // predecessor starts (a milestone successor sits on that start).
+            DependencyKind.StartToFinish => succMilestone ? Lag(calendar.OnOrAfter(ps)) : StartFor(calendar.AddWorkingDays(calendar.OnOrAfter(ps), link.LagDays - 1)),
             _ => Lag(predMilestone || succMilestone ? pf : calendar.OnOrAfter(pf.AddDays(1))),
         };
     }
@@ -273,7 +451,7 @@ public static class ScheduleEngine
         Rollup(outline, calendar, null);
     }
 
-    private static void MoveLeaf(Item item, DateOnly start, WorkCalendar calendar)
+    internal static void MoveLeaf(Item item, DateOnly start, WorkCalendar calendar)
     {
         if (item.Start is { } s && item.Finish is { } f)
         {
