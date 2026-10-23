@@ -98,12 +98,14 @@ public sealed class DependencyService(IWorkbenchDbContextFactory dbFactory) : ID
         var parents = items.Where(i => i.ParentId is not null).Select(i => i.ParentId!.Value).ToHashSet();
         var tasks = items
             .Where(i => !parents.Contains(i.Id) && (i.Start ?? i.Finish) is not null)
-            .Select(i => new ScheduleTask(i.Id, (i.Start ?? i.Finish)!.Value, (i.Finish ?? i.Start)!.Value))
+            .Select(i => new ScheduleTask(i.Id, (i.Start ?? i.Finish)!.Value, (i.Finish ?? i.Start)!.Value, i.IsMilestone))
             .ToList();
         var links = dependencies
             .Select(d => new ScheduleLink(d.PredecessorId, d.SuccessorId, (DependencyKind)(int)d.Type, d.LagDays))
             .ToList();
-        return CriticalPathCalculator.Analyze(tasks, links);
+        var calendar = await PlanReflow.CalendarAsync(db, sheetId, cancellationToken);
+        var constraints = await PlanReflow.ConstraintsAsync(db, sheetId, tasks.Select(t => t.Id).ToHashSet(), cancellationToken);
+        return CriticalPathCalculator.Analyze(tasks, links, calendar, constraints);
     }
 
     /// <summary>True when <paramref name="predecessorId"/> is already reachable from <paramref name="successorId"/>.</summary>

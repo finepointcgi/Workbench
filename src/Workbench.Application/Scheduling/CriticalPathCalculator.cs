@@ -2,19 +2,26 @@ using Workbench.Contracts.Scheduling;
 
 namespace Workbench.Application.Scheduling;
 
-public sealed record ScheduleTask(Guid Id, DateOnly Start, DateOnly Finish);
+/// <summary>A task in the network. A milestone has no duration; any other task lasts at least one working day.</summary>
+public sealed record ScheduleTask(Guid Id, DateOnly Start, DateOnly Finish, bool IsMilestone = false);
 
 public sealed record ScheduleLink(Guid PredecessorId, Guid SuccessorId, DependencyKind Type, int LagDays);
 
 /// <summary>
-/// Classic CPM over working-day indexes. Each task is the half-open range [ES, ES + duration).
-/// A task's planned start acts as a "start no earlier than" constraint, so tasks without
-/// predecessors stay where they are planned.
+/// Classic CPM over the plan calendar's working-day indexes (<see cref="WorkCalendar.Index"/>: holidays and days off don't
+/// count). Each task is the half-open range [ES, ES + duration). A task's planned start acts as a "start no earlier than"
+/// constraint, so tasks without predecessors stay where they are planned. Date constraints apply as in MS Project: No
+/// Earlier Than and Must kinds bound the early dates, No Later Than and Must kinds the late dates, so a missed deadline
+/// shows as negative slack.
 /// </summary>
 public static class CriticalPathCalculator
 {
-    public static ScheduleAnalysis Analyze(IReadOnlyCollection<ScheduleTask> tasks, IReadOnlyCollection<ScheduleLink> links)
+    public static ScheduleAnalysis Analyze(
+        IReadOnlyCollection<ScheduleTask> tasks, IReadOnlyCollection<ScheduleLink> links, WorkCalendar? calendar = null,
+        IReadOnlyDictionary<Guid, PlanConstraintDto>? constraints = null)
     {
+        calendar ??= WorkCalendar.Weekdays;
+        constraints ??= new Dictionary<Guid, PlanConstraintDto>();
         if (tasks.Count == 0)
         {
             return new ScheduleAnalysis(null, null, [], []);
@@ -26,12 +33,17 @@ public static class CriticalPathCalculator
         var outgoing = edges.ToLookup(l => l.PredecessorId);
         var order = TopologicalOrder(tasks, edges);
 
-        var duration = tasks.ToDictionary(t => t.Id, t => WorkingDays.Duration(t.Start, t.Finish));
+        var duration = tasks.ToDictionary(t => t.Id, t => calendar.Duration(t.Start, t.Finish, t.IsMilestone));
+        int Day(PlanConstraintDto c) => calendar.Index(ScheduleEngine.EffectiveDate(c, calendar));
+
+        // The index just after a task finishing on the constraint's day (a milestone takes no time, so it's the day itself).
+        int End(Guid id, PlanConstraintDto c) => Day(c) + (duration[id] == 0 ? 0 : 1);
         var es = new Dictionary<Guid, int>();
         var ef = new Dictionary<Guid, int>();
         foreach (var id in order)
         {
-            var start = WorkingDays.Index(byId[id].Start);
+            var start = calendar.Index(byId[id].Start);
+            constraints.TryGetValue(id, out var constraint);
             foreach (var link in incoming[id].Where(l => ef.ContainsKey(l.PredecessorId)))
             {
                 var p = link.PredecessorId;
@@ -44,6 +56,15 @@ public static class CriticalPathCalculator
                 });
             }
 
+            start = constraint?.Kind switch
+            {
+                PlanConstraintKind.StartNoEarlierThan => Math.Max(start, Day(constraint)),
+                PlanConstraintKind.FinishNoEarlierThan => Math.Max(start, End(id, constraint) - duration[id]),
+                PlanConstraintKind.MustStartOn => Day(constraint),
+                PlanConstraintKind.MustFinishOn => End(id, constraint) - duration[id],
+                _ => start,
+            };
+
             es[id] = start;
             ef[id] = start + duration[id];
         }
@@ -54,6 +75,7 @@ public static class CriticalPathCalculator
         foreach (var id in Enumerable.Reverse(order))
         {
             var finish = projectFinish;
+            constraints.TryGetValue(id, out var constraint);
             foreach (var link in outgoing[id].Where(l => lf.ContainsKey(l.SuccessorId)))
             {
                 var s = link.SuccessorId;
@@ -66,6 +88,13 @@ public static class CriticalPathCalculator
                 });
             }
 
+            finish = constraint?.Kind switch
+            {
+                PlanConstraintKind.FinishNoLaterThan or PlanConstraintKind.MustFinishOn => Math.Min(finish, End(id, constraint)),
+                PlanConstraintKind.StartNoLaterThan or PlanConstraintKind.MustStartOn => Math.Min(finish, Day(constraint) + duration[id]),
+                _ => finish,
+            };
+
             lf[id] = finish;
             ls[id] = finish - duration[id];
         }
@@ -73,8 +102,8 @@ public static class CriticalPathCalculator
         var items = order
             .Select(id => new ItemSlack(
                 id,
-                WorkingDays.FromIndex(es[id]),
-                WorkingDays.FromIndex(duration[id] == 0 ? es[id] : ef[id] - 1),
+                calendar.FromIndex(es[id]),
+                calendar.FromIndex(duration[id] == 0 ? es[id] : ef[id] - 1),
                 ls[id] - es[id],
                 ls[id] - es[id] <= 0))
             .OrderBy(i => i.EarlyStart)

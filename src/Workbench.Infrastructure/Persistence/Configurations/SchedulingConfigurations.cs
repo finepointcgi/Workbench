@@ -41,3 +41,35 @@ internal sealed class BaselineEntryConfiguration : IEntityTypeConfiguration<Base
         b.HasIndex(e => new { e.BaselineId, e.ItemId }).IsUnique();
     }
 }
+
+internal sealed class PlanCalendarConfiguration : IEntityTypeConfiguration<PlanCalendar>
+{
+    public void Configure(EntityTypeBuilder<PlanCalendar> b)
+    {
+        b.HasOne<Sheet>().WithMany().HasForeignKey(x => x.SheetId).OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => x.SheetId).IsUnique();
+        b.HasMany(x => x.Exceptions).WithOne().HasForeignKey(e => e.CalendarId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class PlanCalendarExceptionConfiguration : IEntityTypeConfiguration<PlanCalendarException>
+{
+    public void Configure(EntityTypeBuilder<PlanCalendarException> b)
+    {
+        b.Property(x => x.Name).HasMaxLength(200);
+        b.HasIndex(x => new { x.CalendarId, x.Date }).IsUnique();
+    }
+}
+
+/// <summary>A constraint goes with its task (and with its sheet).</summary>
+internal sealed class TaskConstraintConfiguration : IEntityTypeConfiguration<TaskConstraint>
+{
+    public void Configure(EntityTypeBuilder<TaskConstraint> b)
+    {
+        b.Property(x => x.Type).HasConversion<string>().HasMaxLength(32);
+        b.HasOne<Sheet>().WithMany().HasForeignKey(x => x.SheetId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => x.ItemId).IsUnique();
+        b.HasIndex(x => x.SheetId);
+    }
+}

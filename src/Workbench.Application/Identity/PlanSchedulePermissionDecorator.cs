@@ -6,7 +6,7 @@ namespace Workbench.Application.Identity;
 
 /// <summary>
 /// The plan editor follows the sheet's roles: Viewers read the outline and export it; Editors (who can edit the project's
-/// plan) indent, re-date, link and import. Previewing an import needs Editor too, since it exists only to import.
+/// plan) indent, re-date, link, constrain, change the calendar and import. Previewing an import needs Editor too, since it exists only to import.
 /// </summary>
 public sealed class PermissionCheckingPlanScheduleService(IPlanScheduleService inner, AccessControl access) : IPlanScheduleService
 {
@@ -62,6 +62,36 @@ public sealed class PermissionCheckingPlanScheduleService(IPlanScheduleService i
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
         return await inner.ApplyImportAsync(sheetId, request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PlanConflictDto>> SetConstraintAsync(Guid sheetId, Guid itemId, SetPlanConstraintRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        return await inner.SetConstraintAsync(sheetId, itemId, request, cancellationToken);
+    }
+
+    public async Task<PlanCalendarDto> GetCalendarAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
+        return await inner.GetCalendarAsync(sheetId, cancellationToken);
+    }
+
+    public async Task<PlanCalendarDto> SetCalendarAsync(Guid sheetId, SetPlanCalendarRequest? request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        return await inner.SetCalendarAsync(sheetId, request, cancellationToken);
+    }
+
+    public async Task<PlanFile> ExportMsProjectAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
+        return await inner.ExportMsProjectAsync(sheetId, cancellationToken);
+    }
+
+    public async Task<PlanFile> ExportGanttPdfAsync(Guid sheetId, GanttPdfRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
+        return await inner.ExportGanttPdfAsync(sheetId, request, cancellationToken);
     }
 }
 

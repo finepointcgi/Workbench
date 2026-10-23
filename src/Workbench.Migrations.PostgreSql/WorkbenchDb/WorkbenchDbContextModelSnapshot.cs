@@ -21216,6 +21216,88 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("Dependency");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendar", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("UseCompanyHolidays")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("WorkDays")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId")
+                        .IsUnique();
+
+                    b.ToTable("PlanCalendar");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendarException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CalendarId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsWorking")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("PlanCalendarException");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.TaskConstraint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId")
+                        .IsUnique();
+
+                    b.HasIndex("SheetId");
+
+                    b.ToTable("TaskConstraint");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Security.AccessReview", b =>
                 {
                     b.Property<Guid>("Id")
@@ -26799,6 +26881,39 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendar", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendarException", b =>
+                {
+                    b.HasOne("Workbench.Domain.Scheduling.PlanCalendar", null)
+                        .WithMany("Exceptions")
+                        .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.TaskConstraint", b =>
+                {
+                    b.HasOne("Workbench.Domain.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Security.AccessReviewItem", b =>
                 {
                     b.HasOne("Workbench.Domain.Security.AccessReview", null)
@@ -27235,6 +27350,11 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
             modelBuilder.Entity("Workbench.Domain.Scheduling.Baseline", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendar", b =>
+                {
+                    b.Navigation("Exceptions");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Security.AccessReview", b =>
