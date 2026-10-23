@@ -4,7 +4,7 @@
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
         <MudIcon Icon="@AutomationUi.ActionIcon(Action.Kind)" Color="Color.Primary" />
         <MudSelect T="AutomationActionKind" @bind-Value="Action.Kind" Dense="true" Label="@($"Action {Index + 1}")" Style="max-width:320px" ReadOnly="ReadOnly" data-testid="action-kind">
-            @foreach (var kind in Enum.GetValues<AutomationActionKind>())
+            @foreach (var kind in Enum.GetValues<AutomationActionKind>().Where(k => k <= AutomationActionKind.Block))
             {
                 <MudSelectItem Value="kind">@AutomationUi.Action(kind)</MudSelectItem>
             }

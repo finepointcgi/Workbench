@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Automations;
 using Workbench.Application.Notifications;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Collaboration;
@@ -10,7 +11,8 @@ namespace Workbench.Application.Automation;
 
 /// <summary>
 /// Decorates <see cref="IItemService"/>: captures the item before and after each create or update, notifies people
-/// newly assigned in a Person column (unless they made the change), and runs the sheet's rules.
+/// newly assigned in a Person column (unless they made the change), and runs the sheet's automations
+/// (<see cref="SheetAutomationRuntime"/>; rows added inside <see cref="SheetAutomationEvents.AddedByForm"/> also fire "added by a form").
 /// <para>
 /// Ordering: registered after <c>AddWorkbenchCollaboration</c>, so it wraps <c>ActivityRecordingItemService</c>:
 /// <c>AutomationItemService → ActivityRecordingItemService → ItemService</c>. The person's change is saved and
@@ -19,13 +21,24 @@ namespace Workbench.Application.Automation;
 /// (register it later) so people are checked but rule actions, which act for the rule's author, are not.
 /// </para>
 /// </summary>
-public sealed class AutomationItemService(
-    IItemService inner,
-    IWorkbenchDbContextFactory dbFactory,
-    RuleEngine engine,
-    Notifier notifier,
-    ICurrentUser currentUser) : IItemService
+public sealed class AutomationItemService : IItemService
 {
+    private readonly IItemService inner;
+    private readonly IWorkbenchDbContextFactory dbFactory;
+    private readonly SheetAutomationRuntime engine;
+    private readonly Notifier notifier;
+    private readonly ICurrentUser currentUser;
+
+    public AutomationItemService(IItemService inner, IWorkbenchDbContextFactory dbFactory, SheetAutomationRuntime engine, Notifier notifier, ICurrentUser currentUser,
+        AutomationItemServiceAccessor? accessor = null)
+    {
+        (this.inner, this.dbFactory, this.engine, this.notifier, this.currentUser) = (inner, dbFactory, engine, notifier, currentUser);
+        if (accessor is not null)
+        {
+            accessor.Instance ??= this;
+        }
+    }
+
     public Task<IReadOnlyList<ItemDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
         inner.ListAsync(sheetId, cancellationToken);
 
@@ -33,7 +46,11 @@ public sealed class AutomationItemService(
     {
         var created = await inner.CreateAsync(sheetId, request, cancellationToken);
         await NotifyAssignedAsync(sheetId, null, created);
-        await engine.OnItemCreatedAsync(this, sheetId, created);
+        using (SheetAutomationRuntime.ForActor(currentUser.Email))
+        {
+            await engine.OnItemCreatedAsync(this, sheetId, created, SheetAutomationEvents.CurrentForm);
+        }
+
         return created;
     }
 
@@ -49,7 +66,10 @@ public sealed class AutomationItemService(
         if (before is not null)
         {
             await NotifyAssignedAsync(sheetId, before, updated);
-            await engine.OnItemUpdatedAsync(this, sheetId, before, updated);
+            using (SheetAutomationRuntime.ForActor(currentUser.Email))
+            {
+                await engine.OnItemUpdatedAsync(this, sheetId, before, updated);
+            }
         }
 
         return updated;
@@ -92,12 +112,20 @@ public sealed class AutomationItemService(
                 continue;
             }
 
-            await notifier.NotifyAsync(assigned, new NotificationRequest(
+            var request = new NotificationRequest(
                 NotificationKinds.Assignment,
                 $"{actor} assigned you to \"{after.Title}\"",
                 $"You're now {column.Name} on \"{after.Title}\" in {sheetName}.",
                 sheetId,
-                after.Id));
+                after.Id);
+            if (SheetAutomationBatch.Current is { } batch)
+            {
+                // A batch (an import) sends one "assigned to N rows" notice per person and column at the end.
+                batch.Notify(column.Id, $"Assigned to you as {column.Name}", sheetId, sheetName, assigned, request, after.Title);
+                continue;
+            }
+
+            await notifier.NotifyAsync(assigned, request);
         }
     }
 }

@@ -1,0 +1,213 @@
+@* One action of a sheet automation: set a column, assign, notify, email, add a sub-item or an item, move or copy the row, request approval, give a to-do. *@
+
+<MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="action">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudIcon Icon="@AutomationUi.ActionIcon(Action.Kind)" Color="Color.Primary" />
+        <MudSelect T="AutomationActionKind" Value="Action.Kind" ValueChanged="SetKind" Dense="true" Label="@($"Action {Index + 1}")" Style="max-width:320px" data-testid="action-kind">
+            @foreach (var kind in AutomationUi.SheetActions)
+            {
+                <MudSelectItem Value="kind">@AutomationUi.Action(kind)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="Index == 0" aria-label="Move action up" title="Move up" OnClick="() => OnMove.InvokeAsync(-1)" />
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="IsLast" aria-label="Move action down" title="Move down" OnClick="() => OnMove.InvokeAsync(1)" />
+        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Remove action" title="Remove action" OnClick="OnRemove" />
+    </MudStack>
+
+    @switch (Action.Kind)
+    {
+        case AutomationActionKind.SetField:
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="12" sm="5">
+                    <MudSelect T="string" @bind-Value="Action.FieldKey" Dense="true" Label="Column" ToStringFunc="Label" data-testid="action-field">
+                        @foreach (var field in Sheet.Fields.Where(f => !f.IsFormula))
+                        {
+                            <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    @if (Field(Action.FieldKey)?.Options is { Count: > 0 } options)
+                    {
+                        <MudSelect T="string" @bind-Value="Action.Value" Dense="true" Label="To" data-testid="action-value">
+                            @foreach (var option in options)
+                            {
+                                <MudSelectItem Value="option">@option</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudTextField @bind-Value="Action.Value" Margin="Margin.Dense" Label="To" HelperText="@TokenHint" data-testid="action-value" />
+                    }
+                </MudItem>
+            </MudGrid>
+            break;
+
+        case AutomationActionKind.AssignPerson:
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="12" sm="5">@PersonColumnPicker("Person column")</MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="Action.Value" Margin="Margin.Dense" Label="Person's email" InputType="InputType.Email" HelperText="They're notified that they were assigned." />
+                </MudItem>
+            </MudGrid>
+            break;
+
+        case AutomationActionKind.Notify or AutomationActionKind.SendEmail or AutomationActionKind.CreateTask:
+            <MudText Typo="Typo.body2" Class="mt-2 mb-1">@(Action.Kind switch { AutomationActionKind.Notify => "Notify", AutomationActionKind.SendEmail => "Email", _ => "Give a to-do to" })</MudText>
+            @foreach (var (recipient, ri) in Action.Recipients.Select((r, i) => (r, i)))
+            {
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="RecipientKind" Value="recipient.Kind" ValueChanged="k => SetRecipientKind(recipient, k)" Dense="true" Label="Who">
+                            <MudSelectItem Value="RecipientKind.Field">People in a column</MudSelectItem>
+                            <MudSelectItem Value="RecipientKind.Person">Someone by email</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="10" sm="7">
+                        @if (recipient.Kind == RecipientKind.Field)
+                        {
+                            <MudSelect T="string" @bind-Value="recipient.Value" Dense="true" Label="Person column" ToStringFunc="Label">
+                                @foreach (var field in PersonColumns)
+                                {
+                                    <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <MudTextField @bind-Value="recipient.Value" Margin="Margin.Dense" Label="Email" InputType="InputType.Email" />
+                        }
+                    </MudItem>
+                    <MudItem xs="2" sm="1" Class="d-flex align-center">
+                        @if (Action.Recipients.Count > 1)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Remove recipient" OnClick="() => Action.Recipients.RemoveAt(ri)" />
+                        }
+                    </MudItem>
+                </MudGrid>
+            }
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => Action.Recipients.Add(NewRecipient())">Recipient</MudButton>
+            <MudTextField @bind-Value="Action.Title" Label="@(Action.Kind == AutomationActionKind.SendEmail ? "Subject" : "Title")" Placeholder="{automation}: {Title}" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="Action.Message" Label="Message" Lines="2" Sizing="InputSizing.Auto" Margin="Margin.Dense" HelperText="@TokenHint" />
+            @if (Action.Kind == AutomationActionKind.CreateTask)
+            {
+                <MudNumericField T="int?" @bind-Value="Action.DueInDays" Label="Due in (days)" Min="0" Max="365" Clearable="true" Margin="Margin.Dense" Style="max-width:200px" />
+            }
+            else if (Action.Kind == AutomationActionKind.SendEmail)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Sent straight away, whatever each person's notification settings.</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">In the app right away; by email as each person prefers.</MudText>
+            }
+            break;
+
+        case AutomationActionKind.CreateSubItem:
+            <MudTextField @bind-Value="Action.Value" Margin="Margin.Dense" Class="mt-2" Label="Sub-item title" Placeholder="Follow up on {Title}" HelperText="@TokenHint" />
+            break;
+
+        case AutomationActionKind.CreateItem:
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="Action.Value" Margin="Margin.Dense" Label="New item's title" HelperText="@TokenHint" /></MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Action.TargetSheetId" Dense="true" Label="In" Clearable="true" Placeholder="This sheet" ToStringFunc="SheetLabel">
+                        @foreach (var target in Sheet.TargetSheets)
+                        {
+                            <MudSelectItem Value="target.Id">@target.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            break;
+
+        case AutomationActionKind.MoveRow or AutomationActionKind.CopyRow:
+            <MudSelect T="string" @bind-Value="Action.TargetSheetId" Dense="true" Label="To the sheet" Class="mt-2" ToStringFunc="SheetLabel" data-testid="action-sheet"
+                       HelperText="@($"Values go into columns with the same name and kind; sub-items {(Action.Kind == AutomationActionKind.MoveRow ? "move" : "are copied")} too. Only sheets you can edit are listed.")">
+                @foreach (var target in Sheet.TargetSheets)
+                {
+                    <MudSelectItem Value="target.Id">@target.Label</MudSelectItem>
+                }
+            </MudSelect>
+            break;
+
+        case AutomationActionKind.RequireApproval:
+            <MudGrid Spacing="2" Class="mt-1">
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Action.WorkflowKey" Dense="true" Label="Approval workflow" HelperText="Approvers decide in their Approvals inbox.">
+                        @foreach (var workflow in Sheet.ApprovalWorkflows)
+                        {
+                            <MudSelectItem Value="workflow.Id">@workflow.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="Action.FieldKey" Dense="true" Label="Write the decision to" Clearable="true" Placeholder="Nowhere" ToStringFunc="Label"
+                               HelperText="&quot;Approved&quot; or &quot;Rejected&quot; goes into this column.">
+                        @foreach (var field in Sheet.Fields.Where(f => !f.IsFormula && f.Type is "Text" or "Dropdown" or "Title"))
+                        {
+                            <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            @if (Sheet.ApprovalWorkflows.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">An administrator creates record approval workflows in Admin › Automation › Approval workflows.</MudAlert>
+            }
+            break;
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public ActionModel Action { get; set; } = default!;
+    [Parameter] public int Index { get; set; }
+    [Parameter] public bool IsLast { get; set; }
+    [Parameter, EditorRequired] public SheetAutomationCatalogDto Sheet { get; set; } = default!;
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback<int> OnMove { get; set; }
+
+    public const string TokenHint = "Use {Title}, {Start}, {Finish}, {Today} or {Column name} for the row's values.";
+
+    private IEnumerable<SheetAutomationFieldDto> PersonColumns => Sheet.Fields.Where(f => f.Type == "Person");
+
+    private SheetAutomationFieldDto? Field(string? key) => Sheet.Fields.FirstOrDefault(f => f.Key == key);
+
+    private string Label(string? key) => Field(key)?.Label ?? key ?? "";
+
+    private string SheetLabel(string? id) => Sheet.TargetSheets.FirstOrDefault(s => s.Id == id)?.Label ?? (id is null ? "This sheet" : "(a sheet you can't edit)");
+
+    private RecipientModel NewRecipient() => PersonColumns.FirstOrDefault() is { } column
+        ? new RecipientModel { Kind = RecipientKind.Field, Value = column.Key }
+        : new RecipientModel { Kind = RecipientKind.Person, Value = "" };
+
+    private RenderFragment PersonColumnPicker(string label) => __builder =>
+    {
+        <MudSelect T="string" @bind-Value="Action.FieldKey" Dense="true" Label="@label" ToStringFunc="Label">
+            @foreach (var field in PersonColumns)
+            {
+                <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+            }
+        </MudSelect>
+    };
+
+    private void SetRecipientKind(RecipientModel recipient, RecipientKind kind)
+    {
+        recipient.Kind = kind;
+        recipient.Value = kind == RecipientKind.Field ? PersonColumns.FirstOrDefault()?.Key ?? "" : "";
+    }
+
+    private void SetKind(AutomationActionKind kind)
+    {
+        Action.Kind = kind;
+        Action.FieldKey = kind == AutomationActionKind.AssignPerson ? PersonColumns.FirstOrDefault()?.Key : null;
+        Action.Value = null;
+        Action.TargetSheetId = null;
+        if (kind is AutomationActionKind.Notify or AutomationActionKind.SendEmail or AutomationActionKind.CreateTask && Action.Recipients.All(r => r.Kind == RecipientKind.Relationship))
+        {
+            Action.Recipients = [NewRecipient()];
+        }
+    }
+}

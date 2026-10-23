@@ -30,7 +30,19 @@ public enum AutomationTriggerKind
     Manual,
 }
 
-public enum RecordEventKind { Created, Updated, StatusChanged, Submitted, Approved, Rejected, Deleted }
+public enum RecordEventKind
+{
+    Created,
+    Updated,
+    StatusChanged,
+    Submitted,
+    Approved,
+    Rejected,
+    Deleted,
+
+    /// <summary>Sheets: a row was added by a form (<see cref="AutomationSheets.ItemAddedByFormEvent"/>).</summary>
+    AddedByForm,
+}
 
 public enum ScheduleFrequency { Daily, Weekly, Monthly }
 
@@ -59,6 +71,8 @@ public enum ThresholdKind
 /// <param name="OffsetDays">Date field: -30 = 30 days before the date, 5 = 5 days after it.</param>
 /// <param name="Percent">Thresholds: the percentage (25 = 25%).</param>
 /// <param name="Days">Thresholds: days late (missing timesheets) or business days waiting (approvals).</param>
+/// <param name="SheetId">Sheet automations: the sheet it belongs to (the record type is then <see cref="AutomationSheets.EntityType"/>,
+/// fields are column ids or <see cref="AutomationSheets.Title"/>, <see cref="AutomationSheets.Start"/>, <see cref="AutomationSheets.Finish"/>).</param>
 public sealed record AutomationTrigger(
     AutomationTriggerKind Kind,
     string? EntityType = null,
@@ -74,7 +88,8 @@ public sealed record AutomationTrigger(
     int? OffsetDays = null,
     ThresholdKind? Threshold = null,
     decimal? Percent = null,
-    int? Days = null);
+    int? Days = null,
+    Guid? SheetId = null);
 
 /// <summary>What a condition looks at.</summary>
 public enum ConditionSubject
@@ -156,6 +171,26 @@ public enum AutomationActionKind
 
     /// <summary>Refuses the change with <see cref="AutomationAction.Message"/> (validation). Only for record events.</summary>
     Block,
+
+    // ---- Sheet actions (sheet automations only) ----
+
+    /// <summary>Puts the email in <see cref="AutomationAction.Value"/> (a template) into the Person column <see cref="AutomationAction.FieldKey"/>.</summary>
+    AssignPerson,
+
+    /// <summary>Adds a sub-item titled <see cref="AutomationAction.Value"/> (a template) under the row.</summary>
+    CreateSubItem,
+
+    /// <summary>Adds an item titled <see cref="AutomationAction.Value"/> to <see cref="AutomationAction.TargetSheetId"/> (this sheet when null).</summary>
+    CreateItem,
+
+    /// <summary>Moves the row (and its sub-items) to <see cref="AutomationAction.TargetSheetId"/>, matching columns by name.</summary>
+    MoveRow,
+
+    /// <summary>Copies the row (and its sub-items) to <see cref="AutomationAction.TargetSheetId"/>, matching columns by name.</summary>
+    CopyRow,
+
+    /// <summary>Emails the recipients directly (subject <see cref="AutomationAction.Title"/>, body <see cref="AutomationAction.Message"/>), whatever their notification settings.</summary>
+    SendEmail,
 }
 
 public enum RecipientKind
@@ -191,7 +226,8 @@ public sealed record AutomationAction(
     string? WorkflowKey = null,
     Guid? ConnectorId = null,
     Guid? WebhookEndpointId = null,
-    Guid? TargetAutomationId = null);
+    Guid? TargetAutomationId = null,
+    Guid? TargetSheetId = null);
 
 public enum AutomationRunAs
 {
@@ -257,7 +293,9 @@ public sealed record AutomationSummaryDto(
     DateTime? LastRunAtUtc,
     string? LastRunStatus,
     int RunsLast7Days,
-    int FailuresLast7Days);
+    int FailuresLast7Days,
+    Guid? SheetId = null,
+    string? SheetName = null);
 
 public sealed record AutomationVersionDto(int Version, string CreatedBy, DateTime CreatedAtUtc, string? Note, bool IsCurrent);
 
@@ -364,7 +402,87 @@ public sealed record AutomationCatalogDto(
     IReadOnlyList<AutomationOptionDto> OrgUnits,
     IReadOnlyList<AutomationOptionDto> Projects);
 
-public sealed record AutomationTemplateDto(string Key, string Name, string Description, string Category, SaveAutomationRequest Request);
+/// <summary>
+/// A recipe: a plain sentence with blanks (<see cref="Sentence"/> holds <c>{blankKey}</c> tokens, each one of <see cref="Blanks"/>).
+/// <see cref="Request"/> is the automation with the blanks' defaults; <see cref="IAutomationService.BuildRecipeAsync"/> fills them in.
+/// </summary>
+/// <param name="Scope"><see cref="AutomationRecipeScope.Sheet"/> recipes need a sheet; record recipes work across modules.</param>
+public sealed record AutomationTemplateDto(string Key, string Name, string Description, string Category, SaveAutomationRequest Request,
+    AutomationRecipeScope Scope = AutomationRecipeScope.Record, string? Sentence = null, IReadOnlyList<AutomationRecipeBlankDto>? Blanks = null);
+
+public enum AutomationRecipeScope { Record, Sheet }
+
+/// <summary>What a recipe's blank asks for.</summary>
+public enum AutomationRecipeBlankKind
+{
+    /// <summary>A sheet column (or Title / Start / Finish).</summary>
+    Column,
+
+    /// <summary>Start, Finish or a Date column.</summary>
+    DateColumn,
+
+    /// <summary>A Person column.</summary>
+    PersonColumn,
+
+    /// <summary>A value of the column chosen in <see cref="AutomationRecipeBlankDto.DependsOn"/> (its dropdown options when it has them).</summary>
+    ColumnValue,
+
+    /// <summary>An email address.</summary>
+    Person,
+
+    /// <summary>Another sheet.</summary>
+    Sheet,
+
+    Number,
+    Text,
+
+    /// <summary>A record approval workflow (Setup › Approval workflows).</summary>
+    ApprovalWorkflow,
+}
+
+/// <param name="Default">The value used until it's filled in (null: it must be filled in). For column blanks, a column name to pick when
+/// the sheet has one (e.g. "Status").</param>
+/// <param name="DependsOn">For <see cref="AutomationRecipeBlankKind.ColumnValue"/>: the column blank whose values it offers.</param>
+public sealed record AutomationRecipeBlankDto(string Key, string Label, AutomationRecipeBlankKind Kind, string? Default = null, string? DependsOn = null);
+
+// ---- Sheet automations (same model and builder, scoped to one sheet) ----
+
+/// <summary>Sheet automations: when a row is added, changed or a date arrives, act on the row.</summary>
+public static class AutomationSheets
+{
+    /// <summary>The record type of sheet rows.</summary>
+    public const string EntityType = "sheet-item";
+
+    public const string Title = "title";
+    public const string Start = "start";
+    public const string Finish = "finish";
+
+    /// <summary>
+    /// The event a form raises when it adds a row (the forms work raises it; automations listen with a record-event trigger on
+    /// <see cref="RecordEventKind.AddedByForm"/>). See <c>Application.Automations.SheetAutomationEvents.AddedByForm</c>.
+    /// </summary>
+    public const string ItemAddedByFormEvent = "sheet.item.added_by_form";
+
+    /// <summary>Chains of sheet automations (an action triggering another) stop after this many levels, whatever the settings.</summary>
+    public const int MaxChainDepth = 3;
+
+    public static bool IsBuiltInField(string? key) => key is Title or Start or Finish;
+}
+
+/// <summary>A sheet's column as the builder offers it.</summary>
+/// <param name="Type">The column kind (<c>Text</c>, <c>Dropdown</c>, <c>Person</c>, <c>Date</c>, ...), or <c>Title</c>/<c>Date</c> for built-in fields.</param>
+public sealed record SheetAutomationFieldDto(string Key, string Label, string Type, IReadOnlyList<string> Options, bool IsFormula);
+
+public sealed record SheetAutomationCatalogDto(
+    Guid SheetId,
+    string SheetName,
+    IReadOnlyList<SheetAutomationFieldDto> Fields,
+    IReadOnlyList<AutomationOptionDto> Rows,
+    IReadOnlyList<AutomationOptionDto> TargetSheets,
+    IReadOnlyList<AutomationOptionDto> ApprovalWorkflows,
+    IReadOnlyList<AutomationOptionDto> ChatConnectors,
+    IReadOnlyList<AutomationOptionDto> WebhookEndpoints,
+    bool CanEdit);
 
 /// <summary>
 /// Admin › Automation. Managing needs the "manage automations" permission (administrators until the permission catalog
@@ -407,6 +525,15 @@ public interface IAutomationService
     Task<IReadOnlyList<AutomationOptionDto>> ListRecordsAsync(string entityType, string? search = null, CancellationToken cancellationToken = default);
 
     IReadOnlyList<AutomationTemplateDto> ListTemplates();
+
+    /// <summary>A recipe with its blanks filled in (blank key → value; missing ones use the defaults), ready for the builder.</summary>
+    Task<SaveAutomationRequest> BuildRecipeAsync(string key, Guid? sheetId, IReadOnlyDictionary<string, string?> blanks, CancellationToken cancellationToken = default);
+
+    /// <summary>A sheet's automations. Viewers of the sheet may list them; creating and changing them needs Editor (or managing automations).</summary>
+    Task<IReadOnlyList<AutomationSummaryDto>> ListForSheetAsync(Guid sheetId, CancellationToken cancellationToken = default);
+
+    /// <summary>The builder's pick lists for a sheet: its columns and rows, sheets to move or copy to, workflows and connectors.</summary>
+    Task<SheetAutomationCatalogDto> GetSheetCatalogAsync(Guid sheetId, CancellationToken cancellationToken = default);
 
     Task<AutomationSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default);
 

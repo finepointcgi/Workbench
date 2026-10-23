@@ -57,6 +57,8 @@ else
                 <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="DownloadTemplateAsync" data-testid="plan-template">Download blank Excel template</MudMenuItem>
             </MudMenu>
         }
+        @* One automation builder: recipes and the sheet's automations (Workbench.Ui.Automation). *@
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Bolt" OnClick="AutomateAsync" data-testid="sheet-automate">Automate</MudButton>
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
     </MudStack>
@@ -208,6 +210,8 @@ else
             await LoadAsync();
         }
     }
+
+    private Task AutomateAsync() => Workbench.Ui.Automation.AutomateDialog.ShowAsync(DialogService, SheetId, _sheet?.Summary.Name ?? "this sheet", _access.CanEdit);
 
     private async Task ShareAsync()
     {

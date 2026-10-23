@@ -24,8 +24,12 @@ public sealed class TriggerModel
     public decimal Percent { get; set; } = 25m;
     public int Days { get; set; } = 2;
 
+    /// <summary>Sheet automations: the sheet (the record type is then sheet rows).</summary>
+    public Guid? SheetId { get; set; }
+
     public static TriggerModel From(AutomationTrigger t) => new()
     {
+        SheetId = t.SheetId,
         Kind = t.Kind,
         EntityType = t.EntityType,
         Events = t.Events?.ToList() ?? [RecordEventKind.Submitted],
@@ -44,7 +48,19 @@ public sealed class TriggerModel
         Days = t.Days ?? 2,
     };
 
-    public AutomationTrigger ToTrigger() => Kind switch
+    public AutomationTrigger ToTrigger() => SheetId is { } sheet ? SheetTrigger(sheet) : RecordTrigger();
+
+    /// <summary>A sheet trigger: rows added (or added by a form), a column changes, a date arrives (checked hourly), or a schedule.</summary>
+    private AutomationTrigger SheetTrigger(Guid sheet) => (Kind switch
+    {
+        AutomationTriggerKind.RecordEvent => new AutomationTrigger(Kind, Events: Events.ToList()),
+        AutomationTriggerKind.FieldChanged => new AutomationTrigger(Kind, FieldKey: FieldKey, FromValue: Blank(FromValue), ToValue: Blank(ToValue)),
+        AutomationTriggerKind.DateField => new AutomationTrigger(Kind, FieldKey: FieldKey, OffsetDays: OffsetBefore ? -OffsetDays : OffsetDays),
+        _ => new AutomationTrigger(AutomationTriggerKind.Schedule, Frequency: Frequency, Hour: Hour,
+            DayOfWeek: Frequency == ScheduleFrequency.Weekly ? DayOfWeek : null, DayOfMonth: Frequency == ScheduleFrequency.Monthly ? DayOfMonth : null),
+    }) with { EntityType = AutomationSheets.EntityType, SheetId = sheet };
+
+    private AutomationTrigger RecordTrigger() => Kind switch
     {
         AutomationTriggerKind.RecordEvent => new(Kind, EntityType, Events.ToList()),
         AutomationTriggerKind.FieldChanged => new(Kind, EntityType, FieldKey: FieldKey, FromValue: Blank(FromValue), ToValue: Blank(ToValue)),
@@ -143,6 +159,19 @@ public sealed class ActionModel
     public string? WebhookEndpointId { get; set; }
     public string? TargetAutomationId { get; set; }
 
+    /// <summary>Sheet actions: the sheet to create, move or copy into (null for this sheet).</summary>
+    public string? TargetSheetId { get; set; }
+
+    private static readonly HashSet<AutomationActionKind> WithRecipients = [AutomationActionKind.Notify, AutomationActionKind.CreateTask, AutomationActionKind.SendEmail];
+    private static readonly HashSet<AutomationActionKind> WithTitle =
+        [AutomationActionKind.Notify, AutomationActionKind.CreateTask, AutomationActionKind.SendEmail, AutomationActionKind.PostToChat, AutomationActionKind.CallWebhook];
+    private static readonly HashSet<AutomationActionKind> WithMessage =
+        [AutomationActionKind.Notify, AutomationActionKind.CreateTask, AutomationActionKind.SendEmail, AutomationActionKind.PostToChat, AutomationActionKind.CallWebhook, AutomationActionKind.Block];
+    private static readonly HashSet<AutomationActionKind> WithField = [AutomationActionKind.SetField, AutomationActionKind.AssignPerson, AutomationActionKind.RequireApproval];
+    private static readonly HashSet<AutomationActionKind> WithValue =
+        [AutomationActionKind.SetField, AutomationActionKind.AssignPerson, AutomationActionKind.CreateSubItem, AutomationActionKind.CreateItem];
+    private static readonly HashSet<AutomationActionKind> WithSheet = [AutomationActionKind.CreateItem, AutomationActionKind.MoveRow, AutomationActionKind.CopyRow];
+
     public static ActionModel From(AutomationAction a) => new()
     {
         Kind = a.Kind,
@@ -156,19 +185,23 @@ public sealed class ActionModel
         ConnectorId = a.ConnectorId?.ToString(),
         WebhookEndpointId = a.WebhookEndpointId?.ToString(),
         TargetAutomationId = a.TargetAutomationId?.ToString(),
+        TargetSheetId = a.TargetSheetId?.ToString(),
     };
 
     public AutomationAction ToAction() => new(Kind,
-        Kind is AutomationActionKind.Notify or AutomationActionKind.CreateTask ? Recipients.Where(r => !string.IsNullOrWhiteSpace(r.Value)).Select(r => new AutomationRecipient(r.Kind, r.Value.Trim())).ToList() : null,
-        Kind is AutomationActionKind.Block or AutomationActionKind.SetField or AutomationActionKind.RequireApproval or AutomationActionKind.StartAutomation ? null : Title,
-        Kind is AutomationActionKind.SetField or AutomationActionKind.RequireApproval or AutomationActionKind.StartAutomation ? null : Message,
-        Kind == AutomationActionKind.SetField ? FieldKey : null,
-        Kind == AutomationActionKind.SetField ? Value : null,
+        WithRecipients.Contains(Kind) ? Recipients.Where(r => !string.IsNullOrWhiteSpace(r.Value)).Select(r => new AutomationRecipient(r.Kind, r.Value.Trim())).ToList() : null,
+        WithTitle.Contains(Kind) ? Title : null,
+        WithMessage.Contains(Kind) ? Message : null,
+        WithField.Contains(Kind) ? Blank(FieldKey) : null,
+        WithValue.Contains(Kind) ? Value : null,
         Kind == AutomationActionKind.CreateTask ? DueInDays : null,
         Kind == AutomationActionKind.RequireApproval ? WorkflowKey : null,
         Kind == AutomationActionKind.PostToChat && Guid.TryParse(ConnectorId, out var c) ? c : null,
         Kind == AutomationActionKind.CallWebhook && Guid.TryParse(WebhookEndpointId, out var w) ? w : null,
-        Kind == AutomationActionKind.StartAutomation && Guid.TryParse(TargetAutomationId, out var t) ? t : null);
+        Kind == AutomationActionKind.StartAutomation && Guid.TryParse(TargetAutomationId, out var t) ? t : null,
+        WithSheet.Contains(Kind) && Guid.TryParse(TargetSheetId, out var s) ? s : null);
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 /// <summary>Labels and chips shared by the automation pages.</summary>
@@ -234,8 +267,41 @@ public static class AutomationUi
         AutomationActionKind.PostToChat => "Post to Teams or Slack",
         AutomationActionKind.CallWebhook => "Call a webhook",
         AutomationActionKind.StartAutomation => "Start another automation",
+        AutomationActionKind.AssignPerson => "Assign someone",
+        AutomationActionKind.CreateSubItem => "Add a sub-item",
+        AutomationActionKind.CreateItem => "Create an item",
+        AutomationActionKind.MoveRow => "Move the row to another sheet",
+        AutomationActionKind.CopyRow => "Copy the row to another sheet",
+        AutomationActionKind.SendEmail => "Send an email",
         _ => "Refuse the change (validation)",
     };
+
+    /// <summary>The actions a sheet automation offers, in the order the builder lists them.</summary>
+    public static readonly IReadOnlyList<AutomationActionKind> SheetActions =
+    [
+        AutomationActionKind.SetField, AutomationActionKind.AssignPerson, AutomationActionKind.Notify, AutomationActionKind.SendEmail,
+        AutomationActionKind.CreateSubItem, AutomationActionKind.CreateItem, AutomationActionKind.MoveRow, AutomationActionKind.CopyRow,
+        AutomationActionKind.RequireApproval, AutomationActionKind.CreateTask,
+    ];
+
+    /// <summary>Sheet triggers as people think of them; each maps to a trigger kind (and event).</summary>
+    public static string SheetTrigger(AutomationTriggerKind kind, IReadOnlyCollection<RecordEventKind> events) => kind switch
+    {
+        AutomationTriggerKind.RecordEvent when events.Contains(RecordEventKind.AddedByForm) => "An item is added by a form",
+        AutomationTriggerKind.RecordEvent => "An item is added",
+        AutomationTriggerKind.FieldChanged => "A column changes",
+        AutomationTriggerKind.DateField => "A date arrives",
+        _ => "On a recurring schedule",
+    };
+
+    /// <summary>Sheet fields as the condition editor's fields (dropdown columns offer their options).</summary>
+    public static IReadOnlyList<Workbench.Contracts.Customization.EntityFieldDto> SheetFields(SheetAutomationCatalogDto sheet) =>
+        sheet.Fields.Select(f => new Workbench.Contracts.Customization.EntityFieldDto(AutomationSheets.EntityType, f.Key, f.Label, f.Type switch
+        {
+            "Date" => "date",
+            "Number" or "Currency" => "number",
+            _ => "text",
+        }, false, false, f.Options.Count > 0 ? f.Options : null, null)).ToList();
 
     public static string ActionIcon(AutomationActionKind kind) => kind switch
     {
@@ -246,6 +312,12 @@ public static class AutomationUi
         AutomationActionKind.PostToChat => Icons.Material.Filled.Forum,
         AutomationActionKind.CallWebhook => Icons.Material.Filled.Webhook,
         AutomationActionKind.StartAutomation => Icons.Material.Filled.PlayCircle,
+        AutomationActionKind.AssignPerson => Icons.Material.Filled.PersonAdd,
+        AutomationActionKind.CreateSubItem => Icons.Material.Filled.SubdirectoryArrowRight,
+        AutomationActionKind.CreateItem => Icons.Material.Filled.PlaylistAdd,
+        AutomationActionKind.MoveRow => Icons.Material.Filled.DriveFileMove,
+        AutomationActionKind.CopyRow => Icons.Material.Filled.ContentCopy,
+        AutomationActionKind.SendEmail => Icons.Material.Filled.Email,
         _ => Icons.Material.Filled.Block,
     };
 

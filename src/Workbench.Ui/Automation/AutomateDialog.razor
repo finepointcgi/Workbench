@@ -1,0 +1,86 @@
+@using Workbench.Contracts.Automations
+@using Workbench.Ui.AutomationBuilder
+@inject IAutomationService Automations
+@inject NavigationManager Navigation
+
+@* The sheet's "Automate" button: recipes to start from, building one from scratch, and the sheet's automations. *@
+<MudDialog data-testid="automate-dialog">
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Bolt" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Automate @SheetName</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (CanEdit)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h2">Start from a recipe</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => Go(null)" data-testid="automate-custom">Build your own</MudButton>
+            </MudStack>
+            <MudGrid Spacing="2" Class="mb-4">
+                @foreach (var recipe in Recipes)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Outlined="true" Class="pa-3 recipe-card" Style="height:100%;cursor:pointer" @onclick="() => Go(recipe.Key)" data-testid="@($"recipe-{recipe.Key}")"
+                                  role="button" tabindex="0" aria-label="@recipe.Name" @onkeydown="e => OnKey(e, recipe.Key)">
+                            <MudText Typo="Typo.body1"><RecipeSentence Recipe="recipe" /></MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@recipe.Description</MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">Editors of this sheet can add automations. You can see what runs here.</MudAlert>
+        }
+
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="mb-2">On this sheet</MudText>
+        <SheetAutomationList SheetId="SheetId" CanEdit="CanEdit" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .recipe-card:hover, .recipe-card:focus-visible { border-color: var(--mud-palette-primary); }
+</style>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter] public string SheetName { get; set; } = "this sheet";
+    [Parameter] public bool CanEdit { get; set; }
+
+    private IEnumerable<AutomationTemplateDto> Recipes => Automations.ListTemplates().Where(t => t.Scope == AutomationRecipeScope.Sheet);
+
+    /// <summary>Opens the dialog for a sheet (the sheet page's header button and the Automation tab).</summary>
+    public static async Task ShowAsync(IDialogService dialogs, Guid sheetId, string sheetName, bool canEdit)
+    {
+        var parameters = new DialogParameters<AutomateDialog>
+        {
+            { d => d.SheetId, sheetId },
+            { d => d.SheetName, sheetName },
+            { d => d.CanEdit, canEdit },
+        };
+        var dialog = await dialogs.ShowAsync<AutomateDialog>(null, parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+        await dialog.Result;
+    }
+
+    private void OnKey(KeyboardEventArgs e, string recipe)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            Go(recipe);
+        }
+    }
+
+    private void Go(string? recipe)
+    {
+        Dialog.Close();
+        Navigation.NavigateTo(recipe is null ? $"sheets/{SheetId}/automations/new" : $"sheets/{SheetId}/automations/new?recipe={Uri.EscapeDataString(recipe)}");
+    }
+}

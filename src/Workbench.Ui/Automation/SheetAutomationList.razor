@@ -1,0 +1,90 @@
+@using Workbench.Contracts.Automations
+@using Workbench.Ui.AutomationBuilder
+@inject IAutomationService Automations
+@inject ISnackbar Snackbar
+
+@* A sheet's automations: on/off switches and links into the builder. *@
+@if (_automations is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else if (_automations.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">No automations on this sheet yet. Start from a recipe or build your own.</MudText>
+}
+else
+{
+    <MudPaper Outlined="true">
+        <MudList T="AutomationSummaryDto" Dense="true" data-testid="sheet-automations">
+            @foreach (var automation in _automations)
+            {
+                <MudListItem T="AutomationSummaryDto" @key="automation.Id">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudSwitch T="bool" Value="automation.IsEnabled" ValueChanged="v => SetEnabledAsync(automation, v)" Color="Color.Primary" Disabled="!CanEdit"
+                                   aria-label="@($"Turn {automation.Name} on or off")" />
+                        <div style="flex:1;min-width:0">
+                            <MudLink Href="@($"sheets/{SheetId}/automations/{automation.Id}")" Typo="Typo.body1">@automation.Name</MudLink>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" Style="overflow-wrap:anywhere">
+                                @automation.TriggerSummary
+                                @if (automation.LastRunAtUtc is { } at && Enum.TryParse<AutomationRunStatus>(automation.LastRunStatus, out var status))
+                                {
+                                    <span> · last run @AutomationUi.When(at): @AutomationUi.Status(status)</span>
+                                }
+                            </MudText>
+                        </div>
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+
+    /// <summary>Bumped by the page on live changes, so new runs show up.</summary>
+    [Parameter] public int Version { get; set; }
+
+    [Parameter] public EventCallback<int> CountChanged { get; set; }
+
+    private IReadOnlyList<AutomationSummaryDto>? _automations;
+    private (Guid, int)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != (SheetId, Version))
+        {
+            _loaded = (SheetId, Version);
+            await LoadAsync();
+        }
+    }
+
+    public async Task LoadAsync()
+    {
+        try
+        {
+            _automations = await Automations.ListForSheetAsync(SheetId);
+            await CountChanged.InvokeAsync(_automations.Count);
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            _automations ??= [];
+            Snackbar.Add($"Couldn't load automations: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SetEnabledAsync(AutomationSummaryDto automation, bool enabled)
+    {
+        try
+        {
+            await Automations.SetEnabledAsync(automation.Id, enabled);
+            await LoadAsync();
+            Snackbar.Add(enabled ? $"{automation.Name} is on" : $"{automation.Name} is off", Severity.Success);
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

@@ -26,7 +26,8 @@ public static class AutomationBuilderRegistration
         services.AddScoped<AutomationScheduler>();
         services.TryAddScoped<IAutomationPermissions, AdminAutomationPermissions>();
         services.TryAddScoped<IEntityFieldCatalog, BuiltInEntityFieldCatalog>();
-        services.AddScoped<IAutomationService, AutomationService>();
+        services.AddScoped<AutomationService>(); // Also behind the sheet rules API (RuleService), which checks sheet roles itself.
+        services.AddScoped<IAutomationService>(sp => sp.GetRequiredService<AutomationService>());
         services.AddScoped<IAutomationTaskService, AutomationTaskService>();
         services.AddScoped<IMyTodoProvider, AutomationTaskTodoProvider>();
         services.AddScoped<IApprovalDocumentHandler, RecordApprovalHandler>();

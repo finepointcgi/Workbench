@@ -29,7 +29,8 @@ public sealed class AutomationService(
     AuditRecorder audit,
     ICurrentUser currentUser,
     IServiceProvider services,
-    TimeProvider clock) : IAutomationService
+    TimeProvider clock,
+    SheetAutomationRuntime? sheetRuntime = null) : IAutomationService
 {
     public const string AuditEntityType = "Automation";
 
@@ -37,10 +38,36 @@ public sealed class AutomationService(
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    public async Task<IReadOnlyList<AutomationSummaryDto>> ListAsync(CancellationToken cancellationToken = default)
+    /// <summary>Every automation, sheet automations included (each names its sheet).</summary>
+    public Task<IReadOnlyList<AutomationSummaryDto>> ListAsync(CancellationToken cancellationToken = default) => SummariesAsync(null, cancellationToken);
+
+    public async Task<IReadOnlyList<AutomationSummaryDto>> ListForSheetAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            if (!await db.Sheets.AnyAsync(s => s.Id == sheetId, cancellationToken))
+            {
+                throw WorkbenchNotFoundException.For("Sheet", sheetId);
+            }
+        }
+
+        return await SummariesAsync(sheetId, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<AutomationSummaryDto>> SummariesAsync(Guid? sheetId, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var rows = await db.Set<AutomationRecord>().AsNoTracking().Where(a => a.DeletedAtUtc == null).OrderBy(a => a.Name).ToListAsync(cancellationToken);
+        var query = db.Set<AutomationRecord>().AsNoTracking().Where(a => a.DeletedAtUtc == null);
+        if (sheetId is { } only)
+        {
+            query = query.Where(a => a.SheetId == only);
+        }
+
+        var rows = await (sheetId is null ? query.OrderBy(a => a.Name) : query.OrderBy(a => a.CreatedAtUtc).ThenBy(a => a.Name)).ToListAsync(cancellationToken);
+        var sheetIds = rows.Where(r => r.SheetId != null).Select(r => r.SheetId!.Value).Distinct().ToList();
+        var sheetNames = await db.Sheets.AsNoTracking().Where(s => sheetIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+        var sheetColumns = (await db.Columns.AsNoTracking().Where(c => sheetIds.Contains(c.SheetId)).ToListAsync(cancellationToken))
+            .GroupBy(c => c.SheetId).ToDictionary(g => g.Key, g => (IReadOnlyList<Domain.Column>)g.ToList());
         var ids = rows.Select(r => r.Id).ToList();
         var since = Now.AddDays(-7);
         var recent = await db.Set<AutomationRun>().AsNoTracking()
@@ -62,10 +89,14 @@ public sealed class AutomationService(
         {
             var definition = versions.FirstOrDefault(v => v.Id == a.CurrentVersionId) is { } v ? AutomationJson.Definition(v.DefinitionJson) : null;
             var mine = recent.Where(r => r.AutomationId == a.Id).ToList();
+            var summary = definition is null ? a.TriggerKind
+                : a.SheetId is { } sheet ? SheetAutomationRules.Describe(definition.Trigger, sheetColumns.GetValueOrDefault(sheet) ?? [])
+                : AutomationText.Trigger(definition.Trigger);
             return new AutomationSummaryDto(a.Id, a.Name, a.Description, a.IsEnabled, Enum.Parse<AutomationTriggerKind>(a.TriggerKind), a.EntityType,
-                definition is null ? a.TriggerKind : AutomationText.Trigger(definition.Trigger), a.CurrentVersion, a.UpdatedBy, a.UpdatedAtUtc,
+                summary, a.CurrentVersion, a.UpdatedBy, a.UpdatedAtUtc,
                 lastStatus.TryGetValue(a.Id, out var ls) ? ls.At : null, lastStatus.TryGetValue(a.Id, out var ls2) ? ls2.Status : null,
-                mine.Count(r => r.Status != nameof(AutomationRunStatus.ConditionsNotMet)), mine.Count(r => failed.Contains(r.Status)));
+                mine.Count(r => r.Status != nameof(AutomationRunStatus.ConditionsNotMet)), mine.Count(r => failed.Contains(r.Status)),
+                a.SheetId, a.SheetId is { } id ? sheetNames.GetValueOrDefault(id) ?? "(deleted sheet)" : null);
         }).ToList();
     }
 
@@ -114,6 +145,11 @@ public sealed class AutomationService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var automation = await FindAsync(db, automationId, cancellationToken, tracking: true);
         var (name, description, definition, note) = await ValidateAsync(db, request, automationId, cancellationToken);
+        if (definition.Trigger.SheetId != automation.SheetId)
+        {
+            throw new ArgumentException(automation.SheetId is null ? "An automation can't move onto a sheet; create one from the sheet's Automate button." : "A sheet automation stays on its sheet.");
+        }
+
         var before = Snapshot(automation, await CurrentDefinitionAsync(db, automation, cancellationToken));
         automation.Name = name;
         automation.Description = description;
@@ -194,6 +230,13 @@ public sealed class AutomationService(
             }
         }
 
+        if (definition.Trigger.SheetId is { } sheetId)
+        {
+            var runtime = sheetRuntime ?? throw new InvalidOperationException("Sheet automations aren't available here.");
+            return await runtime.DryRunAsync(request.AutomationId ?? Guid.Empty, string.IsNullOrWhiteSpace(name) ? "Draft" : name!, definition, sheetId,
+                request.RecordId ?? throw new ArgumentException("Choose a row to test against."), Me, cancellationToken);
+        }
+
         var entityType = request.EntityType ?? definition.Trigger.EntityType;
         if (AutomationEntities.Find(entityType) is not null && request.RecordId is null)
         {
@@ -211,6 +254,11 @@ public sealed class AutomationService(
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
             var automation = await FindAsync(db, automationId, cancellationToken);
+            if (automation.SheetId is not null)
+            {
+                throw new ArgumentException("Sheet automations run when their trigger happens; use a dry run to test one on a row.");
+            }
+
             entityType = automation.EntityType;
             if (AutomationEntities.Find(entityType) is not null && request.RecordId is null)
             {
@@ -307,6 +355,67 @@ public sealed class AutomationService(
 
     public IReadOnlyList<AutomationTemplateDto> ListTemplates() => AutomationTemplates.All;
 
+    public async Task<SaveAutomationRequest> BuildRecipeAsync(string key, Guid? sheetId, IReadOnlyDictionary<string, string?> blanks, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<Domain.Column> columns = [];
+        if (sheetId is { } id)
+        {
+            await using var db = await dbFactory.CreateAsync(cancellationToken);
+            if (!await db.Sheets.AnyAsync(s => s.Id == id, cancellationToken))
+            {
+                throw WorkbenchNotFoundException.For("Sheet", id);
+            }
+
+            columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == id).OrderBy(c => c.Order).ToListAsync(cancellationToken);
+        }
+
+        return AutomationTemplates.Build(key, sheetId, columns, blanks);
+    }
+
+    public async Task<SheetAutomationCatalogDto> GetSheetCatalogAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var sheet = await db.Sheets.AsNoTracking().Where(s => s.Id == sheetId).Select(s => new { s.Id, s.Name, s.WorkspaceId }).FirstOrDefaultAsync(cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Sheet", sheetId);
+        var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).OrderBy(c => c.Order).ToListAsync(cancellationToken);
+        var fields = new List<SheetAutomationFieldDto>
+        {
+            new(AutomationSheets.Title, "Title", "Title", [], false),
+            new(AutomationSheets.Start, "Start", "Date", [], false),
+            new(AutomationSheets.Finish, "Finish", "Date", [], false),
+        };
+        fields.AddRange(columns.Select(c => new SheetAutomationFieldDto(c.Id.ToString(), c.Name, c.Type.ToString(), c.Options, c.Formula is not null)));
+        var rows = await db.Items.AsNoTracking().Where(i => i.SheetId == sheetId).OrderBy(i => i.ParentId == null ? 0 : 1).ThenBy(i => i.Order).Take(200)
+            .Select(i => new AutomationOptionDto(i.Id.ToString(), i.Title)).ToListAsync(cancellationToken);
+
+        // Sheets the signed-in user can edit (moving or copying rows needs it, now and when the automation runs).
+        var targets = new List<AutomationOptionDto>();
+        var others = await db.Sheets.AsNoTracking().Where(s => s.Id != sheetId).OrderBy(s => s.Name).Select(s => new { s.Id, s.Name, s.WorkspaceId }).Take(500).ToListAsync(cancellationToken);
+        var roles = new Dictionary<Guid, bool>();
+        foreach (var other in others)
+        {
+            if (!roles.TryGetValue(other.WorkspaceId, out var editable))
+            {
+                roles[other.WorkspaceId] = editable = await SheetAutomationRuntime.RoleOfAsync(db, Me, other.WorkspaceId) is Domain.Identity.WorkspaceRole.Owner or Domain.Identity.WorkspaceRole.Editor;
+            }
+
+            if (editable)
+            {
+                targets.Add(new AutomationOptionDto(other.Id.ToString(), other.Name));
+            }
+        }
+
+        var workflows = await db.Set<ApprovalWorkflow>().AsNoTracking().Where(w => w.DocumentType.StartsWith(ApprovalDocumentTypes.CustomPrefix))
+            .OrderBy(w => w.Name).Select(w => new AutomationOptionDto(w.DocumentType, w.Name)).ToListAsync(cancellationToken);
+        var connectors = await db.Set<IntegrationConnector>().AsNoTracking().Where(c => c.Kind == "teams" || c.Kind == "slack")
+            .OrderBy(c => c.Name).Select(c => new AutomationOptionDto(c.Id.ToString(), c.Name + (c.IsActive ? "" : " (off)"))).ToListAsync(cancellationToken);
+        var endpoints = await db.Set<WebhookEndpoint>().AsNoTracking().OrderBy(e => e.Name)
+            .Select(e => new AutomationOptionDto(e.Id.ToString(), e.Name + (e.IsActive ? "" : " (off)"))).ToListAsync(cancellationToken);
+        var canEdit = await SheetAutomationRuntime.RoleOfAsync(db, Me, sheet.WorkspaceId) is Domain.Identity.WorkspaceRole.Owner or Domain.Identity.WorkspaceRole.Editor
+            || (services.GetService(typeof(IAutomationPermissions)) is IAutomationPermissions p && await p.CanManageAsync(cancellationToken));
+        return new SheetAutomationCatalogDto(sheet.Id, sheet.Name, fields, rows, targets, workflows, connectors, endpoints, canEdit);
+    }
+
     public async Task<AutomationSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -365,6 +474,7 @@ public sealed class AutomationService(
         automation.CurrentVersionId = version.Id;
         automation.TriggerKind = definition.Trigger.Kind.ToString();
         automation.EntityType = definition.Trigger.EntityType;
+        automation.SheetId = definition.Trigger.SheetId;
         automation.TriggerKeys = definition.Trigger.Kind switch
         {
             AutomationTriggerKind.RecordEvent => string.Join(",", (definition.Trigger.Events ?? []).Distinct()),
@@ -437,6 +547,11 @@ public sealed class AutomationService(
 
         var d = request.Definition ?? throw new ArgumentException("Define what the automation does.");
         var trigger = d.Trigger ?? throw new ArgumentException("Choose a trigger.");
+        if (trigger.SheetId is not null)
+        {
+            return (name, description, await SheetAutomationRules.ValidateAsync(db, d, Me, ct), note);
+        }
+
         trigger = trigger.Kind switch
         {
             AutomationTriggerKind.Threshold => trigger.Threshold switch
@@ -762,118 +877,4 @@ public static class AutomationText
         "opportunity" => "opportunity",
         _ => null,
     };
-}
-
-/// <summary>Checks the "manage automations" and "run automation" permissions (<see cref="IAutomationPermissions"/>).</summary>
-public sealed class PermissionCheckingAutomationService(IAutomationService inner, IAutomationPermissions permissions, AccessControl access) : IAutomationService
-{
-    private async Task ManageAsync(CancellationToken ct)
-    {
-        if (!await permissions.CanManageAsync(ct))
-        {
-            await access.RequireRoleAsync(_ => false, "Only administrators can manage automations.", ct);
-        }
-    }
-
-    public async Task<IReadOnlyList<AutomationSummaryDto>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.ListAsync(cancellationToken);
-    }
-
-    public async Task<AutomationDto> GetAsync(Guid automationId, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.GetAsync(automationId, cancellationToken);
-    }
-
-    public async Task<AutomationDefinition> GetVersionAsync(Guid automationId, int version, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.GetVersionAsync(automationId, version, cancellationToken);
-    }
-
-    public async Task<AutomationDto> CreateAsync(SaveAutomationRequest request, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.CreateAsync(request, cancellationToken);
-    }
-
-    public async Task<AutomationDto> UpdateAsync(Guid automationId, SaveAutomationRequest request, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.UpdateAsync(automationId, request, cancellationToken);
-    }
-
-    public async Task<AutomationDto> SetEnabledAsync(Guid automationId, bool enabled, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.SetEnabledAsync(automationId, enabled, cancellationToken);
-    }
-
-    public async Task<AutomationDto> RestoreVersionAsync(Guid automationId, int version, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.RestoreVersionAsync(automationId, version, cancellationToken);
-    }
-
-    public async Task DeleteAsync(Guid automationId, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        await inner.DeleteAsync(automationId, cancellationToken);
-    }
-
-    public async Task<AutomationRunDto> DryRunAsync(AutomationDryRunRequest request, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.DryRunAsync(request, cancellationToken);
-    }
-
-    public async Task<AutomationRunDto> RunNowAsync(Guid automationId, AutomationRunNowRequest request, CancellationToken cancellationToken = default)
-    {
-        if (!await permissions.CanRunAsync(automationId, cancellationToken))
-        {
-            await access.RequireRoleAsync(_ => false, "You don't have permission to run this automation.", cancellationToken);
-        }
-
-        return await inner.RunNowAsync(automationId, request, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<AutomationRunDto>> ListRunsAsync(AutomationRunQuery query, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.ListRunsAsync(query, cancellationToken);
-    }
-
-    public async Task<AutomationRunDto> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.GetRunAsync(runId, cancellationToken);
-    }
-
-    public async Task<AutomationCatalogDto> GetCatalogAsync(CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.GetCatalogAsync(cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<AutomationOptionDto>> ListRecordsAsync(string entityType, string? search = null, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.ListRecordsAsync(entityType, search, cancellationToken);
-    }
-
-    public IReadOnlyList<AutomationTemplateDto> ListTemplates() => inner.ListTemplates();
-
-    public async Task<AutomationSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.GetSettingsAsync(cancellationToken);
-    }
-
-    public async Task<AutomationSettingsDto> SaveSettingsAsync(SaveAutomationSettingsRequest request, CancellationToken cancellationToken = default)
-    {
-        await ManageAsync(cancellationToken);
-        return await inner.SaveSettingsAsync(request, cancellationToken);
-    }
 }
