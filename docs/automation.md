@@ -1,11 +1,48 @@
 # Automation (Admin › Automation)
 
-Administrators build "when this happens, if these are true, do that" rules across every module, without code. Sheets keep their
-own rules (the automation panel on a sheet); this page is for records: contracts, projects, people, timesheets, expenses,
-invoices, bills, purchasing and business development.
+Build "when this happens, if these are true, do that" without code, with one builder and one engine for everything: records
+across every module (contracts, projects, people, timesheets, expenses, invoices, bills, purchasing, business development) and the
+rows of each sheet. Administrators manage record automations; a sheet's editors automate their own sheet.
 
-Open it from **Admin › Automation** (`/admin/automation`). Tabs: **Automations** (the list, with on/off switches), **Run log**,
-**Templates**, **Approval workflows** and **Settings** (pause everything, loop protection limits).
+Open it from **Admin › Automation** (`/admin/automation`). Tabs: **Automations** (every automation, sheet ones included with a link
+to their sheet; filter by "Across modules" or "On sheets"), **Run log**, **Recipes**, **Approval workflows** and **Settings** (pause
+everything, loop protection limits). On a sheet, the **Automate** button opens the sheet recipes and the sheet's automations; the
+**Automation** tab lists them with their recent runs.
+
+## Sheet automations
+
+The same builder at `/sheets/{id}/automations/…`, with the sheet's columns:
+
+- **When**: an item is added; an item is added by a form; a column changes (optionally from and/or to a value); a date arrives
+  (Start, Finish or a Date column, on the day or N days before or after; checked hourly, once per row and date); on a recurring
+  schedule (daily, weekly or monthly from an hour, for each row matching the conditions).
+- **If**: conditions on the row's columns (all or any, nested groups), compared ignoring case and spaces.
+- **Then**: set a column, assign someone (Person column, they're notified), notify (in the app, email by preference), send an email,
+  add a sub-item, create an item (here or in another sheet), move or copy the row with its sub-items to another sheet (values go to
+  columns with the same name and kind), request approval through a record approval workflow (the decision, "Approved" or
+  "Rejected", can be written to a column, so a "when Approval changes to Approved" automation can follow), give a to-do.
+  Text can use `{Title}`, `{Start}`, `{Finish}`, `{Today}` and `{Column name}`.
+- It acts as **whoever saved it last**: changes show as `Workbench Automation (rule "Name", author email)`; actions on another sheet
+  need the author to edit it (checked when saved and when it runs); date and schedule triggers stop while the author can't edit
+  the sheet or is deactivated. Loop protection: chains stop after 3 steps (or the tenant's lower limit), each automation runs at
+  most the tenant's hourly limit per row, and "pause every automation" stops sheet automations too.
+- **Excel imports** (the plan's Import from Excel) run the sheet's automations on every row the file added or changed, as one batch:
+  notifications and emails are collected and sent once per automation and person ("Notes changed: 12 rows from the Excel import").
+- Sheet rules made before the unified builder were moved into sheet automations by a data migration (same ids, history kept in the
+  run log, date triggers that already fired don't fire again). The `/sheets/{id}/rules` API still works on them.
+
+## Recipes
+
+Plain sentences with blanks to fill in, like "When **Status** changes to **Done**, notify **Owner**". Choosing one opens the builder
+with the sentence on top; filling in a blank sets up the steps below, which you can still change before saving.
+
+- Sheets: status changes → notify; date arrives → set status (move to In progress); added by a form → assign; added → notify;
+  status → move or copy to another sheet; N days before a date → remind unless done; weekly nudge on open rows; blocked → add a
+  sub-item; status → email; status → request approval.
+- Records: funding drops below n% → notify the PM; timesheet submitted more than n days late → remind the supervisor; timesheet n
+  days overdue → remind; timesheet approvals waiting n days → escalate; expense lines over $n without a receipt → refuse; expense
+  reports over $n → tell Finance; bill approved → notify someone; project over n% of budget; n days before a contract ends →
+  closeout to-do; requisitions over $n → extra approval; approved invoices → a channel; opportunity stage changes → capture managers.
 
 ## Building one
 
@@ -75,11 +112,7 @@ account charges), reminders after N business days with escalation to the approve
 people, who can then decide**, fallbacks, self-approval rules and delegation (Approvals › Delegations). Built-in defaults are
 unchanged. **Record approval workflows** (for the "Require an approval" action) are added at the bottom of the list.
 
-## Templates
-
-Funding running low (tell the PM), receipts required over $75, escalate timesheet approvals after 2 days, missing timesheet
-reminder, project over budget, contract ending (closeout to-do), extra approval for large requisitions, post approved invoices to a
-channel, and stage changes to the capture manager. The first three are set up in the development data.
+The development data sets up three record recipes: funding under 25%, receipts over $75 and timesheet approval escalation.
 
 ## Permissions
 
