@@ -49,6 +49,7 @@ public static class IdentityRegistration
         services.Decorate<ISheetService, PermissionCheckingSheetService>();
         services.Decorate<IItemService, PermissionCheckingItemService>();
         services.Decorate<IColumnService, PermissionCheckingColumnService>();
+        services.Decorate<ISheetBulkEditService, PermissionCheckingSheetBulkEditService>(); // Bulk cell edits: Editor; restricted columns stay hidden.
         services.Decorate<ISheetViewService, PermissionCheckingSheetViewService>(); // Saved views and exports: Viewer; shared views and the sheet's default: Editor.
         services.Decorate<IDependencyService, PermissionCheckingDependencyService>();
         services.Decorate<IBaselineService, PermissionCheckingBaselineService>();
