@@ -5,7 +5,7 @@ using Workbench.Contracts.Automations;
 
 namespace Workbench.Api;
 
-/// <summary>Admin › Automation (cross-module automations) and the to-dos they create. Sheet rules are in <see cref="AutomationEndpoints"/>.</summary>
+/// <summary>Admin › Automation (cross-module automations) and the to-dos they create. Sheet automations are here too (<c>/automations/sheets/{id}</c>); the older sheet rules API is in <see cref="AutomationEndpoints"/>.</summary>
 internal static class AutomationBuilderEndpoints
 {
     public static void MapAutomationBuilderEndpoints(this RouteGroupBuilder v1)
@@ -14,6 +14,10 @@ internal static class AutomationBuilderEndpoints
         automations.MapGet("", (IAutomationService s, CancellationToken ct) => s.ListAsync(ct));
         automations.MapGet("/catalog", (IAutomationService s, CancellationToken ct) => s.GetCatalogAsync(ct));
         automations.MapGet("/templates", (IAutomationService s) => s.ListTemplates());
+        automations.MapPost("/templates/{key}/build", (string key, BuildRecipeBody body, IAutomationService s, CancellationToken ct) =>
+            s.BuildRecipeAsync(key, body.SheetId, body.Blanks ?? new Dictionary<string, string?>(), ct));
+        automations.MapGet("/sheets/{sheetId:guid}", (Guid sheetId, IAutomationService s, CancellationToken ct) => s.ListForSheetAsync(sheetId, ct));
+        automations.MapGet("/sheets/{sheetId:guid}/catalog", (Guid sheetId, IAutomationService s, CancellationToken ct) => s.GetSheetCatalogAsync(sheetId, ct));
         automations.MapGet("/settings", (IAutomationService s, CancellationToken ct) => s.GetSettingsAsync(ct));
         automations.MapPut("/settings", (SaveAutomationSettingsRequest request, IAutomationService s, CancellationToken ct) => s.SaveSettingsAsync(request, ct));
         automations.MapGet("/runs", (Guid? automationId, AutomationRunStatus? status, string? entityType, Guid? recordId, int? take, IAutomationService s, CancellationToken ct) =>
@@ -42,6 +46,9 @@ internal static class AutomationBuilderEndpoints
         automations.MapPost("/{id:guid}/run", (Guid id, AutomationRunNowRequest request, IAutomationService s, CancellationToken ct) => s.RunNowAsync(id, request, ct));
     }
 }
+
+/// <summary>Body of <c>POST /automations/templates/{key}/build</c>: the sheet (for sheet recipes) and the blanks filled in.</summary>
+public sealed record BuildRecipeBody(Guid? SheetId, Dictionary<string, string?>? Blanks);
 
 /// <summary>Body of <c>PUT /automations/{id}/enabled</c>.</summary>
 public sealed record SetAutomationEnabledBody(bool Enabled);

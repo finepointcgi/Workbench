@@ -16,6 +16,9 @@ public sealed class AutomationRecord : Entity
 
     public string? EntityType { get; set; }
 
+    /// <summary>Sheet automations: the sheet it belongs to (it runs on that sheet's rows and its editors manage it).</summary>
+    public Guid? SheetId { get; set; }
+
     /// <summary>Comma-separated record events or the integration event key, for the capture index.</summary>
     public string? TriggerKeys { get; set; }
 

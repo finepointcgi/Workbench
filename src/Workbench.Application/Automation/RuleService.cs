@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Automations;
 using Workbench.Application.Notifications;
 using Workbench.Contracts;
 using Workbench.Contracts.Automation;
@@ -9,75 +10,59 @@ using Model = Workbench.Domain.Automation;
 
 namespace Workbench.Application.Automation;
 
+/// <summary>
+/// The sheet rules API (<c>/sheets/{id}/rules</c>), kept for API clients: rules are sheet automations now, stored, run and logged
+/// with Admin › Automation (<see cref="AutomationService"/>, <see cref="SheetAutomationRuntime"/>). A rule maps to an automation on
+/// the sheet with the same id; automations using the newer triggers and actions show here with the parts a rule can express.
+/// </summary>
 public sealed class RuleService(
     IWorkbenchDbContextFactory dbFactory,
     IItemService items,
     ICurrentUser currentUser,
-    TimeProvider clock) : IRuleService
+    TimeProvider clock,
+    AutomationService automations) : IRuleService
 {
     public async Task<IReadOnlyList<RuleDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        await EnsureSheetAsync(db, sheetId, cancellationToken);
-        var rules = await db.Set<Model.Rule>().AsNoTracking().Where(r => r.SheetId == sheetId)
-            .OrderBy(r => r.CreatedAtUtc).ToListAsync(cancellationToken);
-        return rules.Select(r => r.ToDto()).ToList();
+        var list = await automations.ListForSheetAsync(sheetId, cancellationToken);
+        var rules = new List<RuleDto>();
+        foreach (var summary in list)
+        {
+            rules.Add(RuleMapping.ToRule(await automations.GetAsync(summary.Id, cancellationToken)));
+        }
+
+        return rules;
     }
 
-    public async Task<RuleDto> GetAsync(Guid sheetId, Guid ruleId, CancellationToken cancellationToken = default)
-    {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return (await FindAsync(db, sheetId, ruleId, cancellationToken)).ToDto();
-    }
+    public async Task<RuleDto> GetAsync(Guid sheetId, Guid ruleId, CancellationToken cancellationToken = default) =>
+        RuleMapping.ToRule(await FindAsync(sheetId, ruleId, cancellationToken));
 
     public async Task<RuleDto> CreateAsync(Guid sheetId, SaveRuleRequest request, CancellationToken cancellationToken = default)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        await EnsureSheetAsync(db, sheetId, cancellationToken);
-        var columns = await ColumnsAsync(db, sheetId, cancellationToken);
-        var now = clock.GetUtcNow().UtcDateTime;
-        var rule = new Model.Rule
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
-            SheetId = sheetId,
-            Name = "",
-            CreatedBy = currentUser.Email,
-            CreatedAtUtc = now,
-        };
-        Apply(rule, request, columns);
-        rule.UpdatedAtUtc = now;
-        db.Set<Model.Rule>().Add(rule);
-        await db.SaveChangesAsync(cancellationToken);
-        return rule.ToDto();
+            await EnsureSheetAsync(db, sheetId, cancellationToken);
+        }
+
+        return RuleMapping.ToRule(await automations.CreateAsync(RuleMapping.ToAutomation(sheetId, request), cancellationToken));
     }
 
     public async Task<RuleDto> UpdateAsync(Guid sheetId, Guid ruleId, SaveRuleRequest request, CancellationToken cancellationToken = default)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var rule = await FindAsync(db, sheetId, ruleId, cancellationToken);
-        Apply(rule, request, await ColumnsAsync(db, sheetId, cancellationToken));
-        rule.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
-        await db.SaveChangesAsync(cancellationToken);
-        return rule.ToDto();
+        await FindAsync(sheetId, ruleId, cancellationToken);
+        return RuleMapping.ToRule(await automations.UpdateAsync(ruleId, RuleMapping.ToAutomation(sheetId, request), cancellationToken));
     }
 
     public async Task<RuleDto> SetEnabledAsync(Guid sheetId, Guid ruleId, bool enabled, CancellationToken cancellationToken = default)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var rule = await FindAsync(db, sheetId, ruleId, cancellationToken);
-        rule.Enabled = enabled;
-        rule.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
-        await db.SaveChangesAsync(cancellationToken);
-        return rule.ToDto();
+        await FindAsync(sheetId, ruleId, cancellationToken);
+        return RuleMapping.ToRule(await automations.SetEnabledAsync(ruleId, enabled, cancellationToken));
     }
 
     public async Task DeleteAsync(Guid sheetId, Guid ruleId, CancellationToken cancellationToken = default)
     {
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var rule = await FindAsync(db, sheetId, ruleId, cancellationToken);
-        var runs = await db.Set<Model.RuleRun>().Where(r => r.RuleId == ruleId).ToListAsync(cancellationToken);
-        db.Set<Model.RuleRun>().RemoveRange(runs);
-        db.Set<Model.Rule>().Remove(rule);
-        await db.SaveChangesAsync(cancellationToken);
+        await FindAsync(sheetId, ruleId, cancellationToken);
+        await automations.DeleteAsync(ruleId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<RuleRunDto>> ListRunsAsync(Guid sheetId, Guid? ruleId = null, int limit = 50, CancellationToken cancellationToken = default)
@@ -85,27 +70,24 @@ public sealed class RuleService(
         limit = Math.Clamp(limit, 1, 500);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         await EnsureSheetAsync(db, sheetId, cancellationToken);
-        var query = db.Set<Model.RuleRun>().AsNoTracking().Where(r => r.SheetId == sheetId);
-        if (ruleId is { } id)
+        var ids = await db.Set<Domain.Automations.AutomationRecord>().AsNoTracking().Where(a => a.SheetId == sheetId).Select(a => a.Id).ToListAsync(cancellationToken);
+        if (ruleId is { } only)
         {
-            query = query.Where(r => r.RuleId == id);
+            ids = ids.Where(id => id == only).ToList();
         }
 
-        var runs = await query.OrderByDescending(r => r.FiredAtUtc).ThenByDescending(r => r.Id).Take(limit).ToListAsync(cancellationToken);
-        var ruleIds = runs.Select(r => r.RuleId).Distinct().ToList();
-        var itemIds = runs.Where(r => r.ItemId is not null).Select(r => r.ItemId!.Value).Distinct().ToList();
-        var names = await db.Set<Model.Rule>().Where(r => ruleIds.Contains(r.Id)).ToDictionaryAsync(r => r.Id, r => r.Name, cancellationToken);
+        var dry = nameof(Contracts.Automations.AutomationRunStatus.DryRun);
+        var runs = await db.Set<Domain.Automations.AutomationRun>().AsNoTracking().Where(r => ids.Contains(r.AutomationId) && !r.IsDryRun && r.Status != dry)
+            .OrderByDescending(r => r.StartedAtUtc).ThenByDescending(r => r.Id).Take(limit).ToListAsync(cancellationToken);
+        var itemIds = runs.Where(r => r.RecordId is not null).Select(r => r.RecordId!.Value).Distinct().ToList();
         var titles = await db.Items.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.Title, cancellationToken);
-        return runs.Select(r => new RuleRunDto(
-            r.Id,
-            r.RuleId,
-            names.GetValueOrDefault(r.RuleId) ?? "(deleted rule)",
-            r.ItemId,
-            r.ItemId is { } item ? titles.GetValueOrDefault(item) : null,
-            r.FiredAtUtc,
-            (RuleRunOutcome)(int)r.Outcome,
-            r.Detail,
-            r.Error)).ToList();
+        return runs.Select(r => RuleMapping.ToRuleRun(r, r.RecordId is { } item ? titles.GetValueOrDefault(item) : null)).ToList();
+    }
+
+    private async Task<Contracts.Automations.AutomationDto> FindAsync(Guid sheetId, Guid ruleId, CancellationToken cancellationToken)
+    {
+        var automation = await automations.GetAsync(ruleId, cancellationToken);
+        return automation.Definition.Trigger.SheetId == sheetId ? automation : throw WorkbenchNotFoundException.For("Rule", ruleId);
     }
 
     public async Task<RuleTestResult> TestAsync(Guid sheetId, TestRuleRequest request, CancellationToken cancellationToken = default)
@@ -335,8 +317,4 @@ public sealed class RuleService(
             throw WorkbenchNotFoundException.For("Sheet", sheetId);
         }
     }
-
-    private static async Task<Model.Rule> FindAsync(IWorkbenchDbContext db, Guid sheetId, Guid ruleId, CancellationToken cancellationToken) =>
-        await db.Set<Model.Rule>().FirstOrDefaultAsync(r => r.Id == ruleId && r.SheetId == sheetId, cancellationToken)
-        ?? throw WorkbenchNotFoundException.For("Rule", ruleId);
 }

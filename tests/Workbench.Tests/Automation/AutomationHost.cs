@@ -47,7 +47,7 @@ internal sealed class AutomationHost : IAsyncDisposable
     public IActivityService Activity => Get<IActivityService>();
     public IRuleService Rules => Get<IRuleService>();
     public INotificationService Notifications => Get<INotificationService>();
-    public RuleEngine Engine => Get<RuleEngine>();
+    public Workbench.Application.Automations.SheetAutomationRuntime Engine => Get<Workbench.Application.Automations.SheetAutomationRuntime>();
     public DigestSender Digests => Get<DigestSender>();
 
     public T Get<T>() where T : notnull => _scope.ServiceProvider.GetRequiredService<T>();

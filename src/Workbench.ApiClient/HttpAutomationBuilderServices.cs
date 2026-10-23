@@ -74,6 +74,15 @@ public sealed class HttpAutomationService(HttpClient http) : IAutomationService
         await (await http.GetAsync($"{Root}/records/{Uri.EscapeDataString(entityType)}{(string.IsNullOrWhiteSpace(search) ? "" : $"?search={Uri.EscapeDataString(search)}")}", cancellationToken))
             .ReadAsync<List<AutomationOptionDto>>(cancellationToken);
 
+    public async Task<SaveAutomationRequest> BuildRecipeAsync(string key, Guid? sheetId, IReadOnlyDictionary<string, string?> blanks, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/templates/{Uri.EscapeDataString(key)}/build", new { sheetId, blanks }, cancellationToken)).ReadAsync<SaveAutomationRequest>(cancellationToken);
+
+    public async Task<IReadOnlyList<AutomationSummaryDto>> ListForSheetAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/sheets/{sheetId}", cancellationToken)).ReadAsync<List<AutomationSummaryDto>>(cancellationToken);
+
+    public async Task<SheetAutomationCatalogDto> GetSheetCatalogAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/sheets/{sheetId}/catalog", cancellationToken)).ReadAsync<SheetAutomationCatalogDto>(cancellationToken);
+
     /// <summary>Templates are static; the desktop app reads them once from the server.</summary>
     public IReadOnlyList<AutomationTemplateDto> ListTemplates() =>
         http.GetFromJsonAsync<List<AutomationTemplateDto>>($"{Root}/templates").GetAwaiter().GetResult() ?? [];
