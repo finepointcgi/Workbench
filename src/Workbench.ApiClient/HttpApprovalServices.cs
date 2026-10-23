@@ -17,8 +17,23 @@ public sealed class HttpApprovalInboxService(HttpClient http) : IApprovalInboxSe
     public async Task DecideAsync(string documentType, Guid documentId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"{Root}/{Uri.EscapeDataString(documentType)}/{documentId}/decision", request, cancellationToken)).EnsureOkAsync(cancellationToken);
 
+    public async Task<BulkApprovalResultDto> DecideManyAsync(BulkApprovalRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/decisions", request, cancellationToken)).ReadAsync<BulkApprovalResultDto>(cancellationToken);
+
     public async Task<IReadOnlyList<ApprovalInstanceDto>> GetHistoryAsync(string documentType, Guid documentId, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Root}/{Uri.EscapeDataString(documentType)}/{documentId}/history", cancellationToken)).ReadAsync<List<ApprovalInstanceDto>>(cancellationToken);
+}
+
+/// <summary>The token goes in the body, never the URL, so it stays out of request logs.</summary>
+public sealed class HttpApprovalEmailLinkService(HttpClient http) : IApprovalEmailLinkService
+{
+    private const string Root = "api/v1/approvals/email-links";
+
+    public async Task<ApprovalEmailLinkDto> OpenAsync(string token, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/open", new ConfirmApprovalEmailLinkRequest(token), cancellationToken)).ReadAsync<ApprovalEmailLinkDto>(cancellationToken);
+
+    public async Task<ApprovalEmailLinkDto> ConfirmAsync(ConfirmApprovalEmailLinkRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/confirm", request, cancellationToken)).ReadAsync<ApprovalEmailLinkDto>(cancellationToken);
 }
 
 public sealed class HttpApprovalDelegationService(HttpClient http) : IApprovalDelegationService
@@ -69,6 +84,7 @@ public static class ApprovalClientRegistration
     public static IServiceCollection AddApprovalClients(this IServiceCollection services, Uri serverBaseAddress)
     {
         services.AddHttpClient<IApprovalInboxService, HttpApprovalInboxService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IApprovalEmailLinkService, HttpApprovalEmailLinkService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IApprovalDelegationService, HttpApprovalDelegationService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IApprovalWorkflowService, HttpApprovalWorkflowService>(client => client.BaseAddress = serverBaseAddress);
         return services;

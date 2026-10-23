@@ -11,6 +11,17 @@ public interface IEmailSender
     Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Content added to a notification email below its message (e.g. Approve and Reject links), as text and HTML.</summary>
+public sealed record EmailExtra(string Text, string Html);
+
+/// <summary>Adds content to notification emails as they're sent: one notification's email, or a daily digest.</summary>
+public interface INotificationEmailExtras
+{
+    Task<EmailExtra?> ForSingleAsync(Domain.Notifications.Notification notification, CancellationToken cancellationToken = default);
+
+    Task<EmailExtra?> ForDigestAsync(string recipient, IReadOnlyList<Domain.Notifications.Notification> notifications, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Drops every email. Used until infrastructure registers a real sender (and in tests).</summary>
 public sealed class NullEmailSender : IEmailSender
 {
