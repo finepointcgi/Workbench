@@ -1,4 +1,4 @@
-@* The "To do" list, grouped overdue → today → this week → coming up. Shared by the home page and the mobile Today tab.
+@* The "To do" list, grouped overdue → today → this week → coming up; the later groups show their first few items. Shared by the home page and the mobile Today tab.
    Inline actions (approve a leave request or a simple document) run here; the item disappears and OnChanged reloads. *@
 @inject IServiceProvider Services
 @inject ISnackbar Snackbar
@@ -18,8 +18,10 @@ else
         <MudText Typo="Typo.overline" HtmlTag="h3" Class="d-block mt-2" Color="TodoFormat.Color(group.Key)" data-urgency="@group.Key">
             @TodoFormat.Heading(group.Key) · @group.Count()
         </MudText>
+        var urgency = group.Key;
+        var shown = Shown(urgency, group.Count());
         <MudPaper Outlined="true" Class="mb-2">
-            @foreach (var item in group)
+            @foreach (var item in group.Take(shown))
             {
                 <div @key="item.Key" class="@($"d-flex align-start gap-3 pa-3{(Compact ? " flex-wrap" : "")}")" data-todo="@item.Key"
                      style="@($"border-left:3px solid {TodoFormat.Accent(item.Urgency)}")">
@@ -48,6 +50,12 @@ else
                     </div>
                 </div>
             }
+            @if (shown < group.Count())
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" Class="ma-1" OnClick="() => _expanded.Add(urgency)" data-testid="todo-more">
+                    Show @(group.Count() - shown) more
+                </MudButton>
+            }
         </MudPaper>
     }
 }
@@ -66,6 +74,13 @@ else
     private readonly HashSet<string> _done = [];
     private readonly HashSet<string> _busy = [];
     private List<MyTodoItem> _visible = [];
+    private readonly HashSet<TodoUrgency> _expanded = [];
+
+    /// <summary>Overdue and today always show in full; later groups show their first few until "Show more".</summary>
+    private const int Preview = 3;
+
+    private int Shown(TodoUrgency urgency, int count) =>
+        urgency is TodoUrgency.Overdue or TodoUrgency.Today || _expanded.Contains(urgency) || count <= Preview + 1 ? count : Preview;
 
     protected override void OnParametersSet() => _visible = Items.Where(i => !_done.Contains(i.Key)).ToList();
 
