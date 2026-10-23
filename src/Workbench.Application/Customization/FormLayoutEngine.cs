@@ -113,7 +113,7 @@ public static class FormLayoutEngine
                 }
 
                 shown.Add(new EffectiveFormField(field.Key, field.Label, field.FieldType, field.IsCustom, field.IsRequired,
-                    field.IsRequired || placement.Required, field.Options));
+                    field.IsRequired || placement.Required, field.Options, field.OptionLabels));
             }
 
             sections.Add(new EffectiveFormSection(section.Key, section.Title, shown));

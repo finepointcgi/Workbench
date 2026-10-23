@@ -25,8 +25,12 @@ public sealed class EntityFieldCatalog(
         var result = entity.BuiltInFields.Select(b => new EntityFieldDto(entity.Key, b.Key, b.Label, b.FieldType, false, b.IsRequired, b.Options, null)).ToList();
         var defs = await customFields.ListDefinitionsAsync(entity.Key, false, ct);
         var withOptions = defs.Any(d => d.ValueListKey is not null) ? await customFields.GetValuesAsync(entity.Key, null, ct) : null;
-        result.AddRange(defs.Select(d => new EntityFieldDto(entity.Key, CustomFieldValues.CatalogPrefix + d.Key, d.Label, d.FieldType.ToString(), true, d.IsRequired,
-            withOptions?.Fields.FirstOrDefault(f => f.FieldId == d.Id)?.Options?.Select(o => o.Code).ToList(), d.PermissionKey)));
+        result.AddRange(defs.Select(d =>
+        {
+            var options = withOptions?.Fields.FirstOrDefault(f => f.FieldId == d.Id)?.Options;
+            return new EntityFieldDto(entity.Key, CustomFieldValues.CatalogPrefix + d.Key, d.Label, d.FieldType.ToString(), true, d.IsRequired,
+                options?.Select(o => o.Code).ToList(), d.PermissionKey, options?.Select(o => o.Label).ToList());
+        }));
         return result;
     }
 

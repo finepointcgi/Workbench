@@ -308,6 +308,26 @@ public sealed class CustomFieldTests
     }
 
     [Fact]
+    public async Task Picklists_carry_their_labels_to_forms_so_people_see_names_not_codes()
+    {
+        var (seeded, _) = await HostWithProjectAsync();
+        await using var host = seeded;
+        await host.Host.Get<ICustomListService>().SaveAsync(new SaveValueListRequest("offices", "Program offices", null,
+            [new("peo-eis", "PEO EIS"), new("peo-c3t", "PEO C3T")]));
+        await AddAsync(host, "Program office", CustomFieldType.Picklist, list: "offices");
+
+        var field = (await host.Host.Get<IEntityFieldCatalog>().GetFieldsAsync(E.Project)).Single(f => f.Key == "cf.program_office");
+        Assert.Equal(["peo-eis", "peo-c3t"], field.Options!);
+        Assert.Equal(["PEO EIS", "PEO C3T"], field.OptionLabels!);
+
+        var form = await host.Host.Get<IFormLayoutService>().GetEffectiveAsync(E.Project);
+        var shown = form.Sections.SelectMany(s => s.Fields).Single(f => f.Key == "cf.program_office");
+        Assert.Equal("Select", shown.FieldType);
+        Assert.Equal("PEO EIS", shown.LabelOf("peo-eis"));
+        Assert.Equal("unknown", shown.LabelOf("unknown")); // a code with no label shows as itself
+    }
+
+    [Fact]
     public async Task The_report_writer_offers_custom_fields_as_columns()
     {
         var (seeded, _) = await HostWithProjectAsync();

@@ -75,7 +75,16 @@ public sealed record EffectiveFormField(
     bool IsCustom,
     bool DomainRequired,
     bool Required,
-    IReadOnlyList<string>? Options);
+    IReadOnlyList<string>? Options,
+    IReadOnlyList<string>? OptionLabels = null)
+{
+    /// <summary>The label to show for a stored option code (the code itself when there's no label).</summary>
+    public string LabelOf(string option)
+    {
+        var index = Options is null ? -1 : Options.ToList().IndexOf(option);
+        return index >= 0 && OptionLabels is { } labels && index < labels.Count ? labels[index] : option;
+    }
+}
 
 public sealed record EffectiveFormSection(string Key, string Title, IReadOnlyList<EffectiveFormField> Fields);
 

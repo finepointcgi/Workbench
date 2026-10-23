@@ -16,19 +16,20 @@
         <MudSwitch T="bool" Value="Flag" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Color="Color.Primary" ReadOnly="ReadOnly" />
         break;
     case "Select" when Field.Options is { Count: > 0 } options:
-        <MudSelect T="string" Value="Text" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Required="Field.Required" ReadOnly="ReadOnly" Clearable="true">
+        <MudSelect T="string" Value="Text" ValueChanged="v => ChangedAsync(v)" Label="@Field.Label" Required="Field.Required" ReadOnly="ReadOnly" Clearable="true"
+                   ToStringFunc="@(code => code is null ? null : Field.LabelOf(code))">
             @foreach (var option in options)
             {
-                <MudSelectItem Value="option">@option</MudSelectItem>
+                <MudSelectItem Value="option">@Field.LabelOf(option)</MudSelectItem>
             }
         </MudSelect>
         break;
     case "MultiSelect" when Field.Options is { Count: > 0 } options:
         <MudSelect T="string" MultiSelection="true" SelectedValues="Many" SelectedValuesChanged="v => ChangedAsync(v.ToList())" Label="@Field.Label"
-                   Required="Field.Required" ReadOnly="ReadOnly">
+                   Required="Field.Required" ReadOnly="ReadOnly" ToStringFunc="@(code => code is null ? null : Field.LabelOf(code))">
             @foreach (var option in options)
             {
-                <MudSelectItem Value="option">@option</MudSelectItem>
+                <MudSelectItem Value="option">@Field.LabelOf(option)</MudSelectItem>
             }
         </MudSelect>
         break;
