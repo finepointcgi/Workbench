@@ -243,6 +243,7 @@ public partial class SheetGrid
             var rowsTouched = changes.Select(c => c.ItemId).Distinct().Count();
             Snackbar.Add($"Pasted into {rowsTouched + created.Ids.Count} {(rowsTouched + created.Ids.Count == 1 ? "row" : "rows")}"
                 + (created.Ids.Count > 0 ? $" (added {created.Ids.Count})" : "") + ". Ctrl+Z undoes it.", Severity.Success);
+            // Select what was pasted. Added rows aren't on screen until the reload, so they're found again by id.
             var lastRow = Math.Min(top + block.Count - 1, _rows.Count - 1);
             if (_rows.Count > 0)
             {
@@ -250,6 +251,13 @@ public partial class SheetGrid
                 _anchorRow = Math.Min(top, _rows.Count - 1);
                 _anchorCol = left;
                 _anchorId = _rows[_anchorRow].Item.Id;
+            }
+
+            if (created.Ids.Count > 0)
+            {
+                _activeId = created.Ids[^1];
+                _anchorId ??= created.Ids[0];
+                _anchorCol = left;
             }
 
             await Changed.InvokeAsync();

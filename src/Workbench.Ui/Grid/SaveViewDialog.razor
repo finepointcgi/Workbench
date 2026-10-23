@@ -2,25 +2,26 @@
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
-            <MudTextField @bind-Value="Name" Label="View name" Required="true" AutoFocus="true" Immediate="true" MaxLength="120" data-testid="view-name" />
+            <MudTextField @bind-Value="_name" Label="View name" Required="true" AutoFocus="true" Immediate="true" MaxLength="120" data-testid="view-name"
+                          Error="_blank" ErrorText="Give the view a name." OnKeyDown="NameKeyAsync" />
             @if (CanShare)
             {
-                <MudSwitch T="bool" @bind-Value="IsShared" Color="Color.Primary" Label="Share with everyone on this sheet" data-testid="view-shared" />
+                <MudSwitch T="bool" @bind-Value="_shared" Color="Color.Primary" Label="Share with everyone on this sheet" data-testid="view-shared" />
             }
             else
             {
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Only you see this view. People who edit the sheet can share views.</MudText>
             }
-            <MudCheckBox T="bool" @bind-Value="IsMyDefault" Label="Open the sheet with this view for me" Dense="true" data-testid="view-my-default" />
-            @if (CanShare && IsShared)
+            <MudCheckBox T="bool" @bind-Value="_myDefault" Label="Open the sheet with this view for me" Dense="true" data-testid="view-my-default" />
+            @if (CanShare && _shared)
             {
-                <MudCheckBox T="bool" @bind-Value="IsSheetDefault" Label="Open the sheet with this view for everyone" Dense="true" data-testid="view-sheet-default" />
+                <MudCheckBox T="bool" @bind-Value="_sheetDefault" Label="Open the sheet with this view for everyone" Dense="true" data-testid="view-sheet-default" />
             }
         </MudStack>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(Name)" OnClick="Submit" data-testid="view-save">Save</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="view-save">Save</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -43,6 +44,31 @@
     [Parameter]
     public bool IsSheetDefault { get; set; }
 
-    private void Submit() =>
-        MudDialog.Close(DialogResult.Ok(new SaveViewResult(Name.Trim(), CanShare && IsShared, IsMyDefault, CanShare && IsShared && IsSheetDefault)));
+    // The dialog's own copies: parameters are set again whenever the dialog re-renders.
+    private string _name = string.Empty;
+    private bool _shared;
+    private bool _myDefault;
+    private bool _sheetDefault;
+
+    protected override void OnInitialized() => (_name, _shared, _myDefault, _sheetDefault) = (Name, IsShared, IsMyDefault, IsSheetDefault);
+
+    private bool _blank;
+
+    private void Submit()
+    {
+        _blank = string.IsNullOrWhiteSpace(_name);
+        if (!_blank)
+        {
+            MudDialog.Close(DialogResult.Ok(new SaveViewResult(_name.Trim(), CanShare && _shared, _myDefault, CanShare && _shared && _sheetDefault)));
+        }
+    }
+
+    private async Task NameKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Yield(); // let the typed name bind first
+            Submit();
+        }
+    }
 }

@@ -341,8 +341,8 @@
 /* The fill handle: Excel's small square at the selection's bottom-right corner. */
 .wb-fill-handle {
     position: absolute;
-    right: -4px;
-    bottom: -4px;
+    right: 0;
+    bottom: 0;
     width: 8px;
     height: 8px;
     background: var(--mud-palette-primary);
