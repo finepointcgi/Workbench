@@ -204,8 +204,8 @@ reveals. Admin holds every permission.
 | Create projects | `projects.create` | Create new projects (project requests). | Admin, Project manager, Finance | New project |
 | Run the projects you manage | `projects.manage_own` | Set up the projects you're the manager of: WBS, charge assignments, plan sheet, draft budgets and estimates at completion. | Admin, Project manager | Resourcing, Project costs, Project status, Contract funding |
 | See every project's financials | `projects.financials.view` | Financials, budgets, project costs and financial exports of every project, and contract funding. Project managers always see their own. | Admin, Finance | Project costs, Project status, Contract funding |
-| Staff every project | `projects.resourcing.manage` | Change anyone's allocations on every project and see capacity and utilization. | Admin, Resource manager | Resourcing, My allocations |
-| See every project's staffing | `projects.resourcing.view` | Allocations and open demand on every project. | Admin, Finance | — |
+| Staff every project | `projects.resourcing.manage` | Change anyone's allocations and assignments (Assign people) on every project and see capacity and utilization. A project's manager assigns people on their own projects without it. | Admin, Resource manager | Resourcing, My allocations |
+| See every project's staffing | `projects.resourcing.view` | Allocations, assignments and open demand on every project. | Admin, Finance | — |
 | Manage earned value | `projects.evm.manage` | Approve and reject baseline changes and reopen closed earned value periods. | Admin, Finance | — |
 | Manage ceilings and closeout | `projects.ceilings.manage` | Hours, cost and billing ceilings, overrides, alerts and contract and project closeout. | Admin, Finance | — |
 
