@@ -114,21 +114,21 @@ public static class NavCatalog
             Keywords: "approve reject inbox timesheet expense odc bill requisition delegation"),
 
         new(Projects, null, "All projects", "projects", Icons.Material.Filled.Work, NavRule.Everyone, Keywords: "contracts wbs"),
-        new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, NavRule.Custom(a => a.Can(P.ProjectsCreate) && !a.Can(P.SetupProjects), "Under Admin › Setup instead for those who set up every project", P.ProjectsCreate), MatchAll: true, Keywords: "create request project wbs plan"),
+        new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, NavRule.Custom(a => a.Can(P.ProjectsCreate) && !a.Can(P.SetupProjects), "Under Admin › Setup instead for those who set up every project", P.ProjectsCreate), MatchAll: true, Keywords: "create request project wbs plan", InMenu: false), // + New › Project.
         new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, NavRule.Custom(a => a.Can(P.ResourcingManage) || a.IsPm, "Also managers of a project", P.ResourcingManage, P.ProjectsManageOwn), Keywords: "staffing allocations capacity utilization heat map"),
         new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, NavRule.Custom(a => a.Can(P.ProjectsFinancialsView) || a.IsPm, "Also managers of a project", P.ProjectsFinancialsView, P.ProjectsManageOwn), MatchAll: true, Keywords: "other direct costs vendor"),
         new(Projects, null, "Proposal pricing", "pricing", Icons.Material.Filled.PriceCheck, NavRule.Need(P.PricingManage), Detail: "Proposal", Keywords: "bid proposal price cost volume wrap rate fee scenario propricer"),
 
-        // People (HR): everyone's own profile, benefits and the directory; HR (and Finance, for pay and benefit costs) the rest.
-        new(People, null, "My profile", "hr/me", Icons.Material.Filled.Badge, NavRule.Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
-        new(People, null, "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, NavRule.Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
-        new(People, null, "Directory", "hr", Icons.Material.Filled.People, NavRule.Everyone, MatchAll: true, Detail: "Employee", Keywords: "employees personnel hr records"),
-        new(People, null, "Org chart", "hr/org-chart", Icons.Material.Filled.AccountTree, NavRule.Everyone, Keywords: "reporting structure supervisors"),
+        // People (HR): HR's own work first; everyone's directory (with the org chart) and their own profile (with benefits).
         new(People, "HR administration", "Positions", "hr/positions", Icons.Material.Filled.WorkOutline, NavRule.Need(P.HrWorkforceView, P.HrPositionsManage), Keywords: "approved positions headcount open requisitions salary range"),
         new(People, "HR administration", "Onboarding and offboarding", "hr/onboarding", Icons.Material.Filled.Checklist, NavRule.Need(P.HrOnboardingManage), Detail: "Checklist", Keywords: "new hire checklist termination exit"),
         new(People, "HR administration", "Personnel requests", "hr/requests", Icons.Material.Filled.MarkEmailUnread, NavRule.Need(P.HrRecordsManage), Keywords: "change requests employee updates"),
         new(People, "HR administration", "Compensation", "hr/compensation", Icons.Material.Filled.Paid, NavRule.Need(P.HrWorkforceView, P.HrCompensationManage), Keywords: "salary raise merit cycle pay change"),
         new(People, "HR administration", "Benefits administration", "hr/benefits", Icons.Material.Filled.MedicalServices, NavRule.Need(P.HrWorkforceView, P.HrBenefitsManage), Keywords: "plans tiers open enrollment deductions paylocity fringe"),
+        new(People, "Directory", "Directory", "hr", Icons.Material.Filled.People, NavRule.Everyone, MatchAll: true, Detail: "Employee", Keywords: "employees personnel hr records"),
+        new(People, "Directory", "Org chart", "hr/org-chart", Icons.Material.Filled.AccountTree, NavRule.Everyone, Keywords: "reporting structure supervisors"),
+        new(People, "My profile", "My profile", "hr/me", Icons.Material.Filled.Badge, NavRule.Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
+        new(People, "My profile", "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, NavRule.Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
         // Business development: the capture pipeline (BD, Finance, Admin); capture and proposal managers see their own.
         new(Growth, "Business development", "Pipeline", "bd", Icons.Material.Filled.ViewKanban, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), MatchAll: true, Keywords: "capture board opportunities crm"),
         new(Growth, "Business development", "Opportunities", "bd/opportunities", Icons.Material.Filled.Flag, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), Detail: "Opportunity", Keywords: "pursuits rfp solicitation capture"),
@@ -140,36 +140,33 @@ public static class NavCatalog
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, NavRule.Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, NavRule.Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
 
-        // Finance (Finance and administrators).
+        // Finance (Finance and administrators): in each group the everyday pages first, the setup pages last.
         new(Finance, "Accounting", "Journal entries", "accounting/journal", Icons.Material.Filled.MenuBook, NavRule.Need(P.GlJournalsPost), Detail: "Journal entry", Keywords: "gl general ledger je"),
-        new(Finance, "Accounting", "Chart of accounts", "accounting/accounts", Icons.Material.Filled.AccountTree, NavRule.Need(P.GlAccountsManage), Keywords: "gl accounts"),
-        new(Finance, "Accounting", "Posting rules", "accounting/posting-rules", Icons.Material.Filled.Rule, NavRule.Need(P.GlPostingManage)),
         new(Finance, "Accounting", "Period close", "accounting/close", Icons.Material.Filled.EventAvailable, NavRule.Need(P.GlClose), Keywords: "fiscal month end"),
         new(Finance, "Accounting", "Recurring journals", "accounting/recurring", Icons.Material.Filled.EventRepeat, NavRule.Need(P.GlRecurringManage), Keywords: "recurring journal entries rent accrual amortization auto reverse"),
-
-        new(Finance, "Planning", "Budgets", "planning/budgets", Icons.Material.Filled.TableChart, NavRule.Need(P.BudgetsManage), Detail: "Budget version", Keywords: "corporate gl budget versions original revised forecast spread"),
-        new(Finance, "Planning", "Budget vs actual", "planning/budget-vs-actual", Icons.Material.Filled.CompareArrows, NavRule.Need(P.BudgetsManage), Keywords: "variance budget actual income statement org unit pool"),
-        new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, NavRule.Need(P.BudgetsManage), Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
         new(Finance, "Accounting", "Currency revaluation", "accounting/revaluation", Icons.Material.Filled.CurrencyExchange, NavRule.Need(P.GlRevaluation), Keywords: "foreign exchange fx unrealized gain loss month end period close multicurrency"),
         new(Finance, "Accounting", "Foreign currency report", "accounting/foreign-currency", Icons.Material.Filled.Language, NavRule.Need(P.GlRevaluation), Keywords: "fx exposure realized unrealized gain loss multicurrency"),
+        new(Finance, "Accounting", "Chart of accounts", "accounting/accounts", Icons.Material.Filled.AccountTree, NavRule.Need(P.GlAccountsManage), Keywords: "gl accounts"),
+        new(Finance, "Accounting", "Posting rules", "accounting/posting-rules", Icons.Material.Filled.Rule, NavRule.Need(P.GlPostingManage)),
         new(Finance, "Accounting", "Sales and use tax return", "accounting/sales-tax", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesTaxManage), InMenu: false, Keywords: "sales tax use tax return jurisdiction state county filing"),
+
 
         new(Finance, "Billing & AR", "Invoices", "billing", Icons.Material.Filled.Receipt, NavRule.Need(P.BillingInvoicesManage), MatchAll: true, Keywords: "billing receivables"),
         new(Finance, "Billing & AR", "New invoice", "billing/new", Icons.Material.Filled.NoteAdd, NavRule.Need(P.BillingInvoicesManage), InMenu: false),
-        new(Finance, "Billing & AR", "Contracts and milestones", "billing/contracts", Icons.Material.Filled.Flag, NavRule.Need(P.BillingInvoicesManage), Detail: "Contract"),
         new(Finance, "Billing & AR", "Customer payments", "billing/payments", Icons.Material.Filled.Payments, NavRule.Need(P.BillingPaymentsRecord), Keywords: "cash receipts"),
         new(Finance, "Billing & AR", "AR aging", "billing/aging", Icons.Material.Filled.HourglassBottom, NavRule.Need(P.BillingReportsView), Keywords: "receivables overdue"),
         new(Finance, "Billing & AR", "Unbilled accrual", "billing/accrual", Icons.Material.Filled.EventRepeat, NavRule.Need(P.BillingInvoicesManage)),
+        new(Finance, "Billing & AR", "Contracts and milestones", "billing/contracts", Icons.Material.Filled.Flag, NavRule.Need(P.BillingInvoicesManage), Detail: "Contract"),
         new(Finance, null, "Invoice", "billing/invoices", Icons.Material.Filled.Receipt, NavRule.Need(P.BillingInvoicesManage), Detail: "Invoice", InMenu: false),
         new(Finance, null, "Customer statement", "billing/statements", Icons.Material.Filled.Receipt, NavRule.Need(P.BillingInvoicesManage), Detail: "Statement", InMenu: false),
 
         new(Finance, "Payables & purchasing", "Bills", "purchasing/bills", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.ApBillsManage), Detail: "Bill", Keywords: "ap accounts payable vendor invoices"),
         new(Finance, "Payables & purchasing", "Payment runs", "purchasing/payments", Icons.Material.Filled.Payments, NavRule.Need(P.ApPaymentsManage), Detail: "Payment run", Keywords: "pay vendors checks ach"),
-        new(Finance, "Payables & purchasing", "Vendors", "purchasing/vendors", Icons.Material.Filled.Storefront, NavRule.Need(P.VendorsManage), Detail: "Vendor", Keywords: "suppliers 1099"),
-        new(Finance, "Payables & purchasing", "Subcontracts", "purchasing/subcontracts", Icons.Material.Filled.Handshake, NavRule.Need(P.VendorsManage), Detail: "Subcontract"),
         new(Finance, "Payables & purchasing", "Purchase orders", "purchasing/orders", Icons.Material.Filled.ShoppingBasket, NavRule.Need(P.PurchaseOrdersManage), Detail: "Purchase order", Keywords: "po"),
         new(Finance, "Payables & purchasing", "Receiving", "purchasing/receiving", Icons.Material.Filled.Inventory, NavRule.Need(P.PurchaseOrdersManage)),
         new(Finance, "Payables & purchasing", "Match exceptions", "purchasing/match-exceptions", Icons.Material.Filled.CompareArrows, NavRule.Need(P.PurchaseOrdersManage), Keywords: "three way match"),
+        new(Finance, "Payables & purchasing", "Vendors", "purchasing/vendors", Icons.Material.Filled.Storefront, NavRule.Need(P.VendorsManage), Detail: "Vendor", Keywords: "suppliers 1099"),
+        new(Finance, "Payables & purchasing", "Subcontracts", "purchasing/subcontracts", Icons.Material.Filled.Handshake, NavRule.Need(P.VendorsManage), Detail: "Subcontract"),
         new(Finance, "Payables & purchasing", "Requests for quote", "purchasing/rfqs", Icons.Material.Filled.RequestQuote, NavRule.Need(P.SourcingManage), Detail: "RFQ", Keywords: "rfq quotes sourcing competition bids award"),
         new(Finance, "Payables & purchasing", "Supplier portal", "purchasing/supplier-portal", Icons.Material.Filled.Storefront, NavRule.Need(P.SourcingManage), Keywords: "vendor portal contacts acknowledgements ship notices asn", InMenu: false), // Linked from Requests for quote.
 
@@ -178,6 +175,7 @@ public static class NavCatalog
         new(Finance, "Cash", "Reconcile", "cash/reconcile", Icons.Material.Filled.FactCheck, NavRule.Need(P.CashManage), Detail: "Reconciliation", Keywords: "bank reconciliation"),
         new(Finance, "Cash", "Reconciliation history", "cash/reconciliations", Icons.Material.Filled.History, NavRule.Need(P.CashManage)),
         new(Finance, "Cash", "Cash forecast", "cash/forecast", Icons.Material.Filled.ShowChart, NavRule.Need(P.CashForecastView)),
+        new(Finance, "Cash", "Corporate cards", "cards", Icons.Material.Filled.CreditCard, NavRule.Need(P.CardsManage), Keywords: "card statement import reconciliation aging p-card travel card"),
 
         new(Finance, "Assets", "Asset register", "assets", Icons.Material.Filled.ListAlt, NavRule.Need(P.AssetsManage), MatchAll: true, Detail: "Asset", Keywords: "fixed assets"),
         new(Finance, "Assets", "Capitalize", "assets/capitalize", Icons.Material.Filled.AddBox, NavRule.Need(P.AssetsManage), InMenu: false),
@@ -187,7 +185,6 @@ public static class NavCatalog
         new(Finance, "Assets", "Asset transfers", "assets/transfers", Icons.Material.Filled.SwapHoriz, NavRule.Need(P.AssetsManage), Keywords: "move asset location custodian organization company intercompany history", InMenu: false),
 
         new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, NavRule.Need(P.PayrollRun), Detail: "Payroll run", Keywords: "paylocity pay runs"),
-        new(Finance, null, "Corporate cards", "cards", Icons.Material.Filled.CreditCard, NavRule.Need(P.CardsManage), Keywords: "card statement import reconciliation aging p-card travel card"),
 
         new(Finance, "Revenue & compliance", "Revenue", "accounting/revenue", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), MatchAll: true, Keywords: "revenue recognition run"),
         new(Finance, "Revenue & compliance", "Revenue estimates", "accounting/revenue/estimates", Icons.Material.Filled.Calculate, NavRule.Need(P.RevenueManage), Keywords: "eac etc", InMenu: false),
@@ -195,6 +192,9 @@ public static class NavCatalog
         new(Finance, "Revenue & compliance", "Incurred cost", "accounting/incurred-cost", Icons.Material.Filled.Gavel, NavRule.Need(P.IncurredCostManage), Detail: "Submission", Keywords: "ice dcaa submission"),
         new(Finance, "Revenue & compliance", "Indirect rates", "accounting/indirect-rates", Icons.Material.Filled.Percent, NavRule.Need(P.IndirectRatesManage), Keywords: "fringe overhead g&a pools"),
         new(Finance, "Revenue & compliance", "Total time accounting", "accounting/total-time", Icons.Material.Filled.MoreTime, NavRule.Need(P.TimeTotalTime), Keywords: "tta uncompensated overtime exempt salaried effective rate labor cost method"),
+        new(Finance, "Planning", "Budgets", "planning/budgets", Icons.Material.Filled.TableChart, NavRule.Need(P.BudgetsManage), Detail: "Budget version", Keywords: "corporate gl budget versions original revised forecast spread"),
+        new(Finance, "Planning", "Budget vs actual", "planning/budget-vs-actual", Icons.Material.Filled.CompareArrows, NavRule.Need(P.BudgetsManage), Keywords: "variance budget actual income statement org unit pool"),
+        new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, NavRule.Need(P.BudgetsManage), Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
         new(Finance, null, "Revenue by project", "accounting/revenue/projects", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), Detail: "Project", InMenu: false),
 
         // Materials: the Materials role (and administrators) runs it; Finance reads parts, inventory and the inventory reports
@@ -211,7 +211,6 @@ public static class NavCatalog
         new(Materials, "Quality & engineering", "Engineering changes", "materials/engineering-changes", Icons.Material.Filled.ChangeCircle, NavRule.Need(P.MaterialsManage), Detail: "Engineering change", Keywords: "eco ecn revision effectivity configuration as built as designed"),
         new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile receiving", InMenu: false),
         new(Materials, "Inventory", "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.MaterialsView), Keywords: "valuation aging gfm wip trace"),
-        new(Materials, "Inventory", "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, NavRule.Need(P.MaterialsManage), Keywords: "warehouses bins work centers"),
         new(Materials, "Sales and shipping", "Sales orders", "materials/sales-orders", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesOrdersView), Detail: "Sales order", Keywords: "so customer order clin delivery"),
         new(Materials, "Sales and shipping", "Shipping", "materials/shipping", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsManage), Keywords: "pick pack ship shipment dd250 wawf piee tracking"),
         new(Materials, null, "Pick list", "materials/pick-lists", Icons.Material.Filled.PlaylistAddCheck, NavRule.Need(P.MaterialsView), Detail: "Pick list", InMenu: false),
@@ -222,6 +221,7 @@ public static class NavCatalog
         new(Materials, "Manufacturing", "Capacity schedule", "materials/capacity", Icons.Material.Filled.ViewTimeline, NavRule.Need(P.MaterialsManage), Keywords: "finite capacity scheduling load chart work center calendar queue"),
         new(Materials, "Inventory", "Physical inventory", "materials/physical-inventory", Icons.Material.Filled.FactCheck, NavRule.Need(P.MaterialsManage), Detail: "Physical inventory", Keywords: "wall to wall count tags freeze recount"),
         new(Materials, "Inventory", "Landed cost", "materials/landed-cost", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsManage), Detail: "Landed cost", Keywords: "freight duty handling allocation receipts"), // Finance: linked from Inventory reports (its menu is at its link budget).
+        new(Materials, "Inventory", "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, NavRule.Need(P.MaterialsManage), Keywords: "warehouses bins work centers"),
         new(Materials, null, "Count on a phone", "m/count", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile physical inventory count tags", InMenu: false),
 
         // Reports: one place for every report.
@@ -239,20 +239,7 @@ public static class NavCatalog
         new(Reports, null, "Saved report", "reports/saved", Icons.Material.Filled.Assessment, NavRule.Everyone, Detail: "Report", InMenu: false),
         new(Reports, null, "Standard report", "reports/standard", Icons.Material.Filled.Assessment, NavRule.Everyone, Detail: "Report", InMenu: false),
 
-        // Admin (administrators; Finance sees the setup parts, titled Setup).
-        new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, NavRule.Need(P.SetupPeople), Keywords: "employees cost rates supervisors"),
-        new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, NavRule.Need(P.AdminUsers, P.AdminSecurity), Keywords: "sign in accounts security invite deactivate"),
-        new(Admin, "People and access", "Roles", "admin/roles", Icons.Material.Filled.AdminPanelSettings, NavRule.Need(P.AdminRoles), Detail: "Role", Keywords: "permissions security groups access rights custom role"),
-        new(Admin, "Customization", "Customization", "admin/customization", Icons.Material.Filled.Tune, NavRule.Need(P.AdminCustomization), Keywords: "custom fields picklists lists dropdowns status labels sub-status numbering document numbers"),
-        new(Admin, "Customization", "Layouts", "admin/customization/layouts", Icons.Material.Filled.ViewQuilt, NavRule.Need(P.AdminCustomization), Keywords: "forms fields sections required hidden home page widgets dashboard roles customize"),
-        new(Admin, "Customization", "Automation", "admin/automation", Icons.Material.Filled.Bolt, NavRule.Need(P.AdminAutomations), Detail: "Automation", Keywords: "workflow rules triggers conditions actions notify escalate validation receipts funding thresholds"),
-        new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, NavRule.Need(P.AdminAssistant), Keywords: "ai claude assistant usage audit bedrock govcloud"),
-        new(Admin, "Integrations", "EDI", "admin/integrations/edi", Icons.Material.Filled.SwapHoriz, NavRule.Need(P.SourcingManage), Keywords: "x12 850 855 856 810 edi trading partners vendors"),
-        new(Admin, "Integrations", "Integrations", "admin/integrations", Icons.Material.Filled.Hub, NavRule.Need(P.AdminIntegrations), Keywords: "webhooks api keys teams slack quickbooks sftp export connector"),
-        new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, NavRule.Need(P.AdminCompliance), Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
-        new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, NavRule.Need(P.CasCpsrManage), Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),
-        new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, NavRule.Need(P.CasCpsrManage), Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency"),
-        new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, NavRule.Need(P.SetupAuditLog), Keywords: "history security"),
+        // Admin (administrators; Finance sees the setup parts, titled Setup). Setup first: it is what most people here come for.
         new(Admin, "Setup", "Getting started", "setup", Icons.Material.Filled.Checklist, NavRule.Need(P.SetupOrganizationView), MatchAll: true),
         new(Admin, "Setup", "Org units", "setup/org-units", Icons.Material.Filled.AccountTree, NavRule.Need(P.SetupPeople), Keywords: "departments"),
         new(Admin, "Setup", "Labor categories", "setup/labor-categories", Icons.Material.Filled.Badge, NavRule.Need(P.SetupPeople), Keywords: "plc"),
@@ -264,11 +251,25 @@ public static class NavCatalog
         new(Admin, "Setup", "Currencies and rates", "setup/currencies", Icons.Material.Filled.CurrencyExchange, NavRule.Need(P.SetupCurrencies), Keywords: "exchange rates fx multicurrency euro pound functional currency"),
         new(Admin, "Setup", "Card programs", "setup/card-programs", Icons.Material.Filled.CreditCard, NavRule.Need(P.CardsManage), Keywords: "corporate card issuer cardholder"),
         new(Admin, "Setup", "Sales and use tax", "setup/sales-tax", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesTaxManage), InMenu: false, Keywords: "sales tax rates jurisdictions tax codes exemption certificates resale avalara"),
-        new(Admin, "Customization", "Approval workflows", "setup/approval-workflows", Icons.Material.Filled.AltRoute, NavRule.Need(P.ApprovalWorkflowsView), Detail: "Workflow", Keywords: "routing approvers delegation"),
-        new(Admin, "Integrations", "Import", "setup/import", Icons.Material.Filled.UploadFile, NavRule.Need(P.SetupImports), Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
-        new(Admin, "Integrations", "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, NavRule.Need(P.SetupImports), Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
         new(Admin, "Setup", "Organization", "setup/organization", Icons.Material.Filled.Tune, NavRule.Need(P.SetupOrganizationView), Keywords: "settings timesheet cadence company"),
         new(Admin, "Setup", "Companies", "setup/companies", Icons.Material.Filled.Domain, NavRule.Need(P.SetupCompanies), Keywords: "multicompany legal entity intercompany ein due to due from"),
+        new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, NavRule.Need(P.SetupPeople), Keywords: "employees cost rates supervisors"),
+        new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, NavRule.Need(P.AdminUsers, P.AdminSecurity), Keywords: "sign in accounts security invite deactivate"),
+        new(Admin, "People and access", "Roles", "admin/roles", Icons.Material.Filled.AdminPanelSettings, NavRule.Need(P.AdminRoles), Detail: "Role", Keywords: "permissions security groups access rights custom role"),
+        new(Admin, "People and access", "Assistant", "admin/assistant", Icons.Material.Filled.AutoAwesome, NavRule.Need(P.AdminAssistant), Keywords: "ai claude assistant usage audit bedrock govcloud"),
+        new(Admin, "People and access", "Audit log", "setup/audit", Icons.Material.Filled.History, NavRule.Need(P.SetupAuditLog), Keywords: "history security"),
+        new(Admin, "People and access", "Support requests", "admin/support", Icons.Material.Filled.SupportAgent, NavRule.Need(P.AdminSupport), Keywords: "help desk problems feedback bug reports"),
+        new(Admin, "Customization", "Customization", "admin/customization", Icons.Material.Filled.Tune, NavRule.Need(P.AdminCustomization), Keywords: "custom fields picklists lists dropdowns status labels sub-status numbering document numbers"),
+        new(Admin, "Customization", "Layouts", "admin/customization/layouts", Icons.Material.Filled.ViewQuilt, NavRule.Need(P.AdminCustomization), Keywords: "forms fields sections required hidden home page widgets dashboard roles customize"),
+        new(Admin, "Customization", "Automation", "admin/automation", Icons.Material.Filled.Bolt, NavRule.Need(P.AdminAutomations), Detail: "Automation", Keywords: "workflow rules triggers conditions actions notify escalate validation receipts funding thresholds"),
+        new(Admin, "Customization", "Approval workflows", "setup/approval-workflows", Icons.Material.Filled.AltRoute, NavRule.Need(P.ApprovalWorkflowsView), Detail: "Workflow", Keywords: "routing approvers delegation"),
+        new(Admin, "Integrations", "EDI", "admin/integrations/edi", Icons.Material.Filled.SwapHoriz, NavRule.Need(P.SourcingManage), Keywords: "x12 850 855 856 810 edi trading partners vendors"),
+        new(Admin, "Integrations", "Integrations", "admin/integrations", Icons.Material.Filled.Hub, NavRule.Need(P.AdminIntegrations), Keywords: "webhooks api keys teams slack quickbooks sftp export connector"),
+        new(Admin, "Integrations", "Import", "setup/import", Icons.Material.Filled.UploadFile, NavRule.Need(P.SetupImports), Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
+        new(Admin, "Integrations", "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, NavRule.Need(P.SetupImports), Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
+        new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, NavRule.Need(P.AdminCompliance), Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
+        new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, NavRule.Need(P.CasCpsrManage), Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),
+        new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, NavRule.Need(P.CasCpsrManage), Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency"),
 
         // Findable with Ctrl+K only.
         new(Home, null, "Notifications", "notifications", Icons.Material.Filled.Notifications, NavRule.Everyone, Keywords: "alerts email digest settings", InMenu: false),
@@ -280,7 +281,6 @@ public static class NavCatalog
         new(Home, null, "Glossary", "help/glossary", Icons.Material.Filled.Translate, NavRule.Public, Keywords: "terms definitions acronyms", InMenu: false),
         new(Home, null, "What's new", "help/whats-new", Icons.Material.Filled.NewReleases, NavRule.Public, Keywords: "changes release notes changelog", InMenu: false),
         new(Home, null, "My support requests", "support", Icons.Material.Filled.SupportAgent, NavRule.Everyone, Keywords: "report problem feedback bug help", InMenu: false),
-        new(Admin, null, "Support requests", "admin/support", Icons.Material.Filled.SupportAgent, NavRule.Need(P.AdminSupport), Keywords: "help desk problems feedback bug reports", InMenu: false),
         new(MyWork, null, "My staffing", "resourcing", Icons.Material.Filled.GroupWork, NavRule.Custom(a => a.IsSignedIn && !a.Can(P.ResourcingManage) && !a.IsPm, "Everyone who doesn't see Resourcing"), Keywords: "resourcing staffing allocations", InMenu: false),
     ];
 

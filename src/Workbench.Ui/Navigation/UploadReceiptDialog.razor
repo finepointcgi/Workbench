@@ -1,0 +1,70 @@
+@* "+ New › Upload a receipt": pick or drop one file; it goes to My receipts, which opens once it's uploaded. *@
+@using Microsoft.AspNetCore.Components.Forms
+@using Workbench.Contracts.Collaboration
+@using Workbench.Contracts.Receipts
+@using Workbench.Ui.Receipts
+@using Workbench.Ui.Odcs
+@inject IReceiptLibraryService Library
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudDialog data-testid="upload-receipt-dialog">
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            A receipt, hotel folio or card statement. Workbench reads the vendor, date and total so you can attach it to an expense line later.
+        </MudText>
+        <MudFileUpload T="IBrowserFile" FilesChanged="UploadAsync" Accept="@AttachmentRules.Accept" Disabled="_uploading" Class="mt-0">
+            <CustomContent>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync"
+                           Disabled="_uploading" data-testid="upload-receipt-pick">@(_uploading ? "Uploading…" : "Choose a file")</MudButton>
+            </CustomContent>
+            <SelectedTemplate />
+        </MudFileUpload>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()" Disabled="_uploading">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private bool _uploading;
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!AttachmentRules.IsAllowed(file.Name) || file.Size > AttachmentRules.MaxSizeBytes)
+        {
+            Snackbar.Add(AttachmentRules.IsAllowed(file.Name)
+                ? $"{file.Name} is larger than {AttachmentRules.MaxSizeBytes / (1024 * 1024)} MB."
+                : $"\"{Path.GetExtension(file.Name)}\" files can't be uploaded.", Severity.Warning);
+            return;
+        }
+
+        _uploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(AttachmentRules.MaxSizeBytes);
+            var reading = await Library.UploadAsync(file.Name, stream);
+            Snackbar.Add(reading.Extraction.Method == ReceiptReadMethod.None
+                ? $"Uploaded {file.Name}. Nothing could be read from it; add its details with Edit."
+                : $"Uploaded {file.Name}: {ReceiptFormat.Kind(reading.Receipt.Kind).ToLowerInvariant()}{(reading.Receipt.Vendor is { } v ? $" from {v}" : "")}, {ReceiptFormat.Money(reading.Receipt.Total)}.",
+                Severity.Success);
+            MudDialog.Close(DialogResult.Ok(reading.Receipt));
+            Navigation.NavigateTo("receipts");
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't upload {file.Name}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+}

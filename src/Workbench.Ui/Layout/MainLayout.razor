@@ -14,8 +14,9 @@
                        OnClick="ToggleDrawer" aria-label="Toggle navigation" aria-expanded="@(_drawerOpen ? "true" : "false")" />
         <span class="wb-brand"><span class="wb-brand-mark" aria-hidden="true">W</span>Workbench</span>
         <MudSpacer />
+        <NewMenu @ref="_new" Access="_access" />
         <Workbench.Ui.Companies.CompanySwitcher />
-        <CommandPalette Access="_access" Ask="AskAssistantAsync" />
+        <CommandPalette Access="_access" Ask="AskAssistantAsync" Create="CreateAsync" />
         <Workbench.Ui.Assistant.AssistantButton @ref="_assistant" Access="_access" />
         <HelpButton Access="_access" />
         <NotificationBell />
@@ -59,4 +60,8 @@
     private Workbench.Ui.Assistant.AssistantButton? _assistant;
 
     private Task AskAssistantAsync(string question) => _assistant?.AskAsync(question) ?? Task.CompletedTask;
+
+    private NewMenu? _new;
+
+    private Task CreateAsync(string key) => _new?.LaunchAsync(key) ?? Task.CompletedTask;
 }

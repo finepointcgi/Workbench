@@ -120,10 +120,10 @@ public sealed class HrReportTests
             NavCatalog.MenuEntries(new NavAccess(new CurrentUserInfo("x@example.com", "X", roles, Guid.NewGuid()))).Where(e => e.Section == NavCatalog.People || e.Href == "hr/reports")
                 .Select(e => e.Href).ToList();
 
-        Assert.Equal(["hr/me", "hr/benefits/me", "hr", "hr/org-chart"], Links(OrgRoles.Employee));
-        Assert.Equal(["hr/me", "hr/benefits/me", "hr", "hr/org-chart", "hr/positions", "hr/onboarding", "hr/requests", "hr/compensation", "hr/benefits", "hr/reports"], Links(OrgRoles.Hr));
+        Assert.Equal(["hr", "hr/org-chart", "hr/me", "hr/benefits/me"], Links(OrgRoles.Employee));
+        Assert.Equal(["hr/positions", "hr/onboarding", "hr/requests", "hr/compensation", "hr/benefits", "hr", "hr/org-chart", "hr/me", "hr/benefits/me", "hr/reports"], Links(OrgRoles.Hr));
         Assert.Equal(Links(OrgRoles.Hr), Links(OrgRoles.Admin));
-        Assert.Equal(["hr/me", "hr/benefits/me", "hr", "hr/org-chart", "hr/positions", "hr/compensation", "hr/benefits", "hr/reports"], Links(OrgRoles.Finance));
+        Assert.Equal(["hr/positions", "hr/compensation", "hr/benefits", "hr", "hr/org-chart", "hr/me", "hr/benefits/me", "hr/reports"], Links(OrgRoles.Finance));
         Assert.Equal("Employee", NavCatalog.Match("hr/employees/123", new NavAccess(new CurrentUserInfo("x@example.com", "X", OrgRoles.Employee, null)))!.Value.Entry.Detail);
     }
 

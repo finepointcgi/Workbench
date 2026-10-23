@@ -1,0 +1,171 @@
+@* The app bar's "+ New" button (shortcut N): what this user can create, their own paperwork first. Each item opens the
+   existing create page, or its create dialog right here. Ctrl+K lists the same items (NewCatalog). *@
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@using Workbench.Contracts.Odcs
+@using Workbench.Ui.Odcs
+@implements IAsyncDisposable
+@inject IServiceProvider Services
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+@if (_actions.Count > 0)
+{
+    <MudMenu @ref="_menu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Dense="true" AriaLabel="Create something new" data-testid="new-menu">
+        <ActivatorContent>
+            @* A custom activator has to open the menu itself (MudBlazor 9); MudMenu's wrapper is the one role="button". *@
+            <span class="mud-button-root mud-button mud-button-outlined mud-button-outlined-inherit mud-button-outlined-size-medium wb-new-button px-2 px-sm-3 mr-2"
+                  style="text-transform:none;min-width:0" data-testid="new-button" aria-keyshortcuts="N" @onclick="e => context.ToggleAsync(e)">
+                <span class="mud-button-label">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-hidden="true" />
+                    <span class="d-none d-sm-inline ml-1">New</span>
+                    <span class="wb-sr-only d-sm-none">New</span>
+                </span>
+            </span>
+        </ActivatorContent>
+        <ChildContent>
+            @{ var first = true; var mine = true; }
+            @foreach (var action in _actions)
+            {
+                if (!first && mine && !action.Mine)
+                {
+                    <MudDivider Class="my-1" />
+                }
+
+                first = false;
+                mine = action.Mine;
+                <MudMenuItem Icon="@action.Icon" OnClick="() => Start(action)" data-testid="@($"new-{action.Key}")">@action.Title</MudMenuItem>
+            }
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    private IReadOnlyList<NewAction> _actions = [];
+    private MudMenu? _menu;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<NewMenu>? _self;
+
+    protected override void OnParametersSet() => _actions = NewCatalog.For(Access);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/navigation.js");
+            _self = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("registerNewShortcut", _self);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+            // No N shortcut; the button still works.
+        }
+    }
+
+    [JSInvokable]
+    public Task OpenFromShortcut() => InvokeAsync(async () =>
+    {
+        if (_menu is not null && !_menu.Open)
+        {
+            await _menu.OpenMenuAsync(EventArgs.Empty);
+        }
+    });
+
+    /// <summary>Starts the item with <paramref name="key"/> (from Ctrl+K), if this user may.</summary>
+    public Task LaunchAsync(string key) =>
+        NewCatalog.Find(key) is { } action && action.IsVisible(Access) ? LaunchAsync(action) : Task.CompletedTask;
+
+    // The menu closes once its item's click handler returns, so a dialog's whole flow runs after it rather than inside it.
+    private void Start(NewAction action) => _ = InvokeAsync(() => LaunchAsync(action));
+
+    private async Task LaunchAsync(NewAction action)
+    {
+        switch (action.Kind)
+        {
+            case NewKind.ProjectDialog:
+                // The form opens the new project's plan itself.
+                await Dialogs.ShowAsync<Workbench.Ui.Projects.NewProjectDialog>("New project", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+                break;
+            case NewKind.SheetDialog:
+                await NewSheetAsync();
+                break;
+            case NewKind.ExpenseReportDialog:
+                await NewExpenseReportAsync();
+                break;
+            case NewKind.ReceiptUpload:
+                await Dialogs.ShowAsync<UploadReceiptDialog>("Upload a receipt", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+                break;
+            default:
+                Navigation.NavigateTo(action.Href);
+                break;
+        }
+    }
+
+    private async Task NewSheetAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<NewSheetDialog>("New sheet");
+        if (await dialog.Result is not { Canceled: false, Data: CreateSheetRequest request } || Services.GetService<ISheetService>() is not { } sheets)
+        {
+            return;
+        }
+
+        try
+        {
+            var created = await sheets.CreateAsync(request);
+            Navigation.NavigateTo($"sheets/{created.Id}");
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't create the sheet: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // The same steps as Expenses › New report: the dialog collects the header, then the report opens.
+    private async Task NewExpenseReportAsync()
+    {
+        var custom = new FormCustomValues();
+        var dialog = await Dialogs.ShowAsync<ExpenseReportDialog>("New expense report", new DialogParameters<ExpenseReportDialog> { { d => d.CustomValues, custom } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveExpenseReportRequest request } || Services.GetService<IExpenseReportService>() is not { } reports)
+        {
+            return;
+        }
+
+        try
+        {
+            var report = await reports.CreateReportAsync(request);
+            await ConfigurableForm.SaveCustomFieldsAsync(Services, CustomizableEntities.ExpenseReport, report.Id, custom);
+            Navigation.NavigateTo($"expenses/{report.Id}");
+        }
+        catch (Exception ex) when (OdcFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("unregisterNewShortcut");
+                await _module.DisposeAsync();
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+            {
+            }
+        }
+
+        _self?.Dispose();
+    }
+}
