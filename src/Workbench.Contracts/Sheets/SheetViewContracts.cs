@@ -17,17 +17,28 @@ public static class SheetFields
     public const string Start = "start";
     public const string Finish = "finish";
     public const string Wbs = "wbs";
+
+    /// <summary>Read-only baseline fields, shown when a view compares to a baseline (<see cref="SheetViewDefinition.BaselineId"/>).</summary>
+    public const string BaselineStart = "baseline-start";
+
+    public const string BaselineFinish = "baseline-finish";
+
+    /// <summary>Plan working days the finish has moved since the baseline (positive = later).</summary>
+    public const string FinishVariance = "finish-variance";
 }
 
 /// <summary>
 /// What a view shows. Sorts are applied in order within each level of the hierarchy (children stay under their parent);
 /// every filter must match (AND), and a matching row keeps its parents for context. Equals and NotEquals take several
 /// values separated by new lines ("is any of" / "is none of"). <see cref="HiddenColumns"/> are field keys.
+/// <see cref="BaselineId"/>: on a scheduled sheet, compare to this saved baseline (adds the read-only Baseline start, Baseline
+/// finish and Finish variance columns).
 /// </summary>
 public sealed record SheetViewDefinition(
     IReadOnlyList<ListSort>? Sort = null,
     IReadOnlyList<ListFilterCondition>? Filters = null,
-    IReadOnlyList<string>? HiddenColumns = null)
+    IReadOnlyList<string>? HiddenColumns = null,
+    Guid? BaselineId = null)
 {
     public static SheetViewDefinition Standard { get; } = new();
 
@@ -35,7 +46,7 @@ public sealed record SheetViewDefinition(
 
     public bool HasFilters => Filters is { Count: > 0 };
 
-    public bool IsStandard => !HasSort && !HasFilters && HiddenColumns is not { Count: > 0 };
+    public bool IsStandard => !HasSort && !HasFilters && HiddenColumns is not { Count: > 0 } && BaselineId is null;
 
     public bool IsHidden(string field) => HiddenColumns?.Contains(field) == true;
 }

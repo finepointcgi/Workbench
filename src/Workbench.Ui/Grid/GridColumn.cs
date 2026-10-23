@@ -18,6 +18,15 @@ public enum GridColumnKind
 
     /// <summary>MS Project predecessor text over task IDs, e.g. <c>3, 5SS+2d</c> (the plan editor).</summary>
     Predecessors,
+
+    /// <summary>Read-only: the task's start in the baseline the grid compares to (<see cref="SheetViewDefinition.BaselineId"/>).</summary>
+    BaselineStart,
+
+    /// <summary>Read-only: the task's finish in the compared baseline.</summary>
+    BaselineFinish,
+
+    /// <summary>Read-only: how many plan working days the finish has moved since the baseline (positive = later).</summary>
+    FinishVariance,
 }
 
 /// <summary>A column as the grid shows it: one of the built-in item fields or a sheet column.</summary>
@@ -26,7 +35,8 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     /// <summary>How values in this column are edited and displayed.</summary>
     public ColumnKind ValueKind => Kind switch
     {
-        GridColumnKind.Start or GridColumnKind.Finish => ColumnKind.Date,
+        GridColumnKind.Start or GridColumnKind.Finish or GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish => ColumnKind.Date,
+        GridColumnKind.FinishVariance => ColumnKind.Number,
         GridColumnKind.Custom => Column!.Type,
         _ => ColumnKind.Text,
     };
@@ -37,14 +47,16 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
 
     public const string AssigneesKey = "assignees";
 
-    /// <summary>Formula and lookup columns are computed server-side and can't be edited in the grid.</summary>
-    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup;
+    /// <summary>Formula and lookup columns are computed server-side and can't be edited in the grid; baseline columns are history.</summary>
+    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup || IsBaseline;
+
+    public bool IsBaseline => Kind is GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish or GridColumnKind.FinishVariance;
 
     /// <summary>
     /// Title, then Assignees (when shown), then Start/Finish when scheduling is on (with Duration and Predecessors when the
-    /// plan is loaded), then the sheet's columns, then WBS.
+    /// plan is loaded, and the baseline columns when comparing to a baseline), then the sheet's columns, then WBS.
     /// </summary>
-    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false)
+    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false, bool baseline = false)
     {
         var columns = new List<GridColumn> { new("title", "Title", GridColumnKind.Title, null, 320) };
         if (assignees)
@@ -60,6 +72,13 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
             {
                 columns.Add(new("duration", "Duration", GridColumnKind.Duration, null, 100));
                 columns.Add(new("predecessors", "Predecessors", GridColumnKind.Predecessors, null, 130));
+            }
+
+            if (baseline)
+            {
+                columns.Add(new(SheetFields.BaselineStart, "Baseline start", GridColumnKind.BaselineStart, null, 130));
+                columns.Add(new(SheetFields.BaselineFinish, "Baseline finish", GridColumnKind.BaselineFinish, null, 130));
+                columns.Add(new(SheetFields.FinishVariance, "Finish variance", GridColumnKind.FinishVariance, null, 130));
             }
         }
 
