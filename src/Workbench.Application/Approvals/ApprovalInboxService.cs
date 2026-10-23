@@ -4,6 +4,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.Approvals;
+using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Approvals;
 
@@ -43,21 +44,52 @@ public sealed class ApprovalInboxService(
         await _backfill.RunAsync(cancellationToken); // Documents pending since before workflows (seeded, imported, upgraded).
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var now = engine.UtcNow;
-        return (await engine.ActionableAsync(db, null, access.Email, cancellationToken))
+        var items = (await engine.ActionableAsync(db, null, access.Email, cancellationToken))
             .SelectMany(x => x.Tasks.Select(t => (x.Instance, t.Task, t.OnBehalfOf)))
             .GroupBy(x => x.Instance.Id)
             .Select(g =>
             {
                 var (instance, task, onBehalfOf) = g.OrderBy(x => x.Task.ActivatedAtUtc).First();
                 var scopes = g.Select(x => x.Task.ScopeLabel).Where(l => l is not null).Distinct().ToList();
-                return new ApprovalInboxItemDto(task.Id, instance.Id, instance.DocumentType, ApprovalDocumentTypes.Label(instance.DocumentType), instance.DocumentId,
+                var projects = g.Select(x => ProjectOf(x.Task.ScopeKey)).ToList();
+                var item = new ApprovalInboxItemDto(task.Id, instance.Id, instance.DocumentType, ApprovalDocumentTypes.Label(instance.DocumentType), instance.DocumentId,
                     instance.Title, instance.Summary, instance.Amount, instance.SubmitterEmail, string.Join(", ", g.Select(x => x.Task.StepName).Distinct()),
                     scopes.Count == 0 ? null : string.Join(", ", scopes), task.ActivatedAtUtc,
                     task.ActivatedAtUtc is { } since ? BusinessDays.Between(since, now) : 0, onBehalfOf, instance.Link,
-                    g.Select(x => ProjectOf(x.Task.ScopeKey)).FirstOrDefault(p => p is not null));
+                    projects.FirstOrDefault(p => p is not null));
+                // Only my projects' share of it is mine to decide when every task I have on it is a project's.
+                return (Item: item, OnlyProjects: projects.All(p => p is not null) ? projects.Select(p => p!.Value).Distinct().ToList() : null);
             })
-            .OrderBy(i => i.WaitingSinceUtc)
+            .OrderBy(x => x.Item.WaitingSinceUtc)
             .ToList();
+        var shares = await ProjectHoursAsync(db, items.Where(x => x.OnlyProjects is not null && x.Item.DocumentType == ApprovalDocumentTypes.Timesheet)
+            .Select(x => (x.Item.DocumentId, (IReadOnlyList<Guid>)x.OnlyProjects!)).ToList(), cancellationToken);
+        return items.Select(x => shares.TryGetValue(x.Item.DocumentId, out var share)
+                ? x.Item with { Amount = share.Hours, Summary = $"{share.Hours:0.0} h on {share.Codes} of {share.Total:0.0} h" }
+                : x.Item)
+            .ToList();
+    }
+
+    /// <summary>For timesheets a project manager decides only part of: the hours on their projects, the project codes and the sheet's total.</summary>
+    private static async Task<Dictionary<Guid, (decimal Hours, string Codes, decimal Total)>> ProjectHoursAsync(
+        IWorkbenchDbContext db, IReadOnlyList<(Guid SheetId, IReadOnlyList<Guid> Projects)> sheets, CancellationToken ct)
+    {
+        if (sheets.Count == 0)
+        {
+            return [];
+        }
+
+        var sheetIds = sheets.Select(s => s.SheetId).ToList();
+        var entries = await db.Set<TimeEntry>().AsNoTracking().Where(e => sheetIds.Contains(e.TimesheetId))
+            .Join(db.Set<WbsElement>(), e => e.WbsElementId, w => w.Id, (e, w) => new { e.TimesheetId, e.Hours, w.ProjectId })
+            .ToListAsync(ct);
+        var projectIds = sheets.SelectMany(s => s.Projects).Distinct().ToList();
+        var codes = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Code, ct);
+        var bySheet = entries.ToLookup(e => e.TimesheetId);
+        return sheets.ToDictionary(s => s.SheetId, s => (
+            bySheet[s.SheetId].Where(e => s.Projects.Contains(e.ProjectId)).Sum(e => e.Hours),
+            string.Join(", ", s.Projects.Select(p => codes.GetValueOrDefault(p) ?? "?").Order()),
+            bySheet[s.SheetId].Sum(e => e.Hours)));
     }
 
     public async Task<int> CountMineAsync(CancellationToken cancellationToken = default)
