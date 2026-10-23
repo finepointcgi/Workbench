@@ -78,9 +78,17 @@
     private static string DetailLabel(NavEntry entry, string[] tail)
     {
         var noun = entry.Detail ?? "Details";
-        if (tail.Contains("new", StringComparer.OrdinalIgnoreCase))
+        var newAt = Array.FindIndex(tail, t => t.Equals("new", StringComparison.OrdinalIgnoreCase));
+        if (newAt == 0)
         {
             return entry.Detail is null ? "New" : $"New {noun.ToLowerInvariant()}";
+        }
+
+        // Something new inside a record (sheets/{id}/automations/new): name what's being added, not the record.
+        if (newAt > 0)
+        {
+            var what = tail[newAt - 1].Replace('-', ' ');
+            return $"New {(what.EndsWith('s') ? what[..^1] : what)}";
         }
 
         var edit = tail[^1].Equals("edit", StringComparison.OrdinalIgnoreCase);

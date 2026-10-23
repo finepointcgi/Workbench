@@ -40,6 +40,8 @@ public sealed class LayoutNavigationTests
         Assert.Empty(PageBreadcrumbs.Build("setup/contracts", Access(OrgRoles.Finance))); // Setup's tabs show where you are
         Assert.Equal(["Setup", "Setup", "Contracts", "Contract"],
             PageBreadcrumbs.Build($"setup/contracts/{Guid.NewGuid()}", Access(OrgRoles.Finance)).Select(c => c.Text));
+        Assert.Equal(["Sheets & dashboards", "Sheets", "New automation"],
+            PageBreadcrumbs.Build($"sheets/{Guid.NewGuid()}/automations/new", Access(OrgRoles.Employee)).Select(c => c.Text));
         Assert.Equal(["Sheets & dashboards", "Sheets", "Sheet"],
             PageBreadcrumbs.Build($"sheets/{Guid.NewGuid()}?item=1", Access(OrgRoles.Employee)).Select(c => c.Text));
     }
