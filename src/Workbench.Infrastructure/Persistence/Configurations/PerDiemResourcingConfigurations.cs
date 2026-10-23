@@ -113,5 +113,24 @@ internal sealed class ResourceAllocationConfiguration : IEntityTypeConfiguration
         b.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(x => x.WbsElementId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<LaborCategory>().WithMany().HasForeignKey(x => x.LaborCategoryId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => x.AssignmentId);
+        b.HasOne<StaffingAssignment>().WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class StaffingAssignmentConfiguration : IEntityTypeConfiguration<StaffingAssignment>
+{
+    public void Configure(EntityTypeBuilder<StaffingAssignment> b)
+    {
+        b.Property(x => x.TotalHours).Hours();
+        b.Property(x => x.Notes).HasMaxLength(500);
+        b.Property(x => x.CreatedBy).HasMaxLength(320);
+        b.Property(x => x.UpdatedBy).HasMaxLength(320);
+        b.HasIndex(x => new { x.ProjectId, x.EmployeeId });
+        b.HasIndex(x => new { x.EmployeeId, x.To });
+        b.HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<WbsElement>().WithMany().HasForeignKey(x => x.WbsElementId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<LaborCategory>().WithMany().HasForeignKey(x => x.LaborCategoryId).OnDelete(DeleteBehavior.Restrict);
     }
 }

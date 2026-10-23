@@ -65,7 +65,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
                 $"staffing:{plan.ProjectId}:unstaffed:{H(plan.UnstaffedHours)}", TodoCategories.Project,
                 $"{H(plan.UnstaffedHours)} budgeted hours on {plan.ProjectCode} have nobody staffed",
                 string.Join("; ", Describe(plan, unstaffed)) + ".",
-                TodoUrgency.ThisWeek, null, link, "Staff people", Priority: 5);
+                TodoUrgency.ThisWeek, null, link, "Assign people", Priority: 5);
         }
 
         var over = plan.Categories.Where(c => c.Status is StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted).ToList();

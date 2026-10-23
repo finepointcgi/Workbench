@@ -54,6 +54,23 @@ internal static class PerDiemResourcingEndpoints
 
         res.MapGet("/projects/{projectId:guid}/staffing-plan", (Guid projectId, IProjectStaffingService s, CancellationToken ct) => s.GetPlanAsync(projectId, ct));
         res.MapGet("/projects/{projectId:guid}/setup-progress", (Guid projectId, IProjectStaffingService s, CancellationToken ct) => s.GetSetupProgressAsync(projectId, ct));
+        res.MapGet("/projects/{projectId:guid}/assignments", (Guid projectId, IStaffingAssignmentService s, CancellationToken ct) => s.ListAsync(projectId, ct));
+        res.MapPost("/assignments/preview", (SaveAssignmentRequest r, IStaffingAssignmentService s, CancellationToken ct) => s.PreviewAsync(r, ct));
+        res.MapPost("/assignments", (SaveAssignmentRequest r, IStaffingAssignmentService s, CancellationToken ct) => s.SaveAsync(r, ct));
+        res.MapPost("/projects/{projectId:guid}/assignments/bulk", (Guid projectId, SaveAssignmentsRequest r, IStaffingAssignmentService s, CancellationToken ct) =>
+            s.SaveManyAsync(projectId, r.Assignments, ct));
+        res.MapDelete("/assignments/{id:guid}", async (Guid id, IStaffingAssignmentService s, CancellationToken ct) =>
+        {
+            await s.DeleteAsync(id, ct);
+            return Results.NoContent();
+        });
+        res.MapPut("/assignments/{id:guid}/week", (Guid id, SetAssignmentWeekRequest r, IStaffingAssignmentService s, CancellationToken ct) => s.SetWeekAsync(id, r.WeekStart, r.Hours, ct));
+        res.MapPost("/projects/{projectId:guid}/assignments/paste-preview", (Guid projectId, AssignmentPasteRequest r, IStaffingAssignmentService s, CancellationToken ct) =>
+            s.PreviewPasteAsync(projectId, r.Text, ct));
+        res.MapGet("/projects/{projectId:guid}/assignments/copy-preview", (Guid projectId, Guid fromProjectId, IStaffingAssignmentService s, CancellationToken ct) =>
+            s.PreviewCopyTeamAsync(projectId, fromProjectId, ct));
+        res.MapGet("/assignments/mine/hours-left", (DateOnly from, DateOnly to, Guid? excludeTimesheetId, IStaffingAssignmentService s, CancellationToken ct) =>
+            s.ListMyHoursLeftAsync(from, to, excludeTimesheetId, ct));
         res.MapPost("/staffing-check", (StaffingCheckRequest r, IProjectStaffingService s, CancellationToken ct) => s.CheckAsync(r, ct));
         res.MapGet("/projects/{projectId:guid}/staffing-candidates", (Guid projectId, Guid? laborCategoryId, IProjectStaffingService s, CancellationToken ct) =>
             s.ListCandidatesAsync(projectId, laborCategoryId, ct));

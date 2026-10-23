@@ -168,6 +168,44 @@ public sealed class HttpProjectStaffingService(HttpClient http) : IProjectStaffi
             .ReadAsync<List<StaffingCandidateDto>>(cancellationToken);
 }
 
+public sealed class HttpStaffingAssignmentService(HttpClient http) : IStaffingAssignmentService
+{
+    private const string Root = "api/v1/resourcing";
+
+    public async Task<ProjectAssignmentsDto> ListAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/projects/{projectId}/assignments", cancellationToken)).ReadAsync<ProjectAssignmentsDto>(cancellationToken);
+
+    public async Task<AssignmentPreviewDto> PreviewAsync(SaveAssignmentRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/assignments/preview", request, cancellationToken)).ReadAsync<AssignmentPreviewDto>(cancellationToken);
+
+    public async Task<StaffingAssignmentDto> SaveAsync(SaveAssignmentRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/assignments", request, cancellationToken)).ReadAsync<StaffingAssignmentDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<StaffingAssignmentDto>> SaveManyAsync(Guid projectId, IReadOnlyList<SaveAssignmentRequest> requests, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/projects/{projectId}/assignments/bulk", new SaveAssignmentsRequest(requests), cancellationToken))
+            .ReadAsync<List<StaffingAssignmentDto>>(cancellationToken);
+
+    public async Task DeleteAsync(Guid assignmentId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Root}/assignments/{assignmentId}", cancellationToken)).EnsureOkAsync(cancellationToken);
+
+    public async Task<StaffingAssignmentDto> SetWeekAsync(Guid assignmentId, DateOnly weekStart, decimal hours, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Root}/assignments/{assignmentId}/week", new SetAssignmentWeekRequest(weekStart, hours), cancellationToken))
+            .ReadAsync<StaffingAssignmentDto>(cancellationToken);
+
+    public async Task<AssignmentPastePreviewDto> PreviewPasteAsync(Guid projectId, string text, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/projects/{projectId}/assignments/paste-preview", new AssignmentPasteRequest(text), cancellationToken))
+            .ReadAsync<AssignmentPastePreviewDto>(cancellationToken);
+
+    public async Task<AssignmentPastePreviewDto> PreviewCopyTeamAsync(Guid projectId, Guid fromProjectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Query.With($"{Root}/projects/{projectId}/assignments/copy-preview", ("fromProjectId", fromProjectId.ToString())), cancellationToken))
+            .ReadAsync<AssignmentPastePreviewDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<AssignmentHoursLeftDto>> ListMyHoursLeftAsync(DateOnly from, DateOnly to, Guid? excludeTimesheetId = null, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Query.With($"{Root}/assignments/mine/hours-left", ("from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), ("excludeTimesheetId", excludeTimesheetId?.ToString())), cancellationToken))
+            .ReadAsync<List<AssignmentHoursLeftDto>>(cancellationToken);
+}
+
 public static class PerDiemResourcingClientRegistration
 {
     public static IServiceCollection AddPerDiemResourcingClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -178,6 +216,7 @@ public static class PerDiemResourcingClientRegistration
         services.AddHttpClient<IResourcePlanningService, HttpResourcePlanningService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IAllocationForecastService, HttpAllocationForecastService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProjectStaffingService, HttpProjectStaffingService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IStaffingAssignmentService, HttpStaffingAssignmentService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }
