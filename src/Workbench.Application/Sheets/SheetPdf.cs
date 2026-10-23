@@ -31,7 +31,7 @@ internal static class SheetPdf
             {
                 page = new Page();
                 pages.Add(page);
-                y = Header(page, result, widths, pages.Count == 1);
+                y = Header(page, result, kinds, widths, pages.Count == 1);
             }
 
             if (row is null)
@@ -73,7 +73,7 @@ internal static class SheetPdf
     }
 
     /// <summary>Draws the title (first page) and the column header; returns where the rows start.</summary>
-    private static float Header(Page page, ReportResultDto result, IReadOnlyList<float> widths, bool first)
+    private static float Header(Page page, ReportResultDto result, IReadOnlyList<ColumnKind> kinds, IReadOnlyList<float> widths, bool first)
     {
         page.Text(Margin, 44, first ? 16 : 11, true, Fit(result.Title, Width - 2 * Margin, first ? 16 : 11));
         if (result.Subtitle is { } subtitle)
@@ -87,7 +87,14 @@ internal static class SheetPdf
         for (var c = 0; c < result.Columns.Count; c++)
         {
             var label = Fit(result.Columns[c].Label, widths[c] - 2 * Pad);
-            page.Text(x + Pad, y + 11, FontSize, true, label);
+            if (IsNumeric(kinds[c]))
+            {
+                page.TextRight(x + widths[c] - Pad, y + 11, FontSize, true, label);
+            }
+            else
+            {
+                page.Text(x + Pad, y + 11, FontSize, true, label);
+            }
             x += widths[c];
         }
 

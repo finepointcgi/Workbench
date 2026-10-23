@@ -165,17 +165,31 @@ export function init(container, dotNet) {
             container.focus({ preventScroll: true });
         }
     };
+    // Copy and cut run from the key press (every browser sends it) and from the copy/cut event (menus, other shortcuts);
+    // whichever comes first does the work.
+    let copiedAt = 0;
+    const copy = cut => {
+        copiedAt = Date.now();
+        dotNet.invokeMethodAsync(cut ? 'CutSelectionAsync' : 'CopySelection').then(text => {
+            if (text) {
+                writeClipboard(text);
+            }
+        });
+    };
+    const onCopyKey = e => {
+        if (e.target === container && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && ['c', 'x'].includes(e.key.toLowerCase())) {
+            copy(e.key.toLowerCase() === 'x');
+        }
+    };
     const onCopy = e => {
         if (e.target !== container) {
             return;
         }
 
         e.preventDefault();
-        dotNet.invokeMethodAsync(e.type === 'cut' ? 'CutSelectionAsync' : 'CopySelection').then(text => {
-            if (text) {
-                writeClipboard(text);
-            }
-        });
+        if (Date.now() - copiedAt > 500) {
+            copy(e.type === 'cut');
+        }
     };
     const onPaste = e => {
         if (e.target !== container) {
@@ -190,6 +204,7 @@ export function init(container, dotNet) {
     };
 
     container.addEventListener('keydown', onKeyDown);
+    container.addEventListener('keydown', onCopyKey);
     container.addEventListener('pointerdown', onPointerDown);
     container.addEventListener('copy', onCopy);
     container.addEventListener('cut', onCopy);
@@ -197,6 +212,7 @@ export function init(container, dotNet) {
     return {
         dispose() {
             container.removeEventListener('keydown', onKeyDown);
+            container.removeEventListener('keydown', onCopyKey);
             container.removeEventListener('pointerdown', onPointerDown);
             container.removeEventListener('copy', onCopy);
             container.removeEventListener('cut', onCopy);

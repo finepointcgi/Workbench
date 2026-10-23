@@ -35,13 +35,19 @@
                     else if (SheetFilterText.TakesValue(condition.Operator) && field is { Kind: ColumnKind.Dropdown } && field.Options.Count > 0
                              && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
                     {
-                        <MudSelect T="string" MultiSelection="true" SelectedValues="condition.Choices" SelectedValuesChanged="v => condition.Choices = v.ToList()"
-                                   Label="Values" Dense="true" Margin="Margin.Dense" Style="min-width:200px;flex:2" data-testid="filter-choices">
+                        <div class="d-flex flex-wrap align-center" style="gap:4px;min-width:200px;flex:2" role="group" aria-label="Values" data-testid="filter-choices">
                             @foreach (var option in field.Options)
                             {
-                                <MudSelectItem T="string" Value="option">@option</MudSelectItem>
+                                var picked = condition.Choices.Contains(option);
+                                <MudChip T="string" Size="Size.Small" Variant="@(picked ? Variant.Filled : Variant.Outlined)" Color="@(picked ? Color.Primary : Color.Default)"
+                                         Icon="@(picked ? Icons.Material.Filled.Check : null)" OnClick="() => Toggle(condition, option)" aria-pressed="@(picked ? "true" : "false")"
+                                         data-testid="filter-choice">@option</MudChip>
                             }
-                        </MudSelect>
+                            @if (condition.Error is not null)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error">@condition.Error</MudText>
+                            }
+                        </div>
                     }
                     else if (SheetFilterText.TakesValue(condition.Operator))
                     {
@@ -121,6 +127,16 @@
         }
 
         _conditions.Add(condition);
+    }
+
+    private static void Toggle(Condition condition, string option)
+    {
+        if (!condition.Choices.Remove(option))
+        {
+            condition.Choices.Add(option);
+        }
+
+        condition.Error = null;
     }
 
     private void SetField(Condition condition, string key)
