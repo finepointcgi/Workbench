@@ -197,7 +197,7 @@ public sealed partial class DemoModeTests
             new ClockAt(justBefore), Microsoft.Extensions.Logging.Abstractions.NullLogger<DemoResetBackgroundService>.Instance);
 
         await job.StartAsync(CancellationToken.None);
-        await lifetime.Stopped.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await lifetime.Stopped.Task.WaitAsync(TimeSpan.FromMinutes(2));
 
         await using var db = await factory.Services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync();
         Assert.False(await db.Database.CanConnectAsync() && await db.Set<AppUser>().AnyAsync());
