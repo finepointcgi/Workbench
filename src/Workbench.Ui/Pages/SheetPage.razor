@@ -45,15 +45,16 @@ else
         }
         @if (_planService is not null && _sheet.Summary.SchedulingEnabled)
         {
-            @* Excel round trip for PMs who plan in MS Project or Excel. *@
-            <MudMenu Label="Excel" StartIcon="@Icons.Material.Filled.TableView" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined"
-                     Size="Size.Small" AriaLabel="Excel import and export" data-testid="plan-excel-menu">
+            @* Excel and MS Project (XML) round trips for PMs who plan in either. *@
+            <MudMenu Label="Import / export" StartIcon="@Icons.Material.Filled.TableView" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined"
+                     Size="Size.Small" AriaLabel="Import and export the plan (Excel, MS Project)" data-testid="plan-excel-menu">
                 <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportPlanAsync" data-testid="plan-export">Export plan to Excel</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportMsProjectAsync" data-testid="plan-export-msproject">Export plan to MS Project (.xml)</MudMenuItem>
                 @if (_access.CanEdit)
                 {
-                    <MudMenuItem Icon="@Icons.Material.Filled.Upload" OnClick="ImportPlanAsync" data-testid="plan-import">Import plan from Excel…</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Upload" OnClick="ImportPlanAsync" data-testid="plan-import">Import plan from Excel or MS Project…</MudMenuItem>
                 }
-                <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="DownloadTemplateAsync" data-testid="plan-template">Download blank template</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="DownloadTemplateAsync" data-testid="plan-template">Download blank Excel template</MudMenuItem>
             </MudMenu>
         }
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
@@ -63,6 +64,9 @@ else
     {
         <MudText Class="mud-text-secondary mb-4">@_sheet.Summary.Description</MudText>
     }
+
+    @* Tasks whose date constraint and links disagree, on every view of the plan. *@
+    <Workbench.Ui.Gantt.PlanConflictsBanner SheetId="SheetId" Plan="_plan" CanEdit="_access.CanEdit" Changed="LoadAsync" />
 
     @* Views hide edit affordances from Viewers and Commenters; the server enforces the same rules. *@
     <CascadingValue Value="_access">
@@ -164,6 +168,14 @@ else
         }
     }
 
+    private async Task ExportMsProjectAsync()
+    {
+        if (_planService is { } plans)
+        {
+            await DownloadAsync(() => plans.ExportMsProjectAsync(SheetId));
+        }
+    }
+
     private async Task DownloadTemplateAsync()
     {
         if (_planService is { } plans)
@@ -189,7 +201,7 @@ else
     private async Task ImportPlanAsync()
     {
         var parameters = new DialogParameters<Workbench.Ui.Plan.PlanImportDialog> { { d => d.SheetId, SheetId } };
-        var dialog = await DialogService.ShowAsync<Workbench.Ui.Plan.PlanImportDialog>("Import plan from Excel", parameters,
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Plan.PlanImportDialog>("Import plan from Excel or MS Project", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
         if (await dialog.Result is { Canceled: false })
         {

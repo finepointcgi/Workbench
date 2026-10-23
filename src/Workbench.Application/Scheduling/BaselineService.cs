@@ -58,6 +58,69 @@ public sealed class BaselineService(IWorkbenchDbContextFactory dbFactory, TimePr
         return new BaselineDetail(new BaselineSummary(baseline.Id, baseline.Name, baseline.CapturedAtUtc, entries.Count), entries);
     }
 
+    public async Task<BaselineComparison> CompareAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default)
+    {
+        var detail = await GetAsync(sheetId, baselineId, cancellationToken);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var items = await db.Items.AsNoTracking().Where(i => i.SheetId == sheetId).ToListAsync(cancellationToken);
+        var calendar = await PlanReflow.CalendarAsync(db, sheetId, cancellationToken);
+        var outline = new PlanOutline(items);
+        var entries = detail.Entries.ToDictionary(e => e.ItemId);
+        var spans = Span(outline, id => entries.TryGetValue(id, out var e) ? (e.Start, e.Finish) : (null, null));
+
+        var rows = outline.Ordered.Select(item =>
+        {
+            var (bs, bf) = spans[item.Id];
+            DateOnly? start = item.Start ?? item.Finish, finish = item.Finish ?? item.Start;
+            var milestone = item.IsMilestone && !outline.IsSummary(item.Id);
+            int? duration = start is { } s && finish is { } f ? calendar.Duration(s, f, milestone) : null;
+            int? baselineDuration = bs is { } s0 && bf is { } f0 ? calendar.Duration(s0, f0, milestone && s0 == f0) : null;
+            return new BaselineVarianceDto(item.Id, start, finish, bs, bf,
+                start is { } a && bs is { } b ? calendar.Between(b, a) : null,
+                finish is { } c && bf is { } d ? calendar.Between(d, c) : null,
+                duration - baselineDuration);
+        }).ToList();
+
+        var planFinish = rows.Select(r => r.Finish).OfType<DateOnly>().DefaultIfEmpty().Max();
+        var baselineFinish = rows.Select(r => r.BaselineFinish).OfType<DateOnly>().DefaultIfEmpty().Max();
+        int? finishVariance = planFinish == default || baselineFinish == default ? null : calendar.Between(baselineFinish, planFinish);
+        return new BaselineComparison(detail.Summary, rows, finishVariance);
+    }
+
+    public async Task DeleteAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var baseline = await db.Set<Baseline>().Include(b => b.Entries)
+            .FirstOrDefaultAsync(b => b.Id == baselineId && b.SheetId == sheetId, cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Baseline", baselineId);
+        db.Set<BaselineEntry>().RemoveRange(baseline.Entries);
+        db.Set<Baseline>().Remove(baseline);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Baseline dates per item in the outline: a task's own, or for a summary the span of its subtasks' (as the Gantt draws
+    /// them), falling back to its own when no subtask was in the baseline.
+    /// </summary>
+    public static Dictionary<Guid, (DateOnly? Start, DateOnly? Finish)> Span(PlanOutline outline, Func<Guid, (DateOnly? Start, DateOnly? Finish)> dates)
+    {
+        var result = new Dictionary<Guid, (DateOnly? Start, DateOnly? Finish)>();
+        foreach (var item in outline.Ordered.Reverse())
+        {
+            var spans = outline.ChildrenOf(item.Id).Select(k => result[k.Id]).Where(s => s.Start is not null).ToList();
+            if (spans.Count > 0)
+            {
+                result[item.Id] = (spans.Min(s => s.Start), spans.Max(s => s.Finish));
+                continue;
+            }
+
+            var (start, finish) = dates(item.Id);
+            result[item.Id] = (start ?? finish, finish ?? start);
+        }
+
+        return result;
+    }
+
     private static async Task EnsureSheetAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
     {
         if (!await db.Sheets.AnyAsync(s => s.Id == sheetId, cancellationToken))

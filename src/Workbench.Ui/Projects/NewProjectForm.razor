@@ -58,14 +58,14 @@
         else if (_from == ProjectStartFrom.ImportExcel)
         {
             <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-                <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".xlsx,.xlsm,.csv">
+                <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".xlsx,.xlsm,.csv,.xml">
                     <CustomContent>
                         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync"
-                                   data-testid="start-import-choose">Choose an Excel file</MudButton>
+                                   data-testid="start-import-choose">Choose an Excel or MS Project file</MudButton>
                     </CustomContent>
                     <SelectedTemplate />
                 </MudFileUpload>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">@(_import?.FileName ?? "Any plan exported from Workbench, or the blank template.")</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@(_import?.FileName ?? "A plan exported from Workbench, the blank template, or MS Project saved as XML (.xml; .mpp can't be read).")</MudText>
             </MudStack>
             @if (_check is { } check)
             {

@@ -1,0 +1,196 @@
+@* The plan's working calendar: the company calendar (Monday to Friday less company holidays) or the plan's own work week,
+   days off and working days. Durations stay the same in working days, so finish dates move to fit. *@
+@using System.Globalization
+@using Workbench.Contracts
+@using Workbench.Contracts.Scheduling
+@inject IPlanScheduleService Plans
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_calendar is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Loading the calendar" />
+        }
+        else
+        {
+            <MudText Class="mb-3">
+                Durations count working days on this calendar. Changing it keeps every task's duration and moves finish dates to fit,
+                and the critical path counts the same days.
+            </MudText>
+            <MudRadioGroup T="bool" @bind-Value="_custom" Disabled="!CanEdit">
+                <MudRadio Value="false" Color="Color.Primary" data-testid="calendar-company">Use the company calendar (Monday to Friday, less company holidays)</MudRadio>
+                <MudRadio Value="true" Color="Color.Primary" data-testid="calendar-custom">Give this plan its own calendar</MudRadio>
+            </MudRadioGroup>
+
+            @if (_custom)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-3" id="workweek-label">Working days of the week</MudText>
+                <div role="group" aria-labelledby="workweek-label" class="d-flex flex-wrap gap-1">
+                    @foreach (var day in WeekOrder)
+                    {
+                        <MudCheckBox T="bool" Value="_week.Contains(day)" ValueChanged="on => Toggle(day, on)" Label="@CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedDayName(day)"
+                                     Disabled="!CanEdit" Dense="true" />
+                    }
+                </div>
+                <MudSwitch T="bool" @bind-Value="_useCompanyHolidays" Color="Color.Primary" Disabled="!CanEdit" Class="mt-2"
+                           Label="Company holidays are days off on this plan too" />
+
+                <MudText Typo="Typo.subtitle2" Class="mt-3">This plan's exceptions</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Days off just for this plan (a site shutdown) or extra working days (a working Saturday).</MudText>
+                @if (_exceptions.Count > 0)
+                {
+                    <MudSimpleTable Dense="true" Class="mb-2" data-testid="calendar-exceptions">
+                        <thead><tr><th scope="col">Date</th><th scope="col">Name</th><th scope="col">Kind</th><th scope="col"><span class="wb-sr-only">Remove</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var day in _exceptions.OrderBy(e => e.Date))
+                            {
+                                <tr>
+                                    <td>@day.Date.ToString("ddd MMM d, yyyy", CultureInfo.InvariantCulture)</td>
+                                    <td>@day.Name</td>
+                                    <td>@(day.IsWorking ? "Working day" : "Day off")</td>
+                                    <td>
+                                        @if (CanEdit)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _exceptions.Remove(day)"
+                                                           aria-label="@($"Remove {day.Name} on {day.Date:MMM d}")" />
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                @if (CanEdit)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Spacing="2">
+                        <MudDatePicker Editable="true" Placeholder="MM/DD/YYYY" DateFormat="MM/dd/yyyy" @bind-Date="_newDate" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:170px" data-testid="calendar-new-date" />
+                        <MudTextField @bind-Value="_newName" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="Site shutdown" Style="max-width:220px" data-testid="calendar-new-name" />
+                        <MudSelect T="bool" @bind-Value="_newWorking" Label="Kind" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:150px">
+                            <MudSelectItem Value="false">Day off</MudSelectItem>
+                            <MudSelectItem Value="true">Working day</MudSelectItem>
+                        </MudSelect>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddException" data-testid="calendar-add"
+                                   Disabled="@(_newDate is null || string.IsNullOrWhiteSpace(_newName))">Add</MudButton>
+                    </MudStack>
+                }
+            }
+
+            <MudExpansionPanels Class="mt-4" Elevation="0" Outlined="true">
+                <MudExpansionPanel Text="@($"Company holidays ({_calendar.CompanyHolidays.Count})")">
+                    @if (_calendar.CompanyHolidays.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2">No company holidays are set up. Finance adds them on the Leave page (Holidays tab); timesheets use them too.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true">
+                            <tbody>
+                                @foreach (var holiday in _calendar.CompanyHolidays)
+                                {
+                                    <tr><td>@holiday.Date.ToString("ddd MMM d, yyyy", CultureInfo.InvariantCulture)</td><td>@holiday.Name</td></tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">@(CanEdit ? "Cancel" : "Close")</MudButton>
+        @if (CanEdit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || _calendar is null || (_custom && _week.Count == 0))"
+                       data-testid="calendar-save">Save calendar</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly DayOfWeek[] WeekOrder =
+        [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter]
+    public bool CanEdit { get; set; }
+
+    private PlanCalendarDto? _calendar;
+    private bool _custom;
+    private HashSet<DayOfWeek> _week = [];
+    private bool _useCompanyHolidays = true;
+    private List<PlanCalendarDayDto> _exceptions = [];
+    private DateTime? _newDate;
+    private string _newName = "";
+    private bool _newWorking;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _calendar = await Plans.GetCalendarAsync(SheetId);
+            _custom = _calendar.IsCustom;
+            _week = _calendar.WorkWeek.ToHashSet();
+            _useCompanyHolidays = _calendar.UseCompanyHolidays;
+            _exceptions = _calendar.Exceptions.ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            MudDialog.Cancel();
+        }
+    }
+
+    private void Toggle(DayOfWeek day, bool on)
+    {
+        if (on)
+        {
+            _week.Add(day);
+        }
+        else
+        {
+            _week.Remove(day);
+        }
+    }
+
+    private void AddException()
+    {
+        if (_newDate is not { } date || string.IsNullOrWhiteSpace(_newName))
+        {
+            return;
+        }
+
+        var day = DateOnly.FromDateTime(date);
+        _exceptions.RemoveAll(e => e.Date == day);
+        _exceptions.Add(new PlanCalendarDayDto(day, _newName.Trim(), _newWorking));
+        _newDate = null;
+        _newName = "";
+        _newWorking = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var request = _custom ? new SetPlanCalendarRequest(WeekOrder.Where(_week.Contains).ToList(), _useCompanyHolidays, _exceptions) : null;
+            await Plans.SetCalendarAsync(SheetId, request);
+            Snackbar.Add(_custom ? "Saved the plan's calendar. Finish dates moved to fit it." : "The plan uses the company calendar.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

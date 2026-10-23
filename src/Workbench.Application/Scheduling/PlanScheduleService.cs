@@ -9,6 +9,7 @@ using Workbench.Contracts.Sheets;
 using Workbench.Contracts.Tasks;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
+using Workbench.Domain.Leave;
 using Workbench.Domain.Scheduling;
 using Workbench.Domain.Tasks;
 
@@ -44,9 +45,189 @@ public sealed class PlanScheduleService(
             int? duration = item.Start is { } s && item.Finish is { } f ? state.Calendar.Duration(s, f, item.IsMilestone && !summary) : null;
             var percent = percentKey is null ? null : ScheduleEngine.Percent(item.Values.GetValueOrDefault(percentKey));
             return new PlanTaskDto(item.Id, outline.TaskNumber[item.Id], outline.OutlineNumber[item.Id], outline.Level[item.Id], summary,
-                duration, predecessors.GetValueOrDefault(item.Id) ?? "", percent);
+                duration, predecessors.GetValueOrDefault(item.Id) ?? "", percent, state.Constraints.GetValueOrDefault(item.Id));
         }).ToList();
-        return new PlanScheduleDto(sheetId, list, state.Calendar.Holidays.Order().ToList());
+        var conflicts = state.Sheet.SchedulingEnabled ? ScheduleEngine.Conflicts(state.Items, state.Links, state.Calendar, state.Constraints) : [];
+        return new PlanScheduleDto(sheetId, list, state.Calendar.Holidays.Order().ToList(), conflicts,
+            Enum.GetValues<DayOfWeek>().Where(d => (state.Calendar.WorkDays & (1 << (int)d)) != 0).ToList(),
+            state.Calendar.ExtraWorkingDays.Order().ToList());
+    }
+
+    public async Task<IReadOnlyList<PlanConflictDto>> SetConstraintAsync(Guid sheetId, Guid itemId, SetPlanConstraintRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!Enum.IsDefined(request.Kind))
+        {
+            throw new ArgumentException($"Unknown constraint '{request.Kind}'.");
+        }
+
+        if (request.Kind == PlanConstraintKind.AsLateAsPossible)
+        {
+            throw new ArgumentException("As Late As Possible isn't supported. Use Finish No Later Than for a deadline.");
+        }
+
+        var clear = request.Kind == PlanConstraintKind.AsSoonAsPossible;
+        if (!clear && request.Date is null)
+        {
+            throw new ArgumentException($"{PlanConstraints.Label(request.Kind)} needs a date.");
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var state = await LoadAsync(db, sheetId, cancellationToken, tracked: true);
+        var item = Find(state, itemId);
+        if (!clear && state.Items.Any(i => i.ParentId == itemId))
+        {
+            throw new ArgumentException($"\"{item.Title}\" is a summary task: its dates come from its subtasks, so constrain a subtask instead.");
+        }
+
+        var row = await db.Set<TaskConstraint>().FirstOrDefaultAsync(c => c.SheetId == sheetId && c.ItemId == itemId, cancellationToken);
+        string summary;
+        if (clear)
+        {
+            if (row is not null)
+            {
+                db.Set<TaskConstraint>().Remove(row);
+            }
+
+            state.Constraints.Remove(itemId);
+            summary = $"Removed the date constraint on \"{item.Title}\"";
+        }
+        else
+        {
+            var constraint = new PlanConstraintDto(request.Kind, request.Date!.Value);
+            if (row is null)
+            {
+                db.Set<TaskConstraint>().Add(new TaskConstraint { SheetId = sheetId, ItemId = itemId, Type = (TaskConstraintType)(int)request.Kind, Date = constraint.Date });
+            }
+            else
+            {
+                row.Type = (TaskConstraintType)(int)request.Kind;
+                row.Date = constraint.Date;
+            }
+
+            state.Constraints[itemId] = constraint;
+            summary = $"Set \"{item.Title}\" to {constraint.Label} {constraint.Date.ToString("MM/dd/yyyy", CultureInfo.InvariantCulture)}";
+        }
+
+        await SaveAsync(db, state, cancellationToken);
+        await RecordAsync(sheetId, itemId, ActivityKinds.ItemUpdated, summary, SheetChangeKind.ItemUpdated);
+        return state.Sheet.SchedulingEnabled ? ScheduleEngine.Conflicts(state.Items, state.Links, state.Calendar, state.Constraints) : [];
+    }
+
+    public async Task<PlanCalendarDto> GetCalendarAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        await EnsureSheetAsync(db, sheetId, cancellationToken);
+        return await CalendarDtoAsync(db, sheetId, cancellationToken);
+    }
+
+    public async Task<PlanCalendarDto> SetCalendarAsync(Guid sheetId, SetPlanCalendarRequest? request, CancellationToken cancellationToken = default)
+    {
+        var mask = 0;
+        List<PlanCalendarDayDto> exceptions = [];
+        if (request is not null)
+        {
+            foreach (var day in request.WorkWeek ?? [])
+            {
+                if (!Enum.IsDefined(day))
+                {
+                    throw new ArgumentException($"Unknown day '{day}'.");
+                }
+
+                mask |= 1 << (int)day;
+            }
+
+            if (mask == 0)
+            {
+                throw new ArgumentException("Choose at least one working day of the week.");
+            }
+
+            exceptions = (request.Exceptions ?? []).ToList();
+            var duplicate = exceptions.GroupBy(e => e.Date).FirstOrDefault(g => g.Count() > 1);
+            if (duplicate is not null)
+            {
+                throw new ArgumentException($"{duplicate.Key:MM/dd/yyyy} is listed twice.");
+            }
+
+            if (exceptions.FirstOrDefault(e => string.IsNullOrWhiteSpace(e.Name) || e.Name.Trim().Length > 200) is { } bad)
+            {
+                throw new ArgumentException($"Give {bad.Date:MM/dd/yyyy} a name (up to 200 characters), like \"Site shutdown\".");
+            }
+
+            if (exceptions.Count > 1000)
+            {
+                throw new ArgumentException("A calendar has at most 1,000 exception days.");
+            }
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var state = await LoadAsync(db, sheetId, cancellationToken, tracked: true);
+
+        // Durations stay what they are in working days on the old calendar; finish dates move to fit the new one.
+        var outline = new PlanOutline(state.Items);
+        var durations = state.Items
+            .Where(i => !outline.IsSummary(i.Id) && i.Start is not null && i.Finish is not null)
+            .ToDictionary(i => i.Id, i => state.Calendar.Duration(i.Start!.Value, i.Finish!.Value, i.IsMilestone));
+
+        var existing = await db.Set<PlanCalendar>().Include(c => c.Exceptions).FirstOrDefaultAsync(c => c.SheetId == sheetId, cancellationToken);
+        if (existing is not null)
+        {
+            db.Set<PlanCalendarException>().RemoveRange(existing.Exceptions);
+            db.Set<PlanCalendar>().Remove(existing);
+        }
+
+        if (request is not null)
+        {
+            var calendar = new PlanCalendar { SheetId = sheetId, WorkDays = mask, UseCompanyHolidays = request.UseCompanyHolidays };
+            calendar.Exceptions.AddRange(exceptions.Select(e => new PlanCalendarException
+            {
+                CalendarId = calendar.Id, Date = e.Date, Name = e.Name.Trim(), IsWorking = e.IsWorking,
+            }));
+            db.Set<PlanCalendar>().Add(calendar);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        var updated = await PlanReflow.CalendarAsync(db, sheetId, cancellationToken);
+        if (state.Sheet.SchedulingEnabled)
+        {
+            foreach (var item in state.Items.Where(i => durations.ContainsKey(i.Id)))
+            {
+                var start = updated.OnOrAfter(item.Start!.Value);
+                var finish = item.IsMilestone ? start : updated.Finish(start, durations[item.Id]);
+                if (item.Start != start || item.Finish != finish)
+                {
+                    item.Start = start;
+                    item.Finish = finish;
+                }
+            }
+        }
+
+        await SaveAsync(db, state with { Calendar = updated }, cancellationToken);
+        await RecordAsync(sheetId, null, ActivityKinds.ItemUpdated,
+            request is null ? "The plan now uses the company calendar" : "Changed the plan's working calendar", SheetChangeKind.ItemUpdated);
+        return await CalendarDtoAsync(db, sheetId, cancellationToken);
+    }
+
+    private static async Task<PlanCalendarDto> CalendarDtoAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
+    {
+        var company = (await db.Set<Holiday>().AsNoTracking().ToListAsync(cancellationToken))
+            .OrderBy(h => h.Date).Select(h => new PlanCalendarDayDto(h.Date, h.Name)).ToList();
+        var own = await db.Set<PlanCalendar>().AsNoTracking().Include(c => c.Exceptions).FirstOrDefaultAsync(c => c.SheetId == sheetId, cancellationToken);
+        return own is null
+            ? new PlanCalendarDto(false, PlanCalendarDto.MondayToFriday, true, [], company)
+            : new PlanCalendarDto(true,
+                Enum.GetValues<DayOfWeek>().Where(d => (own.WorkDays & (1 << (int)d)) != 0).ToList(),
+                own.UseCompanyHolidays,
+                own.Exceptions.OrderBy(e => e.Date).Select(e => new PlanCalendarDayDto(e.Date, e.Name, e.IsWorking)).ToList(),
+                company);
+    }
+
+    private static async Task EnsureSheetAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
+    {
+        if (!await db.Sheets.AnyAsync(s => s.Id == sheetId, cancellationToken))
+        {
+            throw WorkbenchNotFoundException.For("Sheet", sheetId);
+        }
     }
 
     public async Task IndentAsync(Guid sheetId, Guid itemId, CancellationToken cancellationToken = default)
@@ -161,9 +342,70 @@ public sealed class PlanScheduleService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var state = await LoadAsync(db, sheetId, cancellationToken);
+        var (rows, _) = await RowsAsync(db, state, cancellationToken);
+        return new PlanFile($"{FileSafe(state.Sheet.Name)} plan.xlsx", PlanWorkbook.ContentType, PlanWorkbook.Write(state.Sheet.Name, rows));
+    }
+
+    public async Task<PlanFile> ExportMsProjectAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var state = await LoadAsync(db, sheetId, cancellationToken);
+        var (rows, emails) = await RowsAsync(db, state, cancellationToken);
+        var baselines = new List<MsProjectBaseline>();
+        foreach (var baseline in await db.Set<Baseline>().AsNoTracking().Include(b => b.Entries).Where(b => b.SheetId == sheetId)
+                     .OrderByDescending(b => b.CapturedAtUtc).Take(11).ToListAsync(cancellationToken))
+        {
+            baselines.Add(new MsProjectBaseline(baseline.Name, baseline.Entries.GroupBy(e => e.ItemId).ToDictionary(g => g.Key, g => (g.First().Start, g.First().Finish))));
+        }
+
+        var content = MsProjectXml.Write(state.Sheet.Name, rows, state.Calendar, emails, baselines, clock.GetUtcNow().UtcDateTime);
+        return new PlanFile($"{FileSafe(state.Sheet.Name)} plan.xml", MsProjectXml.ContentType, content);
+    }
+
+    public async Task<PlanFile> ExportGanttPdfAsync(Guid sheetId, GanttPdfRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.From is { } from && request.To is { } to && to < from)
+        {
+            throw new ArgumentException("The end of the date range is before its start.");
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var state = await LoadAsync(db, sheetId, cancellationToken);
+        var (rows, _) = await RowsAsync(db, state, cancellationToken);
+
+        // The critical path as the Gantt shows it: dated tasks without subtasks.
+        var outline = new PlanOutline(state.Items);
+        var tasks = state.Items.Where(i => !outline.IsSummary(i.Id) && (i.Start ?? i.Finish) is not null)
+            .Select(i => new ScheduleTask(i.Id, (i.Start ?? i.Finish)!.Value, (i.Finish ?? i.Start)!.Value, i.IsMilestone)).ToList();
+        var analysis = CriticalPathCalculator.Analyze(tasks,
+            state.Links.Select(l => new ScheduleLink(l.PredecessorId, l.SuccessorId, l.Type, l.LagDays)).ToList(), state.Calendar, state.Constraints);
+
+        Dictionary<Guid, (DateOnly? Start, DateOnly? Finish)>? baseline = null;
+        string? baselineName = null;
+        if (request.BaselineId is { } baselineId)
+        {
+            var saved = await db.Set<Baseline>().AsNoTracking().Include(b => b.Entries)
+                .FirstOrDefaultAsync(b => b.Id == baselineId && b.SheetId == sheetId, cancellationToken)
+                ?? throw WorkbenchNotFoundException.For("Baseline", baselineId);
+            baselineName = saved.Name;
+            var entries = saved.Entries.GroupBy(e => e.ItemId).ToDictionary(g => g.Key, g => g.First());
+            baseline = BaselineService.Span(outline, id => entries.TryGetValue(id, out var e) ? (e.Start, e.Finish) : (null, null));
+        }
+
+        var conflicts = state.Sheet.SchedulingEnabled ? ScheduleEngine.Conflicts(state.Items, state.Links, state.Calendar, state.Constraints) : [];
+        var chart = new GanttPdfChart(
+            state.Sheet.Name, rows, analysis.CriticalPath.ToHashSet(), conflicts.Select(c => c.ItemId).ToHashSet(), baseline, baselineName,
+            state.Calendar, DateOnly.FromDateTime(clock.GetLocalNow().DateTime));
+        return new PlanFile($"{FileSafe(state.Sheet.Name)} Gantt.pdf", GanttPdf.ContentType, GanttPdf.Write(chart, request));
+    }
+
+    /// <summary>The plan as export rows in outline order, and the email of each person named (for MS Project's resources).</summary>
+    private static async Task<(List<PlanSheetRow> Rows, Dictionary<string, string?> Emails)> RowsAsync(IWorkbenchDbContext db, State state, CancellationToken cancellationToken)
+    {
         var outline = new PlanOutline(state.Items);
         var predecessors = ScheduleEngine.PredecessorText(outline, state.Links);
-        var assignees = await AssigneesAsync(db, sheetId, cancellationToken);
+        var assignees = await AssigneesAsync(db, state.Sheet.Id, cancellationToken);
         var emails = assignees.Values.SelectMany(a => a).Distinct().ToList();
         var names = await db.Set<AppUser>().AsNoTracking().Where(u => emails.Contains(u.Email))
             .ToDictionaryAsync(u => u.Email, u => u.DisplayName, cancellationToken);
@@ -181,10 +423,16 @@ public sealed class PlanScheduleService(
                 percentKey is null ? null : ScheduleEngine.Percent(item.Values.GetValueOrDefault(percentKey)),
                 people.Count == 0 ? null : string.Join("; ", people.Select(e => names.GetValueOrDefault(e) ?? e)),
                 notesKey is null ? null : item.Values.GetValueOrDefault(notesKey),
-                item.Id, summary);
+                item.Id, summary, state.Constraints.GetValueOrDefault(item.Id));
         }).ToList();
 
-        return new PlanFile($"{FileSafe(state.Sheet.Name)} plan.xlsx", PlanWorkbook.ContentType, PlanWorkbook.Write(state.Sheet.Name, rows));
+        var byName = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var email in emails)
+        {
+            byName.TryAdd(names.GetValueOrDefault(email) ?? email, email);
+        }
+
+        return (rows, byName);
     }
 
     public Task<PlanFile> TemplateAsync(CancellationToken cancellationToken = default) =>
@@ -209,7 +457,7 @@ public sealed class PlanScheduleService(
                 throw new ArgumentException($"The file has {errors} error{(errors == 1 ? "" : "s")}. Fix {(errors == 1 ? "it" : "them")} and import again; nothing was changed.");
             }
 
-            await ApplyAsync(db, sheetId, import, snapshot, cancellationToken);
+            await ApplyAsync(db, sheetId, import, snapshot, MsProjectXml.IsXml(request.FileName), cancellationToken);
         }
 
         // Removed tasks go through the item service, which also removes their comments and attachments. Only the topmost:
@@ -246,15 +494,25 @@ public sealed class PlanScheduleService(
         }
 
         var state = await LoadAsync(db, sheetId, cancellationToken);
-        var rows = PlanWorkbook.Read(request.FileName ?? "plan.xlsx", request.Content, out var hasIdColumn);
+        var fileName = request.FileName ?? "plan.xlsx";
+        var xml = MsProjectXml.IsXml(fileName);
+        var hasIdColumn = true;
+        var rows = xml ? MsProjectXml.Read(fileName, request.Content) : PlanWorkbook.Read(fileName, request.Content, out hasIdColumn);
+        if (xml)
+        {
+            // MS Project gives every task a GUID; only those Workbench wrote (an exported plan coming back) match tasks here.
+            var known = state.Items.Select(i => i.Id).ToHashSet();
+            rows = rows.Select(r => r.Task.UniqueId is { } uid && !known.Contains(uid) ? r with { Task = r.Task with { UniqueId = null } } : r).ToList();
+        }
+
         var users = await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive)
             .Select(u => new PlanUser(u.Email, u.DisplayName)).ToListAsync(cancellationToken);
         var snapshot = new PlanSnapshot(state.Items, state.Links, state.Calendar, state.PercentColumn, state.NotesColumn,
-            await AssigneesAsync(db, sheetId, cancellationToken), users, state.Sheet.SchedulingEnabled);
-        return (PlanImport.Build(request.FileName ?? "plan.xlsx", rows, hasIdColumn, snapshot), snapshot);
+            await AssigneesAsync(db, sheetId, cancellationToken), users, state.Sheet.SchedulingEnabled, state.Constraints);
+        return (PlanImport.Build(fileName, rows, hasIdColumn, snapshot, hasConstraints: xml, unknownResourcesAreWarnings: xml), snapshot);
     }
 
-    private async Task ApplyAsync(IWorkbenchDbContext db, Guid sheetId, PlanImport import, PlanSnapshot snapshot, CancellationToken cancellationToken)
+    private async Task ApplyAsync(IWorkbenchDbContext db, Guid sheetId, PlanImport import, PlanSnapshot snapshot, bool setsConstraints, CancellationToken cancellationToken)
     {
         var sheet = await db.Sheets.FirstAsync(s => s.Id == sheetId, cancellationToken);
         var existing = await db.Items.Where(i => i.SheetId == sheetId).ToDictionaryAsync(i => i.Id, cancellationToken);
@@ -324,6 +582,31 @@ public sealed class PlanScheduleService(
         var rows = await db.Set<Dependency>().Where(d => d.SheetId == sheetId).ToListAsync(cancellationToken);
         ReplaceLinks(db, sheetId, rows, import.Links);
 
+        // Constraints: an MS Project file sets every task's (none is As Soon As Possible); Excel files leave them alone.
+        if (setsConstraints)
+        {
+            var current = await db.Set<TaskConstraint>().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken);
+            var wanted = import.Tasks.Where(t => t.Constraint is not null).ToDictionary(t => t.ItemId, t => t.Constraint!);
+            foreach (var row in current)
+            {
+                if (!wanted.TryGetValue(row.ItemId, out var c))
+                {
+                    db.Set<TaskConstraint>().Remove(row);
+                }
+                else
+                {
+                    row.Type = (TaskConstraintType)(int)c.Kind;
+                    row.Date = c.Date;
+                    wanted.Remove(row.ItemId);
+                }
+            }
+
+            db.Set<TaskConstraint>().AddRange(wanted.Select(kv => new TaskConstraint
+            {
+                SheetId = sheetId, ItemId = kv.Key, Type = (TaskConstraintType)(int)kv.Value.Kind, Date = kv.Value.Date,
+            }));
+        }
+
         // Without the task service (tests, tools), assignments are written directly, without notifications.
         if (tasks is null)
         {
@@ -381,7 +664,8 @@ public sealed class PlanScheduleService(
 
     /// <summary><see cref="PercentColumn"/> is the % column the caller may read; the rollup uses <see cref="RollupPercentId"/>, restricted or not.</summary>
     private sealed record State(
-        Sheet Sheet, List<Item> Items, List<PlanLink> Links, WorkCalendar Calendar, Column? PercentColumn, Column? NotesColumn, Guid? RollupPercentId);
+        Sheet Sheet, List<Item> Items, List<PlanLink> Links, WorkCalendar Calendar, Column? PercentColumn, Column? NotesColumn, Guid? RollupPercentId,
+        Dictionary<Guid, PlanConstraintDto> Constraints);
 
     private static async Task<State> LoadAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken, bool tracked = false)
     {
@@ -393,7 +677,7 @@ public sealed class PlanScheduleService(
         var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId && !c.IsRestricted && c.Formula == null).ToListAsync(cancellationToken);
         var percent = TaskRules.PercentColumn(columns);
         var notes = columns.FirstOrDefault(c => c.Type == ColumnType.Text && string.Equals(c.Name, NotesColumnName, StringComparison.OrdinalIgnoreCase));
-        return new State(sheet, plan.Items, plan.Links, plan.Calendar, percent, notes, plan.PercentColumn?.Id);
+        return new State(sheet, plan.Items, plan.Links, plan.Calendar, percent, notes, plan.PercentColumn?.Id, plan.Constraints);
     }
 
     private static async Task<Dictionary<Guid, IReadOnlyList<string>>> AssigneesAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken) =>
@@ -409,7 +693,7 @@ public sealed class PlanScheduleService(
     {
         if (state.Sheet.SchedulingEnabled)
         {
-            ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.RollupPercentId);
+            ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.RollupPercentId, state.Constraints);
         }
 
         await PlanReflow.NumberAsync(db, await PlanReflow.ProjectForAsync(db, state.Sheet.Id, cancellationToken), state.Items, cancellationToken);

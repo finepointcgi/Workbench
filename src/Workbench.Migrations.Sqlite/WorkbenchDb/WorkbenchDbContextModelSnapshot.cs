@@ -19980,6 +19980,87 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("Dependency");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendar", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("UseCompanyHolidays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("WorkDays")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId")
+                        .IsUnique();
+
+                    b.ToTable("PlanCalendar");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendarException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CalendarId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsWorking")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("PlanCalendarException");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.TaskConstraint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId")
+                        .IsUnique();
+
+                    b.HasIndex("SheetId");
+
+                    b.ToTable("TaskConstraint");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Security.AccessReview", b =>
                 {
                     b.Property<Guid>("Id")
@@ -25472,6 +25553,39 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendar", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendarException", b =>
+                {
+                    b.HasOne("Workbench.Domain.Scheduling.PlanCalendar", null)
+                        .WithMany("Exceptions")
+                        .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.TaskConstraint", b =>
+                {
+                    b.HasOne("Workbench.Domain.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Security.AccessReviewItem", b =>
                 {
                     b.HasOne("Workbench.Domain.Security.AccessReview", null)
@@ -25908,6 +26022,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
             modelBuilder.Entity("Workbench.Domain.Scheduling.Baseline", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Scheduling.PlanCalendar", b =>
+                {
+                    b.Navigation("Exceptions");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Security.AccessReview", b =>

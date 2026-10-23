@@ -58,4 +58,36 @@ public sealed class HttpPlanScheduleService(HttpClient http) : IPlanScheduleServ
         using var response = await http.PostAsJsonAsync($"api/v1/sheets/{sheetId}/plan/import", request, cancellationToken);
         return await response.ReadAsync<PlanImportPreview>(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<PlanConflictDto>> SetConstraintAsync(Guid sheetId, Guid itemId, SetPlanConstraintRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.PutAsJsonAsync($"api/v1/sheets/{sheetId}/plan/items/{itemId}/constraint", request, cancellationToken);
+        return await response.ReadAsync<List<PlanConflictDto>>(cancellationToken);
+    }
+
+    public async Task<PlanCalendarDto> GetCalendarAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.GetAsync($"api/v1/sheets/{sheetId}/plan/calendar", cancellationToken);
+        return await response.ReadAsync<PlanCalendarDto>(cancellationToken);
+    }
+
+    public async Task<PlanCalendarDto> SetCalendarAsync(Guid sheetId, SetPlanCalendarRequest? request, CancellationToken cancellationToken = default)
+    {
+        using var response = request is null
+            ? await http.DeleteAsync($"api/v1/sheets/{sheetId}/plan/calendar", cancellationToken)
+            : await http.PutAsJsonAsync($"api/v1/sheets/{sheetId}/plan/calendar", request, cancellationToken);
+        return await response.ReadAsync<PlanCalendarDto>(cancellationToken);
+    }
+
+    public async Task<PlanFile> ExportMsProjectAsync(Guid sheetId, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.GetAsync($"api/v1/sheets/{sheetId}/plan/export/msproject", cancellationToken);
+        return await response.ReadAsync<PlanFile>(cancellationToken);
+    }
+
+    public async Task<PlanFile> ExportGanttPdfAsync(Guid sheetId, GanttPdfRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.PostAsJsonAsync($"api/v1/sheets/{sheetId}/plan/export/gantt-pdf", request, cancellationToken);
+        return await response.ReadAsync<PlanFile>(cancellationToken);
+    }
 }

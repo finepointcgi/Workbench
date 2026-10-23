@@ -19,10 +19,14 @@ public sealed record PlanSheetRow(
     string? Resources,
     string? Notes,
     Guid? UniqueId,
-    bool IsSummary = false);
+    bool IsSummary = false,
+    Contracts.Scheduling.PlanConstraintDto? Constraint = null);
 
-/// <summary>A row read from an uploaded file: <see cref="Row"/> is its 1-based row in the file, <see cref="Errors"/> what couldn't be read.</summary>
-public sealed record PlanFileRow(int Row, PlanSheetRow Task, string? DurationText, IReadOnlyList<string> Errors);
+/// <summary>
+/// A row read from an uploaded file: <see cref="Row"/> is its 1-based row in the file (the task ID in an MS Project file),
+/// <see cref="Errors"/> what couldn't be read and <see cref="Warnings"/> what was read with a change.
+/// </summary>
+public sealed record PlanFileRow(int Row, PlanSheetRow Task, string? DurationText, IReadOnlyList<string> Errors, IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// The plan's .xlsx layout, shared by export, the blank template and import, so an exported file imports unchanged.

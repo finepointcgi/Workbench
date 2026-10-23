@@ -197,6 +197,17 @@ public sealed class PlanGridTests
 
         public Task<PlanImportPreview> ApplyImportAsync(Guid sheetId, PlanImportRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<PlanConflictDto>> SetConstraintAsync(Guid sheetId, Guid itemId, SetPlanConstraintRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<PlanCalendarDto> GetCalendarAsync(Guid sheetId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PlanCalendarDto> SetCalendarAsync(Guid sheetId, SetPlanCalendarRequest? request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PlanFile> ExportMsProjectAsync(Guid sheetId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<PlanFile> ExportGanttPdfAsync(Guid sheetId, GanttPdfRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         private Task Record(string call, Guid itemId)
         {
             Calls.Add((call, itemId));

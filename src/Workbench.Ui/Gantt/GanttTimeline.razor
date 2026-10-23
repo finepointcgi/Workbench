@@ -31,9 +31,9 @@
 
         <g transform="translate(0,@F(GanttLayout.HeaderHeight))">
             @* Background: weekends, row lines, column grid *@
-            @foreach (var weekend in Scale.Weekends())
+            @foreach (var off in Scale.DaysOff(IsWorkingDay))
             {
-                <rect class="gantt-weekend" x="@F(weekend.X)" y="0" width="@F(weekend.Width)" height="@F(BodyHeight)" />
+                <rect class="gantt-weekend" x="@F(off.X)" y="0" width="@F(off.Width)" height="@F(BodyHeight)" />
             }
             @foreach (var tick in Scale.MinorTicks())
             {
@@ -106,7 +106,7 @@
                     <g class="@BarClass(row, "gantt-milestone")" data-item="@row.Item.Id" data-link-target>
                         <path data-drag="move" d="@Diamond(cx, top + 15, 8)" />
                         <circle class="gantt-link-handle" data-drag="link" data-end cx="@F(cx + 15)" cy="@F(top + 15)" r="4" />
-                        <text class="gantt-bar-label" data-end x="@F(cx + 24)" y="@F(top + 19)">@row.Item.Title</text>
+                        <text class="gantt-bar-label" data-end x="@F(cx + 24)" y="@F(top + 19)">@Marker(row)@row.Item.Title</text>
                         <title>@Tooltip(row)</title>
                     </g>
                 }
@@ -116,7 +116,7 @@
                         <rect data-role="bar" data-drag="move" x="@F(x1)" y="@F(top + 7)" width="@F(Math.Max(x2 - x1, 2))" height="16" rx="3" />
                         <rect class="gantt-resize-handle" data-drag="resize" data-end x="@F(x2 - 5)" y="@F(top + 7)" width="8" height="16" />
                         <circle class="gantt-link-handle" data-drag="link" data-end cx="@F(x2 + 9)" cy="@F(top + 15)" r="4" />
-                        <text class="gantt-bar-label" data-end x="@F(x2 + 18)" y="@F(top + 19)">@row.Item.Title</text>
+                        <text class="gantt-bar-label" data-end x="@F(x2 + 18)" y="@F(top + 19)">@Marker(row)@row.Item.Title</text>
                         <title>@Tooltip(row)</title>
                     </g>
                 }
@@ -163,6 +163,18 @@
 
     [Parameter]
     public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>The plan's calendar: days off (weekends, holidays) are shaded. Null shades weekends.</summary>
+    [Parameter]
+    public Func<DateOnly, bool>? IsWorkingDay { get; set; }
+
+    /// <summary>Date constraints by item id, shown in the bar's tooltip.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<Guid, PlanConstraintDto>? Constraints { get; set; }
+
+    /// <summary>Constraint conflicts by item id: the bar is outlined and marked, and the tooltip says why.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<Guid, PlanConflictDto>? Conflicts { get; set; }
 
     [Parameter]
     public EventCallback<GanttBarDrop> OnBarDropped { get; set; }
@@ -279,10 +291,28 @@
             text += slack.IsCritical ? "\nCritical path" : $"\nSlack: {slack.SlackDays} working day{(slack.SlackDays == 1 ? "" : "s")}";
         }
 
+        if (Constraints?.GetValueOrDefault(row.Item.Id) is { } constraint)
+        {
+            text += $"\n{constraint.Label} {constraint.Date.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}";
+        }
+
+        if (Conflicts?.GetValueOrDefault(row.Item.Id) is { } conflict)
+        {
+            text += $"\nConflict: {conflict.Message}";
+        }
+
         return text;
     }
 
-    private string BarClass(GanttRow row, string kind) => _critical.Contains(row.Item.Id) ? $"{kind} critical" : kind;
+    /// <summary>A text marker before the label: ⚠ for a constraint conflict, 📌 for a constrained task (not by color alone, 1.4.1).</summary>
+    private string Marker(GanttRow row) =>
+        Conflicts?.ContainsKey(row.Item.Id) == true ? "⚠ " : Constraints?.ContainsKey(row.Item.Id) == true ? "📌 " : "";
+
+    private string BarClass(GanttRow row, string kind)
+    {
+        var css = _critical.Contains(row.Item.Id) ? $"{kind} critical" : kind;
+        return Conflicts?.ContainsKey(row.Item.Id) == true ? css + " conflict" : css;
+    }
 
     private static string Abbreviation(DependencyKind type) => type switch
     {

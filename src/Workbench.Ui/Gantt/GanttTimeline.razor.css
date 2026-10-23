@@ -160,3 +160,11 @@
     stroke-dasharray: 5 4;
     pointer-events: none;
 }
+
+/* A constraint conflict: a dashed outline as well as the ⚠ marker on the label. */
+.gantt-task.conflict [data-role="bar"],
+.gantt-milestone.conflict [data-drag="move"] {
+    stroke: var(--mud-palette-warning-darken, #b26a00);
+    stroke-width: 2;
+    stroke-dasharray: 4 2;
+}

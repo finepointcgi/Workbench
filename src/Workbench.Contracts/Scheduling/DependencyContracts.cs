@@ -15,7 +15,7 @@ public enum DependencyKind
     StartToFinish,
 }
 
-/// <summary>A scheduling link. <paramref name="LagDays"/> is in working days (Mon–Fri); negative is lead.</summary>
+/// <summary>A scheduling link. <paramref name="LagDays"/> is in working days on the plan's calendar; negative is lead.</summary>
 public sealed record DependencyDto(Guid Id, Guid PredecessorId, Guid SuccessorId, DependencyKind Type, int LagDays);
 
 public sealed record CreateDependencyRequest(
@@ -49,6 +49,6 @@ public interface IDependencyService
 
     Task RemoveAsync(Guid sheetId, Guid dependencyId, CancellationToken cancellationToken = default);
 
-    /// <summary>Runs a forward and backward pass over Mon–Fri working days.</summary>
+    /// <summary>Runs a forward and backward pass over the plan's working days (its calendar, holidays and constraints).</summary>
     Task<ScheduleAnalysis> AnalyzeAsync(Guid sheetId, CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- An MS Project XML file with what Workbench can't take as it is: each task shows one problem. -->
+<Project xmlns="http://schemas.microsoft.com/project">
+	<SaveVersion>14</SaveVersion>
+	<Name>problems.xml</Name>
+	<MinutesPerDay>480</MinutesPerDay>
+	<Tasks>
+		<Task>
+			<UID>1</UID>
+			<ID>1</ID>
+			<Name>Elapsed lag</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>1</OutlineLevel>
+			<Start>2026-10-05T08:00:00</Start>
+			<Finish>2026-10-06T17:00:00</Finish>
+			<Duration>PT16H0M0S</Duration>
+			<DurationFormat>7</DurationFormat>
+		</Task>
+		<Task>
+			<UID>2</UID>
+			<ID>2</ID>
+			<Name>Waits a week of calendar time</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>1</OutlineLevel>
+			<Start>2026-10-14T08:00:00</Start>
+			<Finish>2026-10-14T17:00:00</Finish>
+			<Duration>PT8H0M0S</Duration>
+			<DurationFormat>7</DurationFormat>
+			<PredecessorLink>
+				<PredecessorUID>1</PredecessorUID>
+				<Type>1</Type>
+				<LinkLag>100800</LinkLag>
+				<LagFormat>8</LagFormat>
+			</PredecessorLink>
+		</Task>
+		<Task>
+			<UID>3</UID>
+			<ID>3</ID>
+			<Name>Percent lag</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>1</OutlineLevel>
+			<Start>2026-10-07T08:00:00</Start>
+			<Finish>2026-10-07T17:00:00</Finish>
+			<Duration>PT8H0M0S</Duration>
+			<PredecessorLink>
+				<PredecessorUID>1</PredecessorUID>
+				<Type>1</Type>
+				<LinkLag>500</LinkLag>
+				<LagFormat>19</LagFormat>
+			</PredecessorLink>
+		</Task>
+		<Task>
+			<UID>4</UID>
+			<ID>4</ID>
+			<Name>As late as possible</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>1</OutlineLevel>
+			<Start>2026-10-08T08:00:00</Start>
+			<Finish>2026-10-08T17:00:00</Finish>
+			<Duration>PT8H0M0S</Duration>
+			<ConstraintType>1</ConstraintType>
+		</Task>
+		<Task>
+			<UID>5</UID>
+			<ID>5</ID>
+			<Name>Half a day</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>1</OutlineLevel>
+			<Start>2026-10-08T08:00:00</Start>
+			<Finish>2026-10-08T12:00:00</Finish>
+			<Duration>PT4H0M0S</Duration>
+			<PredecessorLink>
+				<PredecessorUID>99</PredecessorUID>
+				<Type>1</Type>
+				<LinkLag>0</LinkLag>
+			</PredecessorLink>
+		</Task>
+		<Task>
+			<UID>6</UID>
+			<ID>6</ID>
+			<IsNull>1</IsNull>
+		</Task>
+		<Task>
+			<UID>7</UID>
+			<ID>7</ID>
+			<Name>Too deep</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>3</OutlineLevel>
+			<Start>2026-10-08T08:00:00</Start>
+			<Finish>2026-10-08T17:00:00</Finish>
+			<Duration>PT8H0M0S</Duration>
+		</Task>
+		<Task>
+			<UID>8</UID>
+			<ID>8</ID>
+			<Name>Deadline without a date</Name>
+			<IsNull>0</IsNull>
+			<OutlineLevel>1</OutlineLevel>
+			<Start>2026-10-08T08:00:00</Start>
+			<Finish>2026-10-08T17:00:00</Finish>
+			<Duration>PT8H0M0S</Duration>
+			<ConstraintType>7</ConstraintType>
+		</Task>
+	</Tasks>
+</Project>
