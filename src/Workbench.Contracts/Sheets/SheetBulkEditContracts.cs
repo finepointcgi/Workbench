@@ -28,7 +28,10 @@ public sealed record SheetBulkEditRequest(
 /// <summary>A cell that wasn't set, and why. <see cref="NewRowIndex"/> points into <see cref="SheetBulkEditRequest.NewRows"/>.</summary>
 public sealed record BulkSkippedCell(Guid? ItemId, int? NewRowIndex, string Field, string Reason);
 
-/// <summary>A cell that changed: its stored value before and after (what undo puts back).</summary>
+/// <summary>
+/// A cell that changed: its stored value before and after (what undo puts back). On a plan this includes start and finish dates
+/// the plan moved because of the edit (successors pushed by links), so putting every <c>Before</c> back undoes all of it.
+/// </summary>
 public sealed record BulkCellChange(Guid ItemId, string Field, string? Before, string? After);
 
 /// <param name="Updated">Changed rows as saved (formula and lookup columns worked out).</param>

@@ -79,6 +79,45 @@ public sealed class SheetBulkEditTests
     }
 
     [Fact]
+    public async Task On_a_plan_the_changes_include_dates_the_links_pushed_so_undo_puts_the_plan_back()
+    {
+        var kit = new PlanKit();
+        var sheetId = await kit.SheetAsync();
+        var design = await kit.TaskAsync(sheetId, "Design", PlanKit.Mon, 5);
+        var build = await kit.TaskAsync(sheetId, "Build", PlanKit.Mon.AddDays(7), 3);
+        await kit.LinkAsync(sheetId, design.Id, build.Id);
+        var original = await kit.DatesAsync(sheetId, build.Id);
+        var bulk = new SheetBulkEditService(kit.Factory, TimeProvider.System);
+
+        // Design now finishes Wednesday of the next week: Build is pushed.
+        var result = await bulk.ApplyAsync(sheetId, new SheetBulkEditRequest([new BulkRowEdit(design.Id, [new(SheetFields.Finish, "2026-10-14")])]));
+        Assert.NotEqual(original, await kit.DatesAsync(sheetId, build.Id));
+        Assert.Contains(result.Changes, c => c.ItemId == build.Id && c.Field == SheetFields.Start);
+        Assert.Contains(result.Updated, i => i.Id == build.Id);
+
+        await bulk.ApplyAsync(sheetId, new SheetBulkEditRequest(
+            result.Changes.GroupBy(c => c.ItemId).Select(g => new BulkRowEdit(g.Key, g.Select(c => new BulkCellEdit(c.Field, c.Before)).ToList())).ToList()));
+        Assert.Equal(original, await kit.DatesAsync(sheetId, build.Id));
+        Assert.Equal(PlanKit.Mon.AddDays(4), (await kit.DatesAsync(sheetId, design.Id)).Finish);
+    }
+
+    [Fact]
+    public async Task One_cell_records_the_same_named_change_as_a_single_update()
+    {
+        await using var host = new AutomationHost();
+        var sheetId = await host.NewSheetAsync();
+        var hours = await host.Columns.CreateAsync(sheetId, new CreateColumnRequest("Hours", ColumnKind.Number));
+        await host.Columns.CreateAsync(sheetId, new CreateColumnRequest("Twice", ColumnKind.Number, Formula: "=[Hours] * 2"));
+        var design = await host.Items.CreateAsync(sheetId, new CreateItemRequest("Design"));
+
+        await host.Get<ISheetBulkEditService>().ApplyAsync(sheetId,
+            new SheetBulkEditRequest([new BulkRowEdit(design.Id, [new(hours.Id.ToString(), "3")])], Source: "Edit Hours"));
+
+        var latest = (await host.Activity.ListAsync(sheetId)).OrderByDescending(a => a.OccurredAtUtc).First();
+        Assert.Equal((ActivityKinds.ItemUpdated, "Updated \"Design\": Hours: (empty) → \"3\""), (latest.Kind, latest.Summary));
+    }
+
+    [Fact]
     public async Task Automations_run_once_for_the_batch_with_one_notification_per_automation_and_person()
     {
         await using var host = new AutomationHost();
