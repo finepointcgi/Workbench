@@ -16,6 +16,23 @@
 
 <MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
     <MudTabPanel Text="@($"Waiting on me ({_items?.Count ?? 0})")">
+        @if (_result is not null)
+        {
+            <MudAlert Severity="@(_result.Failed == 0 ? Severity.Success : Severity.Warning)" Dense="true" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _result = null"
+                      data-testid="bulk-result" role="status">
+                <div>@_result.Summary</div>
+                @if (_result.Failed > 0)
+                {
+                    <ul class="mt-1 mb-0 pl-4">
+                        @foreach (var failed in _result.Items.Where(r => !r.Succeeded))
+                        {
+                            <li data-testid="bulk-failure">@failed.Title: @failed.Problem</li>
+                        }
+                    </ul>
+                }
+            </MudAlert>
+        }
+
         @if (_items is null)
         {
             <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
@@ -28,10 +45,53 @@
         }
         else
         {
+            @* Filters: one document type (then the header checkbox selects all of that type), or time charged to projects I manage. *@
+            <MudChipSet T="string" SelectedValue="_filter" SelectedValueChanged="SetFilter" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
+                        Size="Size.Small" Class="mb-2" data-testid="inbox-filters" aria-label="Show">
+                <MudChip T="string" Value="@All" Text="@($"All ({_items.Count})")" />
+                @foreach (var group in _items.GroupBy(i => i.DocumentType).OrderBy(g => g.First().DocumentLabel))
+                {
+                    <MudChip T="string" Value="@($"type:{group.Key}")" Text="@($"{group.First().DocumentLabel} ({group.Count()})")" data-testid="@($"filter-{group.Key}")" />
+                }
+                @if (_items.Any(IsMyProjectTime) || _filter == MyProjects)
+                {
+                    <MudChip T="string" Value="@MyProjects" Text="@($"Time on my projects ({_items.Count(IsMyProjectTime)})")" data-testid="filter-my-projects"
+                             title="Timesheet hours charged to projects you manage" />
+                }
+            </MudChipSet>
+
+            @if (_selected.Count > 0)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-3 d-flex flex-wrap align-center gap-2" data-testid="bulk-bar">
+                    <MudText Typo="Typo.subtitle2" Class="mr-2" data-testid="bulk-count">@_selected.Count selected</MudText>
+                    <MudTextField @bind-Value="_bulkComment" Immediate="true" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined" Style="min-width:260px; flex:1"
+                                  Label="Comment (optional; required to reject)" data-testid="bulk-comment" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="() => BulkAsync(ApprovalDecisionKind.Approve)" data-testid="bulk-approve">
+                        Approve @_selected.Count
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy || string.IsNullOrWhiteSpace(_bulkComment)" OnClick="() => BulkAsync(ApprovalDecisionKind.Reject)"
+                               data-testid="bulk-reject" title="Say why in the comment to reject">
+                        Reject @_selected.Count
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="() => _selected = []">Clear</MudButton>
+                </MudPaper>
+            }
+
+            @if (Visible.Count == 0)
+            {
+                <MudText Class="mud-text-secondary" data-testid="inbox-filter-empty">
+                    @(_filter == MyProjects
+                        ? "No time on your projects is waiting on you. Project managers approve hours charged to their projects when the timesheet workflow has a project manager step (Setup › Approval workflows)."
+                        : "Nothing here.")
+                </MudText>
+            }
+            else
+            {
             @* Wide windows: a compact table whose action column never scrolls away. Below 960px (Sm and smaller) each row becomes
                a card (MudTable's DataLabel layout), with the actions full width at the bottom. *@
             <div class="wb-inbox-host">
-            <MudTable Items="_items" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="wb-inbox" data-testid="inbox" aria-label="Approvals waiting on me">
+            <MudTable T="ApprovalInboxItemDto" Items="Visible" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="wb-inbox" data-testid="inbox" aria-label="Approvals waiting on me"
+                      MultiSelection="true" SelectOnRowClick="false" @bind-SelectedItems="_selected">
                 <HeaderContent>
                     <MudTh>What</MudTh>
                     <MudTh>From</MudTh>
@@ -72,6 +132,7 @@
                 </RowTemplate>
             </MudTable>
             </div>
+            }
         }
     </MudTabPanel>
     <MudTabPanel Text="Delegations">
@@ -126,7 +187,70 @@
 </MudTabs>
 
 @code {
+    private const string All = "all";
+    private const string MyProjects = "my-projects";
+
     private IReadOnlyList<ApprovalInboxItemDto>? _items;
+    private HashSet<ApprovalInboxItemDto> _selected = [];
+    private string _filter = All;
+    private string? _bulkComment;
+    private BulkApprovalResultDto? _result;
+
+    [SupplyParameterFromQuery(Name = "show")]
+    public string? Show { get; set; }
+
+    private static bool IsMyProjectTime(ApprovalInboxItemDto item) => item.DocumentType == ApprovalDocumentTypes.Timesheet && item.ProjectId is not null;
+
+    // Kept in a field: the table keeps its selection only while its Items stay the same list.
+    private IReadOnlyList<ApprovalInboxItemDto> Visible { get; set; } = [];
+
+    private void Refilter() => Visible = (_items ?? []).Where(i => _filter switch
+    {
+        All => true,
+        MyProjects => IsMyProjectTime(i),
+        _ => _filter == $"type:{i.DocumentType}",
+    }).ToList();
+
+    private void SetFilter(string? filter)
+    {
+        _filter = filter ?? All;
+        Refilter();
+        // Selection follows the filter, so "select all" never reaches rows you can't see.
+        _selected = _selected.Where(Visible.Contains).ToHashSet();
+    }
+
+    private async Task BulkAsync(ApprovalDecisionKind kind)
+    {
+        var picked = _selected.Where(Visible.Contains).ToList();
+        if (picked.Count == 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _result = await Inbox.DecideManyAsync(new BulkApprovalRequest(picked.Select(i => new ApprovalItemRef(i.DocumentType, i.DocumentId)).ToList(), kind, _bulkComment));
+            _selected = [];
+            _bulkComment = null;
+            await LoadAsync();
+            if (Visible.Count == 0)
+            {
+                _filter = All;
+                Refilter();
+            }
+
+            _refocus = true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
     private IReadOnlyList<ApprovalDelegationDto>? _delegations;
     private IReadOnlyDictionary<Guid, Workbench.Contracts.Assistant.TimesheetFlagsDto> _flags = new Dictionary<Guid, Workbench.Contracts.Assistant.TimesheetFlagsDto>();
     private bool _busy;
@@ -138,12 +262,18 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Show == MyProjects)
+        {
+            _filter = MyProjects;
+        }
+
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _items = await Inbox.ListMineAsync();
+        Refilter();
         _delegations = await Delegations.ListAsync();
         _flags = await Workbench.Ui.Assistant.TimesheetFlagLoader.LoadAsync(Services, _items.Where(i => i.DocumentType == ApprovalDocumentTypes.Timesheet).Select(i => i.DocumentId));
     }
@@ -185,6 +315,7 @@
         {
             await Inbox.DecideAsync(item.DocumentType, item.DocumentId, request);
             Snackbar.Add($"{done}: {item.Title}", Severity.Success);
+            _selected.Remove(item);
             await LoadAsync();
             _refocus = true;
         }
