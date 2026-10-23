@@ -40,18 +40,28 @@ public partial class SheetGrid
         Sort = definition.Sort ?? [],
         Filters = definition.Filters ?? [],
         Hidden = (definition.HiddenColumns ?? []).Order(StringComparer.Ordinal),
+        definition.BaselineId,
     });
 
     /// <summary>Shown columns: every column but the hidden ones (Title always shows).</summary>
     private void RebuildColumns()
     {
+        _allColumns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null,
+            baseline: CanCompareBaselines && _view.BaselineId is not null);
         _columns = _allColumns.Where(c => c.Kind == GridColumnKind.Title || !_view.IsHidden(c.Key)).ToList();
         _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
     }
 
     private void SetView(SheetViewDefinition definition)
     {
+        var baselineChanged = definition.BaselineId != _view.BaselineId;
         _view = definition;
+        if (baselineChanged)
+        {
+            _comparison = null;
+            _ = RefreshComparisonAsync();
+        }
+
         CollapseRange();
         RebuildColumns();
         _visible = SheetViewEngine.Visible(Items, Sheet.Columns, _view);

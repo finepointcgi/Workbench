@@ -7,6 +7,7 @@ using Workbench.Contracts.Collaboration;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Reports;
+using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
 using Workbench.Domain;
 
@@ -25,7 +26,8 @@ public sealed class SheetViewService(
     IItemService items,
     TimeProvider clock,
     SecurityEventLog? securityLog = null,
-    ISheetPermissions? permissions = null) : ISheetViewService
+    ISheetPermissions? permissions = null,
+    IBaselineService? baselines = null) : ISheetViewService
 {
     public const string ExportEvent = "export.sheet";
     public const int MaxFilters = 30;
@@ -154,14 +156,17 @@ public sealed class SheetViewService(
 
         var sheet = await sheets.GetAsync(sheetId, cancellationToken) ?? throw WorkbenchNotFoundException.For("Sheet", sheetId);
         var rows = SheetViewEngine.Apply(await items.ListAsync(sheetId, cancellationToken), sheet.Columns, request.View);
-        var fields = ExportFields(sheet, request.View);
+        var comparison = sheet.Summary.SchedulingEnabled && request.View?.BaselineId is { } baselineId && baselines is not null
+            ? await baselines.CompareAsync(sheetId, baselineId, cancellationToken)
+            : null;
+        var fields = ExportFields(sheet, request.View, comparison is not null);
         var title = string.IsNullOrWhiteSpace(request.ViewName) ? sheet.Summary.Name : $"{sheet.Summary.Name} - {request.ViewName.Trim()}";
         var generated = clock.GetUtcNow().UtcDateTime;
         var result = new ReportResultDto(
             title,
-            Describe(sheet, request.View),
+            Describe(sheet, request.View, comparison),
             fields.Select(f => new ReportColumnDto(f.Key, f.Name, f.Type)).ToList(),
-            rows.Select(r => new ReportRowDto(ReportRowKind.Detail, r.Depth, fields.Select(f => SheetViewEngine.Value(r.Item, f.Key)).ToList())).ToList(),
+            rows.Select(r => new ReportRowDto(ReportRowKind.Detail, r.Depth, fields.Select(f => Value(r.Item, f.Key, comparison)).ToList())).ToList(),
             [],
             generated);
         var file = request.Format == SheetExportFormat.Pdf
@@ -175,20 +180,37 @@ public sealed class SheetViewService(
         return file;
     }
 
-    /// <summary>The fields an export holds, in grid order: Title, Start and Finish (scheduled sheets), the columns, WBS.</summary>
-    private static List<(string Key, string Name, ReportColumnType Type, ColumnKind Kind)> ExportFields(SheetDetail sheet, SheetViewDefinition? view)
+    /// <summary>
+    /// The fields an export holds, in grid order: Title, Start and Finish (scheduled sheets), the baseline columns (when the view
+    /// compares to a baseline), the columns, WBS.
+    /// </summary>
+    private static List<(string Key, string Name, ReportColumnType Type, ColumnKind Kind)> ExportFields(SheetDetail sheet, SheetViewDefinition? view, bool baseline)
     {
         var fields = new List<(string Key, string Name, ReportColumnType Type, ColumnKind Kind)> { (SheetFields.Title, "Title", ReportColumnType.Text, ColumnKind.Text) };
         if (sheet.Summary.SchedulingEnabled)
         {
             fields.Add((SheetFields.Start, "Start", ReportColumnType.Date, ColumnKind.Date));
             fields.Add((SheetFields.Finish, "Finish", ReportColumnType.Date, ColumnKind.Date));
+            if (baseline)
+            {
+                fields.Add((SheetFields.BaselineStart, "Baseline start", ReportColumnType.Date, ColumnKind.Date));
+                fields.Add((SheetFields.BaselineFinish, "Baseline finish", ReportColumnType.Date, ColumnKind.Date));
+                fields.Add((SheetFields.FinishVariance, "Finish variance (working days)", ReportColumnType.Number, ColumnKind.Number));
+            }
         }
 
         fields.AddRange(sheet.Columns.OrderBy(c => c.Order).Select(c => (c.Id.ToString(), c.Name, ReportType(c.Type), c.Type)));
         fields.Add((SheetFields.Wbs, "WBS", ReportColumnType.Text, ColumnKind.Text));
         return fields.Where(f => f.Key == SheetFields.Title || view?.IsHidden(f.Key) != true).ToList();
     }
+
+    private static string? Value(ItemDto item, string field, BaselineComparison? comparison) => field switch
+    {
+        SheetFields.BaselineStart => comparison?.For(item.Id)?.BaselineStart?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+        SheetFields.BaselineFinish => comparison?.For(item.Id)?.BaselineFinish?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+        SheetFields.FinishVariance => comparison?.For(item.Id) is { InBaseline: true } task ? task.FinishVarianceDays?.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+        _ => SheetViewEngine.Value(item, field),
+    };
 
     private static ReportColumnType ReportType(ColumnKind kind) => kind switch
     {
@@ -200,11 +222,11 @@ public sealed class SheetViewService(
     };
 
     /// <summary>"Sorted by Status; filtered: Status is Done" under the title, so a file says what it holds.</summary>
-    private static string? Describe(SheetDetail sheet, SheetViewDefinition? view)
+    private static string? Describe(SheetDetail sheet, SheetViewDefinition? view, BaselineComparison? comparison)
     {
         if (view is null || (!view.HasSort && !view.HasFilters))
         {
-            return null;
+            return comparison is null ? null : $"Compared to the baseline \"{comparison.Baseline.Name}\"";
         }
 
         string Name(string field) => field switch
@@ -225,6 +247,11 @@ public sealed class SheetViewService(
         if (view.HasFilters)
         {
             parts.Add("Filtered: " + string.Join("; ", view.Filters!.Select(f => $"{Name(f.Field)} {SheetFilterText.Operator(f.Operator)} {string.Join(" or ", SheetViewEngine.Values(f.Value))}".Trim())));
+        }
+
+        if (comparison is not null)
+        {
+            parts.Add($"Compared to the baseline \"{comparison.Baseline.Name}\"");
         }
 
         return string.Join(". ", parts);
@@ -263,7 +290,8 @@ public sealed class SheetViewService(
     internal static SheetViewDefinition Clean(SheetViewDefinition d) => new(
         d.Sort?.Where(s => !string.IsNullOrWhiteSpace(s.Field)).DistinctBy(s => s.Field).ToList() ?? [],
         d.Filters?.Where(f => !string.IsNullOrWhiteSpace(f.Field)).ToList() ?? [],
-        d.HiddenColumns?.Where(c => !string.IsNullOrWhiteSpace(c) && c != SheetFields.Title).Distinct(StringComparer.Ordinal).ToList() ?? []);
+        d.HiddenColumns?.Where(c => !string.IsNullOrWhiteSpace(c) && c != SheetFields.Title).Distinct(StringComparer.Ordinal).ToList() ?? [],
+        d.BaselineId);
 
     private static void Validate(SaveSheetViewRequest request)
     {

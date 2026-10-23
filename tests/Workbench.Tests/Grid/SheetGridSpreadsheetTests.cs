@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Reports;
+using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
 using Workbench.Tests.Accessibility;
 using Workbench.Ui.Grid;
@@ -208,6 +209,77 @@ public sealed class SheetGridSpreadsheetTests
         Assert.Equal(["Alpha", "Bravo", "Charlie"], grid.FindAll(".wb-title-link").Select(a => a.TextContent));
     }
 
+    [Fact]
+    public async Task With_the_bulk_service_a_paste_is_one_request_and_its_undo_is_one_more()
+    {
+        await using var ctx = CreateContext(out var items);
+        items.Seed("Design", "Build");
+        var bulk = new FakeBulk(items);
+        ctx.Services.AddSingleton<ISheetBulkEditService>(bulk);
+        var grid = Render(ctx, items);
+
+        Cell(grid, 0, 1).Click();
+        await grid.InvokeAsync(() => SheetGridOf(grid).PasteAsync("8\t100\r\n4\t200\r\n2\t300\r\n"));
+
+        var paste = Assert.Single(bulk.Requests);
+        Assert.Equal("Paste", paste.Source);
+        Assert.Equal(2, paste.Rows.Count);
+        Assert.Equal([Hours.Id.ToString(), Budget.Id.ToString()], paste.Rows[0].Cells.Select(c => c.Field));
+        Assert.Equal(["2", "300"], Assert.Single(paste.NewRows!).Cells.Select(c => c.Value));
+        Assert.Empty(items.Updates); // nothing row by row
+        Assert.Equal(3, items.All.Count);
+
+        Key(grid, "z", ctrl: true);
+        grid.WaitForAssertion(() => Assert.Equal(2, bulk.Requests.Count));
+        var undo = bulk.Requests[1];
+        Assert.Single(undo.DeleteItemIds!);
+        Assert.All(undo.Rows.SelectMany(r => r.Cells), c => Assert.Null(c.Value));
+        Assert.Equal(2, items.All.Count);
+        Assert.Null(items.Value("Design", Hours));
+
+        Key(grid, "y", ctrl: true);
+        grid.WaitForAssertion(() => Assert.Equal(3, bulk.Requests.Count));
+        Assert.Equal(3, items.All.Count);
+        Assert.Equal("8", items.Value("Design", Hours));
+    }
+
+    [Fact]
+    public async Task A_view_compared_to_a_baseline_shows_baseline_dates_and_the_finish_variance()
+    {
+        await using var ctx = CreateContext(out var items);
+        var mon = new DateOnly(2026, 10, 5);
+        items.Seed("Design", "Build");
+        var design = items.Find("Design")!;
+        var build = items.Find("Build")!;
+        var baseline = new BaselineSummary(Guid.NewGuid(), "Approved plan", DateTime.UtcNow, 2);
+        var baselines = new FakeBaselines(new BaselineComparison(baseline,
+        [
+            new BaselineVarianceDto(design.Id, mon, mon.AddDays(6), mon, mon.AddDays(4), 0, 2, 2),
+            new BaselineVarianceDto(build.Id, null, null, null, null, null, null, null),
+        ], 2));
+        ctx.Services.AddSingleton<IBaselineService>(baselines);
+        var view = new SheetViewDto(Guid.NewGuid(), SheetId, "Against approved", true, "pm@example.com", new SheetViewDefinition(BaselineId: baseline.Id), false, false, DateTime.UtcNow);
+        ctx.Services.AddSingleton<ISheetViewService>(new FakeViewService(view));
+        var grid = ctx.Render<SheetGridView>(p => p
+            .Add(v => v.Sheet, new SheetDetail(new SheetSummary(SheetId, "Plan", null, "Program Office", 2, true, null, DateTime.UtcNow), [Hours]))
+            .Add(v => v.Items, items.All));
+
+        grid.WaitForAssertion(() => Assert.Contains("Baseline finish", grid.FindAll("th .wb-th-name").Select(t => t.TextContent)));
+        Assert.Equal(["Title", "Start", "Finish", "Baseline start", "Baseline finish", "Finish variance", "Hours", "WBS"],
+            grid.FindAll("th .wb-th-name").Select(t => t.TextContent));
+        grid.WaitForAssertion(() => Assert.Equal("+2 days", grid.Find("[data-testid=finish-variance]").TextContent));
+        Assert.Contains("later than the baseline", grid.Find("[data-testid=finish-variance]").GetAttribute("title"));
+        Assert.Equal("10/09/2026", Cell(grid, 0, 4).TextContent.Trim());
+        Assert.Contains("wb-readonly", Cell(grid, 0, 4).ClassName);
+        Assert.Contains("Baseline: Approved plan", grid.Find("[data-testid=grid-baseline]").TextContent);
+
+        // Baseline cells are history: typing doesn't edit them, and a paste skips them.
+        Cell(grid, 0, 5).Click();
+        Key(grid, "Delete");
+        await grid.InvokeAsync(() => SheetGridOf(grid).PasteAsync("9"));
+        Assert.Empty(items.Updates);
+    }
+
     // ---- Helpers ----
 
     private static BunitContext CreateContext(out StatefulItemService items)
@@ -278,6 +350,17 @@ public sealed class SheetGridSpreadsheetTests
             Find(title)?.Values.TryGetValue(column.Id.ToString(), out var value) == true ? value : null;
 
         public Task<IReadOnlyList<ItemDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default) => Task.FromResult(All);
+
+        /// <summary>A change made by the bulk fake: not counted in <see cref="Updates"/> (which are row-by-row saves).</summary>
+        public Task<ItemDto> UpdateSilentlyAsync(Guid itemId, string title, Dictionary<string, string?> values)
+        {
+            lock (_items)
+            {
+                var updated = _items.Single(i => i.Id == itemId) with { Title = title, Values = values };
+                Replace(updated);
+                return Task.FromResult(updated);
+            }
+        }
 
         public Task<ItemDto> CreateAsync(Guid sheetId, CreateItemRequest request, CancellationToken cancellationToken = default)
         {
@@ -381,6 +464,67 @@ public sealed class SheetGridSpreadsheetTests
 
         public Task<ReportFileDto> ExportAsync(Guid sheetId, SheetExportRequest request, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ReportFileDto("plan.xlsx", "application/octet-stream", [1]));
+    }
+
+    /// <summary>Applies bulk requests to the stateful items, recording each request.</summary>
+    private sealed class FakeBulk(StatefulItemService items) : ISheetBulkEditService
+    {
+        public List<SheetBulkEditRequest> Requests { get; } = [];
+
+        public async Task<SheetBulkEditResult> ApplyAsync(Guid sheetId, SheetBulkEditRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            var changes = new List<BulkCellChange>();
+            var updated = new List<ItemDto>();
+            foreach (var row in request.Rows)
+            {
+                var item = items.All.Single(i => i.Id == row.ItemId);
+                var values = new Dictionary<string, string?>(item.Values);
+                var title = item.Title;
+                foreach (var cell in row.Cells)
+                {
+                    var before = cell.Field == SheetFields.Title ? item.Title : values.GetValueOrDefault(cell.Field);
+                    changes.Add(new BulkCellChange(item.Id, cell.Field, before, cell.Value));
+                    if (cell.Field == SheetFields.Title)
+                    {
+                        title = cell.Value!;
+                    }
+                    else
+                    {
+                        values[cell.Field] = cell.Value;
+                    }
+                }
+
+                updated.Add(await items.UpdateSilentlyAsync(item.Id, title, values));
+            }
+
+            var created = new List<ItemDto>();
+            foreach (var row in request.NewRows ?? [])
+            {
+                created.Add(await items.CreateAsync(sheetId, new CreateItemRequest("New row", Values: row.Cells.ToDictionary(c => c.Field, c => c.Value))));
+            }
+
+            foreach (var id in request.DeleteItemIds ?? [])
+            {
+                await items.DeleteAsync(sheetId, id);
+            }
+
+            return new SheetBulkEditResult(updated, created, changes, [], request.DeleteItemIds?.Count ?? 0);
+        }
+    }
+
+    private sealed class FakeBaselines(BaselineComparison comparison) : IBaselineService
+    {
+        public Task<BaselineSummary> CaptureAsync(Guid sheetId, CaptureBaselineRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<BaselineSummary>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<BaselineSummary>>([comparison.Baseline]);
+
+        public Task<BaselineDetail> GetAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<BaselineComparison> CompareAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) => Task.FromResult(comparison);
+
+        public Task DeleteAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class NoColumns : IColumnService
