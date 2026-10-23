@@ -1,0 +1,47 @@
+@* Shows and hides grid columns (Title always shows). Hiding is part of the view; it hides nothing from anyone else. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Hidden columns are only out of sight in this view; their values stay.</MudText>
+        <MudStack Spacing="0">
+            @foreach (var (key, name) in Columns)
+            {
+                <MudCheckBox T="bool" Value="!_hidden.Contains(key)" ValueChanged="on => Toggle(key, on)" Label="@name" Dense="true" data-testid="@($"show-column-{key}")" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _hidden.Clear()">Show all</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="columns-apply">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<(string Key, string Name)> Columns { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<string> Hidden { get; set; } = [];
+
+    private readonly HashSet<string> _hidden = [];
+
+    protected override void OnInitialized() => _hidden.UnionWith(Hidden);
+
+    private void Toggle(string key, bool shown)
+    {
+        if (shown)
+        {
+            _hidden.Remove(key);
+        }
+        else
+        {
+            _hidden.Add(key);
+        }
+    }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok<IReadOnlyList<string>>(Columns.Select(c => c.Key).Where(_hidden.Contains).ToList()));
+}

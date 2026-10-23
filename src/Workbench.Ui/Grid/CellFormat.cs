@@ -101,7 +101,7 @@ public static class CellFormat
                 return true;
 
             case ColumnKind.Checkbox:
-                value = trimmed is "true" or "1" or "yes" or "x" ? "true" : "false";
+                value = trimmed.ToLowerInvariant() is "true" or "1" or "yes" or "x" or "y" or "checked" or "✓" or "✔" ? "true" : "false";
                 return true;
 
             default:
@@ -110,9 +110,35 @@ public static class CellFormat
         }
     }
 
+    /// <summary>
+    /// <see cref="TryNormalize(string?, ColumnKind, out string?, out string?)"/> for a grid column: pasted or filled text
+    /// for a Dropdown (status) column takes the option's own spelling when it matches one, ignoring case.
+    /// </summary>
+    public static bool TryNormalize(string? text, GridColumn column, out string? value, out string? error)
+    {
+        if (!TryNormalize(text, column.ValueKind, out value, out error))
+        {
+            return false;
+        }
+
+        if (value is not null && column.ValueKind == ColumnKind.Dropdown && column.Column is { } custom)
+        {
+            var typed = value;
+            value = custom.Options.FirstOrDefault(o => string.Equals(o, typed, StringComparison.OrdinalIgnoreCase)) ?? typed;
+        }
+
+        return true;
+    }
+
+    /// <summary>The text a cell copies as: what the grid shows (Excel and Google Sheets read dates, $ and commas back).</summary>
+    public static string CopyText(string? raw, ColumnKind kind) => kind == ColumnKind.Checkbox
+        ? raw == "true" ? "TRUE" : raw is null ? string.Empty : "FALSE"
+        : Display(raw, kind);
+
     public static string KindName(ColumnKind kind) => kind switch
     {
         ColumnKind.CostpointLookup => "Costpoint lookup",
+        ColumnKind.Dropdown => "Status / dropdown",
         _ => kind.ToString(),
     };
 

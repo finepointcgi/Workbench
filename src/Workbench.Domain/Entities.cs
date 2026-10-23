@@ -55,6 +55,9 @@ public sealed class Column : Entity
     /// reading it); everyone else's reads leave it out.
     /// </summary>
     public bool IsRestricted { get; set; }
+
+    /// <summary>A Dropdown column's status label colors: a palette key per option, in the order of <see cref="Options"/>.</summary>
+    public List<string> OptionColors { get; set; } = [];
 }
 
 /// <summary>A row in a sheet, which is also a task on boards and the Gantt.</summary>

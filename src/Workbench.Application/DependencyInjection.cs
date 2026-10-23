@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<ISheetService, SheetService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IColumnService, ColumnService>();
+        services.AddScoped<ISheetViewService, SheetViewService>(); // Saved grid views (sort, filter, hidden columns) and sheet exports.
         services.AddWorkbenchScheduling();
         services.AddWorkbenchCollaboration();
         services.AddWorkbenchCostpoint();
