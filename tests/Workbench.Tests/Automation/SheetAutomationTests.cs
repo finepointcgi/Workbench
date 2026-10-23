@@ -113,9 +113,13 @@ public sealed class SheetAutomationTests
         Assert.Equal("Fired already", items.Single(i => i.Id == fired.Id).Title);
     }
 
+    private static int _created;
+
+    /// <summary>A rule as the old engine stored it; each one a minute after the last, so they list in the order made.</summary>
     private static Legacy.Rule Rule(Guid sheetId, string name, Legacy.RuleTrigger trigger, params Legacy.RuleAction[] actions) => new()
     {
-        SheetId = sheetId, Name = name, CreatedBy = "Alice@Example.com", CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow, Trigger = trigger, Actions = actions.ToList(),
+        SheetId = sheetId, Name = name, CreatedBy = "Alice@Example.com", CreatedAtUtc = new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc).AddMinutes(Interlocked.Increment(ref _created)),
+        UpdatedAtUtc = new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc), Trigger = trigger, Actions = actions.ToList(),
     };
 
     // ---- New triggers ----

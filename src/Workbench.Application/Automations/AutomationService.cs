@@ -63,7 +63,7 @@ public sealed class AutomationService(
             query = query.Where(a => a.SheetId == only);
         }
 
-        var rows = await (sheetId is null ? query.OrderBy(a => a.Name) : query.OrderBy(a => a.CreatedAtUtc)).ToListAsync(cancellationToken);
+        var rows = await (sheetId is null ? query.OrderBy(a => a.Name) : query.OrderBy(a => a.CreatedAtUtc).ThenBy(a => a.Name)).ToListAsync(cancellationToken);
         var sheetIds = rows.Where(r => r.SheetId != null).Select(r => r.SheetId!.Value).Distinct().ToList();
         var sheetNames = await db.Sheets.AsNoTracking().Where(s => sheetIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
         var sheetColumns = (await db.Columns.AsNoTracking().Where(c => sheetIds.Contains(c.SheetId)).ToListAsync(cancellationToken))
