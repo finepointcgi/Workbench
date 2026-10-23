@@ -26,9 +26,13 @@ The menu on the left only shows what you use:
 
 On a small screen the menu is hidden; open it with the menu button at the top left.
 
+## Create something new (N)
+
+Select **+ New** at the top, or press `N` when you're not typing in a field, to start the things you do most: log time, an expense report, a receipt, a travel or leave request, or a purchase request. People whose role needs them also see a project, an invoice, a journal entry, a vendor bill and more. Each item opens the same form as the page it belongs to. You can turn the `N` shortcut off (or back on) from your account menu.
+
 ## Search (Ctrl+K)
 
-Press `Ctrl+K` (`⌘K` on a Mac), or select **Search** at the top, and start typing. You can jump to any page you're allowed to open, a project, a sheet, a dashboard, or a help article. Use the arrow keys and Enter, or click a result.
+Press `Ctrl+K` (`⌘K` on a Mac), or select **Search** at the top, and start typing. You can jump to any page you're allowed to open, a project, a sheet, a dashboard, or a help article, or type "new" to start anything on the **+ New** menu. Use the arrow keys and Enter, or click a result.
 
 ## Getting help
 

@@ -1,4 +1,5 @@
-@* App bar menu for the signed-in user: their name (never just the email), roles, the phone layout and sign out. *@
+@* App bar menu for the signed-in user: their name (never just the email), roles, the phone layout, the N shortcut
+   switch and sign out. *@
 @using Microsoft.JSInterop
 @using Microsoft.Extensions.DependencyInjection
 @using Workbench.Contracts.ProjectAccounting
@@ -42,6 +43,10 @@
             @if (ShowName)
             {
                 <MudMenuItem Icon="@Icons.Material.Filled.PhoneIphone" OnClick="OpenMobileAsync" data-testid="mobile-view">Mobile view</MudMenuItem>
+            }
+            @if (_newKey is { } on)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.Keyboard" OnClick="ToggleNewKeyAsync" data-testid="new-shortcut-toggle">@(on ? "Turn off the N shortcut for New" : "Turn on the N shortcut for New")</MudMenuItem>
             }
             <MudMenuItem Icon="@Icons.Material.Filled.BugReport" OnClick="() => Workbench.Ui.Support.SupportDialogs.ShowAsync(Dialogs, Navigation)" data-testid="report-problem">Report a problem / Send feedback</MudMenuItem>
             <MudMenuItem Icon="@Icons.Material.Filled.SupportAgent" Href="support" data-testid="my-support">My support requests</MudMenuItem>
@@ -114,6 +119,40 @@
         }
 
         Navigation.NavigateTo("m");
+    }
+
+    // Whether N opens "+ New" on this device; null until read (or when the browser can't say).
+    private bool? _newKey;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/navigation.js");
+            _newKey = await module.InvokeAsync<bool>("getNewShortcut");
+            StateHasChanged();
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+        }
+    }
+
+    private async Task ToggleNewKeyAsync()
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/navigation.js");
+            await module.InvokeVoidAsync("setNewShortcut", _newKey != true);
+            _newKey = _newKey != true;
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+        }
     }
 
     private Task SignOutAsync() => SignOut.SignOutAsync();

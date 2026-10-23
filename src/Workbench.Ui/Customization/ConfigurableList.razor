@@ -22,53 +22,55 @@
                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Style="min-width: 240px; max-width: 360px" data-testid="@SearchTestId" />
         }
         @ToolBarContent
-        <MudSpacer />
-        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterList" OnClick="FiltersAsync" data-testid="list-filter">
-            Filter@(FilterCount > 0 ? $" ({FilterCount})" : "")
-        </MudButton>
-        <MudMenu Label="@ViewButtonLabel" Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Tune" EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                 AriaLabel="@($"View options: {ViewName}")" Dense="true" data-testid="view-menu">
-            @if (_views is not null)
-            {
-                <MudMenuItem OnClick="() => SelectAsync(null)" Icon="@(_selected is null ? Icons.Material.Filled.Check : Icons.Material.Filled.ViewList)">Standard view</MudMenuItem>
-                @foreach (var view in _views.Views)
+        @* Filter and View stay together on the right, wrapping as one when the page's own buttons fill the row. *@
+        <div class="d-flex align-center flex-nowrap gap-2 ml-auto" data-testid="list-view-controls">
+            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterList" OnClick="FiltersAsync" data-testid="list-filter">
+                Filter@(FilterCount > 0 ? $" ({FilterCount})" : "")
+            </MudButton>
+            <MudMenu Label="@ViewButtonLabel" Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Tune" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                     AriaLabel="@($"View options: {ViewName}")" Dense="true" data-testid="view-menu">
+                @if (_views is not null)
                 {
-                    <MudMenuItem OnClick="() => SelectAsync(view)" Icon="@(_selected?.Id == view.Id ? Icons.Material.Filled.Check : Icons.Material.Filled.ViewList)" data-view="@view.Name">
-                        @view.Name@(view.Visibility == ListViewVisibility.Personal ? "" : $" ({ShareLabel(view)})")@(_views.DefaultViewId == view.Id ? " · default" : "")
-                    </MudMenuItem>
+                    <MudMenuItem OnClick="() => SelectAsync(null)" Icon="@(_selected is null ? Icons.Material.Filled.Check : Icons.Material.Filled.ViewList)">Standard view</MudMenuItem>
+                    @foreach (var view in _views.Views)
+                    {
+                        <MudMenuItem OnClick="() => SelectAsync(view)" Icon="@(_selected?.Id == view.Id ? Icons.Material.Filled.Check : Icons.Material.Filled.ViewList)" data-view="@view.Name">
+                            @view.Name@(view.Visibility == ListViewVisibility.Personal ? "" : $" ({ShareLabel(view)})")@(_views.DefaultViewId == view.Id ? " · default" : "")
+                        </MudMenuItem>
+                    }
+                    @if (_selected is { CanEdit: true } && _dirty)
+                    {
+                        <MudMenuItem OnClick="SaveAsync" Icon="@Icons.Material.Filled.Save">Save changes to "@_selected.Name"</MudMenuItem>
+                    }
+                    <MudMenuItem OnClick="SaveAsNewAsync" Icon="@Icons.Material.Filled.SaveAs" data-testid="view-save-as">Save as a new view…</MudMenuItem>
+                    @if (_selected is { CanEdit: true } editable)
+                    {
+                        <MudMenuItem OnClick="() => RenameAsync(editable)" Icon="@Icons.Material.Filled.Edit">Rename or share…</MudMenuItem>
+                        <MudMenuItem OnClick="() => DeleteAsync(editable)" Icon="@Icons.Material.Filled.Delete">Delete this view</MudMenuItem>
+                    }
+                    @if (_views.DefaultViewId != _selected?.Id)
+                    {
+                        <MudMenuItem OnClick="SetDefaultAsync" Icon="@Icons.Material.Filled.Star">Make this my default view</MudMenuItem>
+                    }
+                    <MudDivider />
                 }
-                @if (_selected is { CanEdit: true } && _dirty)
+                <MudMenuItem OnClick="ColumnsAsync" Icon="@Icons.Material.Filled.ViewColumn" data-testid="list-columns">Columns…</MudMenuItem>
+                @if (_available.Any(c => c.Groupable))
                 {
-                    <MudMenuItem OnClick="SaveAsync" Icon="@Icons.Material.Filled.Save">Save changes to "@_selected.Name"</MudMenuItem>
+                    <MudMenuItem OnClick="() => GroupBy(null)" Icon="@(_group is null ? Icons.Material.Filled.Check : Icons.Material.Filled.Workspaces)" data-testid="list-group">No grouping</MudMenuItem>
+                    @foreach (var column in _available.Where(c => c.Groupable))
+                    {
+                        <MudMenuItem OnClick="() => GroupBy(column.Key)" Icon="@(_group?.Key == column.Key ? Icons.Material.Filled.Check : Icons.Material.Filled.Workspaces)">Group by @column.Title.ToLowerInvariant()</MudMenuItem>
+                    }
                 }
-                <MudMenuItem OnClick="SaveAsNewAsync" Icon="@Icons.Material.Filled.SaveAs" data-testid="view-save-as">Save as a new view…</MudMenuItem>
-                @if (_selected is { CanEdit: true } editable)
+                @if (_canExport)
                 {
-                    <MudMenuItem OnClick="() => RenameAsync(editable)" Icon="@Icons.Material.Filled.Edit">Rename or share…</MudMenuItem>
-                    <MudMenuItem OnClick="() => DeleteAsync(editable)" Icon="@Icons.Material.Filled.Delete">Delete this view</MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem OnClick="() => ExportAsync(ReportFileFormat.Xlsx)" Icon="@Icons.Material.Filled.GridOn" data-testid="list-export">Export to Excel</MudMenuItem>
+                    <MudMenuItem OnClick="() => ExportAsync(ReportFileFormat.Csv)" Icon="@Icons.Material.Filled.Description">Export to CSV</MudMenuItem>
                 }
-                @if (_views.DefaultViewId != _selected?.Id)
-                {
-                    <MudMenuItem OnClick="SetDefaultAsync" Icon="@Icons.Material.Filled.Star">Make this my default view</MudMenuItem>
-                }
-                <MudDivider />
-            }
-            <MudMenuItem OnClick="ColumnsAsync" Icon="@Icons.Material.Filled.ViewColumn" data-testid="list-columns">Columns…</MudMenuItem>
-            @if (_available.Any(c => c.Groupable))
-            {
-                <MudMenuItem OnClick="() => GroupBy(null)" Icon="@(_group is null ? Icons.Material.Filled.Check : Icons.Material.Filled.Workspaces)" data-testid="list-group">No grouping</MudMenuItem>
-                @foreach (var column in _available.Where(c => c.Groupable))
-                {
-                    <MudMenuItem OnClick="() => GroupBy(column.Key)" Icon="@(_group?.Key == column.Key ? Icons.Material.Filled.Check : Icons.Material.Filled.Workspaces)">Group by @column.Title.ToLowerInvariant()</MudMenuItem>
-                }
-            }
-            @if (_canExport)
-            {
-                <MudDivider />
-                <MudMenuItem OnClick="() => ExportAsync(ReportFileFormat.Xlsx)" Icon="@Icons.Material.Filled.GridOn" data-testid="list-export">Export to Excel</MudMenuItem>
-                <MudMenuItem OnClick="() => ExportAsync(ReportFileFormat.Csv)" Icon="@Icons.Material.Filled.Description">Export to CSV</MudMenuItem>
-            }
-        </MudMenu>
+            </MudMenu>
+        </div>
     </MudStack>
 
     @if (FilterCount > 0 || _dirty)

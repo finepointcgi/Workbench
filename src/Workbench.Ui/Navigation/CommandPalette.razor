@@ -18,6 +18,9 @@
     /// <summary>Raised with the question when the user picks "Ask the assistant" in the palette.</summary>
     [Parameter] public EventCallback<string> Ask { get; set; }
 
+    /// <summary>Raised with the <see cref="NewAction"/> key when the user picks a "New …" item.</summary>
+    [Parameter] public EventCallback<string> Create { get; set; }
+
     private IJSObjectReference? _module;
     private DotNetObjectReference<CommandPalette>? _self;
     private string _shortcut = "Ctrl K";
@@ -75,6 +78,11 @@
             {
                 _open = false;
                 await Ask.InvokeAsync(question);
+            }
+            else if (result is { Canceled: false, Data: PaletteItem { Kind: PaletteKind.Create, Action: { } key } })
+            {
+                _open = false;
+                await Create.InvokeAsync(key);
             }
         }
         finally

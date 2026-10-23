@@ -104,7 +104,8 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Contains("setup/projects/new", links);
+        Assert.DoesNotContain("setup/projects/new", links); // + New › Project
+        Assert.Equal(["projects", "resourcing", "odcs"], nav.FindAll("[data-testid='nav-projects'] a[href]").Select(a => a.GetAttribute("href")));
         Assert.Contains("approvals", links);
         Assert.Contains("resourcing", links);
         Assert.Contains("odcs", links);
@@ -119,13 +120,12 @@ public sealed class NavMenuTests
     [InlineData(OrgRoles.Finance)]
     [InlineData(OrgRoles.Admin)]
     [InlineData(OrgRoles.Employee)]
-    public async Task Only_project_managers_get_the_pm_shortcuts(OrgRoles roles)
+    public async Task Only_project_managers_get_the_pm_reports(OrgRoles roles)
     {
         var (nav, ctx) = await RenderAsync(new NavUser(roles));
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.DoesNotContain("setup/projects/new", links);
         Assert.DoesNotContain("reports/standard/project-status", links);
         Assert.Equal(roles != OrgRoles.Employee, links.Contains("setup/projects")); // Finance and Admin: under Setup
     }
@@ -209,7 +209,7 @@ public sealed class NavMenuTests
         Assert.True(Expanded(nav, "nav-finance"));
         Assert.False(Expanded(nav, "nav-my-work"));
         var cash = nav.Find("[data-testid='nav-group-Cash']");
-        Assert.Equal("cash cash/reconcile cash/reconciliations cash/forecast", cash.GetAttribute("data-pages"));
+        Assert.Equal("cash cash/reconcile cash/reconciliations cash/forecast cards", cash.GetAttribute("data-pages"));
         Assert.Contains("href=\"cash/reconcile\"", cash.OuterHtml); // links to the group page you're on, so it shows as current
         Assert.Empty(nav.FindAll("a[href='cash/forecast']")); // a tab, not a menu link
     }
@@ -235,7 +235,7 @@ public sealed class NavMenuTests
         var access = await NavAccess.LoadAsync(ctx.Services);
 
         var tabs = ctx.Render<GroupTabs>(p => p.Add(t => t.Access, access));
-        Assert.Equal(["cash", "cash/reconcile", "cash/reconciliations", "cash/forecast"], tabs.FindAll("a").Select(a => a.GetAttribute("href")!).ToList());
+        Assert.Equal(["cash", "cash/reconcile", "cash/reconciliations", "cash/forecast", "cards"], tabs.FindAll("a").Select(a => a.GetAttribute("href")!).ToList());
         Assert.Equal("Cash", tabs.Find("nav").GetAttribute("aria-label"));
 
         navigation.NavigateTo("purchasing/bills/" + Guid.NewGuid());
@@ -243,6 +243,51 @@ public sealed class NavMenuTests
 
         navigation.NavigateTo("time"); // not in a group
         tabs.WaitForAssertion(() => Assert.Empty(tabs.FindAll("a")));
+    }
+
+    [Fact]
+    public async Task Employee_people_section_is_the_directory_and_their_own_profile()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Employee));
+        await using var _ = ctx;
+
+        Assert.Equal("hr hr/org-chart", nav.Find("[data-testid='nav-group-Directory']").GetAttribute("data-pages"));
+        Assert.Equal("hr/me hr/benefits/me", nav.Find("[data-testid='nav-group-My profile']").GetAttribute("data-pages"));
+        Assert.Equal(2, nav.FindAll("[data-testid='nav-people'] a[href]").Count);
+    }
+
+    [Fact]
+    public async Task Hr_sees_its_own_work_first()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Hr));
+        await using var _ = ctx;
+
+        var people = nav.FindAll("[data-testid='nav-people'] a[href]").Select(a => a.TextContent.Trim()).ToList();
+        Assert.Equal(["HR administration", "Directory", "My profile"], people);
+    }
+
+    [Fact]
+    public async Task Finance_groups_lead_with_the_everyday_pages_and_setup_comes_first_under_setup()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Finance));
+        await using var _ = ctx;
+
+        var finance = nav.FindAll("[data-testid='nav-finance'] a[href]").Select(a => a.TextContent.Trim()).ToList();
+        Assert.Equal(["Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Payroll", "Revenue & compliance", "Planning"], finance);
+        Assert.StartsWith("accounting/journal accounting/close accounting/recurring", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
+        Assert.EndsWith("accounting/accounts accounting/posting-rules", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
+        Assert.StartsWith("purchasing/bills purchasing/payments purchasing/orders", nav.Find("[data-testid='nav-group-Payables & purchasing']").GetAttribute("data-pages"));
+        Assert.Equal("Setup", nav.FindAll("[data-testid='nav-admin'] a[href]")[0].TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task Admin_reaches_support_requests_from_the_menu()
+    {
+        var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Admin));
+        await using var _ = ctx;
+
+        Assert.Contains("admin/support", nav.Find("[data-testid='nav-group-People and access']").GetAttribute("data-pages")!.Split(' '));
+        Assert.EndsWith("materials/setup", nav.Find("[data-testid='nav-group-Inventory']").GetAttribute("data-pages"));
     }
 
     private static bool Expanded(IRenderedComponent<NavMenu> nav, string testId) =>

@@ -65,7 +65,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _items = [.. Recent, .. PaletteSearch.Pages(Access), .. HelpPalette.Items()];
+        _items = [.. Recent, .. PaletteSearch.Creates(Access), .. PaletteSearch.Pages(Access), .. HelpPalette.Items()];
         Refresh();
         if (!Access.IsSignedIn)
         {
@@ -151,7 +151,7 @@
     private void Open(PaletteItem item)
     {
         MudDialog.Close(DialogResult.Ok(item));
-        if (item.Kind != PaletteKind.Ask)
+        if (item.Kind is not (PaletteKind.Ask or PaletteKind.Create))
         {
             Navigation.NavigateTo(item.Href);
         }
@@ -165,6 +165,7 @@
         PaletteKind.Dashboard => "Dashboard",
         PaletteKind.Help => "Help",
         PaletteKind.Ask => "Ask",
+        PaletteKind.Create => "New",
         _ => "Page",
     };
 }

@@ -10,11 +10,12 @@ public enum PaletteKind
     Sheet,
     Dashboard,
     Help,
+    Create,
     Ask,
 }
 
-/// <summary>One result in the command palette.</summary>
-public sealed record PaletteItem(PaletteKind Kind, string Title, string Href, string Icon, string? Subtitle = null, string? Keywords = null);
+/// <summary>One result in the command palette. <see cref="Action"/> is the <see cref="NewAction"/> key of a "New …" item.</summary>
+public sealed record PaletteItem(PaletteKind Kind, string Title, string Href, string Icon, string? Subtitle = null, string? Keywords = null, string? Action = null);
 
 /// <summary>Ranks command-palette results. Pure, so it is easy to test.</summary>
 public static class PaletteSearch
@@ -23,14 +24,22 @@ public static class PaletteSearch
 
     /// <summary>
     /// The pages a user may open, as palette items (subtitle: where they live in the menu). Entries outside the menu
-    /// that only name records (breadcrumb parents such as billing/statements) aren't pages of their own.
+    /// that only name records (breadcrumb parents such as billing/statements) aren't pages of their own, and create pages
+    /// outside the menu (billing/new) are listed once, as their "New …" item.
     /// </summary>
-    public static IEnumerable<PaletteItem> Pages(NavAccess access) =>
-        NavCatalog.PaletteEntries(access)
-            .Where(e => e.InMenu || e.Detail is null)
+    public static IEnumerable<PaletteItem> Pages(NavAccess access)
+    {
+        var creates = NewCatalog.For(access).Select(a => a.Href).ToHashSet();
+        return NavCatalog.PaletteEntries(access)
+            .Where(e => e.InMenu || (e.Detail is null && !creates.Contains(e.Href)))
             .GroupBy(e => e.Href)
             .Select(g => g.First())
             .Select(e => new PaletteItem(PaletteKind.Page, e.Title, e.Href, e.Icon, Where(e, access), e.Keywords));
+    }
+
+    /// <summary>The "+ New" items the user may start, as palette items ("New invoice", "Log time").</summary>
+    public static IEnumerable<PaletteItem> Creates(NavAccess access) =>
+        NewCatalog.For(access).Select(a => new PaletteItem(PaletteKind.Create, a.PaletteTitle, $"new/{a.Key}", a.Icon, "+ New (N)", $"new create add start {a.Title} {a.Keywords}", a.Key));
 
     private static string Where(NavEntry entry, NavAccess access)
     {
@@ -100,7 +109,7 @@ public static class PaletteSearch
             score = 30;
         }
 
-        return score + (item.Kind == PaletteKind.Recent ? 5 : 0) + (item.Kind == PaletteKind.Page ? 2 : 0);
+        return score + (item.Kind == PaletteKind.Recent ? 5 : 0) + (item.Kind is PaletteKind.Page or PaletteKind.Create ? 2 : 0);
     }
 
     public static string IconFor(PaletteKind kind) => kind switch
@@ -111,6 +120,7 @@ public static class PaletteSearch
         PaletteKind.Dashboard => Icons.Material.Filled.Dashboard,
         PaletteKind.Help => Icons.Material.Filled.HelpOutline,
         PaletteKind.Ask => Icons.Material.Filled.AutoAwesome,
+        PaletteKind.Create => Icons.Material.Filled.Add,
         _ => Icons.Material.Filled.Article,
     };
 }

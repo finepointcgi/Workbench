@@ -173,9 +173,9 @@ public sealed class BuiltInRoleParityTests
         Assert.Contains("time/team", Menu(OrgRoles.Timekeeper));
         Assert.DoesNotContain("time/team", Menu(OrgRoles.Finance));
         Assert.Contains("time/team", Menu(OrgRoles.Admin));
-        Assert.Contains("setup/projects/new", Menu(OrgRoles.ProjectManager));
-        Assert.DoesNotContain("setup/projects/new", Menu(OrgRoles.Finance | OrgRoles.ProjectManager));
-        Assert.DoesNotContain("setup/projects/new", Menu(OrgRoles.Admin));
+        Assert.DoesNotContain("setup/projects/new", Menu(OrgRoles.ProjectManager)); // + New › Project for everyone who may create one
+        Assert.Contains(NewCatalog.For(new NavAccess(new CurrentUserInfo("x@example.com", "X", OrgRoles.ProjectManager, null))), a => a.Key == "project");
+        Assert.DoesNotContain(NewCatalog.For(new NavAccess(new CurrentUserInfo("x@example.com", "X", OrgRoles.Employee, null))), a => a.Key == "project");
         Assert.Contains("reports/standard/project-status", Menu(OrgRoles.Employee, managesProject: true));
         Assert.DoesNotContain("reports/standard/project-status", Menu(OrgRoles.Finance, managesProject: true));
         Assert.Contains("odcs", Menu(OrgRoles.ProjectManager));
