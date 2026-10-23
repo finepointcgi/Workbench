@@ -1,0 +1,129 @@
+@* The column dialog's settings for formulas, "Link to row" and lookup columns. *@
+@inject ISheetLinkService Links
+@inject ISheetService Sheets
+@inject ISnackbar Snackbar
+
+@if (State.Enabled)
+{
+    @if (Type == ColumnKind.LinkedRow)
+    {
+        <MudSelect T="Guid?" Label="Link to rows of" Value="State.LinkSheetId" ValueChanged="OnLinkSheetChanged" Required="true"
+                   HelperText="People who can't see that sheet won't see the links or anything looked up through them." data-testid="link-sheet">
+            @foreach (var sheet in _sheets)
+            {
+                <MudSelectItem T="Guid?" Value="sheet.Id">@sheet.Name (@sheet.Workspace)</MudSelectItem>
+            }
+        </MudSelect>
+    }
+    else if (Type == ColumnKind.Lookup)
+    {
+        @if (_linkColumns.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">A lookup shows a field of linked rows. Add a "Link to row" column to this sheet first.</MudAlert>
+        }
+        else
+        {
+            <MudSelect T="Guid?" Label="Through the link column" Value="State.LookupLinkColumnId" ValueChanged="OnLookupLinkChanged" Required="true" data-testid="lookup-link">
+                @foreach (var link in _linkColumns)
+                {
+                    <MudSelectItem T="Guid?" Value="link.Id">@link.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string" Label="Show this field of the linked rows" Value="State.LookupField" ValueChanged="OnLookupFieldChanged" Required="true"
+                       Disabled="_lookupFields.Count == 0" HelperText="It updates whenever the linked rows change." data-testid="lookup-field">
+                @foreach (var field in _lookupFields)
+                {
+                    <MudSelectItem T="string" Value="field.Key">@field.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    }
+    else
+    {
+        <MudSwitch T="bool" Value="State.UseFormula" ValueChanged="OnUseFormulaChanged" Color="Color.Primary" Label="Calculate with a formula" data-testid="use-formula" />
+        @if (State.UseFormula)
+        {
+            <FormulaEditor SheetId="SheetId" Value="@State.Formula" ValueChanged="OnFormulaChanged" Columns="_columns" />
+        }
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter, EditorRequired] public ColumnKind Type { get; set; }
+    [Parameter] public ColumnDto? Column { get; set; }
+    [Parameter, EditorRequired] public ColumnExtrasState State { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<LinkableSheetDto> _sheets = [];
+    private IReadOnlyList<ColumnDto> _columns = [];
+    private List<ColumnDto> _linkColumns = [];
+    private IReadOnlyList<SheetFieldDto> _lookupFields = [];
+    private bool _loaded;
+
+    protected override void OnInitialized()
+    {
+        State.Enabled = SheetId != Guid.Empty;
+        State.Load(Column);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!State.Enabled || _loaded)
+        {
+            return;
+        }
+
+        _loaded = true;
+        try
+        {
+            _sheets = await Links.ListSheetsAsync();
+            _columns = (await Sheets.GetAsync(SheetId))?.Columns ?? [];
+            _linkColumns = _columns.Where(c => c.Type == ColumnKind.LinkedRow && c.Id != Column?.Id).ToList();
+            UpdateLookupFields();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Snackbar.Add($"Couldn't load the sheets: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void UpdateLookupFields()
+    {
+        var link = _linkColumns.FirstOrDefault(l => l.Id == State.LookupLinkColumnId);
+        var target = link is { Options.Count: > 0 } && Guid.TryParse(link.Options[0], out var id) ? _sheets.FirstOrDefault(s => s.Id == id) : null;
+        _lookupFields = target?.Fields ?? [];
+    }
+
+    private Task OnLinkSheetChanged(Guid? value)
+    {
+        State.LinkSheetId = value;
+        return Changed.InvokeAsync();
+    }
+
+    private Task OnLookupLinkChanged(Guid? value)
+    {
+        State.LookupLinkColumnId = value;
+        State.LookupField = null;
+        UpdateLookupFields();
+        return Changed.InvokeAsync();
+    }
+
+    private Task OnLookupFieldChanged(string value)
+    {
+        State.LookupField = value;
+        return Changed.InvokeAsync();
+    }
+
+    private Task OnUseFormulaChanged(bool value)
+    {
+        State.UseFormula = value;
+        return Changed.InvokeAsync();
+    }
+
+    private Task OnFormulaChanged(string value)
+    {
+        State.Formula = value;
+        return Changed.InvokeAsync();
+    }
+}

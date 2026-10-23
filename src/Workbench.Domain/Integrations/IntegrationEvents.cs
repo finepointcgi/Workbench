@@ -23,12 +23,13 @@ public sealed record IntegrationEventType(string Key, string Subject, Type DataT
     public static readonly IntegrationEventType ShipmentShipped = new("shipment.shipped", "Shipment", typeof(ShipmentEventData));
     public static readonly IntegrationEventType RfqAwarded = new("rfq.awarded", "Rfq", typeof(RfqAwardEventData));
     public static readonly IntegrationEventType NcrDispositioned = new("ncr.dispositioned", "Nonconformance", typeof(NcrEventData));
+    public static readonly IntegrationEventType SheetFormSubmitted = new("sheet.form_submitted", "SheetItem", typeof(SheetFormSubmittedEventData));
 
     public static IReadOnlyList<IntegrationEventType> All { get; } =
     [
         TimesheetSubmitted, TimesheetApproved, InvoiceApproved, InvoiceSent, InvoicePaid, BillApproved, BillPaid,
         PurchaseOrderApproved, ProjectCreated, EmployeeHired, EmployeeTerminated, OpportunityStageChanged, PeriodClosed,
-        ShipmentShipped, RfqAwarded, NcrDispositioned,
+        ShipmentShipped, RfqAwarded, NcrDispositioned, SheetFormSubmitted,
     ];
 
     public static IntegrationEventType? Find(string key) => All.FirstOrDefault(t => t.Key == key);
@@ -117,4 +118,10 @@ public sealed record NcrEventData(
     : IntegrationEventData
 {
     public override Guid GetSubjectId() => NcrId;
+}
+
+/// <summary>A form added a row to a sheet. No answers are sent (cell values can be restricted); read the row through the API.</summary>
+public sealed record SheetFormSubmittedEventData(Guid FormId, Guid SheetId, Guid ItemId, string FormTitle, bool Public) : IntegrationEventData
+{
+    public override Guid GetSubjectId() => ItemId;
 }

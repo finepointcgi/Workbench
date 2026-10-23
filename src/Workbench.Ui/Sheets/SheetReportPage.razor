@@ -1,0 +1,344 @@
+@page "/sheet-reports/new"
+@page "/sheet-reports/{ReportId:guid}"
+@* A cross-sheet report: the builder (sheets, columns, filters, sort, sharing) and the live result, each row linking back. *@
+@inject ISheetReportService Reports
+@inject ISheetLinkService Links
+@inject Workbench.Contracts.Identity.IWorkspaceMembershipService Workspaces
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>@(string.IsNullOrWhiteSpace(_name) ? "Report" : _name) · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    <MudIconButton Href="sheet-reports" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to reports" />
+    <MudText Typo="Typo.h4" HtmlTag="h1">@(ReportId is null ? "New report" : _name)</MudText>
+    <MudSpacer />
+    @if (_canEdit)
+    {
+        <MudButton Variant="Variant.Text" StartIcon="@(_editing ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.Tune)" OnClick="() => _editing = !_editing">
+            @(_editing ? "Hide settings" : "Edit report")
+        </MudButton>
+    }
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Refresh" OnClick="RunAsync" />
+</MudStack>
+
+@if (_notFound)
+{
+    <MudText>This report doesn't exist or isn't shared with you.</MudText>
+}
+else
+{
+    @if (_editing)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_name" Label="Report name" Required="true" Immediate="true" data-testid="report-name" />
+                <MudSelect T="Guid" Label="Sheets" MultiSelection="true" SelectedValues="_sheetIds" SelectedValuesChanged="OnSheetsChanged"
+                           ToStringFunc="@(id => _sheets.FirstOrDefault(s => s.Id == id)?.Name ?? "")" data-testid="report-sheets">
+                    @foreach (var sheet in _sheets)
+                    {
+                        <MudSelectItem T="Guid" Value="sheet.Id">@sheet.Name (@sheet.Workspace)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" Label="Columns" MultiSelection="true" SelectedValues="_columns" SelectedValuesChanged="OnColumnsChanged"
+                           HelperText="Matched by name in each sheet." data-testid="report-columns">
+                    @foreach (var name in AvailableColumns)
+                    {
+                        <MudSelectItem T="string" Value="name">@name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudText Typo="Typo.subtitle2">Filters</MudText>
+                @foreach (var filter in _filters)
+                {
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudSelect T="string" @bind-Value="filter.Column" Label="Column" Margin="Margin.Dense" Style="min-width: 160px">
+                            @foreach (var name in AvailableColumns)
+                            {
+                                <MudSelectItem T="string" Value="name">@name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect T="SheetReportOperator" @bind-Value="filter.Operator" Label="Test" Margin="Margin.Dense" Style="min-width: 170px">
+                            @foreach (var op in Enum.GetValues<SheetReportOperator>())
+                            {
+                                <MudSelectItem T="SheetReportOperator" Value="op">@OperatorText(op)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (filter.Operator is not (SheetReportOperator.IsBlank or SheetReportOperator.IsNotBlank))
+                        {
+                            <MudTextField @bind-Value="filter.Value" Label="Value" Margin="Margin.Dense" HelperText="Dates: 2026-11-01, today, today+7" />
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="Remove filter" OnClick="() => _filters.Remove(filter)" />
+                    </MudStack>
+                }
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddFilter" data-testid="add-filter">Add filter</MudButton>
+                    @if (_filters.Count > 1)
+                    {
+                        <MudRadioGroup T="bool" @bind-Value="_matchAll">
+                            <MudRadio T="bool" Value="true">Match every filter</MudRadio>
+                            <MudRadio T="bool" Value="false">Match any filter</MudRadio>
+                        </MudRadioGroup>
+                    }
+                </MudStack>
+
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                    <MudSelect T="string" @bind-Value="_sortBy" Label="Sort by" Clearable="true" Style="min-width: 200px">
+                        @foreach (var name in AvailableColumns)
+                        {
+                            <MudSelectItem T="string" Value="name">@name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSwitch @bind-Value="_sortDescending" Label="Largest or latest first" Color="Color.Primary" />
+                    <MudSelect T="Guid?" @bind-Value="_sharedWith" Label="Share with" Clearable="true" Style="min-width: 220px" HelperText="Empty: only you">
+                        @foreach (var workspace in _workspaces)
+                        {
+                            <MudSelectItem T="Guid?" Value="workspace.Id">Members of @workspace.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" OnClick="PreviewAsync" StartIcon="@Icons.Material.Filled.Visibility">Preview</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="string.IsNullOrWhiteSpace(_name) || _sheetIds.Count == 0"
+                               data-testid="report-save">Save report</MudButton>
+                    @if (ReportId is not null)
+                    {
+                        <MudSpacer />
+                        <MudButton Color="Color.Error" Variant="Variant.Text" OnClick="DeleteAsync">Delete</MudButton>
+                    }
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    }
+
+    @if (_result is { } result)
+    {
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.body2" data-testid="report-count">@Summary(result)</MudText>
+            @if (result.HiddenSheets > 0)
+            {
+                <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Outlined.VisibilityOff">@result.HiddenSheets sheet@(result.HiddenSheets == 1 ? "" : "s") you can't see left out</MudChip>
+            }
+            @if (result.Truncated)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning">Showing the first @result.Rows.Count rows: add a filter</MudChip>
+            }
+        </MudStack>
+        <MudTable T="SheetReportRowDto" Items="result.Rows" Dense="true" Hover="true" Elevation="0" Outlined="true" HorizontalScrollbar="true" data-testid="report-table">
+            <HeaderContent>
+                @if (!result.Columns.Any(c => c.Name.Equals("Title", StringComparison.OrdinalIgnoreCase)))
+                {
+                    <MudTh>Row</MudTh>
+                }
+                @foreach (var column in result.Columns)
+                {
+                    <MudTh>@column.Name</MudTh>
+                }
+            </HeaderContent>
+            <RowTemplate>
+                @if (!result.Columns.Any(c => c.Name.Equals("Title", StringComparison.OrdinalIgnoreCase)))
+                {
+                    <MudTd><MudLink Href="@RowHref(context)">@context.Title</MudLink></MudTd>
+                }
+                @for (var i = 0; i < result.Columns.Count; i++)
+                {
+                    var column = result.Columns[i];
+                    var value = context.Cells[i];
+                    <MudTd>
+                        @if (column.Name.Equals("Title", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <MudLink Href="@RowHref(context)">@value</MudLink>
+                        }
+                        else if (column.Name.Equals("Sheet", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <MudLink Href="@($"sheets/{context.SheetId}")">@value</MudLink>
+                        }
+                        else if (column.Type == ColumnKind.Checkbox)
+                        {
+                            @(value == "true" ? "✓" : "")
+                        }
+                        else
+                        {
+                            <span title="@(Workbench.Contracts.Sheets.FormulaErrorText.Explain(value))">@CellFormat.Display(value, column.Type)</span>
+                        }
+                    </MudTd>
+                }
+            </RowTemplate>
+            <NoRecordsContent><MudText>No rows match.</MudText></NoRecordsContent>
+        </MudTable>
+    }
+}
+
+@code {
+    [Parameter] public Guid? ReportId { get; set; }
+
+    private sealed class FilterRow
+    {
+        public string Column { get; set; } = "Title";
+        public SheetReportOperator Operator { get; set; } = SheetReportOperator.Is;
+        public string? Value { get; set; }
+    }
+
+    private IReadOnlyList<LinkableSheetDto> _sheets = [];
+    private IReadOnlyList<Workbench.Contracts.Identity.WorkspaceSummary> _workspaces = [];
+    private SheetReportResultDto? _result;
+    private string _name = "";
+    private IReadOnlyCollection<Guid> _sheetIds = new HashSet<Guid>();
+    private IReadOnlyCollection<string> _columns = new HashSet<string>();
+    private List<string> _columnOrder = [];
+    private readonly List<FilterRow> _filters = [];
+    private bool _matchAll = true;
+    private string? _sortBy;
+    private bool _sortDescending;
+    private Guid? _sharedWith;
+    private bool _editing;
+    private bool _canEdit = true;
+    private bool _notFound;
+
+    private IEnumerable<string> AvailableColumns =>
+        new[] { "Sheet", "Title", "Start", "Finish" }
+            .Concat(_sheets.Where(s => _sheetIds.Contains(s.Id)).SelectMany(s => s.Fields).Where(f => Guid.TryParse(f.Key, out _)).Select(f => f.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _sheets = await Links.ListSheetsAsync();
+            _workspaces = await Workspaces.ListMyWorkspacesAsync();
+            if (ReportId is { } id)
+            {
+                if (await Reports.GetAsync(id) is not { } report)
+                {
+                    _notFound = true;
+                    return;
+                }
+
+                Load(report);
+                await RunAsync();
+            }
+            else
+            {
+                _editing = true;
+                _columnOrder = ["Sheet", "Title"];
+                _columns = new HashSet<string>(_columnOrder);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load the report: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Load(SheetReportDto report)
+    {
+        _name = report.Name;
+        _sheetIds = new HashSet<Guid>(report.SheetIds);
+        _columnOrder = report.Columns.ToList();
+        _columns = new HashSet<string>(_columnOrder, StringComparer.OrdinalIgnoreCase);
+        _filters.Clear();
+        _filters.AddRange(report.Filters.Select(f => new FilterRow { Column = f.Column, Operator = f.Operator, Value = f.Value }));
+        _matchAll = report.MatchAll;
+        _sortBy = report.SortBy;
+        _sortDescending = report.SortDescending;
+        _sharedWith = report.WorkspaceId;
+        _canEdit = report.CanEdit;
+    }
+
+    private void OnSheetsChanged(IReadOnlyCollection<Guid> values) => _sheetIds = values.ToHashSet();
+
+    private static string Summary(SheetReportResultDto result)
+    {
+        var rows = result.Rows.Count;
+        var sheets = result.Report.SheetIds.Count - result.HiddenSheets;
+        return $"{rows} row{(rows == 1 ? "" : "s")} from {sheets} sheet{(sheets == 1 ? "" : "s")}";
+    }
+
+    private void OnColumnsChanged(IReadOnlyCollection<string> values)
+    {
+        var picked = values.ToList();
+        _columnOrder = _columnOrder.Where(c => picked.Contains(c, StringComparer.OrdinalIgnoreCase))
+            .Concat(picked.Where(p => !_columnOrder.Contains(p, StringComparer.OrdinalIgnoreCase))).ToList();
+        _columns = new HashSet<string>(_columnOrder, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void AddFilter() => _filters.Add(new FilterRow { Column = AvailableColumns.Skip(4).FirstOrDefault() ?? "Title" });
+
+    private SaveSheetReportRequest Request() => new(_name.Trim(), _sheetIds.ToList(), _columnOrder,
+        _filters.Where(f => !string.IsNullOrWhiteSpace(f.Column)).Select(f => new SheetReportFilterDto(f.Column, f.Operator, f.Value)).ToList(),
+        _matchAll, _sortBy, _sortDescending, _sharedWith);
+
+    private static string RowHref(SheetReportRowDto row) => $"sheets/{row.SheetId}?item={row.ItemId}";
+
+    public static string OperatorText(SheetReportOperator op) => op switch
+    {
+        SheetReportOperator.Is => "is",
+        SheetReportOperator.IsNot => "is not",
+        SheetReportOperator.Contains => "contains",
+        SheetReportOperator.DoesNotContain => "doesn't contain",
+        SheetReportOperator.IsBlank => "is blank",
+        SheetReportOperator.IsNotBlank => "isn't blank",
+        SheetReportOperator.GreaterThan => "is more than / after",
+        SheetReportOperator.LessThan => "is less than / before",
+        SheetReportOperator.OnOrAfter => "is at least / on or after",
+        _ => "is at most / on or before",
+    };
+
+    private async Task RunAsync()
+    {
+        try
+        {
+            _result = ReportId is { } id ? await Reports.RunAsync(id) : await Reports.PreviewAsync(Request());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't run the report: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        try
+        {
+            _result = await Reports.PreviewAsync(Request());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var saved = ReportId is { } id ? await Reports.UpdateAsync(id, Request()) : await Reports.CreateAsync(Request());
+            Snackbar.Add($"Saved \"{saved.Name}\".", Severity.Success);
+            if (ReportId is null)
+            {
+                Navigation.NavigateTo($"sheet-reports/{saved.Id}");
+                return;
+            }
+
+            _editing = false;
+            await RunAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (ReportId is not { } id || await DialogService.ShowMessageBoxAsync($"Delete {_name}?", "The sheets and their rows stay as they are.", yesText: "Delete", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await Reports.DeleteAsync(id);
+        Navigation.NavigateTo("sheet-reports");
+    }
+}

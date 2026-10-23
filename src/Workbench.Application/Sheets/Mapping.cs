@@ -13,4 +13,6 @@ internal static class Mapping
             new Dictionary<string, string?>(i.Values), i.IsMilestone);
 
     public static ColumnType ToDomain(this ColumnKind kind) => (ColumnType)(int)kind;
+
+    public static ColumnKind ToContract(this ColumnType type) => (ColumnKind)(int)type;
 }

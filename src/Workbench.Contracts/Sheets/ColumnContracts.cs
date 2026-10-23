@@ -11,6 +11,18 @@ public enum ColumnKind
     Dropdown,
     Checkbox,
     CostpointLookup,
+
+    /// <summary>
+    /// Links to rows of another sheet. <c>Options[0]</c> is the other sheet's id; the cell value is the linked item ids,
+    /// comma-separated. Viewers who can't see that sheet see no links. Manage with <see cref="ISheetLinkService"/>.
+    /// </summary>
+    LinkedRow = 8,
+
+    /// <summary>
+    /// Read-only: shows a field of the rows linked in a <see cref="LinkedRow"/> column of this sheet, updated on every read.
+    /// <c>Options</c> are the link column's id, then the field key (a column id, or <c>title</c>, <c>start</c>, <c>finish</c>).
+    /// </summary>
+    Lookup = 9,
 }
 
 /// <summary>

@@ -2,12 +2,15 @@
 @inject ISheetService SheetService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <PageTitle>Sheets · Workbench</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
     <MudText Typo="Typo.h4" HtmlTag="h1">Sheets</MudText>
     <MudSpacer />
+    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.TableView" Href="sheet-reports" Class="mr-2">Reports across sheets</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                OnClick="CreateSheetAsync">New sheet</MudButton>
 </MudStack>
@@ -78,20 +81,31 @@
 
     private async Task CreateSheetAsync()
     {
-        var dialog = await DialogService.ShowAsync<NewSheetDialog>("New sheet");
+        var dialog = await DialogService.ShowAsync<NewSheetDialog>("New sheet", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await dialog.Result;
-        if (result is null || result.Canceled || result.Data is not CreateSheetRequest request)
+        if (result is null || result.Canceled || result.Data is null)
         {
             return;
         }
 
         try
         {
-            var created = await SheetService.CreateAsync(request);
+            var created = result.Data switch
+            {
+                CreateSheetFromTemplateRequest fromTemplate when Services.GetService(typeof(ISheetTemplateService)) is ISheetTemplateService templates =>
+                    await templates.CreateSheetAsync(fromTemplate),
+                CreateSheetRequest request => await SheetService.CreateAsync(request),
+                _ => null,
+            };
+            if (created is null)
+            {
+                return;
+            }
+
             Snackbar.Add($"Created \"{created.Name}\"", Severity.Success);
-            await LoadAsync();
+            Navigation.NavigateTo($"sheets/{created.Id}");
         }
-        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException or Workbench.Contracts.WorkbenchNotFoundException)
         {
             Snackbar.Add($"Couldn't create the sheet: {ex.Message}", Severity.Error);
         }

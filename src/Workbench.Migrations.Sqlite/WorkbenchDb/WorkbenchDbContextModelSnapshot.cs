@@ -7128,6 +7128,109 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("StoredFile");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Forms.FormSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FormId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectedReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SubmittedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FormId", "SubmittedAtUtc");
+
+                    b.ToTable("FormSubmission");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Forms.SheetForm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConfirmationMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fields")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyOnSubmit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PublicToken")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique();
+
+                    b.HasIndex("SheetId");
+
+                    b.ToTable("SheetForm");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Hr.BenefitDeductionExport", b =>
                 {
                     b.Property<Guid>("Id")
@@ -20368,6 +20471,135 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("WorkspaceId");
 
                     b.ToTable("Sheets");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Sheets.SheetReference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fields")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SourceSheetId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId");
+
+                    b.HasIndex("SourceSheetId");
+
+                    b.ToTable("SheetReference");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Sheets.SheetReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Columns")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Filters")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("MatchAll")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SheetIds")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SortBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SortDescending")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerEmail");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("SheetReport");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Sheets.SheetTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("SheetTemplate");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Support.SupportRequest", b =>

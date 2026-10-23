@@ -13,6 +13,24 @@ internal sealed class TestRow : IFormulaContext
 
     public DateOnly Today { get; init; } = DefaultToday;
 
+    /// <summary>Column ranges by "From:To" (case-insensitive), e.g. "Status:Status".</summary>
+    public Dictionary<string, FormulaValue> Ranges { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cross-sheet references by name.</summary>
+    public Dictionary<string, FormulaValue> References { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public FormulaValue GetColumnRange(string from, string to) =>
+        Ranges.TryGetValue($"{from}:{to}", out var value) ? value : FormulaValue.FromError(FormulaErrors.Ref);
+
+    public FormulaValue GetSheetReference(string name) =>
+        References.TryGetValue(name, out var value) ? value : FormulaValue.FromError(FormulaErrors.Ref);
+
+    public TestRow WithRange(string column, params FormulaValue[] values)
+    {
+        Ranges[$"{column}:{column}"] = FormulaValue.FromList(values);
+        return this;
+    }
+
     public FormulaValue GetValue(string name) =>
         Values.TryGetValue(name, out var value) ? value : FormulaValue.FromError(FormulaErrors.Ref);
 

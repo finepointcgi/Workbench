@@ -151,6 +151,7 @@ public static class Permission
 
     // Sheets
     public const string RestrictedColumnsView = "sheets.restricted_columns.view";
+    public const string SheetFormsPublic = "sheets.forms.public";
 
     // Sensitive fields: withheld fields are masked in reads, exports, reports, the API and the assistant
     // ([SensitiveField] on contract properties). LaborCostView, PayRatesView, VendorTaxIds and VendorBankDetails are fields too.
@@ -301,6 +302,9 @@ public static class PermissionCatalog
         new(Permission.SalesCreditHold, AreaMaterials, "Credit holds", "Put sales orders on or off credit hold.", F),
 
         new(Permission.RestrictedColumnsView, AreaSheets, "See restricted columns", "Sheet columns marked \"Finance and owners only\" in every workspace.", F, Sensitive: true),
+        new(Permission.SheetFormsPublic, AreaSheets, "Publish public forms",
+            "Share a sheet's form by public link, so anyone with the link can add a row without signing in. Only in workspaces the person owns.",
+            F | OrgRoles.ProjectManager),
 
         new(Permission.FieldsSalaries, AreaFields, "See salaries", "Salary ranges on positions and the amounts in compensation history and pay changes. Without it they show as hidden.", H | F, Sensitive: true),
         new(Permission.FieldsBurdenedCost, AreaFields, "See burdened cost", "Fringe, overhead and G&A applied to project cost (burdened cost and burdened financials). Project managers always see their own projects'.", F, Sensitive: true),

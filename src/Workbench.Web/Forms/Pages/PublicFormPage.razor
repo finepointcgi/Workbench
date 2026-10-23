@@ -1,0 +1,89 @@
+@* A public form: its fields only. The "website" field is a honeypot, hidden from people (and screen readers). *@
+<PublicFormLayout Title="@Form.Title">
+    @if (!string.IsNullOrWhiteSpace(Form.Description))
+    {
+        <p class="lead pre">@Form.Description</p>
+    }
+    @if (!Form.IsOpen)
+    {
+        <p class="notice" role="status">This form is closed and isn't taking responses right now.</p>
+    }
+    else
+    {
+        @if (Error is not null)
+        {
+            <p class="error" role="alert">@Error</p>
+        }
+        <form method="post" action="@Path" class="card" novalidate>
+            <input type="hidden" name="@Token.FormFieldName" value="@Token.RequestToken" />
+            <div class="trap" aria-hidden="true">
+                <label for="@PublicFormEndpoints.Honeypot">Leave this empty</label>
+                <input id="@PublicFormEndpoints.Honeypot" name="@PublicFormEndpoints.Honeypot" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+            @foreach (var field in Form.Fields)
+            {
+                var id = $"f_{field.Key}";
+                var help = field.HelpText is null ? null : $"{id}_help";
+                var value = Values?.GetValueOrDefault(field.Key);
+                <div class="field">
+                    @if (field.Type == ColumnKind.Checkbox)
+                    {
+                        <label class="inline" for="@id">
+                            <input id="@id" name="@field.Key" type="checkbox" value="true" checked="@(value == "true")" aria-describedby="@help" />
+                            @field.Label
+                        </label>
+                    }
+                    else
+                    {
+                        <label for="@id">@field.Label@if (field.Required) {<span class="req" aria-hidden="true"> *</span>}</label>
+                        @switch (field.Type)
+                        {
+                            case ColumnKind.Dropdown:
+                                <select id="@id" name="@field.Key" required="@field.Required" aria-describedby="@help">
+                                    <option value="">Choose…</option>
+                                    @foreach (var option in field.Options)
+                                    {
+                                        <option value="@option" selected="@(string.Equals(value, option, StringComparison.OrdinalIgnoreCase))">@option</option>
+                                    }
+                                </select>
+                                break;
+                            case ColumnKind.Date:
+                                <input id="@id" name="@field.Key" type="date" value="@value" required="@field.Required" aria-describedby="@help" />
+                                break;
+                            case ColumnKind.Number or ColumnKind.Currency:
+                                <input id="@id" name="@field.Key" type="text" inputmode="decimal" value="@value" required="@field.Required" aria-describedby="@help" />
+                                break;
+                            case ColumnKind.Person:
+                                <input id="@id" name="@field.Key" type="email" autocomplete="email" value="@value" required="@field.Required" aria-describedby="@help" />
+                                break;
+                            default:
+                                if (field.Key == "title")
+                                {
+                                    <input id="@id" name="@field.Key" type="text" maxlength="500" value="@value" required aria-describedby="@help" />
+                                }
+                                else
+                                {
+                                    <textarea id="@id" name="@field.Key" rows="3" maxlength="4000" required="@field.Required" aria-describedby="@help">@value</textarea>
+                                }
+                                break;
+                        }
+                    }
+                    @if (help is not null)
+                    {
+                        <p class="hint" id="@help">@field.HelpText</p>
+                    }
+                </div>
+            }
+            <p class="hint">Fields marked * are required.</p>
+            <button type="submit" class="primary">Send</button>
+        </form>
+    }
+</PublicFormLayout>
+
+@code {
+    [Parameter, EditorRequired] public FillFormDto Form { get; set; } = default!;
+    [Parameter, EditorRequired] public AntiforgeryTokenSet Token { get; set; } = default!;
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, string?>? Values { get; set; }
+}

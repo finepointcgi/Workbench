@@ -108,6 +108,7 @@ public static class DependencyInjection
         services.AddScoped<Workbench.Contracts.Identity.IPermissionCatalog>(sp => sp.GetRequiredService<Identity.PermissionRegistry>());
         Automations.AutomationBuilderRegistration.AddWorkbenchAutomationBuilder(services); // Admin › Automation: cross-module automations (capture hook in AuditRecorder, queue, schedules, thresholds); above AddWorkbenchIdentity.
         Customization.LayoutsRegistration.AddWorkbenchLayouts(services); // Form layouts (required fields checked on save), list views, role home pages; after every form's service, above AddWorkbenchIdentity.
+        services.AddWorkbenchSheetExtras(); // Wave E: linked rows, lookups, cross-sheet references, templates, copy, cross-sheet reports, forms; above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();
