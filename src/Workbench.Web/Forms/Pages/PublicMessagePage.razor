@@ -1,0 +1,14 @@
+<PublicFormLayout Title="@Title">
+    <p class="@(IsError ? "error" : "notice")" role="@(IsError ? "alert" : "status")">@Text</p>
+    @if (Again is not null)
+    {
+        <p><a href="@Again">Send another response</a></p>
+    }
+</PublicFormLayout>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter] public string? Again { get; set; }
+    [Parameter] public bool IsError { get; set; }
+}

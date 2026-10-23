@@ -39,6 +39,12 @@ public enum ColumnType
     Dropdown,
     Checkbox,
     CostpointLookup,
+
+    /// <summary>Links to rows of another sheet (Options[0] is that sheet's id); the value is the linked item ids, comma-separated.</summary>
+    LinkedRow = 8,
+
+    /// <summary>Shows a field of the rows linked in a LinkedRow column (Options: the link column's id, then the field key); computed on read.</summary>
+    Lookup = 9,
 }
 
 public sealed class Column : Entity

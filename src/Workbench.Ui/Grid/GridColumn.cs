@@ -37,8 +37,8 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
 
     public const string AssigneesKey = "assignees";
 
-    /// <summary>Formula columns are computed server-side and can't be edited in the grid.</summary>
-    public bool ReadOnly => IsFormula;
+    /// <summary>Formula and lookup columns are computed server-side and can't be edited in the grid.</summary>
+    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup;
 
     /// <summary>
     /// Title, then Assignees (when shown), then Start/Finish when scheduling is on (with Duration and Predecessors when the
@@ -83,4 +83,4 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
 public sealed record GridRow(ItemDto Item, int Depth, bool HasChildren, bool HasPreviousSibling);
 
 /// <summary>What <see cref="ColumnDialog"/> returns. The type is ignored when editing an existing column.</summary>
-public sealed record ColumnDialogResult(string Name, ColumnKind Type, IReadOnlyList<string> Options, bool IsRestricted = false, IReadOnlyList<string>? OptionColors = null);
+public sealed record ColumnDialogResult(string Name, ColumnKind Type, IReadOnlyList<string> Options, bool IsRestricted = false, IReadOnlyList<string>? OptionColors = null, string? Formula = null);

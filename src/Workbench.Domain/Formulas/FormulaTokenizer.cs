@@ -11,6 +11,13 @@ public enum TokenKind
     /// <summary>A bracketed column reference such as <c>[Planned hours]</c>; the text is the name without brackets.</summary>
     Reference,
     Identifier,
+
+    /// <summary>A cross-sheet reference such as <c>{Open risks}</c>; the text is the name without braces.</summary>
+    SheetReference,
+
+    /// <summary><c>@cell</c>: the value being tested inside a criterion (COUNTIFS, SUMIFS, COLLECT, ...).</summary>
+    CurrentCell,
+    Colon,
     Plus,
     Minus,
     Star,
@@ -29,7 +36,8 @@ public enum TokenKind
     End,
 }
 
-public readonly record struct Token(TokenKind Kind, string Text, int Position, double Number = 0);
+/// <summary>A token. <see cref="Length"/> is how many characters of the formula it covers (for references, the brackets too).</summary>
+public readonly record struct Token(TokenKind Kind, string Text, int Position, double Number = 0, int Length = 0);
 
 /// <summary>Thrown when formula text can't be tokenized or parsed. <see cref="Position"/> is a zero-based character index.</summary>
 public sealed class FormulaParseException(string message, int position) : Exception(message)
@@ -71,13 +79,14 @@ public static class FormulaTokenizer
                 }
 
                 var literal = text[start..i];
-                tokens.Add(new Token(TokenKind.Number, literal, start, double.Parse(literal, CultureInfo.InvariantCulture)));
+                tokens.Add(new Token(TokenKind.Number, literal, start, double.Parse(literal, CultureInfo.InvariantCulture), i - start));
                 continue;
             }
 
             if (c == '"')
             {
-                tokens.Add(new Token(TokenKind.String, ReadString(text, ref i), start));
+                var literal = ReadString(text, ref i);
+                tokens.Add(new Token(TokenKind.String, literal, start, Length: i - start));
                 continue;
             }
 
@@ -95,8 +104,43 @@ public static class FormulaTokenizer
                     throw new FormulaParseException($"Empty column reference '[]' at position {start + 1}. Put a column name inside the brackets.", start);
                 }
 
-                tokens.Add(new Token(TokenKind.Reference, name, start));
+                tokens.Add(new Token(TokenKind.Reference, name, start, Length: close + 1 - start));
                 i = close + 1;
+
+                // Smartsheet's [Column]@row means this row's value, which is what [Column] already is.
+                if (string.Compare(text, i, "@row", 0, 4, StringComparison.OrdinalIgnoreCase) == 0
+                    && (i + 4 >= text.Length || !char.IsLetterOrDigit(text[i + 4])))
+                {
+                    i += 4;
+                }
+
+                continue;
+            }
+
+            if (c == '{')
+            {
+                var close = text.IndexOf('}', i + 1);
+                if (close < 0)
+                {
+                    throw new FormulaParseException($"Missing '}}' to close the sheet reference at position {start + 1}.", start);
+                }
+
+                var name = text[(i + 1)..close].Trim();
+                if (name.Length == 0)
+                {
+                    throw new FormulaParseException($"Empty sheet reference '{{}}' at position {start + 1}. Put the name of a cross-sheet reference inside the braces.", start);
+                }
+
+                tokens.Add(new Token(TokenKind.SheetReference, name, start, Length: close + 1 - start));
+                i = close + 1;
+                continue;
+            }
+
+            if (c == '@' && string.Compare(text, i + 1, "cell", 0, 4, StringComparison.OrdinalIgnoreCase) == 0
+                && (i + 5 >= text.Length || !char.IsLetterOrDigit(text[i + 5])))
+            {
+                tokens.Add(new Token(TokenKind.CurrentCell, "@cell", start, Length: 5));
+                i += 5;
                 continue;
             }
 
@@ -107,7 +151,7 @@ public static class FormulaTokenizer
                     i++;
                 }
 
-                tokens.Add(new Token(TokenKind.Identifier, text[start..i], start));
+                tokens.Add(new Token(TokenKind.Identifier, text[start..i], start, Length: i - start));
                 continue;
             }
 
@@ -129,9 +173,10 @@ public static class FormulaTokenizer
                 '(' => (TokenKind.LeftParen, 1),
                 ')' => (TokenKind.RightParen, 1),
                 ',' => (TokenKind.Comma, 1),
+                ':' => (TokenKind.Colon, 1),
                 _ => throw new FormulaParseException($"Unexpected character '{c}' at position {start + 1}.", start),
             };
-            tokens.Add(new Token(kind, text.Substring(start, length), start));
+            tokens.Add(new Token(kind, text.Substring(start, length), start, Length: length));
             i += length;
         }
 

@@ -83,3 +83,24 @@ public sealed record FunctionNode(string Name, IReadOnlyList<FormulaNode> Argume
 {
     public override string ToString() => $"{Name}({string.Join(", ", Arguments)})";
 }
+
+/// <summary>
+/// A whole-column range on this sheet, <c>[Status]:[Status]</c>, or several adjacent columns, <c>[Task]:[Owner]</c>
+/// (every row, in sheet order). Used by COUNTIFS, SUMIFS, INDEX, MATCH, VLOOKUP and the other range functions.
+/// </summary>
+public sealed record ColumnRangeNode(string From, string To, int Position) : FormulaNode(Position)
+{
+    public override string ToString() => $"[{From}]:[{To}]";
+}
+
+/// <summary>A named cross-sheet reference, <c>{Open risks}</c>: columns of another sheet, chosen by name on this sheet.</summary>
+public sealed record SheetRangeNode(string Name, int Position) : FormulaNode(Position)
+{
+    public override string ToString() => $"{{{Name}}}";
+}
+
+/// <summary><c>@cell</c>: inside a criterion, the value being tested (as in Smartsheet).</summary>
+public sealed record CurrentCellNode(int Position) : FormulaNode(Position)
+{
+    public override string ToString() => "@cell";
+}

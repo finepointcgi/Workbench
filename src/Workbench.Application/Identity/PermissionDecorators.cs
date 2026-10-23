@@ -52,7 +52,8 @@ public sealed class PermissionCheckingSheetService(ISheetService inner, AccessCo
 /// that an assignee of the item (Assignees or a Person column) with any role may change only its status and % complete.
 /// </summary>
 public sealed class PermissionCheckingItemService(
-    IItemService inner, AccessControl access, RestrictedColumnAccess restricted, AssigneeStatusPermission? assignees = null) : IItemService
+    IItemService inner, AccessControl access, RestrictedColumnAccess restricted, AssigneeStatusPermission? assignees = null,
+    Forms.FormSubmissionGrant? forms = null) : IItemService
 {
     public async Task<IReadOnlyList<ItemDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
@@ -64,7 +65,12 @@ public sealed class PermissionCheckingItemService(
 
     public async Task<ItemDto> CreateAsync(Guid sheetId, CreateItemRequest request, CancellationToken cancellationToken = default)
     {
-        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        // A form response adds its one row without edit access; the form service has checked the form and its fields.
+        if (forms?.TryUse(sheetId) != true)
+        {
+            await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        }
+
         var hidden = await restricted.HiddenColumnsAsync(sheetId, cancellationToken);
         if (hidden.Count > 0 && request.Values is not null)
         {

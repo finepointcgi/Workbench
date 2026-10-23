@@ -108,6 +108,7 @@ public sealed class BuiltInRoleParityTests
         [Permission.SalesOrdersManage] = r => r.CanViewMaterials(),
         [Permission.SalesCreditHold] = r => r.IsFinance(),
         [Permission.RestrictedColumnsView] = r => r.IsFinance(),
+        [Permission.SheetFormsPublic] = r => r.IsFinance() || r.IsProjectManager(), // New in wave E: public form links (also needs the workspace's Owner role).
 
         // Sensitive fields: who saw each field before it became a permission.
         [Permission.FieldsSalaries] = r => r.IsHr() || r.IsFinance(), // Salary ranges and compensation amounts (HR, Finance, Admin).

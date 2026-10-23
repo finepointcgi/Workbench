@@ -266,7 +266,7 @@
                         var locked = IsRolledUp(row, column);
                         var inRange = InRange(rowIndex, colIndex);
                         <td class="@CellClass(column, active, editing, locked, inRange)" data-col="@colIndex" role="gridcell"
-                            id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)" title="@(locked ? "Summary task: rolled up from its subtasks" : null)"
+                            id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)" title="@(locked ? "Summary task: rolled up from its subtasks" : FormulaErrorText.Explain(raw))"
                             aria-selected="@(active || inRange ? "true" : "false")" aria-readonly="@(!column.ReadOnly && !locked && CanEdit ? null : "true")"
                             @onclick="e => OnCellClickAsync(row, colIndex, e)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
                             @if (editing)
@@ -328,6 +328,11 @@
                             else if (column.Kind == GridColumnKind.Duration)
                             {
                                 @(int.TryParse(raw, out var days) ? PlanDuration.Format(days) : "")
+                            }
+                            else if (column.ValueKind == ColumnKind.LinkedRow)
+                            {
+                                @* Wave E: titles of the linked rows the viewer can see. *@
+                                <Workbench.Ui.Sheets.LinkedRowsCell ColumnId="column.Column!.Id" Raw="@raw" />
                             }
                             else
                             {
@@ -912,9 +917,15 @@
             return;
         }
 
+        if (column.ValueKind == ColumnKind.LinkedRow)
+        {
+            _ = PickLinkedRowsAsync(row.Item, column); // Wave E: link cells are picked in a dialog.
+            return;
+        }
+
         if (column.ReadOnly)
         {
-            Snackbar.Add($"{column.Name} is a formula column and can't be edited.", Severity.Info);
+            Snackbar.Add($"{column.Name} is {(column.IsFormula ? "a formula" : "a lookup")} column and can't be edited.", Severity.Info);
             return;
         }
 
@@ -1067,6 +1078,15 @@
         {
             ReplaceItem(await ItemService.UpdateAsync(SheetId, item.Id,
                 new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, item.Values, milestone)));
+        }
+    }
+
+    /// <summary>Wave E: picks the rows a link cell points at, from the linked sheet's rows the user can see.</summary>
+    private async Task PickLinkedRowsAsync(ItemDto item, GridColumn column)
+    {
+        if (await Workbench.Ui.Sheets.LinkRowsDialog.PickAsync(DialogService, SheetId, column.Column!, Raw(item, column)) is { } value)
+        {
+            await SaveAsync(item, column, value.Length == 0 ? null : value);
         }
     }
 
@@ -1392,7 +1412,7 @@
     private async Task AddColumnAsync()
     {
         var dialog = await DialogService.ShowAsync<ColumnDialog>("Add column",
-            new DialogParameters<ColumnDialog> { { d => d.CanRestrict, Sheet.CanSeeRestricted } });
+            new DialogParameters<ColumnDialog> { { d => d.CanRestrict, Sheet.CanSeeRestricted }, { d => d.SheetId, SheetId } });
         if (await dialog.Result is not { Canceled: false, Data: ColumnDialogResult result })
         {
             return;
@@ -1400,7 +1420,7 @@
 
         try
         {
-            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options, IsRestricted: result.IsRestricted, OptionColors: result.OptionColors));
+            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options, result.Formula, IsRestricted: result.IsRestricted, OptionColors: result.OptionColors));
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -1422,7 +1442,7 @@
 
     private async Task EditColumnAsync(ColumnDto column)
     {
-        var parameters = new DialogParameters<ColumnDialog> { { d => d.Column, column }, { d => d.CanRestrict, Sheet.CanSeeRestricted } };
+        var parameters = new DialogParameters<ColumnDialog> { { d => d.Column, column }, { d => d.CanRestrict, Sheet.CanSeeRestricted }, { d => d.SheetId, SheetId } };
         var dialog = await DialogService.ShowAsync<ColumnDialog>($"Edit {column.Name}", parameters);
         if (await dialog.Result is not { Canceled: false, Data: ColumnDialogResult result })
         {
@@ -1431,7 +1451,7 @@
 
         try
         {
-            await ColumnService.UpdateAsync(SheetId, column.Id, new UpdateColumnRequest(result.Name, result.Options, column.Formula, column.Order,
+            await ColumnService.UpdateAsync(SheetId, column.Id, new UpdateColumnRequest(result.Name, result.Options, result.Formula, column.Order,
                 Sheet.CanSeeRestricted && result.IsRestricted != column.IsRestricted ? result.IsRestricted : null, result.OptionColors));
             await Changed.InvokeAsync();
         }

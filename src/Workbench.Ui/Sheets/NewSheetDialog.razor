@@ -1,15 +1,58 @@
+@* New sheet: start blank or from a template (built-in, or one your workspace saved). *@
+@inject IServiceProvider Services
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="3">
-            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
+            <MudText Typo="Typo.subtitle2">Start from</MudText>
+            <div class="wb-template-grid" role="radiogroup" aria-label="Start from">
+                @foreach (var choice in Choices)
+                {
+                    var selected = choice.Id == _selected;
+                    <div class="@($"wb-template-card {(selected ? "wb-template-selected" : "")}")" role="radio" aria-checked="@(selected ? "true" : "false")"
+                         tabindex="0" @onclick="() => Select(choice)" @onkeydown="e => OnKey(e, choice)" data-testid="@($"template-{choice.Id}")">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@choice.Icon" Size="Size.Small" Color="Color.Primary" />
+                            <MudText Typo="Typo.subtitle2">@choice.Name</MudText>
+                            <MudSpacer />
+                            @if (choice.Template?.CanDelete == true)
+                            {
+                                <span @onclick:stopPropagation="true">
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Outlined.Delete" aria-label="@($"Delete the template {choice.Name}")"
+                                                   OnClick="() => DeleteAsync(choice.Template)" />
+                                </span>
+                            }
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@choice.Description</MudText>
+                    </div>
+                }
+            </div>
+
+            <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" data-testid="new-sheet-name" />
             <MudTextField @bind-Value="_description" Label="Description" Lines="2" />
-            <MudSwitch @bind-Value="_schedulingEnabled" Label="Enable scheduling (Gantt)" Color="Color.Primary" />
+            @if (Selected?.Template is { } template)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Columns: @string.Join(", ", template.ColumnNames.Take(8))@(template.ColumnNames.Count > 8 ? ", …" : "")
+                </MudText>
+                @if (template.RowCount > 0)
+                {
+                    <MudSwitch @bind-Value="_includeRows" Color="Color.Primary"
+                               Label="@(template.IsBuiltIn ? "Include the example rows" : $"Include its {template.RowCount} rows")" data-testid="include-rows" />
+                }
+            }
+            else
+            {
+                <MudSwitch @bind-Value="_schedulingEnabled" Label="Enable scheduling (Gantt)" Color="Color.Primary" />
+            }
         </MudStack>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">Create</MudButton>
+                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit" data-testid="new-sheet-create">Create</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -17,12 +60,92 @@
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
+    private sealed record Choice(string Id, string Name, string Description, string Icon, SheetTemplateDto? Template);
+
+    private const string Blank = "blank";
+
+    private IReadOnlyList<SheetTemplateDto> _templates = [];
+    private string _selected = Blank;
     private string _name = string.Empty;
     private string? _description;
     private bool _schedulingEnabled;
+    private bool _includeRows = true;
+
+    private ISheetTemplateService? TemplateService => Services.GetService(typeof(ISheetTemplateService)) as ISheetTemplateService;
+
+    private IEnumerable<Choice> Choices =>
+        new[] { new Choice(Blank, "Blank sheet", "An empty grid: add your own columns.", Icons.Material.Filled.GridOn, null) }
+            .Concat(_templates.Select(t => new Choice(t.Id, t.Name, t.IsBuiltIn ? t.Description : $"{t.Workspace} template. {t.Description}".Trim(),
+                t.IsBuiltIn ? IconFor(t.Id) : Icons.Material.Filled.Bookmark, t)));
+
+    private Choice? Selected => Choices.FirstOrDefault(c => c.Id == _selected);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TemplateService is not { } templates)
+        {
+            return;
+        }
+
+        try
+        {
+            _templates = await templates.ListAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load the templates: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private static string IconFor(string id) => id switch
+    {
+        "builtin:project-schedule" => Icons.Material.Filled.ViewTimeline,
+        "builtin:issue-tracker" => Icons.Material.Filled.BugReport,
+        "builtin:raid-log" => Icons.Material.Filled.Shield,
+        "builtin:contract-deliverables" => Icons.Material.Filled.Assignment,
+        "builtin:onboarding-checklist" => Icons.Material.Filled.Checklist,
+        _ => Icons.Material.Filled.Description,
+    };
+
+    private void Select(Choice choice)
+    {
+        var previous = Selected;
+        _selected = choice.Id;
+        if (string.IsNullOrWhiteSpace(_name) || _name == previous?.Template?.Name)
+        {
+            _name = choice.Template?.Name ?? _name;
+        }
+    }
+
+    private void OnKey(KeyboardEventArgs e, Choice choice)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            Select(choice);
+        }
+    }
+
+    private async Task DeleteAsync(SheetTemplateDto template)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync($"Delete the template {template.Name}?", "Sheets made from it stay as they are.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true || TemplateService is not { } templates)
+        {
+            return;
+        }
+
+        await templates.DeleteAsync(Guid.Parse(template.Id));
+        _templates = _templates.Where(t => t.Id != template.Id).ToList();
+        _selected = Blank;
+    }
 
     private void Cancel() => MudDialog.Cancel();
 
-    private void Submit() =>
-        MudDialog.Close(DialogResult.Ok(new CreateSheetRequest(_name.Trim(), _description, _schedulingEnabled)));
+    private void Submit()
+    {
+        object result = Selected?.Template is { } template
+            ? new CreateSheetFromTemplateRequest(template.Id, _name.Trim(), _description, _includeRows)
+            : new CreateSheetRequest(_name.Trim(), _description, _schedulingEnabled);
+        MudDialog.Close(DialogResult.Ok(result));
+    }
 }

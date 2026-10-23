@@ -309,6 +309,7 @@ reveals. Admin holds every permission.
 | Permission | Key | What it allows | Built-in roles | Opens |
 |---|---|---|---|---|
 | See restricted columns ⚠ | `sheets.restricted_columns.view` | Sheet columns marked "Finance and owners only" in every workspace. | Admin, Finance | — |
+| Publish public forms | `sheets.forms.public` | Share a sheet's form by public link, so anyone with the link can add a row without signing in. Only in workspaces the person owns. | Admin, Finance, Project manager | — |
 
 ### Sensitive fields
 

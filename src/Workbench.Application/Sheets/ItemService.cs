@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Workbench.Application.Formulas;
 using Workbench.Application.Scheduling;
 using Workbench.Contracts;
 using Workbench.Contracts.Sheets;
@@ -7,8 +6,10 @@ using Workbench.Domain;
 
 namespace Workbench.Application.Sheets;
 
-public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvider clock) : IItemService
+public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvider clock, SheetCalculator? calculator = null) : IItemService
 {
+    private readonly SheetCalculator _calculator = calculator ?? new SheetCalculator(dbFactory, clock);
+
     public async Task<IReadOnlyList<ItemDto>> ListAsync(Guid sheetId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -24,9 +25,18 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
             .ThenBy(i => i.Order)
             .ToListAsync(cancellationToken);
         var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken);
-        var computed = FormulaCalculator.Calculate(columns, items, Today());
-        return items.Select(i => WithComputed(i.ToDto(), computed)).ToList();
+        if (!NeedsCalculation(columns))
+        {
+            return items.Select(i => i.ToDto()).ToList();
+        }
+
+        var computed = await _calculator.ComputeAsync(db, sheetId, columns, items, cancellationToken);
+        return computed.Select(i => i.ToDto()).ToList();
     }
+
+    /// <summary>Formula, link and lookup columns are worked out on every read; other sheets need none of that.</summary>
+    private static bool NeedsCalculation(IReadOnlyList<Column> columns) =>
+        columns.Any(c => c.Formula is not null || c.Type is ColumnType.LinkedRow or ColumnType.Lookup);
 
     public async Task<ItemDto> CreateAsync(Guid sheetId, CreateItemRequest request, CancellationToken cancellationToken = default)
     {
@@ -56,7 +66,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
             Title = request.Title.Trim(),
             Start = request.Start,
             Finish = request.Finish,
-            Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken),
+            Values = await StoredValuesAsync(db, sheetId, request.Values, null, cancellationToken),
             IsMilestone = request.IsMilestone,
         };
         PinMilestoneDate(item);
@@ -87,7 +97,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
             item.WbsCodeIsAuto = code is null;
             item.CostpointWbsId = code;
         }
-        item.Values = await StoredValuesAsync(db, sheetId, request.Values, cancellationToken);
+        item.Values = await StoredValuesAsync(db, sheetId, request.Values, item.Values, cancellationToken);
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
@@ -162,53 +172,72 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
     }
 
-    /// <summary>Copies request values, dropping formula columns: their values are computed on read, never stored.</summary>
-    private static async Task<Dictionary<string, string?>> StoredValuesAsync(
-        IWorkbenchDbContext db, Guid sheetId, IReadOnlyDictionary<string, string?>? values, CancellationToken cancellationToken)
+    /// <summary>
+    /// Copies request values, dropping formula and lookup columns (computed on read, never stored). Link cells keep only
+    /// ids of rows in the linked sheet; someone who can't see that sheet can't change its links, so the stored value stays.
+    /// </summary>
+    private async Task<Dictionary<string, string?>> StoredValuesAsync(
+        IWorkbenchDbContext db, Guid sheetId, IReadOnlyDictionary<string, string?>? values, IReadOnlyDictionary<string, string?>? existing,
+        CancellationToken cancellationToken)
     {
-        if (values is null || values.Count == 0)
+        var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken);
+        var computedIds = columns.Where(c => c.Formula != null || c.Type == ColumnType.Lookup).Select(c => c.Id).ToHashSet();
+        var stored = new Dictionary<string, string?>(
+            (values ?? new Dictionary<string, string?>()).Where(kv => !(Guid.TryParse(kv.Key, out var id) && computedIds.Contains(id))));
+
+        foreach (var link in columns.Where(c => c.Type == ColumnType.LinkedRow))
         {
-            return [];
+            var key = link.Id.ToString();
+            var before = existing?.GetValueOrDefault(key);
+            if (SheetLinks.TargetOf(link) is not { } targetId || !await _calculator.CanSeeSheetAsync(targetId, cancellationToken))
+            {
+                stored.Remove(key);
+                if (!string.IsNullOrEmpty(before))
+                {
+                    stored[key] = before;
+                }
+
+                continue;
+            }
+
+            var sent = stored.FirstOrDefault(kv => string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (sent.Key is null)
+            {
+                continue;
+            }
+
+            stored.Remove(sent.Key);
+            var ids = SheetLinks.Parse(sent.Value);
+            if (sent.Value is { Length: > 0 } text && ids.Count == 0 && text.Trim().Length > 0)
+            {
+                throw new ArgumentException($"\"{link.Name}\" links to rows of another sheet. Pick the rows instead of typing.");
+            }
+
+            var known = ids.Count == 0 ? [] : await db.Items.AsNoTracking()
+                .Where(i => i.SheetId == targetId && ids.Contains(i.Id)).Select(i => i.Id).ToListAsync(cancellationToken);
+            var kept = ids.Where(known.Contains).ToList();
+            if (kept.Count > 0)
+            {
+                stored[key] = SheetLinks.Format(kept);
+            }
         }
 
-        var formulaColumnIds = await db.Columns
-            .Where(c => c.SheetId == sheetId && c.Formula != null)
-            .Select(c => c.Id)
-            .ToListAsync(cancellationToken);
-        return new Dictionary<string, string?>(
-            values.Where(kv => !(Guid.TryParse(kv.Key, out var id) && formulaColumnIds.Contains(id))));
+        return stored;
     }
 
-    /// <summary>The item's DTO with formula columns calculated against the rest of the sheet.</summary>
+    /// <summary>The item's DTO with formula, link and lookup columns worked out against the rest of the sheet.</summary>
     private async Task<ItemDto> WithComputedAsync(IWorkbenchDbContext db, Guid sheetId, Item item, CancellationToken cancellationToken)
     {
         var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken);
-        if (columns.All(c => c.Formula is null))
+        if (!NeedsCalculation(columns))
         {
             return item.ToDto();
         }
 
         var items = await db.Items.AsNoTracking().Where(i => i.SheetId == sheetId).ToListAsync(cancellationToken);
-        return WithComputed(item.ToDto(), FormulaCalculator.Calculate(columns, items, Today()));
+        var computed = await _calculator.ComputeAsync(db, sheetId, columns, items, cancellationToken);
+        return computed.FirstOrDefault(i => i.Id == item.Id)?.ToDto() ?? item.ToDto();
     }
-
-    private static ItemDto WithComputed(ItemDto dto, IReadOnlyDictionary<Guid, IReadOnlyDictionary<Guid, string?>> computed)
-    {
-        if (!computed.TryGetValue(dto.Id, out var row) || row.Count == 0)
-        {
-            return dto;
-        }
-
-        var values = new Dictionary<string, string?>(dto.Values);
-        foreach (var (columnId, value) in row)
-        {
-            values[columnId.ToString()] = value;
-        }
-
-        return dto with { Values = values };
-    }
-
-    private DateOnly Today() => DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
 
     private static void Renumber(IEnumerable<Item> siblings)
     {

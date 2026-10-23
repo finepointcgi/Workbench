@@ -28,6 +28,7 @@ public static class WebhookEventCatalog
         new("shipment.shipped", "Shipment shipped", "Materials", "A sales order shipment was confirmed and its stock issued."),
         new("rfq.awarded", "RFQ awarded", "Purchasing", "Lines of a request for quote were awarded into purchase orders."),
         new("ncr.dispositioned", "NCR dispositioned", "Materials", "A nonconformance's approved disposition was carried out and the NCR closed."),
+        new("sheet.form_submitted", "Form response", "Sheets", "A form added a row to a sheet (signed in or by public link)."),
     ];
 
     public static bool IsKnown(string key) => All.Any(e => e.Key == key);

@@ -46,6 +46,8 @@
                 <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Style="align-self:flex-start"
                            OnClick="AddLabel" data-testid="status-label-add">Add label</MudButton>
             }
+            @* Wave E: formula, link-to-row and lookup settings. *@
+            <Workbench.Ui.Sheets.ColumnExtras SheetId="SheetId" Type="_type" Column="Column" State="_extras" Changed="@(() => { })" />
             @if (CanRestrict)
             {
                 @if (Column?.ReadsRestricted == true)
@@ -68,7 +70,7 @@
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                   Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="Submit">@(Column is null ? "Add" : "Save")</MudButton>
+                   Disabled="string.IsNullOrWhiteSpace(_name) || !_extras.IsComplete(_type)" OnClick="Submit">@(Column is null ? "Add" : "Save")</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -83,6 +85,12 @@
     /// <summary>Whether to offer "Finance and owners only" (the user may see and set restricted columns).</summary>
     [Parameter]
     public bool CanRestrict { get; set; }
+
+    /// <summary>The sheet, for formula help and link settings (Guid.Empty hides them).</summary>
+    [Parameter]
+    public Guid SheetId { get; set; }
+
+    private readonly Workbench.Ui.Sheets.ColumnExtrasState _extras = new();
 
     private string _name = string.Empty;
     private ColumnKind _type = ColumnKind.Text;
@@ -127,7 +135,8 @@
         var labels = _type == ColumnKind.Dropdown
             ? _labels.Where(l => !string.IsNullOrWhiteSpace(l.Name)).DistinctBy(l => l.Name.Trim(), StringComparer.OrdinalIgnoreCase).ToList()
             : [];
-        MudDialog.Close(DialogResult.Ok(new ColumnDialogResult(_name.Trim(), _type, labels.Select(l => l.Name.Trim()).ToList(), _restricted,
-            labels.Select(l => l.Color).ToList())));
+        var options = _extras.OptionsFor(_type)?.ToList() ?? labels.Select(l => l.Name.Trim()).ToList();
+        MudDialog.Close(DialogResult.Ok(new ColumnDialogResult(_name.Trim(), _type, options, _restricted,
+            OptionColors: _type == ColumnKind.Dropdown ? labels.Select(l => l.Color).ToList() : null, Formula: _extras.FormulaFor(_type, Column))));
     }
 }
