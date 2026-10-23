@@ -38,8 +38,8 @@
 
 .timesheet-grid .code {
     text-align: left;
-    min-width: 150px;
-    max-width: 260px;
+    min-width: 140px;
+    max-width: 240px;
     padding-left: 8px;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -73,6 +73,8 @@
 
 .timesheet-grid .cell {
     white-space: nowrap;
+    position: relative;
+    padding-right: 12px;
 }
 
 .timesheet-grid input {
@@ -102,13 +104,30 @@
     opacity: 0.45;
 }
 
+/* The comment button sits in the cell's corner and shows on hover or keyboard focus (or when there is a comment), so the
+   whole week fits without scrolling. It stays in the tab order. */
 .timesheet-grid .comment {
+    position: absolute;
+    top: 2px;
+    right: 0;
     border: none;
     background: none;
-    padding: 0 0 0 1px;
+    padding: 0;
+    line-height: 0;
     cursor: pointer;
     color: var(--mud-palette-text-secondary);
-    vertical-align: middle;
+    opacity: 0;
+}
+
+.timesheet-grid .comment ::deep .mud-icon-root {
+    font-size: 0.95rem;
+}
+
+.timesheet-grid .cell:hover .comment,
+.timesheet-grid .cell:focus-within .comment,
+.timesheet-grid .comment:focus-visible,
+.timesheet-grid .comment.has-comment {
+    opacity: 1;
 }
 
 .timesheet-grid .comment.has-comment {

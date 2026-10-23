@@ -118,4 +118,44 @@ public sealed class TimesheetGridTests
         Assert.Equal(0, asked);
         Assert.Empty(grid.FindAll("[data-testid='cell-IND.OH-2026-10-19']"));
     }
+
+    [Fact]
+    public async Task Filling_puts_hours_only_into_empty_days_that_can_be_charged()
+    {
+        await using var ctx = NewContext();
+        var grid = ctx.Render<TimesheetGrid>(p => p.Add(g => g.Detail, Detail()));
+        var before = grid.Instance.Version;
+
+        var filled = await grid.InvokeAsync(() => grid.Instance.FillEmptyAsync(
+        [
+            (Direct, Monday, 4m),               // already has 8 h: kept
+            (Direct, Monday.AddDays(2), 6m),    // empty Wednesday: filled
+            (Direct, Monday.AddDays(4), 6m),    // future day: can't be entered
+            (Pto, Monday.AddDays(2), 2m),       // no row yet: the row is added and filled
+            (Guid.NewGuid(), Monday, 3m),       // not one of my codes: ignored
+        ]));
+
+        Assert.Equal(2, filled);
+        Assert.Equal("8", grid.Find("[data-testid='cell-1001.01-2026-10-19']").GetAttribute("value"));
+        Assert.Equal("6", grid.Find("[data-testid='cell-1001.01-2026-10-21']").GetAttribute("value"));
+        Assert.Equal("", grid.Find("[data-testid='cell-1001.01-2026-10-23']").GetAttribute("value") ?? "");
+        Assert.Equal("2", grid.Find("[data-testid='cell-LV.PTO-2026-10-21']").GetAttribute("value"));
+        Assert.True(grid.Instance.IsDirty);
+        Assert.True(grid.Instance.Version > before);
+        Assert.True(grid.Instance.IsWorkday(Monday) && !grid.Instance.IsWorkday(Monday.AddDays(5)));
+    }
+
+    [Fact]
+    public async Task A_cleared_then_refilled_cell_saves_as_a_new_entry()
+    {
+        await using var ctx = NewContext();
+        var grid = ctx.Render<TimesheetGrid>(p => p.Add(g => g.Detail, Detail()));
+
+        grid.Find("[data-testid='cell-1001.01-2026-10-20']").Change("");
+        grid.Find("[data-testid='cell-1001.01-2026-10-20']").Change("5");
+
+        var tuesday = Assert.Single(grid.Instance.BuildEntries(), e => e.WorkDate == Monday.AddDays(1));
+        Assert.Equal(5m, tuesday.Hours);
+        Assert.Null(tuesday.EntryId);
+    }
 }

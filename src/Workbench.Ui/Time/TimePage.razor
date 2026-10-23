@@ -1,5 +1,7 @@
 @page "/time"
 @using System.Globalization
+@using Microsoft.AspNetCore.Components.Routing
+@implements IDisposable
 @inject ITimesheetService Timesheets
 @inject Workbench.Contracts.Leave.ILeaveTimesheetService LeaveTimesheets
 @inject IDialogService DialogService
@@ -39,7 +41,7 @@ else
         @if (_leave.Prefill.Count > 0 && !_detail.Timesheet.IsLocked)
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" data-testid="leave-prefill">
-                Pre-filled from approved leave and holidays: @string.Join(", ", _leave.Prefill.Select(p => $"{PrefillName(p)} {p.Date:ddd M/d} {p.Hours:0.##} h ({p.Source})")). Save to keep them.
+                Pre-filled from approved leave and holidays: @string.Join(", ", _leave.Prefill.Select(p => $"{PrefillName(p)} {p.Date:ddd M/d} {p.Hours:0.##} h ({p.Source})")). They're kept when you save.
             </MudAlert>
         }
         @foreach (var warning in _leave.Warnings)
@@ -48,8 +50,24 @@ else
         }
     }
 
+    <NavigationLock OnBeforeInternalNavigation="SaveBeforeLeavingAsync" />
+    @if (!_detail.Timesheet.IsLocked)
+    {
+        @* Head starts: fill empty cells from what you're staffed on, or from last period. Nothing you typed is replaced. *@
+        <MudStack Row="true" Spacing="2" Class="mb-2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+            @if (_allocations.Count > 0)
+            {
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.AutoFixHigh" OnClick="FillFromStaffingAsync"
+                           Disabled="_busy" data-testid="fill-staffing">Fill from my staffing</MudButton>
+            }
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyLastPeriodAsync"
+                       Disabled="_busy" data-testid="copy-last">Copy last @(IsWeekly ? "week" : "period")</MudButton>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Fills empty days you can charge; nothing you typed changes.</MudText>
+        </MudStack>
+    }
+
     <MudPaper Outlined="true" Class="pa-3">
-        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" StaffedWbs="_staffed" OnLockedEdit="UnlockAsync" OnChanged="StateHasChanged" />
+        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" StaffedWbs="_staffed" OnLockedEdit="UnlockAsync" OnChanged="OnGridChangedAsync" />
     </MudPaper>
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap" Spacing="2">
@@ -57,8 +75,16 @@ else
         <MudSpacer />
         @if (!_detail.Timesheet.IsLocked)
         {
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(_busy || _grid?.IsDirty != true)" OnClick="SaveAsync"
-                       StartIcon="@Icons.Material.Filled.Save" data-testid="save">Save</MudButton>
+            @if (CanAutoSave || _saveState is not null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="save-state" aria-live="polite">@(_saveState ?? "")</MudText>
+            }
+            @if (!AutoSaves || _grid?.IsDirty == true && !CanAutoSave)
+            {
+                @* Saving needs a reason after submitting (or keeps pre-filled leave): one deliberate Save. *@
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(_busy || _grid?.IsDirty != true)" OnClick="SaveAsync"
+                           StartIcon="@Icons.Material.Filled.Save" data-testid="save">Save</MudButton>
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Disabled="_busy" OnClick="SubmitAsync"
                        StartIcon="@Icons.Material.Filled.Send" data-testid="submit">Certify and submit</MudButton>
         }
@@ -86,6 +112,16 @@ else
     public string? Date { get; set; }
 
     private IReadOnlyCollection<Guid> _staffed = [];
+    private IReadOnlyList<Workbench.Contracts.Resourcing.AllocationDto> _allocations = [];
+    private CancellationTokenSource? _autoSave;
+    private string? _saveState;
+
+    /// <summary>Drafts save themselves; after submitting, each change needs a reason, so saving is deliberate.</summary>
+    private bool AutoSaves => _detail is { Timesheet: { IsLocked: false, ChangesNeedReason: false } };
+
+    private bool CanAutoSave => AutoSaves && _grid?.IsDirty == true;
+
+    private bool IsWeekly => _detail is not null && _detail.Timesheet.PeriodEnd.DayNumber - _detail.Timesheet.PeriodStart.DayNumber == 6;
 
     private bool NextDisabled => _detail is null || _detail.Timesheet.PeriodEnd >= DateOnly.FromDateTime(DateTime.Now);
 
@@ -111,6 +147,11 @@ else
 
     private async Task GoAsync(DateOnly? date)
     {
+        if (CanAutoSave)
+        {
+            await AutoSaveAsync();
+        }
+
         if (_grid?.IsDirty == true && !await ConfirmDiscardAsync())
         {
             return;
@@ -233,6 +274,140 @@ else
         });
     }
 
+    private async Task OnGridChangedAsync()
+    {
+        if (CanAutoSave)
+        {
+            _saveState = "Unsaved changes";
+            ScheduleAutoSave();
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Save a moment after the last edit, so typing a week of hours is one save, not forty.
+    private void ScheduleAutoSave()
+    {
+        _autoSave?.Cancel();
+        var pending = _autoSave = new CancellationTokenSource();
+        _ = Task.Delay(TimeSpan.FromSeconds(1.5), pending.Token).ContinueWith(
+            t => t.IsCanceled ? Task.CompletedTask : InvokeAsync(AutoSaveAsync), TaskScheduler.Default);
+    }
+
+    private async Task AutoSaveAsync()
+    {
+        if (!CanAutoSave || _detail is null || _grid is null)
+        {
+            return;
+        }
+
+        if (_busy)
+        {
+            ScheduleAutoSave();
+            return;
+        }
+
+        _autoSave?.Cancel();
+        var version = _grid.Version;
+        var entries = _grid.BuildEntries();
+        _busy = true;
+        _saveState = "Saving…";
+        StateHasChanged();
+        try
+        {
+            var saved = await Timesheets.SaveEntriesAsync(_detail.Timesheet.Id, new SaveTimeEntriesRequest(entries));
+            if (_grid.Version == version)
+            {
+                _detail = saved; // nothing changed meanwhile: show what the server kept
+                _saveState = "All changes saved";
+            }
+            else
+            {
+                ScheduleAutoSave(); // edited while saving: save again (entries match by charge code and day)
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            _saveState = $"Couldn't save: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SaveBeforeLeavingAsync(LocationChangingContext context)
+    {
+        if (CanAutoSave)
+        {
+            await AutoSaveAsync();
+        }
+    }
+
+    /// <summary>Spreads each staffed week's hours over that week's working days, into empty cells only.</summary>
+    private async Task FillFromStaffingAsync()
+    {
+        if (_detail is null || _grid is null)
+        {
+            return;
+        }
+
+        var hours = new List<(Guid, DateOnly, decimal)>();
+        foreach (var allocation in _allocations)
+        {
+            var workdays = Enumerable.Range(0, 7).Select(i => allocation.WeekStart.AddDays(i)).Where(_grid.IsWorkday).ToList();
+            var inPeriod = workdays.Where(d => _detail.Days.Any(day => day.Date == d)).ToList();
+            if (workdays.Count == 0 || inPeriod.Count == 0)
+            {
+                continue;
+            }
+
+            // Quarter hours per day; the remainder goes on the first day so the week adds up.
+            var perDay = Math.Floor(allocation.Hours / workdays.Count * 4) / 4;
+            var remainder = allocation.Hours - perDay * workdays.Count;
+            foreach (var day in inPeriod)
+            {
+                hours.Add((allocation.WbsElementId!.Value, day, day == workdays[0] ? perDay + remainder : perDay));
+            }
+        }
+
+        var filled = await _grid.FillEmptyAsync(hours);
+        Snackbar.Add(filled == 0 ? "Nothing to fill: those days already have hours, or can't be entered yet." : $"Filled {filled} day{(filled == 1 ? "" : "s")} from your staffing.",
+            filled == 0 ? Severity.Info : Severity.Success);
+    }
+
+    /// <summary>Copies the previous period's hours to the same weekdays, into empty cells only (comments aren't copied).</summary>
+    private async Task CopyLastPeriodAsync()
+    {
+        if (_detail is null || _grid is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var start = _detail.Timesheet.PeriodStart;
+            var previous = (await Timesheets.ListMyTimesheetsAsync()).Where(t => t.PeriodEnd < start).OrderByDescending(t => t.PeriodEnd).FirstOrDefault();
+            if (previous is null)
+            {
+                Snackbar.Add("There's no earlier timesheet to copy.", Severity.Info);
+                return;
+            }
+
+            var shift = start.DayNumber - previous.PeriodStart.DayNumber;
+            var last = await Timesheets.GetAsync(previous.Id);
+            var filled = await _grid.FillEmptyAsync(last.Entries.Select(e => (e.WbsElementId, e.WorkDate.AddDays(shift), e.Hours)));
+            Snackbar.Add(filled == 0 ? "Nothing to copy into: those days already have hours, can't be entered yet, or the codes are closed." : $"Copied {filled} day{(filled == 1 ? "" : "s")} from {PeriodLabel(previous)}.",
+                filled == 0 ? Severity.Info : Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
     private async Task<bool> RunAsync(Func<Task> action)
     {
         _busy = true;
@@ -269,7 +444,8 @@ else
         try
         {
             var mine = await allocations.ListMineAsync(detail.Timesheet.PeriodStart, detail.Timesheet.PeriodEnd);
-            return mine.Where(a => a.WbsElementId is not null && a.Hours > 0).Select(a => a.WbsElementId!.Value).ToHashSet();
+            _allocations = mine.Where(a => a.WbsElementId is not null && a.Hours > 0).ToList();
+            return _allocations.Select(a => a.WbsElementId!.Value).ToHashSet();
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
         {
@@ -340,4 +516,6 @@ else
 
     internal static string PeriodLabel(TimesheetDto t) =>
         $"{t.PeriodStart.ToString("MMM d", CultureInfo.InvariantCulture)} – {t.PeriodEnd.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)}";
+
+    public void Dispose() => _autoSave?.Cancel();
 }

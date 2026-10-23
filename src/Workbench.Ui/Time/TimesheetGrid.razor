@@ -138,6 +138,65 @@
 
     public bool IsDirty { get; private set; }
 
+    /// <summary>Goes up on every edit, so a page saving in the background can tell whether the grid changed meanwhile.</summary>
+    public int Version { get; private set; }
+
+    /// <summary>Monday to Friday and not a company holiday.</summary>
+    public bool IsWorkday(DateOnly date) => date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) && !HolidayOn(date);
+
+    /// <summary>
+    /// Puts hours into empty cells the employee may charge (adding the code's row when needed): "Fill from my staffing" and
+    /// "Copy last week". Cells that already have hours, days that can't be entered and codes not chargeable that day are
+    /// left alone. Returns how many cells were filled.
+    /// </summary>
+    public async Task<int> FillEmptyAsync(IEnumerable<(Guid WbsElementId, DateOnly Date, decimal Hours)> hours)
+    {
+        if (Locked || !Editable)
+        {
+            return 0;
+        }
+
+        var filled = 0;
+        foreach (var (wbsElementId, date, value) in hours.Where(h => h.Hours > 0))
+        {
+            if (Detail.Days.FirstOrDefault(d => d.Date == date) is not { CanEnter: true })
+            {
+                continue;
+            }
+
+            var row = _rows.FirstOrDefault(r => r.Code.WbsElementId == wbsElementId);
+            if (row is null && Detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == wbsElementId) is { } code)
+            {
+                row = Row.For(code);
+                _rows.Add(row);
+            }
+
+            if (row is null || !row.Dates.Contains(date) || row.Cell(date).Hours is > 0)
+            {
+                continue;
+            }
+
+            row.Edit(date).Hours = Math.Clamp(value, 0, 24);
+            filled++;
+        }
+
+        if (filled > 0)
+        {
+            _rows.Sort((a, b) => string.CompareOrdinal(a.Code.Code, b.Code.Code));
+            Changed();
+            StateHasChanged();
+            await OnChanged.InvokeAsync();
+        }
+
+        return filled;
+    }
+
+    private void Changed()
+    {
+        IsDirty = true;
+        Version++;
+    }
+
     private DateOnly TodayDate => Today ?? DateOnly.FromDateTime(DateTime.Now);
 
     private decimal Standard => Detail.Timesheet.StandardHours;
@@ -266,8 +325,14 @@
 
         decimal? hours = string.IsNullOrWhiteSpace(text) ? null
             : decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? Math.Clamp(decimal.Round(v, 2), 0, 24) : row.Cell(date).Hours;
-        row.Edit(date).Hours = hours;
-        IsDirty = true;
+        var cell = row.Edit(date);
+        cell.Hours = hours;
+        if (hours is null)
+        {
+            cell.EntryId = null; // a cleared cell's entry is removed on save; refilling it makes a new one
+        }
+
+        Changed();
         await OnChanged.InvokeAsync();
     }
 
@@ -287,7 +352,7 @@
         if (await dialog.Result is { Canceled: false, Data: string comment } && !readOnly)
         {
             row.Edit(day.Date).Comment = string.IsNullOrWhiteSpace(comment) ? null : comment;
-            IsDirty = true;
+            Changed();
             await OnChanged.InvokeAsync();
         }
     }
