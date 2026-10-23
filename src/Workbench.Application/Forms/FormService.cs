@@ -254,7 +254,9 @@ public sealed class FormService(
         }
 
         ItemDto created;
+        // The form's row also fires "added by a form" sheet automations (Automations.SheetAutomationEvents).
         using (grant.Allow(form.SheetId))
+        using (Automations.SheetAutomationEvents.AddedByForm(form.Title))
         {
             created = await items.CreateAsync(form.SheetId, new CreateItemRequest(title ?? "Form response", Start: start, Finish: finish, Values: values), cancellationToken);
         }
