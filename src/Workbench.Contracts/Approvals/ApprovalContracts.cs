@@ -235,7 +235,8 @@ public sealed record ApprovalInboxItemDto(
     DateTime? WaitingSinceUtc,
     int BusinessDaysWaiting,
     string? OnBehalfOf,
-    string Link);
+    string Link,
+    Guid? ProjectId = null);
 
 public sealed record ApprovalTaskDto(
     Guid Id,
@@ -270,6 +271,18 @@ public enum ApprovalDecisionKind { Approve, Reject, Return }
 
 public sealed record ApprovalDecisionRequest(ApprovalDecisionKind Decision, string? Comment = null);
 
+/// <summary>One document in a bulk decision.</summary>
+public sealed record ApprovalItemRef(string DocumentType, Guid DocumentId);
+
+/// <summary>Approve or reject several documents with one optional comment (a reason is required to reject).</summary>
+public sealed record BulkApprovalRequest(IReadOnlyList<ApprovalItemRef> Items, ApprovalDecisionKind Decision, string? Comment = null);
+
+/// <summary>What happened to one document of a bulk decision; <see cref="Problem"/> says why it couldn't be decided.</summary>
+public sealed record BulkApprovalItemResult(string DocumentType, Guid DocumentId, string Title, bool Succeeded, string? Problem);
+
+/// <summary>A bulk decision's outcome, e.g. "12 approved, 1 couldn't be: you entered it yourself".</summary>
+public sealed record BulkApprovalResultDto(int Succeeded, int Failed, string Summary, IReadOnlyList<BulkApprovalItemResult> Items);
+
 /// <summary>Everything waiting on the signed-in user, across document types, and the approval trail of a document.</summary>
 public interface IApprovalInboxService
 {
@@ -280,8 +293,59 @@ public interface IApprovalInboxService
     /// <summary>Approves, rejects or returns the document through its own module (its state changes and posting run as usual).</summary>
     Task DecideAsync(string documentType, Guid documentId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Approves or rejects each document in turn, exactly as <see cref="DecideAsync"/> would (every module check, segregation
+    /// of duties included). A document that can't be decided doesn't stop the others; the result says why.
+    /// </summary>
+    Task<BulkApprovalResultDto> DecideManyAsync(BulkApprovalRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Every approval trip of a document, newest first. Visible to the submitter, participants, Finance and Admin.</summary>
     Task<IReadOnlyList<ApprovalInstanceDto>> GetHistoryAsync(string documentType, Guid documentId, CancellationToken cancellationToken = default);
+}
+
+// ---- Approve from email ----
+
+public enum ApprovalEmailLinkState
+{
+    /// <summary>The link is good: the signed-in user can confirm the decision.</summary>
+    Ready,
+    Invalid,
+    Expired,
+    Used,
+    /// <summary>The link was sent to someone else than the signed-in user.</summary>
+    WrongUser,
+    /// <summary>The document was decided, recalled or is no longer waiting on the signed-in user.</summary>
+    NoLongerWaiting,
+    /// <summary>Confirmed: the decision was made.</summary>
+    Done,
+}
+
+/// <summary>What an Approve or Reject link from an email would do, for the confirm page.</summary>
+public sealed record ApprovalEmailLinkDto(
+    ApprovalEmailLinkState State,
+    string Message,
+    ApprovalDecisionKind? Decision = null,
+    string? DocumentType = null,
+    string? DocumentLabel = null,
+    Guid? DocumentId = null,
+    string? Title = null,
+    string? Summary = null,
+    decimal? Amount = null,
+    string? SubmitterEmail = null,
+    string? Link = null,
+    DateTime? ExpiresAtUtc = null);
+
+public sealed record ConfirmApprovalEmailLinkRequest(string Token, string? Comment = null);
+
+/// <summary>
+/// The Approve and Reject links in approval emails. Opening a link only shows what it would do; the decision is made by a
+/// confirm (never on a GET), as the signed-in user the email went to, once, before the link expires. Both outcomes are audited.
+/// </summary>
+public interface IApprovalEmailLinkService
+{
+    Task<ApprovalEmailLinkDto> OpenAsync(string token, CancellationToken cancellationToken = default);
+
+    Task<ApprovalEmailLinkDto> ConfirmAsync(ConfirmApprovalEmailLinkRequest request, CancellationToken cancellationToken = default);
 }
 
 // ---- Delegation ----

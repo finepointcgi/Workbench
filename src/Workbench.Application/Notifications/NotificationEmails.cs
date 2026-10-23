@@ -7,7 +7,7 @@ namespace Workbench.Application.Notifications;
 /// <summary>Plain, self-contained email templates (HTML and text). No images, fonts or external styles.</summary>
 public static class NotificationEmails
 {
-    public static EmailMessage Single(Notification notification, NotificationOptions options)
+    public static EmailMessage Single(Notification notification, NotificationOptions options, EmailExtra? extra = null)
     {
         var link = AbsoluteLink(notification.Link, options);
         var text = new StringBuilder()
@@ -21,6 +21,11 @@ public static class NotificationEmails
         if (link is not null)
         {
             text.AppendLine($"Open: {link}").AppendLine();
+        }
+
+        if (extra is not null)
+        {
+            text.AppendLine(extra.Text).AppendLine();
         }
 
         text.Append(Footer);
@@ -37,10 +42,11 @@ public static class NotificationEmails
             html.Append("<p style=\"margin:0 0 16px\"><a href=\"").Append(Encode(link)).Append("\" style=\"color:#0b57d0\">Open in Workbench</a></p>");
         }
 
+        html.Append(extra?.Html);
         return new EmailMessage(notification.RecipientEmail, notification.Title, text.ToString(), Wrap(notification.Title, html.ToString()));
     }
 
-    public static EmailMessage Digest(string recipient, IReadOnlyList<Notification> notifications, NotificationOptions options)
+    public static EmailMessage Digest(string recipient, IReadOnlyList<Notification> notifications, NotificationOptions options, EmailExtra? extra = null)
     {
         var subject = notifications.Count == 1
             ? "Workbench: 1 unread notification"
@@ -77,6 +83,12 @@ public static class NotificationEmails
         }
 
         html.Append("</ul>");
+        if (extra is not null)
+        {
+            text.AppendLine().AppendLine(extra.Text);
+            html.Append(extra.Html);
+        }
+
         text.AppendLine().Append(Footer);
         return new EmailMessage(recipient, subject, text.ToString(), Wrap(subject, html.ToString()));
     }
@@ -98,7 +110,7 @@ public static class NotificationEmails
         </html>
         """;
 
-    private static string? AbsoluteLink(string? link, NotificationOptions options)
+    public static string? AbsoluteLink(string? link, NotificationOptions options)
     {
         if (link is null)
         {
@@ -108,5 +120,5 @@ public static class NotificationEmails
         return string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? link : options.PublicBaseUrl.TrimEnd('/') + "/" + link.TrimStart('/');
     }
 
-    private static string Encode(string value) => WebUtility.HtmlEncode(value);
+    public static string Encode(string value) => WebUtility.HtmlEncode(value);
 }

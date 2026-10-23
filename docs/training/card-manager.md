@@ -7,6 +7,12 @@
 - **Approvals** (menu) holds everything waiting on you; the number shows how many. **Home › Waiting on you** lists the
   oldest; timesheets can be approved right there.
 - **Approve** · **Return** (send back to fix, with a comment) · **Reject** (stop it, with a reason).
+- **Several at once:** tick the rows (or pick a type, e.g. **Timesheet**, and tick the header box for all of them),
+  add one comment if you like, then **Approve** or **Reject** (rejecting needs the comment as the reason). Each item is
+  still checked on its own; the summary says which couldn't be done and why.
+- **Time on my projects:** hours charged to projects you manage, when your timesheet workflow has a project manager step.
+- **From email:** approval emails have **Approve** and **Reject** links. They open Workbench to confirm, work once, only
+  for you, and expire after 7 days.
 - You can't approve your own items; they go to your supervisor.
 
 **Timesheet checklist:** every working day has hours · hours on the right tasks · corrections have a clear reason.
