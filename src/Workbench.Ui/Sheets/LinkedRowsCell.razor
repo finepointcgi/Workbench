@@ -1,0 +1,27 @@
+@* A link cell: the titles of the linked rows the viewer can see, each opening that row. Nothing for sheets they can't see. *@
+@if (Column is { CanSee: true } link)
+{
+    var rows = Ids.Select(link.Row).Where(r => r is not null).ToList();
+    <span class="wb-links" data-testid="linked-rows">
+        @foreach (var row in rows.Take(3))
+        {
+            <a class="wb-link-chip" href="@($"sheets/{link.TargetSheetId}?item={row!.Id}")" title="@($"{row.Title} ({link.TargetSheetName})")"
+               @onclick:stopPropagation="true">@row.Title</a>
+        }
+        @if (rows.Count > 3)
+        {
+            <span class="mud-text-secondary">+@(rows.Count - 3)</span>
+        }
+    </span>
+}
+
+@code {
+    [CascadingParameter] public SheetLinksDto? Links { get; set; }
+    [Parameter, EditorRequired] public Guid ColumnId { get; set; }
+    [Parameter] public string? Raw { get; set; }
+
+    private LinkColumnDto? Column => Links?.For(ColumnId);
+
+    private IEnumerable<Guid> Ids => (Raw ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(p => Guid.TryParse(p, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty);
+}

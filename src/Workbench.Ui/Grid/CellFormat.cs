@@ -139,6 +139,8 @@ public static class CellFormat
     {
         ColumnKind.CostpointLookup => "Costpoint lookup",
         ColumnKind.Dropdown => "Status / dropdown",
+        ColumnKind.LinkedRow => "Link to row",
+        ColumnKind.Lookup => "Lookup (from linked rows)",
         _ => kind.ToString(),
     };
 

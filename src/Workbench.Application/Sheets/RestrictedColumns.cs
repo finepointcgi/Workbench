@@ -5,7 +5,7 @@ namespace Workbench.Application.Sheets;
 
 /// <summary>
 /// Which columns of a sheet are restricted: those marked so, plus every formula column that reads one (on the same row
-/// or its children, directly or through another formula). Otherwise <c>[Budget] / [Planned hours]</c> would show the
+/// or its children, in a column range, directly or through another formula). Otherwise <c>[Budget] / [Planned hours]</c> would show the
 /// budget to anyone who can do arithmetic.
 /// </summary>
 public static class RestrictedColumns
@@ -25,7 +25,9 @@ public static class RestrictedColumns
             try
             {
                 var formula = Formula.Parse(column.Formula!);
-                reads[column.Id] = formula.References.Concat(formula.ChildReferences).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                reads[column.Id] = formula.References.Concat(formula.ChildReferences)
+                    .Concat(formula.ColumnRanges.SelectMany(r => Formulas.FormulaCalculator.RangeColumns(list, r.From, r.To)?.Select(c => c.Name) ?? []))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
             catch (FormulaParseException)
             {

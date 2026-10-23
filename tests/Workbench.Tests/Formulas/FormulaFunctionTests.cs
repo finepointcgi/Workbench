@@ -214,6 +214,14 @@ public sealed class FormulaFunctionTests
         [
             "SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTIF", "IF", "AND", "OR", "NOT", "ROUND", "ABS", "TODAY", "DATE",
             "NETWORKDAYS", "YEAR", "MONTH", "DAY", "LEN", "LEFT", "RIGHT", "CONCATENATE", "ISBLANK", "IFERROR", "DATEDIFF", "CHILDREN",
+
+            // Wave E: the common Smartsheet functions (docs/sheets/formulas.md).
+            "AVERAGE", "MEDIAN", "LARGE", "SMALL", "PRODUCT", "ROUNDUP", "ROUNDDOWN", "INT", "SQRT", "MOD", "CEILING", "FLOOR",
+            "COUNTBLANK", "COUNTIFS", "SUMIF", "SUMIFS", "AVERAGEIF", "AVERAGEIFS", "COLLECT",
+            "ISERROR", "ISNUMBER", "ISTEXT", "ISDATE", "ISBOOLEAN", "CONTAINS", "HAS",
+            "INDEX", "MATCH", "VLOOKUP", "JOIN", "DISTINCT",
+            "WEEKDAY", "WEEKNUMBER", "YEARDAY", "NETDAYS", "NETWORKDAY", "WORKDAY",
+            "MID", "FIND", "UPPER", "LOWER", "TRIM", "SUBSTITUTE", "REPLACE", "VALUE",
         ];
 
         Assert.Equal(expected.Order(), FormulaFunctions.Names.Order());

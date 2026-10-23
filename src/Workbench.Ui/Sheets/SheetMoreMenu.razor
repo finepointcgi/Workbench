@@ -1,0 +1,43 @@
+@* The sheet page's "More" menu: forms, copy, save as template. *@
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+
+<MudMenu Label="More" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined" Size="Size.Small" AriaLabel="More sheet actions" data-testid="sheet-more">
+    <MudMenuItem Icon="@Icons.Material.Filled.DynamicForm" OnClick="() => { _ = FormsAsync(); }" data-testid="sheet-forms">Forms…</MudMenuItem>
+    <MudMenuItem Icon="@Icons.Material.Filled.ContentCopy" OnClick="() => { _ = CopyAsync(); }" data-testid="sheet-copy">Copy sheet…</MudMenuItem>
+    @if (CanEdit)
+    {
+        <MudMenuItem Icon="@Icons.Material.Filled.BookmarkAdd" OnClick="() => { _ = SaveTemplateAsync(); }" data-testid="sheet-save-template">Save as template…</MudMenuItem>
+    }
+    <MudMenuItem Icon="@Icons.Material.Filled.TableView" Href="sheet-reports">Reports across sheets</MudMenuItem>
+</MudMenu>
+
+@code {
+    [Parameter, EditorRequired] public SheetDetail Sheet { get; set; } = default!;
+    [Parameter] public bool CanEdit { get; set; }
+
+    private async Task FormsAsync()
+    {
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Forms.FormsDialog>($"Forms for {Sheet.Summary.Name}",
+            new DialogParameters<Workbench.Ui.Forms.FormsDialog> { { d => d.Sheet, Sheet }, { d => d.CanEdit, CanEdit } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        await dialog.Result;
+    }
+
+    private async Task CopyAsync()
+    {
+        var dialog = await DialogService.ShowAsync<CopySheetDialog>("Copy sheet",
+            new DialogParameters<CopySheetDialog> { { d => d.Sheet, Sheet } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SheetSummary copy })
+        {
+            Navigation.NavigateTo($"sheets/{copy.Id}");
+        }
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<SaveTemplateDialog>("Save as template",
+            new DialogParameters<SaveTemplateDialog> { { d => d.Sheet, Sheet } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        await dialog.Result;
+    }
+}

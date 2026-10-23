@@ -60,6 +60,11 @@ else
         @* One automation builder: recipes and the sheet's automations (Workbench.Ui.Automation). *@
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Bolt" OnClick="AutomateAsync" data-testid="sheet-automate">Automate</MudButton>
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
+        @if (!Embedded)
+        {
+            @* Wave E: forms, copies and templates. *@
+            <Workbench.Ui.Sheets.SheetMoreMenu Sheet="_sheet" CanEdit="_access.CanEdit" />
+        }
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
     </MudStack>
     @if (!string.IsNullOrWhiteSpace(_sheet.Summary.Description))
@@ -72,6 +77,8 @@ else
 
     @* Views hide edit affordances from Viewers and Commenters; the server enforces the same rules. *@
     <CascadingValue Value="_access">
+    @* Wave E: linked rows the viewer can see, for link cells in every view. *@
+    <CascadingValue Value="_links">
     @* Task assignment (Assignees, "My tasks"): null where the service isn't registered, which hides those affordances. *@
     <CascadingValue Value="_tasks">
     @* The plan editor's outline (task IDs, durations, predecessors) on scheduled sheets; null hides those columns. *@
@@ -111,8 +118,14 @@ else
     </CascadingValue>
     </CascadingValue>
     </CascadingValue>
+    </CascadingValue>
 }
 <SheetLiveRefresher SheetId="SheetId" Changed="OnLiveChangeAsync" />
+@foreach (var linked in _links.Links.Where(l => l.CanSee && l.TargetSheetId != SheetId).Select(l => l.TargetSheetId).Distinct())
+{
+    @* Lookups and link titles follow the linked sheets live. *@
+    <SheetLiveRefresher @key="linked" SheetId="linked" Changed="OnLiveChangeAsync" />
+}
 
 @code {
     [Parameter]
@@ -130,6 +143,7 @@ else
     private Workbench.Contracts.ProjectAccounting.ProjectDto? _project;
     private SheetTasksDto? _tasks;
     private Workbench.Contracts.Scheduling.PlanScheduleDto? _plan;
+    private SheetLinksDto _links = SheetLinksDto.Empty;
 
     private Workbench.Contracts.Scheduling.IPlanScheduleService? _planService =>
         Services.GetService(typeof(Workbench.Contracts.Scheduling.IPlanScheduleService)) as Workbench.Contracts.Scheduling.IPlanScheduleService;
@@ -147,6 +161,9 @@ else
             _tasks = _sheet is not null && Services.GetService(typeof(ITaskAssignmentService)) is ITaskAssignmentService tasks
                 ? await tasks.GetSheetAsync(SheetId) : null;
             _plan = _sheet is { Summary.SchedulingEnabled: true } && _planService is { } plans ? await plans.GetAsync(SheetId) : null;
+            _links = _sheet is not null && _sheet.Columns.Any(c => c.Type is ColumnKind.LinkedRow or ColumnKind.Lookup)
+                && Services.GetService(typeof(ISheetLinkService)) is ISheetLinkService links
+                ? await links.GetAsync(SheetId) : SheetLinksDto.Empty;
             var project = _sheet is null ? null : await ProjectService.GetProjectForSheetAsync(SheetId);
 
             // The Financials tab only for those who may read the project's financials (Finance, Admin, its manager).

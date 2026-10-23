@@ -10,6 +10,34 @@ public interface IFormulaContext
 
     /// <summary>A list of the direct children's values for a column, or a #REF! error when there is no such name.</summary>
     FormulaValue GetChildValues(string name);
+
+    /// <summary>
+    /// Every row's values for the columns from <paramref name="from"/> to <paramref name="to"/> (one column when they're the
+    /// same), as a list (a table for several columns), or #REF! when a name doesn't exist.
+    /// </summary>
+    FormulaValue GetColumnRange(string from, string to) => FormulaValue.FromError(FormulaErrors.Ref);
+
+    /// <summary>The values a named cross-sheet reference points at, #REF! when there's no such name, #NO ACCESS when it's hidden from the viewer.</summary>
+    FormulaValue GetSheetReference(string name) => FormulaValue.FromError(FormulaErrors.Ref);
+
+    /// <summary>The value <c>@cell</c> stands for: set only while a criterion is tested.</summary>
+    FormulaValue CurrentCell => Coerce.ValueError;
+}
+
+/// <summary>Evaluates a criterion with <c>@cell</c> bound to one value of the range.</summary>
+internal sealed class CellContext(IFormulaContext inner, FormulaValue cell) : IFormulaContext
+{
+    public DateOnly Today => inner.Today;
+
+    public FormulaValue CurrentCell => cell;
+
+    public FormulaValue GetValue(string name) => inner.GetValue(name);
+
+    public FormulaValue GetChildValues(string name) => inner.GetChildValues(name);
+
+    public FormulaValue GetColumnRange(string from, string to) => inner.GetColumnRange(from, to);
+
+    public FormulaValue GetSheetReference(string name) => inner.GetSheetReference(name);
 }
 
 public static class FormulaEvaluator
@@ -30,6 +58,9 @@ public static class FormulaEvaluator
         TextNode t => FormulaValue.FromText(t.Value),
         BooleanNode b => FormulaValue.FromBoolean(b.Value),
         ReferenceNode r => context.GetValue(r.Name),
+        ColumnRangeNode r => context.GetColumnRange(r.From, r.To),
+        SheetRangeNode r => context.GetSheetReference(r.Name),
+        CurrentCellNode => context.CurrentCell,
         UnaryNode u => EvalUnary(u, context),
         BinaryNode b => EvalBinary(b, context),
         FunctionNode f => FormulaFunctions.Call(f, context),

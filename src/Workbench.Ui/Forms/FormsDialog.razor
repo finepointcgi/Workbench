@@ -1,0 +1,142 @@
+@* A sheet's forms: build, share (inside Workbench or by public link) and see how many responses each has. *@
+@inject IFormService Forms
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                A form adds a row to this sheet for each response. People filling it in see only the form, never the sheet's other rows.
+            </MudText>
+            @if (_forms is null)
+            {
+                <MudProgressLinear Indeterminate="true" aria-label="Loading forms" />
+            }
+            else if (_forms.Count == 0)
+            {
+                <MudText Class="pa-2">No forms yet.</MudText>
+            }
+            else
+            {
+                @foreach (var form in _forms)
+                {
+                    <MudPaper Outlined="true" Class="pa-3" data-testid="form-row">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                            <MudText Typo="Typo.subtitle1"><strong>@form.Title</strong></MudText>
+                            <MudChip T="string" Size="Size.Small">@AudienceText(form.Audience)</MudChip>
+                            @if (!form.IsOpen)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">Closed</MudChip>
+                            }
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@form.ResponseCount response@(form.ResponseCount == 1 ? "" : "s") · @form.Fields.Count fields</MudText>
+                            <MudSpacer />
+                            <MudButton Size="Size.Small" Href="@($"forms/{form.Id}")" StartIcon="@Icons.Material.Filled.OpenInNew">Open</MudButton>
+                            @if (form.CanEdit)
+                            {
+                                <MudButton Size="Size.Small" OnClick="() => EditAsync(form)" StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
+                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Delete" aria-label="@($"Delete {form.Title}")" OnClick="() => DeleteAsync(form)" />
+                            }
+                        </MudStack>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-1">
+                            <MudTextField T="string" Value="@Link(form)" ReadOnly="true" Label="@(form.PublicPath is null ? "Link for people in Workbench" : "Public link (no sign-in)")"
+                                          Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="form-link" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" aria-label="Copy link" OnClick="() => CopyAsync(Link(form))" />
+                            @if (form.PublicPath is not null && form.CanEdit)
+                            {
+                                <MudButton Size="Size.Small" OnClick="() => ResetAsync(form)">New link</MudButton>
+                            }
+                        </MudStack>
+                    </MudPaper>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Close</MudButton>
+        @if (CanEdit)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="new-form">New form</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public SheetDetail Sheet { get; set; } = default!;
+    [Parameter] public bool CanEdit { get; set; }
+
+    private IReadOnlyList<FormDto>? _forms;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _forms = await Forms.ListAsync(Sheet.Summary.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _forms = [];
+            Snackbar.Add($"Couldn't load the forms: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public static string AudienceText(FormAudience audience) => audience switch
+    {
+        FormAudience.Workspace => "Workspace members",
+        FormAudience.Organization => "Anyone signed in",
+        _ => "Anyone with the link",
+    };
+
+    private string Link(FormDto form) => Navigation.ToAbsoluteUri(form.PublicPath ?? $"forms/{form.Id}").ToString();
+
+    private async Task CopyAsync(string link)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
+            Snackbar.Add("Link copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("Select the link and copy it.", Severity.Info);
+        }
+    }
+
+    private async Task EditAsync(FormDto? form)
+    {
+        var dialog = await DialogService.ShowAsync<FormBuilderDialog>(form is null ? "New form" : $"Edit {form.Title}",
+            new DialogParameters<FormBuilderDialog> { { d => d.Sheet, Sheet }, { d => d.Form, form } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task ResetAsync(FormDto form)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync("New public link", "The old link stops working right away. Anyone who has it will need the new one.",
+            yesText: "Make a new link", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await Forms.ResetPublicLinkAsync(form.Id);
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(FormDto form)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync($"Delete {form.Title}?", "Its links stop working. Rows it already added stay on the sheet.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await Forms.DeleteAsync(form.Id);
+            await LoadAsync();
+        }
+    }
+}

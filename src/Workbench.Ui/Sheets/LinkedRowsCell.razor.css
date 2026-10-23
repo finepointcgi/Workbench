@@ -1,0 +1,4 @@
+.wb-links { display: inline-flex; gap: 4px; align-items: center; overflow: hidden; white-space: nowrap; }
+.wb-link-chip { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; border-radius: 10px;
+    background: var(--mud-palette-primary-hover); color: var(--mud-palette-primary); text-decoration: none; font-size: .85em; line-height: 20px; }
+.wb-link-chip:hover, .wb-link-chip:focus-visible { text-decoration: underline; }

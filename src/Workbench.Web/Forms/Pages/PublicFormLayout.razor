@@ -1,0 +1,27 @@
+@* The public form's page shell: plain server-rendered HTML, no scripts, one h1, announced messages. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>@Title</title>
+    <link rel="stylesheet" href="/css/public-form.css" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+</head>
+<body>
+    <a class="skip" href="#main">Skip to main content</a>
+    <main id="main" tabindex="-1">
+        <h1>@Title</h1>
+        @ChildContent
+    </main>
+    <footer class="foot">
+        <p>Powered by Workbench. Your answers go only to the people who run this form.</p>
+    </footer>
+</body>
+</html>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,105 @@
+@* Picks columns of another sheet and names them, for formulas on this sheet: {Name}. *@
+@inject ISheetLinkService Links
+@inject ISheetFormulaService Formulas
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Pick the sheet and the columns to read. Formulas here use the reference by name, like COUNTIF({Open risks}, "Open").
+                People who can't see that sheet get "no access" instead of its values.
+            </MudText>
+            <MudSelect T="Guid?" Label="Sheet" Value="_sheetId" ValueChanged="OnSheetChanged" data-testid="reference-sheet">
+                @foreach (var sheet in _sheets)
+                {
+                    <MudSelectItem T="Guid?" Value="sheet.Id">@sheet.Name (@sheet.Workspace)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (Selected is { } source)
+            {
+                <MudText Typo="Typo.subtitle2">Columns (left to right, for VLOOKUP and INDEX)</MudText>
+                <div class="d-flex flex-wrap gap-1">
+                    @foreach (var field in source.Fields)
+                    {
+                        <MudCheckBox T="bool" Value="_fields.Contains(field.Key)" ValueChanged="(bool on) => Toggle(field, on)" Label="@field.Name" Dense="true" />
+                    }
+                </div>
+                <MudTextField @bind-Value="_name" Label="Name" Immediate="true" HelperText="Used in formulas between braces." data-testid="reference-name" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateAsync"
+                   Disabled="_sheetId is null || _fields.Count == 0 || string.IsNullOrWhiteSpace(_name)" data-testid="create-reference">Add reference</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+
+    private IReadOnlyList<LinkableSheetDto> _sheets = [];
+    private Guid? _sheetId;
+    private readonly List<string> _fields = [];
+    private string _name = "";
+    private bool _nameTouched;
+
+    private LinkableSheetDto? Selected => _sheets.FirstOrDefault(s => s.Id == _sheetId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _sheets = (await Links.ListSheetsAsync()).Where(s => s.Id != SheetId).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load the sheets: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnSheetChanged(Guid? id)
+    {
+        _sheetId = id;
+        _fields.Clear();
+        SuggestName();
+    }
+
+    private void Toggle(SheetFieldDto field, bool on)
+    {
+        _fields.Remove(field.Key);
+        if (on)
+        {
+            _fields.Add(field.Key);
+        }
+
+        SuggestName();
+    }
+
+    private void SuggestName()
+    {
+        if (_nameTouched && _name.Length > 0 || Selected is not { } sheet)
+        {
+            return;
+        }
+
+        var first = sheet.Fields.FirstOrDefault(f => f.Key == _fields.FirstOrDefault());
+        _name = first is null ? sheet.Name : $"{sheet.Name} {first.Name}";
+    }
+
+    private async Task CreateAsync()
+    {
+        _nameTouched = true;
+        try
+        {
+            var created = await Formulas.CreateReferenceAsync(SheetId, new CreateSheetReferenceRequest(_name.Trim(), _sheetId!.Value, _fields.ToList()));
+            MudDialog.Close(DialogResult.Ok(created));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+}
