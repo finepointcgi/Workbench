@@ -1,0 +1,114 @@
+@* Sets a task's date constraint (MS Project's Start No Earlier Than, Must Start On, ...). Conflicts with its predecessors are
+   shown here when saving, and stay listed above the plan until they're resolved. *@
+@using System.Globalization
+@using Workbench.Contracts
+@using Workbench.Contracts.Scheduling
+@inject IPlanScheduleService Plans
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-3"><strong>@Title</strong></MudText>
+        <MudSelect T="PlanConstraintKind" @bind-Value="_kind" Label="Constraint" Variant="Variant.Outlined" data-testid="constraint-kind">
+            @foreach (var kind in PlanConstraints.Choices)
+            {
+                <MudSelectItem Value="kind">@PlanConstraints.Label(kind)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1 mb-3">@PlanConstraints.Help(_kind)</MudText>
+        @if (_kind != PlanConstraintKind.AsSoonAsPossible)
+        {
+            <MudDatePicker Editable="true" Placeholder="MM/DD/YYYY" DateFormat="MM/dd/yyyy" @bind-Date="_date" Label="Date" Variant="Variant.Outlined" data-testid="constraint-date" />
+        }
+
+        @if (_conflicts.Count > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3" data-testid="constraint-conflicts" role="alert">
+                @foreach (var conflict in _conflicts)
+                {
+                    <div>@conflict.Message</div>
+                }
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_saved)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => MudDialog.Close(DialogResult.Ok(true))">Done</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" data-testid="constraint-save"
+                       Disabled="@(_busy || (_kind != PlanConstraintKind.AsSoonAsPossible && _date is null))">Save</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid ItemId { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public PlanConstraintDto? Current { get; set; }
+
+    /// <summary>The task's open conflicts, shown until it's saved.</summary>
+    [Parameter]
+    public IReadOnlyList<PlanConflictDto> Conflicts { get; set; } = [];
+
+    /// <summary>Suggested date for a new constraint (the task's start).</summary>
+    [Parameter]
+    public DateOnly? Suggested { get; set; }
+
+    private PlanConstraintKind _kind;
+    private DateTime? _date;
+    private List<PlanConflictDto> _conflicts = [];
+    private bool _busy;
+    private bool _saved;
+
+    protected override void OnInitialized()
+    {
+        _kind = Current?.Kind ?? PlanConstraintKind.AsSoonAsPossible;
+        _date = (Current?.Date ?? Suggested)?.ToDateTime(TimeOnly.MinValue);
+        _conflicts = Conflicts.ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var all = await Plans.SetConstraintAsync(SheetId, ItemId,
+                new SetPlanConstraintRequest(_kind, _date is { } d ? DateOnly.FromDateTime(d) : null));
+            _conflicts = all.Where(c => c.ItemId == ItemId).ToList();
+            if (_conflicts.Count == 0)
+            {
+                Snackbar.Add(_kind == PlanConstraintKind.AsSoonAsPossible
+                    ? $"\"{Title}\" has no date constraint now."
+                    : $"\"{Title}\": {PlanConstraints.Label(_kind)} {DateOnly.FromDateTime(_date!.Value).ToString("MMM d", CultureInfo.InvariantCulture)}.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+                return;
+            }
+
+            // Saved, but its links disagree: say so here instead of closing.
+            _saved = true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, ex is ArgumentException ? Severity.Warning : Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

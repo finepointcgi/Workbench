@@ -1,0 +1,51 @@
+@* Lists tasks whose date constraint and links disagree, above every view of the plan, so a conflict is never silent. *@
+@using Workbench.Contracts.Scheduling
+@inject IDialogService DialogService
+
+@if (Plan is { } plan && plan.AllConflicts.Count > 0)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3" data-testid="plan-conflicts" role="status">
+        <MudText Typo="Typo.subtitle2">
+            @(plan.AllConflicts.Count == 1 ? "1 task can't meet its date constraint" : $"{plan.AllConflicts.Count} tasks can't meet their date constraints")
+        </MudText>
+        <ul class="plan-conflicts">
+            @foreach (var conflict in plan.AllConflicts.Take(_expanded ? int.MaxValue : 5))
+            {
+                <li>
+                    <strong>@conflict.TaskNumber. @conflict.Title</strong>: @conflict.Message
+                    @if (CanEdit)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" OnClick="() => EditAsync(conflict)"
+                                   aria-label="@($"Change the constraint on {conflict.Title}")">Change constraint</MudButton>
+                    }
+                </li>
+            }
+        </ul>
+        @if (plan.AllConflicts.Count > 5)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => _expanded = !_expanded">@(_expanded ? "Show fewer" : $"Show all {plan.AllConflicts.Count}")</MudButton>
+        }
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    [Parameter]
+    public PlanScheduleDto? Plan { get; set; }
+
+    [Parameter]
+    public bool CanEdit { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private bool _expanded;
+
+    private async Task EditAsync(PlanConflictDto conflict)
+    {
+        await TaskConstraintEditor.EditAsync(DialogService, SheetId, conflict.ItemId, conflict.Title, Plan);
+        await Changed.InvokeAsync();
+    }
+}

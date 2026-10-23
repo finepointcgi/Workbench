@@ -132,6 +132,22 @@ public sealed class MsProjectXmlTests
     }
 
     [Fact]
+    public async Task A_plan_without_progress_round_trips_without_inventing_any()
+    {
+        var sheet = await _kit.SheetAsync();
+        var a = await _kit.TaskAsync(sheet, "Design", Mon, 5);
+        var b = await _kit.TaskAsync(sheet, "Build", Mon, 3);
+        await _kit.LinkAsync(sheet, a.Id, b.Id, DependencyKind.StartToFinish, 2);
+
+        var file = await _kit.Plan.ExportMsProjectAsync(sheet);
+        var preview = await _kit.Plan.PreviewImportAsync(sheet, new PlanImportRequest(file.FileName, file.Content));
+
+        Assert.Empty(preview.Changes);
+        Assert.Empty(preview.Issues);
+        Assert.DoesNotContain("PercentComplete", System.Text.Encoding.UTF8.GetString(file.Content));
+    }
+
+    [Fact]
     public async Task An_exported_plan_imports_into_a_new_plan_with_the_same_schedule()
     {
         var sheet = await ImportOfficeMoveAsync();

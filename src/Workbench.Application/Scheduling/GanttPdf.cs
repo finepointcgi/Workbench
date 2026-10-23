@@ -203,7 +203,7 @@ public static class GanttPdf
             var x = scale.Clamp(scale.X(d));
             var end = scale.Clamp(scale.X(monthWide ? d.AddMonths(1) : d.AddYears(1)));
             p.Line(x, top, x, bodyTop + bodyHeight);
-            var label = monthWide ? d.ToString(end - x >= 70 ? "MMMM yyyy" : "MMM yy", Inv) : d.Year.ToString(Inv);
+            var label = monthWide ? d.ToString(end - x >= 70 ? "MMMM yyyy" : end - x >= 45 ? "MMM yyyy" : "MMM", Inv) : d.Year.ToString(Inv);
             if (end - x >= TextWidth(label, 7) + 4)
             {
                 p.Text(x + 3, top + 10, 7, true, label);

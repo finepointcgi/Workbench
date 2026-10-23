@@ -1,11 +1,21 @@
 @using System.Globalization
 @inject NavigationManager Navigation
 
-<div class="@(Assignees is null ? "gantt-task-list" : "gantt-task-list with-assignees")" role="table" aria-label="Tasks">
+<div class="@ListClass" role="table" aria-label="Tasks">
     <div class="gantt-task-header" role="row" style="height:@(Px(GanttLayout.HeaderHeight))">
         <span class="gantt-col-name" role="columnheader">Task</span>
+        @if (ShowConstraints)
+        {
+            <span class="gantt-col-constraint" role="columnheader"><span class="wb-sr-only">Date constraint</span></span>
+        }
         <span class="gantt-col-date" role="columnheader">Start</span>
         <span class="gantt-col-date" role="columnheader">Finish</span>
+        @if (Comparison is not null)
+        {
+            <span class="gantt-col-date" role="columnheader" title="Baseline start">BL start</span>
+            <span class="gantt-col-date" role="columnheader" title="Baseline finish">BL finish</span>
+            <span class="gantt-col-variance" role="columnheader" title="Finish variance in working days: + is later than the baseline">Var.</span>
+        }
         @if (Assignees is not null)
         {
             <span class="gantt-col-assignee" role="columnheader">Assigned</span>
@@ -39,8 +49,30 @@
                     <span class="wb-sr-only">(critical path)</span>
                 }
             </span>
+            @if (ShowConstraints)
+            {
+                var constraint = Constraints?.GetValueOrDefault(row.Item.Id);
+                var conflict = Conflicts?.GetValueOrDefault(row.Item.Id);
+                <span class="gantt-col-constraint" role="cell">
+                    @if (!row.IsSummary && (CanConstrain || constraint is not null))
+                    {
+                        var label = constraint is null ? $"Set a date constraint on {row.Item.Title}" : $"{row.Item.Title}: {constraint.Label} {Format(constraint.Date)}{(conflict is null ? "" : " (conflict)")}";
+                        <button type="button" class="@ConstraintClass(constraint, conflict)" title="@(conflict?.Message ?? label)" aria-label="@label"
+                                disabled="@(!CanConstrain)" @onclick="() => OnConstrain.InvokeAsync(row)" data-testid="gantt-constraint">
+                            <MudIcon Icon="@(conflict is not null ? Icons.Material.Filled.Warning : constraint is not null ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
+                        </button>
+                    }
+                </span>
+            }
             <span class="gantt-col-date" role="cell">@Format(row.Start)</span>
             <span class="gantt-col-date" role="cell">@Format(row.Finish)</span>
+            @if (Comparison is not null)
+            {
+                var variance = Comparison.For(row.Item.Id);
+                <span class="gantt-col-date" role="cell">@Format(variance?.BaselineStart)</span>
+                <span class="gantt-col-date" role="cell">@Format(variance?.BaselineFinish)</span>
+                <span class="@VarianceClass(variance?.FinishVarianceDays)" role="cell">@Variance(variance?.FinishVarianceDays)</span>
+            }
             @if (Assignees is not null)
             {
                 var people = Assignees(row.Item.Id);
@@ -87,7 +119,44 @@
     [Parameter]
     public EventCallback<ItemDto> OnAssign { get; set; }
 
+    /// <summary>The plan's baseline comparison: adds baseline start, finish and finish variance columns. Null hides them.</summary>
+    [Parameter]
+    public Workbench.Contracts.Scheduling.BaselineComparison? Comparison { get; set; }
+
+    /// <summary>Date constraints by item id; non-null shows the constraint column.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<Guid, Workbench.Contracts.Scheduling.PlanConstraintDto>? Constraints { get; set; }
+
+    [Parameter]
+    public IReadOnlyDictionary<Guid, Workbench.Contracts.Scheduling.PlanConflictDto>? Conflicts { get; set; }
+
+    [Parameter]
+    public bool CanConstrain { get; set; }
+
+    [Parameter]
+    public EventCallback<GanttRow> OnConstrain { get; set; }
+
+    private bool ShowConstraints => Constraints is not null;
+
+    private string ListClass =>
+        "gantt-task-list" + (Assignees is null ? "" : " with-assignees") + (Comparison is null ? "" : " with-baseline") + (ShowConstraints ? " with-constraints" : "");
+
+    private static string ConstraintClass(Workbench.Contracts.Scheduling.PlanConstraintDto? constraint, Workbench.Contracts.Scheduling.PlanConflictDto? conflict) =>
+        conflict is not null ? "gantt-constraint conflict" : constraint is not null ? "gantt-constraint set" : "gantt-constraint";
+
+    private static string Variance(int? days) => days switch
+    {
+        null => "—",
+        0 => "0d",
+        > 0 => $"+{days}d",
+        _ => $"{days}d",
+    };
+
+    private static string VarianceClass(int? days) => days > 0 ? "gantt-col-variance late" : "gantt-col-variance";
+
     private static string Px(double value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "px";
+
+    private static string Format(DateOnly date) => date.ToString("MMM d", CultureInfo.InvariantCulture);
 
     private static string Format(DateOnly? date) => date?.ToString("MMM d", CultureInfo.InvariantCulture) ?? "—";
 }
