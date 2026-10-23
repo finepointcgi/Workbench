@@ -13,6 +13,7 @@ using Workbench.Contracts.Time;
 using Workbench.Domain.Notifications;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Tests.Time;
+using Workbench.Ui.Setup.Approvals;
 
 namespace Workbench.Tests.Approvals;
 
@@ -196,13 +197,13 @@ public sealed partial class BulkAndEmailApprovalTests
     {
         var kit = await Kit.CreateAsync();
         kit.Host.User.Email = "admin@example.com";
+        // Setup › Approval workflows › "Project managers approve time charged to their projects".
         var admin = new TestUser("admin@example.com");
-        await new ApprovalWorkflowService(kit.Host.Factory, new ApprovalEngine(kit.Host.Clock), new AuditRecorder(admin, kit.Host.Clock), new AccessControl(kit.Host.Factory, admin))
-            .SaveAsync(ApprovalDocumentTypes.Timesheet, new SaveApprovalWorkflowRequest("Supervisor and project managers", new ApprovalWorkflowDefinition([
-                new ApprovalStepDefinition("Supervisor", 1, new ApproverRule(ApproverRuleKind.Supervisor), Fallback: new ApproverRule(ApproverRuleKind.OrgRole, ApprovalOrgRole.Admin),
-                    WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
-                new ApprovalStepDefinition("Project managers", 1, new ApproverRule(ApproverRuleKind.ProjectManager), WhenSubmitterIsApprover: SelfApprovalPolicy.Skip),
-            ])));
+        var workflows = new ApprovalWorkflowService(kit.Host.Factory, new ApprovalEngine(kit.Host.Clock), new AuditRecorder(admin, kit.Host.Clock), new AccessControl(kit.Host.Factory, admin));
+        var current = await workflows.GetAsync(ApprovalDocumentTypes.Timesheet);
+        Assert.False(ProjectManagerTimeApproval.IsOn(current.Definition)); // Off by default.
+        var saved = await workflows.SaveAsync(ApprovalDocumentTypes.Timesheet, new SaveApprovalWorkflowRequest(current.Name, ProjectManagerTimeApproval.With(current.Definition, true)));
+        Assert.True(ProjectManagerTimeApproval.IsOn(saved.Definition));
         var dana = await kit.SubmitWeekAsync(kit.Host.Dana, kit.Host.Direct.Id, kit.Help.Id, kit.Host.Overhead.Id);
         var kim = await kit.SubmitWeekAsync(kit.Kim); // Overhead only: no project manager step.
 
@@ -212,6 +213,9 @@ public sealed partial class BulkAndEmailApprovalTests
         Assert.Equal("Project managers", item.StepName);
         Assert.Equal("2002 Sustainment", item.ScopeLabel);
         Assert.NotNull(item.ProjectId);
+        // Only Sam's share: one 8-hour day on 2002 of Dana's 24.
+        Assert.Equal(8m, item.Amount);
+        Assert.Equal("8.0 h on 2002 of 24.0 h", item.Summary);
         var result = await kit.Inbox.DecideManyAsync(Bulk(ApprovalDecisionKind.Approve, null, item.DocumentId, kim));
         Assert.Equal("1 approved, 1 couldn't be: Only the employee's supervisor (or an administrator when there's no supervisor) can review this timesheet", result.Summary);
         Assert.Equal(TimesheetStatus.Submitted, await kit.StatusAsync(dana)); // The supervisor (and 1001's manager) still decide.
@@ -221,10 +225,26 @@ public sealed partial class BulkAndEmailApprovalTests
         kit.Host.SignInAs(kit.Host.Pat);
         var pats = (await kit.Inbox.ListMineAsync()).Single(i => i.DocumentId == dana);
         Assert.NotNull(pats.ProjectId);
+        Assert.Equal(24m, pats.Amount); // Pat also reviews as supervisor: the whole timesheet.
+        Assert.Equal("24.0 h", pats.Summary);
         Assert.Equal("2 approved", (await kit.Inbox.DecideManyAsync(Bulk(ApprovalDecisionKind.Approve, null, dana, kim))).Summary);
         Assert.Equal(TimesheetStatus.Approved, await kit.StatusAsync(dana));
         var history = Assert.Single(await kit.Inbox.GetHistoryAsync(ApprovalDocumentTypes.Timesheet, dana));
         Assert.Contains(history.Tasks, t => t.ScopeLabel == "2002 Sustainment" && t.DecidedBy == "sam@example.com");
+    }
+
+    [Fact]
+    public void The_project_manager_option_adds_one_parallel_step_and_removes_it_again()
+    {
+        var supervisorOnly = ApprovalDefaults.For(ApprovalDocumentTypes.Timesheet);
+        var on = ProjectManagerTimeApproval.With(supervisorOnly, true);
+
+        var step = Assert.Single(on.Steps, s => s.Approver.Kind == ApproverRuleKind.ProjectManager);
+        Assert.Equal(supervisorOnly.Steps[0].Sequence, step.Sequence); // Alongside the supervisor, not after.
+        Assert.Equal(SelfApprovalPolicy.Skip, step.WhenSubmitterIsApprover);
+        Assert.Same(on, ProjectManagerTimeApproval.With(on, true));
+        Assert.Equal(supervisorOnly.Steps, ProjectManagerTimeApproval.With(on, false).Steps);
+        Assert.False(ProjectManagerTimeApproval.IsOn(ProjectManagerTimeApproval.With(on, false)));
     }
 
     // ---- Approve from email ----

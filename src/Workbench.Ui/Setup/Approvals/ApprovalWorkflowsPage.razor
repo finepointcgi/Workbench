@@ -16,6 +16,20 @@
 }
 else
 {
+    @if (_pmTime is { } pmTime)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="pm-time-approval">
+            <MudSwitch T="bool" Value="pmTime" ValueChanged="SetPmTimeAsync" Disabled="!_isAdmin || _busy" Color="Color.Primary" data-testid="pm-time-switch"
+                       Label="Project managers approve time charged to their projects" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                When this is on, a submitted timesheet also goes to the manager of each project it charges, at the same time as the
+                supervisor. Each manager approves only the hours on their own projects, from Approvals › Time on my projects. The
+                timesheet is approved once everyone has approved. Projects without a manager, and a manager's own hours on their
+                project, skip this step. Off by default; timesheets already submitted keep the rules they started with.
+            </MudText>
+        </MudPaper>
+    }
+
     <MudPaper Outlined="true" Class="pa-4 mb-4">
         <MudSimpleTable Dense="true" Elevation="0" data-testid="workflows">
             <thead><tr><th>Document</th><th>Workflow</th><th>Version</th><th>Steps</th><th>In flight</th><th>Updated</th><th></th></tr></thead>
@@ -86,11 +100,14 @@ else
     private IReadOnlyList<EmployeeDto> _employees = [];
     private bool _isAdmin;
     private string? _newName;
+    private bool? _pmTime;
+    private bool _busy;
 
     protected override async Task OnInitializedAsync()
     {
         _isAdmin = (await CurrentUser.GetAsync()).Can(Permission.ApprovalWorkflowsManage);
         _workflows = await Workflows.ListAsync();
+        _pmTime = ProjectManagerTimeApproval.IsOn((await Workflows.GetAsync(ApprovalDocumentTypes.Timesheet)).Definition);
         _units = await Workflows.ListOrgUnitApproversAsync();
         _employees = (await People.ListEmployeesAsync()).OrderBy(e => e.DisplayName).ToList();
     }
@@ -105,6 +122,29 @@ else
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
         {
             Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SetPmTimeAsync(bool on)
+    {
+        _busy = true;
+        try
+        {
+            var current = await Workflows.GetAsync(ApprovalDocumentTypes.Timesheet);
+            var saved = await Workflows.SaveAsync(ApprovalDocumentTypes.Timesheet, new SaveApprovalWorkflowRequest(current.Name,
+                ProjectManagerTimeApproval.With(current.Definition, on),
+                on ? "Project managers approve time charged to their projects" : "Project managers no longer approve time"));
+            _pmTime = ProjectManagerTimeApproval.IsOn(saved.Definition);
+            _workflows = await Workflows.ListAsync();
+            Snackbar.Add(on ? "Project managers now approve time charged to their projects" : "Timesheets no longer go to project managers", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 
