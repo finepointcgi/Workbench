@@ -25,6 +25,7 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
             Type = request.Type.ToDomain(),
             Order = nextOrder + 1,
             Options = request.Options?.ToList() ?? [],
+            OptionColors = request.Type == ColumnKind.Dropdown ? StatusLabels.Colors(request.Options ?? [], request.OptionColors ?? []) : [],
             Formula = formula,
             IsRestricted = request.IsRestricted,
         };
@@ -43,6 +44,11 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
             ?? throw WorkbenchNotFoundException.For("Column", columnId);
 
         column.Name = request.Name.Trim();
+        if (column.Type == ColumnType.Dropdown)
+        {
+            column.OptionColors = StatusLabels.Colors(request.Options, request.OptionColors ?? StatusLabels.ByName(column.Options, column.OptionColors, request.Options));
+        }
+
         column.Options = request.Options.ToList();
         column.Formula = await ValidateFormulaAsync(db, sheetId, columnId, column.Name, request.Formula, cancellationToken);
         column.Order = request.Order;

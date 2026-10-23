@@ -15,13 +15,117 @@
 @* ARIA grid: focus stays on the container and aria-activedescendant points screen readers at the active cell, so
    moving with the arrow keys announces the cell (its column header and value). The table is presentational; the rows
    and cells carry the grid roles. *@
-@if (Tasks is not null)
-{
-    <div class="d-flex align-center mb-1" style="gap:8px">
+<div class="wb-grid-toolbar" role="toolbar" aria-label="Grid tools">
+    @if (ViewService is not null)
+    {
+        <MudMenu Label="@ViewName" StartIcon="@Icons.Material.Filled.ViewList" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Text"
+                 Size="Size.Small" Dense="true" AriaLabel="@($"Views: {ViewName}")" data-testid="grid-views">
+            <MudMenuItem Icon="@(_savedView is null ? Icons.Material.Filled.Check : Icons.Material.Filled.TableRows)" OnClick="() => UseView(null)">Standard view</MudMenuItem>
+            @foreach (var view in _views?.Views ?? [])
+            {
+                var isDefault = _views!.DefaultView?.Id == view.Id;
+                <MudMenuItem Icon="@(_savedView?.Id == view.Id ? Icons.Material.Filled.Check : view.IsShared ? Icons.Material.Filled.Group : Icons.Material.Filled.Person)"
+                             OnClick="() => UseView(view)" data-testid="grid-view-option">
+                    @view.Name<span class="mud-text-secondary">@(view.IsShared ? " · shared" : " · just you")@(isDefault ? " · opens first" : "")</span>
+                </MudMenuItem>
+            }
+            <MudDivider />
+            @if (_savedView is { CanEdit: true } changedView && ViewChanged)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.Save" OnClick="() => SaveViewAsync(false)" data-testid="grid-update-view">Save changes to "@changedView.Name"</MudMenuItem>
+            }
+            <MudMenuItem Icon="@Icons.Material.Filled.SaveAs" OnClick="() => SaveViewAsync(true)" data-testid="grid-save-view">Save as a new view…</MudMenuItem>
+            @if (_savedView is { } current)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.Star" OnClick="() => SetMyDefaultAsync(_views?.MyDefaultViewId == current.Id ? null : current)">
+                    @(_views?.MyDefaultViewId == current.Id ? "Stop opening with this view" : "Open the sheet with this view")
+                </MudMenuItem>
+                @if (_views?.CanShare == true && current.IsShared)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Groups" OnClick="() => SetSheetDefaultAsync(_views.SheetDefaultViewId == current.Id ? null : current)">
+                        @(_views.SheetDefaultViewId == current.Id ? "Stop being everyone's default" : "Make it everyone's default")
+                    </MudMenuItem>
+                }
+                @if (current.CanEdit)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="() => SaveViewAsync(false)">Rename or share…</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteViewAsync(current)">Delete view</MudMenuItem>
+                }
+            }
+        </MudMenu>
+    }
+    <MudButton StartIcon="@Icons.Material.Filled.Sort" Size="Size.Small" Variant="Variant.Text" OnClick="SortDialogAsync" data-testid="grid-sort"
+               Color="@(_view.HasSort ? Color.Primary : Color.Default)">Sort@(_view.HasSort ? $" ({_view.Sort!.Count})" : "")</MudButton>
+    <MudButton StartIcon="@Icons.Material.Filled.FilterList" Size="Size.Small" Variant="Variant.Text" OnClick="() => FilterDialogAsync()" data-testid="grid-filter"
+               Color="@(_view.HasFilters ? Color.Primary : Color.Default)">Filter@(_view.HasFilters ? $" ({_view.Filters!.Count})" : "")</MudButton>
+    <MudButton StartIcon="@Icons.Material.Filled.ViewColumn" Size="Size.Small" Variant="Variant.Text" OnClick="ColumnsDialogAsync" data-testid="grid-columns"
+               Color="@(_view.HiddenColumns is { Count: > 0 } ? Color.Primary : Color.Default)">Columns@(_view.HiddenColumns is { Count: > 0 } hiddenCols ? $" ({hiddenCols.Count} hidden)" : "")</MudButton>
+    @if (CanEdit)
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Disabled="!_history.CanUndo" OnClick="UndoAsync" data-testid="grid-undo"
+                       aria-label="@(_history.UndoLabel is { } u ? $"Undo {u.ToLowerInvariant()} (Ctrl+Z)" : "Undo (Ctrl+Z)")" title="@(_history.UndoLabel is { } ut ? $"Undo {ut.ToLowerInvariant()} (Ctrl+Z)" : "Undo (Ctrl+Z)")" />
+        <MudIconButton Icon="@Icons.Material.Filled.Redo" Size="Size.Small" Disabled="!_history.CanRedo" OnClick="RedoAsync" data-testid="grid-redo"
+                       aria-label="@(_history.RedoLabel is { } r ? $"Redo {r.ToLowerInvariant()} (Ctrl+Y)" : "Redo (Ctrl+Y)")" title="@(_history.RedoLabel is { } rt ? $"Redo {rt.ToLowerInvariant()} (Ctrl+Y)" : "Redo (Ctrl+Y)")" />
+    }
+    @if (ViewService is not null)
+    {
+        <MudMenu Label="Export" StartIcon="@Icons.Material.Filled.Download" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Text" Size="Size.Small"
+                 Dense="true" AriaLabel="Export the sheet" data-testid="grid-export">
+            <MudMenuItem Icon="@Icons.Material.Filled.TableView" OnClick="() => ExportAsync(SheetExportFormat.Xlsx, true)" data-testid="export-xlsx">@(_view.IsStandard ? "Excel (.xlsx)" : "This view to Excel (.xlsx)")</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.PictureAsPdf" OnClick="() => ExportAsync(SheetExportFormat.Pdf, true)" data-testid="export-pdf">@(_view.IsStandard ? "PDF" : "This view to PDF")</MudMenuItem>
+            @if (!_view.IsStandard)
+            {
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.TableView" OnClick="() => ExportAsync(SheetExportFormat.Xlsx, false)">Whole sheet to Excel</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.PictureAsPdf" OnClick="() => ExportAsync(SheetExportFormat.Pdf, false)">Whole sheet to PDF</MudMenuItem>
+            }
+        </MudMenu>
+    }
+    <MudSpacer />
+    @if (Tasks is not null)
+    {
         <MudSwitch T="bool" Value="_myTasks" ValueChanged="SetMyTasks" Color="Color.Primary" Size="Size.Small" Label="My tasks" data-testid="grid-my-tasks" />
-        @if (_myTasks)
+    }
+</div>
+@if (_myTasks || _view.HasSort || _view.HasFilters || ViewChanged)
+{
+    <div class="wb-view-chips" data-testid="grid-view-summary">
+        @foreach (var sort in _view.Sort ?? [])
         {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary" role="status">Showing @_mine.Count @(_mine.Count == 1 ? "row" : "rows") assigned to you (and their parents).</MudText>
+            <MudChip T="string" Size="Size.Small" Icon="@(sort.Descending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                     OnClose="_ => ClearSort()">Sorted by @FieldName(sort.Field)@(sort.Descending ? " (descending)" : "")</MudChip>
+        }
+        @foreach (var filter in _view.Filters ?? [])
+        {
+            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.FilterList" OnClick="() => FilterDialogAsync()"
+                     OnClose="_ => RemoveFilter(filter)" data-testid="filter-chip">@Describe(filter)</MudChip>
+        }
+        <MudText Typo="Typo.caption" Class="mud-text-secondary" role="status">
+            @if (_myTasks)
+            {
+                @($"Showing {_rows.Count} {(_rows.Count == 1 ? "row" : "rows")} assigned to you (and their parents).")
+            }
+            else if (_view.HasFilters)
+            {
+                @($"Showing {_rows.Count} of {Items.Count} rows.")
+            }
+            @if (Rearranged && CanEdit)
+            {
+                @(" Clear the sort and filter to indent or insert rows.")
+            }
+        </MudText>
+        @if (_view.HasSort || _view.HasFilters)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetView(_view with { Sort = [], Filters = [] })" data-testid="grid-clear-view">Clear sort and filter</MudButton>
+        }
+        @if (ViewChanged && ViewService is not null)
+        {
+            @if (_savedView is not null)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ResetView">Reset to "@_savedView.Name"</MudButton>
+            }
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="() => SaveViewAsync(_savedView is not { CanEdit: true })" data-testid="grid-save-view-button">Save view</MudButton>
         }
     </div>
 }
@@ -30,7 +134,7 @@
      aria-activedescendant="@(ActiveRow is not null && ActiveColumn is not null ? ActiveCellId : null)"
      aria-describedby="@($"{_gridId}-help")"
      @onkeydown="OnKeyDownAsync">
-    <span id="@($"{_gridId}-help")" class="wb-sr-only">Arrow keys move between cells. Enter or F2 edits a cell, Enter saves, Escape cancels. Space toggles a checkbox.@(CanEdit ? " In the Title column, Tab indents a row and Shift+Tab outdents it; Insert adds a row above." : "")</span>
+    <span id="@($"{_gridId}-help")" class="wb-sr-only">Arrow keys move between cells. Enter or F2 edits a cell, Enter saves, Escape cancels. Space toggles a checkbox. Shift with the arrow keys selects a range; Control+C copies it.@(CanEdit ? " Control+V pastes, Control+D fills down, Delete clears, Control+Z undoes and Control+Y redoes. Enter on a status cell opens its labels. In the Title column, Tab indents a row and Shift+Tab outdents it; Insert adds a row above." : "")</span>
     <table class="wb-table" style="width:@(TableWidth)px" role="presentation">
         <colgroup>
             <col style="width:@(GutterWidth)px" />
@@ -64,6 +168,15 @@
                                 <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="wb-fx" aria-label="Restricted column" data-testid="restricted-icon" />
                             }
                             <span class="wb-th-name">@column.Name</span>
+                            @if (_view.Sort?.FirstOrDefault(s => s.Field == column.Key) is { } sorted)
+                            {
+                                <MudIcon Icon="@(sorted.Descending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)" Size="Size.Small" Class="wb-fx"
+                                         aria-label="@(sorted.Descending ? "Sorted descending" : "Sorted ascending")" />
+                            }
+                            @if (_view.Filters?.Any(f => f.Field == column.Key) == true)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.FilterList" Size="Size.Small" Class="wb-fx" aria-label="Filtered" />
+                            }
                             <MudMenu Icon="@Icons.Material.Filled.ArrowDropDown" Size="Size.Small" Dense="true" Class="wb-th-menu"
                                      AriaLabel="@($"{column.Name} column actions")">
                                 @if (column.Column is { } custom && CanEdit)
@@ -76,11 +189,22 @@
                                     }
                                     @if (custom.Type == ColumnKind.Dropdown)
                                     {
-                                        <MudMenuItem Icon="@Icons.Material.Filled.List" OnClick="() => EditColumnAsync(custom)">Edit options</MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Palette" OnClick="() => EditColumnAsync(custom)">Edit labels and colors</MudMenuItem>
                                     }
                                     <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
                                     <MudDivider />
                                 }
+                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors))
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.ArrowUpward" OnClick="() => SortBy(column, false)" data-testid="sort-asc">Sort ascending</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.ArrowDownward" OnClick="() => SortBy(column, true)" data-testid="sort-desc">Sort descending</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.FilterList" OnClick="() => FilterDialogAsync(column)">Filter by @column.Name…</MudMenuItem>
+                                }
+                                @if (column.Kind != GridColumnKind.Title)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Filled.VisibilityOff" OnClick="() => HideColumn(column)" data-testid="hide-column">Hide column</MudMenuItem>
+                                }
+                                <MudDivider />
                                 <MudMenuItem Icon="@Icons.Material.Filled.SwapHoriz" OnClick="() => ResizeColumnAsync(column)">Column width</MudMenuItem>
                                 @if (CanEdit)
                                 {
@@ -106,7 +230,8 @@
         </thead>
         <tbody role="rowgroup">
             <Virtualize Items="_rows" ItemSize="RowHeight" OverscanCount="10" SpacerElement="tr" Context="row">
-                <tr class="@RowClass(row)" role="row" aria-rowindex="@(IndexOf(row) + 2)">
+                @{ var rowIndex = IndexOf(row); }
+                <tr class="@RowClass(row)" role="row" aria-rowindex="@(rowIndex + 2)" data-row="@rowIndex">
                     <td class="wb-gutter wb-sticky" role="rowheader" aria-colindex="1">
                         <div class="wb-gutter-cell">
                         <span class="wb-rownum" title="@(_plan.ContainsKey(row.Item.Id) ? "Task ID (for Predecessors)" : null)">@RowNumber(row)</span>
@@ -139,10 +264,11 @@
                         var editing = active && _editing;
                         var raw = Raw(row.Item, column);
                         var locked = IsRolledUp(row, column);
-                        <td class="@CellClass(column, active, editing, locked)" data-col="@colIndex" role="gridcell"
+                        var inRange = InRange(rowIndex, colIndex);
+                        <td class="@CellClass(column, active, editing, locked, inRange)" data-col="@colIndex" role="gridcell"
                             id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)" title="@(locked ? "Summary task: rolled up from its subtasks" : null)"
-                            aria-selected="@(active ? "true" : "false")" aria-readonly="@(!column.ReadOnly && !locked && CanEdit ? null : "true")"
-                            @onclick="() => OnCellClickAsync(row, colIndex)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
+                            aria-selected="@(active || inRange ? "true" : "false")" aria-readonly="@(!column.ReadOnly && !locked && CanEdit ? null : "true")"
+                            @onclick="e => OnCellClickAsync(row, colIndex, e)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
                             @if (editing)
                             {
                                 @Editor(column)
@@ -183,6 +309,13 @@
                             {
                                 <AssigneeChips Assignees="@(Tasks?.For(row.Item.Id) ?? [])" Max="4" Empty="@(CanAssign ? "Assign…" : "—")" />
                             }
+                            else if (IsStatus(column))
+                            {
+                                @if (!string.IsNullOrEmpty(raw))
+                                {
+                                    <span class="wb-pill" style="@PillStyle(column.Column!.ColorOf(raw))" data-testid="status-pill">@raw</span>
+                                }
+                            }
                             else if (column.ValueKind == ColumnKind.Checkbox)
                             {
                                 var isChecked = raw == "true";
@@ -199,6 +332,10 @@
                             else
                             {
                                 @CellFormat.Display(raw, column.ValueKind)
+                            }
+                            @if (IsFillCorner(rowIndex, colIndex))
+                            {
+                                <span class="wb-fill-handle" title="Drag down to fill (or Ctrl+D)" aria-hidden="true" data-testid="fill-handle"></span>
                             }
                         </td>
                     }
@@ -229,9 +366,36 @@
                data-testid="grid-quick-add" />
     }
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-        @Items.Count @(Items.Count == 1 ? "row" : "rows") · @(CanEdit ? "Enter or F2 to edit · Tab / Shift+Tab in Title (or Alt+Shift+→/←) to indent or outdent · Insert adds a row above" : "View only")
+        @Items.Count @(Items.Count == 1 ? "row" : "rows") · @(CanEdit ? "Enter or F2 to edit · Shift+arrows or drag to select · Ctrl+C / Ctrl+V copy and paste (from Excel too) · Ctrl+D fills down · Ctrl+Z undoes · Tab / Shift+Tab in Title to indent or outdent · Insert adds a row above" : "View only · Shift+arrows or drag to select · Ctrl+C copies")
     </MudText>
 </div>
+
+@if (_statusPop is { } pop && StatusColumn is { Column: { } statusColumn } statusGridColumn && StatusItem is { } statusItem)
+{
+    var current = Raw(statusItem, statusGridColumn);
+    <div class="wb-pop-backdrop" @onclick="CloseStatus"></div>
+    <div class="wb-status-pop" @ref="_statusRef" role="menu" aria-label="@($"{statusColumn.Name} of {statusItem.Title}")" data-testid="status-popover"
+         style="left:@Px(pop.Left);top:@Px(pop.Top)" @onkeydown="OnStatusKeyAsync">
+        @for (var i = 0; i < statusColumn.Options.Count; i++)
+        {
+            var option = statusColumn.Options[i];
+            var index = i;
+            var selected = string.Equals(option, current, StringComparison.OrdinalIgnoreCase);
+            <button type="button" class="wb-pill wb-pill-option" role="menuitemradio" aria-checked="@(selected ? "true" : "false")" data-index="@index"
+                    tabindex="@(index == _statusFocus ? 0 : -1)" style="@PillStyle(statusColumn.ColorOf(option))" @onclick="() => PickStatusAsync(option)"
+                    data-testid="status-option">
+                @if (selected)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="wb-pill-check" aria-hidden="true" />
+                }
+                @option
+            </button>
+        }
+        <button type="button" class="wb-pop-link" role="menuitem" data-index="@statusColumn.Options.Count" tabindex="@(_statusFocus == statusColumn.Options.Count ? 0 : -1)"
+                @onclick="() => PickStatusAsync(null)" data-testid="status-clear">Clear</button>
+        <button type="button" class="wb-pop-link" role="menuitem" tabindex="-1" @onclick="EditLabelsAsync" data-testid="status-edit-labels">Edit labels…</button>
+    </div>
+}
 
 @code {
     private const int GutterWidth = 56;
@@ -307,9 +471,9 @@
         _lastTasks = Tasks;
         _lastPlan = Plan;
         _plan = Scheduling && Plan is not null ? Plan.Tasks.ToDictionary(t => t.ItemId) : [];
-        _columns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null);
+        _allColumns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null);
+        RebuildColumns();
         _mine = TaskView.MineWithAncestors(Tasks, Sheet, Items);
-        _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
         _children = Items.ToLookup(i => i.ParentId);
         // A reload (our own save echoed back by live refresh, or someone else's change) keeps an open edit while its row is
         // still there; the typed text is kept separately.
@@ -328,6 +492,17 @@
             _activeCol = 0;
             _scrollToActive = true;
             BeginEdit(selectAll: true);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A sheet's saved views (and the one it opens with) load once; undo history belongs to one sheet.
+        if (_viewsFor != SheetId)
+        {
+            _viewsFor = SheetId;
+            _history.Clear();
+            await LoadViewsAsync(openDefault: true);
         }
     }
 
@@ -377,7 +552,11 @@
                     await _module.InvokeVoidAsync("focusEditor", _editorRef, _selectAllOnFocus);
                 }
             }
-            else if (_focusGrid)
+            else if (_focusStatus)
+            {
+                await FocusStatusAsync();
+            }
+            else if (_focusGrid && _statusPop is null)
             {
                 _focusGrid = false;
                 await _module.InvokeVoidAsync("focusGrid", _container);
@@ -422,6 +601,8 @@
     private void RebuildRows()
     {
         var rows = new List<GridRow>(Items.Count);
+        var visible = SheetViewEngine.Visible(Items, Sheet.Columns, _view);
+        var order = SheetViewEngine.Comparer(_view.Sort, Sheet.Columns);
         AddRows(null, 0);
         _rows = rows;
         _rowIndex = new Dictionary<Guid, int>(rows.Count);
@@ -445,10 +626,12 @@
             _activeId = _rows[_activeRow].Item.Id;
         }
 
+        RestoreAnchor();
+
         void AddRows(Guid? parentId, int depth)
         {
             var first = true;
-            foreach (var item in _children[parentId].OrderBy(i => i.Order).Where(i => !_myTasks || _mine.Contains(i.Id)))
+            foreach (var item in _children[parentId].Where(i => (!_myTasks || _mine.Contains(i.Id)) && (visible is null || visible.Contains(i.Id))).Order(order))
             {
                 var hasChildren = _children.Contains(item.Id);
                 rows.Add(new GridRow(item, depth, hasChildren, !first));
@@ -507,11 +690,16 @@
 
     private bool IsActive(GridRow row, int colIndex) => _activeId == row.Item.Id && _activeCol == colIndex;
 
-    private void Select(int rowIndex, int colIndex)
+    private void Select(int rowIndex, int colIndex, bool keepRange = false)
     {
         if (_rows.Count == 0 || _columns.Count == 0)
         {
             return;
+        }
+
+        if (!keepRange)
+        {
+            CollapseRange();
         }
 
         _activeRow = Math.Clamp(rowIndex, 0, _rows.Count - 1);
@@ -538,7 +726,7 @@
         Select(row, col);
     }
 
-    private async Task OnCellClickAsync(GridRow row, int colIndex)
+    private async Task OnCellClickAsync(GridRow row, int colIndex, MouseEventArgs? e = null)
     {
         if (IsActive(row, colIndex) && _editing)
         {
@@ -550,9 +738,23 @@
             return;
         }
 
+        if (e?.ShiftKey == true)
+        {
+            SelectTo(IndexOf(row), colIndex, extend: true);
+            _scrollToActive = false;
+            _focusGrid = true;
+            return;
+        }
+
         Select(IndexOf(row), colIndex);
         _scrollToActive = false;
         _focusGrid = true;
+
+        // One click changes a status: the labels open right away.
+        if (IsStatus(_columns[colIndex]) && CanEdit)
+        {
+            await OpenStatusAsync(row, colIndex, e);
+        }
     }
 
     private void OnCellDoubleClick(GridRow row, int colIndex)
@@ -613,6 +815,11 @@
                     break;
             }
 
+            return;
+        }
+
+        if (await OnRangeKeyAsync(e))
+        {
             return;
         }
 
@@ -722,6 +929,12 @@
             return;
         }
 
+        if (IsStatus(column))
+        {
+            _ = OpenStatusAndRenderAsync(row, _activeCol);
+            return;
+        }
+
         var raw = Raw(row.Item, column);
         var useInitial = initialText is not null && column.ValueKind is not (ColumnKind.Date or ColumnKind.Dropdown);
         _editText = useInitial ? initialText! : CellFormat.EditText(raw, column.ValueKind);
@@ -731,6 +944,12 @@
         _editing = true;
         _focusEditor = true;
         _selectAllOnFocus = selectAll;
+    }
+
+    private async Task OpenStatusAndRenderAsync(GridRow row, int colIndex)
+    {
+        await OpenStatusAsync(row, colIndex);
+        await InvokeAsync(StateHasChanged);
     }
 
     private void CancelEdit()
@@ -830,9 +1049,10 @@
     {
         try
         {
-            var updated = await ItemService.UpdateAsync(SheetId, item.Id,
-                new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, item.Values, !item.IsMilestone));
-            ReplaceItem(updated);
+            var milestone = !item.IsMilestone;
+            await SetMilestoneAsync(item.Id, milestone);
+            _history.Record(milestone ? "Mark as milestone" : "Unmark milestone",
+                () => SetMilestoneAsync(_history.Resolve(item.Id), !milestone), () => SetMilestoneAsync(_history.Resolve(item.Id), milestone));
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -841,9 +1061,19 @@
         }
     }
 
+    private async Task SetMilestoneAsync(Guid itemId, bool milestone)
+    {
+        if (FindItem(itemId) is { } item)
+        {
+            ReplaceItem(await ItemService.UpdateAsync(SheetId, item.Id,
+                new UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, item.Values, milestone)));
+        }
+    }
+
     private async Task SaveAsync(ItemDto item, GridColumn column, string? value)
     {
-        if (column.ReadOnly || !CanEdit || Raw(item, column) == value)
+        var before = Raw(item, column);
+        if (column.ReadOnly || !CanEdit || before == value)
         {
             return;
         }
@@ -861,12 +1091,14 @@
                     await plan.SetPredecessorsAsync(SheetId, item.Id, value);
                 }
 
+                RecordCell(item, column, before, value);
                 await Changed.InvokeAsync();
                 return;
             }
 
             var updated = await ItemService.UpdateAsync(SheetId, item.Id, CellFormat.WithValue(item, column, value));
             ReplaceItem(updated);
+            RecordCell(item, column, before, value);
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -958,7 +1190,8 @@
         try
         {
             var request = new CreateItemRequest(title);
-            await ItemService.CreateAsync(SheetId, last is null ? request : WithStart(request, last));
+            request = last is null ? request : WithStart(request, last);
+            RecordCreate("Add task", await ItemService.CreateAsync(SheetId, request), request);
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -971,7 +1204,18 @@
     private Task AddRowBelowAsync(ItemDto item) => CreateRowAsync(WithStart(new CreateItemRequest("New row", item.ParentId, item.Order + 1), item));
 
     /// <summary>A new row where this one is, pushing it (and the rows after it) down, like Insert in MS Project.</summary>
-    private Task InsertRowAboveAsync(ItemDto item) => CreateRowAsync(WithStart(new CreateItemRequest("New row", item.ParentId, item.Order), item));
+    private Task InsertRowAboveAsync(ItemDto item)
+    {
+        if (Rearranged)
+        {
+            Snackbar.Add(RearrangedMessage, Severity.Info);
+            return Task.CompletedTask;
+        }
+
+        return CreateRowAsync(WithStart(new CreateItemRequest("New row", item.ParentId, item.Order), item));
+    }
+
+    private const string RearrangedMessage = "The rows are sorted or filtered, so they aren't in their real order. Clear the sort and filter to indent, outdent or insert rows.";
 
     private Task AddChildAsync(ItemDto item)
     {
@@ -989,6 +1233,7 @@
         {
             var created = await ItemService.CreateAsync(SheetId, request);
             _editWhenLoaded = created.Id;
+            RecordCreate("Add row", created, request);
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -1004,9 +1249,16 @@
             return;
         }
 
+        if (Rearranged)
+        {
+            Snackbar.Add(RearrangedMessage, Severity.Info);
+            return;
+        }
+
+        var undo = (Label: "Indent", Before: Structure(), Redo: (Func<Task>)(() => RepeatAsync(row.Item.Id, IndentAsync)));
         if (PlanService is { } plan)
         {
-            await RestructureAsync(row, () => plan.IndentAsync(SheetId, row.Item.Id), expand: row.HasPreviousSibling);
+            await RestructureAsync(row, () => plan.IndentAsync(SheetId, row.Item.Id), expand: row.HasPreviousSibling, undo);
             return;
         }
 
@@ -1020,7 +1272,7 @@
         }
 
         _collapsed.Remove(previous.Id);
-        await MoveAsync(row.Item, new MoveItemRequest(previous.Id, _children[previous.Id].Count()));
+        await MoveAsync(row.Item, new MoveItemRequest(previous.Id, _children[previous.Id].Count()), undo);
     }
 
     private async Task OutdentAsync(GridRow row)
@@ -1030,9 +1282,16 @@
             return;
         }
 
+        if (Rearranged)
+        {
+            Snackbar.Add(RearrangedMessage, Severity.Info);
+            return;
+        }
+
+        var undo = (Label: "Outdent", Before: Structure(), Redo: (Func<Task>)(() => RepeatAsync(row.Item.Id, OutdentAsync)));
         if (PlanService is { } plan && row.Item.ParentId is not null)
         {
-            await RestructureAsync(row, () => plan.OutdentAsync(SheetId, row.Item.Id), expand: false);
+            await RestructureAsync(row, () => plan.OutdentAsync(SheetId, row.Item.Id), expand: false, undo);
             return;
         }
 
@@ -1042,11 +1301,20 @@
         }
 
         var parent = _rows[parentIndex].Item;
-        await MoveAsync(row.Item, new MoveItemRequest(parent.ParentId, parent.Order + 1));
+        await MoveAsync(row.Item, new MoveItemRequest(parent.ParentId, parent.Order + 1), undo);
+    }
+
+    /// <summary>Redo of an indent or outdent: the same action on the row (by its current id).</summary>
+    private async Task RepeatAsync(Guid itemId, Func<GridRow, Task> action)
+    {
+        if (_rowIndex.TryGetValue(_history.Resolve(itemId), out var index))
+        {
+            await action(_rows[index]);
+        }
     }
 
     /// <summary>Indent or outdent through the plan service, which also applies the date rules (see <see cref="IPlanScheduleService"/>).</summary>
-    private async Task RestructureAsync(GridRow row, Func<Task> action, bool expand)
+    private async Task RestructureAsync(GridRow row, Func<Task> action, bool expand, (string Label, Dictionary<Guid, (Guid? ParentId, int Order)> Before, Func<Task> Redo) undo)
     {
         if (expand && _children[row.Item.ParentId].Where(i => i.Order < row.Item.Order).OrderByDescending(i => i.Order).FirstOrDefault() is { } previous)
         {
@@ -1056,6 +1324,7 @@
         try
         {
             await action();
+            RecordStructure(undo.Label, undo.Before, undo.Redo);
             _activeId = row.Item.Id;
             _scrollToActive = true;
             _focusGrid = true;
@@ -1067,11 +1336,12 @@
         }
     }
 
-    private async Task MoveAsync(ItemDto item, MoveItemRequest request)
+    private async Task MoveAsync(ItemDto item, MoveItemRequest request, (string Label, Dictionary<Guid, (Guid? ParentId, int Order)> Before, Func<Task> Redo) undo)
     {
         try
         {
             await ItemService.MoveAsync(SheetId, item.Id, request);
+            RecordStructure(undo.Label, undo.Before, undo.Redo);
             _activeId = item.Id;
             _scrollToActive = true;
             _focusGrid = true;
@@ -1090,7 +1360,7 @@
             var descendants = CountDescendants(row.Item.Id);
             var parameters = new DialogParameters<ConfirmDialog>
             {
-                { d => d.Message, $"Delete \"{row.Item.Title}\" and its {descendants} sub-{(descendants == 1 ? "row" : "rows")}? This can't be undone." },
+                { d => d.Message, $"Delete \"{row.Item.Title}\" and its {descendants} sub-{(descendants == 1 ? "row" : "rows")}? Ctrl+Z brings the rows back, but not their comments or files." },
             };
             var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete row", parameters);
             var result = await dialog.Result;
@@ -1102,7 +1372,9 @@
 
         try
         {
+            var snapshot = Snapshot(row.Item);
             await ItemService.DeleteAsync(SheetId, row.Item.Id);
+            RecordDelete(snapshot);
             _focusGrid = true;
             await Changed.InvokeAsync();
         }
@@ -1128,7 +1400,7 @@
 
         try
         {
-            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options, IsRestricted: result.IsRestricted));
+            await ColumnService.CreateAsync(SheetId, new CreateColumnRequest(result.Name, result.Type, result.Options, IsRestricted: result.IsRestricted, OptionColors: result.OptionColors));
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -1160,7 +1432,7 @@
         try
         {
             await ColumnService.UpdateAsync(SheetId, column.Id, new UpdateColumnRequest(result.Name, result.Options, column.Formula, column.Order,
-                Sheet.CanSeeRestricted && result.IsRestricted != column.IsRestricted ? result.IsRestricted : null));
+                Sheet.CanSeeRestricted && result.IsRestricted != column.IsRestricted ? result.IsRestricted : null, result.OptionColors));
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (IsExpected(ex))
@@ -1229,7 +1501,9 @@
         && (column.Kind is GridColumnKind.Start or GridColumnKind.Finish or GridColumnKind.Duration
             || (column.Column is { } custom && Tasks?.PercentColumn?.Id == custom.Id));
 
-    private static string CellClass(GridColumn column, bool active, bool editing, bool locked = false)
+    private static string Px(double value) => value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "px";
+
+    private static string CellClass(GridColumn column, bool active, bool editing, bool locked = false, bool inRange = false)
     {
         var css = column.Kind == GridColumnKind.Title ? "wb-cell wb-title wb-sticky" : "wb-cell";
         if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency || column.Kind == GridColumnKind.Duration)
@@ -1250,6 +1524,16 @@
         if (active)
         {
             css += " wb-active";
+        }
+
+        if (inRange)
+        {
+            css += " wb-in-range";
+        }
+
+        if (column.ValueKind == ColumnKind.Dropdown)
+        {
+            css += " wb-status";
         }
 
         if (editing)

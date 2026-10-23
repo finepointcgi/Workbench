@@ -4150,6 +4150,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.PrimitiveCollection<string>("OptionColors")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.PrimitiveCollection<string>("Options")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -20370,6 +20374,78 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("Sheets");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.SheetView", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsSheetDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId", "OwnerEmail");
+
+                    b.ToTable("SheetView");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetViewPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ViewId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId");
+
+                    b.HasIndex("ViewId");
+
+                    b.HasIndex("UserEmail", "SheetId")
+                        .IsUnique();
+
+                    b.ToTable("SheetViewPreference");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Support.SupportRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -25490,6 +25566,30 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetView", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetViewPreference", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.SheetView", null)
+                        .WithMany()
+                        .HasForeignKey("ViewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Tasks.ItemAssignee", b =>

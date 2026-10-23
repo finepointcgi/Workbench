@@ -18,7 +18,33 @@
             }
             @if (_type == ColumnKind.Dropdown)
             {
-                <MudTextField @bind-Value="_options" Label="Options" HelperText="One option per line" Lines="5" />
+                @* Status labels: each option has a color from an accessible palette (its text stays readable) and always shows its name. *@
+                <MudText Typo="Typo.subtitle2">Labels</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">People pick a label with one click. The order here is the order labels sort in.</MudText>
+                @for (var i = 0; i < _labels.Count; i++)
+                {
+                    var index = i;
+                    var label = _labels[index];
+                    var color = StatusColors.Find(label.Color) ?? StatusColors.Suggest(label.Name);
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" data-testid="status-label">
+                        <span class="wb-pill" style="background:@color.Background;color:@color.Text;min-width:96px" aria-hidden="true">@(string.IsNullOrWhiteSpace(label.Name) ? "Label" : label.Name)</span>
+                        <MudTextField T="string" @bind-Value="label.Name" Label="@($"Label {index + 1}")" Margin="Margin.Dense" Immediate="true" MaxLength="100"
+                                      data-testid="status-label-name" />
+                        <MudSelect T="string" Value="color.Key" ValueChanged="key => label.Color = key" Label="Color" Dense="true" Margin="Margin.Dense" Style="max-width:150px"
+                                   data-testid="status-label-color">
+                            @foreach (var option in StatusColors.All)
+                            {
+                                <MudSelectItem T="string" Value="option.Key">
+                                    <span class="wb-swatch" style="background:@option.Background" aria-hidden="true"></span> @option.Name
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="index == 0" aria-label="@($"Move {label.Name} up")" OnClick="() => MoveLabel(index, -1)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="@($"Remove {label.Name}")" OnClick="() => _labels.RemoveAt(index)" />
+                    </MudStack>
+                }
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Style="align-self:flex-start"
+                           OnClick="AddLabel" data-testid="status-label-add">Add label</MudButton>
             }
             @if (CanRestrict)
             {
@@ -60,7 +86,13 @@
 
     private string _name = string.Empty;
     private ColumnKind _type = ColumnKind.Text;
-    private string? _options;
+    private sealed class Label
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Color { get; set; } = string.Empty;
+    }
+
+    private readonly List<Label> _labels = [];
     private bool _restricted;
 
     protected override void OnInitialized()
@@ -69,21 +101,33 @@
         {
             _name = Column.Name;
             _type = Column.Type;
-            _options = string.Join('\n', Column.Options);
+            _labels.AddRange(Column.Options.Select(o => new Label { Name = o, Color = Column.ColorOf(o).Key }));
             _restricted = Column.IsRestricted;
         }
+        else
+        {
+            // A new status column starts with the usual labels; they're easy to rename or remove.
+            _labels.AddRange(StatusColors.Defaults.Select(d => new Label { Name = d.Label, Color = d.Color.Key }));
+        }
+    }
+
+    private void AddLabel() => _labels.Add(new Label { Color = StatusColors.Gray.Key });
+
+    private void MoveLabel(int index, int by)
+    {
+        var label = _labels[index];
+        _labels.RemoveAt(index);
+        _labels.Insert(Math.Clamp(index + by, 0, _labels.Count), label);
     }
 
     private void Cancel() => MudDialog.Cancel();
 
     private void Submit()
     {
-        var options = _type == ColumnKind.Dropdown
-            ? (_options ?? string.Empty)
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList()
+        var labels = _type == ColumnKind.Dropdown
+            ? _labels.Where(l => !string.IsNullOrWhiteSpace(l.Name)).DistinctBy(l => l.Name.Trim(), StringComparer.OrdinalIgnoreCase).ToList()
             : [];
-        MudDialog.Close(DialogResult.Ok(new ColumnDialogResult(_name.Trim(), _type, options, _restricted)));
+        MudDialog.Close(DialogResult.Ok(new ColumnDialogResult(_name.Trim(), _type, labels.Select(l => l.Name.Trim()).ToList(), _restricted,
+            labels.Select(l => l.Color).ToList())));
     }
 }

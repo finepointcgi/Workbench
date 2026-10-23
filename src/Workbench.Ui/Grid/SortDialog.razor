@@ -1,0 +1,92 @@
+@* Sorts the grid by one or more fields. Children stay under their parent; each level is sorted. *@
+@using Workbench.Contracts.Customization
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Rows are sorted within their parent, so subtasks stay under their task. Blanks go last.</MudText>
+            @for (var i = 0; i < _levels.Count; i++)
+            {
+                var index = i;
+                var level = _levels[index];
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" data-testid="sort-level">
+                    <MudText Typo="Typo.body2" Style="min-width:64px">@(index == 0 ? "Sort by" : "then by")</MudText>
+                    <MudSelect T="string" @bind-Value="level.Field" Label="Field" Dense="true" Margin="Margin.Dense" Class="flex-grow-1">
+                        @foreach (var field in Fields)
+                        {
+                            <MudSelectItem T="string" Value="field.Key">@field.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="bool" @bind-Value="level.Descending" Label="Order" Dense="true" Margin="Margin.Dense" Style="min-width:150px">
+                        <MudSelectItem T="bool" Value="false">@Ascending(level.Field)</MudSelectItem>
+                        <MudSelectItem T="bool" Value="true">@Descending(level.Field)</MudSelectItem>
+                    </MudSelect>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="@($"Remove sort level {index + 1}")" OnClick="() => _levels.RemoveAt(index)" />
+                </MudStack>
+            }
+            @if (_levels.Count < 10)
+            {
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Style="align-self:flex-start"
+                           OnClick="Add" data-testid="sort-add">@(_levels.Count == 0 ? "Add a sort" : "Add another level")</MudButton>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _levels.Clear()" Disabled="_levels.Count == 0">Clear</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="sort-apply">Sort</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private sealed class Level
+    {
+        public string Field { get; set; } = string.Empty;
+        public bool Descending { get; set; }
+    }
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ViewField> Fields { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<ListSort> Sort { get; set; } = [];
+
+    private readonly List<Level> _levels = [];
+
+    protected override void OnInitialized()
+    {
+        _levels.AddRange(Sort.Select(s => new Level { Field = s.Field, Descending = s.Descending }));
+        if (_levels.Count == 0)
+        {
+            Add();
+        }
+    }
+
+    private void Add() => _levels.Add(new Level { Field = Fields.FirstOrDefault(f => _levels.All(l => l.Field != f.Key))?.Key ?? Fields.FirstOrDefault()?.Key ?? string.Empty });
+
+    private ColumnKind KindOf(string key) => Fields.FirstOrDefault(f => f.Key == key)?.Kind ?? ColumnKind.Text;
+
+    private string Ascending(string key) => KindOf(key) switch
+    {
+        ColumnKind.Number or ColumnKind.Currency => "Smallest first",
+        ColumnKind.Date => "Earliest first",
+        ColumnKind.Dropdown => "In label order",
+        ColumnKind.Checkbox => "Unchecked first",
+        _ => "A to Z",
+    };
+
+    private string Descending(string key) => KindOf(key) switch
+    {
+        ColumnKind.Number or ColumnKind.Currency => "Largest first",
+        ColumnKind.Date => "Latest first",
+        ColumnKind.Dropdown => "Reverse label order",
+        ColumnKind.Checkbox => "Checked first",
+        _ => "Z to A",
+    };
+
+    private void Submit() =>
+        MudDialog.Close(DialogResult.Ok<IReadOnlyList<ListSort>>(_levels.Where(l => l.Field.Length > 0).DistinctBy(l => l.Field).Select(l => new ListSort(l.Field, l.Descending)).ToList()));
+}
