@@ -1,6 +1,8 @@
 namespace Workbench.Contracts.Customization;
 
-public sealed record EntityFieldDto(string EntityType, string Key, string Label, string FieldType, bool IsCustom, bool IsRequired, IReadOnlyList<string>? Options, string? PermissionKey);
+/// <param name="OptionLabels">What to show for each of <paramref name="Options"/> (same order) when the stored codes differ from the labels.</param>
+public sealed record EntityFieldDto(string EntityType, string Key, string Label, string FieldType, bool IsCustom, bool IsRequired, IReadOnlyList<string>? Options, string? PermissionKey,
+    IReadOnlyList<string>? OptionLabels = null);
 
 public interface IEntityFieldCatalog
 {
