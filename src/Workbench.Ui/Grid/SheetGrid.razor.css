@@ -297,3 +297,147 @@
     outline: 2px solid var(--mud-palette-primary);
     outline-offset: 1px;
 }
+
+/* ---- Toolbar: views, sort, filter, columns, undo, export ---- */
+.wb-grid-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.wb-view-chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+/* ---- Ranges: drag, Shift+click, Shift+arrows ---- */
+.wb-table td.wb-cell {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.wb-table td.wb-editing {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.wb-table td.wb-in-range {
+    background: linear-gradient(rgba(var(--mud-palette-primary-rgb), 0.12), rgba(var(--mud-palette-primary-rgb), 0.12)), var(--mud-palette-surface);
+}
+
+.wb-table td.wb-in-range.wb-title {
+    background: linear-gradient(rgba(var(--mud-palette-primary-rgb), 0.12), rgba(var(--mud-palette-primary-rgb), 0.12)), var(--mud-palette-surface);
+}
+
+.wb-dragging {
+    cursor: cell;
+}
+
+/* The fill handle: Excel's small square at the selection's bottom-right corner. */
+.wb-fill-handle {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 8px;
+    height: 8px;
+    background: var(--mud-palette-primary);
+    border: 1px solid var(--mud-palette-surface);
+    cursor: crosshair;
+    z-index: 3;
+    touch-action: none;
+}
+
+.wb-table tr.wb-fill-preview td.wb-cell {
+    box-shadow: inset 0 0 0 1px var(--mud-palette-primary);
+    border-style: dashed;
+}
+
+/* ---- Status labels ---- */
+.wb-table td.wb-status {
+    padding-top: 3px;
+    padding-bottom: 3px;
+    cursor: pointer;
+}
+
+.wb-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* A thin edge keeps light labels visible on a white grid (the label text carries the meaning). */
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.wb-pop-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+}
+
+.wb-status-pop {
+    position: fixed;
+    z-index: 1401;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 220px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: var(--mud-default-borderradius);
+    box-shadow: var(--mud-elevation-8);
+}
+
+.wb-pill-option {
+    border: none;
+    cursor: pointer;
+    min-height: 30px;
+    font-family: inherit;
+}
+
+.wb-pill-option:focus-visible,
+.wb-pop-link:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+.wb-pill-option:hover {
+    filter: brightness(0.94);
+}
+
+.wb-pill-check {
+    font-size: 1rem;
+}
+
+.wb-pop-link {
+    border: none;
+    background: none;
+    padding: 4px 8px;
+    text-align: left;
+    color: var(--mud-palette-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8125rem;
+    border-radius: 4px;
+}
+
+.wb-pop-link:hover {
+    background: var(--mud-palette-action-default-hover);
+}

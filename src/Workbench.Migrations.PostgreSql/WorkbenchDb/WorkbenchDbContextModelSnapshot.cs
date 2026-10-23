@@ -4425,6 +4425,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("character varying(200)")
                         .UseCollation("C");
 
+                    b.PrimitiveCollection<List<string>>("OptionColors")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.PrimitiveCollection<List<string>>("Options")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -21648,6 +21652,82 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("Sheets");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.SheetView", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("character varying(50000)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSheetDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .UseCollation("C");
+
+                    b.Property<string>("OwnerEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId", "OwnerEmail");
+
+                    b.ToTable("SheetView");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetViewPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("ViewId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId");
+
+                    b.HasIndex("ViewId");
+
+                    b.HasIndex("UserEmail", "SheetId")
+                        .IsUnique();
+
+                    b.ToTable("SheetViewPreference");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Support.SupportRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -26817,6 +26897,30 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetView", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetViewPreference", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.SheetView", null)
+                        .WithMany()
+                        .HasForeignKey("ViewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Tasks.ItemAssignee", b =>

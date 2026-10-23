@@ -15,6 +15,7 @@ public static class WorkbenchApi
 
         v1.MapSheetEndpoints();
         v1.MapColumnEndpoints();
+        v1.MapSheetViewEndpoints();
         v1.MapItemEndpoints();
         v1.MapSchedulingEndpoints();
         v1.MapCollaborationEndpoints();

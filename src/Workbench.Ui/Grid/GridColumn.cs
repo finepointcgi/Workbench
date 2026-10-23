@@ -83,4 +83,4 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
 public sealed record GridRow(ItemDto Item, int Depth, bool HasChildren, bool HasPreviousSibling);
 
 /// <summary>What <see cref="ColumnDialog"/> returns. The type is ignored when editing an existing column.</summary>
-public sealed record ColumnDialogResult(string Name, ColumnKind Type, IReadOnlyList<string> Options, bool IsRestricted = false);
+public sealed record ColumnDialogResult(string Name, ColumnKind Type, IReadOnlyList<string> Options, bool IsRestricted = false, IReadOnlyList<string>? OptionColors = null);

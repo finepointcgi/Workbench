@@ -17,20 +17,41 @@ public enum ColumnKind
 /// A sheet column. <paramref name="IsRestricted"/>: marked "Finance and owners only". <paramref name="ReadsRestricted"/>: a
 /// formula column that reads a restricted column, so it is restricted too. Only people who may see restricted columns
 /// (Finance, administrators, the workspace's owners) ever receive such columns.
+/// <paramref name="OptionColors"/>: a Dropdown column's status label colors, one <see cref="StatusColors"/> key per option
+/// (same order as <paramref name="Options"/>; missing or unknown keys use <see cref="StatusColors.Suggest"/>).
 /// </summary>
 public sealed record ColumnDto(
-    Guid Id, string Name, ColumnKind Type, int Order, IReadOnlyList<string> Options, string? Formula, bool IsRestricted = false, bool ReadsRestricted = false)
+    Guid Id, string Name, ColumnKind Type, int Order, IReadOnlyList<string> Options, string? Formula, bool IsRestricted = false, bool ReadsRestricted = false,
+    IReadOnlyList<string>? OptionColors = null)
 {
     public bool IsEffectivelyRestricted => IsRestricted || ReadsRestricted;
+
+    /// <summary>The status color of a Dropdown option (matched case-insensitively), or of a value that isn't an option.</summary>
+    public StatusColor ColorOf(string? option)
+    {
+        for (var i = 0; i < Options.Count; i++)
+        {
+            if (string.Equals(Options[i], option, StringComparison.OrdinalIgnoreCase))
+            {
+                return OptionColors is { } colors && i < colors.Count && StatusColors.Find(colors[i]) is { } color ? color : StatusColors.Suggest(Options[i]);
+            }
+        }
+
+        return StatusColors.Suggest(option);
+    }
 }
 
-public sealed record CreateColumnRequest(string Name, ColumnKind Type, IReadOnlyList<string>? Options = null, string? Formula = null, bool IsRestricted = false);
+/// <param name="OptionColors">Status label colors for a Dropdown column, one <see cref="StatusColors"/> key per option.</param>
+public sealed record CreateColumnRequest(
+    string Name, ColumnKind Type, IReadOnlyList<string>? Options = null, string? Formula = null, bool IsRestricted = false, IReadOnlyList<string>? OptionColors = null);
 
 /// <summary>
 /// Replaces the editable fields of a column. The type can't be changed after creation. <paramref name="IsRestricted"/>
-/// null leaves the restriction as it is; changing it needs Finance, Admin or Owner.
+/// null leaves the restriction as it is; changing it needs Finance, Admin or Owner. <paramref name="OptionColors"/> null leaves
+/// the status label colors as they are (renamed options keep their color by position).
 /// </summary>
-public sealed record UpdateColumnRequest(string Name, IReadOnlyList<string> Options, string? Formula, int Order, bool? IsRestricted = null);
+public sealed record UpdateColumnRequest(
+    string Name, IReadOnlyList<string> Options, string? Formula, int Order, bool? IsRestricted = null, IReadOnlyList<string>? OptionColors = null);
 
 public interface IColumnService
 {
