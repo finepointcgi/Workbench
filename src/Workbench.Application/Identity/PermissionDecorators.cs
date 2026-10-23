@@ -197,6 +197,18 @@ public sealed class PermissionCheckingBaselineService(IBaselineService inner, Ac
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
         return await inner.GetAsync(sheetId, baselineId, cancellationToken);
     }
+
+    public async Task<BaselineComparison> CompareAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
+        return await inner.CompareAsync(sheetId, baselineId, cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Editor, cancellationToken);
+        await inner.DeleteAsync(sheetId, baselineId, cancellationToken);
+    }
 }
 
 public sealed class PermissionCheckingCommentService(ICommentService inner, AccessControl access) : ICommentService

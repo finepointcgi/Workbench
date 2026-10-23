@@ -16,7 +16,8 @@ public sealed record PlanSnapshot(
     Column? NotesColumn,
     IReadOnlyDictionary<Guid, IReadOnlyList<string>> Assignees,
     IReadOnlyList<PlanUser> Users,
-    bool Scheduling = true);
+    bool Scheduling = true,
+    IReadOnlyDictionary<Guid, PlanConstraintDto>? Constraints = null);
 
 /// <summary>What a file sets on one task. <see cref="ItemId"/> is new for added tasks.</summary>
 public sealed record PlanImportTask(
@@ -33,7 +34,8 @@ public sealed record PlanImportTask(
     string? WbsCode,
     decimal? PercentComplete,
     string? Notes,
-    IReadOnlyList<string> Assignees);
+    IReadOnlyList<string> Assignees,
+    PlanConstraintDto? Constraint = null);
 
 /// <summary>
 /// Compares an uploaded plan with the sheet: which tasks the file adds, changes and removes, and which rows have errors.
@@ -62,13 +64,25 @@ public sealed class PlanImport
     /// <summary>Existing tasks the file leaves out.</summary>
     public IReadOnlyList<Guid> Removed { get; }
 
-    public static PlanImport Build(string fileName, IReadOnlyList<PlanFileRow> rows, bool hasIdColumn, PlanSnapshot plan)
+    /// <param name="hasConstraints">
+    /// The file sets constraints (MS Project XML): a task without one is As Soon As Possible. Otherwise (Excel) the plan's
+    /// constraints are kept as they are.
+    /// </param>
+    /// <param name="unknownResourcesAreWarnings">
+    /// Resources that aren't Workbench users are left off with a warning rather than blocking the import (MS Project files
+    /// often name roles or people outside the company).
+    /// </param>
+    public static PlanImport Build(
+        string fileName, IReadOnlyList<PlanFileRow> rows, bool hasIdColumn, PlanSnapshot plan, bool hasConstraints = false, bool unknownResourcesAreWarnings = false)
     {
         var issues = new List<PlanImportIssue>();
         foreach (var row in rows)
         {
             issues.AddRange(row.Errors.Select(e => new PlanImportIssue(row.Row, e)));
+            issues.AddRange((row.Warnings ?? []).Select(w => new PlanImportIssue(row.Row, w, IsError: false)));
         }
+
+        var constraintsBefore = plan.Constraints ?? new Dictionary<Guid, PlanConstraintDto>();
 
         if (rows.Count == 0)
         {
@@ -199,8 +213,10 @@ public sealed class PlanImport
                 else
                 {
                     issues.Add(new PlanImportIssue(row.Row, matches.Count == 0
-                        ? $"\"{name}\" isn't an active Workbench user. Use their name or email."
-                        : $"More than one person is called \"{name}\". Use their email."));
+                        ? unknownResourcesAreWarnings
+                            ? $"Resource \"{name}\" isn't an active Workbench user, so the task is imported without them."
+                            : $"\"{name}\" isn't an active Workbench user. Use their name or email."
+                        : $"More than one person is called \"{name}\". Use their email.", IsError: !unknownResourcesAreWarnings || matches.Count > 1));
                 }
             }
 
@@ -230,9 +246,16 @@ public sealed class PlanImport
                 issues.Add(new PlanImportIssue(row.Row, error));
             }
 
+            var constraint = hasConstraints ? task.Constraint : isNew[i] ? null : constraintsBefore.GetValueOrDefault(ids[i]);
+            if (summary && hasConstraints && constraint is not null)
+            {
+                issues.Add(new PlanImportIssue(row.Row, $"Its {PlanConstraints.Label(constraint.Kind)} constraint is left off: it's a summary task, whose dates come from its subtasks.", IsError: false));
+                constraint = null;
+            }
+
             tasks.Add(new PlanImportTask(
                 row.Row, ids[i], isNew[i], parents[i], orders[i], task.Name.Trim(), summary, start, finish, milestone,
-                task.WbsCode?.Trim(), summary ? null : task.PercentComplete, task.Notes, emails));
+                task.WbsCode?.Trim(), summary ? null : task.PercentComplete, task.Notes, emails, constraint));
         }
 
         // Circular links.
@@ -258,7 +281,14 @@ public sealed class PlanImport
             {
                 Id = t.ItemId, ParentId = t.ParentId, Order = t.Order, Title = t.Title, Start = t.Start, Finish = t.Finish, IsMilestone = t.IsMilestone,
             }).ToList();
-            ScheduleEngine.Reflow(simulated, links, calendar, null);
+            var constraints = tasks.Where(t => t.Constraint is not null).ToDictionary(t => t.ItemId, t => t.Constraint!);
+            ScheduleEngine.Reflow(simulated, links, calendar, null, constraints);
+            foreach (var conflict in ScheduleEngine.Conflicts(simulated, links, calendar, constraints))
+            {
+                var at = tasks.First(t => t.ItemId == conflict.ItemId);
+                issues.Add(new PlanImportIssue(at.Row, "After importing: " + conflict.Message, IsError: false));
+            }
+
             var result = simulated.ToDictionary(i => i.Id);
             tasks = tasks.Select(t => t with { Start = result[t.ItemId].Start, Finish = result[t.ItemId].Finish, IsMilestone = result[t.ItemId].IsMilestone }).ToList();
         }
@@ -382,6 +412,11 @@ public sealed class PlanImport
             details.Add($"Resources: {string.Join(", ", task.Assignees)}");
         }
 
+        if (task.Constraint is { } constraint)
+        {
+            details.Add($"{constraint.Label} {Day(constraint.Date)}");
+        }
+
         return details;
     }
 
@@ -454,6 +489,12 @@ public sealed class PlanImport
             details.Add($"Resources {List(oldPeople)} → {List(task.Assignees)}");
         }
 
+        var oldConstraint = plan.Constraints?.GetValueOrDefault(before.Id);
+        if (oldConstraint != task.Constraint)
+        {
+            details.Add($"Constraint {ConstraintText(oldConstraint)} → {ConstraintText(task.Constraint)}");
+        }
+
         var oldLinks = plan.Links.Where(l => l.SuccessorId == before.Id).Select(l => (l.PredecessorId, l.Type, l.LagDays)).ToHashSet();
         var newLinks = links.Where(l => l.SuccessorId == before.Id).Select(l => (l.PredecessorId, l.Type, l.LagDays)).ToHashSet();
         if (!oldLinks.SetEquals(newLinks))
@@ -470,6 +511,9 @@ public sealed class PlanImport
         var kept = tasks.Where(t => !t.IsNew).Select(t => t.ItemId).ToHashSet();
         return siblings.Where(kept.Contains).ToList().IndexOf(id);
     }
+
+    private static string ConstraintText(PlanConstraintDto? constraint) =>
+        constraint is null ? "As Soon As Possible" : $"{constraint.Label} {Day(constraint.Date)}";
 
     private static string Normalize(string? text) => (text ?? "").Replace("\r\n", "\n").Trim();
 

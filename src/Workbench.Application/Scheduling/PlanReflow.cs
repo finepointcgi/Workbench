@@ -8,8 +8,9 @@ using Workbench.Domain.Scheduling;
 
 namespace Workbench.Application.Scheduling;
 
-/// <summary>A scheduled sheet's tracked items with what the engine needs: links, the working calendar and the % column.</summary>
-internal sealed record PlanState(Sheet Sheet, List<Item> Items, List<PlanLink> Links, WorkCalendar Calendar, Column? PercentColumn);
+/// <summary>A scheduled sheet's tracked items with what the engine needs: links, the working calendar, constraints and the % column.</summary>
+internal sealed record PlanState(
+    Sheet Sheet, List<Item> Items, List<PlanLink> Links, WorkCalendar Calendar, Column? PercentColumn, Dictionary<Guid, PlanConstraintDto> Constraints);
 
 /// <summary>
 /// Runs <see cref="ScheduleEngine.Reflow"/> on a sheet after its items or links change, so summaries span their subtasks and
@@ -27,11 +28,36 @@ internal static class PlanReflow
             .Select(d => new PlanLink(d.PredecessorId, d.SuccessorId, (DependencyKind)(int)d.Type, d.LagDays))
             .ToList();
         var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheet.Id).ToListAsync(cancellationToken);
-        return new PlanState(sheet, items, links, await CalendarAsync(db, cancellationToken), TaskRules.PercentColumn(columns));
+        return new PlanState(sheet, items, links, await CalendarAsync(db, sheet.Id, cancellationToken), TaskRules.PercentColumn(columns),
+            await ConstraintsAsync(db, sheet.Id, ids, cancellationToken));
     }
 
+    /// <summary>The company calendar: Monday to Friday less company holidays.</summary>
     public static async Task<WorkCalendar> CalendarAsync(IWorkbenchDbContext db, CancellationToken cancellationToken) =>
         new(await db.Set<Holiday>().AsNoTracking().Select(h => h.Date).ToListAsync(cancellationToken));
+
+    /// <summary>The sheet's own calendar when it has one, else the company calendar.</summary>
+    public static async Task<WorkCalendar> CalendarAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
+    {
+        var own = await db.Set<PlanCalendar>().AsNoTracking().Include(c => c.Exceptions).FirstOrDefaultAsync(c => c.SheetId == sheetId, cancellationToken);
+        if (own is null)
+        {
+            return await CalendarAsync(db, cancellationToken);
+        }
+
+        var holidays = own.UseCompanyHolidays ? await db.Set<Holiday>().AsNoTracking().Select(h => h.Date).ToListAsync(cancellationToken) : [];
+        return new WorkCalendar(
+            holidays.Concat(own.Exceptions.Where(e => !e.IsWorking).Select(e => e.Date)),
+            own.WorkDays,
+            own.Exceptions.Where(e => e.IsWorking).Select(e => e.Date));
+    }
+
+    /// <summary>The sheet's task constraints by item id (for items that still exist).</summary>
+    public static async Task<Dictionary<Guid, PlanConstraintDto>> ConstraintsAsync(
+        IWorkbenchDbContext db, Guid sheetId, IReadOnlySet<Guid> itemIds, CancellationToken cancellationToken) =>
+        (await db.Set<TaskConstraint>().AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(cancellationToken))
+            .Where(c => itemIds.Contains(c.ItemId))
+            .ToDictionary(c => c.ItemId, c => new PlanConstraintDto((PlanConstraintKind)(int)c.Type, c.Date));
 
     /// <summary>Reflows the sheet's tracked items in place and numbers a project plan's WBS codes. True when anything changed (the caller saves).</summary>
     public static async Task<bool> ReflowAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
@@ -49,7 +75,7 @@ internal static class PlanReflow
         }
 
         var state = await LoadAsync(db, sheet, cancellationToken);
-        var changed = sheet.SchedulingEnabled && ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.PercentColumn?.Id);
+        var changed = sheet.SchedulingEnabled && ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.PercentColumn?.Id, state.Constraints);
         return await NumberAsync(db, project, state.Items, cancellationToken) | changed;
     }
 
