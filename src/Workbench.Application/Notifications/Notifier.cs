@@ -24,7 +24,8 @@ public sealed class Notifier(
     IEmailSender email,
     NotificationOptions options,
     TimeProvider clock,
-    ILogger<Notifier>? logger = null) : INotificationPublisher
+    ILogger<Notifier>? logger = null,
+    INotificationEmailExtras? extras = null) : INotificationPublisher
 {
     private readonly ILogger _log = (ILogger?)logger ?? NullLogger.Instance;
 
@@ -70,7 +71,8 @@ public sealed class Notifier(
             {
                 try
                 {
-                    await email.SendAsync(NotificationEmails.Single(notification, options));
+                    var extra = extras is null ? null : await extras.ForSingleAsync(notification, CancellationToken.None);
+                    await email.SendAsync(NotificationEmails.Single(notification, options, extra));
                     notification.EmailedAtUtc = clock.GetUtcNow().UtcDateTime;
                     sent = true;
                 }

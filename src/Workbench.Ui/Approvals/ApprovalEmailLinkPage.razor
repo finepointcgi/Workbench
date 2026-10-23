@@ -1,0 +1,126 @@
+@page "/approvals/email/{Token}"
+@inject IApprovalEmailLinkService Links
+@inject ISnackbar Snackbar
+
+@* Where an email's Approve or Reject link lands. Opening it only shows what it would do; nothing is decided until Confirm. *@
+<PageTitle>Confirm approval · Workbench</PageTitle>
+
+<h1 class="mud-typography mud-typography-h4 mb-3" tabindex="-1" @ref="_heading">
+    @(_link?.Decision == ApprovalDecisionKind.Reject ? "Reject from email" : "Approve from email")
+</h1>
+
+@if (_link is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Elevation="0" Class="pa-4" Style="max-width:640px" data-testid="email-link">
+        @if (_link.Title is not null && _link.State != ApprovalEmailLinkState.WrongUser)
+        {
+            <MudChip T="string" Size="Size.Small" Class="ml-0">@_link.DocumentLabel</MudChip>
+            <MudText Typo="Typo.h6" Class="mt-1">@_link.Title</MudText>
+            @if (_link.Summary is not null)
+            {
+                <MudText Class="mud-text-secondary">@_link.Summary</MudText>
+            }
+
+            <MudText Typo="Typo.body2" Class="mt-2">
+                From @_link.SubmitterEmail
+                @if (_link.Amount is { } amount && Amount(amount) != _link.Summary)
+                {
+                    <span> · @Amount(amount)</span>
+                }
+            </MudText>
+        }
+
+        <MudAlert Severity="@Severity" Dense="true" Class="my-3" data-testid="email-link-state" role="status">@_link.Message</MudAlert>
+
+        @if (_link.State == ApprovalEmailLinkState.Ready)
+        {
+            <MudTextField @bind-Value="_comment" Immediate="true" Lines="2" Variant="Variant.Outlined"
+                          Label="@(_link.Decision == ApprovalDecisionKind.Reject ? "Reason (required)" : "Comment (optional)")" data-testid="email-link-comment" />
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="@(_link.Decision == ApprovalDecisionKind.Reject ? Color.Error : Color.Primary)"
+                           Disabled="_busy || (_link.Decision == ApprovalDecisionKind.Reject && string.IsNullOrWhiteSpace(_comment))"
+                           OnClick="ConfirmAsync" data-testid="email-link-confirm">
+                    @(_link.Decision == ApprovalDecisionKind.Reject ? "Confirm reject" : "Confirm approve")
+                </MudButton>
+                @if (_link.Link is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Href="@_link.Link">Open it first</MudButton>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="approvals" data-testid="email-link-inbox">Go to Approvals</MudButton>
+                @if (_link.State == ApprovalEmailLinkState.Done && _link.Link is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Href="@_link.Link">Open it</MudButton>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public string Token { get; set; } = "";
+
+    private ApprovalEmailLinkDto? _link;
+    private string? _comment;
+    private bool _busy;
+    private ElementReference _heading;
+    private bool _refocus;
+
+    private string Amount(decimal amount) => ApprovalDocumentTypes.AmountIsHours(_link?.DocumentType ?? "") ? $"{amount:0.0} h" : amount.ToString("C");
+
+    private Severity Severity => _link?.State switch
+    {
+        ApprovalEmailLinkState.Ready => Severity.Info,
+        ApprovalEmailLinkState.Done => Severity.Success,
+        ApprovalEmailLinkState.NoLongerWaiting => Severity.Normal,
+        _ => Severity.Warning,
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _link = await Links.OpenAsync(Token);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or HttpRequestException)
+        {
+            _link = new ApprovalEmailLinkDto(ApprovalEmailLinkState.Invalid, ex.Message);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_refocus)
+        {
+            _refocus = false;
+            await _heading.FocusAsync();
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _busy = true;
+        try
+        {
+            _link = await Links.ConfirmAsync(new ConfirmApprovalEmailLinkRequest(Token, _comment));
+            _refocus = true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

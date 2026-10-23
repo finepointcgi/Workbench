@@ -18,6 +18,10 @@ internal static class ApprovalEndpoints
             await s.DecideAsync(documentType, documentId, request, ct);
             return Results.NoContent();
         });
+        inbox.MapPost("/decisions", (BulkApprovalRequest request, IApprovalInboxService s, CancellationToken ct) => s.DecideManyAsync(request, ct));
+        // Email links: reading what a link would do changes nothing (refusals are audited); only the POST decides.
+        inbox.MapPost("/email-links/open", (ConfirmApprovalEmailLinkRequest request, IApprovalEmailLinkService s, CancellationToken ct) => s.OpenAsync(request.Token, ct));
+        inbox.MapPost("/email-links/confirm", (ConfirmApprovalEmailLinkRequest request, IApprovalEmailLinkService s, CancellationToken ct) => s.ConfirmAsync(request, ct));
         inbox.MapGet("/{documentType}/{documentId:guid}/history", (string documentType, Guid documentId, IApprovalInboxService s, CancellationToken ct) =>
             s.GetHistoryAsync(documentType, documentId, ct));
 

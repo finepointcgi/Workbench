@@ -16,7 +16,8 @@ public sealed class DigestSender(
     IEmailSender email,
     NotificationOptions options,
     TimeProvider clock,
-    ILogger<DigestSender>? logger = null)
+    ILogger<DigestSender>? logger = null,
+    INotificationEmailExtras? extras = null)
 {
     private readonly ILogger _log = (ILogger?)logger ?? NullLogger.Instance;
 
@@ -65,7 +66,8 @@ public sealed class DigestSender(
             var notifications = group.ToList();
             try
             {
-                await email.SendAsync(NotificationEmails.Digest(group.Key, notifications, options), cancellationToken);
+                var extra = extras is null ? null : await extras.ForDigestAsync(group.Key, notifications, cancellationToken);
+                await email.SendAsync(NotificationEmails.Digest(group.Key, notifications, options, extra), cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

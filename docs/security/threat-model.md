@@ -154,6 +154,20 @@ Vendor contacts are outsiders: a separate sign-in kind, never an `AppUser`. Desi
 | Spoofing | A deactivated contact keeps a session | Each request re-checks the contact and vendor; deactivation and password changes bump a session version | M |
 | Spoofing | Replaying a portal cookie at another tenant | The cookie carries the tenant id and is rejected elsewhere | M |
 
+### Approve and Reject links in emails (`/approvals/email/{token}`)
+
+Approval notification emails (immediate and digest) list what's waiting on the recipient with Approve and Reject links.
+Code: `Application/Approvals/ApprovalEmailLinks.cs`.
+
+| Threat | Example | Mitigation | Status |
+| --- | --- | --- | --- |
+| Spoofing | Forging or editing a link to approve something else | The token is the task, document, decision, recipient and expiry sealed with the host's Data Protection keys (per tenant in SaaS mode); anything else is "not valid" | M |
+| Spoofing | A forwarded email, or someone else's browser session | The page needs a normal sign-in; a link opened by anyone but its recipient is refused without showing the document, and audited | M |
+| Tampering | A mail scanner or prefetch "clicks" the link | Opening only shows what the link would do; the decision is a button on a signed-in Blazor circuit (never a GET); the API equivalent is a POST with the token in the body | M |
+| Tampering | Replaying a link | Single use (a decision audit row with the token's nonce), bound to one pending task (dead once anything decides it), 7-day expiry | M |
+| Elevation | Using a link to skip a module's checks | The confirm goes through the inbox and the module's own service, with the same checks (segregation of duties, closed periods, ceilings) as the page | M |
+| Repudiation | "I never approved that" | Audit rows under `ApprovalEmailLink` for every decision and refusal (wrong user, expired, used, no longer waiting), plus the module's own audit and the approval trail | M |
+
 ### EDI (X12 files)
 
 | Threat | Example | Mitigation | Status |

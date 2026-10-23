@@ -53,7 +53,8 @@ public sealed class ApprovalInboxService(
                 return new ApprovalInboxItemDto(task.Id, instance.Id, instance.DocumentType, ApprovalDocumentTypes.Label(instance.DocumentType), instance.DocumentId,
                     instance.Title, instance.Summary, instance.Amount, instance.SubmitterEmail, string.Join(", ", g.Select(x => x.Task.StepName).Distinct()),
                     scopes.Count == 0 ? null : string.Join(", ", scopes), task.ActivatedAtUtc,
-                    task.ActivatedAtUtc is { } since ? BusinessDays.Between(since, now) : 0, onBehalfOf, instance.Link);
+                    task.ActivatedAtUtc is { } since ? BusinessDays.Between(since, now) : 0, onBehalfOf, instance.Link,
+                    g.Select(x => ProjectOf(x.Task.ScopeKey)).FirstOrDefault(p => p is not null));
             })
             .OrderBy(i => i.WaitingSinceUtc)
             .ToList();
@@ -96,6 +97,89 @@ public sealed class ApprovalInboxService(
                 break;
         }
     }
+
+    /// <summary>The most a bulk decision takes at once (each document is its own unit of work).</summary>
+    public const int MaxBulkItems = 200;
+
+    public async Task<BulkApprovalResultDto> DecideManyAsync(BulkApprovalRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Decision is not (ApprovalDecisionKind.Approve or ApprovalDecisionKind.Reject))
+        {
+            throw new ArgumentException("Return documents one at a time, saying what each one needs.");
+        }
+
+        var items = (request.Items ?? []).Where(i => i is not null && !string.IsNullOrWhiteSpace(i.DocumentType))
+            .DistinctBy(i => (i.DocumentType, i.DocumentId)).ToList();
+        if (items.Count == 0)
+        {
+            throw new ArgumentException("Pick at least one item.");
+        }
+
+        if (items.Count > MaxBulkItems)
+        {
+            throw new ArgumentException($"Pick at most {MaxBulkItems} items at a time.");
+        }
+
+        var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
+        if (request.Decision == ApprovalDecisionKind.Reject && comment is null)
+        {
+            throw new ArgumentException("A reason is required when rejecting.");
+        }
+
+        Dictionary<(string, Guid), ApprovalInstance> instances;
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            var ids = items.Select(i => i.DocumentId).Distinct().ToList();
+            instances = (await db.Set<ApprovalInstance>().AsNoTracking().Where(i => ids.Contains(i.DocumentId)).ToListAsync(cancellationToken))
+                .GroupBy(i => (i.DocumentType, i.DocumentId))
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.StartedAtUtc).First());
+        }
+
+        var me = ApprovalEngine.Normalize(access.Email);
+        var results = new List<BulkApprovalItemResult>();
+        foreach (var item in items)
+        {
+            var instance = instances.GetValueOrDefault((item.DocumentType, item.DocumentId));
+            var title = instance?.Title ?? ApprovalDocumentTypes.Label(item.DocumentType);
+            try
+            {
+                // One document at a time through its module, as if decided on its own: its checks decide, not this loop.
+                await DecideAsync(item.DocumentType, item.DocumentId, new ApprovalDecisionRequest(request.Decision, comment), cancellationToken);
+                results.Add(new BulkApprovalItemResult(item.DocumentType, item.DocumentId, title, true, null));
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or WorkbenchNotFoundException)
+            {
+                var problem = instance is not null && ApprovalEngine.Normalize(instance.SubmitterEmail) == me
+                    ? "you entered it yourself"
+                    : instance is { Status: not ApprovalInstanceStatus.Pending } ? "it isn't waiting for approval any more" : ex.Message;
+                results.Add(new BulkApprovalItemResult(item.DocumentType, item.DocumentId, title, false, problem));
+            }
+        }
+
+        return new BulkApprovalResultDto(results.Count(r => r.Succeeded), results.Count(r => !r.Succeeded), Summarize(request.Decision, results), results);
+    }
+
+    /// <summary>"12 approved, 1 couldn't be: you entered it yourself" (several reasons are listed with their counts).</summary>
+    public static string Summarize(ApprovalDecisionKind decision, IReadOnlyList<BulkApprovalItemResult> results)
+    {
+        var done = results.Count(r => r.Succeeded);
+        var text = $"{done} {(decision == ApprovalDecisionKind.Reject ? "rejected" : "approved")}";
+        var failed = results.Where(r => !r.Succeeded).GroupBy(r => r.Problem ?? "unknown problem").ToList();
+        if (failed.Count == 0)
+        {
+            return text;
+        }
+
+        var count = failed.Sum(g => g.Count());
+        var reasons = failed.Count == 1
+            ? failed[0].Key
+            : string.Join("; ", failed.OrderByDescending(g => g.Count()).Select(g => $"{g.Count()} because {g.Key.TrimEnd('.')}"));
+        return $"{text}, {count} couldn't be: {reasons.TrimEnd('.')}";
+    }
+
+    private static Guid? ProjectOf(string? scopeKey) =>
+        scopeKey is not null && scopeKey.StartsWith("project:", StringComparison.Ordinal) && Guid.TryParse(scopeKey["project:".Length..], out var id) ? id : null;
 
     public async Task<IReadOnlyList<ApprovalInstanceDto>> GetHistoryAsync(string documentType, Guid documentId, CancellationToken cancellationToken = default)
     {

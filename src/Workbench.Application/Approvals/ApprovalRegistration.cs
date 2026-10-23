@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Contracts.Approvals;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Workbench.Application.Approvals;
 
@@ -13,10 +14,14 @@ public static class ApprovalRegistration
     public static IServiceCollection AddWorkbenchApprovals(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.AddDataProtection(); // Email link tokens (the web host configures its keys; this is a no-op there).
         services.AddSingleton<ApprovalEngine>();
         services.AddScoped<IApprovalWorkflowService, ApprovalWorkflowService>();
         services.AddScoped<IApprovalInboxService, ApprovalInboxService>();
         services.AddScoped<IApprovalDelegationService, ApprovalDelegationService>();
+        services.AddSingleton<ApprovalEmailTokens>();
+        services.AddScoped<IApprovalEmailLinkService, ApprovalEmailLinkService>();
+        services.AddSingleton<Notifications.INotificationEmailExtras, ApprovalEmailActions>();
         services.AddScoped<ApprovalReminderCheck>();
         services.AddSingleton<ApprovalBackfillGate>();
         services.AddScoped<ApprovalBackfill>();
