@@ -149,6 +149,24 @@ public sealed class SheetAutomationTests
     }
 
     [Fact]
+    public async Task A_real_form_submission_fires_added_by_a_form_automations()
+    {
+        await using var host = new AutomationHost();
+        var sheetId = await host.NewSheetAsync();
+        var owner = await host.PersonColumnAsync(sheetId);
+        var automation = await AutomateAsync(host, sheetId, "Triage", new(AutomationTriggerKind.RecordEvent, Events: [RecordEventKind.AddedByForm]),
+            new AutomationAction(AutomationActionKind.AssignPerson, FieldKey: owner.Id.ToString(), Value: "triage@example.com"));
+        var forms = host.Get<Workbench.Contracts.Forms.IFormService>();
+        var form = await forms.CreateAsync(sheetId, new Workbench.Contracts.Forms.SaveFormRequest("Intake form", [new("title", "What do you need?", Required: true)]));
+
+        await forms.SubmitAsync(form.Id, new Workbench.Contracts.Forms.SubmitFormRequest(new Dictionary<string, string?> { ["title"] = "New laptop" }));
+
+        var row = Assert.Single(await host.Items.ListAsync(sheetId), i => i.Title == "New laptop");
+        Assert.Equal("triage@example.com", row.Values[owner.Id.ToString()]);
+        Assert.Equal("Added by the form \"Intake form\"", Assert.Single(await RunsAsync(host, automation.Id)).TriggerDetail);
+    }
+
+    [Fact]
     public async Task Column_change_triggers_can_require_the_old_value_too()
     {
         await using var host = new AutomationHost();
