@@ -262,13 +262,14 @@ public sealed class TenancyIsolationTests
     public async Task The_host_page_lists_tenants_for_host_admins_only()
     {
         await using var web = await MultiTenantWeb.DevelopmentAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        var html = await (await web.Client(null, MultiTenantWeb.HostAdmin).GetAsync("host", timeout.Token)).Content.ReadAsStringAsync(timeout.Token);
+        // Each GET reads the whole page within the client's own timeout. The first request to a new host takes seconds
+        // alone and many times that under the parallel suite, so one 30-second budget for both requests ran out on CI.
+        var html = await web.Client(null, MultiTenantWeb.HostAdmin).GetStringAsync("host");
         Assert.Contains("acme", html);
         Assert.Contains("beta", html);
         Assert.Contains("Host audit log", html);
 
-        var tenantAdmin = await (await web.Client(null, MultiTenantWeb.DevAdmin).GetAsync("host", timeout.Token)).Content.ReadAsStringAsync(timeout.Token);
+        var tenantAdmin = await web.Client(null, MultiTenantWeb.DevAdmin).GetStringAsync("host");
         Assert.Contains("Only host administrators can manage tenants", tenantAdmin);
     }
 
