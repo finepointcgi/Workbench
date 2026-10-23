@@ -397,13 +397,13 @@ await notifications.PublishAsync(
 
 ## Date rules act for their author
 
-- Nobody is signed in when the hourly `DateTriggerBackgroundService` runs, so a date rule acts as the person who wrote it
-  (`Rule.CreatedBy`). Each author's rules run, per tenant, in a scope from `RuleAuthorExecution.CreateScope` (internal,
+- Nobody is signed in when the hourly `DateTriggerBackgroundService` runs, so a sheet automation's date or schedule trigger acts as
+  its author: whoever last published it (`AutomationRecord.UpdatedBy`; for migrated rules, the rule's author). Each author's rules run, per tenant, in a scope from `RuleAuthorExecution.CreateScope` (internal,
   refused inside an HTTP request): `AccessControl` checks that author, through the ordinary permission-checked services.
   The author gets only their own roles: no system powers, and the worker's `SystemCurrentUser` doesn't leak into it.
 - Checked at run time, before a sheet's rules run: the author must not be deactivated (memberships outlive deactivation,
   so this is explicit) and must be an Editor on the sheet's workspace. Otherwise the rules are skipped, logged, and recorded
-  as a `Skipped` rule run with the reason (at most once per rule and day), and fire again once access is restored.
+  as a `Skipped` run in the automation run log with the reason (at most once per automation and day), and fire again once access is restored.
 - This is deliberately not the "Workbench System" context (`SystemExecution`), which stays limited to the one burdened-cost
   read and never gains sheet data or writes. Don't use the author context for anything except running rules.
 - Changes made by any rule (item or date trigger) are recorded as `Workbench Automation (rule "Name", author email)`
@@ -826,8 +826,14 @@ Checks:
 
 ## Automation (cross-module, Admin › Automation)
 
-- `Domain/Automations`, `Contracts/Automations`, `Application/Automations`, `Ui/AutomationBuilder` (`/admin/automation`); sheet rules
-  stay in `*/Automation` (`IRuleService`). Guide: `docs/automation.md`.
+- `Domain/Automations`, `Contracts/Automations`, `Application/Automations`, `Ui/AutomationBuilder` (`/admin/automation`). Guide:
+  `docs/automation.md`. **Sheet automations are the same model** (`AutomationTrigger.SheetId`, record type `sheet-item`, fields =
+  column ids or `title`/`start`/`finish`) run inline by `SheetAutomationRuntime` from `AutomationItemService`, hourly for dates and
+  schedules; `IRuleService` (`*/Automation`) is the old rules API mapped onto them. Recipes: `AutomationTemplates` (a sentence,
+  blanks, and a builder).
+- **Adding rows in bulk** (an import): `SheetAutomations.CaptureAsync` before, `RunBatchAsync` after, so automations run on each
+  row with one notification per automation and person. **Forms** wrap the row they add in
+  `using (SheetAutomationEvents.AddedByForm(formName))` so "added by a form" automations run.
 - **Record events come from audit rows.** `AuditRecorder.Record` hands every row to `AutomationCapture` in the module's unit of work:
   a record type it knows (`AutomationEntities`, matched by the audit entity type = the class name) with an enabled automation
   listening queues an `AutomationQueueItem` saved with the change, and a validation automation (a Block action) is checked right

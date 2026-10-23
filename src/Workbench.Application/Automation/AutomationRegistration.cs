@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Workbench.Application.Automations;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Notifications;
 using Workbench.Contracts.Automation;
@@ -12,7 +13,7 @@ namespace Workbench.Application.Automation;
 public static class AutomationRegistration
 {
     /// <summary>
-    /// Registers rules and notifications, and decorates <see cref="IItemService"/> and <see cref="ICommentService"/>.
+    /// Registers sheet automations (the runtime; their definitions live with Admin › Automation) and notifications, and decorates <see cref="IItemService"/> and <see cref="ICommentService"/>.
     /// Call it after <c>AddWorkbenchCollaboration</c> (it wraps the activity-recording decorator; see
     /// <see cref="AutomationItemService"/> for the ordering). Infrastructure supplies the real <see cref="IEmailSender"/>.
     /// </summary>
@@ -25,7 +26,9 @@ public static class AutomationRegistration
         services.AddSingleton<Notifier>();
         services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<Notifier>());
         services.AddSingleton<DigestSender>();
-        services.AddSingleton<RuleEngine>();
+        services.AddSingleton<SheetAutomationRuntime>();
+        services.AddScoped<AutomationItemServiceAccessor>();
+        services.AddScoped<SheetAutomations>();
         services.AddScoped<INotificationFeed, InProcessNotificationFeed>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IRuleService, RuleService>();

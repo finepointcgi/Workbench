@@ -228,7 +228,9 @@ public sealed class AutomationSafetyTests
     public async Task Templates_that_need_no_further_choices_save_as_they_are()
     {
         await using var kit = await AutomationKit.CreateAsync();
-        foreach (var template in AutomationTemplates.All.Where(t => t.Key is not ("large-requisition" or "invoice-to-teams")))
+        // Record recipes whose blanks all have defaults; sheet recipes and the rest are covered by RecipeTests.
+        var ready = AutomationTemplates.All.Where(t => t.Scope == AutomationRecipeScope.Record && (t.Blanks ?? []).All(b => b.Default is not null)).ToList();
+        foreach (var template in ready.Where(t => t.Key is not ("large-requisition" or "invoice-to-teams")))
         {
             var created = await kit.Automations.CreateAsync(template.Request);
             Assert.Equal(template.Key, created.TemplateKey);
@@ -236,7 +238,7 @@ public sealed class AutomationSafetyTests
 
         // These two need a workflow or connector picked in the builder first.
         await Assert.ThrowsAsync<ArgumentException>(() => kit.Automations.CreateAsync(AutomationTemplates.Find("large-requisition")!.Request));
-        Assert.Equal(AutomationTemplates.All.Count - 2, (await kit.Automations.ListAsync()).Count);
+        Assert.Equal(ready.Count(t => t.Key is not ("large-requisition" or "invoice-to-teams")), (await kit.Automations.ListAsync()).Count);
     }
 
     [Fact]

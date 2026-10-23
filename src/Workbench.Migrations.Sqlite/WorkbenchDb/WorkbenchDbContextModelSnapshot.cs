@@ -1812,6 +1812,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("SheetId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TemplateKey")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -1834,6 +1837,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SheetId");
 
                     b.HasIndex("IsEnabled", "DeletedAtUtc");
 

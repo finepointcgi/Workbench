@@ -26,7 +26,8 @@ public sealed class PlanScheduleService(
     IItemService items,
     TimeProvider clock,
     ActivityRecorder? activity = null,
-    ITaskAssignmentService? tasks = null) : IPlanScheduleService
+    ITaskAssignmentService? tasks = null,
+    Automations.SheetAutomations? automations = null) : IPlanScheduleService
 {
     public const string PlanImportedKind = "plan.imported";
 
@@ -448,6 +449,7 @@ public sealed class PlanScheduleService(
     {
         PlanImport import;
         PlanSnapshot snapshot;
+        Automations.SheetRowsSnapshot? rowsBefore;
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
             (import, snapshot) = await BuildImportAsync(db, sheetId, request, cancellationToken);
@@ -457,6 +459,7 @@ public sealed class PlanScheduleService(
                 throw new ArgumentException($"The file has {errors} error{(errors == 1 ? "" : "s")}. Fix {(errors == 1 ? "it" : "them")} and import again; nothing was changed.");
             }
 
+            rowsBefore = automations is null ? null : await automations.CaptureAsync(sheetId, cancellationToken);
             await ApplyAsync(db, sheetId, import, snapshot, MsProjectXml.IsXml(request.FileName), cancellationToken);
         }
 
@@ -475,6 +478,12 @@ public sealed class PlanScheduleService(
             {
                 await tasks.SetAssigneesAsync(sheetId, task.ItemId, new SetAssigneesRequest(task.Assignees), cancellationToken);
             }
+        }
+
+        // Sheet automations run on the rows the file added or changed, as one batch (one notification per automation and person).
+        if (rowsBefore is not null)
+        {
+            await automations!.RunBatchAsync(rowsBefore, $"the Excel import ({request.FileName})", cancellationToken);
         }
 
         var preview = import.Preview;

@@ -93,7 +93,7 @@ public sealed class AutomationIndex(TimeProvider clock, ILogger<AutomationIndex>
             var record = nameof(AutomationTriggerKind.RecordEvent);
             var field = nameof(AutomationTriggerKind.FieldChanged);
             var rows = db.Set<AutomationRecord>().AsNoTracking()
-                .Where(a => a.IsEnabled && a.DeletedAtUtc == null && (a.TriggerKind == record || a.TriggerKind == field))
+                .Where(a => a.IsEnabled && a.DeletedAtUtc == null && a.SheetId == null && (a.TriggerKind == record || a.TriggerKind == field))
                 .Select(a => new { a.Id, a.TriggerKind, a.EntityType, a.TriggerKeys, a.HasBlockingAction })
                 .ToList();
             var paused = db.Set<AutomationSettings>().AsNoTracking().Select(s => s.PausedAll).FirstOrDefault();

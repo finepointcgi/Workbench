@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Workbench.Application;
 using Workbench.Application.Automation;
+using Workbench.Application.Automations;
+using Workbench.Contracts.Automations;
+using Workbench.Domain.Automations;
 using Workbench.Application.Identity;
 using Workbench.Domain;
 using Workbench.Domain.Automation;
@@ -16,7 +19,8 @@ namespace Workbench.Tests.Automation;
 /// <summary>
 /// The hourly date-trigger job in the real web host, where nobody is signed in: each rule acts as its author, checked
 /// when it runs, and is skipped (and the reason recorded) when the author is deactivated or can no longer edit.
-/// Seeded workspace: pm@ Owner, analyst@ Editor, viewer@ Viewer.
+/// The rules are stored the old way (the Rules table) and moved into sheet automations by the data migration first, so these
+/// also show migrated date rules fire as they did. Seeded workspace: pm@ Owner, analyst@ Editor, viewer@ Viewer.
 /// </summary>
 public sealed class DateRuleAuthorTests
 {
@@ -32,9 +36,10 @@ public sealed class DateRuleAuthorTests
 
         var item = await QueryAsync(scopes, db => db.Items.AsNoTracking().SingleAsync(i => i.Id == itemId));
         Assert.Equal("Due today [due]", item.Title);
-        var run = await QueryAsync(scopes, db => db.Set<RuleRun>().AsNoTracking().SingleAsync(r => r.RuleId == ruleId && r.ItemId == itemId));
-        Assert.Equal(RuleRunOutcome.Succeeded, run.Outcome);
-        Assert.Equal(DateOnly.FromDateTime(TimeProvider.System.GetLocalNow().DateTime), run.TriggerDate);
+        var run = await QueryAsync(scopes, db => db.Set<AutomationRun>().AsNoTracking().SingleAsync(r => r.AutomationId == ruleId && r.RecordId == itemId));
+        Assert.Equal(nameof(AutomationRunStatus.Succeeded), run.Status);
+        Assert.Equal($"Finish is {DateOnly.FromDateTime(TimeProvider.System.GetLocalNow().DateTime):yyyy-MM-dd}", run.TriggerDetail);
+        Assert.Equal("analyst@example.com", run.Principal);
 
         // The change is recorded as the automation, naming the rule and its author.
         var actor = await QueryAsync(scopes, db => db.Set<ActivityEvent>().AsNoTracking().Where(a => a.ItemId == itemId).Select(a => a.Actor).SingleAsync());
@@ -57,13 +62,13 @@ public sealed class DateRuleAuthorTests
         Assert.Equal(0, await job.RunOnceAsync(CancellationToken.None));
 
         Assert.Equal("Due today", (await QueryAsync(scopes, db => db.Items.AsNoTracking().SingleAsync(i => i.Id == itemId))).Title);
-        var runs = await QueryAsync(scopes, db => db.Set<RuleRun>().AsNoTracking().ToListAsync());
+        var runs = await QueryAsync(scopes, db => db.Set<AutomationRun>().AsNoTracking().ToListAsync());
         foreach (var (ruleId, author) in new[] { (viewerRule, "viewer@example.com"), (outsiderRule, "someone@elsewhere.example") })
         {
-            var skipped = Assert.Single(runs, r => r.RuleId == ruleId);
-            Assert.Equal(RuleRunOutcome.Skipped, skipped.Outcome);
-            Assert.Null(skipped.ItemId);
-            Assert.Equal($"The rule's author, {author}, no longer has edit access to this sheet.", skipped.Error);
+            var skipped = Assert.Single(runs, r => r.AutomationId == ruleId);
+            Assert.Equal(nameof(AutomationRunStatus.Skipped), skipped.Status);
+            Assert.Null(skipped.RecordId);
+            Assert.Equal($"The automation's author, {author}, no longer has edit access to this sheet.", skipped.Error);
         }
 
         Assert.Empty(await QueryAsync(scopes, db => db.Set<ActivityEvent>().AsNoTracking().Where(a => a.ItemId == itemId).ToListAsync()));
@@ -82,9 +87,9 @@ public sealed class DateRuleAuthorTests
         await job.RunOnceAsync(CancellationToken.None);
 
         Assert.Equal("Due today", (await QueryAsync(scopes, db => db.Items.AsNoTracking().SingleAsync(i => i.Id == itemId))).Title);
-        var run = await QueryAsync(scopes, db => db.Set<RuleRun>().AsNoTracking().SingleAsync(r => r.RuleId == ruleId));
-        Assert.Equal(RuleRunOutcome.Skipped, run.Outcome);
-        Assert.Equal("The rule's author, analyst@example.com, is deactivated.", run.Error);
+        var run = await QueryAsync(scopes, db => db.Set<AutomationRun>().AsNoTracking().SingleAsync(r => r.AutomationId == ruleId));
+        Assert.Equal(nameof(AutomationRunStatus.Skipped), run.Status);
+        Assert.Equal("The automation's author, analyst@example.com, is deactivated.", run.Error);
     }
 
     [Fact]
@@ -154,6 +159,7 @@ public sealed class DateRuleAuthorTests
         };
         db.Set<Rule>().Add(rule);
         await db.SaveChangesAsync();
+        Assert.Equal(1, await SheetRuleMigration.MigrateAsync(db));
         return rule.Id;
     });
 
