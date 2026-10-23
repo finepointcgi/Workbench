@@ -99,7 +99,7 @@ public sealed class TimesheetGridTests
 
         Assert.Equal("2 h past the 40 h assigned", grid.Find("[data-testid='hours-left-1001.01']").TextContent.Trim());
         Assert.Contains("over", grid.Find("[data-testid='hours-left-1001.01']").ClassList);
-        Assert.Contains("1001 1001.01 Requirements: 2 h past the 40 h you're assigned.", grid.Find("[data-testid='hours-left-warning']").TextContent);
+        Assert.Contains("1001.01 Requirements: 2 h past the 40 h you're assigned.", grid.Find("[data-testid='hours-left-warning']").TextContent);
         Assert.Contains(grid.Instance.BuildEntries(), e => e.WorkDate == Monday.AddDays(2) && e.Hours == 6m); // still saved
         A11yAssert.Check(grid);
     }

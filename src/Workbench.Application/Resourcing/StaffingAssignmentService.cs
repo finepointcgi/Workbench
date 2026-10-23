@@ -567,7 +567,7 @@ public sealed class StaffingAssignmentService(
         if (overbooked.Count > 0)
         {
             var shown = overbooked.Take(3).Select(w =>
-                $"{Hours(w.ThisAssignment + w.OtherHours)} of {Hours(w.Capacity)} h the week of {w.WeekStart:MMM d} ({Hours(w.OtherHours)} h on other work)");
+                $"{Hours(w.ThisAssignment + w.OtherHours)} of {Hours(w.Capacity)} h the week of {w.WeekStart:MMM d}" + (w.OtherHours > 0 ? $" ({Hours(w.OtherHours)} h on other work)" : ""));
             warnings.Add($"{plan.Employee.DisplayName} would be booked past their hours: {string.Join("; ", shown)}"
                 + (overbooked.Count > 3 ? $"; and {overbooked.Count - 3} more {(overbooked.Count == 4 ? "week" : "weeks")}." : "."));
         }
@@ -692,7 +692,7 @@ public sealed class StaffingAssignmentService(
             .ToList();
     }
 
-    private static string Hours(decimal hours) => ProjectStaffingService.Hours(hours);
+    private static string Hours(decimal hours) => hours.ToString("#,##0.##", CultureInfo.InvariantCulture);
 
     private static string? Clean(string? notes) => string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()[..Math.Min(notes.Trim().Length, 500)];
 

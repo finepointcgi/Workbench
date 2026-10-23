@@ -8,6 +8,9 @@ public static class ResourcingFormat
 {
     public static string Hours(decimal hours) => hours.ToString(hours == Math.Round(hours) ? "0" : "0.#", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>Hours to the quarter hour, as an assignment's weeks are spread (34.75, not 34.8).</summary>
+    public static string ExactHours(decimal hours) => hours.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
     public static string Percent(decimal? ratio) => ratio is { } r ? (r * 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "%" : "—";
 
     public static DateOnly WeekStart(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
