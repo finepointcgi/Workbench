@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 using MudBlazor;
 using Workbench.Contracts.Scheduling;
@@ -195,14 +196,14 @@ public partial class SheetGrid
         }
 
         var edits = new List<CellEdit>();
-        var newRows = new List<IReadOnlyList<string>>();
+        var newRows = new List<BulkNewRow>();
         var skipped = 0;
         var outside = 0;
         for (var r = 0; r < block.Count; r++)
         {
             if (top + r >= _rows.Count)
             {
-                newRows.Add(block[r]);
+                newRows.Add(NewRow(block[r], left, ref skipped, ref outside));
                 continue;
             }
 
@@ -233,16 +234,14 @@ public partial class SheetGrid
             }
         }
 
-        var changes = await ApplyAsync(edits);
-        var created = await CreatePastedRowsAsync(newRows, left);
-        skipped += created.Skipped;
-        outside += created.Outside;
-        if (changes.Count > 0 || created.Ids.Count > 0)
+        var saved = await SaveCellsAsync(edits, newRows, null, "Paste");
+        skipped += saved.Skipped;
+        if (saved.Changes.Count > 0 || saved.Created.Count > 0)
         {
-            RecordCells("Paste", changes, created.Ids, created.Requests);
-            var rowsTouched = changes.Select(c => c.ItemId).Distinct().Count();
-            Snackbar.Add($"Pasted into {rowsTouched + created.Ids.Count} {(rowsTouched + created.Ids.Count == 1 ? "row" : "rows")}"
-                + (created.Ids.Count > 0 ? $" (added {created.Ids.Count})" : "") + ". Ctrl+Z undoes it.", Severity.Success);
+            RecordCells("Paste", saved.Changes, saved.Created, newRows);
+            var rowsTouched = saved.Changes.Select(c => c.ItemId).Distinct().Count();
+            Snackbar.Add($"Pasted into {rowsTouched + saved.Created.Count} {(rowsTouched + saved.Created.Count == 1 ? "row" : "rows")}"
+                + (saved.Created.Count > 0 ? $" (added {saved.Created.Count})" : "") + ". Ctrl+Z undoes it.", Severity.Success);
             // Select what was pasted. Added rows aren't on screen until the reload, so they're found again by id.
             var lastRow = Math.Min(top + block.Count - 1, _rows.Count - 1);
             if (_rows.Count > 0)
@@ -253,10 +252,10 @@ public partial class SheetGrid
                 _anchorId = _rows[_anchorRow].Item.Id;
             }
 
-            if (created.Ids.Count > 0)
+            if (saved.Created.Count > 0)
             {
-                _activeId = created.Ids[^1];
-                _anchorId ??= created.Ids[0];
+                _activeId = saved.Created[^1];
+                _anchorId ??= saved.Created[0];
                 _anchorCol = left;
             }
 
@@ -265,88 +264,54 @@ public partial class SheetGrid
 
         if (skipped > 0 || outside > 0)
         {
-            Snackbar.Add(Skipped(skipped, outside), Severity.Warning);
+            Snackbar.Add(Skipped(skipped, outside, saved.Reasons), Severity.Warning);
         }
 
         _focusGrid = true;
     }
 
-    private static string Skipped(int skipped, int outside) =>
+    private static string Skipped(int skipped, int outside, IReadOnlyList<string>? reasons = null) =>
         string.Join(" ", new[]
         {
-            skipped > 0 ? $"{skipped} {(skipped == 1 ? "value was" : "values were")} skipped (read-only cells, or text that doesn't fit the column)." : null,
+            skipped > 0 ? $"{skipped} {(skipped == 1 ? "value was" : "values were")} skipped "
+                + (reasons is { Count: > 0 } ? $"({string.Join(" ", reasons.Take(2))})" : "(read-only cells, or text that doesn't fit the column).") : null,
             outside > 0 ? $"{outside} {(outside == 1 ? "value" : "values")} fell past the last column." : null,
         }.OfType<string>());
 
-    /// <summary>Rows pasted below the last row become new top-level rows, created with their values in one step each.</summary>
-    private async Task<(List<Guid> Ids, List<CreateItemRequest> Requests, int Skipped, int Outside)> CreatePastedRowsAsync(List<IReadOnlyList<string>> block, int left)
+    /// <summary>A pasted row below the last row: a new top-level row with the cells that can be set on a new row.</summary>
+    private BulkNewRow NewRow(IReadOnlyList<string> cells, int left, ref int skipped, ref int outside)
     {
-        var ids = new List<Guid>();
-        var requests = new List<CreateItemRequest>();
-        var skipped = 0;
-        var outside = 0;
-        foreach (var cells in block)
+        var set = new List<BulkCellEdit>();
+        for (var c = 0; c < cells.Count; c++)
         {
-            var request = new CreateItemRequest("New row");
-            var values = new Dictionary<string, string?>();
-            for (var c = 0; c < cells.Count; c++)
+            if (left + c >= _columns.Count)
             {
-                if (left + c >= _columns.Count)
-                {
-                    outside += cells[c].Length > 0 ? 1 : 0;
-                    continue;
-                }
-
-                var column = _columns[left + c];
-                if (cells[c].Length == 0)
-                {
-                    continue;
-                }
-
-                if (column.ReadOnly || column.Kind is GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors or GridColumnKind.Wbs
-                    || !Normalize(cells[c], column, out var value))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                switch (column.Kind)
-                {
-                    case GridColumnKind.Title when value is not null:
-                        request = request with { Title = value };
-                        break;
-                    case GridColumnKind.Start:
-                        request = request with { Start = CellFormat.ToDateTime(value) is { } s ? DateOnly.FromDateTime(s) : null };
-                        break;
-                    case GridColumnKind.Finish:
-                        request = request with { Finish = CellFormat.ToDateTime(value) is { } f ? DateOnly.FromDateTime(f) : null };
-                        break;
-                    case GridColumnKind.Custom:
-                        values[column.Key] = value;
-                        break;
-                }
+                outside += cells[c].Length > 0 ? 1 : 0;
+                continue;
             }
 
-            request = request with { Values = values };
-            try
+            var column = _columns[left + c];
+            if (cells[c].Length == 0)
             {
-                var created = await ItemService.CreateAsync(SheetId, request);
-                ids.Add(created.Id);
-                requests.Add(request);
+                continue;
             }
-            catch (Exception ex) when (IsExpected(ex))
+
+            if (column.ReadOnly || column.Kind is GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors
+                || column.ValueKind == ColumnKind.LinkedRow || !Normalize(cells[c], column, out var value))
             {
-                Snackbar.Add($"Couldn't add a pasted row: {ex.Message}", Severity.Error);
-                break;
+                skipped++;
+                continue;
             }
+
+            set.Add(new BulkCellEdit(column.Key, value));
         }
 
-        return (ids, requests, skipped, outside);
+        return new BulkNewRow(set);
     }
 
     /// <summary>Whether a paste, fill or clear may set this cell.</summary>
     private bool CanSet(GridRow row, GridColumn column) =>
-        CanEdit && !column.ReadOnly && column.Kind != GridColumnKind.Assignees && !IsRolledUp(row, column)
+        CanEdit && !column.ReadOnly && column.Kind != GridColumnKind.Assignees && column.ValueKind != ColumnKind.LinkedRow && !IsRolledUp(row, column)
         && (column.Kind is not (GridColumnKind.Duration or GridColumnKind.Predecessors) || PlanService is not null);
 
     /// <summary>Text from the clipboard as the column stores it; false when it doesn't fit (and Title can't be blank).</summary>
@@ -447,16 +412,16 @@ public partial class SheetGrid
             }
         }
 
-        var changes = await ApplyAsync(edits);
-        if (changes.Count > 0)
+        var saved = await SaveCellsAsync(edits, null, null, "Fill down");
+        if (saved.Changes.Count > 0)
         {
-            RecordCells("Fill down", changes);
+            RecordCells("Fill down", saved.Changes);
             await Changed.InvokeAsync();
         }
 
-        if (skipped > 0)
+        if (skipped + saved.Skipped > 0)
         {
-            Snackbar.Add(Skipped(skipped, 0), Severity.Info);
+            Snackbar.Add(Skipped(skipped + saved.Skipped, 0, saved.Reasons), Severity.Info);
         }
 
         _focusGrid = true;
@@ -484,10 +449,10 @@ public partial class SheetGrid
             }
         }
 
-        var changes = await ApplyAsync(edits);
-        if (changes.Count > 0)
+        var saved = await SaveCellsAsync(edits, null, null, label);
+        if (saved.Changes.Count > 0)
         {
-            RecordCells(label, changes);
+            RecordCells(label, saved.Changes);
             await Changed.InvokeAsync();
         }
 
@@ -496,68 +461,118 @@ public partial class SheetGrid
 
     // ---- Saving several cells ----
 
+    /// <summary>What saving several cells did: the changes (for undo), the rows added, and the cells skipped and why.</summary>
+    private sealed record SaveOutcome(List<CellChange> Changes, List<Guid> Created, int Skipped, IReadOnlyList<string> Reasons);
+
+    /// <summary>One save for many cells, where the host has it (<see cref="ISheetBulkEditService"/>).</summary>
+    private ISheetBulkEditService? BulkService => Services.GetService<ISheetBulkEditService>();
+
     /// <summary>
-    /// Saves cell values, one update per row (Duration and Predecessors through the plan). Unchanged cells are left alone.
-    /// Returns what changed, for undo.
+    /// Saves cell values, adds rows and deletes rows. With the bulk service that's one request (one reflow, one automation
+    /// batch, one live refresh); without it, one update per row. Duration and Predecessors go through the plan, one cell at a
+    /// time. Unchanged cells are left alone.
     /// </summary>
-    private async Task<List<CellChange>> ApplyAsync(IReadOnlyList<CellEdit> edits)
+    private async Task<SaveOutcome> SaveCellsAsync(IReadOnlyList<CellEdit> edits, IReadOnlyList<BulkNewRow>? newRows, IReadOnlyList<Guid>? delete, string source)
     {
         var changes = new List<CellChange>();
-        foreach (var group in edits.GroupBy(e => e.ItemId))
+        var created = new List<Guid>();
+        var reasons = new List<string>();
+        var skipped = 0;
+        var itemEdits = new List<CellEdit>();
+        var planEdits = new List<(ItemDto Item, CellEdit Edit, string? Before)>();
+        foreach (var edit in edits)
         {
-            if (FindItem(group.Key) is not { } item)
+            if (FindItem(edit.ItemId) is not { } item)
             {
                 continue;
             }
 
-            var updated = item;
-            var rowChanges = new List<CellChange>();
-            var planEdits = new List<CellEdit>();
-            foreach (var edit in group)
-            {
-                var before = Raw(item, edit.Column);
-                if (before == edit.Value || (edit.Column.Kind == GridColumnKind.Title && string.IsNullOrWhiteSpace(edit.Value)))
-                {
-                    continue;
-                }
-
-                rowChanges.Add(new CellChange(item.Id, edit.Column.Key, before, edit.Value));
-                if (edit.Column.Kind is GridColumnKind.Duration or GridColumnKind.Predecessors)
-                {
-                    planEdits.Add(edit);
-                }
-                else
-                {
-                    updated = WithValue(updated, edit.Column, edit.Value);
-                }
-            }
-
-            if (rowChanges.Count == 0)
+            var before = Raw(item, edit.Column);
+            if (before == edit.Value || (edit.Column.Kind == GridColumnKind.Title && string.IsNullOrWhiteSpace(edit.Value)))
             {
                 continue;
             }
 
-            try
+            if (edit.Column.Kind is GridColumnKind.Duration or GridColumnKind.Predecessors)
             {
-                if (!ReferenceEquals(updated, item))
-                {
-                    ReplaceItem(await ItemService.UpdateAsync(SheetId, item.Id, new UpdateItemRequest(updated.Title, updated.Start, updated.Finish, updated.CostpointWbsId, updated.Values)));
-                }
-
-                foreach (var edit in planEdits)
-                {
-                    await SavePlanCellAsync(item, edit.Column, edit.Value);
-                }
-
-                changes.AddRange(rowChanges);
+                planEdits.Add((item, edit, before));
             }
-            catch (Exception ex) when (IsExpected(ex))
+            else
             {
-                Snackbar.Add($"Couldn't save \"{item.Title}\": {ex.Message}", Severity.Error);
+                itemEdits.Add(edit);
             }
         }
 
-        return changes;
+        try
+        {
+            if (BulkService is { } bulk)
+            {
+                if (itemEdits.Count > 0 || newRows is { Count: > 0 } || delete is { Count: > 0 })
+                {
+                    var result = await bulk.ApplyAsync(SheetId, new SheetBulkEditRequest(
+                        itemEdits.GroupBy(e => e.ItemId).Select(g => new BulkRowEdit(g.Key, g.Select(e => new BulkCellEdit(e.Column.Key, e.Value)).ToList())).ToList(),
+                        newRows, delete, source));
+                    foreach (var item in result.Updated)
+                    {
+                        ReplaceItem(item);
+                    }
+
+                    changes.AddRange(result.Changes.Select(c => new CellChange(c.ItemId, c.Field, c.Before, c.After)));
+                    created.AddRange(result.Created.Select(i => i.Id));
+                    skipped += result.Skipped.Count;
+                    reasons.AddRange(result.Skipped.Select(c => c.Reason).Distinct());
+                }
+            }
+            else
+            {
+                await SaveRowByRowAsync(itemEdits, newRows, delete, changes, created);
+            }
+
+            foreach (var (item, edit, before) in planEdits)
+            {
+                await SavePlanCellAsync(item, edit.Column, edit.Value);
+                changes.Add(new CellChange(item.Id, edit.Column.Key, before, edit.Value));
+            }
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't save the changes: {ex.Message}", Severity.Error);
+        }
+
+        return new SaveOutcome(changes, created, skipped, reasons);
+    }
+
+    /// <summary>Without the bulk service (tests, older hosts): one update per row, one create per added row.</summary>
+    private async Task SaveRowByRowAsync(List<CellEdit> edits, IReadOnlyList<BulkNewRow>? newRows, IReadOnlyList<Guid>? delete, List<CellChange> changes, List<Guid> created)
+    {
+        foreach (var group in edits.GroupBy(e => e.ItemId))
+        {
+            var item = FindItem(group.Key)!;
+            var updated = item;
+            foreach (var edit in group)
+            {
+                changes.Add(new CellChange(item.Id, edit.Column.Key, Raw(item, edit.Column), edit.Value));
+                updated = WithValue(updated, edit.Column, edit.Value);
+            }
+
+            ReplaceItem(await ItemService.UpdateAsync(SheetId, item.Id, new UpdateItemRequest(updated.Title, updated.Start, updated.Finish, updated.CostpointWbsId, updated.Values)));
+        }
+
+        foreach (var row in newRows ?? [])
+        {
+            var cells = row.Cells.ToDictionary(c => c.Field, c => c.Value);
+            var request = new CreateItemRequest(
+                cells.GetValueOrDefault(SheetFields.Title) ?? "New row",
+                Start: CellFormat.ToDateTime(cells.GetValueOrDefault(SheetFields.Start)) is { } s ? DateOnly.FromDateTime(s) : null,
+                Finish: CellFormat.ToDateTime(cells.GetValueOrDefault(SheetFields.Finish)) is { } f ? DateOnly.FromDateTime(f) : null,
+                Values: cells.Where(c => Guid.TryParse(c.Key, out _)).ToDictionary(c => c.Key, c => c.Value));
+            created.Add((await ItemService.CreateAsync(SheetId, request)).Id);
+        }
+
+        foreach (var id in delete ?? [])
+        {
+            await DeleteQuietlyAsync(id);
+        }
     }
 
     private async Task SavePlanCellAsync(ItemDto item, GridColumn column, string? value)
@@ -633,39 +648,33 @@ public partial class SheetGrid
         _focusGrid = true;
     }
 
-    /// <summary>Records cell changes (and rows a paste added) as one undo step.</summary>
-    private void RecordCells(string label, IReadOnlyList<CellChange> changes, IReadOnlyList<Guid>? createdIds = null, IReadOnlyList<CreateItemRequest>? createdRequests = null)
+    /// <summary>
+    /// Records cell changes (and rows a paste added) as one undo step. Undo and redo are one save each: undo puts the cells back
+    /// and deletes the added rows, redo sets the cells again and adds the rows again (with new ids).
+    /// </summary>
+    private void RecordCells(string label, IReadOnlyList<CellChange> changes, IReadOnlyList<Guid>? createdIds = null, IReadOnlyList<BulkNewRow>? newRows = null)
     {
         var created = createdIds?.ToList() ?? [];
         _history.Record(label,
+            async () => await SaveCellsAsync(Edits(changes, after: false), null, created.Select(_history.Resolve).ToList(), $"Undo {label.ToLowerInvariant()}"),
             async () =>
             {
-                foreach (var id in created)
+                var again = await SaveCellsAsync(Edits(changes, after: true), created.Count > 0 ? newRows : null, null, label);
+                for (var i = 0; i < created.Count && i < again.Created.Count; i++)
                 {
-                    await DeleteQuietlyAsync(_history.Resolve(id));
-                }
-
-                await ApplyChangesAsync(changes, after: false);
-            },
-            async () =>
-            {
-                await ApplyChangesAsync(changes, after: true);
-                for (var i = 0; i < created.Count; i++)
-                {
-                    var again = await ItemService.CreateAsync(SheetId, createdRequests![i]);
-                    _history.Remap(created[i], again.Id);
-                    created[i] = again.Id;
+                    _history.Remap(created[i], again.Created[i]);
+                    created[i] = again.Created[i];
                 }
             });
     }
 
-    private async Task ApplyChangesAsync(IReadOnlyList<CellChange> changes, bool after)
+    private List<CellEdit> Edits(IReadOnlyList<CellChange> changes, bool after)
     {
         var columns = _allColumns.ToDictionary(c => c.Key);
-        await ApplyAsync(changes
+        return changes
             .Where(c => columns.ContainsKey(c.ColumnKey))
             .Select(c => new CellEdit(_history.Resolve(c.ItemId), columns[c.ColumnKey], after ? c.After : c.Before))
-            .ToList());
+            .ToList();
     }
 
     private async Task DeleteQuietlyAsync(Guid id)
@@ -685,8 +694,18 @@ public partial class SheetGrid
         RecordCells($"Edit {column.Name}", [new CellChange(item.Id, column.Key, before, after)]);
 
     /// <summary>Records added rows: undo deletes them, redo adds them again (with new ids).</summary>
-    private void RecordCreate(string label, ItemDto created, CreateItemRequest request) =>
-        RecordCells(label, [], [created.Id], [request]);
+    private void RecordCreate(string label, ItemDto created, CreateItemRequest request)
+    {
+        var id = created.Id;
+        _history.Record(label,
+            () => DeleteQuietlyAsync(_history.Resolve(id)),
+            async () =>
+            {
+                var again = await ItemService.CreateAsync(SheetId, request);
+                _history.Remap(id, again.Id);
+                id = again.Id;
+            });
+    }
 
     /// <summary>
     /// The sheet's structure (parent and position of every row) before an indent, outdent or move; undo puts every row

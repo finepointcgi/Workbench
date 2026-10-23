@@ -42,6 +42,10 @@ internal static class SheetViewEndpoints
 
         var sheet = v1.MapGroup("/sheets/{sheetId:guid}").WithTags("Sheet views");
 
+        // Many cells at once (paste, fill down, clear): one save; skipped cells are listed in the result.
+        v1.MapPost("/sheets/{sheetId:guid}/items/bulk", (Guid sheetId, SheetBulkEditRequest request, ISheetBulkEditService service, CancellationToken ct) =>
+            service.ApplyAsync(sheetId, request, ct)).WithTags("Items");
+
         // The file as JSON (the desktop app and the grid send the view on screen)...
         sheet.MapPost("/export", (Guid sheetId, SheetExportRequest request, ISheetViewService service, CancellationToken ct) =>
             service.ExportAsync(sheetId, request, ct));

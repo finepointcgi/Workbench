@@ -60,6 +60,26 @@
                Color="@(_view.HasFilters ? Color.Primary : Color.Default)">Filter@(_view.HasFilters ? $" ({_view.Filters!.Count})" : "")</MudButton>
     <MudButton StartIcon="@Icons.Material.Filled.ViewColumn" Size="Size.Small" Variant="Variant.Text" OnClick="ColumnsDialogAsync" data-testid="grid-columns"
                Color="@(_view.HiddenColumns is { Count: > 0 } ? Color.Primary : Color.Default)">Columns@(_view.HiddenColumns is { Count: > 0 } hiddenCols ? $" ({hiddenCols.Count} hidden)" : "")</MudButton>
+    @if (CanCompareBaselines && (_baselines.Count > 0 || CanEdit))
+    {
+        <MudMenu Label="@(ComparedBaseline is { } compared ? $"Baseline: {compared.Name}" : "Baseline")" StartIcon="@Icons.Material.Filled.Compare"
+                 EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Text" Size="Size.Small" Dense="true"
+                 Color="@(_view.BaselineId is null ? Color.Default : Color.Primary)" AriaLabel="Compare to a baseline" data-testid="grid-baseline">
+            <MudMenuItem Icon="@(_view.BaselineId is null ? Icons.Material.Filled.Check : null)" OnClick="() => CompareTo(null)">Don't compare</MudMenuItem>
+            @foreach (var baseline in _baselines)
+            {
+                <MudMenuItem Icon="@(_view.BaselineId == baseline.Id ? Icons.Material.Filled.Check : Icons.Material.Filled.History)" OnClick="() => CompareTo(baseline)"
+                             data-testid="grid-baseline-option">
+                    @baseline.Name<span class="mud-text-secondary"> · @baseline.CapturedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</span>
+                </MudMenuItem>
+            }
+            @if (CanEdit)
+            {
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.AddTask" OnClick="SaveBaselineAsync" data-testid="grid-save-baseline">Save a baseline of the plan now</MudMenuItem>
+            }
+        </MudMenu>
+    }
     @if (CanEdit)
     {
         <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Disabled="!_history.CanUndo" OnClick="UndoAsync" data-testid="grid-undo"
@@ -194,7 +214,7 @@
                                     <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
                                     <MudDivider />
                                 }
-                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors))
+                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors) && !column.IsBaseline)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.ArrowUpward" OnClick="() => SortBy(column, false)" data-testid="sort-asc">Sort ascending</MudMenuItem>
                                     <MudMenuItem Icon="@Icons.Material.Filled.ArrowDownward" OnClick="() => SortBy(column, true)" data-testid="sort-desc">Sort descending</MudMenuItem>
@@ -328,6 +348,11 @@
                             else if (column.Kind == GridColumnKind.Duration)
                             {
                                 @(int.TryParse(raw, out var days) ? PlanDuration.Format(days) : "")
+                            }
+                            else if (column.Kind == GridColumnKind.FinishVariance)
+                            {
+                                var (varianceText, varianceCss, varianceTitle) = Variance(raw);
+                                <span class="@($"wb-variance {varianceCss}")" title="@varianceTitle" data-testid="finish-variance">@varianceText</span>
                             }
                             else if (column.ValueKind == ColumnKind.LinkedRow)
                             {
@@ -476,8 +501,12 @@
         _lastTasks = Tasks;
         _lastPlan = Plan;
         _plan = Scheduling && Plan is not null ? Plan.Tasks.ToDictionary(t => t.ItemId) : [];
-        _allColumns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null);
         RebuildColumns();
+        if (rowsChanged && _view.BaselineId is not null)
+        {
+            _ = RefreshComparisonAsync(); // the plan moved: the variance did too
+        }
+
         _mine = TaskView.MineWithAncestors(Tasks, Sheet, Items);
         _children = Items.ToLookup(i => i.ParentId);
         // A reload (our own save echoed back by live refresh, or someone else's change) keeps an open edit while its row is
@@ -507,6 +536,7 @@
         {
             _viewsFor = SheetId;
             _history.Clear();
+            await LoadBaselinesAsync();
             await LoadViewsAsync(openDefault: true);
         }
     }
@@ -1512,6 +1542,7 @@
     {
         GridColumnKind.Duration => _plan.TryGetValue(item.Id, out var t) && t.DurationDays is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
         GridColumnKind.Predecessors => _plan.TryGetValue(item.Id, out var t) && t.Predecessors.Length > 0 ? t.Predecessors : null,
+        GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish or GridColumnKind.FinishVariance => BaselineRaw(item, column),
         _ => CellFormat.GetRaw(item, column),
     };
 

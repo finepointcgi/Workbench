@@ -441,3 +441,17 @@
 .wb-pop-link:hover {
     background: var(--mud-palette-action-default-hover);
 }
+
+/* ---- Baseline variance: the sign and words say late/early; color only repeats it ---- */
+.wb-variance {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.wb-variance.wb-late {
+    color: var(--mud-palette-error-darken, var(--mud-palette-error));
+}
+
+.wb-variance.wb-early {
+    color: var(--mud-palette-success-darken, var(--mud-palette-success));
+}
