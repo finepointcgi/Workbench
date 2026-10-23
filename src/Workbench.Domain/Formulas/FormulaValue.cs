@@ -23,6 +23,29 @@ public static class FormulaErrors
     public const string Value = "#VALUE!";
     public const string Name = "#NAME?";
     public const string Circular = "#CIRCULAR!";
+
+    /// <summary>MATCH, VLOOKUP or INDEX found nothing.</summary>
+    public const string NoMatch = "#NO MATCH";
+
+    /// <summary>The formula reads a sheet (or a column of one) the viewer can't see.</summary>
+    public const string NoAccess = "#NO ACCESS";
+
+    /// <summary>What an error value means, in plain words, for the cell's tooltip and the formula editor.</summary>
+    public static string Explain(string? code) => code switch
+    {
+        Ref => "This formula uses a column or reference that doesn't exist. It may have been deleted, or renamed outside Workbench.",
+        DivideByZero => "This formula divides by zero, or by a blank cell, so there's no answer.",
+        Value => "A value isn't the right kind here: for example text where a number or date is needed.",
+        Name => "This formula can't be read. Open the column's formula to fix it.",
+        Circular => "Two or more formulas depend on each other, so none of them can be worked out.",
+        NoMatch => "The value you looked for isn't in the range.",
+        NoAccess => "This formula reads another sheet that you don't have access to, so its value is hidden from you.",
+        _ => "This formula couldn't be worked out.",
+    };
+
+    /// <summary>True for every error value a formula can produce.</summary>
+    public static bool IsError(string? value) =>
+        value is Ref or DivideByZero or Value or Name or Circular or NoMatch or NoAccess;
 }
 
 /// <summary>An immutable value produced or consumed by the formula evaluator.</summary>
@@ -35,9 +58,10 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
     private readonly bool _boolean;
     private readonly DateOnly _date;
     private readonly IReadOnlyList<FormulaValue>? _items;
+    private readonly int _width;
 
     private FormulaValue(FormulaValueKind kind, double number = 0, string? text = null, bool boolean = false,
-        DateOnly date = default, IReadOnlyList<FormulaValue>? items = null)
+        DateOnly date = default, IReadOnlyList<FormulaValue>? items = null, int width = 1)
     {
         Kind = kind;
         _number = number;
@@ -45,6 +69,7 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
         _boolean = boolean;
         _date = date;
         _items = items;
+        _width = width;
     }
 
     public static FormulaValue Blank { get; } = new(FormulaValueKind.Blank);
@@ -68,6 +93,15 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
 
     public IReadOnlyList<FormulaValue> Items => Kind == FormulaValueKind.List ? _items! : throw WrongKind(FormulaValueKind.List);
 
+    /// <summary>How many columns a list has: 1 for a column or CHILDREN, more for a multi-column range (items row by row).</summary>
+    public int Width => Kind == FormulaValueKind.List ? _width : throw WrongKind(FormulaValueKind.List);
+
+    /// <summary>How many rows a list has.</summary>
+    public int RowCount => Kind == FormulaValueKind.List ? _items!.Count / _width : throw WrongKind(FormulaValueKind.List);
+
+    /// <summary>A list's value at a zero-based row and column.</summary>
+    public FormulaValue At(int row, int column) => Items[row * _width + column];
+
     public bool IsError => Kind == FormulaValueKind.Error;
 
     public static FormulaValue FromNumber(double value) =>
@@ -82,6 +116,18 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
     public static FormulaValue FromError(string code) => new(FormulaValueKind.Error, text: code);
 
     public static FormulaValue FromList(IReadOnlyList<FormulaValue> items) => new(FormulaValueKind.List, items: items);
+
+    /// <summary>A multi-column range: <paramref name="cells"/> row by row, <paramref name="width"/> per row.</summary>
+    public static FormulaValue FromTable(IReadOnlyList<FormulaValue> cells, int width)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(width, 1);
+        if (cells.Count % width != 0)
+        {
+            throw new ArgumentException("A table needs the same number of cells on every row.", nameof(cells));
+        }
+
+        return new(FormulaValueKind.List, items: cells, width: width);
+    }
 
     /// <summary>
     /// Reads a stored cell value (see docs/CONVENTIONS.md) as a typed value. Empty cells are blank, and values that
@@ -102,6 +148,9 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
                 return FromDate(date);
             case ColumnType.Checkbox when bool.TryParse(raw.Trim(), out var boolean):
                 return FromBoolean(boolean);
+            case ColumnType.Lookup:
+                // A looked-up value whose source type isn't known here: read numbers and dates as such.
+                return TryParseNumber(raw, out var n) ? FromNumber(n) : TryParseDate(raw, out var d) ? FromDate(d) : FromText(raw);
             default:
                 return FromText(raw);
         }
@@ -134,7 +183,7 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
             FormulaValueKind.Text or FormulaValueKind.Error => _text == other._text,
             FormulaValueKind.Boolean => _boolean == other._boolean,
             FormulaValueKind.Date => _date == other._date,
-            FormulaValueKind.List => _items!.SequenceEqual(other._items!),
+            FormulaValueKind.List => _width == other._width && _items!.SequenceEqual(other._items!),
             _ => true,
         };
 

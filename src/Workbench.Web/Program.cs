@@ -11,6 +11,7 @@ using Workbench.Web.Identity;
 using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Supplier;
+using Workbench.Web.Forms;
 using Workbench.Web.Tenancy;
 
 // `Workbench.Web --health-check`: the container HEALTHCHECK probe (GET /health/live), without starting a host.
@@ -103,6 +104,7 @@ app.MapWorkbenchHealthChecks();
 app.MapWorkbenchScim();
 app.MapWorkbenchApi();
 app.MapWorkbenchSupplierPortal();
+app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapRazorComponents<App>()

@@ -1,0 +1,141 @@
+@page "/forms/{FormId:guid}"
+@* Fill in a form while signed in. Only the form's fields; the sheet stays out of sight. *@
+@inject IFormService Forms
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_form?.Title ?? "Form") · Workbench</PageTitle>
+
+<div style="max-width: 680px; margin: 0 auto">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" aria-label="Loading" />
+    }
+    else if (_form is null)
+    {
+        <MudText Typo="Typo.h4" HtmlTag="h1">Form not found</MudText>
+        <MudText Class="mt-2">This form doesn't exist or isn't shared with you.</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">@_form.Title</MudText>
+        @if (!string.IsNullOrWhiteSpace(_form.Description))
+        {
+            <MudText Class="mb-4" Style="white-space: pre-wrap">@_form.Description</MudText>
+        }
+
+        @if (_thanks is not null)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-3" data-testid="form-thanks">@_thanks</MudAlert>
+            <MudButton Variant="Variant.Outlined" OnClick="Again">Send another response</MudButton>
+        }
+        else if (!_form.IsOpen)
+        {
+            <MudAlert Severity="Severity.Info">This form is closed and isn't taking responses right now.</MudAlert>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudStack Spacing="3">
+                    @foreach (var field in _form.Fields)
+                    {
+                        @switch (field.Type)
+                        {
+                            case ColumnKind.Checkbox:
+                                <MudCheckBox T="bool" Value="@(Answer(field) == "true")" ValueChanged="(bool on) => SetChecked(field, on)" Label="@field.Label" />
+                                break;
+                            case ColumnKind.Dropdown:
+                                <MudSelect T="string" Value="@Answer(field)" ValueChanged="(string v) => Set(field, v)" Label="@field.Label" Required="field.Required"
+                                           HelperText="@field.HelpText" Clearable="!field.Required">
+                                    @foreach (var option in field.Options)
+                                    {
+                                        <MudSelectItem T="string" Value="option">@option</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+                            case ColumnKind.Date:
+                                <MudDatePicker Date="@AsDate(field)" DateChanged="(DateTime? d) => SetDate(field, d)" Label="@field.Label"
+                                               Required="field.Required" HelperText="@field.HelpText" Editable="true" />
+                                break;
+                            default:
+                                <MudTextField T="string" Value="@Answer(field)" ValueChanged="(string v) => Set(field, v)" Label="@field.Label" Required="field.Required"
+                                              HelperText="@field.HelpText" Lines="@(field.Type == ColumnKind.Text && field.Key != "title" ? 3 : 1)"
+                                              InputType="@(field.Type == ColumnKind.Person ? InputType.Email : InputType.Text)" data-testid="@TestId(field)" />
+                                break;
+                        }
+                    }
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" role="alert">@_error</MudAlert>
+                    }
+                    <div>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="_busy" data-testid="form-submit">Send</MudButton>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid FormId { get; set; }
+
+    private FillFormDto? _form;
+    private readonly Dictionary<string, string?> _answers = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _thanks;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _form = await Forms.GetForFillingAsync(FormId);
+        }
+        catch (Exception ex) when (ex is Workbench.Contracts.WorkbenchNotFoundException or HttpRequestException or UnauthorizedAccessException)
+        {
+            _form = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string? Answer(FillFieldDto field) => _answers.GetValueOrDefault(field.Key);
+
+    private DateTime? AsDate(FillFieldDto field) => DateTime.TryParse(Answer(field), out var d) ? d : null;
+
+    private void Set(FillFieldDto field, string? value) => _answers[field.Key] = value;
+
+    private void SetChecked(FillFieldDto field, bool on) => Set(field, on ? "true" : null);
+
+    private void SetDate(FillFieldDto field, DateTime? date) => Set(field, date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+
+    private static string TestId(FillFieldDto field) => "field-" + field.Key;
+
+    private void Again()
+    {
+        _answers.Clear();
+        _thanks = null;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _thanks = (await Forms.SubmitAsync(FormId, new SubmitFormRequest(new Dictionary<string, string?>(_answers)))).Message;
+        }
+        catch (Exception ex) when (ex is ArgumentException or Workbench.Contracts.WorkbenchNotFoundException or HttpRequestException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

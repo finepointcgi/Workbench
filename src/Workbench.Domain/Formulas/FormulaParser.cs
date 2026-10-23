@@ -139,7 +139,25 @@ public sealed class FormulaParser
                 return new TextNode(token.Text, token.Position);
             case TokenKind.Reference:
                 Advance();
+                if (Current.Kind == TokenKind.Colon)
+                {
+                    Advance();
+                    if (Current.Kind != TokenKind.Reference)
+                    {
+                        throw Unexpected($"a column after ':', like [{token.Text}]:[{token.Text}] for the whole column");
+                    }
+
+                    var to = Advance();
+                    return new ColumnRangeNode(token.Text, to.Text, token.Position);
+                }
+
                 return new ReferenceNode(token.Text, token.Position);
+            case TokenKind.SheetReference:
+                Advance();
+                return new SheetRangeNode(token.Text, token.Position);
+            case TokenKind.CurrentCell:
+                Advance();
+                return new CurrentCellNode(token.Position);
             case TokenKind.LeftParen:
             {
                 Advance();

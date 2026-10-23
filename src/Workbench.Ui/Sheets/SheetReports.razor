@@ -1,0 +1,60 @@
+@page "/sheet-reports"
+@* Reports that pull rows from several sheets (like Smartsheet reports). *@
+@inject ISheetReportService Reports
+@inject ISnackbar Snackbar
+
+<PageTitle>Reports across sheets · Workbench</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h4" HtmlTag="h1">Reports across sheets</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="sheet-reports/new" data-testid="new-report">New report</MudButton>
+</MudStack>
+<MudText Class="mud-text-secondary mb-4">
+    Pick sheets, columns and filters, and see the matching rows from all of them in one live table. Everyone sees only the sheets and columns they have access to.
+</MudText>
+
+@if (_reports is null)
+{
+    <MudProgressLinear Indeterminate="true" aria-label="Loading reports" />
+}
+else if (_reports.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-6">
+        <MudText>No reports yet. A report can list, say, every open risk across your programs, or every deliverable due this month.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudTable T="SheetReportDto" Items="_reports" Dense="true" Hover="true" Elevation="0" Outlined="true">
+        <HeaderContent>
+            <MudTh>Report</MudTh>
+            <MudTh>Sheets</MudTh>
+            <MudTh>Shared with</MudTh>
+            <MudTh>Owner</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><MudLink Href="@($"sheet-reports/{context.Id}")">@context.Name</MudLink></MudTd>
+            <MudTd>@context.SheetIds.Count</MudTd>
+            <MudTd>@(context.Shared ? context.Workspace : "Only me")</MudTd>
+            <MudTd>@context.OwnerEmail</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<SheetReportDto>? _reports;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports = await Reports.ListAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _reports = [];
+            Snackbar.Add($"Couldn't load the reports: {ex.Message}", Severity.Error);
+        }
+    }
+}

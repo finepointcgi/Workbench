@@ -1,0 +1,52 @@
+@inject ISheetTemplateService Templates
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Everyone in @Sheet.Summary.Workspace will find this template under New sheet.
+            </MudText>
+            <MudTextField @bind-Value="_name" Label="Template name" Required="true" AutoFocus="true" Immediate="true" data-testid="template-name" />
+            <MudTextField @bind-Value="_description" Label="What it's for" Lines="2" />
+            <MudSwitch @bind-Value="_includeRows" Color="Color.Primary" Label="Include the rows as a starting point" />
+            @if (_includeRows && Sheet.Summary.SchedulingEnabled)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Dates move so that a new sheet's plan starts on the day it's made.</MudText>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_name)" OnClick="SaveAsync" data-testid="template-save">Save template</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public SheetDetail Sheet { get; set; } = default!;
+
+    private string _name = "";
+    private string? _description;
+    private bool _includeRows;
+
+    protected override void OnInitialized()
+    {
+        _name = Sheet.Summary.Name;
+        _description = Sheet.Summary.Description;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var saved = await Templates.SaveAsTemplateAsync(Sheet.Summary.Id, new SaveSheetTemplateRequest(_name.Trim(), _description, _includeRows));
+            Snackbar.Add($"Saved the template \"{saved.Name}\".", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't save the template: {ex.Message}", Severity.Error);
+        }
+    }
+}

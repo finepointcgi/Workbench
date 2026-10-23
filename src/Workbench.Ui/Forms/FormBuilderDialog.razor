@@ -1,0 +1,195 @@
+@* Builds a form from the sheet's columns: which fields, their labels, help and whether they're required, who may fill it in. *@
+@inject IFormService Forms
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_title" Label="Form title" Required="true" AutoFocus="true" Immediate="true" data-testid="form-title" />
+            <MudTextField @bind-Value="_description" Label="Instructions (optional)" Lines="2" />
+
+            <MudText Typo="Typo.subtitle2">Questions</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">
+                Each answer goes into its column. Formulas, lookups, links to other sheets and restricted columns can't be asked.
+            </MudText>
+            <div role="list" aria-label="Form fields">
+                @foreach (var (field, index) in _fields.Select((f, i) => (f, i)))
+                {
+                    <MudPaper Outlined="true" Class="pa-2 mb-2" role="listitem" data-testid="form-field">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                            <MudCheckBox T="bool" @bind-Value="field.Included" Disabled="field.Key == TitleKey" aria-label="@($"Ask {field.ColumnName}")" Dense="true" />
+                            <MudText Typo="Typo.body2" Style="min-width: 120px"><strong>@field.ColumnName</strong> <span class="mud-text-secondary">@field.TypeName</span></MudText>
+                            @if (field.Included)
+                            {
+                                <MudTextField @bind-Value="field.Label" Label="Question" Margin="Margin.Dense" Style="min-width: 200px" />
+                                <MudTextField @bind-Value="field.HelpText" Label="Help (optional)" Margin="Margin.Dense" Style="min-width: 200px" />
+                                <MudCheckBox T="bool" @bind-Value="field.Required" Label="Required" Disabled="field.Key == TitleKey" Dense="true" />
+                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.ArrowUpward" Disabled="index == 0" aria-label="@($"Move {field.ColumnName} up")" OnClick="() => Move(index, -1)" />
+                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.ArrowDownward" Disabled="index == _fields.Count - 1" aria-label="@($"Move {field.ColumnName} down")" OnClick="() => Move(index, 1)" />
+                            }
+                        </MudStack>
+                        @if (field.Unavailable is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@field.Unavailable</MudText>
+                        }
+                    </MudPaper>
+                }
+            </div>
+
+            <MudText Typo="Typo.subtitle2">Who can fill it in</MudText>
+            <MudRadioGroup T="FormAudience" @bind-Value="_audience">
+                <MudRadio T="FormAudience" Value="FormAudience.Workspace">Members of @Sheet.Summary.Workspace</MudRadio>
+                <MudRadio T="FormAudience" Value="FormAudience.Organization">Anyone signed in to Workbench</MudRadio>
+                <MudRadio T="FormAudience" Value="FormAudience.Public" Disabled="!_canPublish" data-testid="audience-public">Anyone with the link, without signing in</MudRadio>
+            </MudRadioGroup>
+            @if (!_canPublish)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">
+                    Public links can be turned on by an owner of this workspace who has the "Publish public forms" permission.
+                </MudText>
+            }
+            else if (_audience == FormAudience.Public)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Anyone with the link can add a row. Person columns aren't asked on public forms. Responses are limited per person, and spam is filtered.
+                </MudAlert>
+            }
+
+            <MudTextField @bind-Value="_confirmation" Label="Thank-you message (optional)" Placeholder="Thanks! Your response was recorded." />
+            <MudSwitch @bind-Value="_open" Color="Color.Primary" Label="Taking responses" />
+            <MudSwitch @bind-Value="_notify" Color="Color.Primary" Label="Tell me about each response" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_title) || _busy" OnClick="SaveAsync" data-testid="form-save">Save form</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private const string TitleKey = "title";
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public SheetDetail Sheet { get; set; } = default!;
+    [Parameter] public FormDto? Form { get; set; }
+
+    private sealed class FieldRow
+    {
+        public required string Key { get; init; }
+        public required string ColumnName { get; init; }
+        public required string TypeName { get; init; }
+        public bool Included { get; set; }
+        public string? Label { get; set; }
+        public string? HelpText { get; set; }
+        public bool Required { get; set; }
+        public string? Unavailable { get; init; }
+    }
+
+    private readonly List<FieldRow> _fields = [];
+    private string _title = "";
+    private string? _description;
+    private string? _confirmation;
+    private FormAudience _audience = FormAudience.Workspace;
+    private bool _open = true;
+    private bool _notify = true;
+    private bool _canPublish;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _title = Form?.Title ?? $"{Sheet.Summary.Name} request";
+        _description = Form?.Description;
+        _confirmation = Form?.ConfirmationMessage;
+        _audience = Form?.Audience ?? FormAudience.Workspace;
+        _open = Form?.IsOpen ?? true;
+        _notify = Form?.NotifyOnSubmit ?? true;
+
+        var candidates = new List<FieldRow> { new() { Key = TitleKey, ColumnName = "Title", TypeName = "Text", Included = true, Required = true } };
+        if (Sheet.Summary.SchedulingEnabled)
+        {
+            candidates.Add(new() { Key = "start", ColumnName = "Start", TypeName = "Date" });
+            candidates.Add(new() { Key = "finish", ColumnName = "Finish", TypeName = "Date" });
+        }
+
+        foreach (var column in Sheet.Columns.OrderBy(c => c.Order))
+        {
+            var unavailable = column switch
+            {
+                { Formula: not null } => "A formula: it's worked out, not asked.",
+                { Type: ColumnKind.Lookup } => "A lookup: it's worked out, not asked.",
+                { Type: ColumnKind.LinkedRow } => "Links to another sheet's rows, which people filling in a form can't see.",
+                { IsEffectivelyRestricted: true } => "Restricted to Finance and owners.",
+                _ => null,
+            };
+            if (unavailable is null)
+            {
+                candidates.Add(new() { Key = column.Id.ToString(), ColumnName = column.Name, TypeName = CellFormat.KindName(column.Type) });
+            }
+        }
+
+        // The form's fields first, in its order, then everything else.
+        foreach (var field in Form?.Fields ?? [])
+        {
+            if (candidates.FirstOrDefault(c => c.Key == field.Key) is { } row)
+            {
+                row.Included = true;
+                row.Label = field.Label == row.ColumnName ? null : field.Label;
+                row.HelpText = field.HelpText;
+                row.Required = field.Required;
+                _fields.Add(row);
+            }
+        }
+
+        _fields.AddRange(candidates.Where(c => !_fields.Contains(c)));
+        if (Form is null)
+        {
+            foreach (var row in _fields.Take(4))
+            {
+                row.Included = true;
+            }
+        }
+
+        try
+        {
+            _canPublish = Form?.CanPublish ?? await Forms.CanPublishAsync(Sheet.Summary.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _canPublish = false;
+        }
+    }
+
+    private void Move(int index, int by)
+    {
+        var target = index + by;
+        if (target < 0 || target >= _fields.Count)
+        {
+            return;
+        }
+
+        (_fields[index], _fields[target]) = (_fields[target], _fields[index]);
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        var fields = _fields.Where(f => f.Included)
+            .Select(f => new FormFieldDto(f.Key, string.IsNullOrWhiteSpace(f.Label) ? f.ColumnName : f.Label.Trim(), f.HelpText, f.Required))
+            .ToList();
+        var request = new SaveFormRequest(_title.Trim(), fields, _description, _confirmation, _open, _audience, _notify);
+        try
+        {
+            var saved = Form is null ? await Forms.CreateAsync(Sheet.Summary.Id, request) : await Forms.UpdateAsync(Form.Id, request);
+            Snackbar.Add($"Saved \"{saved.Title}\".", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -865,3 +865,14 @@ Full write-up: `docs/customization.md`.
   Domain), `WidgetDialog`, `WidgetView`/`HomeWidget` and, for server data, `HomeWidgetData`.
 - Managing layouts and sharing views are decided by `ICustomizationAccess` (Admin until the permission catalog lands); don't
   check roles for them anywhere else.
+
+## Linked rows, cross-sheet formulas, forms, templates and reports (wave E)
+
+- Guide: `docs/sheets/formulas.md`. Code: `Application/Sheets` (`SheetCalculator`, link/formula/template/report services),
+  `Application/Forms`, `Domain/Sheets`, `Domain/Forms`, `Ui/Sheets`, `Ui/Forms`, public page `Web/Forms`.
+- Anything that shows another sheet's data goes through `SheetCalculator` (`ComputeAsync` for a sheet the caller already
+  checked, `ReadVisibleAsync` for others): it reads other sheets as the current user and hides restricted columns.
+- Link and lookup columns keep their settings in `Column.Options` (no extra table). Lookup values and formula values are
+  computed on read and never stored; `ItemService` drops them from writes.
+- A form response creates its row through the decorated `IItemService` under a one-use `FormSubmissionGrant` (an
+  AsyncLocal, honoured only by `PermissionCheckingItemService.CreateAsync` for that sheet). Don't reuse it for anything else.

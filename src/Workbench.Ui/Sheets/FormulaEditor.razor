@@ -1,0 +1,159 @@
+@* Writes a formula with help: insert columns, whole-column ranges and cross-sheet references by name, browse the
+   functions, and check the formula (in plain words) against the first row before saving. *@
+@inject ISheetFormulaService Formulas
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudStack Spacing="2" Class="wb-formula-editor">
+    <MudTextField T="string" Value="Value" ValueChanged="OnTextChanged" Label="Formula" Lines="3" Immediate="true" DebounceInterval="300"
+                  Style="font-family: ui-monospace, Menlo, Consolas, monospace" data-testid="formula-text"
+                  HelperText="[Column] reads this row, [Column]:[Column] the whole column, {Name} another sheet. Start with = if you like." />
+    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+        <MudMenu Label="Column" StartIcon="@Icons.Material.Filled.ViewColumn" Size="Size.Small" Variant="Variant.Outlined" Dense="true" AriaLabel="Insert a column">
+            @foreach (var name in ColumnNames)
+            {
+                <MudMenuItem OnClick="() => Insert(Bracket(name))">@name</MudMenuItem>
+            }
+        </MudMenu>
+        <MudMenu Label="Whole column" StartIcon="@Icons.Material.Filled.TableRows" Size="Size.Small" Variant="Variant.Outlined" Dense="true" AriaLabel="Insert a whole-column range">
+            @foreach (var name in ColumnNames)
+            {
+                <MudMenuItem OnClick="() => Insert(Bracket(name) + ':' + Bracket(name))">@name</MudMenuItem>
+            }
+        </MudMenu>
+        <MudMenu Label="Another sheet" StartIcon="@Icons.Material.Filled.CallSplit" Size="Size.Small" Variant="Variant.Outlined" Dense="true"
+                 AriaLabel="Insert a cross-sheet reference" data-testid="reference-menu">
+            @foreach (var reference in _references)
+            {
+                <MudMenuItem OnClick="() => Insert(Braced(reference.Name))">
+                    @Braced(reference.Name)@(reference.CanSee ? $" · {reference.SourceSheetName}: {string.Join(", ", reference.FieldNames)}" : " · no access")
+                </MudMenuItem>
+            }
+            <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="NewReferenceAsync" data-testid="new-reference">Reference another sheet…</MudMenuItem>
+        </MudMenu>
+        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Functions" OnClick="() => _showFunctions = !_showFunctions"
+                   aria-expanded="@(_showFunctions ? "true" : "false")">Functions</MudButton>
+        <MudSpacer />
+        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="CheckAsync"
+                   Disabled="string.IsNullOrWhiteSpace(Value)" data-testid="check-formula">Check</MudButton>
+    </MudStack>
+
+    @if (_check is { } check)
+    {
+        <div role="status">
+            @if (check.Problem is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" data-testid="formula-problem">@check.Problem</MudAlert>
+            }
+            else if (check.SampleRowTitle is null)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true">The formula is fine. Add a row to see what it gives.</MudAlert>
+            }
+            else if (check.Explanation is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" data-testid="formula-sample">
+                    On "@check.SampleRowTitle" it gives @check.SampleValue: @check.Explanation
+                </MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" data-testid="formula-sample">
+                    Looks good. On "@check.SampleRowTitle" it gives <strong>@(string.IsNullOrEmpty(check.SampleValue) ? "a blank" : check.SampleValue)</strong>.
+                </MudAlert>
+            }
+        </div>
+    }
+
+    @if (_showFunctions)
+    {
+        <MudPaper Outlined="true" Class="pa-2" Style="max-height: 280px; overflow: auto">
+            <MudTextField T="string" @bind-Value="_search" Placeholder="Search functions" Immediate="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" aria-label="Search functions" Margin="Margin.Dense" />
+            @foreach (var group in Filtered.GroupBy(f => f.Category))
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-2">@group.Key</MudText>
+                @foreach (var function in group)
+                {
+                    <div class="d-flex gap-2 align-start py-1">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Insert(function.Name + '(')" Style="min-width: 110px; justify-content: flex-start"
+                                   aria-label="@($"Insert {function.Name}")">@function.Name</MudButton>
+                        <MudText Typo="Typo.caption"><code>@function.Syntax</code> @function.Description</MudText>
+                    </div>
+                }
+            }
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public IReadOnlyList<ColumnDto> Columns { get; set; } = [];
+
+    private IReadOnlyList<SheetReferenceDto> _references = [];
+    private IReadOnlyList<FormulaFunctionDto> _functions = [];
+    private FormulaCheckDto? _check;
+    private bool _showFunctions;
+    private string? _search;
+
+    private IEnumerable<string> ColumnNames => new[] { "Title", "Start", "Finish" }.Concat(Columns.OrderBy(c => c.Order).Select(c => c.Name)).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    private IEnumerable<FormulaFunctionDto> Filtered => string.IsNullOrWhiteSpace(_search)
+        ? _functions
+        : _functions.Where(f => f.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) || f.Description.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _functions = await Formulas.ListFunctionsAsync();
+            _references = await Formulas.ListReferencesAsync(SheetId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't load the formula help: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string Bracket(string name) => $"[{name}]";
+
+    private static string Braced(string name) => "{" + name + "}";
+
+    private Task OnTextChanged(string value)
+    {
+        _check = null;
+        Value = value ?? "";
+        return ValueChanged.InvokeAsync(Value);
+    }
+
+    private Task Insert(string text)
+    {
+        var current = Value ?? "";
+        var separator = current.Length == 0 || current.EndsWith(' ') || current.EndsWith('(') || current.EndsWith(',') ? "" : " ";
+        return OnTextChanged(current + separator + text);
+    }
+
+    private async Task CheckAsync()
+    {
+        try
+        {
+            _check = await Formulas.CheckAsync(SheetId, Value);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or ArgumentException)
+        {
+            Snackbar.Add($"Couldn't check the formula: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task NewReferenceAsync()
+    {
+        var dialog = await DialogService.ShowAsync<SheetReferenceDialog>("Reference another sheet",
+            new DialogParameters<SheetReferenceDialog> { { d => d.SheetId, SheetId } }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: SheetReferenceDto created })
+        {
+            _references = [.. _references, created];
+            await Insert(Braced(created.Name));
+        }
+    }
+}

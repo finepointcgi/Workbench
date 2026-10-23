@@ -1,0 +1,49 @@
+@inject ISheetTemplateService Templates
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_name" Label="Name of the copy" Required="true" AutoFocus="true" Immediate="true" data-testid="copy-name" />
+            <MudSwitch @bind-Value="_includeRows" Color="Color.Primary" Label="Copy the rows too" data-testid="copy-rows" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Columns, formulas and cross-sheet references are copied@(_includeRows ? ", with every row, its values and dependencies" : "").
+                Comments, attachments and forms stay with the original. Columns you can't see aren't copied.
+            </MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_name) || _busy" OnClick="CopyAsync" data-testid="copy-confirm">Copy</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public SheetDetail Sheet { get; set; } = default!;
+
+    private string _name = "";
+    private bool _includeRows = true;
+    private bool _busy;
+
+    protected override void OnInitialized() => _name = $"{Sheet.Summary.Name} (copy)";
+
+    private async Task CopyAsync()
+    {
+        _busy = true;
+        try
+        {
+            var copy = await Templates.CopyAsync(Sheet.Summary.Id, new CopySheetRequest(_name.Trim(), _includeRows));
+            Snackbar.Add($"Copied to \"{copy.Name}\" in {copy.Workspace}.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(copy));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException)
+        {
+            Snackbar.Add($"Couldn't copy the sheet: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

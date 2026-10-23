@@ -131,6 +131,7 @@ fails the build if a sensitive-looking field is added.
 | `shipment.shipped` | A sales order shipment is confirmed and its stock issued. | `shipmentId`, `number`, `shipmentNumber`, `companyId`, `salesOrderId`, `salesOrderNumber`, `customerId`, `contractId`, `shipDate`, `carrier`, `trackingNumber`, `isFinal`, `value` |
 | `rfq.awarded` | Lines of an RFQ are awarded into purchase orders. | `rfqId`, `number`, `title`, `awardId`, `vendorsInvited`, `quotesReceived`, `soleSource`, `awardedTotal`, `purchaseOrderNumbers` |
 | `ncr.dispositioned` | A nonconformance's approved disposition is carried out and the NCR closed. | `ncrId`, `number`, `partId`, `lot`, `serial`, `quantity`, `disposition`, `vendorId`, `workOrderId` |
+| `sheet.form_submitted` | A form adds a row to a sheet (signed in or by public link). No answers are sent; read the row through the API. | `formId`, `sheetId`, `itemId`, `formTitle`, `public` |
 | `ping` | **Send a test** in the admin page. | `message`, `endpointId` |
 
 Example `invoice.paid`:

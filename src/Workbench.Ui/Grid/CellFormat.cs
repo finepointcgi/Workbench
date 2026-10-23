@@ -113,6 +113,8 @@ public static class CellFormat
     public static string KindName(ColumnKind kind) => kind switch
     {
         ColumnKind.CostpointLookup => "Costpoint lookup",
+        ColumnKind.LinkedRow => "Link to row",
+        ColumnKind.Lookup => "Lookup (from linked rows)",
         _ => kind.ToString(),
     };
 
