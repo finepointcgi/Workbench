@@ -1,0 +1,205 @@
+@* Filters the grid's rows: every condition must match. A matching subtask keeps its parents in view. *@
+@using Workbench.Contracts.Customization
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Rows that match every condition show, with their parent rows for context.</MudText>
+            @for (var i = 0; i < _conditions.Count; i++)
+            {
+                var index = i;
+                var condition = _conditions[index];
+                var field = FieldOf(condition.Field);
+                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" data-testid="filter-condition">
+                    <MudSelect T="string" Value="condition.Field" ValueChanged="key => SetField(condition, key)" Label="Field" Dense="true" Margin="Margin.Dense" Style="min-width:160px;flex:1">
+                        @foreach (var f in Fields)
+                        {
+                            <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    @if (field?.Kind != ColumnKind.Checkbox)
+                    {
+                        <MudSelect T="ListFilterOperator" @bind-Value="condition.Operator" Label="Condition" Dense="true" Margin="Margin.Dense" Style="min-width:150px">
+                            @foreach (var op in SheetFilterText.OperatorsFor(field?.Kind ?? ColumnKind.Text))
+                            {
+                                <MudSelectItem T="ListFilterOperator" Value="op">@SheetFilterText.Operator(op)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    @if (field?.Kind == ColumnKind.Checkbox)
+                    {
+                        <MudSelect T="string" @bind-Value="condition.Text" Label="Is" Dense="true" Margin="Margin.Dense" Style="min-width:150px">
+                            <MudSelectItem T="string" Value="@("true")">Checked</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("false")">Not checked</MudSelectItem>
+                        </MudSelect>
+                    }
+                    else if (SheetFilterText.TakesValue(condition.Operator) && field is { Kind: ColumnKind.Dropdown } && field.Options.Count > 0
+                             && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
+                    {
+                        <div class="d-flex flex-wrap align-center" style="gap:4px;min-width:200px;flex:2" role="group" aria-label="Values" data-testid="filter-choices">
+                            @foreach (var option in field.Options)
+                            {
+                                var picked = condition.Choices.Contains(option);
+                                <MudChip T="string" Size="Size.Small" Variant="@(picked ? Variant.Filled : Variant.Outlined)" Color="@(picked ? Color.Primary : Color.Default)"
+                                         Icon="@(picked ? Icons.Material.Filled.Check : null)" OnClick="() => Toggle(condition, option)" aria-pressed="@(picked ? "true" : "false")"
+                                         data-testid="filter-choice">@option</MudChip>
+                            }
+                            @if (condition.Error is not null)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error">@condition.Error</MudText>
+                            }
+                        </div>
+                    }
+                    else if (SheetFilterText.TakesValue(condition.Operator))
+                    {
+                        <MudTextField T="string" @bind-Value="condition.Text" Label="Value" Margin="Margin.Dense" Immediate="true" Style="min-width:160px;flex:2"
+                                      Placeholder="@(field?.Kind == ColumnKind.Date ? "MM/DD/YYYY" : null)" Error="condition.Error is not null" ErrorText="@condition.Error"
+                                      data-testid="filter-value" />
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="mt-2" aria-label="@($"Remove condition {index + 1}")" OnClick="() => _conditions.RemoveAt(index)" />
+                </MudStack>
+            }
+            @if (_conditions.Count < 30)
+            {
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Style="align-self:flex-start"
+                           OnClick="Add" data-testid="filter-add">@(_conditions.Count == 0 ? "Add a condition" : "Add another condition")</MudButton>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _conditions.Clear()" Disabled="_conditions.Count == 0">Clear</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="filter-apply">Filter</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private sealed class Condition
+    {
+        public string Field { get; set; } = string.Empty;
+        public ListFilterOperator Operator { get; set; }
+        public string? Text { get; set; }
+        public List<string> Choices { get; set; } = [];
+        public string? Error { get; set; }
+    }
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ViewField> Fields { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<ListFilterCondition> Filters { get; set; } = [];
+
+    private readonly List<Condition> _conditions = [];
+
+    protected override void OnInitialized()
+    {
+        foreach (var filter in Filters)
+        {
+            var field = FieldOf(filter.Field);
+            var values = SheetViewEngine.Values(filter.Value);
+            _conditions.Add(new Condition
+            {
+                Field = filter.Field,
+                Operator = filter.Operator,
+                Choices = field?.Kind == ColumnKind.Dropdown ? values.ToList() : [],
+                Text = field?.Kind is ColumnKind.Dropdown ? null : field is not null && filter.Value is not null ? CellFormat.EditText(filter.Value, field.Kind == ColumnKind.Checkbox ? ColumnKind.Text : field.Kind) : filter.Value,
+            });
+        }
+
+        if (_conditions.Count == 0)
+        {
+            Add();
+        }
+    }
+
+    private ViewField? FieldOf(string key) => Fields.FirstOrDefault(f => f.Key == key);
+
+    private void Add()
+    {
+        var field = Fields.FirstOrDefault(f => f.Kind == ColumnKind.Dropdown) ?? Fields.FirstOrDefault();
+        var condition = new Condition();
+        if (field is not null)
+        {
+            SetField(condition, field.Key);
+        }
+
+        _conditions.Add(condition);
+    }
+
+    private static void Toggle(Condition condition, string option)
+    {
+        if (!condition.Choices.Remove(option))
+        {
+            condition.Choices.Add(option);
+        }
+
+        condition.Error = null;
+    }
+
+    private void SetField(Condition condition, string key)
+    {
+        condition.Field = key;
+        var kind = FieldOf(key)?.Kind ?? ColumnKind.Text;
+        condition.Operator = SheetFilterText.OperatorsFor(kind)[0];
+        condition.Text = kind == ColumnKind.Checkbox ? "true" : null;
+        condition.Choices = [];
+        condition.Error = null;
+    }
+
+    private void Submit()
+    {
+        var result = new List<ListFilterCondition>();
+        foreach (var condition in _conditions.Where(c => c.Field.Length > 0))
+        {
+            condition.Error = null;
+            var field = FieldOf(condition.Field);
+            var kind = field?.Kind ?? ColumnKind.Text;
+            if (kind == ColumnKind.Checkbox)
+            {
+                result.Add(new ListFilterCondition(condition.Field, ListFilterOperator.Equals, condition.Text ?? "true"));
+                continue;
+            }
+
+            if (!SheetFilterText.TakesValue(condition.Operator))
+            {
+                result.Add(new ListFilterCondition(condition.Field, condition.Operator));
+                continue;
+            }
+
+            if (kind == ColumnKind.Dropdown && field!.Options.Count > 0 && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
+            {
+                if (condition.Choices.Count == 0)
+                {
+                    condition.Error = "Pick at least one value.";
+                    continue;
+                }
+
+                result.Add(new ListFilterCondition(condition.Field, condition.Operator, string.Join('\n', condition.Choices)));
+                continue;
+            }
+
+            // Numbers and dates are stored in their invariant form, so "$1,200" and "10/31/2026" compare as values.
+            var normalizeAs = kind is ColumnKind.Number or ColumnKind.Currency or ColumnKind.Date ? kind : ColumnKind.Text;
+            if (string.IsNullOrWhiteSpace(condition.Text))
+            {
+                condition.Error = "Enter a value, or pick \"is blank\".";
+            }
+            else if (!CellFormat.TryNormalize(condition.Text, normalizeAs, out var value, out var error))
+            {
+                condition.Error = error;
+            }
+            else
+            {
+                result.Add(new ListFilterCondition(condition.Field, condition.Operator, value));
+            }
+        }
+
+        if (_conditions.All(c => c.Error is null))
+        {
+            MudDialog.Close(DialogResult.Ok<IReadOnlyList<ListFilterCondition>>(result));
+        }
+    }
+}
