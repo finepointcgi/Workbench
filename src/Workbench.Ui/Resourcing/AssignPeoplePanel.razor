@@ -1,0 +1,405 @@
+@* The project's Budget & staffing tab starts here: who is assigned, to what, for how many hours and when. Workbench spreads
+   each assignment over the working weeks; "Adjust by week" shows those weeks and lets you change one (the total follows).
+   Without a labor budget the assignments are the plan; with one, the budget-vs-staffed view follows below. *@
+@inject IStaffingAssignmentService Assignments
+@inject IProjectStaffingService Staffing
+@inject IResourceAllocationService Allocations
+@inject IProjectService Projects
+@inject IPeopleService People
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<section aria-labelledby="assign-heading" data-testid="assign-people">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap" Spacing="2">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="assign-heading">Assign people</MudText>
+        <MudSpacer />
+        @if (_canManage)
+        {
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ContentPaste" OnClick="() => ManyAsync(false)" Disabled="_busy" data-testid="assign-paste">Paste from Excel</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.GroupAdd" OnClick="() => ManyAsync(true)" Disabled="_busy" data-testid="assign-copy-team">Copy a team</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => EditAsync(null, null)" Disabled="_busy" data-testid="assign-button">Assign a person</MudButton>
+        }
+    </MudStack>
+    <MudText Typo="Typo.body2" HtmlTag="div" Class="mud-text-secondary mb-3" Style="max-width: 76ch">
+        Give each person their hours and dates. Workbench spreads the hours over the working weeks (no weekends or holidays),
+        lets them charge the task, and shows them their hours left on their timesheet.
+    </MudText>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">@_error</MudAlert>
+    }
+    else if (_data is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        @if (_plan is { Overbooked.Count: > 0 } plan)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="assign-overbooked">
+                Booked past their hours in the next weeks (all projects):
+                @string.Join("; ", plan.Overbooked.Select(p => $"{p.Name}, {ResourcingFormat.Hours(p.WorstAllocated)} of {ResourcingFormat.Hours(p.WorstCapacity)} h the week of {p.FirstWeek:MMM d}"))
+            </MudAlert>
+        }
+
+        @if (_data.Assignments.Count > 0)
+        {
+            <MudToggleGroup T="bool" Value="_byWeek" ValueChanged="v => _byWeek = v" Size="Size.Small" Outlined="true" Delimiters="true" Class="mb-2" data-testid="assign-view">
+                <MudToggleItem Value="false" Text="By person" />
+                <MudToggleItem Value="true" Text="Adjust by week" />
+            </MudToggleGroup>
+        }
+
+        @if (_data.Assignments.Count == 0)
+        {
+            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="assign-empty">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">Nobody is assigned yet</MudText>
+                <MudText Class="mud-text-secondary">
+                    @(_canManage ? "Choose Assign a person, or paste a list from Excel. For each person, give the task, their hours in total and the dates." : "The project manager assigns people here.")
+                </MudText>
+            </MudPaper>
+        }
+        else if (_byWeek)
+        {
+            @WeekGrid()
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Outlined="true" Hover="true" Class="mb-3" data-testid="assignments">
+                <thead>
+                    <tr>
+                        <th scope="col">Person</th>
+                        <th scope="col">Task</th>
+                        <th scope="col" style="text-align: right">Hours</th>
+                        <th scope="col">Dates</th>
+                        <th scope="col" style="text-align: right">
+                            <MudTooltip Text="Hours they've put on timesheets for it between the dates (draft, submitted or approved)."><span>Charged</span></MudTooltip>
+                        </th>
+                        @if (_canManage)
+                        {
+                            <th scope="col"><span class="wb-sr-only">Actions</span></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _data.Assignments)
+                    {
+                        <tr data-assignment="@a.EmployeeName">
+                            <td>@a.EmployeeName</td>
+                            <td>@a.WbsLabel</td>
+                            <td style="text-align: right" data-testid="assignment-hours">@ResourcingFormat.Hours(a.TotalHours)</td>
+                            <td style="white-space: nowrap">@a.From.ToString("MMM d") – @a.To.ToString("MMM d, yyyy")</td>
+                            <td style="text-align: right">
+                                @ResourcingFormat.Hours(a.ChargedHours)
+                                <span class="@(a.LeftHours < 0 ? "mud-warning-text" : "mud-text-secondary")" style="font-size: 0.8rem">
+                                    @(a.LeftHours < 0 ? $" · {ResourcingFormat.Hours(-a.LeftHours)} over" : $" · {ResourcingFormat.Hours(a.LeftHours)} left")
+                                </span>
+                            </td>
+                            @if (_canManage)
+                            {
+                                <td style="text-align: right; white-space: nowrap">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => EditAsync(a, null)" Disabled="_busy" aria-label="@($"Change {a.EmployeeName} on {a.WbsLabel}")" />
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" OnClick="() => RemoveAsync(a)" Disabled="_busy" aria-label="@($"Remove {a.EmployeeName} from {a.WbsLabel}")" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th scope="row" colspan="2" style="text-align: left">@(_data.Assignments.Select(a => a.EmployeeId).Distinct().Count() is var n && n == 1 ? "1 person" : $"{n} people")</th>
+                        <td style="text-align: right" data-testid="assignments-total"><b>@ResourcingFormat.Hours(_data.Assignments.Sum(a => a.TotalHours))</b></td>
+                        <td></td>
+                        <td style="text-align: right">@ResourcingFormat.Hours(_data.Assignments.Sum(a => a.ChargedHours))</td>
+                        @if (_canManage)
+                        {
+                            <td></td>
+                        }
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        }
+
+        @if (_data.WeekByWeek.Count > 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2 mb-1">Also staffed week by week (not by total hours):</MudText>
+            <MudSimpleTable Dense="true" Outlined="true" Class="mb-3" data-testid="week-by-week">
+                <tbody>
+                    @foreach (var u in _data.WeekByWeek)
+                    {
+                        <tr>
+                            <td>@u.EmployeeName</td>
+                            <td>@u.WbsLabel</td>
+                            <td style="text-align: right">@ResourcingFormat.Hours(u.Hours) h</td>
+                            <td style="white-space: nowrap">@u.From.ToString("MMM d") – @u.To.ToString("MMM d, yyyy")</td>
+                            @if (_canManage)
+                            {
+                                <td style="text-align: right">
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditAsync(null, new SaveAssignmentRequest(u.EmployeeId, ProjectId, u.Hours, u.WbsElementId, u.From, u.To, u.LaborCategoryId))"
+                                               aria-label="@($"Assign {u.EmployeeName} by total hours")">Assign by total</MudButton>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+
+        @if (_plan is { HasLaborBudget: false } && _data.Assignments.Count > 0)
+        {
+            @* The budget fills itself: until Finance sets a labor budget, the people assigned are the plan. *@
+            <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="plan-from-assignments">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">The plan: @ResourcingFormat.Hours(_data.Assignments.Sum(a => a.TotalHours)) hours</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    There's no budget yet, so the hours of the people assigned are the plan. When Finance sets a budget, this tab compares the two.
+                </MudText>
+                <MudExpansionPanels Elevation="0" Dense="true" Class="mt-2">
+                    <MudExpansionPanel Text="Details: hours by labor category" data-testid="plan-by-category">
+                        <MudSimpleTable Dense="true">
+                            <thead><tr><th scope="col">Labor category</th><th scope="col">People</th><th scope="col" style="text-align: right">Hours</th></tr></thead>
+                            <tbody>
+                                @foreach (var g in _data.Assignments.GroupBy(a => a.LaborCategory ?? "No labor category").OrderByDescending(g => g.Sum(a => a.TotalHours)))
+                                {
+                                    <tr>
+                                        <td>@g.Key</td>
+                                        <td>@string.Join(", ", g.Select(a => a.EmployeeName).Distinct())</td>
+                                        <td style="text-align: right">@ResourcingFormat.Hours(g.Sum(a => a.TotalHours))</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudPaper>
+        }
+    }
+</section>
+
+@if (_plan is { HasLaborBudget: true })
+{
+    <MudDivider Class="my-5" />
+    <ProjectStaffingPanel ProjectId="ProjectId" Changed="OnBudgetPanelChangedAsync" @key="_reloads" />
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    /// <summary>Raised after assignments change, so the page can refresh its setup steps and alerts.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private ProjectAssignmentsDto? _data;
+    private ProjectStaffingPlanDto? _plan;
+    private IReadOnlyList<WbsElementDto> _wbs = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private bool _canManage;
+    private bool _byWeek;
+    private bool _busy;
+    private string? _error;
+    private int _reloads;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _canManage = await Allocations.CanManageAsync(ProjectId);
+            _wbs = await Projects.ListWbsAsync(ProjectId);
+            _categories = await People.ListLaborCategoriesAsync();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _canManage = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _data = await Assignments.ListAsync(ProjectId);
+            _plan = await Staffing.GetPlanAsync(ProjectId);
+            _error = null;
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    // ---- Adjust by week ----
+
+    private RenderFragment WeekGrid() => __builder =>
+    {
+        var weeks = Weeks();
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-1">
+            The hours each person is booked for each week. Change a week and their total follows. Changing an assignment's total or dates spreads it evenly again.
+        </MudText>
+        <div style="overflow-x: auto" class="mb-3">
+            <MudSimpleTable Dense="true" Bordered="true" data-testid="assign-weeks-grid" aria-label="Assigned hours by person and week">
+                <thead>
+                    <tr>
+                        <th scope="col" style="min-width: 180px; position: sticky; left: 0; background: var(--mud-palette-surface)">Person and task</th>
+                        <th scope="col" style="text-align: right">Total</th>
+                        @foreach (var week in weeks)
+                        {
+                            <th scope="col" style="text-align: center; white-space: nowrap">@week.ToString("MMM d")</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _data!.Assignments)
+                    {
+                        var hours = a.Weeks.ToDictionary(w => w.WeekStart, w => w.Hours);
+                        <tr data-assignment="@a.EmployeeName">
+                            <th scope="row" style="text-align: left; font-weight: normal; position: sticky; left: 0; background: var(--mud-palette-surface)">
+                                <div>@a.EmployeeName</div>
+                                <div class="mud-text-secondary" style="font-size: 0.75rem">@a.WbsLabel</div>
+                            </th>
+                            <td style="text-align: right" data-testid="week-row-total"><b>@ResourcingFormat.Hours(a.TotalHours)</b></td>
+                            @foreach (var week in weeks)
+                            {
+                                var inRange = week >= ResourcingFormat.WeekStart(a.From) && week <= a.To;
+                                <td style="padding: 0 2px; text-align: center">
+                                    @if (!inRange)
+                                    {
+                                        <span class="mud-text-disabled" aria-hidden="true">·</span>
+                                    }
+                                    else if (_canManage)
+                                    {
+                                        <input type="number" min="0" max="168" step="0.25" inputmode="decimal" class="wb-week-input"
+                                               style="width: 4.5em; text-align: right; border: 1px solid var(--mud-palette-lines-inputs); border-radius: 4px; background: transparent; color: inherit; padding: 2px 4px"
+                                               value="@ResourcingFormat.Hours(hours.GetValueOrDefault(week))"
+                                               aria-label="@($"{a.EmployeeName}, {a.WbsLabel}, week of {week:MMMM d}")"
+                                               data-testid="@($"week-{a.EmployeeName}-{week:yyyy-MM-dd}")"
+                                               disabled="@_busy"
+                                               @onchange="e => SetWeekAsync(a, week, e.Value?.ToString())" />
+                                    }
+                                    else
+                                    {
+                                        @ResourcingFormat.Hours(hours.GetValueOrDefault(week))
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+    };
+
+    /// <summary>Every week any assignment covers, first to last (up to two years).</summary>
+    private List<DateOnly> Weeks()
+    {
+        if (_data is not { Assignments.Count: > 0 } data)
+        {
+            return [];
+        }
+
+        var first = ResourcingFormat.WeekStart(data.Assignments.Min(a => a.From));
+        var last = data.Assignments.Max(a => a.To);
+        return Enumerable.Range(0, Math.Min(105, (last.DayNumber - first.DayNumber) / 7 + 1)).Select(i => first.AddDays(7 * i)).ToList();
+    }
+
+    private async Task SetWeekAsync(StaffingAssignmentDto assignment, DateOnly week, string? value)
+    {
+        if (!decimal.TryParse(string.IsNullOrWhiteSpace(value) ? "0" : value, NumberStyles.Number, CultureInfo.InvariantCulture, out var hours))
+        {
+            Snackbar.Add("Enter a number of hours.", Severity.Warning);
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var saved = await Assignments.SetWeekAsync(assignment.Id, week, hours);
+            Snackbar.Add($"{saved.EmployeeName}: {ResourcingFormat.Hours(hours)} h the week of {week:MMM d}; {ResourcingFormat.Hours(saved.TotalHours)} h in total.", Severity.Success);
+        });
+    }
+
+    // ---- Changes ----
+
+    private async Task EditAsync(StaffingAssignmentDto? existing, SaveAssignmentRequest? start)
+    {
+        var parameters = new DialogParameters<AssignPersonDialog>
+        {
+            { d => d.ProjectId, ProjectId },
+            { d => d.Wbs, _wbs },
+            { d => d.Categories, _categories },
+            { d => d.Existing, existing },
+            { d => d.Start, start },
+        };
+        var title = existing is null ? "Assign a person" : $"Change {existing.EmployeeName}'s assignment";
+        var dialog = await DialogService.ShowAsync<AssignPersonDialog>(title, parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveAssignmentRequest request })
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var saved = await Assignments.SaveAsync(request);
+            Snackbar.Add($"Assigned {saved.EmployeeName} {ResourcingFormat.Hours(saved.TotalHours)} h on {saved.WbsLabel}, {saved.From:MMM d} – {saved.To:MMM d}.", Severity.Success);
+        });
+    }
+
+    private async Task RemoveAsync(StaffingAssignmentDto assignment)
+    {
+        var confirm = await DialogService.ShowMessageBoxAsync("Remove the assignment",
+            $"Take {assignment.EmployeeName} off {assignment.WbsLabel} ({ResourcingFormat.Hours(assignment.TotalHours)} h)? Hours they've already charged stay on their timesheets.",
+            yesText: "Remove", cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Assignments.DeleteAsync(assignment.Id);
+            Snackbar.Add($"Removed {assignment.EmployeeName} from {assignment.WbsLabel}.", Severity.Success);
+        });
+    }
+
+    private async Task ManyAsync(bool copyTeam)
+    {
+        var parameters = new DialogParameters<AssignManyDialog> { { d => d.ProjectId, ProjectId }, { d => d.CopyTeam, copyTeam } };
+        var dialog = await DialogService.ShowAsync<AssignManyDialog>(copyTeam ? "Copy a team from another project" : "Paste people from Excel", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+        {
+            await AfterChangeAsync();
+        }
+    }
+
+    private async Task OnBudgetPanelChangedAsync()
+    {
+        await LoadAsync();
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await AfterChangeAsync();
+    }
+
+    private async Task AfterChangeAsync()
+    {
+        await LoadAsync();
+        _reloads++;
+        await Changed.InvokeAsync();
+    }
+}

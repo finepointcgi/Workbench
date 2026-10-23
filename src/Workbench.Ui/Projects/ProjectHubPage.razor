@@ -172,10 +172,17 @@ else
             <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="ProjectId" Changed="ReloadAsync" />
         </div>,
         "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
-        // Budget and staffing on one screen: hours by labor category, then the people staffed into them.
+        // Assign people first (who, which task, how many hours, when); then Finance's budget and who charges to the project.
         "staffing" => @<div>
+            @if (_hub!.Tabs.Team)
+            {
+                <div data-testid="staffing-section">
+                    <Workbench.Ui.Resourcing.AssignPeoplePanel ProjectId="ProjectId" Changed="ReloadAsync" />
+                </div>
+            }
             @if (_hub!.Tabs.Budgets)
             {
+                <MudDivider Class="my-6" />
                 <section aria-labelledby="budget-heading" data-testid="budget-section">
                     <MudText Typo="Typo.h6" HtmlTag="h2" id="budget-heading" Class="mb-2">Budget</MudText>
                     <Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />
@@ -183,16 +190,8 @@ else
             }
             @if (_hub!.Tabs.Team)
             {
-                @if (_hub!.Tabs.Budgets)
-                {
-                    <MudDivider Class="my-6" />
-                }
-                <section aria-labelledby="staffing-heading" data-testid="staffing-section">
-                    <MudText Typo="Typo.h6" HtmlTag="h2" id="staffing-heading" Class="mb-2">Staffing</MudText>
-                    <Workbench.Ui.Resourcing.ProjectStaffingPanel ProjectId="ProjectId" Changed="ReloadAsync" />
-                    <MudDivider Class="my-6" />
-                    <ProjectTeamTab ProjectId="ProjectId" @key="_reloads" />
-                </section>
+                <MudDivider Class="my-6" />
+                <ProjectTeamTab ProjectId="ProjectId" @key="_reloads" />
             }
         </div>,
         "setup" => @<ProjectSetupTab Hub="_hub!" Section="@Section" Changed="ReloadAsync" />,

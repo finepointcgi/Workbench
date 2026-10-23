@@ -1,0 +1,193 @@
+@* Assign several people at once: paste rows from Excel (person, task, hours, from, to), or copy another project's team.
+   Either way the rows are checked first, like the plan's Excel import, and nothing is saved until you choose Assign. *@
+@inject IStaffingAssignmentService Assignments
+@inject IProjectService Projects
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (CopyTeam)
+        {
+            <MudText Class="mb-3">
+                Assigns the same people for the same hours, on the tasks here with the same code or name (else the whole project),
+                over this project's dates. Check the hours and dates after.
+            </MudText>
+            <MudSelect T="Guid?" Label="Copy the team from" Value="_fromProjectId" ValueChanged="OnProjectChangedAsync" data-testid="copy-from-project">
+                @foreach (var p in _projects)
+                {
+                    <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else
+        {
+            <MudText Class="mb-2">
+                Copy the rows in Excel and paste them here: one person a row, with columns <b>person, task, hours, from, to</b>.
+                The person can be a name, email or employee number; the task a WBS code or name (blank for the whole project).
+                Leave the dates blank to use the task's dates.
+            </MudText>
+            <MudTextField T="string" @bind-Value="_text" Lines="7" Variant="Variant.Outlined" Label="Rows from Excel" data-testid="paste-text"
+                          Placeholder="@("Dana Lee\t1001.01.02\t400\t11/2/2026\t3/31/2027")" Immediate="true" />
+            <MudButton Variant="Variant.Outlined" Class="mt-2" StartIcon="@Icons.Material.Filled.FactCheck" OnClick="CheckPasteAsync"
+                       Disabled="@(_busy || string.IsNullOrWhiteSpace(_text))" data-testid="paste-check">Check the rows</MudButton>
+        }
+
+        @if (_busy)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-2" aria-label="Checking the rows" />
+        }
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+
+        @if (_preview is { } preview)
+        {
+            <div role="status" class="mt-3 mb-2" data-testid="assign-many-summary">
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@preview.ValidCount ready</MudChip>
+                @if (preview.HasErrors)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">@preview.Rows.Count(r => !r.IsValid) with problems</MudChip>
+                }
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@ResourcingFormat.Hours(preview.Rows.Where(r => r.IsValid).Sum(r => r.Hours ?? 0)) hours</MudChip>
+            </div>
+            @if (preview.HasErrors)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">
+                    @(CopyTeam ? "Some people can't be copied. The others can still be assigned." : "Fix these rows in Excel and paste them again. Nothing has been assigned.")
+                </MudAlert>
+            }
+            <MudSimpleTable Dense="true" Striped="true" data-testid="assign-many-rows">
+                <thead>
+                    <tr>
+                        <th scope="col">@(CopyTeam ? "#" : "Row")</th>
+                        <th scope="col">Person</th>
+                        <th scope="col">Task</th>
+                        <th scope="col" style="text-align: right">Hours</th>
+                        <th scope="col">Dates</th>
+                        <th scope="col">Check</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in preview.Rows)
+                    {
+                        <tr data-line="@row.Line">
+                            <td>@row.Line</td>
+                            <td>@row.Person</td>
+                            <td>@(string.IsNullOrWhiteSpace(row.Task) ? "Whole project" : row.Task)</td>
+                            <td style="text-align: right">@(row.Hours is { } h ? ResourcingFormat.Hours(h) : "—")</td>
+                            <td>@Dates(row)</td>
+                            <td>
+                                @foreach (var e in row.Errors)
+                                {
+                                    <div class="mud-error-text"><MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" Color="Color.Error" aria-label="Problem" /> @e</div>
+                                }
+                                @foreach (var w in row.Warnings)
+                                {
+                                    <div class="mud-warning-text"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" aria-label="Warning" /> @w</div>
+                                }
+                                @if (row.IsValid && row.Warnings.Count == 0)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" aria-label="Ready" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="@(!CanSave)" data-testid="assign-many-save">
+            @(_preview is { ValidCount: var n } ? $"Assign {n} {(n == 1 ? "row" : "rows")}" : "Assign")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    /// <summary>True to copy another project's team; false to paste rows from Excel.</summary>
+    [Parameter] public bool CopyTeam { get; set; }
+
+    private IReadOnlyList<ProjectDto> _projects = [];
+    private Guid? _fromProjectId;
+    private string? _text;
+    private AssignmentPastePreviewDto? _preview;
+    private string? _error;
+    private bool _busy;
+
+    // A paste with problems is fixed in Excel and pasted again; a copied team saves the people who can be copied.
+    private bool CanSave => !_busy && _preview is { ValidCount: > 0 } p && (CopyTeam || !p.HasErrors);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CopyTeam)
+        {
+            return;
+        }
+
+        try
+        {
+            _projects = (await Projects.ListProjectsAsync()).Where(p => p.Id != ProjectId).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static string Dates(AssignmentPasteRowDto row) =>
+        row.Request is null && row.From is null && row.To is null ? "—"
+        : row.From is null && row.To is null ? "The task's dates"
+        : $"{row.From?.ToString("MMM d, yyyy") ?? "task start"} – {row.To?.ToString("MMM d, yyyy") ?? "task finish"}";
+
+    private Task CheckPasteAsync() => RunAsync(async () => _preview = await Assignments.PreviewPasteAsync(ProjectId, _text ?? ""));
+
+    private async Task OnProjectChangedAsync(Guid? projectId)
+    {
+        _fromProjectId = projectId;
+        _preview = null;
+        if (projectId is { } id)
+        {
+            await RunAsync(async () => _preview = await Assignments.PreviewCopyTeamAsync(ProjectId, id));
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_preview is not { } preview)
+        {
+            return;
+        }
+
+        var requests = preview.Rows.Where(r => r.IsValid).Select(r => r.Request!).ToList();
+        await RunAsync(async () =>
+        {
+            var saved = await Assignments.SaveManyAsync(ProjectId, requests);
+            Snackbar.Add($"Assigned {saved.Count} {(saved.Count == 1 ? "row" : "rows")}, {ResourcingFormat.Hours(saved.Sum(a => a.TotalHours))} hours.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(saved.Count));
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        (_busy, _error) = (true, null);
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

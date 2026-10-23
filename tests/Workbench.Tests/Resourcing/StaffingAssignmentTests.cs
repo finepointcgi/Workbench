@@ -375,7 +375,7 @@ public sealed class StaffingAssignmentTests
         db.Set<Timesheet>().Add(sheet);
         foreach (var (wbs, hours) in entries)
         {
-            db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = wbs, WorkDate = weekStart.AddDays(1), Hours = hours, EnteredAtUtc = now, UpdatedAtUtc = now });
+            db.Set<TimeEntry>().Add(new TimeEntry { TimesheetId = sheet.Id, WbsElementId = wbs, LaborCategoryId = host.Se2, WorkDate = weekStart.AddDays(1), Hours = hours, EnteredAtUtc = now, UpdatedAtUtc = now });
         }
 
         await db.SaveChangesAsync();

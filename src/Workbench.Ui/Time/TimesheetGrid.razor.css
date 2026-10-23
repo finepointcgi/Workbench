@@ -53,6 +53,17 @@
     font-size: 0.75rem;
 }
 
+/* "312 of 400 h left" under an assigned charge code; past the assignment it turns to the warning color. */
+.timesheet-grid .code .hours-left {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.timesheet-grid .code .hours-left.over {
+    color: var(--mud-palette-warning-darken);
+    font-weight: 500;
+}
+
 /* Weekends and holidays: dimmed but still usable. */
 .timesheet-grid .nonwork {
     background: var(--mud-palette-background-gray);

@@ -67,7 +67,7 @@ else
     }
 
     <MudPaper Outlined="true" Class="pa-3">
-        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" StaffedWbs="_staffed" OnLockedEdit="UnlockAsync" OnChanged="OnGridChangedAsync" />
+        <TimesheetGrid @ref="_grid" Detail="_detail" Prefill="_leave?.Prefill" StaffedWbs="_staffed" HoursLeft="_hoursLeft" OnLockedEdit="UnlockAsync" OnChanged="OnGridChangedAsync" />
     </MudPaper>
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4" Wrap="Wrap.Wrap" Spacing="2">
@@ -113,6 +113,7 @@ else
 
     private IReadOnlyCollection<Guid> _staffed = [];
     private IReadOnlyList<Workbench.Contracts.Resourcing.AllocationDto> _allocations = [];
+    private IReadOnlyList<Workbench.Contracts.Resourcing.AssignmentHoursLeftDto> _hoursLeft = [];
     private CancellationTokenSource? _autoSave;
     private string? _saveState;
 
@@ -136,6 +137,11 @@ else
             var detail = await Timesheets.GetOrCreateMyTimesheetAsync(date);
             _leave = await LeaveFor(detail);
             _staffed = await StaffedWbsFor(detail);
+            _hoursLeft = await HoursLeftFor(detail);
+            if (_hoursLeft.Any(a => a.WbsElementIds.Count == 1))
+            {
+                _staffed = _staffed.Concat(_hoursLeft.Where(a => a.WbsElementIds.Count == 1).Select(a => a.WbsElementIds[0])).ToHashSet();
+            }
             _detail = detail;
             _waitingOn = await WaitingOnAsync(detail.Timesheet);
         }
@@ -446,6 +452,24 @@ else
             var mine = await allocations.ListMineAsync(detail.Timesheet.PeriodStart, detail.Timesheet.PeriodEnd);
             _allocations = mine.Where(a => a.WbsElementId is not null && a.Hours > 0).ToList();
             return _allocations.Select(a => a.WbsElementId!.Value).ToHashSet();
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>The employee's assignments this period with their hours left ("312 of 400 h left"). Fails soft.</summary>
+    private async Task<IReadOnlyList<Workbench.Contracts.Resourcing.AssignmentHoursLeftDto>> HoursLeftFor(TimesheetDetailDto detail)
+    {
+        if (Services.GetService(typeof(Workbench.Contracts.Resourcing.IStaffingAssignmentService)) is not Workbench.Contracts.Resourcing.IStaffingAssignmentService assignments)
+        {
+            return [];
+        }
+
+        try
+        {
+            return await assignments.ListMyHoursLeftAsync(detail.Timesheet.PeriodStart, detail.Timesheet.PeriodEnd, detail.Timesheet.Id);
         }
         catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
         {
