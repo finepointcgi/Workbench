@@ -1,0 +1,232 @@
+@* Assign someone to the project, or one of its tasks, for a total number of hours between two dates. The dates start as
+   the task's (or the project's); the preview shows how the hours spread over the weeks and warns when the person would be
+   booked past their hours on other work. Labor category and notes are under Details. Returns a SaveAssignmentRequest. *@
+@inject IStaffingAssignmentService Assignments
+@inject IProjectStaffingService Staffing
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudAutocomplete T="StaffingCandidateDto" Label="Person" Value="_person" ValueChanged="OnPersonChangedAsync" SearchFunc="SearchPeople"
+                             ToStringFunc="@(c => c?.Name ?? "")" Required="true" ResetValueOnEmptyText="true" CoerceText="true" MaxItems="50"
+                             Disabled="@(Existing is not null)" data-testid="assign-person" AutoFocus="@(Existing is null)">
+                <ItemTemplate Context="c">
+                    <span>@c.Name</span>
+                    <span class="mud-text-secondary"> · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h a week booked</span>
+                </ItemTemplate>
+            </MudAutocomplete>
+            <MudSelect T="Guid?" Label="Task" Value="_wbsId" ValueChanged="OnTaskChangedAsync" data-testid="assign-task"
+                       HelperText="What they'll work on and charge their time to.">
+                <MudSelectItem T="Guid?" Value="null">Whole project</MudSelectItem>
+                @foreach (var w in Tasks)
+                {
+                    <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Start">
+                <MudNumericField T="decimal?" Label="Hours" Value="_hours" ValueChanged="OnHoursChangedAsync" Min="0" Max="99999" Style="max-width: 140px"
+                                 HelperText="In total" data-testid="assign-hours" Immediate="true" DebounceInterval="400" />
+                <MudDatePicker Label="From" Date="_from" DateChanged="d => OnDatesChangedAsync(d, _to)" DateFormat="MMM d, yyyy" Style="max-width: 170px" data-testid="assign-from" />
+                <MudDatePicker Label="To" Date="_to" DateChanged="d => OnDatesChangedAsync(_from, d)" DateFormat="MMM d, yyyy" Style="max-width: 170px" data-testid="assign-to" />
+            </MudStack>
+            <MudExpansionPanels Elevation="0" Outlined="true" Dense="true">
+                <MudExpansionPanel Text="Details" data-testid="assign-details">
+                    <MudSelect T="Guid?" Label="Labor category" Value="_categoryId" ValueChanged="OnCategoryChangedAsync" Clearable="true" data-testid="assign-category"
+                               HelperText="What their hours bill as. Leave it to use their own.">
+                        @foreach (var c in Categories.Where(c => c.IsActive || c.Id == _categoryId))
+                        {
+                            <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudTextField T="string" Label="Notes" @bind-Value="_notes" MaxLength="500" Lines="2" Class="mt-2" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" data-testid="assign-error">@_error</MudAlert>
+            }
+            else if (_preview is { } preview && _hours > 0)
+            {
+                var working = preview.Weeks.Where(w => w.Hours > 0).ToList();
+                <div data-testid="assign-summary" aria-live="polite">
+                    <MudText Typo="Typo.body2">
+                        @ResourcingFormat.Hours(_hours.Value) hours from @preview.From.ToString("MMM d") to @preview.To.ToString("MMM d, yyyy"):
+                        @(working.Count == 1 ? "1 week" : $"{working.Count} weeks")@(working.Count > 1 ? $", about {ResourcingFormat.Hours(Math.Round(_hours.Value / working.Count, 1))} h a week" : "").
+                        Weekends and holidays are skipped.
+                        @if (preview.LaborCategory is { } label)
+                        {
+                            <span class="mud-text-secondary">Bills as @label.</span>
+                        }
+                    </MudText>
+                    <div class="d-flex flex-wrap gap-1 mt-1" data-testid="assign-weeks">
+                        @foreach (var w in preview.Weeks.Take(12))
+                        {
+                            var over = preview.Overbooked.Any(o => o.WeekStart == w.WeekStart);
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(over ? Color.Warning : Color.Default)"
+                                     Icon="@(over ? Icons.Material.Filled.WarningAmber : null)">@w.WeekStart.ToString("MMM d") · @ResourcingFormat.Hours(w.Hours) h</MudChip>
+                        }
+                        @if (preview.Weeks.Count > 12)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary align-self-center">and @(preview.Weeks.Count - 12) more weeks</MudText>
+                        }
+                    </div>
+                </div>
+                @foreach (var warning in preview.Warnings)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" data-testid="assign-warning">@warning</MudAlert>
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(_person is null || _hours is not > 0 || _error is not null || _preview is null)" data-testid="assign-save">
+            @(_preview?.Warnings.Count > 0 ? "Assign anyway" : Existing is null ? "Assign" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+    [Parameter] public IReadOnlyList<WbsElementDto> Wbs { get; set; } = [];
+    [Parameter] public IReadOnlyList<LaborCategoryDto> Categories { get; set; } = [];
+
+    /// <summary>The assignment to change, if any.</summary>
+    [Parameter] public StaffingAssignmentDto? Existing { get; set; }
+
+    /// <summary>Starting values for a new assignment (from "Assign by total" or a budget slot).</summary>
+    [Parameter] public SaveAssignmentRequest? Start { get; set; }
+
+    private IReadOnlyList<StaffingCandidateDto> _candidates = [];
+    private StaffingCandidateDto? _person;
+    private Guid? _wbsId;
+    private decimal? _hours;
+    private DateTime? _from;
+    private DateTime? _to;
+    private Guid? _categoryId;
+    private string? _notes;
+    private bool _datesChosen;
+    private AssignmentPreviewDto? _preview;
+    private string? _error;
+    private int _version;
+
+    private IEnumerable<WbsElementDto> Tasks => Wbs.Where(w => w.IsOpen || w.Id == _wbsId).OrderBy(w => w.Code, StringComparer.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _candidates = await Staffing.ListCandidatesAsync(ProjectId, null);
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+
+        if (Existing is { } e)
+        {
+            _person = _candidates.FirstOrDefault(c => c.EmployeeId == e.EmployeeId)
+                ?? new StaffingCandidateDto(e.EmployeeId, e.EmployeeName, null, null, false, 40, 0);
+            (_wbsId, _hours, _categoryId, _notes) = (e.WbsElementId, e.TotalHours, e.LaborCategoryId, e.Notes);
+            (_from, _to, _datesChosen) = (Date(e.From), Date(e.To), true);
+        }
+        else if (Start is { } s)
+        {
+            _person = _candidates.FirstOrDefault(c => c.EmployeeId == s.EmployeeId);
+            (_wbsId, _hours, _categoryId) = (s.WbsElementId, s.TotalHours > 0 ? s.TotalHours : null, s.LaborCategoryId);
+            if (s.From is { } f && s.To is { } t)
+            {
+                (_from, _to, _datesChosen) = (Date(f), Date(t), true);
+            }
+        }
+
+        await PreviewAsync();
+    }
+
+    private static DateTime Date(DateOnly d) => d.ToDateTime(TimeOnly.MinValue);
+
+    private Task<IEnumerable<StaffingCandidateDto>> SearchPeople(string? text, CancellationToken _) =>
+        Task.FromResult(string.IsNullOrWhiteSpace(text)
+            ? _candidates.AsEnumerable()
+            : _candidates.Where(c => c.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    private async Task OnPersonChangedAsync(StaffingCandidateDto? person)
+    {
+        _person = person;
+        await PreviewAsync();
+    }
+
+    private async Task OnTaskChangedAsync(Guid? wbsId)
+    {
+        _wbsId = wbsId;
+        if (!_datesChosen)
+        {
+            (_from, _to) = (null, null); // the new task's dates
+        }
+
+        await PreviewAsync();
+    }
+
+    private async Task OnHoursChangedAsync(decimal? hours)
+    {
+        _hours = hours;
+        await PreviewAsync();
+    }
+
+    private async Task OnDatesChangedAsync(DateTime? from, DateTime? to)
+    {
+        (_from, _to, _datesChosen) = (from, to, true);
+        await PreviewAsync();
+    }
+
+    private async Task OnCategoryChangedAsync(Guid? categoryId)
+    {
+        _categoryId = categoryId;
+        await PreviewAsync();
+    }
+
+    private SaveAssignmentRequest? Request() => _person is null || _hours is not > 0 ? null
+        : new SaveAssignmentRequest(_person.EmployeeId, ProjectId, _hours.Value, _wbsId,
+            _from is { } f ? DateOnly.FromDateTime(f) : null, _to is { } t ? DateOnly.FromDateTime(t) : null,
+            _categoryId, _notes, Existing?.Id);
+
+    private async Task PreviewAsync()
+    {
+        var version = ++_version;
+        if (Request() is not { } request)
+        {
+            (_preview, _error) = (null, null);
+            return;
+        }
+
+        try
+        {
+            var preview = await Assignments.PreviewAsync(request);
+            if (version != _version)
+            {
+                return; // a later change is already being previewed
+            }
+
+            (_preview, _error) = (preview, null);
+            (_from, _to) = (Date(preview.From), Date(preview.To));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            if (version == _version)
+            {
+                (_preview, _error) = (null, ex.Message);
+            }
+        }
+    }
+
+    private void Submit()
+    {
+        if (Request() is { } request)
+        {
+            MudDialog.Close(DialogResult.Ok(request));
+        }
+    }
+}

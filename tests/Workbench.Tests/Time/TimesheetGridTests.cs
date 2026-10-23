@@ -84,6 +84,27 @@ public sealed class TimesheetGridTests
     }
 
     [Fact]
+    public async Task Assigned_rows_show_hours_left_and_warn_without_blocking_past_the_assignment()
+    {
+        await using var ctx = NewContext();
+        // 40 h on 1001.01 from Oct 1, 20 already on other timesheets; this one has 16 so far.
+        var left = new Workbench.Contracts.Resourcing.AssignmentHoursLeftDto(Guid.NewGuid(), "1001", "1001.01 Requirements", new DateOnly(2026, 10, 1), new DateOnly(2026, 12, 31), 40m, 20m, [Direct]);
+        var grid = ctx.Render<TimesheetGrid>(p => p.Add(g => g.Detail, Detail()).Add(g => g.HoursLeft, [left]));
+
+        Assert.Equal("4 of 40 h left", grid.Find("[data-testid='hours-left-1001.01']").TextContent.Trim());
+        Assert.Empty(grid.FindAll("[data-testid='hours-left-IND.OH']"));
+        Assert.Empty(grid.FindAll("[data-testid='hours-left-warning']"));
+
+        grid.Find("[data-testid='cell-1001.01-2026-10-21']").Change("6");
+
+        Assert.Equal("2 h past the 40 h assigned", grid.Find("[data-testid='hours-left-1001.01']").TextContent.Trim());
+        Assert.Contains("over", grid.Find("[data-testid='hours-left-1001.01']").ClassList);
+        Assert.Contains("1001 1001.01 Requirements: 2 h past the 40 h you're assigned.", grid.Find("[data-testid='hours-left-warning']").TextContent);
+        Assert.Contains(grid.Instance.BuildEntries(), e => e.WorkDate == Monday.AddDays(2) && e.Hours == 6m); // still saved
+        A11yAssert.Check(grid);
+    }
+
+    [Fact]
     public async Task Locked_timesheet_asks_for_a_reason_instead_of_editing()
     {
         await using var ctx = NewContext();

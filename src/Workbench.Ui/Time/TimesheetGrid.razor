@@ -37,6 +37,21 @@
                     <td class="code" data-testid="@($"row-{row.Code.Code}")">
                         <div class="name">@ChargeCodeText.Label(row.Code.Code, row.Code.Name, row.Code.Kind)</div>
                         <div class="mud-text-secondary context">@ChargeCodeText.Context(row.Code.Kind, row.Code.ProjectCode, row.Code.ProjectName)</div>
+                        @if (LeftFor(row) is { } left)
+                        {
+                            <div class="hours-left @(left.Left < 0 ? "over" : "")" data-testid="@($"hours-left-{row.Code.Code}")"
+                                 title="@($"Assigned {left.Assignment.TotalHours:0.##} h on {left.Assignment.Label}, {left.Assignment.From:MMM d} – {left.Assignment.To:MMM d, yyyy}")">
+                                @if (left.Left < 0)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" aria-hidden="true" Style="font-size: 0.9rem; vertical-align: -2px" />
+                                    @($"{Format(-left.Left)} h past the {Format(left.Assignment.TotalHours)} h assigned")
+                                }
+                                else
+                                {
+                                    @($"{Format(left.Left)} of {Format(left.Assignment.TotalHours)} h left")
+                                }
+                            </div>
+                        }
                     </td>
                     @foreach (var day in Detail.Days)
                     {
@@ -82,6 +97,13 @@
         </tfoot>
     </table>
 </div>
+
+@if (Overruns.ToList() is { Count: > 0 } overruns)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3" data-testid="hours-left-warning">
+        @OverrunText(overruns) You can still save and submit; your project manager will see it.
+    </MudAlert>
+}
 
 <div class="timesheet-summary mt-3" data-testid="week-summary">
     <MudText Typo="Typo.subtitle1" HtmlTag="div">
@@ -130,6 +152,9 @@
 
     /// <summary>WBS elements the employee is staffed on this period: they start as rows (without hours), like recently used codes.</summary>
     [Parameter] public IReadOnlyCollection<Guid>? StaffedWbs { get; set; }
+
+    /// <summary>The employee's assignments overlapping the period (hours already charged on other timesheets), for "312 of 400 h left".</summary>
+    [Parameter] public IReadOnlyList<Workbench.Contracts.Resourcing.AssignmentHoursLeftDto>? HoursLeft { get; set; }
 
     private readonly Dictionary<(Guid WbsElementId, DateOnly Date), decimal> _planned = [];
 
@@ -290,6 +315,26 @@
             }
         }
     }
+
+    /// <summary>
+    /// Hours left on the assignment covering the row: its total less hours on other timesheets and, live, the hours on
+    /// this timesheet for every code it covers between its dates. Going past it warns; it never blocks.
+    /// </summary>
+    private (Workbench.Contracts.Resourcing.AssignmentHoursLeftDto Assignment, decimal Left)? LeftFor(Row row) =>
+        HoursLeft?.FirstOrDefault(a => a.WbsElementIds.Contains(row.Code.WbsElementId) && Detail.Days.Any(d => d.Date >= a.From && d.Date <= a.To)) is { } a
+            ? (a, Left(a))
+            : null;
+
+    private decimal Left(Workbench.Contracts.Resourcing.AssignmentHoursLeftDto a) =>
+        a.TotalHours - a.ChargedElsewhereHours
+        - _rows.Where(r => a.WbsElementIds.Contains(r.Code.WbsElementId)).Sum(r => r.Cells.Where(c => c.Key >= a.From && c.Key <= a.To).Sum(c => c.Value.Hours ?? 0));
+
+    private IEnumerable<(Workbench.Contracts.Resourcing.AssignmentHoursLeftDto Assignment, decimal Left)> Overruns =>
+        (HoursLeft ?? []).Select(a => (a, Left(a)))
+            .Where(x => x.Item2 < 0 && _rows.Any(r => x.a.WbsElementIds.Contains(r.Code.WbsElementId) && r.Cells.Any(c => c.Key >= x.a.From && c.Key <= x.a.To && c.Value.Hours > 0)));
+
+    private static string OverrunText(IEnumerable<(Workbench.Contracts.Resourcing.AssignmentHoursLeftDto Assignment, decimal Left)> overruns) =>
+        string.Join("; ", overruns.Select(o => $"{o.Assignment.ProjectCode} {o.Assignment.Label}: {Format(-o.Left)} h past the {Format(o.Assignment.TotalHours)} h you're assigned")) + ".";
 
     private string? Planned(Row row, DateOnly date) =>
         _planned.TryGetValue((row.Code.WbsElementId, date), out var hours) ? Format(hours) : null;

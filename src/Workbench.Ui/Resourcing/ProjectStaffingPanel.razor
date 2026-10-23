@@ -1,6 +1,8 @@
 @* A project's staffing against its labor budget: budgeted, staffed and the gap for each labor category, then each WBS
-   element × labor category with the people on it and a Staff button. Used by the project page's Staffing tab. *@
+   element × labor category with the people on it and an Assign button. Shown under Assign people when the project has a
+   labor budget. *@
 @inject IProjectStaffingService Staffing
+@inject IStaffingAssignmentService Assignments
 @inject IResourceAllocationService Allocations
 @inject IProjectService Projects
 @inject IPeopleService People
@@ -8,7 +10,7 @@
 @inject ISnackbar Snackbar
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
-    <MudText Typo="Typo.h6" HtmlTag="h2">Budget and staffing</MudText>
+    <MudText Typo="Typo.h6" HtmlTag="h2">Against the budget</MudText>
     <MudSpacer />
     @if (_canManage && _plan is { HasLaborBudget: true })
     {
@@ -18,13 +20,11 @@
                 <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AccountTree" OnClick="GenerateAsync" Disabled="_busy" data-testid="generate-from-plan">Fill from the plan</MudButton>
             </MudTooltip>
         }
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => StaffAsync(null, null)" Disabled="_busy" data-testid="staff-person-button">Staff a person</MudButton>
     }
 </MudStack>
 <MudText Typo="Typo.body2" HtmlTag="div" Class="mud-text-secondary mb-3" Style="max-width: 72ch">
-    The <Term Key="budget">budget</Term> says how many hours of each <Term Key="labor-category">labor category</Term> the work needs.
-    <Term Key="staffing">Staffing</Term> fills those hours with named people who bill as that category. Timesheets then charge
-    the actual hours, which count against the same labor category.
+    Finance's <Term Key="budget">budget</Term> says how many hours of each <Term Key="labor-category">labor category</Term> the work needs.
+    The people assigned fill those hours, counted in the category they bill as. Timesheets then charge the actual hours.
 </MudText>
 
 @if (_error is not null)
@@ -38,12 +38,12 @@ else if (_plan is null)
 else if (!_plan.HasLaborBudget)
 {
     <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="staffing-no-budget">
-        <MudText Typo="Typo.subtitle1" HtmlTag="h3">Budget by labor category first</MudText>
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3">No labor budget yet</MudText>
         <MudText Class="mud-text-secondary mb-3">
-            There's nothing to staff yet. Add hours by labor category to each WBS element on the Budget tab, for example
-            1,200 Systems Engineer II hours on 1.2. Then come back here and staff people into those hours.
+            Until Finance budgets hours by labor category, the people assigned are the plan. Once there's a budget, this
+            compares the two.
         </MudText>
-        <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Calculate">Go to the budget</MudButton>
+        <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Calculate">Go to the budget</MudButton>
     </MudPaper>
     @if (_plan.Slots.Count > 0)
     {
@@ -200,7 +200,7 @@ else
                         <td style="text-align: right">
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
                                        OnClick="() => StaffAsync(s.WbsElementId, s.LaborCategoryId)" Disabled="_busy"
-                                       aria-label="@($"Staff {s.LaborCategory} on {s.WbsLabel}")">Staff</MudButton>
+                                       aria-label="@($"Assign someone as {s.LaborCategory} on {s.WbsLabel}")">Assign</MudButton>
                         </td>
                     }
                 </tr>
@@ -241,25 +241,24 @@ else
 
     private async Task StaffAsync(Guid? wbsId, Guid? categoryId)
     {
-        var parameters = new DialogParameters<StaffPersonDialog>
+        var gap = _plan?.Slots.FirstOrDefault(s => s.WbsElementId == wbsId && s.LaborCategoryId == categoryId) is { Gap: > 0 } slot ? slot.Gap : 0;
+        var parameters = new DialogParameters<AssignPersonDialog>
         {
             { d => d.ProjectId, ProjectId },
             { d => d.Wbs, _wbs },
             { d => d.Categories, _categories },
-            { d => d.Slots, _plan?.Slots ?? [] },
-            { d => d.WbsElementId, wbsId },
-            { d => d.LaborCategoryId, categoryId },
+            { d => d.Start, new SaveAssignmentRequest(Guid.Empty, ProjectId, gap, wbsId, LaborCategoryId: categoryId) },
         };
-        var dialog = await DialogService.ShowAsync<StaffPersonDialog>("Staff a person", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
-        if (await dialog.Result is not { Canceled: false, Data: SaveAllocationRequest request })
+        var dialog = await DialogService.ShowAsync<AssignPersonDialog>("Assign a person", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: SaveAssignmentRequest request })
         {
             return;
         }
 
         await RunAsync(async () =>
         {
-            var saved = await Allocations.CreateAsync(request);
-            Snackbar.Add($"Staffed {saved.FirstOrDefault()?.EmployeeName} for {saved.Count} {(saved.Count == 1 ? "week" : "weeks")} ({ResourcingFormat.Hours(saved.Sum(a => a.Hours))} h).", Severity.Success);
+            var saved = await Assignments.SaveAsync(request);
+            Snackbar.Add($"Assigned {saved.EmployeeName} {ResourcingFormat.Hours(saved.TotalHours)} h on {saved.WbsLabel}.", Severity.Success);
         });
     }
 
@@ -276,6 +275,13 @@ else
 
         await RunAsync(async () =>
         {
+            // Their assignments on the slot go (with their weeks), then any staffing entered week by week.
+            var assigned = await Assignments.ListAsync(ProjectId);
+            foreach (var a in assigned.Assignments.Where(a => a.EmployeeId == person.EmployeeId && a.WbsElementId == slot.WbsElementId && a.LaborCategoryId == slot.LaborCategoryId))
+            {
+                await Assignments.DeleteAsync(a.Id);
+            }
+
             var thisWeek = ResourcingFormat.ThisWeek;
             var rows = await Allocations.ListAsync(new AllocationQuery(thisWeek, thisWeek.AddYears(2), ProjectId, person.EmployeeId));
             foreach (var row in rows.Where(r => r.WbsElementId == slot.WbsElementId && (r.LaborCategoryId ?? slot.LaborCategoryId) == slot.LaborCategoryId))

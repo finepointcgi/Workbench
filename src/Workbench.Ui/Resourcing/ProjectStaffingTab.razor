@@ -1,4 +1,4 @@
-@* Resourcing's Project staffing tab: pick a project and see the same budget-against-staffing panel as the project's own Staffing tab. *@
+@* Resourcing's Project staffing tab: pick a project and assign people to it, as on the project's own Budget & staffing tab. *@
 
 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
     <MudSelect T="Guid?" Label="Project" Value="_projectId" ValueChanged="v => _projectId = v" Style="min-width:280px" data-testid="staffing-project">
@@ -15,11 +15,11 @@
 
 @if (_projectId is { } projectId)
 {
-    <ProjectStaffingPanel ProjectId="projectId" @key="projectId" />
+    <AssignPeoplePanel ProjectId="projectId" @key="projectId" />
 }
 else
 {
-    <MudText Class="mud-text-secondary">Pick a project to compare its labor budget with the people staffed on it.</MudText>
+    <MudText Class="mud-text-secondary">Pick a project to see and assign its people.</MudText>
 }
 
 @code {
