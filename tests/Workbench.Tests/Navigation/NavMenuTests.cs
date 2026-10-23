@@ -20,7 +20,7 @@ public sealed class NavMenuTests
         var ctx = NavTestKit.NewContext(user);
         var nav = ctx.Render<NavMenu>();
         await Task.Yield();
-        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("a[href='time']")), TimeSpan.FromSeconds(5));
+        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("a[href='time']")));
         return (nav, ctx);
     }
 
@@ -204,7 +204,7 @@ public sealed class NavMenuTests
         ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("cash/reconcile");
 
         var nav = ctx.Render<NavMenu>();
-        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("[data-testid='nav-group-Cash']")), TimeSpan.FromSeconds(5));
+        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("[data-testid='nav-group-Cash']")));
 
         Assert.True(Expanded(nav, "nav-finance"));
         Assert.False(Expanded(nav, "nav-my-work"));
