@@ -15,7 +15,8 @@ namespace Workbench.Application.Sheets;
 /// Many cells in one save (the grid's paste, fill down and clear, and their undo). The same rules as
 /// <see cref="ItemService"/> for each cell, but one database round, one plan reflow, one activity entry and live refresh,
 /// and the sheet's automations run once as a batch (<see cref="SheetAutomations"/>, like the Excel plan import). Cells that
-/// can't be set are skipped and reported; the others are saved. Permissions: <c>PermissionCheckingSheetBulkEditService</c>.
+/// can't be set are skipped and reported; the others are saved. On a plan, <see cref="SheetBulkEditResult.Changes"/> also lists
+/// dates the reflow moved (successors pushed by links), so undo puts the whole plan back. Permissions: <c>PermissionCheckingSheetBulkEditService</c>.
 /// </summary>
 public sealed class SheetBulkEditService(
     IWorkbenchDbContextFactory dbFactory,
@@ -58,6 +59,7 @@ public sealed class SheetBulkEditService(
             var items = await db.Items.Where(i => i.SheetId == sheetId).ToListAsync(cancellationToken);
             var byId = items.ToDictionary(i => i.Id);
             var parents = items.Where(i => i.ParentId is not null).Select(i => i.ParentId!.Value).ToHashSet();
+            var original = items.ToDictionary(i => i.Id, Copy);
 
             foreach (var row in rowsIn)
             {
@@ -87,11 +89,16 @@ public sealed class SheetBulkEditService(
             }
 
             deleted = await DeleteAsync(db, sheetId, items, deleteIn.ToHashSet(), cancellationToken);
+            var direct = changes.Count;
             if (touched.Count > 0 || created.Count > 0 || deleted > 0)
             {
                 sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
                 await db.SaveChangesAsync(cancellationToken);
                 await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+                if (sheet.SchedulingEnabled)
+                {
+                    touched.AddRange(await MovedByThePlanAsync(db, sheetId, original, parents, touched, changes, cancellationToken));
+                }
             }
 
             var computed = await ComputedAsync(db, sheetId, columns.Values.ToList(), touched.Concat(created).Select(i => i.Id).ToHashSet(), cancellationToken);
@@ -115,12 +122,65 @@ public sealed class SheetBulkEditService(
 
             if (activity is not null)
             {
-                await activity.RecordAsync(sheetId, touched.Count + created.Count == 1 ? (touched.FirstOrDefault() ?? created[0]).Id : null, BulkEditedKind,
-                    Summary(source, changes, touched.Count, created.Count, deleted), SheetChangeKind.ItemUpdated);
+                var edited = changes.Take(direct).Select(c => c.ItemId).Distinct().ToList();
+                if (edited.Count == 1 && created.Count == 0 && deleted == 0)
+                {
+                    // One row (an edit in a cell, a status pick): the same entry a single update records, naming each change.
+                    // Stored values on both sides: formula columns are worked out on read, so they'd look changed.
+                    var after = touched.First(i => i.Id == edited[0]).ToDto();
+                    var described = ActivityRecordingItemService.Describe(original[edited[0]], after, columns.Values.ToList());
+                    await activity.RecordAsync(sheetId, after.Id, ActivityKinds.ItemUpdated, $"Updated \"{after.Title}\": {string.Join("; ", described)}", SheetChangeKind.ItemUpdated);
+                }
+                else
+                {
+                    await activity.RecordAsync(sheetId, null, BulkEditedKind, Summary(source, changes.Take(direct).ToList(), edited.Count, created.Count, deleted), SheetChangeKind.ItemUpdated);
+                }
             }
 
             return result;
         }
+    }
+
+    private static Item Copy(Item i) => new()
+    {
+        Id = i.Id, SheetId = i.SheetId, ParentId = i.ParentId, Order = i.Order, Title = i.Title, Start = i.Start, Finish = i.Finish,
+        CostpointWbsId = i.CostpointWbsId, Values = new Dictionary<string, string?>(i.Values), IsMilestone = i.IsMilestone,
+    };
+
+    /// <summary>
+    /// Dates the plan moved as a result of the edit (links push successors), added to the changes so that putting every
+    /// <see cref="BulkCellChange.Before"/> back undoes the whole edit. Summary rows are left out: they follow their subtasks.
+    /// </summary>
+    private static async Task<List<Item>> MovedByThePlanAsync(IWorkbenchDbContext db, Guid sheetId, Dictionary<Guid, Item> original, HashSet<Guid> parents,
+        List<Item> touched, List<BulkCellChange> changes, CancellationToken cancellationToken)
+    {
+        var now = await db.Items.AsNoTracking().Where(i => i.SheetId == sheetId).ToListAsync(cancellationToken);
+        var direct = changes.Select(c => (c.ItemId, c.Field)).ToHashSet();
+        var touchedIds = touched.Select(i => i.Id).ToHashSet();
+        var moved = new List<Item>();
+        foreach (var item in now.Where(i => original.ContainsKey(i.Id) && !parents.Contains(i.Id)))
+        {
+            var was = original[item.Id];
+            var any = false;
+            if (item.Start != was.Start && !direct.Contains((item.Id, SheetFields.Start)))
+            {
+                changes.Add(new BulkCellChange(item.Id, SheetFields.Start, Format(was.Start), Format(item.Start)));
+                any = true;
+            }
+
+            if (item.Finish != was.Finish && !direct.Contains((item.Id, SheetFields.Finish)))
+            {
+                changes.Add(new BulkCellChange(item.Id, SheetFields.Finish, Format(was.Finish), Format(item.Finish)));
+                any = true;
+            }
+
+            if (any && !touchedIds.Contains(item.Id))
+            {
+                moved.Add(item);
+            }
+        }
+
+        return moved;
     }
 
     private static string Summary(string source, IReadOnlyList<BulkCellChange> changes, int rows, int added, int deleted)

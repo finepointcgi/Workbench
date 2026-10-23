@@ -1146,6 +1146,23 @@
                 return;
             }
 
+            if (BulkService is not null && column.ValueKind != ColumnKind.LinkedRow)
+            {
+                // Through the bulk save: undo then also puts back the dates the plan moved because of this edit.
+                var saved = await SaveCellsAsync([new CellEdit(item.Id, column, value)], null, null, $"Edit {column.Name}");
+                if (saved.Changes.Count > 0)
+                {
+                    RecordCells($"Edit {column.Name}", saved.Changes);
+                    await Changed.InvokeAsync();
+                }
+                else if (saved.Reasons.Count > 0)
+                {
+                    Snackbar.Add($"Couldn't save {column.Name}: {saved.Reasons[0]}", Severity.Warning);
+                }
+
+                return;
+            }
+
             var updated = await ItemService.UpdateAsync(SheetId, item.Id, CellFormat.WithValue(item, column, value));
             ReplaceItem(updated);
             RecordCell(item, column, before, value);
