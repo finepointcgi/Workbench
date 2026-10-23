@@ -1932,6 +1932,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("character varying(200)")
                         .UseCollation("C");
 
+                    b.Property<Guid?>("SheetId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TemplateKey")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -1958,6 +1961,8 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .UseCollation("C");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SheetId");
 
                     b.HasIndex("IsEnabled", "DeletedAtUtc");
 

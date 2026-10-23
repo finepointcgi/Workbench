@@ -203,7 +203,7 @@ public sealed class AutomationScheduler(IWorkbenchDbContextFactory dbFactory, IS
 
         var kinds = new[] { nameof(AutomationTriggerKind.Schedule), nameof(AutomationTriggerKind.DateField), nameof(AutomationTriggerKind.Threshold) };
         var automations = await db.Set<AutomationRecord>().AsNoTracking()
-            .Where(a => a.IsEnabled && a.DeletedAtUtc == null && kinds.Contains(a.TriggerKind)).ToListAsync(ct);
+            .Where(a => a.IsEnabled && a.DeletedAtUtc == null && a.SheetId == null && kinds.Contains(a.TriggerKind)).ToListAsync(ct); // Sheets run their own (hourly).
         var queued = 0;
         foreach (var automation in automations)
         {

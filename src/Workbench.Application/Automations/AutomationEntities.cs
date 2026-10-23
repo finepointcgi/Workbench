@@ -134,7 +134,12 @@ public static class AutomationEntities
         {
             Key = "timesheet", Label = "Timesheet", ClrType = typeof(Timesheet), LinkFormat = "time/history/{id}", ApprovalDocumentType = ApprovalDocumentTypes.Timesheet,
             EmployeeProperty = nameof(Timesheet.EmployeeId), NameProperties = [nameof(Timesheet.PeriodStart), nameof(Timesheet.PeriodEnd)],
-            Computed = [new("totalHours", "Total hours", "number", async c => await c.Db.Set<TimeEntry>().AsNoTracking().Where(e => e.TimesheetId == ((Timesheet)c.Entity).Id).SumAsync(e => e.Hours, c.Ct))],
+            Computed =
+            [
+                new("totalHours", "Total hours", "number", async c => await c.Db.Set<TimeEntry>().AsNoTracking().Where(e => e.TimesheetId == ((Timesheet)c.Entity).Id).SumAsync(e => e.Hours, c.Ct)),
+                new("daysLate", "Days late (first submitted after the period ended)", "number", c => Task.FromResult<object?>(((Timesheet)c.Entity) is { } t
+                    && (t.FirstSubmittedAtUtc ?? t.SubmittedAtUtc) is { } at ? Math.Max(0, DateOnly.FromDateTime(at).DayNumber - t.PeriodEnd.DayNumber) : null)),
+            ],
             CanWrite = r => r.CanViewAllTimesheets(), CanReadAll = r => r.CanViewAllTimesheets(),
         },
         new()

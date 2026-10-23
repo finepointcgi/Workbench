@@ -22,6 +22,7 @@ internal sealed class AutomationRecordConfiguration : IEntityTypeConfiguration<A
         b.Property(a => a.UpdatedBy).HasMaxLength(320);
         b.Property(a => a.DeletedBy).HasMaxLength(320);
         b.HasIndex(a => new { a.IsEnabled, a.DeletedAtUtc });
+        b.HasIndex(a => a.SheetId);
     }
 }
 

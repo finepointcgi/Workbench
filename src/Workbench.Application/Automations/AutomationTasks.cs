@@ -74,7 +74,7 @@ public sealed class AutomationTaskTodoProvider : IMyTodoProvider
 /// recorded by the engine and audited on the record, which fires the record's "approved"/"rejected" automations.
 /// </summary>
 public sealed class RecordApprovalHandler(IWorkbenchDbContextFactory dbFactory, ApprovalEngine engine, ICurrentUser currentUser, AuditRecorder audit,
-    Notifications.INotificationPublisher publisher) : IApprovalDocumentHandler
+    Notifications.INotificationPublisher publisher, IServiceProvider? services = null) : IApprovalDocumentHandler
 {
     public string DocumentType => ApprovalDocumentTypes.CustomPrefix;
 
@@ -104,15 +104,24 @@ public sealed class RecordApprovalHandler(IWorkbenchDbContextFactory dbFactory, 
             }
 
             var outcome = await engine.DecideAsync(db, check, decision, me, comment, ct);
-            var entity = AutomationEntities.Require(request.EntityType);
+            var sheetItem = request.EntityType == AutomationSheets.EntityType;
             if (outcome.Status != ApprovalInstanceStatus.Pending)
             {
                 request.Outcome = outcome.Status.ToString();
-                audit.Record(db, entity.AuditEntityType, recordId, outcome.IsComplete ? "Approved" : "Rejected",
-                    new { Approval = "Pending" }, new { Approval = outcome.Status.ToString(), Workflow = request.DocumentType }, comment);
+                if (!sheetItem)
+                {
+                    var entity = AutomationEntities.Require(request.EntityType);
+                    audit.Record(db, entity.AuditEntityType, recordId, outcome.IsComplete ? "Approved" : "Rejected",
+                        new { Approval = "Pending" }, new { Approval = outcome.Status.ToString(), Workflow = request.DocumentType }, comment);
+                }
             }
 
             await db.SaveChangesAsync(ct);
+            if (sheetItem && outcome.Status != ApprovalInstanceStatus.Pending)
+            {
+                await WriteSheetDecisionAsync(db, request, outcome.IsComplete ? "Approved" : "Rejected", ct);
+            }
+
             await publisher.PublishAsync(outcome.NotifyEmails, "approval.requested", $"Approval needed: {instance.Title}", instance.Summary, "approvals");
             if (outcome.Status != ApprovalInstanceStatus.Pending && instance.SubmitterEmail != me)
             {
@@ -124,5 +133,47 @@ public sealed class RecordApprovalHandler(IWorkbenchDbContextFactory dbFactory, 
         }
 
         throw new InvalidOperationException("Nothing on this record is waiting on you.");
+    }
+
+    /// <summary>
+    /// A sheet row's approval was decided: write "Approved" or "Rejected" into the column the automation's request-approval action
+    /// names (when it names one), as the automation acting for its author, so "when Approval changes to Approved" automations run.
+    /// </summary>
+    private async Task WriteSheetDecisionAsync(IWorkbenchDbContext db, AutomationApprovalRequest request, string decision, CancellationToken ct)
+    {
+        var automation = await db.Set<AutomationRecord>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == request.AutomationId, ct);
+        var version = automation?.CurrentVersionId is { } versionId ? await db.Set<AutomationVersion>().AsNoTracking().FirstOrDefaultAsync(v => v.Id == versionId, ct) : null;
+        var field = version is null ? null : AutomationJson.Definition(version.DefinitionJson).Actions.FirstOrDefault(a => a.Kind == AutomationActionKind.RequireApproval)?.FieldKey;
+        var item = await db.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == request.RecordId, ct);
+        if (automation?.SheetId is not { } sheetId || field is null || item is null || item.SheetId != sheetId || services is null)
+        {
+            return;
+        }
+
+        // Through the automation decorator (inside the permission checks): the approver needn't be able to edit the sheet.
+        _ = services.GetService(typeof(Contracts.Sheets.IItemService));
+        if ((services.GetService(typeof(AutomationItemServiceAccessor)) as AutomationItemServiceAccessor)?.Instance is not { } items)
+        {
+            return;
+        }
+
+        var values = new Dictionary<string, string?>(item.Values);
+        var request2 = new Contracts.Sheets.UpdateItemRequest(item.Title, item.Start, item.Finish, item.CostpointWbsId, values);
+        switch (field)
+        {
+            case AutomationSheets.Title:
+                request2 = request2 with { Title = decision };
+                break;
+            case AutomationSheets.Start or AutomationSheets.Finish:
+                return;
+            default:
+                values[field] = decision;
+                break;
+        }
+
+        using (Automation.AutomationContext.Enter(automation.Name, automation.UpdatedBy))
+        {
+            await items.UpdateAsync(sheetId, item.Id, request2, ct);
+        }
     }
 }
