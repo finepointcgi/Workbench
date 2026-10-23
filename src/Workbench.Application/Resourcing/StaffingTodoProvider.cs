@@ -5,8 +5,9 @@ using Workbench.Contracts.Resourcing;
 namespace Workbench.Application.Resourcing;
 
 /// <summary>
-/// A project manager's staffing to-dos for each open project they manage: budget it by labor category, staff the budgeted
-/// hours nobody is on yet, and sort out staffing over the budget or people booked past their hours.
+/// A project manager's staffing to-dos for each open project they manage: assign people when nobody is (without a labor
+/// budget the people assigned are the plan), staff the budgeted hours nobody is on yet, and sort out staffing over the
+/// budget or people booked past their hours.
 /// </summary>
 public sealed class StaffingTodoProvider : IMyTodoProvider
 {
@@ -25,17 +26,17 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
             plans.Add(await staffing.GetPlanAsync(project.Id, cancellationToken));
         }
 
-        var unbudgeted = plans.Where(p => !p.HasLaborBudget).ToList();
-        var items = plans.Where(p => p.HasLaborBudget || unbudgeted.Count == 1).SelectMany(For).ToList();
-        if (unbudgeted.Count > 1)
+        var empty = plans.Where(NeedsPeople).ToList();
+        var items = plans.SelectMany(p => For(p, includeAssign: empty.Count == 1)).ToList();
+        if (empty.Count > 1)
         {
             // One item for all of them, so several new projects don't crowd out everything else.
-            var codes = unbudgeted.Select(p => p.ProjectCode).ToList();
+            var codes = empty.Select(p => p.ProjectCode).ToList();
             items.Add(new MyTodoItem(
-                $"staffing:budget:{string.Join(",", codes)}", TodoCategories.Project,
-                $"Budget {codes.Count} projects by labor category",
-                $"{Join(codes)} have no labor budget yet. Say how many hours of each labor category each WBS element may use, then staff people into those hours.",
-                TodoUrgency.ThisWeek, null, $"projects/{unbudgeted[0].ProjectId}/budgets", $"Start with {codes[0]}", Priority: 5));
+                $"staffing:assign:{string.Join(",", codes)}", TodoCategories.Project,
+                $"Assign people to {codes.Count} projects",
+                $"Nobody is assigned to {Join(codes)} yet. Give each person their hours on a task and the dates.",
+                TodoUrgency.ThisWeek, null, $"projects/{empty[0].ProjectId}/staffing", $"Start with {codes[0]}", Priority: 5));
         }
 
         return items;
@@ -44,21 +45,26 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
     private static string Join(IReadOnlyList<string> codes) =>
         codes.Count <= 4 ? string.Join(", ", codes.Take(codes.Count - 1)) + " and " + codes[^1] : $"{string.Join(", ", codes.Take(4))} and {codes.Count - 4} more";
 
-    public static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan)
+    /// <summary>No labor budget and nobody staffed from this week on: the PM's next step is assigning people.</summary>
+    private static bool NeedsPeople(ProjectStaffingPlanDto plan) => !plan.HasLaborBudget && plan.StaffedHours == 0;
+
+    public static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan) => For(plan, includeAssign: true);
+
+    private static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan, bool includeAssign)
     {
         var link = $"projects/{plan.ProjectId}/staffing";
         string H(decimal h) => ProjectStaffingService.Hours(h);
-        if (!plan.HasLaborBudget)
+        if (NeedsPeople(plan) && includeAssign)
         {
             yield return new MyTodoItem(
-                $"staffing:{plan.ProjectId}:budget", TodoCategories.Project,
-                $"Budget {plan.ProjectCode} by labor category",
-                "Say how many hours of each labor category each WBS element may use. Then staff people into those hours.",
-                TodoUrgency.ThisWeek, null, $"projects/{plan.ProjectId}/budgets", "Start the budget", Priority: 5);
-            yield break;
+                $"staffing:{plan.ProjectId}:assign", TodoCategories.Project,
+                $"Assign people to {plan.ProjectCode}",
+                "Nobody is assigned yet. Give each person their hours on a task and the dates; until there's a budget, they're the plan.",
+                TodoUrgency.ThisWeek, null, link, "Assign people", Priority: 5);
         }
 
-        var unstaffed = plan.Categories.Where(c => c.Status == StaffingGapStatus.Understaffed).ToList();
+        // Without a labor budget there's nothing to be under or over; the people assigned are the plan.
+        var unstaffed = plan.HasLaborBudget ? plan.Categories.Where(c => c.Status == StaffingGapStatus.Understaffed).ToList() : [];
         if (unstaffed.Count > 0)
         {
             yield return new MyTodoItem(
@@ -68,7 +74,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
                 TodoUrgency.ThisWeek, null, link, "Assign people", Priority: 5);
         }
 
-        var over = plan.Categories.Where(c => c.Status is StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted).ToList();
+        var over = plan.HasLaborBudget ? plan.Categories.Where(c => c.Status is StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted).ToList() : [];
         if (over.Count > 0)
         {
             yield return new MyTodoItem(

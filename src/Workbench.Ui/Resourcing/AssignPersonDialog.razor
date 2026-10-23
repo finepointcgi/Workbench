@@ -9,7 +9,7 @@
         <MudStack Spacing="2">
             <MudAutocomplete T="StaffingCandidateDto" Label="Person" Value="_person" ValueChanged="OnPersonChangedAsync" SearchFunc="SearchPeople"
                              ToStringFunc="@(c => c?.Name ?? "")" Required="true" ResetValueOnEmptyText="true" CoerceText="true" MaxItems="50"
-                             Disabled="@(Existing is not null)" data-testid="assign-person" AutoFocus="@(Existing is null)">
+                             Disabled="@(Existing is not null)" data-testid="assign-person" AutoFocus="@(Existing is null && (Start?.EmployeeId ?? Guid.Empty) == Guid.Empty)">
                 <ItemTemplate Context="c">
                     <span>@c.Name</span>
                     <span class="mud-text-secondary"> · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h a week booked</span>
@@ -64,7 +64,7 @@
                         {
                             var over = preview.Overbooked.Any(o => o.WeekStart == w.WeekStart);
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(over ? Color.Warning : Color.Default)"
-                                     Icon="@(over ? Icons.Material.Filled.WarningAmber : null)">@w.WeekStart.ToString("MMM d") · @ResourcingFormat.Hours(w.Hours) h</MudChip>
+                                     Icon="@(over ? Icons.Material.Filled.WarningAmber : null)">@w.WeekStart.ToString("MMM d") · @ResourcingFormat.ExactHours(w.Hours) h</MudChip>
                         }
                         @if (preview.Weeks.Count > 12)
                         {

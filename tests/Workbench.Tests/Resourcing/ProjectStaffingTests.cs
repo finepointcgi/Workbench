@@ -257,7 +257,7 @@ public sealed class ProjectStaffingTests
     }
 
     [Fact]
-    public async Task A_project_without_a_labor_budget_asks_the_pm_to_budget_it_first()
+    public async Task A_project_without_a_labor_budget_asks_the_pm_to_assign_people_and_then_they_are_the_plan()
     {
         await using var host = await CreateAsync();
         var plan = await host.As(Pm).Get<IProjectStaffingService>().GetPlanAsync(host.Project1);
@@ -265,7 +265,14 @@ public sealed class ProjectStaffingTests
         Assert.False(plan.HasLaborBudget);
         Assert.Contains(plan.Notes, n => n.StartsWith("This project has no budget yet.", StringComparison.Ordinal));
         var todo = Assert.Single(StaffingTodoProvider.For(plan));
-        Assert.Equal(("Budget 1001 by labor category", $"projects/{host.Project1}/budgets"), (todo.Title, todo.Link));
+        Assert.Equal(("Assign people to 1001", $"projects/{host.Project1}/staffing"), (todo.Title, todo.Link));
+        Assert.False((await host.Get<IProjectStaffingService>().GetSetupProgressAsync(host.Project1)).Steps.Single(s => s.Key == "staff").IsDone);
+
+        await host.Get<IStaffingAssignmentService>().SaveAsync(new SaveAssignmentRequest(host.DevId, host.Project1, 40m, host.Build));
+
+        Assert.Empty(StaffingTodoProvider.For(await host.Get<IProjectStaffingService>().GetPlanAsync(host.Project1)));
+        var staff = (await host.Get<IProjectStaffingService>().GetSetupProgressAsync(host.Project1)).Steps.Single(s => s.Key == "staff");
+        Assert.Equal((true, "40 hours assigned from this week on; they're the plan until there's a budget"), (staff.IsDone, staff.Status));
     }
 
     [Fact]
@@ -282,8 +289,8 @@ public sealed class ProjectStaffingTests
         var todos = await host.As(Pm).Get<IMyTodoService>().GetAsync();
 
         var item = Assert.Single(todos.Items, t => t.Key.StartsWith("staffing:", StringComparison.Ordinal));
-        Assert.Equal(("Budget 2 projects by labor category", "Start with 1001"), (item.Title, item.LinkLabel));
-        Assert.StartsWith("1001 and 2002 have no labor budget yet.", item.Reason, StringComparison.Ordinal);
+        Assert.Equal(("Assign people to 2 projects", "Start with 1001"), (item.Title, item.LinkLabel));
+        Assert.StartsWith("Nobody is assigned to 1001 and 2002 yet.", item.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
