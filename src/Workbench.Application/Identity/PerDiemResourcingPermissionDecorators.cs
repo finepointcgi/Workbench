@@ -26,6 +26,7 @@ public static class PerDiemResourcingPermissionRegistration
         services.Decorate<IResourcePlanningService, PermissionCheckingResourcePlanningService>();
         services.Decorate<IAllocationForecastService, PermissionCheckingAllocationForecastService>();
         services.Decorate<IProjectStaffingService, PermissionCheckingProjectStaffingService>();
+        services.Decorate<IStaffingAssignmentService, PermissionCheckingStaffingAssignmentService>();
         return services;
     }
 }
@@ -229,6 +230,96 @@ public sealed class PermissionCheckingProjectStaffingService(IProjectStaffingSer
     {
         await rules.RequireReadProjectAsync(projectId, cancellationToken);
         return await inner.ListCandidatesAsync(projectId, laborCategoryId, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Assigning people by total hours, like allocations: Finance, administrators, resource managers and the project's manager
+/// read a project's assignments; resource managers, administrators and the project's manager change them. Everyone reads
+/// their own hours left.
+/// </summary>
+public sealed class PermissionCheckingStaffingAssignmentService(IStaffingAssignmentService inner, ResourcingAccess rules, IWorkbenchDbContextFactory dbFactory)
+    : IStaffingAssignmentService
+{
+    public async Task<ProjectAssignmentsDto> ListAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireReadProjectAsync(projectId, cancellationToken);
+        return await inner.ListAsync(projectId, cancellationToken);
+    }
+
+    public async Task<AssignmentPreviewDto> PreviewAsync(SaveAssignmentRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await RequireManageAsync(request, cancellationToken);
+        return await inner.PreviewAsync(request, cancellationToken);
+    }
+
+    public async Task<StaffingAssignmentDto> SaveAsync(SaveAssignmentRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await RequireManageAsync(request, cancellationToken);
+        return await inner.SaveAsync(request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<StaffingAssignmentDto>> SaveManyAsync(Guid projectId, IReadOnlyList<SaveAssignmentRequest> requests, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        await rules.RequireManageProjectAsync(projectId, cancellationToken);
+        foreach (var id in requests.Select(r => r.Id).OfType<Guid>().Distinct())
+        {
+            await rules.RequireManageProjectAsync(await ProjectOfAsync(id, cancellationToken), cancellationToken);
+        }
+
+        return await inner.SaveManyAsync(projectId, requests, cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid assignmentId, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireManageProjectAsync(await ProjectOfAsync(assignmentId, cancellationToken), cancellationToken);
+        await inner.DeleteAsync(assignmentId, cancellationToken);
+    }
+
+    public async Task<StaffingAssignmentDto> SetWeekAsync(Guid assignmentId, DateOnly weekStart, decimal hours, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireManageProjectAsync(await ProjectOfAsync(assignmentId, cancellationToken), cancellationToken);
+        return await inner.SetWeekAsync(assignmentId, weekStart, hours, cancellationToken);
+    }
+
+    public async Task<AssignmentPastePreviewDto> PreviewPasteAsync(Guid projectId, string text, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireManageProjectAsync(projectId, cancellationToken);
+        return await inner.PreviewPasteAsync(projectId, text, cancellationToken);
+    }
+
+    public async Task<AssignmentPastePreviewDto> PreviewCopyTeamAsync(Guid projectId, Guid fromProjectId, CancellationToken cancellationToken = default)
+    {
+        await rules.RequireManageProjectAsync(projectId, cancellationToken);
+        await rules.RequireReadProjectAsync(fromProjectId, cancellationToken); // the other project's team is its staffing
+        return await inner.PreviewCopyTeamAsync(projectId, fromProjectId, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<AssignmentHoursLeftDto>> ListMyHoursLeftAsync(DateOnly from, DateOnly to, Guid? excludeTimesheetId = null, CancellationToken cancellationToken = default)
+    {
+        rules.Access.RequireSignedIn();
+        return inner.ListMyHoursLeftAsync(from, to, excludeTimesheetId, cancellationToken);
+    }
+
+    /// <summary>The project asked for, and for an edit the project the assignment is on now.</summary>
+    private async Task RequireManageAsync(SaveAssignmentRequest request, CancellationToken ct)
+    {
+        await rules.RequireManageProjectAsync(request.ProjectId, ct);
+        if (request.Id is { } id)
+        {
+            await rules.RequireManageProjectAsync(await ProjectOfAsync(id, ct), ct);
+        }
+    }
+
+    private async Task<Guid> ProjectOfAsync(Guid assignmentId, CancellationToken ct)
+    {
+        rules.Access.RequireSignedIn();
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Set<StaffingAssignment>().AsNoTracking().Where(a => a.Id == assignmentId).Select(a => (Guid?)a.ProjectId).FirstOrDefaultAsync(ct)
+            ?? throw WorkbenchNotFoundException.For("Assignment", assignmentId);
     }
 }
 

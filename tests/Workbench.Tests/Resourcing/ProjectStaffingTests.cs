@@ -253,7 +253,7 @@ public sealed class ProjectStaffingTests
         Assert.Equal(("staffing", "400 budgeted hours on 1001 have nobody staffed. 400 h of SE2 Systems Engineer II on 1001.01.02."), (alert.Tab, alert.Message));
 
         var todos = await host.Get<IMyTodoService>().GetAsync();
-        Assert.Contains(todos.Items, t => t.Title == "400 budgeted hours on 1001 have nobody staffed" && t.LinkLabel == "Staff people");
+        Assert.Contains(todos.Items, t => t.Title == "400 budgeted hours on 1001 have nobody staffed" && t.LinkLabel == "Assign people");
     }
 
     [Fact]

@@ -20393,6 +20393,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AssignmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -20448,6 +20451,8 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssignmentId");
+
                     b.HasIndex("LaborCategoryId");
 
                     b.HasIndex("WbsElementId");
@@ -20457,6 +20462,69 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("ProjectId", "WeekStart");
 
                     b.ToTable("ResourceAllocation");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.StaffingAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("From")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("LaborCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("To")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("TotalHours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid?>("WbsElementId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LaborCategoryId");
+
+                    b.HasIndex("WbsElementId");
+
+                    b.HasIndex("EmployeeId", "To");
+
+                    b.HasIndex("ProjectId", "EmployeeId");
+
+                    b.ToTable("StaffingAssignment");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Revenue.RevenueDelivery", b =>
@@ -26942,6 +27010,36 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             modelBuilder.Entity("Workbench.Domain.Resourcing.ResourceAllocation", b =>
+                {
+                    b.HasOne("Workbench.Domain.Resourcing.StaffingAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.LaborCategory", null)
+                        .WithMany()
+                        .HasForeignKey("LaborCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.StaffingAssignment", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
                         .WithMany()

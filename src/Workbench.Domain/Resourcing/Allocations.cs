@@ -30,6 +30,36 @@ public sealed class ResourceAllocation : Entity
     /// <summary>The plan item it was generated from (Source = Plan).</summary>
     public Guid? SourceItemId { get; set; }
 
+    /// <summary>The assignment these hours were spread from; null for hours entered week by week.</summary>
+    public Guid? AssignmentId { get; set; }
+
+    public string? Notes { get; set; }
+    public required string CreatedBy { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public string? UpdatedBy { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
+}
+
+/// <summary>
+/// A person assigned to a project, or one WBS element of it, for a total number of hours between two dates (like a
+/// Unanet project assignment). The total is the truth: the weekly <see cref="ResourceAllocation"/> rows that point back
+/// here (<see cref="ResourceAllocation.AssignmentId"/>) are spread from it over the working days, and editing a week
+/// changes the total to the weeks' sum.
+/// </summary>
+public sealed class StaffingAssignment : Entity
+{
+    public Guid EmployeeId { get; set; }
+    public Guid ProjectId { get; set; }
+
+    /// <summary>Null for the whole project.</summary>
+    public Guid? WbsElementId { get; set; }
+
+    /// <summary>The labor category the hours count in; the person's own when not picked.</summary>
+    public Guid? LaborCategoryId { get; set; }
+
+    public DateOnly From { get; set; }
+    public DateOnly To { get; set; }
+    public decimal TotalHours { get; set; }
     public string? Notes { get; set; }
     public required string CreatedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }

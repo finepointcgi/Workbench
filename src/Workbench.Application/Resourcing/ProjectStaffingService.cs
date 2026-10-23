@@ -378,7 +378,10 @@ public static class SetupSteps
         var left = budgeted.Sum(c => c.LeftHours);
         var staffed = budgeted.Sum(c => Math.Min(c.StaffedHours, c.LeftHours));
         var unstaffed = budgeted.Where(c => c.Status == StaffingGapStatus.Understaffed).ToList();
-        var staffedDone = hasBudget && unstaffed.Count == 0;
+        var assigned = categories.Sum(c => c.StaffedHours);
+
+        // With no labor budget yet, the people assigned are the plan.
+        var staffedDone = hasBudget ? unstaffed.Count == 0 : assigned > 0;
         string H(decimal h) => ProjectStaffingService.Hours(h);
 
         return new ProjectSetupProgressDto(projectId,
@@ -395,13 +398,13 @@ public static class SetupSteps
                     ? $"{H(budgeted.Sum(c => c.BudgetHours))} hours in {(budgeted.Count == 1 ? "1 labor category" : $"{budgeted.Count} labor categories")}"
                     : "No labor budget yet",
                 "staffing/budget", hasBudget ? "Open the budget" : "Start the budget"),
-            new ProjectSetupStepDto("staff", "Staff people",
-                "Fill each labor category's budgeted hours with named people who bill as that category, week by week.",
+            new ProjectSetupStepDto("staff", "Assign people",
+                "Give each person their hours on a task and the dates. Workbench spreads the hours over the weeks and lets them charge the task.",
                 staffedDone,
-                !hasBudget ? "Budget first, then staff people into it"
+                !hasBudget ? (assigned > 0 ? $"{H(assigned)} hours assigned from this week on; they're the plan until there's a budget" : "Nobody assigned yet")
                     : staffedDone ? $"{H(staffed)} of {H(left)} hours left are staffed"
                     : $"{H(staffed)} of {H(left)} hours left are staffed; {H(unstaffed.Sum(c => c.Gap))} have nobody yet",
-                "staffing/staff", "Staff people"),
+                "staffing/staff", "Assign people"),
         ]);
     }
 }

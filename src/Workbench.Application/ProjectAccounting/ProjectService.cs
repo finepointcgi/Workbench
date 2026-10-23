@@ -173,13 +173,19 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
         var weeksFrom = first.AddDays(-6);
         var staffed = db.Set<Domain.Resourcing.ResourceAllocation>().Where(r => r.EmployeeId == employeeId && r.WbsElementId != null
             && r.WeekStart >= weeksFrom && r.WeekStart <= last && (r.Hours > 0 || r.Percent > 0));
+        // So does being assigned hours on the project or a task (Assign people), between the assignment's dates, even in a
+        // week its hours don't reach: the task, the leaves under it, or every code on the project for the whole project.
+        var byTotal = await db.Set<Domain.Resourcing.StaffingAssignment>().AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId && a.From <= last && a.To >= first).ToListAsync(cancellationToken);
+        var coveredBy = byTotal.Count == 0 ? [] : await Resourcing.StaffingAssignmentService.CoveredAsync(db, byTotal, cancellationToken);
+        var covered = coveredBy.Values.SelectMany(v => v).Distinct().ToList();
         var elements = await (
                 from w in db.Set<WbsElement>().AsNoTracking()
                 join p in db.Set<Project>() on w.ProjectId equals p.Id
                 where w.IsOpen && w.IsChargeable && p.Status == ProjectStatus.Active
                       && (p.Start == null || p.Start <= last) && (p.Finish == null || p.Finish >= first)
                       && !db.Set<WbsElement>().Any(c => c.ParentId == w.Id)
-                      && (!w.RequiresAssignment || assigned.Any(a => a.WbsElementId == w.Id) || staffed.Any(r => r.WbsElementId == w.Id))
+                      && (!w.RequiresAssignment || assigned.Any(a => a.WbsElementId == w.Id) || staffed.Any(r => r.WbsElementId == w.Id) || covered.Contains(w.Id))
                 select w)
             .ToListAsync(cancellationToken);
         var projectIds = elements.Select(w => w.ProjectId).Distinct().ToList();
@@ -214,13 +220,14 @@ public sealed class ProjectService(IWorkbenchDbContextFactory dbFactory, AuditRe
                 var assignment = assignments.FirstOrDefault(a => a.WbsElementId == element.Id
                     && (a.From is null || a.From <= date) && (a.To is null || a.To >= date));
                 var staffedThatWeek = staffing.FirstOrDefault(r => r.WbsElementId == element.Id && r.WeekStart <= date && date < r.WeekStart.AddDays(7));
-                if (element.RequiresAssignment && assignment is null && staffedThatWeek is null)
+                var assignedHours = byTotal.FirstOrDefault(a => a.From <= date && date <= a.To && coveredBy[a.Id].Contains(element.Id));
+                if (element.RequiresAssignment && assignment is null && staffedThatWeek is null && assignedHours is null)
                 {
                     continue;
                 }
 
                 // An employee with no default labor category can only charge codes whose assignment (or staffing) names one.
-                if ((assignment?.LaborCategoryId ?? staffedThatWeek?.LaborCategoryId ?? employee.DefaultLaborCategoryId) is not { } laborCategoryId)
+                if ((assignment?.LaborCategoryId ?? staffedThatWeek?.LaborCategoryId ?? assignedHours?.LaborCategoryId ?? employee.DefaultLaborCategoryId) is not { } laborCategoryId)
                 {
                     continue;
                 }
