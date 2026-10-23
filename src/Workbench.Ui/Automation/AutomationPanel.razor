@@ -5,46 +5,17 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-@* The sheet's rules (with enable toggles) and their recent runs. *@
+@* The sheet's automations (with on/off switches) and their recent runs. The Automate button in the sheet's header opens the recipes. *@
 <MudStack Spacing="4">
     <MudStack Row="true" AlignItems="AlignItems.Center">
-        <MudText Typo="Typo.h6" HtmlTag="h2">Rules</MudText>
+        <MudText Typo="Typo.h6" HtmlTag="h2">Automations</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">New rule</MudButton>
+        @if (CanEdit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Bolt" OnClick="AutomateAsync" data-testid="panel-automate">Automate</MudButton>
+        }
     </MudStack>
-
-    @if (_rules is null)
-    {
-        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
-    }
-    else if (_rules.Count == 0)
-    {
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            No rules yet. Rules notify people, set fields or add subitems when something happens in this sheet.
-        </MudText>
-    }
-    else
-    {
-        <MudPaper Outlined="true">
-            <MudList T="RuleDto" Dense="true">
-                @foreach (var rule in _rules)
-                {
-                    <MudListItem T="RuleDto" @key="rule.Id">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                            <MudSwitch T="bool" Value="rule.Enabled" ValueChanged="v => SetEnabledAsync(rule, v)" Color="Color.Primary"
-                                       aria-label="@($"Enable {rule.Name}")" />
-                            <div style="flex:1;min-width:0">
-                                <MudText Typo="Typo.body1">@rule.Name</MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="overflow-wrap:anywhere">@RuleFormat.Describe(Sheet, rule)</MudText>
-                            </div>
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="@($"Edit {rule.Name}")" OnClick="() => EditAsync(rule)" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Delete {rule.Name}")" OnClick="() => DeleteAsync(rule)" />
-                        </MudStack>
-                    </MudListItem>
-                }
-            </MudList>
-        </MudPaper>
-    }
+    <SheetAutomationList @ref="_list" SheetId="Sheet.Summary.Id" CanEdit="CanEdit" Version="Version" />
 
     <MudText Typo="Typo.h6" HtmlTag="h2">Recent runs</MudText>
     @if (_runs is { Count: 0 })
@@ -55,7 +26,7 @@
     {
         <MudSimpleTable Dense="true" Hover="true" Outlined="true">
             <thead>
-                <tr><th>When</th><th>Rule</th><th>Item</th><th>Result</th></tr>
+                <tr><th>When</th><th>Automation</th><th>Item</th><th>Result</th></tr>
             </thead>
             <tbody>
                 @foreach (var run in _runs)
@@ -95,7 +66,12 @@
     [Parameter]
     public int Version { get; set; }
 
-    private IReadOnlyList<RuleDto>? _rules;
+    [CascadingParameter]
+    public SheetAccess? Access { get; set; }
+
+    private bool CanEdit => Access?.CanEdit ?? false;
+
+    private SheetAutomationList? _list;
     private IReadOnlyList<RuleRunDto>? _runs;
     private (Guid, int)? _loaded;
 
@@ -112,63 +88,21 @@
     {
         try
         {
-            _rules = await Rules.ListAsync(Sheet.Summary.Id);
             _runs = await Rules.ListRunsAsync(Sheet.Summary.Id, limit: 25);
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
         {
-            _rules ??= [];
             _runs ??= [];
-            Snackbar.Add($"Couldn't load rules: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Couldn't load the runs: {ex.Message}", Severity.Error);
         }
     }
 
-    private async Task EditAsync(RuleDto? rule)
+    private async Task AutomateAsync()
     {
-        var parameters = new DialogParameters<RuleEditorDialog>
+        await AutomateDialog.ShowAsync(DialogService, Sheet.Summary.Id, Sheet.Summary.Name, CanEdit);
+        if (_list is not null)
         {
-            { d => d.Sheet, Sheet },
-            { d => d.Items, Items },
-            { d => d.Rule, rule },
-        };
-        var dialog = await DialogService.ShowAsync<RuleEditorDialog>(null, parameters,
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
-        if (await dialog.Result is { Canceled: false })
-        {
-            await LoadAsync();
-        }
-    }
-
-    private async Task SetEnabledAsync(RuleDto rule, bool enabled)
-    {
-        try
-        {
-            await Rules.SetEnabledAsync(Sheet.Summary.Id, rule.Id, enabled);
-            await LoadAsync();
-        }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
-        {
-            Snackbar.Add($"Couldn't update the rule: {ex.Message}", Severity.Error);
-        }
-    }
-
-    private async Task DeleteAsync(RuleDto rule)
-    {
-        var parameters = new DialogParameters<ConfirmDialog> { { d => d.Message, $"Delete \"{rule.Name}\" and its run history?" } };
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete rule", parameters);
-        if (await dialog.Result is not { Canceled: false })
-        {
-            return;
-        }
-
-        try
-        {
-            await Rules.DeleteAsync(Sheet.Summary.Id, rule.Id);
-            await LoadAsync();
-        }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
-        {
-            Snackbar.Add($"Couldn't delete the rule: {ex.Message}", Severity.Error);
+            await _list.LoadAsync();
         }
     }
 

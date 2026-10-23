@@ -8,7 +8,8 @@
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Automation</MudText>
 <MudText Class="mud-text-secondary mb-4">
     When something happens anywhere in Workbench, check your conditions and act: notify people, set a field, create a to-do, route an
-    approval, post to a channel, call a webhook, or refuse the change with a message. Automations act with their user's access, never more.
+    approval, post to a channel, call a webhook, or refuse the change with a message. Sheet automations (each sheet's Automate button) are
+    listed here too. Automations act with their user's access, never more.
 </MudText>
 
 @if (_forbidden is not null)
@@ -28,12 +29,19 @@ else
         <MudTabPanel Text="Automations" Icon="@Icons.Material.Filled.Bolt">
             <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="admin/automation/new" data-testid="automation-new">New automation</MudButton>
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="() => OnTabChanged(2)">Start from a template</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="() => OnTabChanged(2)" data-testid="automation-recipes">Start from a recipe</MudButton>
+                <MudSpacer />
+                <MudChipSet T="string" @bind-SelectedValue="_scope" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" aria-label="Show">
+                    <MudChip T="string" Value="@("all")" Variant="Variant.Text" Color="Color.Primary">All</MudChip>
+                    <MudChip T="string" Value="@("records")" Variant="Variant.Text" Color="Color.Primary">Across modules</MudChip>
+                    <MudChip T="string" Value="@("sheets")" Variant="Variant.Text" Color="Color.Primary" data-testid="filter-sheets">On sheets</MudChip>
+                </MudChipSet>
             </MudStack>
-            <MudTable T="AutomationSummaryDto" Items="_automations" Loading="_automations is null" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+            <MudTable T="AutomationSummaryDto" Items="Shown" Loading="_automations is null" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
                       OnRowClick="Open" RowStyle="cursor:pointer" aria-label="Automations" data-testid="automations-table">
                 <HeaderContent>
                     <MudTh>Name</MudTh>
+                    <MudTh>Where</MudTh>
                     <MudTh>When</MudTh>
                     <MudTh>On</MudTh>
                     <MudTh>Last run</MudTh>
@@ -46,6 +54,18 @@ else
                         @if (context.Description is { } description)
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@description</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Where">
+                        @if (context.SheetId is { } sheetId)
+                        {
+                            <MudLink Href="@($"sheets/{sheetId}")" @onclick:stopPropagation="true" Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.GridOn" Size="Size.Small" Style="vertical-align:middle" /> @context.SheetName
+                            </MudLink>
+                        }
+                        else
+                        {
+                            <span>@(context.EntityType is { } type ? EntityLabel(type) : "Workbench")</span>
                         }
                     </MudTd>
                     <MudTd DataLabel="When">@context.TriggerSummary</MudTd>
@@ -67,7 +87,7 @@ else
                     <MudTd DataLabel="Last 7 days">@context.RunsLast7Days run@(context.RunsLast7Days == 1 ? "" : "s")@(context.FailuresLast7Days > 0 ? $", {context.FailuresLast7Days} failed" : "")</MudTd>
                     <MudTd DataLabel="Version">v@(context.Version)</MudTd>
                 </RowTemplate>
-                <NoRecordsContent><MudText>No automations yet. Start from a template or build one.</MudText></NoRecordsContent>
+                <NoRecordsContent><MudText>No automations yet. Start from a recipe or build one.</MudText></NoRecordsContent>
             </MudTable>
         </MudTabPanel>
 
@@ -75,19 +95,23 @@ else
             <RunLog />
         </MudTabPanel>
 
-        <MudTabPanel Text="Templates" Icon="@Icons.Material.Filled.AutoAwesome">
+        <MudTabPanel Text="Recipes" Icon="@Icons.Material.Filled.AutoAwesome">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                Pick a sentence, fill in the blanks, and adjust it in the builder. Recipes for sheets (status changes, dates arriving, form submissions, moving rows)
+                are on each sheet's <strong>Automate</strong> button.
+            </MudText>
             <MudGrid Spacing="3">
-                @foreach (var template in Automations.ListTemplates())
+                @foreach (var template in Automations.ListTemplates().Where(t => t.Scope == AutomationRecipeScope.Record))
                 {
                     <MudItem xs="12" sm="6" md="4">
                         <MudCard Outlined="true" Style="height:100%" data-testid="@($"template-{template.Key}")">
                             <MudCardContent>
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Class="ml-0">@template.Category</MudChip>
-                                <MudText Typo="Typo.subtitle1" HtmlTag="h2">@template.Name</MudText>
+                                <MudText Typo="Typo.subtitle1" HtmlTag="h2"><RecipeSentence Recipe="template" /></MudText>
                                 <MudText Typo="Typo.body2" Class="mud-text-secondary">@template.Description</MudText>
                             </MudCardContent>
                             <MudCardActions>
-                                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"admin/automation/new?template={template.Key}")">Use this template</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"admin/automation/new?recipe={template.Key}")">Use this recipe</MudButton>
                             </MudCardActions>
                         </MudCard>
                     </MudItem>
@@ -116,7 +140,26 @@ else
 }
 
 @code {
-    private static readonly string[] Tabs = ["automations", "runs", "templates", "approvals", "settings"];
+    private static readonly string[] Tabs = ["automations", "runs", "recipes", "approvals", "settings"];
+
+    private string? _scope = "all";
+
+    private IEnumerable<AutomationSummaryDto>? Shown => _scope switch
+    {
+        "sheets" => _automations?.Where(a => a.SheetId is not null),
+        "records" => _automations?.Where(a => a.SheetId is null),
+        _ => _automations,
+    };
+
+    private static string EntityLabel(string key) => key switch
+    {
+        "expense-report" => "Expense reports",
+        "expense-line" => "Expense lines and ODCs",
+        "ap-bill" => "AP bills",
+        "purchase-order" => "Purchase orders",
+        "sheet-item" => "Sheet rows",
+        _ => char.ToUpperInvariant(key[0]) + key[1..] + "s",
+    };
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }
@@ -129,7 +172,7 @@ else
     private int _depth;
     private int _rate;
 
-    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "automations"));
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery == "templates" ? "recipes" : TabQuery ?? "automations"));
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,7 +197,8 @@ else
         (_paused, _depth, _rate) = (settings.PausedAll, settings.MaxChainDepth, settings.MaxRunsPerRecordPerHour);
     }
 
-    private void Open(TableRowClickEventArgs<AutomationSummaryDto> args) => Navigation.NavigateTo($"admin/automation/{args.Item!.Id}");
+    private void Open(TableRowClickEventArgs<AutomationSummaryDto> args) =>
+        Navigation.NavigateTo(args.Item!.SheetId is { } sheet ? $"sheets/{sheet}/automations/{args.Item.Id}" : $"admin/automation/{args.Item.Id}");
 
     private void OnTabChanged(int index)
     {

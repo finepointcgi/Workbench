@@ -1,0 +1,173 @@
+@* A recipe as a sentence with blanks: chips in the gallery, inline pickers in the builder ("When [Status ▾] changes to [Done ▾], notify [Owner ▾]"). *@
+
+<span class="recipe-sentence" data-testid="recipe-sentence">
+    @foreach (var part in Parts())
+    {
+        if (part.Blank is not { } blank)
+        {
+            <span>@part.Text</span>
+        }
+        else if (!Editable)
+        {
+            <span class="recipe-blank" title="@blank.Label">@Preview(blank)</span>
+        }
+        else
+        {
+            <span class="recipe-input" data-testid="@($"blank-{blank.Key}")">
+                @switch (blank.Kind)
+                {
+                    case AutomationRecipeBlankKind.Column or AutomationRecipeBlankKind.DateColumn or AutomationRecipeBlankKind.PersonColumn:
+                        <MudSelect T="string" Value="Get(blank.Key)" ValueChanged="v => SetAsync(blank.Key, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                   aria-label="@blank.Label" Placeholder="@blank.Label" ToStringFunc="FieldLabel">
+                            @foreach (var field in Columns(blank.Kind))
+                            {
+                                <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                        break;
+                    case AutomationRecipeBlankKind.ColumnValue when Options(blank) is { Count: > 0 } options:
+                        <MudSelect T="string" Value="Get(blank.Key)" ValueChanged="v => SetAsync(blank.Key, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                   aria-label="@blank.Label" Placeholder="@blank.Label">
+                            @foreach (var option in options)
+                            {
+                                <MudSelectItem Value="option">@option</MudSelectItem>
+                            }
+                        </MudSelect>
+                        break;
+                    case AutomationRecipeBlankKind.Sheet:
+                        <MudSelect T="string" Value="Get(blank.Key)" ValueChanged="v => SetAsync(blank.Key, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                   aria-label="@blank.Label" Placeholder="choose a sheet" ToStringFunc="@(id => Sheet?.TargetSheets.FirstOrDefault(s => s.Id == id)?.Label ?? id ?? "")">
+                            @foreach (var target in Sheet?.TargetSheets ?? [])
+                            {
+                                <MudSelectItem Value="target.Id">@target.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                        break;
+                    case AutomationRecipeBlankKind.ApprovalWorkflow:
+                        <MudSelect T="string" Value="Get(blank.Key)" ValueChanged="v => SetAsync(blank.Key, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                   aria-label="@blank.Label" Placeholder="choose a workflow" ToStringFunc="@(id => Workflows.FirstOrDefault(w => w.Id == id)?.Label ?? id ?? "")">
+                            @foreach (var workflow in Workflows)
+                            {
+                                <MudSelectItem Value="workflow.Id">@workflow.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                        break;
+                    default:
+                        <MudTextField T="string" Value="Get(blank.Key)" ValueChanged="v => SetAsync(blank.Key, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                      aria-label="@blank.Label" Placeholder="@(blank.Kind == AutomationRecipeBlankKind.Person ? "name@example.com" : blank.Label)"
+                                      InputType="@(blank.Kind == AutomationRecipeBlankKind.Number ? InputType.Number : blank.Kind == AutomationRecipeBlankKind.Person ? InputType.Email : InputType.Text)"
+                                      DebounceInterval="400" Immediate="true" />
+                        break;
+                }
+            </span>
+        }
+    }
+</span>
+
+<style>
+    .recipe-sentence { line-height: 2.6; }
+    .recipe-blank { display: inline-block; padding: 0 .5em; margin: 0 .1em; border-radius: 6px; background: var(--mud-palette-primary-hover); color: var(--mud-palette-primary); font-weight: 600; line-height: 1.7; }
+    .recipe-input { display: inline-block; min-width: 9em; max-width: 16em; margin: 0 .25em; vertical-align: middle; }
+    .recipe-input .mud-input-control { margin-top: 0; }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public AutomationTemplateDto Recipe { get; set; } = default!;
+    [Parameter] public bool Editable { get; set; }
+    [Parameter] public Dictionary<string, string?> Blanks { get; set; } = [];
+    [Parameter] public SheetAutomationCatalogDto? Sheet { get; set; }
+    [Parameter] public IReadOnlyList<AutomationOptionDto> Workflows { get; set; } = [];
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private sealed record Part(string? Text, AutomationRecipeBlankDto? Blank);
+
+    private IEnumerable<Part> Parts()
+    {
+        var sentence = Recipe.Sentence ?? Recipe.Name;
+        var at = 0;
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(sentence, @"\{([a-z]+)\}"))
+        {
+            if (m.Index > at)
+            {
+                yield return new Part(sentence[at..m.Index], null);
+            }
+
+            var blank = Recipe.Blanks?.FirstOrDefault(b => b.Key == m.Groups[1].Value);
+            yield return blank is null ? new Part(m.Value, null) : new Part(null, blank);
+            at = m.Index + m.Length;
+        }
+
+        if (at < sentence.Length)
+        {
+            yield return new Part(sentence[at..], null);
+        }
+    }
+
+    private static string Preview(AutomationRecipeBlankDto blank) => blank.Kind switch
+    {
+        AutomationRecipeBlankKind.DateColumn when blank.Default is "start" or "finish" => char.ToUpperInvariant(blank.Default[0]) + blank.Default[1..],
+        AutomationRecipeBlankKind.Number => blank.Default ?? "n",
+        _ => blank.Default ?? blank.Label.ToLowerInvariant(),
+    };
+
+    private string? Get(string key) => Blanks.GetValueOrDefault(key);
+
+    private async Task SetAsync(string key, string? value)
+    {
+        Blanks[key] = value;
+        if (Recipe.Blanks?.Where(b => b.DependsOn == key) is { } dependents)
+        {
+            foreach (var dependent in dependents)
+            {
+                // A value of the old column may not be one of the new column's.
+                if (Options(dependent) is { Count: > 0 } options && Get(dependent.Key) is { } current && !options.Contains(current))
+                {
+                    Blanks[dependent.Key] = options.FirstOrDefault(o => o.Equals(dependent.Default, StringComparison.OrdinalIgnoreCase)) ?? options[0];
+                }
+            }
+        }
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private IEnumerable<SheetAutomationFieldDto> Columns(AutomationRecipeBlankKind kind) => (Sheet?.Fields ?? []).Where(f => !f.IsFormula && kind switch
+    {
+        AutomationRecipeBlankKind.PersonColumn => f.Type == "Person",
+        AutomationRecipeBlankKind.DateColumn => f.Type == "Date",
+        _ => true,
+    });
+
+    private string FieldLabel(string? key) => Sheet?.Fields.FirstOrDefault(f => f.Key == key)?.Label ?? key ?? "";
+
+    private IReadOnlyList<string> Options(AutomationRecipeBlankDto blank) =>
+        blank.DependsOn is { } column && Sheet?.Fields.FirstOrDefault(f => f.Key == Get(column)) is { } field ? field.Options : [];
+
+    /// <summary>The blanks' starting values on a sheet: defaults, with column defaults matched to the sheet's columns by name.</summary>
+    public static Dictionary<string, string?> Defaults(AutomationTemplateDto recipe, SheetAutomationCatalogDto? sheet)
+    {
+        var blanks = new Dictionary<string, string?>();
+        foreach (var blank in recipe.Blanks ?? [])
+        {
+            blanks[blank.Key] = blank.Kind switch
+            {
+                AutomationRecipeBlankKind.Column or AutomationRecipeBlankKind.DateColumn or AutomationRecipeBlankKind.PersonColumn =>
+                    sheet?.Fields.FirstOrDefault(f => f.Key == blank.Default || f.Label.Equals(blank.Default, StringComparison.OrdinalIgnoreCase))?.Key
+                    ?? (blank.Kind == AutomationRecipeBlankKind.PersonColumn ? sheet?.Fields.FirstOrDefault(f => f.Type == "Person")?.Key
+                        : blank.Kind == AutomationRecipeBlankKind.DateColumn ? sheet?.Fields.FirstOrDefault(f => f.Type == "Date")?.Key
+                        : sheet?.Fields.FirstOrDefault(f => f.Type == "Dropdown")?.Key),
+                _ => blank.Default,
+            };
+        }
+
+        foreach (var blank in (recipe.Blanks ?? []).Where(b => b.DependsOn is not null))
+        {
+            var options = sheet?.Fields.FirstOrDefault(f => f.Key == blanks.GetValueOrDefault(blank.DependsOn!))?.Options ?? [];
+            if (options.Count > 0 && !options.Contains(blanks[blank.Key] ?? ""))
+            {
+                blanks[blank.Key] = options.FirstOrDefault(o => o.Equals(blank.Default, StringComparison.OrdinalIgnoreCase)) ?? options[^1];
+            }
+        }
+
+        return blanks;
+    }
+}

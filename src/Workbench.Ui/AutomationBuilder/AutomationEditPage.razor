@@ -1,19 +1,28 @@
 @page "/admin/automation/new"
 @page "/admin/automation/{Id:guid}"
+@page "/sheets/{SheetId:guid}/automations/new"
+@page "/sheets/{SheetId:guid}/automations/{Id:guid}"
 @inject IAutomationService Automations
 @inject NavigationManager Navigation
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
-<PageTitle>@(Id is null ? "New automation" : _name) · Automation · Workbench</PageTitle>
+<PageTitle>@(Id is null ? "New automation" : _name) · @(_sheet?.SheetName ?? "Automation") · Workbench</PageTitle>
 
-<MudLink Href="admin/automation" Typo="Typo.caption" Class="mb-2 d-block">← All automations</MudLink>
+@if (_sheet is { } back)
+{
+    <MudLink Href="@($"sheets/{back.SheetId}")" Typo="Typo.caption" Class="mb-2 d-block" data-testid="back-to-sheet">← Back to @back.SheetName</MudLink>
+}
+else
+{
+    <MudLink Href="admin/automation" Typo="Typo.caption" Class="mb-2 d-block">← All automations</MudLink>
+}
 
 @if (_error is not null)
 {
     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@_error</MudAlert>
 }
-else if (_catalog is null)
+else if (_catalog is null && _sheet is null)
 {
     <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
 }
@@ -21,6 +30,10 @@ else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4" Wrap="Wrap.Wrap">
         <MudText Typo="Typo.h4" HtmlTag="h1">@(Id is null ? "New automation" : _name)</MudText>
+        @if (_sheet is { } on)
+        {
+            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.GridOn" Variant="Variant.Text">@on.SheetName</MudChip>
+        }
         @if (_saved is not null)
         {
             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Version @_saved.Version</MudChip>
@@ -31,6 +44,19 @@ else
 
     <MudGrid Spacing="3">
         <MudItem xs="12" md="8">
+            @if (_recipe is { } recipe)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mb-3" Style="border-color: var(--mud-palette-primary)" data-testid="recipe-panel">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Color="Color.Primary" Size="Size.Small" />
+                        <MudText Typo="Typo.subtitle2">Recipe: fill in the blanks</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.h6" HtmlTag="p">
+                        <RecipeSentence Recipe="recipe" Editable="true" Blanks="_blanks" Sheet="_sheet" Workflows="Workflows" OnChanged="RebuildAsync" />
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Filling in the blanks sets up the steps below; change anything there before you save.</MudText>
+                </MudPaper>
+            }
             <MudPaper Outlined="true" Class="pa-4 mb-3">
                 <MudTextField @bind-Value="_name" Label="Name" Required="true" data-testid="automation-name" />
                 <MudTextField @bind-Value="_description" Label="Description" Lines="2" Sizing="InputSizing.Auto" />
@@ -42,6 +68,12 @@ else
                     <MudAvatar Size="Size.Small" Color="Color.Primary">1</MudAvatar>
                     <MudText Typo="Typo.h6" HtmlTag="h2">When</MudText>
                 </MudStack>
+                @if (_sheet is { } sheet)
+                {
+                    @SheetTriggerEditor(sheet)
+                }
+                else
+                {
                 <MudSelect T="AutomationTriggerKind" Value="_trigger.Kind" ValueChanged="SetTriggerKind" Label="Trigger" data-testid="trigger-kind">
                     @foreach (var kind in Enum.GetValues<AutomationTriggerKind>())
                     {
@@ -165,6 +197,7 @@ else
                             break;
                     }
                 </MudGrid>
+                }
             </MudPaper>
             <div class="d-flex justify-center my-1"><MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Class="mud-text-secondary" /></div>
 
@@ -178,7 +211,14 @@ else
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">No conditions: it acts every time.</MudText>
                     }
                 </MudStack>
-                <ConditionGroupEditor Group="_conditions" Fields="Fields" Catalog="_catalog" />
+                @if (_sheet is { } conditionSheet)
+                {
+                    <ConditionGroupEditor Group="_conditions" Fields="AutomationUi.SheetFields(conditionSheet)" Catalog="ConditionGroupEditor.NoCatalog" FieldsOnly="true" />
+                }
+                else
+                {
+                    <ConditionGroupEditor Group="_conditions" Fields="Fields" Catalog="_catalog!" />
+                }
             </MudPaper>
             <div class="d-flex justify-center my-1"><MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Class="mud-text-secondary" /></div>
 
@@ -190,12 +230,31 @@ else
                 </MudStack>
                 @foreach (var (action, index) in _actions.Select((a, i) => (a, i)))
                 {
-                    <ActionEditor Action="action" Index="index" IsLast="index == _actions.Count - 1" Catalog="_catalog" Entity="Entity" Fields="Fields" SelfId="@Id?.ToString()"
-                                  OnRemove="() => _actions.RemoveAt(index)" OnMove="by => Move(index, by)" />
+                    if (_sheet is { } actionSheet)
+                    {
+                        <SheetActionEditor @key="action" Action="action" Index="index" IsLast="index == _actions.Count - 1" Sheet="actionSheet"
+                                           OnRemove="() => _actions.RemoveAt(index)" OnMove="by => Move(index, by)" />
+                    }
+                    else
+                    {
+                        <ActionEditor Action="action" Index="index" IsLast="index == _actions.Count - 1" Catalog="_catalog!" Entity="Entity" Fields="Fields" SelfId="@Id?.ToString()"
+                                      OnRemove="() => _actions.RemoveAt(index)" OnMove="by => Move(index, by)" />
+                    }
                 }
-                <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="() => _actions.Add(new ActionModel())" data-testid="add-action">Add action</MudButton>
+                <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddAction" data-testid="add-action">Add action</MudButton>
             </MudPaper>
 
+            @if (_sheet is not null)
+            {
+                <MudPaper Outlined="true" Class="pa-4 mb-3">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h2">Acts as</MudText>
+                    <MudText Typo="Typo.body2">Whoever saves it last. Changes show in the sheet's activity as Workbench Automation, naming it and you. Rows go to other sheets only while you can edit them,
+                        and if you lose edit access to this sheet, its date and schedule steps stop.</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Loop protection: automations that trigger each other stop after 3 steps, and each runs at most the tenant's hourly limit on a row.</MudText>
+                </MudPaper>
+            }
+            else
+            {
             <MudPaper Outlined="true" Class="pa-4 mb-3">
                 <MudText Typo="Typo.subtitle1" HtmlTag="h2">Acts as</MudText>
                 <MudRadioGroup T="AutomationRunAs" @bind-Value="_runAs">
@@ -208,6 +267,7 @@ else
                 }
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Each action is checked against this user's access. An action they couldn't do is refused and logged.</MudText>
             </MudPaper>
+            }
 
             <MudPaper Outlined="true" Class="pa-4">
                 <MudTextField @bind-Value="_note" Label="What changed (kept with the version)" />
@@ -225,7 +285,16 @@ else
             <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="dry-run">
                 <MudText Typo="Typo.h6" HtmlTag="h2">Test it</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">A dry run against a record shows what would happen with the definition on this page. Nothing changes.</MudText>
-                @if (Entity is not null)
+                @if (_sheet is { } drySheet)
+                {
+                    <MudSelect T="string" @bind-Value="_recordId" Label="Row" data-testid="dry-run-record">
+                        @foreach (var row in drySheet.Rows)
+                        {
+                            <MudSelectItem Value="row.Id">@row.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else if (Entity is not null)
                 {
                     <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Label="@($"Find a record ({Entity.Label.ToLowerInvariant()})")" Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" DebounceInterval="300" />
@@ -237,7 +306,7 @@ else
                     </MudSelect>
                 }
                 <MudStack Row="true" Spacing="2" Class="mt-2">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Science" Disabled="_busy || (Entity is not null && _recordId is null)" OnClick="DryRunAsync" data-testid="dry-run-button">Dry run</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Science" Disabled="_busy || ((Entity is not null || _sheet is not null) && _recordId is null)" OnClick="DryRunAsync" data-testid="dry-run-button">Dry run</MudButton>
                     @if (Id is not null && _saved?.Definition.Trigger.Kind == AutomationTriggerKind.Manual)
                     {
                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PlayArrow" Disabled="_busy || (Entity is not null && _recordId is null)" OnClick="RunNowAsync">Run now</MudButton>
@@ -306,8 +375,21 @@ else
 @code {
     [Parameter] public Guid? Id { get; set; }
 
+    /// <summary>Sheet automations: the sheet (from <c>/sheets/{id}/automations/…</c>); the builder offers that sheet's columns and sheet actions.</summary>
+    [Parameter] public Guid? SheetId { get; set; }
+
     [SupplyParameterFromQuery(Name = "template")]
     public string? TemplateKey { get; set; }
+
+    /// <summary>A recipe from the gallery to start from (its blanks are filled in at the top).</summary>
+    [SupplyParameterFromQuery(Name = "recipe")]
+    public string? RecipeKey { get; set; }
+
+    private SheetAutomationCatalogDto? _sheet;
+    private AutomationTemplateDto? _recipe;
+    private Dictionary<string, string?> _blanks = [];
+
+    private IReadOnlyList<AutomationOptionDto> Workflows => _sheet?.ApprovalWorkflows ?? _catalog?.ApprovalWorkflows ?? [];
 
     private AutomationCatalogDto? _catalog;
     private AutomationDto? _saved;
@@ -340,15 +422,33 @@ else
     {
         try
         {
-            _catalog ??= await Automations.GetCatalogAsync();
-            if (Id is { } id)
+            AutomationDto? saved = Id is { } id ? await Automations.GetAsync(id) : null;
+            var sheetId = saved?.Definition.Trigger.SheetId ?? SheetId;
+            if (sheetId is { } sheet)
             {
-                Load(await Automations.GetAsync(id));
+                _sheet = await Automations.GetSheetCatalogAsync(sheet);
             }
-            else if (TemplateKey is { } key && Automations.ListTemplates().FirstOrDefault(t => t.Key == key) is { } template)
+            else
             {
-                LoadRequest(template.Request);
-                _templateKey = template.Key;
+                _catalog ??= await Automations.GetCatalogAsync();
+            }
+
+            if (saved is not null)
+            {
+                Load(saved);
+            }
+            else if ((RecipeKey ?? TemplateKey) is { } key && Automations.ListTemplates().FirstOrDefault(t => t.Key == key) is { } recipe)
+            {
+                _recipe = recipe;
+                _templateKey = recipe.Key;
+                _blanks = RecipeSentence.Defaults(recipe, _sheet);
+                await RebuildAsync();
+            }
+            else if (_sheet is { } fresh)
+            {
+                // A blank sheet automation: when a column changes, set a column.
+                _trigger = new TriggerModel { Kind = AutomationTriggerKind.FieldChanged, SheetId = fresh.SheetId, FieldKey = fresh.Fields.FirstOrDefault(f => f.Type == "Dropdown")?.Key, OffsetDays = 0 };
+                _actions = [NewSheetAction(fresh)];
             }
 
             await LoadRecordsAsync();
@@ -358,6 +458,147 @@ else
             _error = ex.Message;
         }
     }
+
+    /// <summary>Rebuilds the automation from the recipe's blanks (the server fills them in).</summary>
+    private async Task RebuildAsync()
+    {
+        if (_recipe is null)
+        {
+            return;
+        }
+
+        try
+        {
+            LoadRequest(await Automations.BuildRecipeAsync(_recipe.Key, _sheet?.SheetId, _blanks));
+        }
+        catch (Exception ex) when (AutomationUi.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static ActionModel NewSheetAction(SheetAutomationCatalogDto sheet) => new()
+    {
+        Kind = AutomationActionKind.Notify,
+        Recipients = sheet.Fields.FirstOrDefault(f => f.Type == "Person") is { } person
+            ? [new RecipientModel { Kind = RecipientKind.Field, Value = person.Key }]
+            : [new RecipientModel { Kind = RecipientKind.Person, Value = "" }],
+    };
+
+    private void AddAction() => _actions.Add(_sheet is { } sheet ? NewSheetAction(sheet) : new ActionModel());
+
+    private RenderFragment SheetTriggerEditor(SheetAutomationCatalogDto sheet) => __builder =>
+    {
+        <MudSelect T="string" Value="AutomationUi.SheetTrigger(_trigger.Kind, _trigger.Events)" ValueChanged="SetSheetTrigger" Label="Trigger" data-testid="trigger-kind">
+            @foreach (var label in SheetTriggers)
+            {
+                <MudSelectItem Value="label">@label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudGrid Spacing="2" Class="mt-1">
+            @switch (_trigger.Kind)
+            {
+                case AutomationTriggerKind.FieldChanged:
+                    var options = sheet.Fields.FirstOrDefault(f => f.Key == _trigger.FieldKey)?.Options ?? [];
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="string" @bind-Value="_trigger.FieldKey" Label="Column" data-testid="trigger-field" ToStringFunc="@(k => sheet.Fields.FirstOrDefault(f => f.Key == k)?.Label ?? k ?? "")">
+                            @foreach (var field in sheet.Fields.Where(f => !f.IsFormula))
+                            {
+                                <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">@ValuePicker("From", options, () => _trigger.FromValue, v => _trigger.FromValue = v)</MudItem>
+                    <MudItem xs="6" sm="4">@ValuePicker("To", options, () => _trigger.ToValue, v => _trigger.ToValue = v)</MudItem>
+                    break;
+                case AutomationTriggerKind.DateField:
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="string" @bind-Value="_trigger.FieldKey" Label="Date" ToStringFunc="@(k => sheet.Fields.FirstOrDefault(f => f.Key == k)?.Label ?? k ?? "")">
+                            @foreach (var field in sheet.Fields.Where(f => f.Type == "Date"))
+                            {
+                                <MudSelectItem Value="field.Key">@field.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="4" sm="3"><MudNumericField T="int" @bind-Value="_trigger.OffsetDays" Label="Days" Min="0" Max="365" /></MudItem>
+                    <MudItem xs="8" sm="5">
+                        <MudSelect T="bool" @bind-Value="_trigger.OffsetBefore" Label="Before or after" Disabled="_trigger.OffsetDays == 0">
+                            <MudSelectItem Value="true">before the date</MudSelectItem>
+                            <MudSelectItem Value="false">after the date</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12"><MudText Typo="Typo.caption" Class="mud-text-secondary">Checked every hour; it runs once per row and date (0 days: on the day itself).</MudText></MudItem>
+                    break;
+                case AutomationTriggerKind.Schedule:
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="ScheduleFrequency" @bind-Value="_trigger.Frequency" Label="Every">
+                            <MudSelectItem Value="ScheduleFrequency.Daily">Day</MudSelectItem>
+                            <MudSelectItem Value="ScheduleFrequency.Weekly">Week</MudSelectItem>
+                            <MudSelectItem Value="ScheduleFrequency.Monthly">Month</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    @if (_trigger.Frequency == ScheduleFrequency.Weekly)
+                    {
+                        <MudItem xs="6" sm="4">
+                            <MudSelect T="DayOfWeek" @bind-Value="_trigger.DayOfWeek" Label="On">
+                                @foreach (var day in Enum.GetValues<DayOfWeek>())
+                                {
+                                    <MudSelectItem Value="day">@day</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+                    else if (_trigger.Frequency == ScheduleFrequency.Monthly)
+                    {
+                        <MudItem xs="6" sm="4"><MudNumericField T="int" @bind-Value="_trigger.DayOfMonth" Label="On day" Min="1" Max="31" /></MudItem>
+                    }
+                    <MudItem xs="6" sm="4"><MudNumericField T="int" @bind-Value="_trigger.Hour" Label="From hour (0–23)" Min="0" Max="23" /></MudItem>
+                    <MudItem xs="12"><MudText Typo="Typo.caption" Class="mud-text-secondary">It runs on each row that matches the conditions below.</MudText></MudItem>
+                    break;
+                default:
+                    <MudItem xs="12"><MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @(_trigger.Events.Contains(RecordEventKind.AddedByForm) ? "When a form adds a row to this sheet." : "When anyone (or another automation) adds a row, including rows added by an Excel import.")
+                    </MudText></MudItem>
+                    break;
+            }
+        </MudGrid>
+    };
+
+    private static readonly string[] SheetTriggers = ["An item is added", "An item is added by a form", "A column changes", "A date arrives", "On a recurring schedule"];
+
+    private void SetSheetTrigger(string label)
+    {
+        (_trigger.Kind, _trigger.Events) = label switch
+        {
+            "An item is added" => (AutomationTriggerKind.RecordEvent, (IReadOnlyCollection<RecordEventKind>)[RecordEventKind.Created]),
+            "An item is added by a form" => (AutomationTriggerKind.RecordEvent, [RecordEventKind.AddedByForm]),
+            "A column changes" => (AutomationTriggerKind.FieldChanged, _trigger.Events),
+            "A date arrives" => (AutomationTriggerKind.DateField, _trigger.Events),
+            _ => (AutomationTriggerKind.Schedule, _trigger.Events),
+        };
+        if (_trigger.Kind == AutomationTriggerKind.DateField)
+        {
+            _trigger.OffsetDays = 0;
+            _trigger.FieldKey = _sheet?.Fields.Any(f => f.Key == _trigger.FieldKey && f.Type == "Date") == true ? _trigger.FieldKey : "finish";
+        }
+    }
+
+    private RenderFragment ValuePicker(string label, IReadOnlyList<string> options, Func<string?> get, Action<string?> set) => __builder =>
+    {
+        if (options.Count > 0)
+        {
+            <MudSelect T="string" Value="get()" ValueChanged="set" Label="@label" Clearable="true" Placeholder="any value">
+                @foreach (var option in options)
+                {
+                    <MudSelectItem Value="option">@option</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else
+        {
+            <MudTextField T="string" Value="get()" ValueChanged="set" Label="@label" Placeholder="any value" />
+        }
+    };
 
     private void Load(AutomationDto automation)
     {
@@ -409,6 +650,11 @@ else
 
     private async Task LoadRecordsAsync()
     {
+        if (_sheet is not null)
+        {
+            return;
+        }
+
         var entity = Entity?.Key;
         if (entity is null || _recordsFor == $"{entity}|{_search}")
         {
@@ -431,7 +677,13 @@ else
     }
 
     private AutomationDefinition Definition() =>
-        new(_trigger.ToTrigger(), _conditions.ToGroup(), _actions.Select(a => a.ToAction()).ToList(), _runAs, _runAs == AutomationRunAs.ServicePrincipal ? _principal : null);
+        new((_sheet is { } sheet ? With(_trigger, sheet.SheetId) : _trigger).ToTrigger(), _conditions.ToGroup(), _actions.Select(a => a.ToAction()).ToList(), _runAs, _runAs == AutomationRunAs.ServicePrincipal ? _principal : null);
+
+    private static TriggerModel With(TriggerModel trigger, Guid sheetId)
+    {
+        trigger.SheetId = sheetId;
+        return trigger;
+    }
 
     private async Task SaveAsync()
     {
@@ -453,7 +705,7 @@ else
             {
                 var created = await Automations.CreateAsync(request);
                 Snackbar.Add($"Created {created.Name}", Severity.Success);
-                Navigation.NavigateTo($"admin/automation/{created.Id}");
+                Navigation.NavigateTo(_sheet is { } sheet ? $"sheets/{sheet.SheetId}/automations/{created.Id}" : $"admin/automation/{created.Id}");
             }
         }
         catch (Exception ex) when (AutomationUi.IsExpected(ex))
@@ -471,7 +723,8 @@ else
         _busy = true;
         try
         {
-            _result = await Automations.DryRunAsync(new AutomationDryRunRequest(Id, Definition(), Guid.TryParse(_recordId, out var record) ? record : null, Entity?.Key, _name));
+            _result = await Automations.DryRunAsync(new AutomationDryRunRequest(Id, Definition(), Guid.TryParse(_recordId, out var record) ? record : null,
+                _sheet is null ? Entity?.Key : AutomationSheets.EntityType, _name));
             if (_log is not null)
             {
                 await _log.LoadAsync();
@@ -532,7 +785,7 @@ else
         try
         {
             await Automations.DeleteAsync(Id!.Value);
-            Navigation.NavigateTo("admin/automation");
+            Navigation.NavigateTo(_sheet is { } sheet ? $"sheets/{sheet.SheetId}" : "admin/automation");
         }
         catch (Exception ex) when (AutomationUi.IsExpected(ex))
         {
