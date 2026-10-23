@@ -1,4 +1,4 @@
-@* Imports a plan from Excel: choose a file, see what it adds, changes and removes (and any row errors), then apply. *@
+@* Imports a plan from Excel or MS Project XML: choose a file, see what it adds, changes and removes (and any row errors), then apply. *@
 @using Workbench.Contracts
 @using Workbench.Contracts.Scheduling
 @inject IPlanScheduleService Plans
@@ -10,11 +10,16 @@
             The file replaces the plan: its rows are the tasks, in order, and tasks that aren't in it are removed.
             Nothing changes until you choose Import.
         </MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" data-testid="plan-import-msproject-hint">
+            From MS Project: use File › Save As and choose <strong>XML Format (*.xml)</strong>, then choose that file here. Workbench reads
+            tasks, outline, durations, links (FS, SS, FF, SF with lag), constraints, % complete and resources. It can't read .mpp files,
+            MS Project's own closed format.
+        </MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-            <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".xlsx,.xlsm,.csv">
+            <MudFileUpload T="IBrowserFile" FilesChanged="FileChosenAsync" Accept=".xlsx,.xlsm,.csv,.xml">
                 <CustomContent>
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync"
-                               Disabled="_busy" data-testid="plan-import-choose">Choose an Excel file</MudButton>
+                               Disabled="_busy" data-testid="plan-import-choose">Choose a file (.xlsx or .xml)</MudButton>
                 </CustomContent>
                 <SelectedTemplate />
             </MudFileUpload>
@@ -41,7 +46,7 @@
                     @(preview.HasErrors ? "Fix these rows in the file and choose it again. Nothing has been imported." : "Check these rows; they won't stop the import.")
                 </MudAlert>
                 <MudSimpleTable Dense="true" Striped="true" Class="mb-3" data-testid="plan-import-issues">
-                    <thead><tr><th scope="col">Row</th><th scope="col">Problem</th></tr></thead>
+                    <thead><tr><th scope="col">@RowLabel</th><th scope="col">Problem</th></tr></thead>
                     <tbody>
                         @foreach (var issue in preview.Issues)
                         {
@@ -65,7 +70,7 @@
             else if (preview.Changes.Count > 0)
             {
                 <MudSimpleTable Dense="true" Class="plan-import-changes" data-testid="plan-import-changes">
-                    <thead><tr><th scope="col">Row</th><th scope="col">Change</th><th scope="col">Task</th><th scope="col">What</th></tr></thead>
+                    <thead><tr><th scope="col">@RowLabel</th><th scope="col">Change</th><th scope="col">Task</th><th scope="col">What</th></tr></thead>
                     <tbody>
                         @foreach (var change in preview.Changes)
                         {
@@ -105,6 +110,9 @@
     private byte[]? _content;
     private PlanImportPreview? _preview;
     private bool _busy;
+
+    /// <summary>MS Project files number their tasks by ID, which is what the preview shows.</summary>
+    private string RowLabel => _fileName?.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) == true ? "Task ID" : "Row";
 
     private async Task FileChosenAsync(IBrowserFile? file)
     {

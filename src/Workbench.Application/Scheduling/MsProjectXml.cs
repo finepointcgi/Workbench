@@ -239,7 +239,11 @@ public static class MsProjectXml
         El(w, "Estimated", row.Start is null ? "1" : "0");
         El(w, "Milestone", milestone ? "1" : "0");
         El(w, "Summary", row.IsSummary ? "1" : "0");
-        El(w, "PercentComplete", Math.Round(row.PercentComplete ?? 0, 0, MidpointRounding.AwayFromZero).ToString("0", Inv));
+        if (row.PercentComplete is { } percent)
+        {
+            El(w, "PercentComplete", Math.Round(percent, 0, MidpointRounding.AwayFromZero).ToString("0", Inv));
+        }
+
         var constraint = row.Constraint is { Kind: not PlanConstraintKind.AsSoonAsPossible } c ? c : null;
         El(w, "ConstraintType", ((int)(constraint?.Kind ?? PlanConstraintKind.AsSoonAsPossible)).ToString(Inv));
         if (constraint is not null)
@@ -455,7 +459,8 @@ public static class MsProjectXml
             {
                 if (decimal.TryParse(percentText, NumberStyles.Number, Inv, out var p) && p is >= 0 and <= 100)
                 {
-                    percent = p;
+                    // MS Project writes 0 for every task not started; that's no progress, not a value worth a column.
+                    percent = p == 0 ? null : p;
                 }
                 else
                 {

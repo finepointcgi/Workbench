@@ -53,6 +53,17 @@
                     </MudSelect>
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddAsync" data-testid="add-dependency-button">Add</MudButton>
                 </MudStack>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-1">
+                    <MudSelect T="DependencyKind" @bind-Value="_type" Label="Link" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1"
+                               data-testid="add-dependency-type">
+                        @foreach (var kind in Enum.GetValues<DependencyKind>())
+                        {
+                            <MudSelectItem Value="kind">@LinkLabel(kind)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudNumericField T="int" @bind-Value="_lag" Label="Lag (working days)" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     Min="-3650" Max="3650" Style="max-width:150px" HelperText="Negative is a lead" data-testid="add-dependency-lag" />
+                </MudStack>
             }
         }
     }
@@ -80,6 +91,8 @@
 
     private IReadOnlyList<DependencyDto>? _dependencies;
     private Guid? _selected;
+    private DependencyKind _type = DependencyKind.FinishToStart;
+    private int _lag;
     private ElementReference _heading;
     private bool _busy;
     private (Guid Item, int Version)? _loaded;
@@ -106,6 +119,15 @@
         (dependency.Type == DependencyKind.FinishToStart ? "" : $" ({KindName(dependency.Type)})")
         + (dependency.LagDays != 0 ? $" {dependency.LagDays:+0;-0} working days" : "");
 
+    /// <summary>What each link type means, in the words of the dropdown.</summary>
+    private static string LinkLabel(DependencyKind kind) => kind switch
+    {
+        DependencyKind.StartToStart => "Start to start (SS): starts when it starts",
+        DependencyKind.FinishToFinish => "Finish to finish (FF): finishes when it finishes",
+        DependencyKind.StartToFinish => "Start to finish (SF): finishes before it starts",
+        _ => "Finish to start (FS): starts after it finishes",
+    };
+
     private static string KindName(DependencyKind kind) => kind switch
     {
         DependencyKind.StartToStart => "start to start",
@@ -130,8 +152,10 @@
         var title = TitleOf(predecessorId);
         await RunAsync(async () =>
         {
-            await DependencyService.AddAsync(SheetId, new CreateDependencyRequest(predecessorId, Item.Id));
+            await DependencyService.AddAsync(SheetId, new CreateDependencyRequest(predecessorId, Item.Id, _type, _lag));
             _selected = null;
+            _type = DependencyKind.FinishToStart;
+            _lag = 0;
             await LoadAsync();
             Snackbar.Add($"\"{Item.Title}\" now depends on \"{title}\".", Severity.Success);
         });

@@ -153,13 +153,17 @@ public sealed class ProjectStartService(
         }
 
         var name = request.FileName ?? "plan.xlsx";
-        var rows = PlanWorkbook.Read(name, request.Content, out var hasIdColumn);
+        var xml = MsProjectXml.IsXml(name);
+        var hasIdColumn = true;
+        var rows = xml
+            ? MsProjectXml.Read(name, request.Content).Select(r => r with { Task = r.Task with { UniqueId = null } }).ToList()
+            : PlanWorkbook.Read(name, request.Content, out hasIdColumn);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var users = await db.Set<AppUser>().AsNoTracking().Where(u => u.IsActive)
             .Select(u => new PlanUser(u.Email, u.DisplayName)).ToListAsync(cancellationToken);
         var empty = new PlanSnapshot([], [], await PlanReflow.CalendarAsync(db, cancellationToken), null, null,
             new Dictionary<Guid, IReadOnlyList<string>>(), users);
-        return PlanImport.Build(name, rows, hasIdColumn, empty).Preview;
+        return PlanImport.Build(name, rows, hasIdColumn, empty, hasConstraints: xml, unknownResourcesAreWarnings: xml).Preview;
     }
 
     /// <summary>

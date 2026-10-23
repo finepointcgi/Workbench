@@ -117,3 +117,86 @@
 .gantt-assign:hover {
     border-color: var(--mud-palette-primary);
 }
+
+.gantt-task-list.with-constraints {
+    flex-basis: 408px;
+    width: 408px;
+}
+
+.gantt-task-list.with-assignees.with-constraints {
+    flex-basis: 484px;
+    width: 484px;
+}
+
+.gantt-task-list.with-baseline {
+    flex-basis: 560px;
+    width: 560px;
+}
+
+.gantt-task-list.with-baseline.with-constraints {
+    flex-basis: 588px;
+    width: 588px;
+}
+
+.gantt-task-list.with-baseline.with-assignees {
+    flex-basis: 636px;
+    width: 636px;
+}
+
+.gantt-task-list.with-baseline.with-assignees.with-constraints {
+    flex-basis: 664px;
+    width: 664px;
+}
+
+.gantt-col-constraint {
+    flex: 0 0 28px;
+    display: flex;
+    justify-content: center;
+}
+
+.gantt-constraint {
+    display: inline-flex;
+    border: 0;
+    padding: 2px;
+    background: none;
+    cursor: pointer;
+    border-radius: 4px;
+    color: var(--mud-palette-text-disabled);
+    opacity: 0;
+}
+
+    .gantt-task-row:hover .gantt-constraint,
+    .gantt-constraint:focus-visible,
+    .gantt-constraint.set,
+    .gantt-constraint.conflict {
+        opacity: 1;
+    }
+
+    .gantt-constraint.set {
+        color: var(--mud-palette-primary);
+    }
+
+    .gantt-constraint.conflict {
+        color: var(--mud-palette-warning);
+    }
+
+    .gantt-constraint:disabled {
+        cursor: default;
+    }
+
+    .gantt-constraint:not(:disabled):hover {
+        background: var(--mud-palette-action-default-hover);
+    }
+
+.gantt-col-variance {
+    flex: 0 0 48px;
+    white-space: nowrap;
+    color: var(--mud-palette-text-secondary);
+    text-align: right;
+    padding-right: 6px;
+}
+
+    .gantt-col-variance.late {
+        color: var(--mud-palette-error);
+        font-weight: 600;
+    }
