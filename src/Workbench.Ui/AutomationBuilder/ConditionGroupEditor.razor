@@ -18,17 +18,20 @@
     @foreach (var (condition, index) in Group.Conditions.Select((c, i) => (c, i)))
     {
         <MudGrid Spacing="2" Class="mt-1" data-testid="condition">
-            <MudItem xs="12" sm="3">
-                <MudSelect T="ConditionSubject" Value="condition.Subject" ValueChanged="v => SetSubject(condition, v)" Dense="true" Label="Check" ReadOnly="ReadOnly">
-                    @foreach (var subject in Enum.GetValues<ConditionSubject>())
-                    {
-                        <MudSelectItem Value="subject">@AutomationUi.Subject(subject)</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            @if (condition.Subject == ConditionSubject.Field)
+            @if (!FieldsOnly)
             {
                 <MudItem xs="12" sm="3">
+                    <MudSelect T="ConditionSubject" Value="condition.Subject" ValueChanged="v => SetSubject(condition, v)" Dense="true" Label="Check" ReadOnly="ReadOnly">
+                        @foreach (var subject in Enum.GetValues<ConditionSubject>())
+                        {
+                            <MudSelectItem Value="subject">@AutomationUi.Subject(subject)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+            @if (condition.Subject == ConditionSubject.Field)
+            {
+                <MudItem xs="12" sm="@(FieldsOnly ? 4 : 3)">
                     <MudSelect T="string" @bind-Value="condition.FieldKey" Dense="true" Label="Field" ReadOnly="ReadOnly" data-testid="condition-field" ToStringFunc="@(key => Fields.FirstOrDefault(f => f.Key == key)?.Label ?? key)">
                         @foreach (var field in Fields)
                         {
@@ -37,7 +40,7 @@
                     </MudSelect>
                 </MudItem>
             }
-            <MudItem xs="12" sm="@(condition.Subject == ConditionSubject.Field ? 2 : 3)">
+            <MudItem xs="12" sm="@(condition.Subject == ConditionSubject.Field ? (FieldsOnly ? 3 : 2) : 3)">
                 <MudSelect T="ConditionOperator" @bind-Value="condition.Operator" Dense="true" Label="Is" ReadOnly="ReadOnly">
                     @foreach (var op in Operators(condition))
                     {
@@ -45,7 +48,7 @@
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="10" sm="@(condition.Subject == ConditionSubject.Field ? 3 : 5)">
+            <MudItem xs="10" sm="@(condition.Subject == ConditionSubject.Field ? (FieldsOnly ? 4 : 3) : 5)">
                 @if (condition.Operator is not (ConditionOperator.IsEmpty or ConditionOperator.IsNotEmpty))
                 {
                     @if (condition.Subject == ConditionSubject.Field)
@@ -89,7 +92,7 @@
 
     @foreach (var child in Group.Groups.ToList())
     {
-        <ConditionGroupEditor Group="child" Fields="Fields" Catalog="Catalog" Depth="Depth + 1" ReadOnly="ReadOnly" OnRemove="() => Group.Groups.Remove(child)" />
+        <ConditionGroupEditor Group="child" Fields="Fields" Catalog="Catalog" Depth="Depth + 1" ReadOnly="ReadOnly" FieldsOnly="FieldsOnly" OnRemove="() => Group.Groups.Remove(child)" />
     }
 
     @if (!ReadOnly)
@@ -111,6 +114,12 @@
     [Parameter] public int Depth { get; set; }
     [Parameter] public bool ReadOnly { get; set; }
     [Parameter] public EventCallback OnRemove { get; set; }
+
+    /// <summary>Sheet automations: conditions only compare the row's fields (no role, company or project subjects).</summary>
+    [Parameter] public bool FieldsOnly { get; set; }
+
+    /// <summary>A catalog with no roles, companies or projects, for <see cref="FieldsOnly"/> editors.</summary>
+    public static readonly AutomationCatalogDto NoCatalog = new([], [], [], [], [], [], [], [], [], []);
 
     private void AddCondition() => Group.Conditions.Add(new ConditionModel { FieldKey = Fields.FirstOrDefault()?.Key });
 
