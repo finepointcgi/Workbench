@@ -146,7 +146,7 @@ public sealed class ProjectStaffingService(
     internal static string Hours(decimal hours) => hours.ToString("#,##0.#", CultureInfo.InvariantCulture);
 
     /// <summary>The labor categories each person qualifies for: their own, and any they're assigned to charge in.</summary>
-    private static async Task<IReadOnlyDictionary<Guid, HashSet<Guid>>> QualificationsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> employeeIds, CancellationToken ct)
+    internal static async Task<IReadOnlyDictionary<Guid, HashSet<Guid>>> QualificationsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> employeeIds, CancellationToken ct)
     {
         var ids = employeeIds.ToList();
         var own = await db.Set<Employee>().AsNoTracking().Where(e => ids.Contains(e.Id) && e.DefaultLaborCategoryId != null)
@@ -180,7 +180,7 @@ public sealed class ProjectStaffingService(
             var capacity = CapacityCalculator.Compute(new CapacityPerson(person.Id, person.StandardHoursPerWeek, person.HireDate, person.TerminationDate), weeks, holidays, leave, 0m);
             var over = capacity
                 .Select(c => (c.WeekStart, c.Capacity, Allocated: allocated.GetValueOrDefault((person.Id, c.WeekStart))))
-                .Where(w => w.Allocated > w.Capacity + 0.005m)
+                .Where(w => CapacityCalculator.IsOverbooked(w.Allocated, w.Capacity))
                 .ToList();
             if (over.Count > 0)
             {

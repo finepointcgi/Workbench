@@ -1,0 +1,91 @@
+.wb-plan-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 32px;
+}
+
+.wb-plan-stat {
+    display: flex;
+    flex-direction: column;
+    min-width: 150px;
+}
+
+.wb-plan-label {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.wb-plan-value {
+    font-size: 1.15rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wb-plan-detail {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+a.wb-plan-detail {
+    color: var(--mud-palette-primary);
+}
+
+.wb-plan-bad {
+    color: var(--mud-palette-warning-darken);
+}
+
+.wb-plan-list {
+    margin: 4px 0 0 18px;
+    padding: 0;
+}
+
+.wb-plan-cell {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    min-height: 26px;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    border-radius: 4px;
+}
+
+.wb-plan-cell:hover,
+.wb-plan-cell:focus-visible {
+    background: color-mix(in srgb, var(--mud-palette-primary) 10%, transparent);
+    outline: 2px solid transparent;
+}
+
+.wb-plan-cell:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+}
+
+.wb-plan-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+}
+
+.wb-plan-chip-over {
+    background: color-mix(in srgb, var(--mud-palette-warning) 28%, transparent);
+    font-weight: 500;
+}
+
+.wb-plan-muted {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.8rem;
+}
+
+.wb-plan-changed {
+    font-weight: 600;
+    color: var(--mud-palette-info-darken);
+}

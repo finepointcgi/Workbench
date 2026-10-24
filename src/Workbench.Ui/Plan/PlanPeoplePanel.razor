@@ -1,0 +1,500 @@
+@* The Plan tab's people, hours and cost: a bar with the plan's totals (finish and float, hours and cost by labor category
+   against the budget, who's overbooked, the schedule check), People / Hours / Cost columns added to the plan grid, and
+   "Try changes", which shows what moving dates or changing people would do before anything is saved. People are the same
+   assignments as on Budget & staffing. Without the service, or for someone who can't see the project's staffing, it shows
+   the plan alone. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.Resourcing
+@using Workbench.Ui.Collaboration
+@using Workbench.Ui.Resourcing
+@inject IServiceProvider Services
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_plan is { } plan)
+{
+    var totals = _try?.After ?? plan.Totals;
+    <section class="wb-plan-bar mb-3" aria-labelledby="plan-totals-heading" data-testid="plan-totals">
+        <h2 id="plan-totals-heading" class="wb-sr-only">Plan totals</h2>
+        <MudPaper Outlined="true" Class="pa-3">
+            <div class="wb-plan-stats">
+                <div class="wb-plan-stat" data-testid="plan-finish">
+                    <span class="wb-plan-label">Finishes</span>
+                    <span class="wb-plan-value">@(totals.Finish is { } f ? PlanPeopleFormat.Date(f) : "No dates yet")</span>
+                    <span class="wb-plan-detail">@Was(plan.Totals.Finish != totals.Finish, PlanPeopleFormat.Date(plan.Totals.Finish))@PlanPeopleFormat.Float(totals.CriticalFloatDays)</span>
+                </div>
+                <div class="wb-plan-stat" data-testid="plan-hours">
+                    <span class="wb-plan-label">Hours</span>
+                    <span class="wb-plan-value">@PlanPeopleFormat.Hours(totals.Hours) h</span>
+                    <span class="wb-plan-detail">
+                        @Was(plan.Totals.Hours != totals.Hours, $"{PlanPeopleFormat.Hours(plan.Totals.Hours)} h")@(totals.HasBudget ? $"of {PlanPeopleFormat.Hours(totals.BudgetHours)} budgeted" : "no budget yet: the plan is the budget")
+                    </span>
+                </div>
+                @if (plan.ShowsCost)
+                {
+                    <div class="wb-plan-stat" data-testid="plan-cost">
+                        <span class="wb-plan-label">Labor cost</span>
+                        <span class="wb-plan-value">@PlanPeopleFormat.Money(totals.Cost)</span>
+                        <span class="wb-plan-detail @(totals.CostGap < 0 ? "wb-plan-bad" : null)">
+                            @Was(plan.Totals.Cost != totals.Cost, PlanPeopleFormat.Money(plan.Totals.Cost))@(plan.CostIncludesBurden ? "with fringe, overhead and G&A · " : "")@CostGapText(totals)
+                        </span>
+                    </div>
+                }
+                <div class="wb-plan-stat" data-testid="plan-overbooked">
+                    <span class="wb-plan-label">People</span>
+                    @if (totals.OverbookedPeople.Count == 0)
+                    {
+                        <span class="wb-plan-value">Everyone fits</span>
+                        <span class="wb-plan-detail">nobody is booked past their hours</span>
+                    }
+                    else
+                    {
+                        <span class="wb-plan-value wb-plan-bad"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" /> @Overbooked(totals.OverbookedPeople.Count)</span>
+                        <span class="wb-plan-detail">@string.Join(", ", totals.OverbookedPeople.Take(3))@(totals.OverbookedPeople.Count > 3 ? $" and {totals.OverbookedPeople.Count - 3} more" : "") · open their task to fix it</span>
+                    }
+                </div>
+                @if (plan.Health is { } health)
+                {
+                    <div class="wb-plan-stat" data-testid="plan-health">
+                        <span class="wb-plan-label">Schedule check</span>
+                        <span class="wb-plan-value">@health.Passed pass · @health.Failed fail</span>
+                        <a class="wb-plan-detail" href="@($"projects/{plan.ProjectId}/schedule-health")" data-testid="plan-health-link">See the 14 checks</a>
+                    </div>
+                }
+            </div>
+
+            <div class="d-flex flex-wrap align-center gap-2 mt-2">
+                <MudSwitch T="bool" Value="_showColumns" ValueChanged="ShowColumns" Color="Color.Primary" Label="People and cost on the plan" data-testid="plan-people-toggle" />
+                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@(_categoriesOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                           OnClick="() => _categoriesOpen = !_categoriesOpen" aria-expanded="@(_categoriesOpen ? "true" : "false")" data-testid="plan-categories-toggle">By labor category</MudButton>
+                @if (plan.CanChange && _try is null && _changes.Count == 0)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Science" OnClick="StartTrying" data-testid="plan-try">Try changes</MudButton>
+                }
+                @if (_undo is { } undo && _changes.Count == 0)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Undo" OnClick="UndoAsync" Disabled="_busy" data-testid="plan-undo">Undo: @undo.Summary</MudButton>
+                }
+            </div>
+
+            @if (_categoriesOpen)
+            {
+                <MudSimpleTable Dense="true" Class="mt-2" data-testid="plan-categories">
+                    <thead>
+                        <tr>
+                            <th>Labor category</th>
+                            <th class="wb-num">Planned</th>
+                            <th class="wb-num">Budget</th>
+                            <th class="wb-num">Gap</th>
+                            @if (plan.ShowsCost)
+                            {
+                                <th class="wb-num">Cost</th>
+                                <th class="wb-num">Budget $</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in totals.Categories)
+                        {
+                            <tr>
+                                <td>@c.LaborCategory</td>
+                                <td class="wb-num">@PlanPeopleFormat.Hours(c.Hours) h</td>
+                                <td class="wb-num">@(c.BudgetHours > 0 ? $"{PlanPeopleFormat.Hours(c.BudgetHours)} h" : "—")</td>
+                                <td class="wb-num @(c.BudgetHours > 0 && c.HoursGap < 0 ? "wb-plan-bad" : null)">
+                                    @(c.BudgetHours > 0 ? c.HoursGap >= 0 ? $"{PlanPeopleFormat.Hours(c.HoursGap)} h unplanned" : $"{PlanPeopleFormat.Hours(-c.HoursGap)} h over" : "not budgeted")
+                                </td>
+                                @if (plan.ShowsCost)
+                                {
+                                    <td class="wb-num">@PlanPeopleFormat.Money(c.Cost)</td>
+                                    <td class="wb-num">@(c.BudgetAmount > 0 ? PlanPeopleFormat.Money(c.BudgetAmount) : "—")</td>
+                                }
+                            </tr>
+                        }
+                        @if (totals.Categories.Count == 0)
+                        {
+                            <tr><td colspan="6" class="mud-text-secondary">Nobody is planned yet. Open a task's People cell to assign someone.</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                @if (totals.PlanIsTheBudget)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">There's no labor budget, so the people and hours on the plan are the budget.</MudText>
+                }
+            }
+
+            @if (_changes.Count > 0 || _trying)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-3" Icon="@Icons.Material.Filled.Science" data-testid="plan-trying">
+                    <MudText Typo="Typo.subtitle2">Trying changes. Nothing is saved until you apply them.</MudText>
+                    @if (_changes.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2">Open a task's People cell to move its dates or change its people. The bar and the columns show the result.</MudText>
+                    }
+                    else
+                    {
+                        <ul class="wb-plan-list" data-testid="plan-trying-changes">
+                            @foreach (var change in _changes.ToList())
+                            {
+                                <li>
+                                    @PlanPeopleFormat.Describe(change, plan, _names)
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Drop this change" OnClick="() => DropAsync(change)" />
+                                </li>
+                            }
+                        </ul>
+                        @if (_try is { } tried)
+                        {
+                            <MudText Typo="Typo.subtitle2" Class="mt-1">What it does</MudText>
+                            <ul class="wb-plan-list" data-testid="plan-trying-effects">
+                                @foreach (var effect in tried.Effects)
+                                {
+                                    <li>@effect</li>
+                                }
+                            </ul>
+                            @foreach (var error in tried.Errors)
+                            {
+                                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-1">@error</MudAlert>
+                            }
+                        }
+                    }
+                    <div class="d-flex gap-2 mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="ApplyTriedAsync"
+                                   Disabled="@(_busy || _changes.Count == 0 || _try?.CanApply != true)" data-testid="plan-apply">Apply changes</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="Discard" Disabled="_busy" data-testid="plan-discard">Discard</MudButton>
+                    </div>
+                </MudAlert>
+            }
+
+            @foreach (var note in plan.Notes)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@note</MudText>
+            }
+            @if (plan.NotOnATask.Count > 0)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" data-testid="plan-not-on-task">
+                    Also on the project but not on a task: @string.Join(", ", (_try?.NotOnATask ?? plan.NotOnATask).Select(p => $"{p.Name} ({PlanPeopleFormat.Hours(p.Hours)} h)")).
+                    <a href="@($"projects/{plan.ProjectId}/staffing")">Budget &amp; staffing</a>
+                </MudText>
+            }
+        </MudPaper>
+    </section>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_error</MudAlert>
+}
+
+<CascadingValue Value="_columns">
+    @ChildContent
+</CascadingValue>
+@if (_plan is not null)
+{
+    <SheetLiveRefresher SheetId="SheetId" Changed="ReloadAsync" />
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ResourcePlanDto? _plan;
+    private PlanTryDto? _try;
+    private readonly List<PlanChange> _changes = [];
+    private readonly Dictionary<Guid, string> _names = [];
+    private PlanAppliedDto? _undo;
+    private GridExtraColumns? _columns;
+    private bool _showColumns = true;
+    private bool _categoriesOpen;
+    private bool _trying;
+    private bool _busy;
+    private string? _error;
+    private Guid _loadedFor;
+
+    private IResourcePlanService? Plans => Services.GetService(typeof(IResourcePlanService)) as IResourcePlanService;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != ProjectId)
+        {
+            _loadedFor = ProjectId;
+            (_try, _undo, _trying) = (null, null, false);
+            _changes.Clear();
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Plans is not { } plans)
+        {
+            return;
+        }
+
+        try
+        {
+            _plan = await plans.GetAsync(ProjectId);
+            _error = null;
+            foreach (var p in _plan.Tasks.SelectMany(t => t.People).Concat(_plan.NotOnATask))
+            {
+                _names[p.EmployeeId] = p.Name;
+            }
+
+            if (_changes.Count > 0)
+            {
+                await TryAsync();
+            }
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException)
+        {
+            _plan = null; // not on the project's staffing: the plan alone
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _error = $"Couldn't load the people on the plan: {ex.Message}";
+        }
+
+        BuildColumns();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    // ---- The grid's extra columns ----
+
+    private void ShowColumns(bool show)
+    {
+        _showColumns = show;
+        BuildColumns();
+    }
+
+    private PlanTaskRowDto? RowOf(Guid itemId) => _try?.Tasks.FirstOrDefault(t => t.ItemId == itemId) ?? _plan?.Task(itemId);
+
+    private void BuildColumns()
+    {
+        if (_plan is not { } plan || !_showColumns)
+        {
+            _columns = null;
+            return;
+        }
+
+        var columns = new List<GridExtraColumn>
+        {
+            new("plan-people", "People", 250, item => RowOf(item.Id) is { } row ? PeopleCell(row) : null,
+                item => RowOf(item.Id) is { } row ? string.Join(", ", row.People.Select(p => $"{p.Name} {PlanPeopleFormat.Hours(p.Hours)} h")) : null),
+            new("plan-hours", "Hours", 90, item => RowOf(item.Id) is { Hours: > 0 } row ? HoursCell(row) : null,
+                item => RowOf(item.Id) is { Hours: > 0 } row ? PlanPeopleFormat.Hours(row.Hours) : null, AlignRight: true),
+            new("plan-category", "Labor category", 170, item => RowOf(item.Id) is { } row ? Text(Categories(row), muted: false) : null,
+                item => RowOf(item.Id) is { } row ? Categories(row) : null),
+        };
+        if (plan.ShowsCost)
+        {
+            columns.Add(new("plan-cost", plan.CostIncludesBurden ? "Cost (burdened)" : "Cost", 120,
+                item => RowOf(item.Id) is { Hours: > 0 } row ? Text(PlanPeopleFormat.Money(row.Cost), muted: false, changed: row.Changed && _try is not null) : null,
+                item => RowOf(item.Id) is { Hours: > 0 } row ? row.Cost?.ToString(System.Globalization.CultureInfo.InvariantCulture) : null, AlignRight: true));
+        }
+
+        if (_try is not null)
+        {
+            columns.Add(new("plan-trying", "If changed", 170, item => RowOf(item.Id) is { Changed: true } row ? Text(PlanPeopleFormat.Range(row.Start, row.Finish), muted: false, changed: true) : null,
+                item => RowOf(item.Id) is { Changed: true } row ? PlanPeopleFormat.Range(row.Start, row.Finish) : null));
+        }
+
+        _columns = new GridExtraColumns(columns);
+    }
+
+    private static string Categories(PlanTaskRowDto row) =>
+        string.Join(", ", row.People.Select(p => p.LaborCategory ?? "No labor category").Distinct());
+
+    private RenderFragment PeopleCell(PlanTaskRowDto row) =>
+        @<button type="button" class="@($"wb-plan-cell {(row.IsOverbooked ? "wb-plan-over" : "")} {(row.Changed && _try is not null ? "wb-plan-changed" : "")}")"
+                 @onclick="() => OpenAsync(row)" @onclick:stopPropagation="true" data-testid="plan-people-cell"
+                 aria-label="@($"People on {row.Title}: {(row.People.Count == 0 ? "nobody" : string.Join(", ", row.People.Select(p => $"{p.Name} {PlanPeopleFormat.Hours(p.Hours)} hours")))}{(row.IsOverbooked ? ". Someone is booked past their hours" : "")}")">
+            @foreach (var p in row.People.Take(3))
+            {
+                <span class="@($"wb-plan-chip {(p.IsOverbooked ? "wb-plan-chip-over" : "")}")" title="@(p.IsOverbooked ? $"{p.Name} is {PlanPeopleFormat.Overbooked(p.Overbooked[0])}" : p.Name)">
+                    @if (p.IsOverbooked)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" Class="wb-plan-chip-icon" />
+                    }
+                    @First(p.Name) · @PlanPeopleFormat.Hours(p.Hours) h
+                </span>
+            }
+            @if (row.People.Count > 3)
+            {
+                <span class="wb-plan-muted">+@(row.People.Count - 3)</span>
+            }
+            @if (row.People.Count == 0)
+            {
+                <span class="wb-plan-muted">@(row.CanAssign && _plan!.CanChange ? "+ Assign" : row.IsSummary ? "" : row.CanAssign ? "Nobody" : "Not a charge code")</span>
+            }
+        </button>;
+
+    private RenderFragment HoursCell(PlanTaskRowDto row) => Text($"{PlanPeopleFormat.Hours(row.Hours)} h", muted: row.IsSummary, changed: row.Changed && _try is not null);
+
+    private static RenderFragment Text(string text, bool muted, bool changed = false) =>
+        @<span class="@($"{(muted ? "wb-plan-muted" : "")} {(changed ? "wb-plan-changed" : "")}")">@text</span>;
+
+    private static string First(string name) => name.Split(' ')[0];
+
+    // ---- A task's people ----
+
+    private async Task OpenAsync(PlanTaskRowDto row)
+    {
+        if (_plan is not { } plan)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<PlanTaskPeopleDialog>
+        {
+            { d => d.ProjectId, ProjectId },
+            { d => d.Row, row },
+            { d => d.CanChange, plan.CanChange },
+            { d => d.CanMoveTasks, plan.CanMoveTasks },
+            { d => d.ShowsCost, plan.ShowsCost },
+            { d => d.Trying, _trying || _changes.Count > 0 },
+        };
+        var dialog = await DialogService.ShowAsync<PlanTaskPeopleDialog>($"{row.Title}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if (await dialog.Result is not { Canceled: false, Data: PlanTaskPeopleResult result })
+        {
+            return;
+        }
+
+        foreach (var (id, name) in result.Names)
+        {
+            _names[id] = name;
+        }
+
+        if (result.TryFirst || _trying || _changes.Count > 0)
+        {
+            _trying = true;
+            _changes.AddRange(result.Changes);
+            await TryAsync();
+        }
+        else
+        {
+            await ApplyAsync(result.Changes);
+        }
+    }
+
+    // ---- Trying changes ----
+
+    private void StartTrying()
+    {
+        _trying = true;
+        BuildColumns();
+    }
+
+    private async Task TryAsync()
+    {
+        if (Plans is not { } plans || _changes.Count == 0)
+        {
+            _try = null;
+            BuildColumns();
+            return;
+        }
+
+        try
+        {
+            _try = await plans.TryAsync(ProjectId, _changes.ToList());
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add($"Couldn't work that out: {ex.Message}", Severity.Error);
+        }
+
+        BuildColumns();
+    }
+
+    private async Task DropAsync(PlanChange change)
+    {
+        _changes.Remove(change);
+        await TryAsync();
+    }
+
+    private void Discard()
+    {
+        _changes.Clear();
+        (_try, _trying) = (null, false);
+        BuildColumns();
+        Snackbar.Add("Discarded the changes. Nothing was saved.", Severity.Info);
+    }
+
+    private async Task ApplyTriedAsync()
+    {
+        if (await ApplyAsync(_changes.ToList()))
+        {
+            _changes.Clear();
+            (_try, _trying) = (null, false);
+            BuildColumns();
+        }
+    }
+
+    private async Task<bool> ApplyAsync(IReadOnlyList<PlanChange> changes)
+    {
+        if (Plans is not { } plans || changes.Count == 0)
+        {
+            return false;
+        }
+
+        _busy = true;
+        try
+        {
+            _undo = await plans.ApplyAsync(ProjectId, changes);
+            Snackbar.Add($"{_undo.Summary} You can undo it from the bar above the plan.", Severity.Success);
+            await LoadAsync();
+            return true;
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        if (Plans is not { } plans || _undo is not { } undo)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await plans.ApplyAsync(ProjectId, undo.Undo);
+            _undo = null;
+            Snackbar.Add("Undone: the plan and its people are back as they were.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add($"Couldn't undo: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- Words ----
+
+    private static string Was(bool changed, string was) => changed ? $"was {was} · " : "";
+
+    private static string Overbooked(int people) => people == 1 ? "1 person overbooked" : $"{people} people overbooked";
+
+    private static string CostGapText(PlanTotalsDto totals) => totals.CostGap switch
+    {
+        null when totals.PlanIsTheBudget => "no budget yet: the plan is the budget",
+        null => "",
+        >= 0 and var left => $"{PlanPeopleFormat.Money(left)} left in the labor budget",
+        var over => $"{PlanPeopleFormat.Money(-over)} over the labor budget",
+    };
+}

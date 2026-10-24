@@ -126,6 +126,12 @@ public static class CapacityCalculator
         return result;
     }
 
+    /// <summary>
+    /// Booked past what they can work in a week (the "booked past their hours" check everywhere: assigning, the staffing
+    /// plan and the plan's people): more than capacity, by more than rounding.
+    /// </summary>
+    public static bool IsOverbooked(decimal booked, decimal capacity) => booked > capacity + 0.005m;
+
     /// <summary>Over above capacity, Full from <paramref name="fullThresholdPercent"/> of it, otherwise Under; None with neither.</summary>
     public static LoadStatus StatusOf(decimal capacity, decimal allocated, decimal fullThresholdPercent)
     {
@@ -134,7 +140,7 @@ public static class CapacityCalculator
             return allocated > 0 ? LoadStatus.Over : LoadStatus.None;
         }
 
-        if (allocated > capacity + 0.005m)
+        if (IsOverbooked(allocated, capacity))
         {
             return LoadStatus.Over;
         }

@@ -49,7 +49,7 @@ public partial class SheetGrid
     private void RebuildColumns()
     {
         _allColumns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null,
-            baseline: CanCompareBaselines && _view.BaselineId is not null, floats: CanShowFloat && _view.ShowFloat);
+            baseline: CanCompareBaselines && _view.BaselineId is not null, floats: CanShowFloat && _view.ShowFloat, extras: Extras?.Columns);
         _columns = _allColumns.Where(c => c.Kind == GridColumnKind.Title || !_view.IsHidden(c.Key)).ToList();
         _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
     }

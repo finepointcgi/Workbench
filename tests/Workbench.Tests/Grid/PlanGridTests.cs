@@ -58,6 +58,33 @@ public sealed class PlanGridTests
     }
 
     [Fact]
+    public async Task Columns_the_page_adds_show_after_the_plan_columns_and_are_read_only()
+    {
+        await using var ctx = CreateContext(out _, out _);
+        var extras = new Workbench.Ui.Grid.GridExtraColumns(
+        [
+            new("plan-people", "People", 200, item => b => b.AddContent(0, $"People of {item.Title}"), item => $"copy {item.Title}"),
+            new("plan-hours", "Hours", 80, item => item.Id == _build.Id ? b => b.AddContent(0, "40 h") : null, _ => null, AlignRight: true),
+        ]);
+        var grid = ctx.Render<SheetGridView>(p => p
+            .Add(v => v.Sheet, new SheetDetail(new SheetSummary(SheetId, "Plan", null, "Program Office", 3, true, null, DateTime.UtcNow), []))
+            .Add(v => v.Items, [_phase, _design, _build])
+            .AddCascadingValue(Plan())
+            .AddCascadingValue(extras));
+
+        grid.WaitForAssertion(() => Assert.Equal(3, grid.FindAll("tr.wb-row").Count));
+        var headers = grid.FindAll("th .wb-th-name").Select(h => h.TextContent).ToList();
+        Assert.Equal(headers.IndexOf("Predecessors") + 1, headers.IndexOf("People"));
+        var build = grid.FindAll("tr.wb-row")[2];
+        var people = build.QuerySelector("td[data-col='5']")!;
+        Assert.Equal("People of Build", people.TextContent.Trim());
+        Assert.Contains("wb-readonly", people.ClassName);
+        Assert.Equal("40 h", build.QuerySelector("td[data-col='6']")!.TextContent.Trim());
+        Assert.Contains("wb-num", build.QuerySelector("td[data-col='6']")!.ClassName);
+        Assert.Equal("", grid.FindAll("tr.wb-row")[0].QuerySelector("td[data-col='6']")!.TextContent.Trim());
+    }
+
+    [Fact]
     public async Task Tab_in_the_title_indents_and_shift_tab_outdents_through_the_plan_service()
     {
         await using var ctx = CreateContext(out _, out var plan);

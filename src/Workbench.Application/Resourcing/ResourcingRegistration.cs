@@ -21,7 +21,9 @@ public static class ResourcingRegistration
         services.AddScoped<IAllocationForecastService, AllocationForecastService>();
         services.AddScoped<ProjectStaffingService>();
         services.AddScoped<IProjectStaffingService>(sp => sp.GetRequiredService<ProjectStaffingService>());
-        services.AddScoped<IStaffingAssignmentService, StaffingAssignmentService>();
+        services.AddScoped<StaffingAssignmentService>();
+        services.AddScoped<IStaffingAssignmentService>(sp => sp.GetRequiredService<StaffingAssignmentService>());
+        services.AddScoped<IResourcePlanService, ResourcePlanService>();
         services.AddScoped<MyTodo.IMyTodoProvider, StaffingTodoProvider>();
         return services;
     }

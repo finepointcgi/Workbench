@@ -27,13 +27,26 @@
 | Tab | Use it to |
 | --- | --- |
 | Overview | See health (On track / At risk / Over) and why, spend vs budget, funding used. |
-| Plan | Open the plan sheet and Gantt chart. |
+| Plan | The tasks, dates, people, hours and cost on one screen (see below), plus the Gantt chart. |
 | Financials | Cost, revenue and margin by task, direct and burdened. |
 | Budgets | Review the budget and your EAC (estimate at completion). |
 | Earned value | CPI, SPI and variance reports (EVM projects). |
 | Ceilings | Watch hours, cost and billing limits before charging is blocked. |
 | Costs | Vendor invoices, travel and other direct costs. |
 | Team | Who charged hours, and how many. |
+
+## Plan with people and cost (Plan tab)
+
+- The bar above the plan: when it finishes and how much room it has, hours and labor cost against the budget (no
+  budget: the plan is the budget), who's booked past their hours, and the schedule check (**See the 14 checks**).
+- **People, Hours, Labor category, Cost** columns sit on the plan grid (turn them off with **People and cost on the plan**).
+  Click a task's **People** cell to change its dates, add someone with their hours, change hours or take someone off.
+  These are the same people as on **Budget & staffing**.
+- A ⚠ person is booked past their hours (all projects). Open the task › **Fix it**: spread their hours over more weeks,
+  move the task after their other work, or give the hours to someone in the same labor category with room. Nothing
+  levels the plan by itself.
+- **Try changes**: move dates and change people, see the new finish, cost, budget and overbookings, then **Apply
+  changes** or **Discard**. After any change, **Undo** in the bar puts it back.
 
 ## Every month
 

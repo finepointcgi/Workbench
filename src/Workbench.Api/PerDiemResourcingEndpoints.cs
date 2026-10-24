@@ -72,6 +72,11 @@ internal static class PerDiemResourcingEndpoints
         res.MapGet("/assignments/mine/hours-left", (DateOnly from, DateOnly to, Guid? excludeTimesheetId, IStaffingAssignmentService s, CancellationToken ct) =>
             s.ListMyHoursLeftAsync(from, to, excludeTimesheetId, ct));
         res.MapPost("/staffing-check", (StaffingCheckRequest r, IProjectStaffingService s, CancellationToken ct) => s.CheckAsync(r, ct));
+        res.MapGet("/projects/{projectId:guid}/resource-plan", (Guid projectId, IResourcePlanService s, CancellationToken ct) => s.GetAsync(projectId, ct));
+        res.MapPost("/projects/{projectId:guid}/resource-plan/try", (Guid projectId, PlanChangesRequest r, IResourcePlanService s, CancellationToken ct) => s.TryAsync(projectId, r.Changes, ct));
+        res.MapPost("/projects/{projectId:guid}/resource-plan/apply", (Guid projectId, PlanChangesRequest r, IResourcePlanService s, CancellationToken ct) => s.ApplyAsync(projectId, r.Changes, ct));
+        res.MapGet("/projects/{projectId:guid}/resource-plan/fixes/{assignmentId:guid}", (Guid projectId, Guid assignmentId, IResourcePlanService s, CancellationToken ct) =>
+            s.ListFixesAsync(projectId, assignmentId, ct));
         res.MapGet("/projects/{projectId:guid}/staffing-candidates", (Guid projectId, Guid? laborCategoryId, IProjectStaffingService s, CancellationToken ct) =>
             s.ListCandidatesAsync(projectId, laborCategoryId, ct));
 
