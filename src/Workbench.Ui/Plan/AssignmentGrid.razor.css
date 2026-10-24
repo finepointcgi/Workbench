@@ -104,3 +104,15 @@ input.wb-assign-input.wb-num {
     gap: 8px;
     margin: 4px 0;
 }
+
+.wb-assign-weekhead {
+    min-width: 64px;
+}
+
+input.wb-assign-input.wb-assign-week {
+    min-width: 56px;
+}
+
+.wb-assign-weekover {
+    background: color-mix(in srgb, var(--mud-palette-warning) 18%, transparent);
+}
