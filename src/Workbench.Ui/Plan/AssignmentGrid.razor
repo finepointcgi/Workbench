@@ -53,7 +53,7 @@
                 {
                     var r = row;
                     <tr @key="r.Key" class="@RowClass(r)" data-testid="assign-row">
-                        @if (r.ReadOnlyReason is not null || !CanChange)
+                        @if (!CanChange)
                         {
                             <td>@r.PersonText</td>
                             <td>@r.TaskLabel</td>
@@ -128,16 +128,16 @@
                             {
                                 <span class="wb-assign-changed">changed</span>
                             }
-                            @if (CanChange && !r.IsNew && r.AssignmentId is not null && r.ReadOnlyReason is null)
+                            @if (CanChange && !r.IsNew && r.AssignmentId is not null)
                             {
                                 <MudIconButton Icon="@Icons.Material.Outlined.PersonRemove" Size="Size.Small" OnClick="() => RemoveAsync(r)" aria-label="@($"Take {r.PersonText} off {r.TaskLabel}")" />
                             }
                         </td>
                     </tr>
-                    @if (r.Error is not null || r.ReadOnlyReason is not null)
+                    @if (r.Error is not null)
                     {
                         <tr class="wb-assign-note">
-                            <td colspan="9" class="@(r.Error is not null ? "wb-assign-error" : "mud-text-secondary")" role="@(r.Error is not null ? "alert" : null)">@(r.Error ?? r.ReadOnlyReason)</td>
+                            <td colspan="9" class="wb-assign-error" role="alert">@r.Error</td>
                         </tr>
                     }
                     @if (r.Fixes is { } fixes)
@@ -237,7 +237,6 @@
         public DateOnly? From { get; set; }
         public DateOnly? To { get; set; }
         public string? Error { get; set; }
-        public string? ReadOnlyReason { get; set; }
         public bool Busy { get; set; }
         public bool IsNew => AssignmentId is null && Source is null;
         public IReadOnlyList<OverbookingFixDto>? Fixes { get; set; }
@@ -376,7 +375,6 @@
     {
         AssignmentId = p.AssignmentId, Source = p, EmployeeId = p.EmployeeId, PersonText = p.Name, WbsElementId = wbs, OriginalWbsElementId = wbs, TaskLabel = label,
         TaskFixed = taskFixed, CategoryId = p.LaborCategoryId, Hours = p.Hours, From = p.From, To = p.To,
-        ReadOnlyReason = p.AssignmentId is null ? "Staffed week by week: change these hours on Budget & staffing (Assign by total turns them into a row here)." : null,
     };
 
     // ---- Editing ----

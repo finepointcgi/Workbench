@@ -6,8 +6,8 @@ namespace Workbench.Contracts.Resourcing;
 // dates or changing people would do before anything is saved, and applies them in one step with an undo.
 
 /// <summary>
-/// Someone on a task: their assignment (<see cref="AssignmentId"/> null for hours staffed week by week, which are changed
-/// on the Budget &amp; staffing tab), labor category, dates and hours. <see cref="DirectCost"/> is hours × their cost rate
+/// Someone on a task: their assignment (hours staffed week by week show as the assignment they'd be, and become one when
+/// first changed; <see cref="AssignmentId"/> is null only for someone being tried), labor category, dates and hours. <see cref="DirectCost"/> is hours × their cost rate
 /// in each week; <see cref="BurdenedCost"/> adds fringe, overhead and G&amp;A. Both are null when the viewer may not see
 /// cost. <see cref="Overbooked"/> lists weeks from this week on where they're booked past their hours on every project.
 /// </summary>
