@@ -13,6 +13,7 @@
 @if (_date == Today)
 {
     <Workbench.Ui.Home.MobileTodo />
+    <Workbench.Ui.Time.TimerWidget Compact="true" BeforeStop="SaveBeforeTimerAsync" Stopped="_ => LoadAsync()" />
 }
 
 <div class="wb-m-title">
@@ -286,6 +287,23 @@ else
         }
 
         Navigation.NavigateTo(date == Today ? "m" : $"m?date={MobileFormat.Iso(date)}");
+    }
+
+    /// <summary>Hours typed here are saved (or knowingly discarded) before the timer adds its own on the server.</summary>
+    private async Task<bool> SaveBeforeTimerAsync()
+    {
+        if (!IsDirty)
+        {
+            return true;
+        }
+
+        if (CanSave)
+        {
+            await SaveAsync();
+            return !IsDirty;
+        }
+
+        return await ConfirmDiscardAsync();
     }
 
     private async Task<bool> ConfirmDiscardAsync()

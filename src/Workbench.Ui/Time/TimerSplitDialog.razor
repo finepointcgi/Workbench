@@ -1,0 +1,57 @@
+@* A timer that ran past midnight: how its hours split across the days. Suggested: the time actually worked on each day. *@
+@using System.Globalization
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-3">@Message</MudText>
+        <MudStack Spacing="2" data-testid="timer-split">
+            @foreach (var day in _days)
+            {
+                <MudNumericField T="decimal" @bind-Value="day.Hours" Label="@day.Date.ToString("dddd, MMM d", CultureInfo.InvariantCulture)" Min="0" Max="24"
+                                 Step="Increment" Format="0.##" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentText="h"
+                                 data-testid="@($"split-{day.Date:yyyy-MM-dd}")" />
+            }
+        </MudStack>
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="AsItRan">As it ran</MudButton>
+            @foreach (var day in _days)
+            {
+                var date = day.Date;
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => AllOn(date)">All on @date.ToString("ddd", CultureInfo.InvariantCulture)</MudButton>
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Total @_days.Sum(d => d.Hours).ToString("0.##", CultureInfo.InvariantCulture) h, in steps of @Increment.ToString("0.##", CultureInfo.InvariantCulture) h.</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm" data-testid="timer-split-confirm">Add hours</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public IReadOnlyList<TimerDayHours> Suggested { get; set; } = [];
+    [Parameter] public decimal Increment { get; set; } = 0.25m;
+
+    private List<Day> _days = [];
+
+    protected override void OnInitialized() => AsItRan();
+
+    private void AsItRan() => _days = Suggested.Select(d => new Day { Date = d.Date, Hours = d.Hours }).ToList();
+
+    private void AllOn(DateOnly date)
+    {
+        var total = Suggested.Sum(d => d.Hours);
+        _days = Suggested.Select(d => new Day { Date = d.Date, Hours = d.Date == date ? total : 0 }).ToList();
+    }
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(_days.Select(d => new TimerDayHours(d.Date, d.Hours)).ToList()));
+
+    private sealed class Day
+    {
+        public DateOnly Date { get; init; }
+        public decimal Hours { get; set; }
+    }
+}

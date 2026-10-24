@@ -1,0 +1,355 @@
+@* The start/stop timer: pick a charge code (the last one charged, or one you're staffed on), Start, and Stop later. The time,
+   rounded to the company's increment, is added to that day's hours for the code, with the note in the cell's comment.
+   Used on My work, the timesheet and the phone's Today page; the running timer also shows in the app bar. *@
+@using System.Globalization
+@using Workbench.Contracts
+@using Workbench.Contracts.Identity
+@implements IDisposable
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_state is not null)
+{
+    <MudPaper Outlined="true" Class="@($"pa-3 mb-3 wb-timer{(Compact ? " wb-timer-compact" : "")}")" data-testid="timer"
+              aria-labelledby="@($"{_id}-title")">
+        @if (_state.Running is { } running)
+        {
+            <div class="d-flex align-center flex-wrap gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Primary" aria-hidden="true" />
+                <div style="flex:1 1 220px;min-width:0">
+                    <MudText Typo="Typo.subtitle2" id="@($"{_id}-title")">
+                        Timer running on <span data-testid="timer-code">@ChargeCodeText.Label(running.ChargeCode)</span>
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Since @StartedText(running) · adds about @Hours(Rounded(running)) when stopped
+                    </MudText>
+                </div>
+                <MudText Typo="Typo.h5" Style="font-variant-numeric:tabular-nums" data-testid="timer-elapsed" aria-live="off">
+                    @TimerSignals.Elapsed(running.StartedAtUtc, DateTime.UtcNow)
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Stop" OnClick="() => StopAsync()"
+                           Disabled="_busy" data-testid="timer-stop">Stop</MudButton>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" AriaLabel="More timer actions" Size="Size.Small">
+                    <MudMenuItem OnClick="DiscardAsync" data-testid="timer-discard">Discard without adding time</MudMenuItem>
+                </MudMenu>
+            </div>
+            <MudTextField T="string" @bind-Value="_note" Label="Note (goes in the timesheet comment)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          MaxLength="500" Class="mt-2" OnBlur="SaveNoteAsync" data-testid="timer-note" />
+            @if (running.CrossesMidnight)
+            {
+                <MudText Typo="Typo.caption" Class="mud-warning-text d-block mt-1">This timer started on @running.StartDate.ToString("dddd", CultureInfo.InvariantCulture). Stopping asks how to split it across the days.</MudText>
+            }
+        }
+        else if (_state.ChargeCodes.Count > 0)
+        {
+            <div class="d-flex align-center flex-wrap gap-3">
+                <MudIcon Icon="@Icons.Material.Outlined.Timer" Class="mud-text-secondary" aria-hidden="true" />
+                <MudText Typo="Typo.subtitle2" id="@($"{_id}-title")" Style="flex:0 0 auto">Timer</MudText>
+                <MudSelect T="Guid?" @bind-Value="_code" Label="Charge code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                           Style="min-width:220px" Class="flex-grow-1" data-testid="timer-code-select">
+                    @foreach (var choice in _state.ChargeCodes)
+                    {
+                        <MudSelectItem T="Guid?" Value="@choice.ChargeCode.WbsElementId">
+                            @ChargeCodeText.Label(choice.ChargeCode)@(choice.Staffed ? " · staffed" : "")
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                @if (!Compact)
+                {
+                    <MudTextField T="string" @bind-Value="_note" Label="Note (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500"
+                                  Class="flex-grow-1" Style="min-width:180px" data-testid="timer-note" />
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="StartAsync"
+                           Disabled="@(_busy || _code is null)" data-testid="timer-start">Start</MudButton>
+            </div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+                Stopping adds the time to today's hours for the code, rounded to the nearest @Hours(_state.IncrementHours).
+                @if (_state.TodayIsLocked)
+                {
+                    <span> Today's timesheet is submitted; stopping will ask you to recall it.</span>
+                }
+            </MudText>
+        }
+    </MudPaper>
+}
+
+@code {
+    /// <summary>A tighter layout for phones and small cards: the note is asked for once the timer runs.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>
+    /// Runs before stopping (the timesheet page saves pending edits); false cancels the stop. The timer's hours are added
+    /// on the server, on top of what's saved.
+    /// </summary>
+    [Parameter] public Func<Task<bool>>? BeforeStop { get; set; }
+
+    /// <summary>After hours were added (the page reloads its timesheet).</summary>
+    [Parameter] public EventCallback<StopTimerResult> Stopped { get; set; }
+
+    private readonly string _id = $"timer-{Guid.NewGuid():N}"[..14];
+    private TimerStateDto? _state;
+    private Guid? _code;
+    private string? _note;
+    private string? _email;
+    private bool _busy;
+    private System.Threading.Timer? _tick;
+
+    // Resolved softly, like the timesheet page's optional services: a page without timekeeping just shows no timer.
+    private ITimesheetTimerService Timer => Services.GetRequiredService<ITimesheetTimerService>();
+
+    private ITimesheetService Timesheets => Services.GetRequiredService<ITimesheetService>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService<ITimesheetTimerService>() is null || Services.GetService<ITimesheetService>() is null)
+        {
+            return;
+        }
+
+        TimerSignals.Changed += OnSignal;
+        try
+        {
+            var me = await (Services.GetService<ICurrentUserContext>()?.GetAsync() ?? Task.FromResult(new CurrentUserInfo("", "", default, Guid.Empty)));
+            _email = me.Email;
+            if (me.EmployeeId is null)
+            {
+                return; // no employee record: no timesheet, so no timer
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException)
+        {
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _state = await Timer.GetAsync();
+            _code = _state.Running?.ChargeCode.WbsElementId ?? (_code is { } c && _state.ChargeCodes.Any(x => x.ChargeCode.WbsElementId == c) ? c : _state.DefaultWbsElementId)
+                ?? _state.ChargeCodes.FirstOrDefault()?.ChargeCode.WbsElementId;
+            _note = _state.Running?.Note ?? (_state.Running is null ? _note : null);
+            SetTicking(_state.Running is not null);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or TaskCanceledException)
+        {
+            _state = null; // no employee record or timekeeping off: the timer just doesn't show
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        if (_code is not { } code)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Timer.StartAsync(new StartTimerRequest(code, _note));
+            Snackbar.Add("Timer started.", Severity.Info);
+        });
+    }
+
+    private async Task StopAsync(StopTimerRequest? request = null)
+    {
+        if (_state?.Running is null || _busy)
+        {
+            return;
+        }
+
+        if (request is null && BeforeStop is not null && !await BeforeStop())
+        {
+            return;
+        }
+
+        _busy = true;
+        StopTimerResult? result = null;
+        try
+        {
+            result = await Timer.StopAsync(request ?? new StopTimerRequest(Note: _note ?? ""));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        request ??= new StopTimerRequest(Note: _note ?? "");
+        switch (result?.Outcome)
+        {
+            case TimerStopOutcome.NeedsSplit:
+                if (await AskSplitAsync(result) is { } split)
+                {
+                    await StopAsync(request with { Split = split });
+                    return;
+                }
+
+                break;
+            case TimerStopOutcome.NeedsRecall when result.TimesheetId is { } id:
+                if (await RecallAsync(id, result) is { } reason)
+                {
+                    await StopAsync(request with { Reason = reason });
+                    return;
+                }
+
+                break;
+            case TimerStopOutcome.Added:
+                Snackbar.Add(result.Message, Severity.Success);
+                await Stopped.InvokeAsync(result);
+                break;
+            case TimerStopOutcome.TooShort:
+                Snackbar.Add(result.Message, Severity.Info);
+                break;
+        }
+
+        await LoadAsync();
+        TimerSignals.Raise(_email);
+    }
+
+    private async Task<List<TimerDayHours>?> AskSplitAsync(StopTimerResult result)
+    {
+        var parameters = new DialogParameters<TimerSplitDialog>
+        {
+            { x => x.Message, result.Message },
+            { x => x.Suggested, result.Days },
+            { x => x.Increment, _state?.IncrementHours ?? 0.25m },
+        };
+        var dialog = await DialogService.ShowAsync<TimerSplitDialog>("Split the timer", parameters);
+        return await dialog.Result is { Canceled: false, Data: List<TimerDayHours> days } ? days : null;
+    }
+
+    /// <summary>Recalls (or reopens) the locked timesheet with a reason; the reason is also recorded with the timer's change.</summary>
+    private async Task<string?> RecallAsync(Guid timesheetId, StopTimerResult result)
+    {
+        var approved = result.TimesheetStatus == TimesheetState.Approved;
+        var parameters = new DialogParameters<ReasonDialog>
+        {
+            { x => x.Message, result.Message + (approved
+                ? " Reopening starts a new revision; you'll certify and get approval again."
+                : " You'll certify and submit it again.") },
+            { x => x.Label, "Reason for the change" },
+            { x => x.ConfirmText, approved ? "Reopen and add the time" : "Recall and add the time" },
+        };
+        var dialog = await DialogService.ShowAsync<ReasonDialog>(approved ? "Correct an approved timesheet" : "Recall timesheet", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string reason })
+        {
+            return null;
+        }
+
+        try
+        {
+            await Timesheets.ReopenAsync(timesheetId, reason);
+            return reason;
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return null;
+        }
+    }
+
+    private async Task DiscardAsync()
+    {
+        var parameters = new DialogParameters<Workbench.Ui.Grid.ConfirmDialog>
+        {
+            { x => x.Message, "Throw this timer away? Nothing is added to your timesheet." },
+            { x => x.ConfirmText, "Discard" },
+        };
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Grid.ConfirmDialog>("Discard the timer", parameters);
+        if (await dialog.Result is { Canceled: false })
+        {
+            await RunAsync(() => Timer.DiscardAsync());
+        }
+    }
+
+    private async Task SaveNoteAsync()
+    {
+        if (_state?.Running is { } running && (_note ?? "") != (running.Note ?? ""))
+        {
+            try
+            {
+                await Timer.SetNoteAsync(_note);
+            }
+            catch (Exception ex) when (ex is ArgumentException or HttpRequestException)
+            {
+                Snackbar.Add(ex.Message, Severity.Warning);
+            }
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+        TimerSignals.Raise(_email);
+    }
+
+    private void OnSignal(string email)
+    {
+        if (TimerSignals.IsFor(email, _email) && !_busy)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                StateHasChanged();
+            });
+        }
+    }
+
+    private void SetTicking(bool on)
+    {
+        if (on && _tick is null)
+        {
+            _tick = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+        else if (!on && _tick is not null)
+        {
+            _tick.Dispose();
+            _tick = null;
+        }
+    }
+
+    private decimal Rounded(RunningTimerDto running)
+    {
+        var increment = _state?.IncrementHours ?? 0.25m;
+        var hours = (decimal)(DateTime.UtcNow - running.StartedAtUtc).TotalHours;
+        return Math.Max(0, Math.Round(hours / increment, MidpointRounding.AwayFromZero) * increment);
+    }
+
+    private static string StartedText(RunningTimerDto running)
+    {
+        var local = running.StartedAtUtc.ToLocalTime();
+        return local.Date == DateTime.Now.Date
+            ? local.ToString("h:mm tt", CultureInfo.InvariantCulture)
+            : local.ToString("ddd h:mm tt", CultureInfo.InvariantCulture);
+    }
+
+    private static string Hours(decimal hours) => $"{hours.ToString("0.##", CultureInfo.InvariantCulture)} h";
+
+    public void Dispose()
+    {
+        TimerSignals.Changed -= OnSignal;
+        _tick?.Dispose();
+    }
+}

@@ -1,0 +1,217 @@
+@* The DCMA 14-point schedule health check of a plan: pass or fail per check against DCMA's threshold, with the tasks behind
+   each one linked to the plan. Exports to PDF and Excel. Used on the project page's "Schedule health" tab. *@
+@using System.Globalization
+@using Workbench.Contracts.Scheduling
+@using Microsoft.JSInterop
+@using Workbench.Contracts
+@inject IScheduleHealthService Health
+@inject IBaselineService Baselines
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<section aria-labelledby="schedule-health-heading" data-testid="schedule-health">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="schedule-health-heading">Schedule health</MudText>
+        @if (_health is { } h)
+        {
+            <MudChip T="string" Size="Size.Small" Color="MudBlazor.Color.Success" Variant="Variant.Outlined" data-testid="health-passed">@h.Passed passed</MudChip>
+            <MudChip T="string" Size="Size.Small" Color="@(h.Failed > 0 ? MudBlazor.Color.Error : MudBlazor.Color.Default)" Variant="Variant.Outlined" data-testid="health-failed">@h.Failed failed</MudChip>
+        }
+        <MudSpacer />
+        <MudDatePicker Label="Status date" Date="_statusDate" DateChanged="OnStatusDateChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       Style="max-width:170px" data-testid="health-status-date" />
+        @if (_baselines.Count > 0)
+        {
+            <MudSelect T="Guid?" Label="Baseline" Value="_baselineId" ValueChanged="OnBaselineChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       Style="max-width:220px" data-testid="health-baseline">
+                @foreach (var b in _baselines)
+                {
+                    <MudSelectItem T="Guid?" Value="@b.Id">@b.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="() => DownloadAsync(pdf: true)"
+                   Disabled="_busy || _health is null" data-testid="health-pdf">PDF</MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.GridOn" OnClick="() => DownloadAsync(pdf: false)"
+                   Disabled="_busy || _health is null" data-testid="health-excel">Excel</MudButton>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        The 14 checks DCMA runs on an Integrated Master Schedule, on the plan's detail tasks. Open a check to see the tasks behind it.
+    </MudText>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+    }
+    else if (_health is null)
+    {
+        <MudProgressLinear aria-label="Checking the schedule" Indeterminate="true" />
+    }
+    else
+    {
+        @foreach (var note in _health.Notes)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+        }
+
+        <MudExpansionPanels MultiExpansion="true" Elevation="0" Outlined="true" data-testid="health-checks">
+            @foreach (var check in _health.Checks)
+            {
+                <MudExpansionPanel @key="check.Key" data-testid="@($"health-{check.Key}")">
+                    <TitleContent>
+                        <div class="d-flex align-center flex-wrap gap-2" style="width:100%">
+                            <MudIcon Icon="@Icon(check.Status)" Color="@Tone(check.Status)" Size="Size.Small" aria-hidden="true" />
+                            <div style="min-width:220px;flex:1 1 260px">
+                                <MudText Typo="Typo.subtitle2">@check.Number. @check.Name</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@check.Explanation</MudText>
+                            </div>
+                            <div style="flex:0 0 120px">
+                                <MudChip T="string" Size="Size.Small" Color="@Tone(check.Status)" Variant="Variant.Text" data-testid="health-status">@StatusText(check.Status)</MudChip>
+                            </div>
+                            <div style="flex:1 1 260px">
+                                <MudText Typo="Typo.body2" data-testid="health-result">@check.Result</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Target: @check.Threshold</MudText>
+                            </div>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (check.Tasks.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">No tasks flagged.</MudText>
+                        }
+                        else
+                        {
+                        <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+                            <thead>
+                                <tr><th scope="col">ID</th><th scope="col">Task</th><th scope="col">Why</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var task in check.Tasks)
+                                {
+                                    <tr @key="task.ItemId">
+                                        <td>@task.TaskNumber</td>
+                                        <td><MudLink Href="@TaskHref(task.ItemId)" Typo="Typo.body2" data-testid="health-task">@task.OutlineNumber @task.Title</MudLink></td>
+                                        <td>@task.Detail</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">
+            @_health.DetailTasks tasks (@_health.IncompleteTasks unfinished), @_health.Links links. Status date @_health.StatusDate.ToString("MMM d, yyyy", CultureInfo.InvariantCulture)@(_health.BaselineName is { } bl ? $"; baseline \"{bl}\"" : "").
+        </MudText>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SheetId { get; set; }
+
+    /// <summary>Where the plan is shown, e.g. <c>projects/{id}/plan</c>; a task opens there with <c>?item={id}</c>. Default: the sheet page.</summary>
+    [Parameter]
+    public string? PlanHref { get; set; }
+
+    private ScheduleHealthDto? _health;
+    private IReadOnlyList<BaselineSummary> _baselines = [];
+    private DateTime? _statusDate;
+    private Guid? _baselineId;
+    private string? _error;
+    private bool _busy;
+    private Guid _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == SheetId)
+        {
+            return;
+        }
+
+        _loaded = SheetId;
+        try
+        {
+            _baselines = await Baselines.ListAsync(SheetId);
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        {
+            _baselines = [];
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _error = null;
+            _health = await Health.GetAsync(SheetId, Request());
+            _statusDate ??= _health.StatusDate.ToDateTime(TimeOnly.MinValue);
+            _baselineId ??= _health.BaselineId;
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or TaskCanceledException)
+        {
+            _error = $"Couldn't check the schedule: {ex.Message}";
+        }
+    }
+
+    private ScheduleHealthRequest Request() =>
+        new(_statusDate is { } d ? DateOnly.FromDateTime(d) : null, _baselineId);
+
+    private async Task OnStatusDateChanged(DateTime? date)
+    {
+        _statusDate = date;
+        await LoadAsync();
+    }
+
+    private async Task OnBaselineChanged(Guid? id)
+    {
+        _baselineId = id;
+        await LoadAsync();
+    }
+
+    private async Task DownloadAsync(bool pdf)
+    {
+        _busy = true;
+        try
+        {
+            var file = pdf ? await Health.ExportPdfAsync(SheetId, Request()) : await Health.ExportExcelAsync(SheetId, Request());
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/plan.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException or JSException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string TaskHref(Guid itemId) => $"{PlanHref ?? $"sheets/{SheetId}"}?item={itemId}";
+
+    private static string StatusText(HealthCheckStatus status) => status switch
+    {
+        HealthCheckStatus.Pass => "Pass",
+        HealthCheckStatus.Fail => "Fail",
+        _ => "Not measured",
+    };
+
+    private static string Icon(HealthCheckStatus status) => status switch
+    {
+        HealthCheckStatus.Pass => Icons.Material.Filled.CheckCircle,
+        HealthCheckStatus.Fail => Icons.Material.Filled.Cancel,
+        _ => Icons.Material.Outlined.RemoveCircleOutline,
+    };
+
+    private static Color Tone(HealthCheckStatus status) => status switch
+    {
+        HealthCheckStatus.Pass => MudBlazor.Color.Success,
+        HealthCheckStatus.Fail => MudBlazor.Color.Error,
+        _ => MudBlazor.Color.Default,
+    };
+}

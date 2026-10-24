@@ -13,3 +13,14 @@ internal sealed class TimeDayRecordConfiguration : IEntityTypeConfiguration<Time
         b.HasOne<Timesheet>().WithMany().HasForeignKey(d => d.TimesheetId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class RunningTimerConfiguration : IEntityTypeConfiguration<RunningTimer>
+{
+    public void Configure(EntityTypeBuilder<RunningTimer> b)
+    {
+        b.HasIndex(t => t.EmployeeId).IsUnique(); // one running timer per person
+        b.Property(t => t.Note).HasMaxLength(500);
+        b.HasOne<Employee>().WithMany().HasForeignKey(t => t.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<WbsElement>().WithMany().HasForeignKey(t => t.WbsElementId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

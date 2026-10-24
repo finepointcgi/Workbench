@@ -31,6 +31,8 @@
     <MudIconButton Icon="@Icons.Material.Filled.Refresh" aria-label="Refresh" OnClick="LoadAsync" Disabled="_loading" />
 </MudStack>
 
+<Workbench.Ui.Time.TimerWidget />
+
 @if (_todo is null)
 {
     @if (_loading)

@@ -12,6 +12,7 @@ public static class SchedulingRegistration
         services.AddScoped<IDependencyService, DependencyService>();
         services.AddScoped<IBaselineService, BaselineService>();
         services.AddScoped<IPlanScheduleService, PlanScheduleService>();
+        services.AddScoped<IScheduleHealthService, ScheduleHealthService>();
         return services;
     }
 }
