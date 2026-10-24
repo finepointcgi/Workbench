@@ -1,0 +1,47 @@
+@* A link cell: the web address and, optionally, the text to show instead of it. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudTextField T="string" @bind-Value="Url" Label="Web address" Placeholder="https://example.com" InputType="InputType.Url" AutoFocus="true" Immediate="true"
+                          Error="_error is not null" ErrorText="@_error" data-testid="link-url" />
+            <MudTextField T="string" @bind-Value="Text" Label="Text to show (optional)" Immediate="true" MaxLength="200" data-testid="link-text" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close(DialogResult.Ok(string.Empty))">Remove link</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="link-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public string Url { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Text { get; set; } = string.Empty;
+
+    private string? _error;
+
+    private void Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Url))
+        {
+            MudDialog.Close(DialogResult.Ok(string.Empty));
+            return;
+        }
+
+        var typed = string.IsNullOrWhiteSpace(Text) ? Url.Trim() : $"[{Text.Trim()}]({Url.Trim()})";
+        if (!ColumnValues.TryNormalize(typed, ColumnKind.Hyperlink, null, out var value, out var error))
+        {
+            _error = error;
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(value ?? string.Empty));
+    }
+}

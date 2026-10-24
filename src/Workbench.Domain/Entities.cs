@@ -45,6 +45,30 @@ public enum ColumnType
 
     /// <summary>Shows a field of the rows linked in a LinkedRow column (Options: the link column's id, then the field key); computed on read.</summary>
     Lookup = 9,
+
+    /// <summary>Several options; stored one per line.</summary>
+    MultiSelect = 10,
+
+    /// <summary>A link: a URL, or <c>[label](url)</c>.</summary>
+    Hyperlink = 11,
+
+    /// <summary>A symbol from the set in Options[0] (rag, flag, stars, priority); stored as its label.</summary>
+    Symbol = 12,
+
+    /// <summary>Percent complete, 0-100.</summary>
+    Progress = 13,
+
+    /// <summary>Read-only: prefix + sequence assigned when a row is added (Options: prefix, digits, first number; see <see cref="Column.NextNumber"/>).</summary>
+    AutoNumber = 14,
+
+    /// <summary>Read-only system columns, filled in from <see cref="Item.CreatedBy"/> and the other audit fields when a row is saved.</summary>
+    CreatedBy = 15,
+
+    CreatedDate = 16,
+
+    ModifiedBy = 17,
+
+    ModifiedDate = 18,
 }
 
 public sealed class Column : Entity
@@ -64,6 +88,9 @@ public sealed class Column : Entity
 
     /// <summary>A Dropdown column's status label colors: a palette key per option, in the order of <see cref="Options"/>.</summary>
     public List<string> OptionColors { get; set; } = [];
+
+    /// <summary>An auto-number column's next number (assigned to the next row added; never reused).</summary>
+    public int NextNumber { get; set; }
 }
 
 /// <summary>A row in a sheet, which is also a task on boards and the Gantt.</summary>
@@ -90,4 +117,16 @@ public sealed class Item : Entity
 
     /// <summary>A milestone: a point in time (a deliverable, a review, a decision) with no duration, so Start = Finish.</summary>
     public bool IsMilestone { get; set; }
+
+    /// <summary>When the row was added (stamped on save; older rows fall back to the time in their id).</summary>
+    public DateTime? CreatedAtUtc { get; set; }
+
+    /// <summary>Who added the row (an email), when known.</summary>
+    public string? CreatedBy { get; set; }
+
+    /// <summary>When the row last changed (stamped on save).</summary>
+    public DateTime? ModifiedAtUtc { get; set; }
+
+    /// <summary>Who last changed the row (an email), when known.</summary>
+    public string? ModifiedBy { get; set; }
 }

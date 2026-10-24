@@ -87,7 +87,7 @@ public abstract class SheetImporter : IImporter
                 var kind = KindFor(c, values);
                 var options = kind == ColumnKind.Dropdown
                     ? c.Options.Concat(values.Select(v => v.Value).OfType<string>()).Distinct(StringComparer.Ordinal).ToList()
-                    : [];
+                    : OptionsFor(c, kind, values);
                 return new ImportColumnDto(c.Title, c.Title, kind, c.SystemType is null && !SmartsheetSources.SystemColumnTypes.Contains(c.Type), options, c.Type);
             })
             .ToList();
@@ -95,8 +95,19 @@ public abstract class SheetImporter : IImporter
     }
 
     /// <summary>Smartsheet column type → Workbench column type.</summary>
-    public static ColumnKind KindFor(SourceColumn column, IReadOnlyList<SourceCell> values) => column.Type switch
+    public static ColumnKind KindFor(SourceColumn column, IReadOnlyList<SourceCell> values) => (column.SystemType ?? column.Type) switch
     {
+        "AUTO_NUMBER" => ColumnKind.AutoNumber,
+        "CREATED_BY" => ColumnKind.CreatedBy,
+        "CREATED_DATE" => ColumnKind.CreatedDate,
+        "MODIFIED_BY" => ColumnKind.ModifiedBy,
+        "MODIFIED_DATE" => ColumnKind.ModifiedDate,
+        "MULTI_PICKLIST" => ColumnKind.MultiSelect,
+        "PICKLIST" when SymbolSetFor(column.Symbol) is not null => ColumnKind.Symbol,
+        "CHECKBOX" when column.Symbol == "FLAG" => ColumnKind.Symbol, // a checkbox star stays a checkbox
+        "PICKLIST" when column.Symbol is "HARVEY_BALLS" => ColumnKind.Progress,
+        "TEXT_NUMBER" when values.Count > 0 && values.All(v => v.Url is not null || (v.Value is { } link
+            && (link.Contains("://", StringComparison.Ordinal) || link.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) && ColumnValues.SafeUrl(link) is not null)) => ColumnKind.Hyperlink,
         "DATE" or "DATETIME" or "ABSTRACT_DATETIME" => ColumnKind.Date,
         "CHECKBOX" => ColumnKind.Checkbox,
         "PICKLIST" => ColumnKind.Dropdown,
@@ -105,6 +116,43 @@ public abstract class SheetImporter : IImporter
             values.Any(v => v.Display?.Contains('$') == true) ? ColumnKind.Currency : ColumnKind.Number,
         _ => ColumnKind.Text,
     };
+
+    /// <summary>Smartsheet's symbol sets → ours (null for sets with no match, imported as a status column).</summary>
+    public static string? SymbolSetFor(string? symbol) => symbol switch
+    {
+        "RYG" or "RYGB" or "RYGG" or "DECISION_SHAPES" or "DECISION_SYMBOLS" => SymbolSets.Rag,
+        "FLAG" => SymbolSets.Flag,
+        "STAR_RATING" => SymbolSets.Stars,
+        "PRIORITY" or "PRIORITY_HML" => SymbolSets.Priority,
+        _ => null,
+    };
+
+    /// <summary>The new column's settings: multi-select choices, the symbol set, an auto-number's prefix, digits and first number.</summary>
+    public static IReadOnlyList<string> OptionsFor(SourceColumn column, ColumnKind kind, IReadOnlyList<SourceCell> values)
+    {
+        switch (kind)
+        {
+            case ColumnKind.MultiSelect:
+                return column.Options.Concat(values.SelectMany(v => (v.Display ?? v.Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            case ColumnKind.Symbol:
+                return [SymbolSetFor(column.Symbol) ?? SymbolSets.Rag];
+            case ColumnKind.AutoNumber:
+                // "REQ-0012": prefix REQ-, 4 digits, numbering from the smallest so imported rows keep their numbers.
+                var numbers = values.Select(v => v.Display ?? v.Value).OfType<string>()
+                    .Select(t => (Text: t, Digits: new string(t.Reverse().TakeWhile(char.IsAsciiDigit).Reverse().ToArray())))
+                    .Where(t => t.Digits.Length > 0).ToList();
+                if (numbers.Count == 0)
+                {
+                    return [];
+                }
+
+                var prefix = numbers[0].Text[..^numbers[0].Digits.Length];
+                return [prefix, numbers.Min(n => n.Digits.Length).ToString(CultureInfo.InvariantCulture), numbers.Min(n => int.TryParse(n.Digits, out var x) ? x : 1).ToString(CultureInfo.InvariantCulture)];
+            default:
+                return [];
+        }
+    }
 
     public async Task RunAsync(ImportContext context, CancellationToken cancellationToken)
     {
@@ -213,7 +261,10 @@ public abstract class SheetImporter : IImporter
                 var options = column.Type == ColumnKind.Dropdown
                     ? column.Options.Concat(source.Rows.Select(r => r.Cells.TryGetValue(column.Source, out var c) ? c.Value : null).OfType<string>())
                         .Select(o => o.Trim()).Where(o => o.Length > 0).Distinct(StringComparer.Ordinal).ToList()
-                    : [];
+                    : column.Type is ColumnKind.MultiSelect or ColumnKind.Symbol or ColumnKind.AutoNumber && source.Columns.FirstOrDefault(s => string.Equals(s.Title, column.Source, StringComparison.OrdinalIgnoreCase)) is { } from
+                        ? (column.Options.Count > 0 && column.Type != ColumnKind.MultiSelect ? column.Options
+                            : OptionsFor(from, column.Type, source.Rows.Select(r => r.Cells.TryGetValue(column.Source, out var c) ? c : null).OfType<SourceCell>().ToList())).ToList()
+                        : [];
                 var match = existing.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
                 if (match is not null)
                 {
@@ -684,6 +735,21 @@ public abstract class SheetImporter : IImporter
                     return (cell.Email ?? raw).Trim().ToLowerInvariant();
                 case ColumnKind.Text:
                     return (cell.Display ?? raw).Trim();
+                case ColumnKind.MultiSelect:
+                    return ColumnValues.TryNormalize((cell.Display ?? raw).Trim(), kind, null, out var selected, out _) ? selected : null;
+                case ColumnKind.Hyperlink:
+                    var url = cell.Url ?? raw;
+                    var label = (cell.Display ?? raw).Trim();
+                    return ColumnValues.TryNormalize(label.Length > 0 && label != url ? $"[{label}]({url})" : url, kind, null, out var link, out _) ? link : null;
+                case ColumnKind.Symbol:
+                    // Smartsheet's stars are "One"…"Five", a flag is true/false.
+                    var word = raw.Trim() switch { "One" => "1", "Two" => "2", "Three" => "3", "Four" => "4", "Five" => "5", "Blue" or "Gray" => "", var w => w };
+                    return word.Length > 0 && ColumnValues.TryNormalize(word, kind, null, out var symbol, out _) ? symbol : null;
+                case ColumnKind.Progress:
+                    var percent = raw.Trim() switch { "Empty" => "0", "Quarter" => "25", "Half" => "50", "Three Quarter" => "75", "Full" => "100", var p => p };
+                    return ColumnValues.TryNormalize(percent, kind, null, out var progress, out _) ? progress : null;
+                case ColumnKind.AutoNumber or ColumnKind.CreatedBy or ColumnKind.CreatedDate or ColumnKind.ModifiedBy or ColumnKind.ModifiedDate:
+                    return null; // Workbench fills these in itself
                 default:
                     return raw.Trim();
             }

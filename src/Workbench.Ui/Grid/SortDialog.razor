@@ -71,18 +71,18 @@
 
     private string Ascending(string key) => KindOf(key) switch
     {
-        ColumnKind.Number or ColumnKind.Currency => "Smallest first",
-        ColumnKind.Date => "Earliest first",
-        ColumnKind.Dropdown => "In label order",
+        ColumnKind.Number or ColumnKind.Currency or ColumnKind.Progress or ColumnKind.AutoNumber => "Smallest first",
+        ColumnKind.Date or ColumnKind.CreatedDate or ColumnKind.ModifiedDate => "Earliest first",
+        ColumnKind.Dropdown or ColumnKind.MultiSelect or ColumnKind.Symbol => "In label order",
         ColumnKind.Checkbox => "Unchecked first",
         _ => "A to Z",
     };
 
     private string Descending(string key) => KindOf(key) switch
     {
-        ColumnKind.Number or ColumnKind.Currency => "Largest first",
-        ColumnKind.Date => "Latest first",
-        ColumnKind.Dropdown => "Reverse label order",
+        ColumnKind.Number or ColumnKind.Currency or ColumnKind.Progress or ColumnKind.AutoNumber => "Largest first",
+        ColumnKind.Date or ColumnKind.CreatedDate or ColumnKind.ModifiedDate => "Latest first",
+        ColumnKind.Dropdown or ColumnKind.MultiSelect or ColumnKind.Symbol => "Reverse label order",
         ColumnKind.Checkbox => "Checked first",
         _ => "Z to A",
     };

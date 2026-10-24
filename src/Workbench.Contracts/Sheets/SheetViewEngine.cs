@@ -31,16 +31,18 @@ public static class SheetViewEngine
     /// The ids of rows a view shows: rows matching every filter, plus their ancestors (so a match keeps its context).
     /// Null when the view has no filters (every row).
     /// </summary>
-    public static IReadOnlySet<Guid>? Visible(IReadOnlyList<ItemDto> items, IReadOnlyList<ColumnDto> columns, SheetViewDefinition? view)
+    /// <param name="only">Also keep only these rows (with their ancestors), e.g. a plan's critical tasks; null for no such limit.</param>
+    public static IReadOnlySet<Guid>? Visible(IReadOnlyList<ItemDto> items, IReadOnlyList<ColumnDto> columns, SheetViewDefinition? view, IReadOnlySet<Guid>? only = null)
     {
-        if (view?.Filters is not { Count: > 0 } filters)
+        var filters = view?.Filters ?? [];
+        if (filters.Count == 0 && only is null)
         {
             return null;
         }
 
         var byId = items.ToDictionary(i => i.Id);
         var visible = new HashSet<Guid>();
-        foreach (var item in items.Where(i => filters.All(f => Matches(i, f, columns))))
+        foreach (var item in items.Where(i => (only is null || only.Contains(i.Id)) && filters.All(f => Matches(i, f, columns))))
         {
             for (var current = item; current is not null && visible.Add(current.Id);)
             {
@@ -55,9 +57,10 @@ public static class SheetViewEngine
     /// The rows in display order with their depth: the hierarchy, each level sorted by the view (else by the sheet's
     /// order), and only rows <see cref="Visible"/> keeps.
     /// </summary>
-    public static IReadOnlyList<(ItemDto Item, int Depth)> Apply(IReadOnlyList<ItemDto> items, IReadOnlyList<ColumnDto> columns, SheetViewDefinition? view)
+    public static IReadOnlyList<(ItemDto Item, int Depth)> Apply(
+        IReadOnlyList<ItemDto> items, IReadOnlyList<ColumnDto> columns, SheetViewDefinition? view, IReadOnlySet<Guid>? only = null)
     {
-        var visible = Visible(items, columns, view);
+        var visible = Visible(items, columns, view, only);
         var comparer = Comparer(view?.Sort, columns);
         var children = items.ToLookup(i => i.ParentId);
         var known = items.Select(i => i.Id).ToHashSet();
@@ -95,11 +98,15 @@ public static class SheetViewEngine
         });
     }
 
-    public static bool Matches(ItemDto item, ListFilterCondition filter, IReadOnlyList<ColumnDto> columns)
+    /// <param name="today">For relative dates (<see cref="RelativeDates"/>); the local date when null.</param>
+    public static bool Matches(ItemDto item, ListFilterCondition filter, IReadOnlyList<ColumnDto> columns, DateOnly? today = null)
     {
         var raw = Value(item, filter.Field);
         var kind = KindOf(filter.Field, columns);
         var empty = string.IsNullOrWhiteSpace(raw) || (kind == ColumnKind.Checkbox && raw != "true");
+        string Resolve(string v) => ColumnValues.IsDateLike(kind) && RelativeDates.Resolve(v, today ?? DateOnly.FromDateTime(DateTime.Now)) is { } day
+            ? day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : v;
         switch (filter.Operator)
         {
             case ListFilterOperator.IsEmpty:
@@ -107,14 +114,18 @@ public static class SheetViewEngine
             case ListFilterOperator.IsNotEmpty:
                 return !empty;
             case ListFilterOperator.Equals or ListFilterOperator.NotEquals:
-                var any = Values(filter.Value).Any(v => kind == ColumnKind.Checkbox ? (v == "true") == !empty : !empty && CompareValues(raw, v, kind, null, false) == 0);
+                var any = kind == ColumnKind.MultiSelect
+                    ? Values(filter.Value).Any(v => ColumnValues.Selected(raw).Contains(v, StringComparer.OrdinalIgnoreCase))
+                    : Values(filter.Value).Any(v => kind == ColumnKind.Checkbox ? (v == "true") == !empty : !empty && CompareValues(raw, Resolve(v), kind, null, false) == 0);
                 return filter.Operator == ListFilterOperator.Equals ? any : !any;
         }
 
-        if (empty || filter.Value is not { } value)
+        if (empty || filter.Value is not { } typed)
         {
             return false;
         }
+
+        var value = Resolve(typed);
 
         switch (filter.Operator)
         {
@@ -156,6 +167,9 @@ public static class SheetViewEngine
 
         var result = kind switch
         {
+            _ when ColumnValues.IsTimestamp(kind) && (ColumnValues.ParseStamp(a) is null || ColumnValues.ParseStamp(b) is null)
+                && ColumnValues.Day(a) is { } x && ColumnValues.Day(b) is { } y => x.CompareTo(y), // a system date against a typed day
+            _ when ColumnValues.Compare(a!, b!, kind, column) is { } newer => newer,
             ColumnKind.Number or ColumnKind.Currency when Number(a) is { } x && Number(b) is { } y => x.CompareTo(y),
             ColumnKind.Date when Date(a) is { } x && Date(b) is { } y => x.CompareTo(y),
             ColumnKind.Checkbox => (a == "true").CompareTo(b == "true"),
@@ -211,10 +225,50 @@ public static class SheetFilterText
             [ListFilterOperator.Equals, ListFilterOperator.NotEquals, ListFilterOperator.GreaterThan, ListFilterOperator.GreaterOrEqual,
              ListFilterOperator.LessThan, ListFilterOperator.LessOrEqual, ListFilterOperator.IsEmpty, ListFilterOperator.IsNotEmpty],
         ColumnKind.Checkbox => [ListFilterOperator.Equals],
-        ColumnKind.Dropdown => [ListFilterOperator.Equals, ListFilterOperator.NotEquals, ListFilterOperator.IsEmpty, ListFilterOperator.IsNotEmpty],
+        ColumnKind.Dropdown or ColumnKind.Symbol => [ListFilterOperator.Equals, ListFilterOperator.NotEquals, ListFilterOperator.IsEmpty, ListFilterOperator.IsNotEmpty],
+        ColumnKind.MultiSelect => [ListFilterOperator.Equals, ListFilterOperator.NotEquals, ListFilterOperator.Contains, ListFilterOperator.IsEmpty, ListFilterOperator.IsNotEmpty],
+        ColumnKind.Progress or ColumnKind.CreatedDate or ColumnKind.ModifiedDate =>
+            [ListFilterOperator.GreaterThan, ListFilterOperator.GreaterOrEqual, ListFilterOperator.LessThan, ListFilterOperator.LessOrEqual,
+             ListFilterOperator.Equals, ListFilterOperator.NotEquals, ListFilterOperator.IsEmpty, ListFilterOperator.IsNotEmpty],
         _ => [ListFilterOperator.Contains, ListFilterOperator.Equals, ListFilterOperator.NotEquals, ListFilterOperator.NotContains,
               ListFilterOperator.StartsWith, ListFilterOperator.IsEmpty, ListFilterOperator.IsNotEmpty],
     };
 
     public static bool TakesValue(ListFilterOperator op) => op is not (ListFilterOperator.IsEmpty or ListFilterOperator.IsNotEmpty);
+}
+
+/// <summary>
+/// Dates relative to today in filters and formatting rules: <c>@today</c>, <c>@today+7</c> (a week from today),
+/// <c>@today-3</c> (three days ago). Stored as typed and worked out when the rule is checked, so "before today" stays true to its words.
+/// </summary>
+public static class RelativeDates
+{
+    public const string Today = "@today";
+
+    public static string Days(int offset) => offset == 0 ? Today : offset > 0 ? $"{Today}+{offset}" : $"{Today}{offset}";
+
+    /// <summary>The offset in days of a relative date, or null for an ordinary value.</summary>
+    public static int? Offset(string? value)
+    {
+        var text = value?.Trim();
+        if (text is null || !text.StartsWith(Today, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var rest = text[Today.Length..].Replace(" ", string.Empty);
+        return rest.Length == 0 ? 0 : int.TryParse(rest, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var days) && Math.Abs(days) <= 36_500 ? days : null;
+    }
+
+    public static DateOnly? Resolve(string? value, DateOnly today) => Offset(value) is { } days ? today.AddDays(days) : null;
+
+    /// <summary>"today", "7 days from today", "3 days ago".</summary>
+    public static string Describe(int days) => days switch
+    {
+        0 => "today",
+        1 => "tomorrow",
+        -1 => "yesterday",
+        > 0 => $"{days} days from today",
+        _ => $"{-days} days ago",
+    };
 }

@@ -151,6 +151,22 @@ public sealed class FormulaValue : IEquatable<FormulaValue>
             case ColumnType.Lookup:
                 // A looked-up value whose source type isn't known here: read numbers and dates as such.
                 return TryParseNumber(raw, out var n) ? FromNumber(n) : TryParseDate(raw, out var d) ? FromDate(d) : FromText(raw);
+            case ColumnType.MultiSelect:
+                // "Design, Build": what the cell shows, so HAS/CONTAINS and text functions read it naturally.
+                return FromText(string.Join(", ", raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)));
+            case ColumnType.Hyperlink:
+                // The address: [label](url) reads as url.
+                var link = raw.Trim();
+                return FromText(link.StartsWith('[') && link.EndsWith(')') && link.LastIndexOf("](", StringComparison.Ordinal) is var at and > 0 ? link[(at + 2)..^1] : link);
+            case ColumnType.Symbol:
+                // Stars are their count; other symbols their label ("Red", "High", "Flagged").
+                return TryParseNumber(raw, out var stars) ? FromNumber(stars) : FromText(raw.Trim());
+            case ColumnType.Progress when TryParseNumber(raw, out var percent):
+                // Like a % complete in Smartsheet or Excel: 40% is 0.4, so [Progress] * [Budget] is the earned part.
+                return FromNumber(percent / 100);
+            case ColumnType.CreatedDate or ColumnType.ModifiedDate
+                when DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var stamp):
+                return FromDate(DateOnly.FromDateTime(stamp.ToLocalTime()));
             default:
                 return FromText(raw);
         }

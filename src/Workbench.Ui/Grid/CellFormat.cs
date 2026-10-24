@@ -47,13 +47,22 @@ public static class CellFormat
             ColumnKind.Number when TryParseStoredDecimal(raw, out var number) => number.ToString("#,0.##########", CultureInfo.CurrentCulture),
             ColumnKind.Currency when TryParseStoredDecimal(raw, out var amount) => amount.ToString("C2", CurrencyCulture),
             ColumnKind.Date when ParseStoredDate(raw) is { } date => date.ToString(DateDisplayFormat, CultureInfo.InvariantCulture),
+            ColumnKind.MultiSelect => ColumnValues.Text(raw, kind)!,
+            ColumnKind.Hyperlink => ColumnValues.Text(raw, kind)!,
+            ColumnKind.Symbol => ColumnValues.Text(raw, kind)!,
+            ColumnKind.Progress => ColumnValues.Text(raw, kind)!,
+            ColumnKind.CreatedDate or ColumnKind.ModifiedDate => ColumnValues.Text(raw, kind)!,
             _ => raw,
         };
     }
 
     /// <summary>The text an editor starts with: the raw value, except dates use the display format.</summary>
-    public static string EditText(string? raw, ColumnKind kind) =>
-        kind == ColumnKind.Date ? Display(raw, kind) : raw ?? string.Empty;
+    public static string EditText(string? raw, ColumnKind kind) => kind switch
+    {
+        ColumnKind.Date => Display(raw, kind),
+        ColumnKind.MultiSelect => Display(raw, kind), // "A, B": typing commas separates the choices again
+        _ => raw ?? string.Empty,
+    };
 
     public static DateTime? ToDateTime(string? raw) => ParseStoredDate(raw)?.ToDateTime(TimeOnly.MinValue);
 
@@ -104,6 +113,13 @@ public static class CellFormat
                 value = trimmed.ToLowerInvariant() is "true" or "1" or "yes" or "x" or "y" or "checked" or "✓" or "✔" ? "true" : "false";
                 return true;
 
+            case ColumnKind.MultiSelect:
+            case ColumnKind.Hyperlink:
+            case ColumnKind.Symbol:
+            case ColumnKind.Progress:
+            case ColumnKind.AutoNumber or ColumnKind.CreatedBy or ColumnKind.CreatedDate or ColumnKind.ModifiedBy or ColumnKind.ModifiedDate:
+                return ColumnValues.TryNormalize(trimmed, kind, null, out value, out error);
+
             default:
                 value = trimmed;
                 return true;
@@ -116,6 +132,12 @@ public static class CellFormat
     /// </summary>
     public static bool TryNormalize(string? text, GridColumn column, out string? value, out string? error)
     {
+        if (column.ValueKind is ColumnKind.MultiSelect or ColumnKind.Symbol && column.Column is { } choices && !string.IsNullOrWhiteSpace(text))
+        {
+            // Multi-select choices take the option's spelling; a symbol must be one of its column's set.
+            return ColumnValues.TryNormalize(text.Trim(), column.ValueKind, choices.Options, out value, out error);
+        }
+
         if (!TryNormalize(text, column.ValueKind, out value, out error))
         {
             return false;
@@ -131,9 +153,12 @@ public static class CellFormat
     }
 
     /// <summary>The text a cell copies as: what the grid shows (Excel and Google Sheets read dates, $ and commas back).</summary>
-    public static string CopyText(string? raw, ColumnKind kind) => kind == ColumnKind.Checkbox
-        ? raw == "true" ? "TRUE" : raw is null ? string.Empty : "FALSE"
-        : Display(raw, kind);
+    public static string CopyText(string? raw, ColumnKind kind) => kind switch
+    {
+        ColumnKind.Checkbox => raw == "true" ? "TRUE" : raw is null ? string.Empty : "FALSE",
+        ColumnKind.Hyperlink => raw ?? string.Empty, // keeps the address (and label) so pasting it back gives the same link
+        _ => Display(raw, kind),
+    };
 
     public static string KindName(ColumnKind kind) => kind switch
     {
@@ -141,6 +166,15 @@ public static class CellFormat
         ColumnKind.Dropdown => "Status / dropdown",
         ColumnKind.LinkedRow => "Link to row",
         ColumnKind.Lookup => "Lookup (from linked rows)",
+        ColumnKind.MultiSelect => "Multi-select",
+        ColumnKind.Hyperlink => "Link (web address)",
+        ColumnKind.Symbol => "Symbols (RAG, flag, stars, priority)",
+        ColumnKind.Progress => "Progress (% complete)",
+        ColumnKind.AutoNumber => "Auto-number",
+        ColumnKind.CreatedBy => "Created by",
+        ColumnKind.CreatedDate => "Created date",
+        ColumnKind.ModifiedBy => "Modified by",
+        ColumnKind.ModifiedDate => "Modified date",
         _ => kind.ToString(),
     };
 

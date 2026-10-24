@@ -309,7 +309,7 @@ public sealed class SheetGridSpreadsheetTests
         grid.Find(".wb-grid").KeyDown(new KeyboardEventArgs { Key = key, ShiftKey = shift, CtrlKey = ctrl, AltKey = alt });
 
     /// <summary>Keeps rows like the real service: creates insert at their order, moves renumber, deletes take descendants.</summary>
-    private sealed class StatefulItemService : IItemService
+    internal sealed class StatefulItemService : IItemService
     {
         private readonly List<ItemDto> _items = [];
 
@@ -447,7 +447,7 @@ public sealed class SheetGridSpreadsheetTests
         }
     }
 
-    private sealed class FakeViewService(SheetViewDto defaultView) : ISheetViewService
+    internal sealed class FakeViewService(SheetViewDto defaultView) : ISheetViewService
     {
         public Task<SheetViewsDto> ListAsync(Guid sheetId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new SheetViewsDto(sheetId, [defaultView], defaultView.Id, null, false));
@@ -527,7 +527,7 @@ public sealed class SheetGridSpreadsheetTests
         public Task DeleteAsync(Guid sheetId, Guid baselineId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
-    private sealed class NoColumns : IColumnService
+    internal sealed class NoColumns : IColumnService
     {
         public Task<ColumnDto> CreateAsync(Guid sheetId, CreateColumnRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

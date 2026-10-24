@@ -26,6 +26,16 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
             throw new ArgumentException($"A {(type == ColumnType.Lookup ? "lookup" : "link to row")} column can't have a formula.");
         }
 
+        if (formula is not null && ColumnValues.IsAutomatic(request.Type))
+        {
+            throw new ArgumentException("An auto-number or system column is filled in automatically, so it can't have a formula.");
+        }
+
+        if (!Enum.IsDefined(request.Type))
+        {
+            throw new ArgumentException("Unknown column type.");
+        }
+
         var column = new Column
         {
             SheetId = sheetId,
@@ -33,13 +43,22 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
             Type = type,
             Order = nextOrder + 1,
             Options = await ValidateOptionsAsync(db, sheetId, request.Name.Trim(), type, request.Options?.ToList() ?? [], cancellationToken),
-            OptionColors = request.Type == ColumnKind.Dropdown ? StatusLabels.Colors(request.Options ?? [], request.OptionColors ?? []) : [],
+            OptionColors = request.Type is ColumnKind.Dropdown or ColumnKind.MultiSelect ? StatusLabels.Colors(request.Options ?? [], request.OptionColors ?? []) : [],
             Formula = formula,
             IsRestricted = request.IsRestricted,
         };
         db.Columns.Add(column);
+        if (ColumnValues.IsAutomatic(request.Type))
+        {
+            await FillAsync(db, column, cancellationToken);
+        }
+
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
-        await db.SaveChangesAsync(cancellationToken);
+        using (SheetRowStamps.Quietly())
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
         return await ToDtoAsync(db, column, cancellationToken);
     }
 
@@ -62,17 +81,17 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
         }
 
         column.Name = newName;
-        if (column.Type == ColumnType.Dropdown)
+        if (column.Type is ColumnType.Dropdown or ColumnType.MultiSelect)
         {
             // Status label colors follow their labels by name (before the options change).
             column.OptionColors = StatusLabels.Colors(request.Options, request.OptionColors ?? StatusLabels.ByName(column.Options, column.OptionColors, request.Options));
         }
 
-        column.Options = column.Type is ColumnType.LinkedRow or ColumnType.Lookup && request.Options.Count == 0
-            ? column.Options // a dialog that only renames sends no options; keep the link settings
+        column.Options = column.Type is ColumnType.LinkedRow or ColumnType.Lookup or ColumnType.Symbol or ColumnType.AutoNumber && request.Options.Count == 0
+            ? column.Options // a dialog that only renames sends no options; keep the link, symbol or numbering settings
             : await ValidateOptionsAsync(db, sheetId, newName, column.Type, request.Options.ToList(), cancellationToken, columnId);
         var requested = renamed && request.Formula is not null ? Formula.RenameColumn(request.Formula, oldName, newName) : request.Formula;
-        column.Formula = column.Type is ColumnType.LinkedRow or ColumnType.Lookup
+        column.Formula = column.Type is ColumnType.LinkedRow or ColumnType.Lookup || ColumnValues.IsAutomatic(column.Type.ToContract())
             ? null
             : await ValidateFormulaAsync(db, sheetId, columnId, column.Name, requested, cancellationToken);
         if (renamed)
@@ -88,7 +107,11 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
         }
 
         await TouchSheetAsync(db, sheetId, cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+        using (SheetRowStamps.Quietly())
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
         return await ToDtoAsync(db, column, cancellationToken);
     }
 
@@ -108,7 +131,10 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
         await RemoveValuesAsync(db, sheetId, columnId, cancellationToken);
         db.Columns.Remove(column);
         await TouchSheetAsync(db, sheetId, cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+        using (SheetRowStamps.Quietly())
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static async Task RemoveValuesAsync(IWorkbenchDbContext db, Guid sheetId, Guid columnId, CancellationToken cancellationToken)
@@ -188,8 +214,72 @@ public sealed class ColumnService(IWorkbenchDbContextFactory dbFactory, TimeProv
                 return [linkId.ToString(), field];
             }
 
+            case ColumnType.Symbol:
+                if (options.Count > 0 && !SymbolSets.All.Contains(options[0].Trim().ToLowerInvariant()))
+                {
+                    throw new ArgumentException($"Pick the symbols \"{name}\" shows: {string.Join(", ", SymbolSets.All.Select(SymbolSets.Name))}.");
+                }
+
+                return [options.Count > 0 ? options[0].Trim().ToLowerInvariant() : SymbolSets.Rag];
+
+            case ColumnType.AutoNumber:
+            {
+                var prefix = options.Count > 0 ? options[0].Trim() : string.Empty;
+                if (prefix.Length > 20)
+                {
+                    throw new ArgumentException("Keep the auto-number prefix to 20 characters.");
+                }
+
+                var (_, digits, start) = ColumnValues.AutoNumberSettings(options);
+                if (options.Count > 1 && !string.IsNullOrWhiteSpace(options[1]) && (!int.TryParse(options[1], out var d) || d is < 0 or > 10))
+                {
+                    throw new ArgumentException("Auto-numbers have 0 to 10 digits.");
+                }
+
+                if (options.Count > 2 && !string.IsNullOrWhiteSpace(options[2]) && (!int.TryParse(options[2], out var first) || first < 0))
+                {
+                    throw new ArgumentException("Auto-numbers start at 0 or more.");
+                }
+
+                return [prefix, digits.ToString(System.Globalization.CultureInfo.InvariantCulture), start.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+            }
+
+            case ColumnType.MultiSelect:
+                return options.Where(o => !string.IsNullOrWhiteSpace(o)).Select(o => o.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
             default:
                 return options;
+        }
+    }
+
+    /// <summary>
+    /// A new auto-number or system column gets its values on every existing row: numbers in the sheet's outline order,
+    /// and who and when from each row's stamps.
+    /// </summary>
+    private static async Task FillAsync(IWorkbenchDbContext db, Column column, CancellationToken cancellationToken)
+    {
+        var items = await db.Items.Where(i => i.SheetId == column.SheetId).ToListAsync(cancellationToken);
+        var key = column.Id.ToString();
+        var children = items.ToLookup(i => i.ParentId);
+        var known = items.Select(i => i.Id).ToHashSet();
+        var outline = new List<Item>(items.Count);
+        void Add(IEnumerable<Item> siblings)
+        {
+            foreach (var item in siblings.OrderBy(i => i.Order))
+            {
+                outline.Add(item);
+                Add(children[item.Id]);
+            }
+        }
+
+        Add(items.Where(i => i.ParentId is null || !known.Contains(i.ParentId.Value)));
+        foreach (var item in outline)
+        {
+            var value = column.Type == ColumnType.AutoNumber ? SheetRowStamps.Next(column) : SheetRowStamps.SystemValue(item, column.Type);
+            if (value is not null)
+            {
+                item.Values = new Dictionary<string, string?>(item.Values) { [key] = value };
+            }
         }
     }
 

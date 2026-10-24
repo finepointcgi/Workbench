@@ -1,0 +1,442 @@
+@* Conditional formatting in plain words: "When Status is Stuck, color the whole row red". Rules apply top to bottom; a rule higher
+   up wins when two set the same color. Colors come from the accessible status palette. *@
+@using Workbench.Contracts.Customization
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Rules apply from the top: when two rules color the same cell, the higher one wins. Bold and strikethrough add up.
+            </MudText>
+            @if (HiddenCount > 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Lock">
+                    @HiddenCount @(HiddenCount == 1 ? "rule uses" : "rules use") a column restricted to Finance and owners, so you don't see @(HiddenCount == 1 ? "it" : "them"). Saving keeps @(HiddenCount == 1 ? "it" : "them").
+                </MudAlert>
+            }
+            @if (_rules.Count == 0)
+            {
+                <MudText Typo="Typo.body2">No rules yet.@(CanEdit ? " Add one to color rows or cells that need attention." : "")</MudText>
+            }
+            @for (var r = 0; r < _rules.Count; r++)
+            {
+                var ruleIndex = r;
+                var rule = _rules[ruleIndex];
+                <MudPaper Outlined="true" Class="pa-3" data-testid="format-rule">
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <span class="wb-rule-sample" style="@Sample(rule)" aria-hidden="true">Aa</span>
+                            <MudText Typo="Typo.body2" Style="flex:1" data-testid="format-rule-text">@Describe(rule)</MudText>
+                            @if (CanEdit)
+                            {
+                                <MudSwitch T="bool" @bind-Value="rule.Enabled" Color="Color.Primary" Size="Size.Small" Label="On" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Disabled="ruleIndex == 0" OnClick="() => Move(ruleIndex, -1)"
+                                               aria-label="@($"Move rule {ruleIndex + 1} up")" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled="ruleIndex == _rules.Count - 1" OnClick="() => Move(ruleIndex, 1)"
+                                               aria-label="@($"Move rule {ruleIndex + 1} down")" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => _rules.RemoveAt(ruleIndex)" aria-label="@($"Delete rule {ruleIndex + 1}")" />
+                            }
+                        </MudStack>
+                        @if (CanEdit)
+                        {
+                            <MudText Typo="Typo.subtitle2">When</MudText>
+                            @for (var c = 0; c < rule.Conditions.Count; c++)
+                            {
+                                var condIndex = c;
+                                var condition = rule.Conditions[condIndex];
+                                var field = FieldOf(condition.Field);
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" data-testid="format-condition">
+                                    @if (condIndex > 0)
+                                    {
+                                        <MudSelect T="bool" @bind-Value="rule.MatchAny" Dense="true" Margin="Margin.Dense" Style="max-width:90px" Label="">
+                                            <MudSelectItem T="bool" Value="false">and</MudSelectItem>
+                                            <MudSelectItem T="bool" Value="true">or</MudSelectItem>
+                                        </MudSelect>
+                                    }
+                                    <MudSelect T="string" Value="condition.Field" ValueChanged="key => SetField(condition, key)" Label="Column" Dense="true" Margin="Margin.Dense"
+                                               Style="min-width:150px;flex:1" data-testid="format-field">
+                                        @foreach (var f in Fields)
+                                        {
+                                            <MudSelectItem T="string" Value="f.Key">@f.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    @if (field?.Kind != ColumnKind.Checkbox)
+                                    {
+                                        <MudSelect T="ListFilterOperator" @bind-Value="condition.Operator" Label="Condition" Dense="true" Margin="Margin.Dense" Style="min-width:140px"
+                                                   data-testid="format-operator">
+                                            @foreach (var op in SheetFilterText.OperatorsFor(field?.Kind ?? ColumnKind.Text))
+                                            {
+                                                <MudSelectItem T="ListFilterOperator" Value="op">@OperatorName(field, op)</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    }
+                                    @if (field?.Kind == ColumnKind.Checkbox)
+                                    {
+                                        <MudSelect T="string" @bind-Value="condition.Text" Label="Is" Dense="true" Margin="Margin.Dense" Style="min-width:140px">
+                                            <MudSelectItem T="string" Value="@("true")">Checked</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("false")">Not checked</MudSelectItem>
+                                        </MudSelect>
+                                    }
+                                    else if (!SheetFilterText.TakesValue(condition.Operator))
+                                    {
+                                    }
+                                    else if (field is not null && ViewField.IsChoice(field.Kind) && field.Options.Count > 0
+                                             && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
+                                    {
+                                        <div class="d-flex flex-wrap align-center" style="gap:4px;min-width:200px;flex:2" role="group" aria-label="Values">
+                                            @foreach (var option in field.Options)
+                                            {
+                                                var picked = condition.Choices.Contains(option);
+                                                <MudChip T="string" Size="Size.Small" Variant="@(picked ? Variant.Filled : Variant.Outlined)" Color="@(picked ? Color.Primary : Color.Default)"
+                                                         Icon="@(picked ? Icons.Material.Filled.Check : null)" OnClick="() => Toggle(condition, option)" aria-pressed="@(picked ? "true" : "false")"
+                                                         data-testid="format-choice">@ViewField.ChoiceLabel(field.Kind, option)</MudChip>
+                                            }
+                                        </div>
+                                    }
+                                    else if (field is not null && ColumnValues.IsDateLike(field.Kind))
+                                    {
+                                        <MudSelect T="string" @bind-Value="condition.DateMode" Dense="true" Margin="Margin.Dense" Label="Date" Style="min-width:150px" data-testid="format-date-mode">
+                                            <MudSelectItem T="string" Value="@("today")">today</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("from")">days from today</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("ago")">days ago</MudSelectItem>
+                                            <MudSelectItem T="string" Value="@("date")">a date</MudSelectItem>
+                                        </MudSelect>
+                                        @if (condition.DateMode is "from" or "ago")
+                                        {
+                                            <MudNumericField T="int" @bind-Value="condition.Days" Label="Days" Min="0" Max="3650" Margin="Margin.Dense" Style="max-width:100px" />
+                                        }
+                                        else if (condition.DateMode == "date")
+                                        {
+                                            <MudTextField T="string" @bind-Value="condition.Text" Label="Date" Placeholder="MM/DD/YYYY" Margin="Margin.Dense" Immediate="true" Style="max-width:150px" />
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <MudTextField T="string" @bind-Value="condition.Text" Label="Value" Margin="Margin.Dense" Immediate="true" Style="min-width:140px;flex:2"
+                                                      Placeholder="@(field?.Kind == ColumnKind.Progress ? "0 to 100" : null)" data-testid="format-value" />
+                                    }
+                                    @if (rule.Conditions.Count > 1)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="mt-2" aria-label="@($"Remove condition {condIndex + 1}")"
+                                                       OnClick="() => rule.Conditions.RemoveAt(condIndex)" />
+                                    }
+                                </MudStack>
+                            }
+                            @if (rule.Conditions.Count < 10)
+                            {
+                                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Size="Size.Small" Style="align-self:flex-start"
+                                           OnClick="() => rule.Conditions.Add(NewCondition())">Add a condition</MudButton>
+                            }
+                            <MudText Typo="Typo.subtitle2">Then format</MudText>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                                <MudSelect T="string" @bind-Value="rule.Target" Label="What" Dense="true" Margin="Margin.Dense" Style="min-width:170px" data-testid="format-target">
+                                    <MudSelectItem T="string" Value="@string.Empty">the whole row</MudSelectItem>
+                                    @foreach (var f in Fields)
+                                    {
+                                        <MudSelectItem T="string" Value="f.Key">the @f.Name cell</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudSelect T="string" @bind-Value="rule.Color" Label="Color" Dense="true" Margin="Margin.Dense" Style="min-width:150px" data-testid="format-color">
+                                    <MudSelectItem T="string" Value="@string.Empty">No color</MudSelectItem>
+                                    @foreach (var option in StatusColors.All)
+                                    {
+                                        <MudSelectItem T="string" Value="option.Key"><span class="wb-swatch" style="background:@option.Background" aria-hidden="true"></span> @option.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudCheckBox T="bool" @bind-Value="rule.Bold" Label="Bold" Dense="true" data-testid="format-bold" />
+                                <MudCheckBox T="bool" @bind-Value="rule.Strikethrough" Label="Strikethrough" Dense="true" data-testid="format-strike" />
+                            </MudStack>
+                            @if (rule.Error is not null)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error" role="alert">@rule.Error</MudText>
+                            }
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+            @if (CanEdit && _rules.Count < 50)
+            {
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Style="align-self:flex-start"
+                           OnClick="AddRule" data-testid="format-add">@(_rules.Count == 0 ? "Add a rule" : "Add another rule")</MudButton>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        @if (CanEdit)
+        {
+            <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="format-save">Save rules</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="() => MudDialog.Cancel()">Close</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .wb-rule-sample { display:inline-flex; align-items:center; justify-content:center; min-width:36px; height:24px; border-radius:4px; border:1px solid var(--mud-palette-lines-default); font-size:13px; }
+</style>
+
+@code {
+    private sealed class ConditionModel
+    {
+        public string Field { get; set; } = string.Empty;
+        public ListFilterOperator Operator { get; set; }
+        public string? Text { get; set; }
+        public List<string> Choices { get; set; } = [];
+
+        /// <summary>For dates: "today", "from" (days from today), "ago" (days ago) or "date" (a typed date).</summary>
+        public string DateMode { get; set; } = "today";
+        public int Days { get; set; }
+    }
+
+    private sealed class RuleModel
+    {
+        public Guid? Id { get; set; }
+        public List<ConditionModel> Conditions { get; } = [];
+        public bool MatchAny { get; set; }
+        public string Target { get; set; } = string.Empty;
+        public string Color { get; set; } = string.Empty;
+        public bool Bold { get; set; }
+        public bool Strikethrough { get; set; }
+        public bool Enabled { get; set; } = true;
+        public string? Error { get; set; }
+    }
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ViewField> Fields { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<SheetFormatRuleDto> Rules { get; set; } = [];
+
+    [Parameter]
+    public int HiddenCount { get; set; }
+
+    [Parameter]
+    public bool CanEdit { get; set; }
+
+    private readonly List<RuleModel> _rules = [];
+
+    protected override void OnInitialized()
+    {
+        foreach (var rule in Rules)
+        {
+            var model = new RuleModel
+            {
+                Id = rule.Id,
+                MatchAny = rule.Definition.MatchAny,
+                Target = rule.Definition.Target ?? string.Empty,
+                Color = rule.Definition.Color ?? string.Empty,
+                Bold = rule.Definition.Bold,
+                Strikethrough = rule.Definition.Strikethrough,
+                Enabled = rule.Definition.Enabled,
+            };
+            model.Conditions.AddRange(rule.Definition.Conditions.Select(ToModel));
+            _rules.Add(model);
+        }
+    }
+
+    private ViewField? FieldOf(string key) => Fields.FirstOrDefault(f => f.Key == key);
+
+    private ConditionModel ToModel(ListFilterCondition condition)
+    {
+        var field = FieldOf(condition.Field);
+        var model = new ConditionModel { Field = condition.Field, Operator = condition.Operator };
+        if (field is not null && ViewField.IsChoice(field.Kind))
+        {
+            model.Choices = SheetViewEngine.Values(condition.Value).ToList();
+        }
+        else if (field is not null && ColumnValues.IsDateLike(field.Kind))
+        {
+            if (RelativeDates.Offset(condition.Value) is { } days)
+            {
+                (model.DateMode, model.Days) = days == 0 ? ("today", 0) : days > 0 ? ("from", days) : ("ago", -days);
+            }
+            else
+            {
+                (model.DateMode, model.Text) = ("date", CellFormat.Display(condition.Value, ColumnKind.Date));
+            }
+        }
+        else
+        {
+            model.Text = condition.Value;
+        }
+
+        return model;
+    }
+
+    private ConditionModel NewCondition()
+    {
+        var field = Fields.FirstOrDefault(f => ViewField.IsChoice(f.Kind) && f.Options.Count > 0) ?? Fields.FirstOrDefault();
+        var condition = new ConditionModel();
+        if (field is not null)
+        {
+            SetField(condition, field.Key);
+        }
+
+        return condition;
+    }
+
+    private void AddRule()
+    {
+        var rule = new RuleModel { Color = StatusColors.Red.Key };
+        rule.Conditions.Add(NewCondition());
+        _rules.Add(rule);
+    }
+
+    private void SetField(ConditionModel condition, string key)
+    {
+        condition.Field = key;
+        var kind = FieldOf(key)?.Kind ?? ColumnKind.Text;
+        // Dates read most naturally as "is before today"; everything else starts with the first comparison for its type.
+        condition.Operator = ColumnValues.IsDateLike(kind) ? ListFilterOperator.LessThan : SheetFilterText.OperatorsFor(kind)[0];
+        condition.Text = kind == ColumnKind.Checkbox ? "true" : null;
+        condition.Choices = [];
+        condition.DateMode = "today";
+        condition.Days = 0;
+    }
+
+    private static void Toggle(ConditionModel condition, string option)
+    {
+        if (!condition.Choices.Remove(option))
+        {
+            condition.Choices.Add(option);
+        }
+    }
+
+    private void Move(int index, int by)
+    {
+        var rule = _rules[index];
+        _rules.RemoveAt(index);
+        _rules.Insert(Math.Clamp(index + by, 0, _rules.Count), rule);
+    }
+
+    /// <summary>Dates compare as "before" and "after"; the rest as the filters word them.</summary>
+    private static string OperatorName(ViewField? field, ListFilterOperator op) => field is not null && ColumnValues.IsDateLike(field.Kind)
+        ? op switch
+        {
+            ListFilterOperator.LessThan => "is before",
+            ListFilterOperator.LessOrEqual => "is on or before",
+            ListFilterOperator.GreaterThan => "is after",
+            ListFilterOperator.GreaterOrEqual => "is on or after",
+            ListFilterOperator.Equals => "is on",
+            ListFilterOperator.NotEquals => "isn't on",
+            _ => SheetFilterText.Operator(op),
+        }
+        : SheetFilterText.Operator(op);
+
+    /// <summary>The condition as stored, or the reason it can't be.</summary>
+    private (ListFilterCondition? Condition, string? Error) Build(ConditionModel condition)
+    {
+        var field = FieldOf(condition.Field);
+        if (field is null)
+        {
+            return (null, "Pick a column.");
+        }
+
+        if (field.Kind == ColumnKind.Checkbox)
+        {
+            return (new ListFilterCondition(condition.Field, ListFilterOperator.Equals, condition.Text ?? "true"), null);
+        }
+
+        if (!SheetFilterText.TakesValue(condition.Operator))
+        {
+            return (new ListFilterCondition(condition.Field, condition.Operator), null);
+        }
+
+        if (ViewField.IsChoice(field.Kind) && field.Options.Count > 0 && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
+        {
+            return condition.Choices.Count == 0
+                ? (null, $"Pick at least one {field.Name} value.")
+                : (new ListFilterCondition(condition.Field, condition.Operator, string.Join('\n', condition.Choices)), null);
+        }
+
+        if (ColumnValues.IsDateLike(field.Kind) && condition.DateMode != "date")
+        {
+            var days = condition.DateMode switch { "from" => condition.Days, "ago" => -condition.Days, _ => 0 };
+            return (new ListFilterCondition(condition.Field, condition.Operator, RelativeDates.Days(days)), null);
+        }
+
+        var normalizeAs = field.Kind switch
+        {
+            ColumnKind.Number or ColumnKind.Currency or ColumnKind.Progress => field.Kind,
+            _ when ColumnValues.IsDateLike(field.Kind) => ColumnKind.Date,
+            _ => ColumnKind.Text,
+        };
+        if (string.IsNullOrWhiteSpace(condition.Text))
+        {
+            return (null, $"Enter the value {field.Name} is compared with.");
+        }
+
+        return CellFormat.TryNormalize(condition.Text, normalizeAs, out var value, out var error)
+            ? (new ListFilterCondition(condition.Field, condition.Operator, value), null)
+            : (null, error);
+    }
+
+    private SheetFormatRuleDefinition? Definition(RuleModel rule, out string? error)
+    {
+        var conditions = new List<ListFilterCondition>();
+        foreach (var condition in rule.Conditions)
+        {
+            var (built, problem) = Build(condition);
+            if (built is null)
+            {
+                error = problem;
+                return null;
+            }
+
+            conditions.Add(built);
+        }
+
+        if (conditions.Count == 0)
+        {
+            error = "Add a condition.";
+            return null;
+        }
+
+        if (rule.Color.Length == 0 && !rule.Bold && !rule.Strikethrough)
+        {
+            error = "Pick a color, bold or strikethrough.";
+            return null;
+        }
+
+        error = null;
+        return new SheetFormatRuleDefinition(conditions, rule.MatchAny, rule.Target.Length == 0 ? null : rule.Target,
+            rule.Color.Length == 0 ? null : rule.Color, rule.Bold, rule.Strikethrough, rule.Enabled);
+    }
+
+    private string Name(string key) => FieldOf(key)?.Name ?? "a hidden column";
+
+    private string Describe(RuleModel rule)
+    {
+        var definition = Definition(rule, out _);
+        return definition is null
+            ? "When … (finish the rule below)"
+            : SheetFormatText.Describe(definition, Name) + (rule.Enabled ? string.Empty : " (off)");
+    }
+
+    private static string Sample(RuleModel rule) =>
+        new CellStyle(StatusColors.Find(rule.Color), rule.Bold, rule.Strikethrough).Css ?? string.Empty;
+
+    private void Submit()
+    {
+        var result = new List<SaveSheetFormatRule>();
+        foreach (var rule in _rules)
+        {
+            var definition = Definition(rule, out var error);
+            rule.Error = error;
+            if (definition is not null)
+            {
+                result.Add(new SaveSheetFormatRule(rule.Id, definition));
+            }
+        }
+
+        if (_rules.All(r => r.Error is null))
+        {
+            MudDialog.Close(DialogResult.Ok<IReadOnlyList<SaveSheetFormatRule>>(result));
+        }
+    }
+}

@@ -15,6 +15,8 @@ public static class DependencyInjection
         services.AddHttpClient<IItemService, HttpItemService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ISheetViewService, HttpSheetViewService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ISheetBulkEditService, HttpSheetBulkEditService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ISheetFormatRuleService, HttpSheetFormatRuleService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<Contracts.Scheduling.IPlanFloatService, HttpPlanFloatService>(client => client.BaseAddress = serverBaseAddress);
         services.AddWorkbenchSchedulingClients(serverBaseAddress);
         services.AddCollaborationClients(serverBaseAddress);
         services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);

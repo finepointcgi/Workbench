@@ -27,6 +27,12 @@ public enum GridColumnKind
 
     /// <summary>Read-only: how many plan working days the finish has moved since the baseline (positive = later).</summary>
     FinishVariance,
+
+    /// <summary>Read-only: working days the task can slip without moving the plan's finish (0 or less = critical).</summary>
+    TotalFloat,
+
+    /// <summary>Read-only: working days the task can slip without moving any successor.</summary>
+    FreeFloat,
 }
 
 /// <summary>A column as the grid shows it: one of the built-in item fields or a sheet column.</summary>
@@ -36,7 +42,7 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     public ColumnKind ValueKind => Kind switch
     {
         GridColumnKind.Start or GridColumnKind.Finish or GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish => ColumnKind.Date,
-        GridColumnKind.FinishVariance => ColumnKind.Number,
+        GridColumnKind.FinishVariance or GridColumnKind.TotalFloat or GridColumnKind.FreeFloat => ColumnKind.Number,
         GridColumnKind.Custom => Column!.Type,
         _ => ColumnKind.Text,
     };
@@ -48,7 +54,10 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     public const string AssigneesKey = "assignees";
 
     /// <summary>Formula and lookup columns are computed server-side and can't be edited in the grid; baseline columns are history.</summary>
-    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup || IsBaseline;
+    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup || IsBaseline || IsFloat || Column is { } c && ColumnValues.IsAutomatic(c.Type);
+
+    /// <summary>Total and free float, read from the plan's critical-path analysis.</summary>
+    public bool IsFloat => Kind is GridColumnKind.TotalFloat or GridColumnKind.FreeFloat;
 
     public bool IsBaseline => Kind is GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish or GridColumnKind.FinishVariance;
 
@@ -56,7 +65,7 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     /// Title, then Assignees (when shown), then Start/Finish when scheduling is on (with Duration and Predecessors when the
     /// plan is loaded, and the baseline columns when comparing to a baseline), then the sheet's columns, then WBS.
     /// </summary>
-    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false, bool baseline = false)
+    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false, bool baseline = false, bool floats = false)
     {
         var columns = new List<GridColumn> { new("title", "Title", GridColumnKind.Title, null, 320) };
         if (assignees)
@@ -80,6 +89,12 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
                 columns.Add(new(SheetFields.BaselineFinish, "Baseline finish", GridColumnKind.BaselineFinish, null, 130));
                 columns.Add(new(SheetFields.FinishVariance, "Finish variance", GridColumnKind.FinishVariance, null, 130));
             }
+
+            if (floats)
+            {
+                columns.Add(new(SheetFields.TotalFloat, "Total float", GridColumnKind.TotalFloat, null, 160));
+                columns.Add(new(SheetFields.FreeFloat, "Free float", GridColumnKind.FreeFloat, null, 110));
+            }
         }
 
         columns.AddRange(sheet.Columns
@@ -94,6 +109,12 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
         ColumnKind.Checkbox => 100,
         ColumnKind.Date => 130,
         ColumnKind.Person => 200,
+        ColumnKind.MultiSelect => 200,
+        ColumnKind.Progress => 140,
+        ColumnKind.Symbol => 130,
+        ColumnKind.AutoNumber => 110,
+        ColumnKind.CreatedDate or ColumnKind.ModifiedDate => 170,
+        ColumnKind.CreatedBy or ColumnKind.ModifiedBy => 200,
         _ => 150,
     };
 }
