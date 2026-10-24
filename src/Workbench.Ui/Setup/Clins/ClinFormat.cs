@@ -35,6 +35,10 @@ public static class ClinFormat
     };
 
     /// <summary>The next CLIN number: one past the highest four-digit CLIN ("0001" for the first).</summary>
+    /// <summary>The next P-series modification number (P00001, P00002…) after the ones already used.</summary>
+    public static string NextModificationNumber(IEnumerable<string> numbers) =>
+        $"P{numbers.Where(n => n.Length == 6 && n[0] == 'P' && int.TryParse(n[1..], out _)).Select(n => int.Parse(n[1..])).DefaultIfEmpty(0).Max() + 1:00000}";
+
     public static string NextNumber(IEnumerable<string> numbers)
     {
         var highest = numbers.Select(n => n.Trim()).Where(n => n.Length == 4 && n.All(char.IsAsciiDigit)).Select(n => int.Parse(n, CultureInfo.InvariantCulture)).DefaultIfEmpty(0).Max();
@@ -68,6 +72,7 @@ public static class ClinFormat
         FundingLevel.Exhausted => "Funding exhausted",
         FundingLevel.Critical => "Over 90%",
         FundingLevel.Warning => "Over 75%",
+        FundingLevel.Unfunded => "Not funded",
         _ => "Funded",
     };
 
@@ -75,7 +80,7 @@ public static class ClinFormat
     {
         FundingLevel.Exhausted or FundingLevel.Critical => MudBlazor.Color.Error,
         FundingLevel.Warning => MudBlazor.Color.Warning,
-        FundingLevel.NotActive => MudBlazor.Color.Default,
+        FundingLevel.NotActive or FundingLevel.Unfunded => MudBlazor.Color.Default,
         _ => MudBlazor.Color.Success,
     };
 
