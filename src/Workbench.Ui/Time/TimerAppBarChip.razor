@@ -1,0 +1,98 @@
+@* The running timer in the app bar, on every page and device: its code and time so far, linking to the timesheet. Hidden
+   when no timer runs. Refreshes when this person starts or stops a timer anywhere on this server, and every minute. *@
+@using System.Globalization
+@using Workbench.Contracts
+@using Workbench.Contracts.Identity
+@implements IDisposable
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+@if (_running is { } running)
+{
+    <MudTooltip Text="@($"Timer running on {ChargeCodeText.Label(running.ChargeCode)}. Open your timesheet to stop it.")">
+        <MudChip T="string" Href="@Href" Color="Color.Inherit" Variant="Variant.Outlined" Size="Size.Small" Icon="@Icons.Material.Filled.Timer"
+                 Class="wb-timer-chip mr-1" data-testid="appbar-timer"
+                 aria-label="@($"Timer running on {running.ChargeCode.Code} for {TimerSignals.Elapsed(running.StartedAtUtc, DateTime.UtcNow, seconds: false)}")">
+            <span style="font-variant-numeric:tabular-nums">@TimerSignals.Elapsed(running.StartedAtUtc, DateTime.UtcNow, seconds: false)</span>
+            <span class="d-none d-sm-inline ml-1">@running.ChargeCode.Code</span>
+        </MudChip>
+    </MudTooltip>
+}
+
+@code {
+    /// <summary>Where the chip goes: the timesheet (the phone layout passes its Today page).</summary>
+    [Parameter] public string Href { get; set; } = "time";
+
+    private RunningTimerDto? _running;
+    private string? _email;
+    private System.Threading.Timer? _tick;
+    private int _ticks;
+
+    private ITimesheetTimerService Timer => Services.GetRequiredService<ITimesheetTimerService>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService<ITimesheetTimerService>() is null || Services.GetService<ICurrentUserContext>() is not { } currentUser)
+        {
+            return;
+        }
+
+        try
+        {
+            var me = await currentUser.GetAsync();
+            _email = me.Email;
+            if (me.EmployeeId is null)
+            {
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return;
+        }
+
+        TimerSignals.Changed += OnSignal;
+        await LoadAsync();
+
+        // Every 15 s redraw the minutes; every minute ask the server (a timer started on another server or device).
+        _tick = new System.Threading.Timer(_ => InvokeAsync(async () =>
+        {
+            if (++_ticks % 4 == 0)
+            {
+                await LoadAsync();
+            }
+
+            StateHasChanged();
+        }), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _running = (await Timer.GetAsync()).Running;
+        }
+        catch (Exception ex) when (ex is ArgumentException or HttpRequestException or UnauthorizedAccessException or WorkbenchNotFoundException or TaskCanceledException)
+        {
+            _running = null;
+        }
+    }
+
+    private void OnSignal(string email)
+    {
+        if (TimerSignals.IsFor(email, _email))
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                StateHasChanged();
+            });
+        }
+    }
+
+    public void Dispose()
+    {
+        TimerSignals.Changed -= OnSignal;
+        _tick?.Dispose();
+    }
+}

@@ -207,22 +207,20 @@ public static class ScheduleHealth
             return NotApplicable(12, "critical-path-test", name, explanation, threshold, "There's no unfinished work to test.");
         }
 
-        var delayed = tasks.Select(t => t.Id != candidate.Id ? t : t with
-        {
-            Finish = plan.Calendar.AddWorkingDays(plan.Calendar.OnOrAfter(t.Finish), TestDelayDays),
-            IsMilestone = false,
-        }).ToList();
+        var longer = candidate with { Finish = plan.Calendar.AddWorkingDays(plan.Calendar.OnOrAfter(candidate.Finish), TestDelayDays), IsMilestone = false };
+        const int delay = TestDelayDays; // the finish date moves this far (a milestone becomes a task ending there)
+        var delayed = tasks.Select(t => t.Id == candidate.Id ? longer : t).ToList();
 
         // The task's own date constraint would hold it, so the test lifts it; anything else holding the finish is a fault.
         var moved = Analyze(plan, delayed.Select(t => t.Id == candidate.Id ? t with { Constraint = null } : t).ToList(), links).ProjectFinish is { } after
             ? plan.Calendar.Between(finish, after)
             : 0;
-        var passed = moved == TestDelayDays;
-        var detail = $"Delayed {Days(TestDelayDays)}: the finish moved {Days(moved)}";
+        var passed = moved == delay;
+        var detail = $"Delayed {Days(delay)}: the finish moved {Days(moved)}";
         return new HealthCheckDto(12, "critical-path-test", name, explanation, threshold,
             passed ? HealthCheckStatus.Pass : HealthCheckStatus.Fail, passed ? 0 : 1, 1, null, null,
-            passed ? $"Delaying task {candidate.TaskNumber.ToString(Inv)} by {Days(TestDelayDays)} moved the finish by the same amount."
-                : $"Delaying task {candidate.TaskNumber.ToString(Inv)} by {Days(TestDelayDays)} moved the finish only {Days(moved)}.",
+            passed ? $"Delaying task {candidate.TaskNumber.ToString(Inv)} by {Days(delay)} moved the finish by the same amount."
+                : $"Delaying task {candidate.TaskNumber.ToString(Inv)} by {Days(delay)} moved the finish only {Days(moved)}.",
             [row(candidate, detail)]);
     }
 
