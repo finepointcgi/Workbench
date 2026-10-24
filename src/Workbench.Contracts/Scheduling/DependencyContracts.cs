@@ -24,8 +24,11 @@ public sealed record CreateDependencyRequest(
     DependencyKind Type = DependencyKind.FinishToStart,
     int LagDays = 0);
 
-/// <summary>Slack for one scheduled item, in working days. Critical items have zero (or negative) slack.</summary>
-public sealed record ItemSlack(Guid ItemId, DateOnly EarlyStart, DateOnly EarlyFinish, int SlackDays, bool IsCritical);
+/// <summary>
+/// Slack for one scheduled item, in working days. Critical items have zero (or negative) slack. <paramref name="SlackDays"/>
+/// is total float; <paramref name="FreeFloatDays"/> how far it can slip before any successor moves (never negative).
+/// </summary>
+public sealed record ItemSlack(Guid ItemId, DateOnly EarlyStart, DateOnly EarlyFinish, int SlackDays, bool IsCritical, int? FreeFloatDays = null);
 
 /// <summary>
 /// Critical-path analysis of a sheet. Only leaf items with dates take part; summary rows span their children.

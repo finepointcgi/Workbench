@@ -10,6 +10,7 @@ public static class SchedulingRegistration
         services.AddHttpClient<IDependencyService, HttpDependencyService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IBaselineService, HttpBaselineService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IPlanScheduleService, HttpPlanScheduleService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IScheduleHealthService, HttpScheduleHealthService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

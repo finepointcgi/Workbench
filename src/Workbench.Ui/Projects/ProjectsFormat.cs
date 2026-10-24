@@ -21,13 +21,14 @@ public static class ProjectsFormat
         ("costs", "Costs"),
         ("revenue", "Revenue"),
         ("evm", "Earned value"),
+        ("schedule-health", "Schedule health"),
         ("narrative", "Monthly narrative"),
         ("ceilings", "Ceilings & closeout"),
         ("setup", "Setup"),
     ];
 
     /// <summary>Tabs used now and then, kept under "More" until opened.</summary>
-    public static bool IsOccasional(string slug) => slug is "revenue" or "evm" or "narrative" or "ceilings";
+    public static bool IsOccasional(string slug) => slug is "revenue" or "evm" or "schedule-health" or "narrative" or "ceilings";
 
     /// <summary>Whether a link's tab (the part before any "/section", e.g. <c>setup/charge-codes</c>) is open to the viewer.</summary>
     public static bool AllowsLink(ProjectHubTabsDto tabs, string link) => Allows(tabs, Normalize(link.Split('/')[0]));
@@ -36,6 +37,7 @@ public static class ProjectsFormat
     {
         "overview" => true,
         "plan" => tabs.Plan,
+        "schedule-health" => tabs.Plan,
         "financials" => tabs.Financials,
         "budgets" => tabs.Budgets,
         "revenue" => tabs.Revenue,
@@ -55,6 +57,7 @@ public static class ProjectsFormat
         "odcs" => "costs",
         "earned-value" => "evm",
         "closeout" => "ceilings",
+        "health" or "dcma" => "schedule-health",
         "team" => "staffing",
         "budget" or "budgets" => "staffing", // Budget and Staffing are one tab
         var t => t,
