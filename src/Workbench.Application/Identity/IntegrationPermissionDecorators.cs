@@ -18,6 +18,7 @@ public static class IntegrationPermissionRegistration
         services.Decorate<IWebhookService, PermissionCheckingWebhookService>();
         services.Decorate<IApiKeyService, PermissionCheckingApiKeyService>();
         services.Decorate<IConnectorService, PermissionCheckingConnectorService>();
+        Integrations.GitLab.GitLabRegistration.AddWorkbenchGitLabPermissions(services);
         return services;
     }
 

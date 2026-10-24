@@ -20,6 +20,9 @@ public interface IConnector
 
     ConnectorMode Mode { get; }
 
+    /// <summary>False for a connector set up elsewhere (GitLab sync): it isn't offered under "Add connector".</summary>
+    bool IsListed => true;
+
     /// <summary>The settings form. May read data for options (saved reports, companies) through the caller's services.</summary>
     Task<IReadOnlyList<ConnectorFieldDto>> GetFieldsAsync(CancellationToken cancellationToken);
 
