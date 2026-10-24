@@ -347,6 +347,69 @@ public sealed class StaffingAssignmentService(
         }
     }
 
+    // ---- Hours staffed week by week ----
+
+    /// <summary>
+    /// One person's hours staffed week by week (rows with no assignment) on one charge code in one labor category, seen as
+    /// the assignment they'd be: the weeks' total from the first week's Monday to the last week's Sunday, the weeks exactly
+    /// as entered. Its id is made from the rows' ids, so every read gives the same one until those rows change, and it
+    /// becomes the real assignment's id when someone first edits it (<see cref="ConvertAsync"/>).
+    /// </summary>
+    internal sealed record WeekByWeekGroup(StaffingAssignment Assignment, IReadOnlyList<ResourceAllocation> Rows);
+
+    /// <summary>Week-by-week rows (hours above 0, no assignment) grouped as assignments; a row with no labor category counts in the person's own.</summary>
+    internal static List<WeekByWeekGroup> GroupWeekByWeek(IEnumerable<ResourceAllocation> loose, Func<Guid, Guid?> defaultCategory) =>
+        loose.Where(r => r.AssignmentId is null && r.Hours > 0)
+            .GroupBy(r => (r.EmployeeId, r.ProjectId, r.WbsElementId, Category: r.LaborCategoryId ?? defaultCategory(r.EmployeeId)))
+            .Select(g =>
+            {
+                var rows = g.OrderBy(r => r.WeekStart).ThenBy(r => r.Id).ToList();
+                var key = System.Security.Cryptography.SHA256.HashData(rows.Select(r => r.Id).Order().SelectMany(id => id.ToByteArray()).ToArray());
+                return new WeekByWeekGroup(new StaffingAssignment
+                {
+                    Id = new Guid(key.AsSpan(0, 16)), EmployeeId = g.Key.EmployeeId, ProjectId = g.Key.ProjectId, WbsElementId = g.Key.WbsElementId,
+                    LaborCategoryId = g.Key.Category, From = rows[0].WeekStart, To = rows[^1].WeekStart.AddDays(6), TotalHours = rows.Sum(r => r.Hours),
+                    CreatedBy = rows[0].CreatedBy, CreatedAtUtc = rows.Min(r => r.CreatedAtUtc),
+                }, rows);
+            })
+            .ToList();
+
+    /// <summary>
+    /// Makes hours staffed week by week a real assignment in <paramref name="db"/> without saving (the caller saves): the
+    /// group's id, total and dates, and its weekly rows point to it unchanged, so the hours, cost and charging stay as they
+    /// were. The rows are marked as entered by hand, so regenerating allocations from the plan no longer replaces them.
+    /// </summary>
+    internal async Task<StaffingAssignment> ConvertAsync(IWorkbenchDbContext db, WeekByWeekGroup group, CancellationToken ct)
+    {
+        var ids = group.Rows.Select(r => r.Id).ToList();
+        var rows = await db.Set<ResourceAllocation>().Where(a => ids.Contains(a.Id) && a.AssignmentId == null && a.Hours > 0).ToListAsync(ct);
+        if (rows.Count != ids.Count)
+        {
+            throw new ArgumentException("Someone's weekly hours were changed by someone else. Reload and try again.");
+        }
+
+        rows = rows.OrderBy(r => r.WeekStart).ToList();
+        var now = clock.GetUtcNow().UtcDateTime;
+        var assignment = new StaffingAssignment
+        {
+            Id = group.Assignment.Id, EmployeeId = group.Assignment.EmployeeId, ProjectId = group.Assignment.ProjectId,
+            WbsElementId = group.Assignment.WbsElementId, LaborCategoryId = group.Assignment.LaborCategoryId,
+            From = rows[0].WeekStart, To = rows[^1].WeekStart.AddDays(6), TotalHours = rows.Sum(r => r.Hours),
+            CreatedBy = audit.Actor, CreatedAtUtc = now,
+        };
+        db.Set<StaffingAssignment>().Add(assignment);
+        foreach (var row in rows)
+        {
+            row.AssignmentId = assignment.Id;
+            row.Source = AllocationSource.Manual;
+            row.UpdatedBy = audit.Actor;
+            row.UpdatedAtUtc = now;
+        }
+
+        audit.Record(db, EntityType, assignment.Id, "ConvertedFromWeeks", after: new { Assignment = Snapshot(assignment), Weeks = rows.Count });
+        return assignment;
+    }
+
     // ---- Saving ----
 
     /// <summary>A validated assignment: the resolved dates and labor category and the weekly spread, before anything is saved.</summary>
@@ -434,9 +497,13 @@ public sealed class StaffingAssignmentService(
         AssignmentId = assignment.Id, Notes = assignment.Notes, CreatedBy = audit.Actor, CreatedAtUtc = now,
     };
 
-    /// <summary>Validates a request and works out its dates, labor category and weekly spread. Reads only.</summary>
-    internal async Task<AssignmentPlan> PlanAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, CancellationToken ct)
+    /// <summary>
+    /// Validates a request and works out its dates, labor category and weekly spread. Reads only. <paramref name="weekByWeek"/>
+    /// is hours staffed week by week not yet made an assignment: a request with its id changes it as if it were one.
+    /// </summary>
+    internal async Task<AssignmentPlan> PlanAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, CancellationToken ct, WeekByWeekGroup? weekByWeek = null)
     {
+        var unsaved = weekByWeek is not null && request.Id == weekByWeek.Assignment.Id;
         if (request.TotalHours is <= 0 or > MaxTotalHours)
         {
             throw new ArgumentException($"Enter the total hours, more than 0 and up to {MaxTotalHours:#,##0}.");
@@ -445,7 +512,7 @@ public sealed class StaffingAssignmentService(
         StaffingAssignment? existing = null;
         if (request.Id is { } id)
         {
-            existing = await db.Set<StaffingAssignment>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct)
+            existing = unsaved ? weekByWeek!.Assignment : await db.Set<StaffingAssignment>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct)
                 ?? throw WorkbenchNotFoundException.For("Assignment", id);
             if (existing.ProjectId != request.ProjectId)
             {
@@ -492,17 +559,17 @@ public sealed class StaffingAssignmentService(
         IReadOnlyList<AssignmentWeekDto> weeks;
         if (keeps)
         {
-            weeks = (await db.Set<ResourceAllocation>().AsNoTracking().Where(a => a.AssignmentId == existing!.Id).ToListAsync(ct))
-                .OrderBy(a => a.WeekStart).Select(a => new AssignmentWeekDto(a.WeekStart, a.Hours)).ToList();
+            weeks = (unsaved ? weekByWeek!.Rows : await db.Set<ResourceAllocation>().AsNoTracking().Where(a => a.AssignmentId == existing!.Id).ToListAsync(ct))
+                .GroupBy(a => a.WeekStart).OrderBy(g => g.Key).Select(g => new AssignmentWeekDto(g.Key, g.Sum(a => a.Hours))).ToList();
         }
         else
         {
             // Weeks already past keep their hours when an assignment changes; the rest of the total is spread from this week on.
             var thisWeek = CapacityCalculator.WeekStart(Today);
-            var past = existing is null ? [] : (await db.Set<ResourceAllocation>().AsNoTracking()
+            var past = existing is null ? [] : (unsaved ? weekByWeek!.Rows.Where(a => a.WeekStart < thisWeek).ToList() : await db.Set<ResourceAllocation>().AsNoTracking()
                     .Where(a => a.AssignmentId == existing.Id && a.WeekStart < thisWeek).ToListAsync(ct))
                 .Where(a => a.WeekStart >= CapacityCalculator.WeekStart(from) && a.WeekStart <= to)
-                .ToDictionary(a => a.WeekStart, a => a.Hours);
+                .GroupBy(a => a.WeekStart).ToDictionary(g => g.Key, g => g.Sum(a => a.Hours));
             if (past.Values.Sum() > total || (past.Count > 0 && thisWeek > to))
             {
                 past = [];
