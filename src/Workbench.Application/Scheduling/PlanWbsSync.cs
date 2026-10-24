@@ -16,7 +16,9 @@ namespace Workbench.Application.Scheduling;
 /// <item>The code follows the row's automatic number, except once time is posted to it: then it keeps its code (and
 /// numbering works around it), its rows can't be deleted (<see cref="PlanWbsItemService"/>), and a summary over it
 /// stays chargeable.</item>
-/// <item>Kind (direct, indirect, leave), open/closed, CLIN mapping and charge rules stay as Finance sets them in Setup.</item>
+/// <item>A new row, or one moved under another, takes its summary's CLIN when it has none (the contract's CLINs are the
+/// plan's top rows, and invoices bill a code by its own CLIN).</item>
+/// <item>Kind (direct, indirect, leave), open/closed, CLIN mapping and charge rules otherwise stay as Finance sets them in Setup.</item>
 /// </list>
 /// </summary>
 internal static class PlanWbsSync
@@ -69,6 +71,23 @@ internal static class PlanWbsSync
         var recodes = new List<(WbsElement Element, string Code)>();
         var created = new List<WbsElement>();
 
+        // The CLIN a row under parentId bills to: the nearest summary above it that has one.
+        Guid? ClinAbove(Guid? parentId)
+        {
+            for (var depth = 0; parentId is { } id && depth < 64; depth++)
+            {
+                var parent = elements.Concat(created).FirstOrDefault(e => e.Id == id);
+                if (parent?.ClinId is { } clin)
+                {
+                    return clin;
+                }
+
+                parentId = parent?.ParentId;
+            }
+
+            return null;
+        }
+
         foreach (var item in outline.Ordered)
         {
             var code = item.CostpointWbsId?.Trim();
@@ -109,7 +128,7 @@ internal static class PlanWbsSync
                     IsChargeable = leaf,
                     ItemId = item.Id,
                     Order = Math.Max(0, order),
-                    ClinId = null,
+                    ClinId = ClinAbove(parentId),
                 };
                 created.Add(element);
                 byItem[item.Id] = element;
@@ -128,6 +147,7 @@ internal static class PlanWbsSync
             if (existing.ParentId != parentId && parentId != existing.Id)
             {
                 existing.ParentId = parentId;
+                existing.ClinId ??= ClinAbove(parentId);
                 touched = true;
             }
 
@@ -292,7 +312,7 @@ internal static class PlanWbsSync
         (await context.Set<T>().AsNoTracking().Where(e => EF.Property<Guid?>(e, property) != null && ids.Contains(EF.Property<Guid?>(e, property)!.Value))
             .Select(e => EF.Property<Guid?>(e, property)).ToListAsync(ct)).OfType<Guid>().ToList();
 
-    private static object Snapshot(WbsElement e) => new { e.Code, e.Name, e.ParentId, e.IsChargeable, e.Order };
+    private static object Snapshot(WbsElement e) => new { e.Code, e.Name, e.ParentId, e.IsChargeable, e.Order, e.ClinId };
 
     private static void Audit(IWorkbenchDbContext db, WbsElement element, string action, object? before, string actor, DateTime now) =>
         db.Set<AuditEvent>().Add(new AuditEvent
