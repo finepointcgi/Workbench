@@ -52,6 +52,31 @@
                                     }
                                 </MudSelect>
                                 break;
+                            case ColumnKind.MultiSelect:
+                                <MudSelect T="string" MultiSelection="true" SelectedValues="@ColumnValues.Selected(Answer(field))"
+                                           SelectedValuesChanged="v => Set(field, ColumnValues.JoinSelected(v))" Label="@field.Label"
+                                           Required="field.Required" HelperText="@field.HelpText" data-testid="@TestId(field)">
+                                    @foreach (var option in field.Options)
+                                    {
+                                        <MudSelectItem T="string" Value="option">@option</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+                            case ColumnKind.Symbol:
+                                <MudSelect T="string" Value="@Answer(field)" ValueChanged="(string v) => Set(field, v)" Label="@field.Label" Required="field.Required"
+                                           HelperText="@field.HelpText" Clearable="!field.Required" data-testid="@TestId(field)">
+                                    @foreach (var option in field.Options)
+                                    {
+                                        var symbol = SymbolSets.Find(option);
+                                        <MudSelectItem T="string" Value="option"><span aria-hidden="true" style="color:@symbol?.Color.Background">@symbol?.Glyph</span> @(symbol?.Label ?? option)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                break;
+                            case ColumnKind.Progress:
+                                <MudTextField T="string" Value="@Answer(field)" ValueChanged="(string v) => Set(field, v)" Label="@field.Label" Required="field.Required"
+                                              HelperText="@(field.HelpText ?? "0 to 100")" Adornment="Adornment.End" AdornmentText="%" InputMode="InputMode.numeric"
+                                              data-testid="@TestId(field)" />
+                                break;
                             case ColumnKind.Date:
                                 <MudDatePicker Date="@AsDate(field)" DateChanged="(DateTime? d) => SetDate(field, d)" Label="@field.Label"
                                                Required="field.Required" HelperText="@field.HelpText" Editable="true" />
@@ -59,7 +84,7 @@
                             default:
                                 <MudTextField T="string" Value="@Answer(field)" ValueChanged="(string v) => Set(field, v)" Label="@field.Label" Required="field.Required"
                                               HelperText="@field.HelpText" Lines="@(field.Type == ColumnKind.Text && field.Key != "title" ? 3 : 1)"
-                                              InputType="@(field.Type == ColumnKind.Person ? InputType.Email : InputType.Text)" data-testid="@TestId(field)" />
+                                              InputType="@(field.Type == ColumnKind.Person ? InputType.Email : field.Type == ColumnKind.Hyperlink ? InputType.Url : InputType.Text)" data-testid="@TestId(field)" />
                                 break;
                         }
                     }

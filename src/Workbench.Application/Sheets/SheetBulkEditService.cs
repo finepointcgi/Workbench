@@ -24,7 +24,8 @@ public sealed class SheetBulkEditService(
     SheetCalculator? calculator = null,
     ActivityRecorder? activity = null,
     SheetAutomations? automations = null,
-    IBlobStore? blobs = null) : ISheetBulkEditService
+    IBlobStore? blobs = null,
+    ICurrentUser? currentUser = null) : ISheetBulkEditService
 {
     public const string BulkEditedKind = "items.bulk_edited";
     public const int MaxCells = 50_000;
@@ -35,6 +36,7 @@ public sealed class SheetBulkEditService(
 
     public async Task<SheetBulkEditResult> ApplyAsync(Guid sheetId, SheetBulkEditRequest request, CancellationToken cancellationToken = default)
     {
+        using var author = SheetRowStamps.As(currentUser?.Email);
         ArgumentNullException.ThrowIfNull(request);
         var rowsIn = request.Rows ?? [];
         var newIn = request.NewRows ?? [];
@@ -270,6 +272,10 @@ public sealed class SheetBulkEditService(
                     {
                         skip(field, $"Pick the rows {column.Name} links to instead of pasting them.");
                     }
+                    else if (ColumnValues.IsAutomatic(column.Type.ToContract()))
+                    {
+                        skip(field, $"{column.Name} is filled in automatically.");
+                    }
                     else if (!TryNormalize(cell.Value, column, out var value, out var error))
                     {
                         skip(field, error!);
@@ -370,6 +376,8 @@ public sealed class SheetBulkEditService(
             case ColumnType.Dropdown:
                 value = column.Options.FirstOrDefault(o => string.Equals(o, trimmed, StringComparison.OrdinalIgnoreCase)) ?? trimmed;
                 return true;
+            case ColumnType.MultiSelect or ColumnType.Hyperlink or ColumnType.Symbol or ColumnType.Progress:
+                return ColumnValues.TryNormalize(trimmed, column.Type.ToContract(), column.Options, out value, out error);
             default:
                 value = trimmed;
                 return true;

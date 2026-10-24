@@ -32,7 +32,7 @@
                             <MudSelectItem T="string" Value="@("false")">Not checked</MudSelectItem>
                         </MudSelect>
                     }
-                    else if (SheetFilterText.TakesValue(condition.Operator) && field is { Kind: ColumnKind.Dropdown } && field.Options.Count > 0
+                    else if (SheetFilterText.TakesValue(condition.Operator) && field is not null && ViewField.IsChoice(field.Kind) && field.Options.Count > 0
                              && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
                     {
                         <div class="d-flex flex-wrap align-center" style="gap:4px;min-width:200px;flex:2" role="group" aria-label="Values" data-testid="filter-choices">
@@ -41,7 +41,7 @@
                                 var picked = condition.Choices.Contains(option);
                                 <MudChip T="string" Size="Size.Small" Variant="@(picked ? Variant.Filled : Variant.Outlined)" Color="@(picked ? Color.Primary : Color.Default)"
                                          Icon="@(picked ? Icons.Material.Filled.Check : null)" OnClick="() => Toggle(condition, option)" aria-pressed="@(picked ? "true" : "false")"
-                                         data-testid="filter-choice">@option</MudChip>
+                                         data-testid="filter-choice">@ViewField.ChoiceLabel(field.Kind, option)</MudChip>
                             }
                             @if (condition.Error is not null)
                             {
@@ -52,7 +52,7 @@
                     else if (SheetFilterText.TakesValue(condition.Operator))
                     {
                         <MudTextField T="string" @bind-Value="condition.Text" Label="Value" Margin="Margin.Dense" Immediate="true" Style="min-width:160px;flex:2"
-                                      Placeholder="@(field?.Kind == ColumnKind.Date ? "MM/DD/YYYY" : null)" Error="condition.Error is not null" ErrorText="@condition.Error"
+                                      Placeholder="@(field is not null && ColumnValues.IsDateLike(field.Kind) ? "MM/DD/YYYY" : field?.Kind == ColumnKind.Progress ? "0 to 100" : null)" Error="condition.Error is not null" ErrorText="@condition.Error"
                                       data-testid="filter-value" />
                     }
                     <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="mt-2" aria-label="@($"Remove condition {index + 1}")" OnClick="() => _conditions.RemoveAt(index)" />
@@ -104,8 +104,8 @@
             {
                 Field = filter.Field,
                 Operator = filter.Operator,
-                Choices = field?.Kind == ColumnKind.Dropdown ? values.ToList() : [],
-                Text = field?.Kind is ColumnKind.Dropdown ? null : field is not null && filter.Value is not null ? CellFormat.EditText(filter.Value, field.Kind == ColumnKind.Checkbox ? ColumnKind.Text : field.Kind) : filter.Value,
+                Choices = field is not null && ViewField.IsChoice(field.Kind) ? values.ToList() : [],
+                Text = field is not null && ViewField.IsChoice(field.Kind) ? null : field is not null && filter.Value is not null ? CellFormat.EditText(filter.Value, ValueKind(field.Kind)) : filter.Value,
             });
         }
 
@@ -149,6 +149,14 @@
         condition.Error = null;
     }
 
+    /// <summary>How a typed value is read: numbers, percentages and dates (system dates by their day) in their stored form, the rest as text.</summary>
+    private static ColumnKind ValueKind(ColumnKind kind) => kind switch
+    {
+        ColumnKind.Number or ColumnKind.Currency or ColumnKind.Date or ColumnKind.Progress => kind,
+        ColumnKind.CreatedDate or ColumnKind.ModifiedDate => ColumnKind.Date,
+        _ => ColumnKind.Text,
+    };
+
     private void Submit()
     {
         var result = new List<ListFilterCondition>();
@@ -169,7 +177,7 @@
                 continue;
             }
 
-            if (kind == ColumnKind.Dropdown && field!.Options.Count > 0 && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
+            if (ViewField.IsChoice(kind) && field!.Options.Count > 0 && condition.Operator is ListFilterOperator.Equals or ListFilterOperator.NotEquals)
             {
                 if (condition.Choices.Count == 0)
                 {
@@ -182,7 +190,7 @@
             }
 
             // Numbers and dates are stored in their invariant form, so "$1,200" and "10/31/2026" compare as values.
-            var normalizeAs = kind is ColumnKind.Number or ColumnKind.Currency or ColumnKind.Date ? kind : ColumnKind.Text;
+            var normalizeAs = ValueKind(kind);
             if (string.IsNullOrWhiteSpace(condition.Text))
             {
                 condition.Error = "Enter a value, or pick \"is blank\".";

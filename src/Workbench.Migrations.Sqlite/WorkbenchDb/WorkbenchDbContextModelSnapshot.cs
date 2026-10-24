@@ -4155,6 +4155,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("NextNumber")
+                        .HasColumnType("INTEGER");
+
                     b.PrimitiveCollection<string>("OptionColors")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -9746,11 +9749,25 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateOnly?>("Finish")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsMilestone")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Order")
                         .HasColumnType("INTEGER");
@@ -20811,6 +20828,37 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("Sheets");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.SheetFormatRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId", "Order");
+
+                    b.ToTable("SheetFormatRule");
+                });
+
             modelBuilder.Entity("Workbench.Domain.SheetView", b =>
                 {
                     b.Property<Guid>("Id")
@@ -26225,6 +26273,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetFormatRule", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.SheetView", b =>

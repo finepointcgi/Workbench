@@ -1,0 +1,52 @@
+@* Picks any number of a multi-select column's choices. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="0" role="group" aria-label="Choices" data-testid="multi-select-options">
+            @foreach (var option in Options)
+            {
+                <MudCheckBox T="bool" Value="_picked.Contains(option)" ValueChanged="on => Toggle(option, on)" Label="@option" Dense="true" data-testid="multi-select-option" />
+            }
+            @if (Options.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">This column has no choices yet. Add them with Edit choices in the column's menu.</MudText>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _picked.Clear()" Disabled="_picked.Count == 0">Clear</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" data-testid="multi-select-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<string> Options { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<string> Selected { get; set; } = [];
+
+    private readonly HashSet<string> _picked = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override void OnInitialized() => _picked.UnionWith(Selected);
+
+    private void Toggle(string option, bool on)
+    {
+        if (on)
+        {
+            _picked.Add(option);
+        }
+        else
+        {
+            _picked.Remove(option);
+        }
+    }
+
+    // In the column's order, plus any value that isn't a choice any more (so saving doesn't drop it).
+    private void Submit() => MudDialog.Close(DialogResult.Ok<IReadOnlyList<string>>(
+        Options.Where(_picked.Contains).Concat(_picked.Where(p => !Options.Contains(p, StringComparer.OrdinalIgnoreCase))).ToList()));
+}

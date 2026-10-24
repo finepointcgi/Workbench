@@ -23,6 +23,36 @@ public enum ColumnKind
     /// <c>Options</c> are the link column's id, then the field key (a column id, or <c>title</c>, <c>start</c>, <c>finish</c>).
     /// </summary>
     Lookup = 9,
+
+    /// <summary>Several of <c>Options</c> at once (colored like status labels by <c>OptionColors</c>); stored one per line.</summary>
+    MultiSelect = 10,
+
+    /// <summary>A web or mail link: <c>https://…</c>, or <c>[label](https://…)</c> with the text to show. See <see cref="ColumnValues"/>.</summary>
+    Hyperlink = 11,
+
+    /// <summary>A symbol with a text label. <c>Options[0]</c> is the set (<see cref="SymbolSets"/>): red/yellow/green, flag, stars, priority.</summary>
+    Symbol = 12,
+
+    /// <summary>Percent complete, 0 to 100, shown as a bar with the number.</summary>
+    Progress = 13,
+
+    /// <summary>
+    /// Read-only: a number given to each new row (prefix + zero-padded sequence, e.g. REQ-0007). <c>Options</c> are the
+    /// prefix, the digits and the first number.
+    /// </summary>
+    AutoNumber = 14,
+
+    /// <summary>Read-only system column: who added the row (an email).</summary>
+    CreatedBy = 15,
+
+    /// <summary>Read-only system column: when the row was added (UTC, <c>yyyy-MM-ddTHH:mm:ssZ</c>).</summary>
+    CreatedDate = 16,
+
+    /// <summary>Read-only system column: who last changed the row.</summary>
+    ModifiedBy = 17,
+
+    /// <summary>Read-only system column: when the row last changed (UTC, <c>yyyy-MM-ddTHH:mm:ssZ</c>).</summary>
+    ModifiedDate = 18,
 }
 
 /// <summary>

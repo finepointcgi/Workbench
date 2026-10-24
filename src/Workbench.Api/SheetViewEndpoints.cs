@@ -46,6 +46,14 @@ internal static class SheetViewEndpoints
         v1.MapPost("/sheets/{sheetId:guid}/items/bulk", (Guid sheetId, SheetBulkEditRequest request, ISheetBulkEditService service, CancellationToken ct) =>
             service.ApplyAsync(sheetId, request, ct)).WithTags("Items");
 
+        // Conditional formatting rules, in the order they apply (viewers read, editors save the whole list).
+        sheet.MapGet("/format-rules", (Guid sheetId, ISheetFormatRuleService service, CancellationToken ct) => service.ListAsync(sheetId, ct));
+        sheet.MapPut("/format-rules", (Guid sheetId, SaveSheetFormatRulesRequest request, ISheetFormatRuleService service, CancellationToken ct) =>
+            service.SaveAsync(sheetId, request, ct));
+
+        // Total and free float of a plan's tasks (read-only).
+        sheet.MapGet("/float", (Guid sheetId, Workbench.Contracts.Scheduling.IPlanFloatService service, CancellationToken ct) => service.GetAsync(sheetId, ct));
+
         // The file as JSON (the desktop app and the grid send the view on screen)...
         sheet.MapPost("/export", (Guid sheetId, SheetExportRequest request, ISheetViewService service, CancellationToken ct) =>
             service.ExportAsync(sheetId, request, ct));
