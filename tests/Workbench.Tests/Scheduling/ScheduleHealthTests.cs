@@ -363,6 +363,24 @@ public sealed class ScheduleHealthTests
     }
 
     [Fact]
+    public void Critical_path_test_can_delay_a_milestone()
+    {
+        var plan = new Plan { Status = Mon.AddDays(14) };
+        var chain = plan.Chain(2, days: 3);
+        foreach (var task in chain)
+        {
+            plan.Replace(task, t => t with { Percent = 100 });
+        }
+
+        var end = plan.Add("Delivered", Cal.AddWorkingDays(chain[^1].Finish, 1), 0);
+        plan.Link(plan.Tasks[1], end);
+
+        var test = plan.Check("critical-path-test");
+        Assert.Equal(end.Id, test.Tasks[0].ItemId);
+        Assert.Equal(HealthCheckStatus.Pass, test.Status);
+    }
+
+    [Fact]
     public void Critical_path_test_tests_the_driving_path_not_a_branch_with_a_deadline()
     {
         var plan = new Plan();
