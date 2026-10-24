@@ -4,8 +4,16 @@ using Workbench.Contracts.Reports;
 
 namespace Workbench.Application.Reports;
 
-/// <summary>Runs report-writer definitions over the curated <see cref="ReportSource"/>s with the caller's permissions.</summary>
-public sealed class ReportWriterService(IWorkbenchDbContextFactory dbFactory, ReportAccess access, TimekeepingClock clock, Customization.CustomFieldService? customFields = null) : IReportWriterService
+/// <summary>
+/// Runs report-writer definitions over the curated <see cref="ReportSource"/>s with the caller's permissions.
+/// <para>
+/// A definition's <see cref="ReportDefinition.CompanyId"/> narrows every source to that company (one of the user's, within
+/// the switcher's pick); without it the report shows all the companies the user is working in.
+/// </para>
+/// </summary>
+public sealed class ReportWriterService(
+    IWorkbenchDbContextFactory dbFactory, ReportAccess access, TimekeepingClock clock, Customization.CustomFieldService? customFields = null,
+    Companies.CompanyScope? companies = null) : IReportWriterService
 {
     public async Task<IReadOnlyList<ReportDataSourceDto>> ListSourcesAsync(CancellationToken cancellationToken = default)
     {
@@ -32,6 +40,8 @@ public sealed class ReportWriterService(IWorkbenchDbContextFactory dbFactory, Re
             throw new ArgumentException("Choose at least one column.");
         }
 
+        var company = companies is null ? null : await companies.CheckFilterAsync(definition.CompanyId, cancellationToken);
+        using var narrowed = Companies.CompanyScope.Narrow(company?.Id);
         var context = await access.GetAsync(cancellationToken);
         if (source.Unavailable(context) is { } reason)
         {
@@ -45,7 +55,7 @@ public sealed class ReportWriterService(IWorkbenchDbContextFactory dbFactory, Re
             : await ReportDates.ResolveAsync(db, definition.Range, definition.From, definition.To, today, cancellationToken);
         var rows = await source.LoadAsync(db, context, from, to, today, cancellationToken);
         var visible = source.Fields.Where(f => source.CanSee(f, context)).ToList();
-        var subtitle = source.DateField is null ? source.Name : $"{source.Name} · {ReportDates.Describe(from, to)}";
+        var subtitle = (source.DateField is null ? source.Name : $"{source.Name} · {ReportDates.Describe(from, to)}") + (company is null ? "" : $" · {company.Code}");
         return ReportEngine.Run(source, visible, rows, definition, subtitle, clock.UtcNow);
     }
 

@@ -1,0 +1,84 @@
+@* A page's company filter (Projects, the report writer, dashboards). Shown only when the user is working in two or more
+   companies: they can use several and the app bar switcher is on "All companies". Null means all of them (the default);
+   everyone else sees nothing. *@
+@using Workbench.Contracts.Companies
+@inject IServiceProvider Services
+
+@if (Shows)
+{
+    <MudSelect T="Guid?" Value="Value" ValueChanged="ChangedAsync" Label="Company" Dense="true" Style="@Style" data-testid="@TestId"
+               Variant="Variant" Margin="Margin" ToStringFunc="Label">
+        <MudSelectItem T="Guid?" Value="null">All my companies</MudSelectItem>
+        @foreach (var company in _context!.Companies)
+        {
+            <MudSelectItem T="Guid?" Value="company.Id">@company.Code · @company.LegalName</MudSelectItem>
+        }
+    </MudSelect>
+}
+
+@code {
+    private CompanyContextDto? _context;
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    /// <summary>The user's companies when the page already loaded them (<see cref="LoadAsync"/>); otherwise the filter loads them.</summary>
+    [Parameter]
+    public CompanyContextDto? Context { get; set; }
+
+    /// <summary>Called once the user's companies are known (null when they can't be read), e.g. to drop a stale pick.</summary>
+    [Parameter]
+    public EventCallback<CompanyContextDto?> Loaded { get; set; }
+
+    [Parameter]
+    public string Style { get; set; } = "max-width: 240px";
+
+    [Parameter]
+    public string TestId { get; set; } = "company-filter";
+
+    [Parameter]
+    public Variant Variant { get; set; } = Variant.Text;
+
+    [Parameter]
+    public Margin Margin { get; set; } = Margin.None;
+
+    /// <summary>The companies the user is working in, when the filter shows.</summary>
+    public IReadOnlyList<CompanyDto> Options => Shows ? _context!.Companies : [];
+
+    public bool Shows => ShowsFor(_context);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _context = Context ?? await LoadAsync(Services);
+        await Loaded.InvokeAsync(_context);
+    }
+
+    /// <summary>The user's company context, or null where there's no company service (component tests) or it can't be read.</summary>
+    public static async Task<CompanyContextDto?> LoadAsync(IServiceProvider services)
+    {
+        try
+        {
+            return services.GetService(typeof(ICompanyService)) is ICompanyService companies ? await companies.GetContextAsync() : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException
+                                       or Workbench.Contracts.WorkbenchForbiddenException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>True when the filter shows for <paramref name="context"/>: two or more companies in view.</summary>
+    public static bool ShowsFor(CompanyContextDto? context) => context is { ShowSwitcher: true, SelectedCompanyId: null };
+
+    private string Label(Guid? id) =>
+        id is { } v && _context?.Companies.FirstOrDefault(c => c.Id == v) is { } c ? $"{c.Code} · {c.LegalName}" : "All my companies";
+
+    private Task ChangedAsync(Guid? value)
+    {
+        Value = value;
+        return ValueChanged.InvokeAsync(value);
+    }
+}

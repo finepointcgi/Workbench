@@ -40,6 +40,7 @@ internal static class AccountingEndpoints
         gl.MapPost("/posting/odcs/{id:guid}", (Guid id, IPostingService s, CancellationToken ct) => s.PostOdcAsync(id, ct));
 
         gl.MapGet("/periods/{id:guid}/close", (Guid id, IPeriodCloseService s, CancellationToken ct) => s.GetChecklistAsync(id, ct));
+        gl.MapGet("/periods/{id:guid}/close/companies/{companyId:guid}", (Guid id, Guid companyId, IPeriodCloseService s, CancellationToken ct) => s.GetCompanyChecklistAsync(id, companyId, ct));
         gl.MapPost("/periods/{id:guid}/close", (Guid id, ClosePeriodRequest r, IPeriodCloseService s, CancellationToken ct) => s.CloseAsync(id, r, ct));
         gl.MapPost("/periods/{id:guid}/reopen", (Guid id, ClosePeriodRequest r, IPeriodCloseService s, CancellationToken ct) => s.ReopenAsync(id, r, ct));
 

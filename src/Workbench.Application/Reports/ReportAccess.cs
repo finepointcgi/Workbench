@@ -32,8 +32,17 @@ public sealed record ReportAccessContext(
     IReadOnlyList<Guid>? RoleIds = null,
 
     /// <summary>Projects the user may see at all (<see cref="ProjectVisibility"/>); null = every project.</summary>
-    IReadOnlySet<Guid>? VisibleProjects = null)
+    IReadOnlySet<Guid>? VisibleProjects = null,
+
+    /// <summary>
+    /// Companies whose records the report shows (their companies, the switcher's pick, or the report's own company
+    /// filter); null = every company. Ledger lines by their company, hours and ODCs by their project's, invoices, bills,
+    /// projects and employees (home company) by theirs.
+    /// </summary>
+    IReadOnlySet<Guid>? VisibleCompanies = null)
 {
+    public bool InCompany(Guid companyId) => VisibleCompanies is null || VisibleCompanies.Contains(companyId);
+
     public bool CanSeeProject(Guid projectId) => VisibleProjects is null || VisibleProjects.Contains(projectId);
 
     public PermissionSet Granted => Permissions ?? PermissionCatalog.ForBuiltInRoles(Roles);
@@ -59,7 +68,7 @@ public sealed record ReportAccessContext(
     public bool CanSeeEmployeeTime(Guid employeeId) => VisibleEmployees is null || VisibleEmployees.Contains(employeeId);
 }
 
-public sealed class ReportAccess(ProjectAccess projects)
+public sealed class ReportAccess(ProjectAccess projects, Companies.CompanyScope? companies = null)
 {
     public AccessControl Access => projects.Access;
 
@@ -74,7 +83,8 @@ public sealed class ReportAccess(ProjectAccess projects)
 
         var managedProjects = await projects.ManagedProjectIdsAsync(ct); // Managed, or covered by a limited role's scope.
 
-        return new ReportAccessContext(access.Email, resolved.BuiltIn, me, visible, managedProjects, contracts, resolved.Permissions, resolved.Roles.Select(r => r.Id).ToList(), await projects.Visibility.VisibleProjectIdsAsync(ct));
+        return new ReportAccessContext(access.Email, resolved.BuiltIn, me, visible, managedProjects, contracts, resolved.Permissions, resolved.Roles.Select(r => r.Id).ToList(), await projects.Visibility.VisibleProjectIdsAsync(ct),
+            companies is null ? null : await companies.VisibleCompanyIdsAsync(ct));
     }
 
     public static WorkbenchForbiddenException Forbidden(string message) => new(message);

@@ -2,6 +2,7 @@ using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.Companies;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Projects;
 using Workbench.Ui.Projects;
@@ -154,5 +155,28 @@ public sealed class ProjectHubPageTests
         Assert.DoesNotContain("Forecast vs budget", employee.Markup);
         Assert.DoesNotContain("$", employee.Find("[data-testid=project-table]").TextContent);
         Assert.Empty(employee.FindAll("[data-testid=mine-toggle]"));
+    }
+
+    [Fact]
+    public async Task People_working_in_several_companies_get_a_company_filter_and_column_and_everyone_else_doesnt()
+    {
+        var main = new CompanyDto(Guid.NewGuid(), "MAIN", "Main company", null, 10, "USD", true, true);
+        var fed = new CompanyDto(Guid.NewGuid(), "FED", "Federal Solutions LLC", null, 10, "USD", true, false);
+        var list = new ProjectHubListDto(true, [Row(null) with { CompanyId = main.Id, CompanyCode = "MAIN" }, Row(null, "4001") with { CompanyId = fed.Id, CompanyCode = "FED" }]);
+        void Companies(IServiceCollection services, CompanyContextDto context) =>
+            services.AddSingleton(Workbench.Tests.Navigation.Stub<ICompanyService>.Create(("GetContextAsync", _ => Task.FromResult(context))));
+
+        await using var multiCtx = NewContext(Hub(null, Tabs(false, false)), list, s => Companies(s, new CompanyContextDto([main, fed], null, true)));
+        var multi = multiCtx.Render<ProjectListPage>();
+        multi.WaitForAssertion(() => Assert.Single(multi.FindAll("[data-testid=project-company-filter]")));
+        multi.WaitForAssertion(() => Assert.Contains(multi.FindAll("[data-testid=project-table] th"), th => th.TextContent.Contains("Company")));
+        Assert.Contains("FED", multi.Find("[data-testid=project-table]").TextContent);
+
+        // One company in view (limited to it, or working in it from the app bar): nothing new.
+        await using var singleCtx = NewContext(Hub(null, Tabs(false, false)), list, s => Companies(s, new CompanyContextDto([main, fed], fed.Id, true)));
+        var single = singleCtx.Render<ProjectListPage>();
+        single.WaitForAssertion(() => Assert.Equal(2, single.FindAll("[data-testid=project-table] tbody tr").Count));
+        Assert.Empty(single.FindAll("[data-testid=project-company-filter]"));
+        Assert.DoesNotContain(single.FindAll("[data-testid=project-table] th"), th => th.TextContent.Contains("Company"));
     }
 }

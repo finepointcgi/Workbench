@@ -64,9 +64,13 @@ public sealed class HttpDashboardService(HttpClient http) : IDashboardService
 
 public sealed class HttpWidgetDataService(HttpClient http) : IWidgetDataService
 {
-    public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default)
+    public Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default) =>
+        GetAsync(dashboardId, widgetId, null, cancellationToken);
+
+    public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, Guid? companyId, CancellationToken cancellationToken = default)
     {
-        using var response = await http.GetAsync($"api/v1/dashboards/{dashboardId}/widgets/{widgetId}/data", cancellationToken);
+        var query = companyId is { } c ? $"?companyId={c}" : "";
+        using var response = await http.GetAsync($"api/v1/dashboards/{dashboardId}/widgets/{widgetId}/data{query}", cancellationToken);
         return await response.ReadAsync<WidgetDataDto>(cancellationToken);
     }
 }

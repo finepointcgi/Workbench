@@ -190,7 +190,7 @@ public sealed class ProjectHubService(
             (ProjectState)(int)project.Status, project.Start, project.Finish, project.SheetId,
             viewer.EmployeeId is { } me && project.ProjectManagerId == me,
             charged.Contains(project.Id),
-            open, money);
+            open, money, project.CompanyId, context.Companies.GetValueOrDefault(project.CompanyId));
     }
 
     private async Task<ProjectMoneyDto> MoneyAsync(IWorkbenchDbContext db, Project project, HubContext context, CancellationToken ct, ProjectFinancialData? loaded = null)
@@ -289,7 +289,10 @@ public sealed class ProjectHubService(
         Dictionary<Guid, string> Managers,
         Dictionary<Guid, List<Item>> Items,
         Dictionary<Guid, Guid> StatusColumns,
-        Dictionary<Guid, ContractFundingDto> Funding);
+        Dictionary<Guid, ContractFundingDto> Funding)
+    {
+        public IReadOnlyDictionary<Guid, string> Companies { get; init; } = new Dictionary<Guid, string>();
+    }
 
     private static async Task<HubContext> LoadContextAsync(IWorkbenchDbContext db, IReadOnlyList<Project> projects, CancellationToken ct)
     {
@@ -309,6 +312,7 @@ public sealed class ProjectHubService(
         var items = (await db.Set<Item>().AsNoTracking().Where(i => sheetIds.Contains(i.SheetId)).ToListAsync(ct))
             .GroupBy(i => i.SheetId)
             .ToDictionary(g => g.Key, g => g.ToList());
-        return new HubContext(contracts, managers, items, statusColumns, []);
+        var companies = await db.Set<Domain.Companies.Company>().AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Code, ct);
+        return new HubContext(contracts, managers, items, statusColumns, []) { Companies = companies };
     }
 }

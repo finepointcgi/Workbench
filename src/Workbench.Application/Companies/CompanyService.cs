@@ -13,7 +13,9 @@ using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Companies;
 
-public sealed partial class CompanyService(IWorkbenchDbContextFactory dbFactory, CompanyScope scope, AuditRecorder audit, TimeProvider clock) : ICompanyService
+public sealed partial class CompanyService(
+    IWorkbenchDbContextFactory dbFactory, CompanyScope scope, AuditRecorder audit, TimeProvider clock, Contracts.Accounting.IPeriodCloseService periodClose,
+    Security.SecurityEventLog? securityLog = null) : ICompanyService
 {
     public const string AuditEntityType = nameof(Company);
 
@@ -382,6 +384,22 @@ public sealed partial class CompanyService(IWorkbenchDbContextFactory dbFactory,
         }
 
         var close = await db.Set<CompanyPeriodClose>().FirstOrDefaultAsync(c => c.CompanyId == companyId && c.FiscalPeriodId == fiscalPeriodId, cancellationToken);
+
+        // Closing runs the company's close checklist; failing checks need "close anyway" (audited, a security event).
+        IReadOnlyList<Contracts.Accounting.CloseCheckDto> failed = [];
+        if (request.Closed && close?.IsClosed != true && period.Status != PeriodStatus.Closed)
+        {
+            var checklist = await periodClose.GetCompanyChecklistAsync(period.Id, company.Id, cancellationToken);
+            try
+            {
+                failed = Accounting.PeriodCloseService.RequirePassedOrOverride(checklist, $"{period.Name} for {company.Code}", request.CloseAnyway);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new ArgumentException(ex.Message, ex);
+            }
+        }
+
         if (close is null)
         {
             close = new CompanyPeriodClose { CompanyId = companyId, FiscalPeriodId = fiscalPeriodId, ChangedBy = audit.Actor };
@@ -393,9 +411,17 @@ public sealed partial class CompanyService(IWorkbenchDbContextFactory dbFactory,
         close.ChangedBy = audit.Actor;
         close.ChangedAtUtc = clock.GetUtcNow().UtcDateTime;
         close.Reason = reason.Length > 1000 ? reason[..1000] : reason;
-        audit.Record(db, AuditEntityType, companyId, request.Closed ? "PeriodClosed" : "PeriodReopened",
-            new { Period = period.Name, Closed = wasClosed }, new { Period = period.Name, Closed = request.Closed }, close.Reason);
+        audit.Record(db, AuditEntityType, companyId, !request.Closed ? "PeriodReopened" : failed.Count == 0 ? "PeriodClosed" : "PeriodClosedAnyway",
+            new { Period = period.Name, Closed = wasClosed },
+            failed.Count == 0 ? (object)new { Period = period.Name, Closed = request.Closed } : new { Period = period.Name, Closed = request.Closed, FailedChecks = Accounting.PeriodCloseService.FailedSnapshot(failed) },
+            close.Reason);
         await db.SaveChangesAsync(cancellationToken);
+        if (failed.Count > 0 && securityLog is not null)
+        {
+            await securityLog.RecordAsync(Contracts.Security.SecurityEventTypes.PeriodClosedAnyway, $"{company.Code} {period.Name}",
+                detail: $"Closed with {failed.Count} failing check(s): {string.Join("; ", failed.Select(c => c.Summary))}. Reason: {close.Reason}", cancellationToken: cancellationToken);
+        }
+
         return PeriodDto(company, period, close);
     }
 

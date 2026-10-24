@@ -89,6 +89,9 @@ public sealed class HttpPeriodCloseService(HttpClient http) : IPeriodCloseServic
 
     public async Task<PeriodCloseChecklistDto> ReopenAsync(Guid fiscalPeriodId, ClosePeriodRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"api/v1/accounting/periods/{fiscalPeriodId}/reopen", request, cancellationToken)).ReadLedgerAsync<PeriodCloseChecklistDto>(cancellationToken);
+
+    public async Task<PeriodCloseChecklistDto> GetCompanyChecklistAsync(Guid fiscalPeriodId, Guid companyId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/accounting/periods/{fiscalPeriodId}/close/companies/{companyId}", cancellationToken)).ReadLedgerAsync<PeriodCloseChecklistDto>(cancellationToken);
 }
 
 public sealed class HttpAccountingReportService(HttpClient http) : IAccountingReportService

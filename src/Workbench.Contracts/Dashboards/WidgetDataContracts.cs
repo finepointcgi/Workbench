@@ -75,8 +75,16 @@ public sealed record WidgetDataDto(
 /// scheduling contract and the project-accounting contracts, so it's limited to what the current user can see.
 /// Project financials and contract funding follow <c>IFinancialAccessService</c>: a widget the viewer may not read
 /// comes back with an <c>Error</c> instead of figures.
+/// <para>
+/// The dashboard's company choice (<c>companyId</c>; null = every company the viewer is working in) applies to every widget:
+/// contracts, projects and their financials, ledger and report figures come from that company only, and a widget on a
+/// project plan sheet of another company says so instead of showing data.
+/// </para>
 /// </summary>
 public interface IWidgetDataService
 {
     Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default);
+
+    Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, Guid? companyId, CancellationToken cancellationToken = default) =>
+        companyId is null ? GetAsync(dashboardId, widgetId, cancellationToken) : throw new NotSupportedException("This widget source can't filter by company.");
 }
