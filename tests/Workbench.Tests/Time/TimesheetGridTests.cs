@@ -66,6 +66,23 @@ public sealed class TimesheetGridTests
     }
 
     [Fact]
+    public async Task Picking_a_code_adds_its_row_and_leaves_the_picker_empty()
+    {
+        // The e2e walkthrough: after picking a code, "Add a charge code" showed the code's id (the picked option had left the list).
+        await using var ctx = NewContext();
+        ctx.Render<MudBlazor.MudPopoverProvider>();
+        var grid = ctx.Render<TimesheetGrid>(p => p.Add(g => g.Detail, Detail()));
+        var picker = grid.FindComponent<MudBlazor.MudSelect<Guid?>>();
+
+        await grid.InvokeAsync(() => picker.Instance.SelectOption(Pto));
+
+        grid.WaitForAssertion(() => Assert.NotNull(grid.Find("[data-testid='cell-LV.PTO-2026-10-19']")));
+        var fresh = grid.FindComponent<MudBlazor.MudSelect<Guid?>>();
+        Assert.Null(fresh.Instance.Value);
+        Assert.DoesNotContain(Pto.ToString(), grid.Find("[data-testid='add-code']").OuterHtml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Editing_a_cell_updates_totals_and_the_entries_to_save()
     {
         await using var ctx = NewContext();

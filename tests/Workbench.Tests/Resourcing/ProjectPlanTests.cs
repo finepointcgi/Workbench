@@ -106,6 +106,55 @@ public sealed class ProjectPlanTests
     }
 
     [Fact]
+    public async Task Indenting_and_outdenting_rows_moves_their_charge_codes_with_them()
+    {
+        // The e2e walkthrough: rows typed at the top level, then indented under the CLIN with Tab, stayed top-level
+        // charge codes (and the CLIN row stayed chargeable) because the indent didn't run the WBS sync.
+        await using var host = await CreateAsync();
+        var items = host.As(Pm).Get<IItemService>();
+        var schedule = host.As(Pm).Get<Workbench.Contracts.Scheduling.IPlanScheduleService>();
+        var phase = await ItemAsync(host, "Phase 1");
+        await AddClinsAsync(host, await ContractAsync(host), ("0001", "Base", 6_000m, 3_000m, null));
+        Guid clin;
+        await using (var db = await host.Db.CreateAsync())
+        {
+            clin = (await db.Set<Clin>().SingleAsync()).Id;
+            (await db.Set<WbsElement>().SingleAsync(w => w.Id == host.Root1)).ClinId = clin; // Phase 1 is CLIN 0001
+            await db.SaveChangesAsync();
+        }
+
+        var analysis = await items.CreateAsync(host.SheetId, new CreateItemRequest("Analysis", null));
+        var migration = await items.CreateAsync(host.SheetId, new CreateItemRequest("Migration", null));
+        var wbs = (await host.Get<IProjectService>().ListWbsAsync(host.Project1)).ToDictionary(w => w.ItemId ?? Guid.Empty);
+        Assert.Null(wbs[analysis.Id].ParentId);
+
+        await schedule.IndentAsync(host.SheetId, analysis.Id);
+        await schedule.IndentAsync(host.SheetId, migration.Id);
+
+        wbs = (await host.Get<IProjectService>().ListWbsAsync(host.Project1)).ToDictionary(w => w.ItemId ?? Guid.Empty);
+        var parent = wbs[phase];
+        Assert.False(parent.IsChargeable);
+        Assert.Equal((parent.Id, true), (wbs[analysis.Id].ParentId!.Value, wbs[analysis.Id].IsChargeable));
+        Assert.Equal(parent.Id, wbs[migration.Id].ParentId!.Value);
+        Assert.StartsWith(parent.Code + ".", wbs[analysis.Id].Code);
+        Assert.StartsWith(parent.Code + ".", wbs[migration.Id].Code);
+
+        // Under the CLIN's row they bill to the CLIN (an invoice leaves out cost on a code with no CLIN), as does a row
+        // added there directly.
+        var review = await items.CreateAsync(host.SheetId, new CreateItemRequest("Review", phase));
+        await using (var db = await host.Db.CreateAsync())
+        {
+            var clins = await db.Set<WbsElement>().Where(w => w.ItemId != null).ToDictionaryAsync(w => w.ItemId!.Value, w => w.ClinId);
+            Assert.Equal((clin, clin, clin), (clins[analysis.Id], clins[migration.Id], clins[review.Id]));
+        }
+
+        await schedule.OutdentAsync(host.SheetId, migration.Id);
+        wbs = (await host.Get<IProjectService>().ListWbsAsync(host.Project1)).ToDictionary(w => w.ItemId ?? Guid.Empty);
+        Assert.NotEqual(parent.Id, wbs[migration.Id].ParentId);
+        Assert.False(wbs[migration.Id].Code.StartsWith(parent.Code + ".", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_charge_code_with_time_on_it_keeps_its_code_and_its_row_cant_be_deleted()
     {
         await using var host = await CreateAsync();
@@ -250,14 +299,16 @@ public sealed class ProjectPlanTests
 
         await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
         var submitted = await pm.SubmitAsync(host.Project1, "Ready for review");
-        Assert.Equal((PlanApprovalStatus.Submitted, Pm, false, false), (submitted.Status, submitted.SubmittedBy, submitted.CanSubmit, submitted.CanReview));
+        // Who submitted and reviewed reads as their name, not their sign-in email.
+        Assert.Equal((PlanApprovalStatus.Submitted, Pm, "Pat", false, false), (submitted.Status, submitted.SubmittedBy, submitted.SubmittedByName, submitted.CanSubmit, submitted.CanReview));
         await Assert.ThrowsAnyAsync<Exception>(() => host.As(Pm).Get<IProjectPlanService>().ApproveAsync(host.Project1)); // not Finance
         await using (var db = await host.Db.CreateAsync())
         {
             Assert.True(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title == "Review the plan for 1001 Modernization"));
         }
 
-        Assert.Contains((await host.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"plan:{host.Project1}:review");
+        var review = Assert.Single((await host.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"plan:{host.Project1}:review");
+        Assert.Equal("Pat submitted it for approval.", review.Reason);
 
         // Returned with comments; the PM sees why and resubmits.
         var finance = host.As(Finance).Get<IProjectPlanService>();
@@ -271,7 +322,7 @@ public sealed class ProjectPlanTests
 
         // Approved: the locked Baseline and the Current working budget are the plan's hours.
         var approved = await host.As(Finance).Get<IProjectPlanService>().ApproveAsync(host.Project1, "Looks right");
-        Assert.Equal((PlanApprovalStatus.Approved, 1, false), (approved.Status, approved.Approvals, approved.ChangedSinceApproval));
+        Assert.Equal((PlanApprovalStatus.Approved, 1, false, "Fin"), (approved.Status, approved.Approvals, approved.ChangedSinceApproval, approved.ReviewedByName));
         var versions = await host.Get<IBudgetService>().ListVersionsAsync(host.Project1);
         var baseline = Assert.Single(versions, v => v.Kind == BudgetVersionKind.Baseline);
         var current = Assert.Single(versions, v => v.Kind == BudgetVersionKind.Current);

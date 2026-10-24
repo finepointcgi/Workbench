@@ -15,7 +15,7 @@
                     <MudSelect T="ClinPricingKind" @bind-Value="_pricing" Label="Pricing">
                         @foreach (var p in Enum.GetValues<ClinPricingKind>())
                         {
-                            <MudSelectItem T="ClinPricingKind" Value="p">@ClinFormat.Label(p) · @p</MudSelectItem>
+                            <MudSelectItem T="ClinPricingKind" Value="p">@ClinFormat.Label(p) · @ClinFormat.Name(p)</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -59,6 +59,13 @@
     [Parameter]
     public DateOnly DefaultEnd { get; set; }
 
+    /// <summary>A new CLIN's pricing (the contract's type) and number (the next free one).</summary>
+    [Parameter]
+    public ClinPricingKind DefaultPricing { get; set; } = ClinPricingKind.CostPlusFixedFee;
+
+    [Parameter]
+    public string? DefaultNumber { get; set; }
+
     private MudForm _form = default!;
     private string? _number;
     private string? _description;
@@ -80,6 +87,7 @@
         else
         {
             (_start, _end) = (SetupFormat.ToDateTime(DefaultStart), SetupFormat.ToDateTime(DefaultEnd));
+            (_pricing, _number) = (DefaultPricing, string.IsNullOrEmpty(DefaultNumber) ? null : DefaultNumber);
         }
     }
 
