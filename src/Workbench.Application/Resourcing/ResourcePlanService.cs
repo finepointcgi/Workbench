@@ -117,6 +117,21 @@ public sealed class ResourcePlanService(
             undo.Add(PutBack(removed, model.Weeks.GetValueOrDefault(removed.Id) ?? [], recreate: true, model.ItemOf(removed.WbsElementId)));
         }
 
+        // Hours staffed week by week that are changed or taken off become assignments first, their weeks unchanged, in a save
+        // of their own (on its own that changes no hours, cost or charging); the change then applies to the assignment.
+        var converting = scenario.Bookings.Where(b => b.Request is not null && !b.IsNew).Select(b => b.AssignmentId!.Value)
+            .Concat(scenario.Removed.Select(r => r.Id)).Where(model.WeekByWeek.ContainsKey).Distinct().ToList();
+        if (converting.Count > 0)
+        {
+            await using var convertDb = await dbFactory.CreateAsync(cancellationToken);
+            foreach (var id in converting)
+            {
+                await staffing.ConvertAsync(convertDb, model.WeekByWeek[id], cancellationToken);
+            }
+
+            await convertDb.SaveChangesAsync(cancellationToken);
+        }
+
         // Everything in one save: the moved tasks (already moved and reflowed on the tracked items) and the people.
         foreach (var booking in scenario.Bookings.Where(b => b.Request is not null))
         {
@@ -262,7 +277,7 @@ public sealed class ResourcePlanService(
 
     // ---- Loading ----
 
-    /// <summary>Someone's hours on the project: an assignment (or a new one), or hours staffed week by week.</summary>
+    /// <summary>Someone's hours on the project: an assignment (or a new one, or hours staffed week by week seen as one).</summary>
     private sealed record Booking(
         Guid? AssignmentId,
         Guid EmployeeId,
@@ -288,7 +303,11 @@ public sealed class ResourcePlanService(
         public required Dictionary<Guid, WbsElement> Wbs { get; init; }
         public required List<StaffingAssignment> Assignments { get; init; }
         public required Dictionary<Guid, IReadOnlyList<AssignmentWeekDto>> Weeks { get; init; }
-        public required List<ResourceAllocation> WeekByWeek { get; init; }
+        /// <summary>
+        /// Hours staffed week by week, by the id they'd have as an assignment. They're in <see cref="Assignments"/> like any
+        /// other, so they can be changed here; changing one makes it a real assignment.
+        /// </summary>
+        public required Dictionary<Guid, StaffingAssignmentService.WeekByWeekGroup> WeekByWeek { get; init; }
         public required Dictionary<Guid, Employee> People { get; init; }
         public required Dictionary<Guid, LaborCategory> Categories { get; init; }
         public required EffectiveRateTable<Guid> Rates { get; init; }
@@ -314,10 +333,6 @@ public sealed class ResourcePlanService(
 
         public List<Booking> CurrentBookings() =>
             Assignments.Select(a => new Booking(a.Id, a.EmployeeId, a.WbsElementId, a.LaborCategoryId, a.From, a.To, a.TotalHours, Weeks.GetValueOrDefault(a.Id) ?? []))
-                .Concat(WeekByWeek
-                    .GroupBy(r => (r.EmployeeId, r.WbsElementId, Category: CategoryOf(r.LaborCategoryId, r.EmployeeId)))
-                    .Select(g => new Booking(null, g.Key.EmployeeId, g.Key.WbsElementId, g.Key.Category, g.Min(r => r.WeekStart), g.Max(r => r.WeekStart).AddDays(6),
-                        g.Sum(r => r.Hours), g.GroupBy(r => r.WeekStart).OrderBy(w => w.Key).Select(w => new AssignmentWeekDto(w.Key, w.Sum(r => r.Hours))).ToList())))
                 .ToList();
     }
 
@@ -343,6 +358,16 @@ public sealed class ResourcePlanService(
         var weeks = rows.Where(r => r.AssignmentId is { } id && ids.Contains(id)).GroupBy(r => r.AssignmentId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<AssignmentWeekDto>)g.OrderBy(r => r.WeekStart).Select(r => new AssignmentWeekDto(r.WeekStart, r.Hours)).ToList());
         var people = await db.Set<Employee>().AsNoTracking().ToDictionaryAsync(e => e.Id, ct);
+
+        // Hours staffed week by week show (and change) as the assignments they'd be.
+        var weekByWeek = StaffingAssignmentService.GroupWeekByWeek(rows, e => people.GetValueOrDefault(e)?.DefaultLaborCategoryId)
+            .ToDictionary(g => g.Assignment.Id);
+        foreach (var group in weekByWeek.Values)
+        {
+            assignments.Add(group.Assignment);
+            weeks[group.Assignment.Id] = group.Rows.GroupBy(r => r.WeekStart).OrderBy(g => g.Key).Select(g => new AssignmentWeekDto(g.Key, g.Sum(r => r.Hours))).ToList();
+        }
+
         var rates = new EffectiveRateTable<Guid>();
         foreach (var r in await db.Set<EmployeeCostRate>().AsNoTracking().ToListAsync(ct))
         {
@@ -381,7 +406,7 @@ public sealed class ResourcePlanService(
             Wbs = await db.Set<WbsElement>().AsNoTracking().Where(w => w.ProjectId == projectId).ToDictionaryAsync(w => w.Id, ct),
             Assignments = assignments,
             Weeks = weeks,
-            WeekByWeek = rows.Where(r => r.AssignmentId is null).ToList(),
+            WeekByWeek = weekByWeek,
             People = people,
             Categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, ct),
             Rates = rates,
@@ -484,7 +509,7 @@ public sealed class ResourcePlanService(
             var hours = set?.Weeks is { } exact ? exact.Sum(w => w.Hours) : set?.Hours ?? a.TotalHours;
             var request = new SaveAssignmentRequest(set?.EmployeeId ?? a.EmployeeId, a.ProjectId, hours, a.WbsElementId,
                 set?.From ?? from, set?.To ?? to, set?.LaborCategoryId ?? a.LaborCategoryId, a.Notes, a.Id);
-            var booking = await PlannedAsync(db, request, set?.Weeks, isNew: false, name, errors, ct);
+            var booking = await PlannedAsync(db, request, set?.Weeks, isNew: false, name, errors, ct, model.WeekByWeek.GetValueOrDefault(a.Id));
             bookings.Add(booking ?? new Booking(a.Id, a.EmployeeId, a.WbsElementId, a.LaborCategoryId, a.From, a.To, a.TotalHours, weeks));
         }
 
@@ -537,8 +562,6 @@ public sealed class ResourcePlanService(
             }
         }
 
-        // Hours staffed week by week aren't changed here; they still count.
-        bookings.AddRange(model.CurrentBookings().Where(b => b.AssignmentId is null));
         return new Scenario(bookings, removed, moved, errors.Distinct().ToList());
     }
 
@@ -594,11 +617,12 @@ public sealed class ResourcePlanService(
     }
 
     /// <summary>The booking a save would make (dates, category, weekly spread), or null with the reason added to <paramref name="errors"/>.</summary>
-    private async Task<Booking?> PlannedAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, IReadOnlyList<AssignmentWeekDto>? exact, bool isNew, string name, List<string> errors, CancellationToken ct)
+    private async Task<Booking?> PlannedAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, IReadOnlyList<AssignmentWeekDto>? exact, bool isNew, string name, List<string> errors,
+        CancellationToken ct, StaffingAssignmentService.WeekByWeekGroup? weekByWeek = null)
     {
         try
         {
-            var plan = await staffing.PlanAsync(db, request, ct);
+            var plan = await staffing.PlanAsync(db, request, ct, weekByWeek);
             var weeks = exact?.Where(w => w.Hours > 0).OrderBy(w => w.WeekStart).ToList() ?? plan.Weeks;
             return new Booking(request.Id, plan.Employee.Id, request.WbsElementId, plan.LaborCategoryId, plan.From, plan.To, weeks.Sum(w => w.Hours), weeks,
                 Changed: true, IsNew: isNew, Request: request, ExactWeeks: exact);
@@ -843,13 +867,12 @@ public sealed class ResourcePlanService(
         var thisWeek = ThisWeek;
         var ids = employeeIds.ToList();
         var here = model.Assignments.Select(a => a.Id).ToList();
-        var looseHere = bookings.Any(b => b.AssignmentId is null && !b.IsNew);
         var rows = await db.Set<ResourceAllocation>().AsNoTracking()
             .Where(a => ids.Contains(a.EmployeeId) && a.WeekStart >= thisWeek && (a.AssignmentId == null || !here.Contains(a.AssignmentId.Value)))
             .ToListAsync(ct);
 
-        // Week-by-week rows on this project are bookings themselves when they're in the list.
-        var load = rows.Where(r => !(looseHere && r.AssignmentId is null && r.ProjectId == model.Project.Id))
+        // Week-by-week rows on this project are assignments here, so they count only through the bookings too.
+        var load = rows.Where(r => !(r.AssignmentId is null && r.ProjectId == model.Project.Id && r.Hours > 0))
             .GroupBy(r => (r.EmployeeId, r.WeekStart)).ToDictionary(g => g.Key, g => g.Sum(r => r.Hours));
         foreach (var b in bookings.Where(b => ids.Contains(b.EmployeeId)))
         {
