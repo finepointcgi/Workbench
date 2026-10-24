@@ -51,6 +51,7 @@ else
     }
 
     <NavigationLock OnBeforeInternalNavigation="SaveBeforeLeavingAsync" />
+    <TimerWidget BeforeStop="SaveBeforeTimerAsync" Stopped="OnTimerStoppedAsync" />
     @if (!_detail.Timesheet.IsLocked)
     {
         @* Head starts: fill empty cells from what you're staffed on, or from last period. Nothing you typed is replaced. *@
@@ -350,6 +351,27 @@ else
         {
             await AutoSaveAsync();
         }
+    }
+
+    /// <summary>
+    /// Before the timer adds its hours on the server, pending edits are saved (a draft saves itself; after a submission
+    /// saving asks for the reason), so nothing typed is lost when the page reloads with the timer's hours.
+    /// </summary>
+    private async Task<bool> SaveBeforeTimerAsync()
+    {
+        if (CanAutoSave)
+        {
+            await AutoSaveAsync();
+            return _saveState?.StartsWith("Couldn't", StringComparison.Ordinal) != true;
+        }
+
+        return _grid?.IsDirty != true || await SaveAsync();
+    }
+
+    private async Task OnTimerStoppedAsync(StopTimerResult result)
+    {
+        await LoadAsync();
+        _saveState = null;
     }
 
     /// <summary>Spreads each staffed week's hours over that week's working days, into empty cells only.</summary>

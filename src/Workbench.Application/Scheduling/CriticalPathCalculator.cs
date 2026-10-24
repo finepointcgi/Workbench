@@ -99,13 +99,29 @@ public static class CriticalPathCalculator
             ls[id] = finish - duration[id];
         }
 
+        // Free float: how far a task can slip before the first successor moves (or, at the end of the network, the plan finish).
+        int FreeFloat(Guid id)
+        {
+            var free = outgoing[id].Any(l => es.ContainsKey(l.SuccessorId))
+                ? outgoing[id].Where(l => es.ContainsKey(l.SuccessorId)).Min(l => l.Type switch
+                {
+                    DependencyKind.FinishToStart => es[l.SuccessorId] - (ef[id] + l.LagDays),
+                    DependencyKind.StartToStart => es[l.SuccessorId] - (es[id] + l.LagDays),
+                    DependencyKind.FinishToFinish => ef[l.SuccessorId] - (ef[id] + l.LagDays),
+                    _ => ef[l.SuccessorId] - (es[id] + l.LagDays),
+                })
+                : projectFinish - ef[id];
+            return Math.Max(0, Math.Min(free, ls[id] - es[id]));
+        }
+
         var items = order
             .Select(id => new ItemSlack(
                 id,
                 calendar.FromIndex(es[id]),
                 calendar.FromIndex(duration[id] == 0 ? es[id] : ef[id] - 1),
                 ls[id] - es[id],
-                ls[id] - es[id] <= 0))
+                ls[id] - es[id] <= 0,
+                FreeFloat(id)))
             .OrderBy(i => i.EarlyStart)
             .ThenBy(i => i.EarlyFinish)
             .ToList();

@@ -15684,6 +15684,35 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("Project");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.RunningTimer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WbsElementId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.HasIndex("WbsElementId");
+
+                    b.ToTable("RunningTimer");
+                });
+
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.TimeDayRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -24803,6 +24832,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("SheetId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.RunningTimer", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
+                        .WithMany()
+                        .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.TimeDayRecord", b =>

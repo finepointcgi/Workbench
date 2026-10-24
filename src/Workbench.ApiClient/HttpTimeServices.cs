@@ -91,6 +91,7 @@ public static class TimekeepingClientRegistration
     {
         services.AddHttpClient<ITimesheetService, HttpTimesheetService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ITimesheetApprovalService, HttpTimesheetApprovalService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ITimesheetTimerService, HttpTimesheetTimerService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ITimeReportService, HttpTimeReportService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IOrganizationSettingsService, HttpOrganizationSettingsService>(c => c.BaseAddress = serverBaseAddress);
         return services;

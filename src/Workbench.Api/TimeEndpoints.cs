@@ -18,6 +18,17 @@ internal static class TimeEndpoints
         time.MapPost("/timesheets/{id:guid}/submit", (Guid id, SubmitTimesheetRequest r, ITimesheetService s, CancellationToken ct) => s.SubmitAsync(id, r, ct));
         time.MapPost("/timesheets/{id:guid}/reopen", (Guid id, ReasonRequest r, ITimesheetService s, CancellationToken ct) => s.ReopenAsync(id, r.Reason, ct));
 
+        // The start/stop timer (the signed-in employee's own).
+        time.MapGet("/timer", (ITimesheetTimerService s, CancellationToken ct) => s.GetAsync(ct));
+        time.MapPost("/timer/start", (StartTimerRequest r, ITimesheetTimerService s, CancellationToken ct) => s.StartAsync(r, ct));
+        time.MapPut("/timer/note", (TimerNoteRequest r, ITimesheetTimerService s, CancellationToken ct) => s.SetNoteAsync(r.Note, ct));
+        time.MapPost("/timer/stop", (StopTimerRequest r, ITimesheetTimerService s, CancellationToken ct) => s.StopAsync(r, ct));
+        time.MapDelete("/timer", async (ITimesheetTimerService s, CancellationToken ct) =>
+        {
+            await s.DiscardAsync(ct);
+            return Results.NoContent();
+        });
+
         time.MapGet("/approvals/is-approver", (ITimesheetApprovalService s, CancellationToken ct) => s.IsApproverAsync(ct));
         time.MapGet("/approvals/pending", (ITimesheetApprovalService s, CancellationToken ct) => s.ListPendingAsync(ct));
         time.MapPost("/approvals/{id:guid}/approve", (Guid id, ITimesheetApprovalService s, CancellationToken ct) => s.ApproveAsync(id, ct));

@@ -53,6 +53,7 @@ public static class IdentityRegistration
         services.Decorate<ISheetViewService, PermissionCheckingSheetViewService>(); // Saved views and exports: Viewer; shared views and the sheet's default: Editor.
         services.Decorate<IDependencyService, PermissionCheckingDependencyService>();
         services.Decorate<IBaselineService, PermissionCheckingBaselineService>();
+        services.Decorate<IScheduleHealthService, PermissionCheckingScheduleHealthService>(); // DCMA schedule health: Viewer on the plan.
         services.Decorate<IPlanScheduleService, PermissionCheckingPlanScheduleService>(); // Plan editor: Viewers read and export, Editors indent, re-date, link and import.
         services.Decorate<ICommentService, PermissionCheckingCommentService>();
         services.Decorate<IAttachmentService, PermissionCheckingAttachmentService>();

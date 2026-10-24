@@ -26,6 +26,7 @@ internal static class SchedulingEndpoints
         });
 
         sheet.MapGet("/schedule", (Guid sheetId, IDependencyService service, CancellationToken ct) => service.AnalyzeAsync(sheetId, ct));
+        sheet.MapScheduleHealthEndpoints();
 
         sheet.MapGet("/baselines", (Guid sheetId, IBaselineService service, CancellationToken ct) => service.ListAsync(sheetId, ct));
 
