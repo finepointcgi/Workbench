@@ -202,19 +202,27 @@ public static class ScheduleHealth
         var candidate = tasks.Where(t => !t.IsComplete && slack.ContainsKey(t.Id))
             .OrderBy(t => slack[t.Id].SlackDays).ThenBy(t => t.IsMilestone).ThenBy(t => slack[t.Id].EarlyStart).ThenBy(t => t.TaskNumber)
             .FirstOrDefault();
-        if (candidate is null || analysis.ProjectFinish is not { } finish)
+        if (candidate is null || analysis.ProjectFinish is null)
         {
             return NotApplicable(12, "critical-path-test", name, explanation, threshold, "There's no unfinished work to test.");
         }
 
-        var longer = candidate with { Finish = plan.Calendar.AddWorkingDays(plan.Calendar.OnOrAfter(candidate.Finish), TestDelayDays), IsMilestone = false };
-        const int delay = TestDelayDays; // the finish date moves this far (a milestone becomes a task ending there)
+        // Lengthen the task by exactly the delay in working days on the plan's calendar. Its own constraint is replaced by a
+        // Start No Earlier Than its computed early start: whatever held the start still holds it, but nothing pins the finish.
+        // Anything else that keeps the finish from moving (a pinned successor, a broken link) is the fault the test looks for.
+        var earlyStart = analysis.Items.First(i => i.ItemId == candidate.Id).EarlyStart;
+        var longer = candidate with
+        {
+            Finish = plan.Calendar.Finish(plan.Calendar.OnOrAfter(candidate.Start), Duration(plan, candidate) + TestDelayDays),
+            IsMilestone = false,
+            Constraint = new PlanConstraintDto(PlanConstraintKind.StartNoEarlierThan, earlyStart),
+        };
+        const int delay = TestDelayDays;
         var delayed = tasks.Select(t => t.Id == candidate.Id ? longer : t).ToList();
 
-        // The task's own date constraint would hold it, so the test lifts it; anything else holding the finish is a fault.
-        var moved = Analyze(plan, delayed.Select(t => t.Id == candidate.Id ? t with { Constraint = null } : t).ToList(), links).ProjectFinish is { } after
-            ? plan.Calendar.Between(finish, after)
-            : 0;
+        // Measured where the network ends (the exclusive end in working days), not between finish dates: a milestone's date is
+        // the working day it sits on while a task's is its last working day, so dates can be a day apart for the same end.
+        var moved = NetworkEnd(plan, Analyze(plan, delayed, links), delayed) - NetworkEnd(plan, analysis, tasks);
         var passed = moved == delay;
         var detail = $"Delayed {Days(delay)}: the finish moved {Days(moved)}";
         return new HealthCheckDto(12, "critical-path-test", name, explanation, threshold,
@@ -222,6 +230,16 @@ public static class ScheduleHealth
             passed ? $"Delaying task {candidate.TaskNumber.ToString(Inv)} by {Days(delay)} moved the finish by the same amount."
                 : $"Delaying task {candidate.TaskNumber.ToString(Inv)} by {Days(delay)} moved the finish only {Days(moved)}.",
             [row(candidate, detail)]);
+    }
+
+    /// <summary>
+    /// The working-day index just after the plan's last work: the end of the latest task, or the day a milestone sits on when
+    /// it's later. This is what the critical path compares, so moves measured here are exact working days.
+    /// </summary>
+    private static int NetworkEnd(HealthPlan plan, ScheduleAnalysis analysis, IReadOnlyList<HealthTask> tasks)
+    {
+        var byId = tasks.ToDictionary(t => t.Id);
+        return analysis.Items.Max(i => plan.Calendar.Index(i.EarlyFinish) + (Duration(plan, byId[i.ItemId]) == 0 ? 0 : 1));
     }
 
     /// <summary>

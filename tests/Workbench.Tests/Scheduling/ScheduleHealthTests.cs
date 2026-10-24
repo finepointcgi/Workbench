@@ -362,6 +362,88 @@ public sealed class ScheduleHealthTests
         Assert.Contains("moved the finish only", test.Result, StringComparison.Ordinal);
     }
 
+    // US federal holidays the seed company calendar has, inside a 100-working-day window from late October 2026.
+    private static readonly WorkCalendar Holidays = new([
+        new(2026, 10, 12), new(2026, 11, 11), new(2026, 11, 26), new(2026, 12, 25), new(2027, 1, 1), new(2027, 1, 18), new(2027, 2, 15), new(2027, 5, 31)]);
+
+    private static HealthTask Task(int number, string title, DateOnly start, DateOnly finish, bool milestone = false, PlanConstraintDto? constraint = null) =>
+        new(Guid.NewGuid(), number, number.ToString(), title, start, finish, milestone, Constraint: constraint);
+
+    private static HealthCheckDto CriticalPathTest(WorkCalendar calendar, IReadOnlyList<HealthTask> tasks, params (int From, int To)[] links) =>
+        ScheduleHealth.Evaluate(new HealthPlan(tasks, links.Select(l => new ScheduleLink(tasks[l.From].Id, tasks[l.To].Id, DependencyKind.FinishToStart, 0)).ToList(),
+            calendar, new DateOnly(2026, 10, 23))).Single(c => c.Key == "critical-path-test");
+
+    [Fact]
+    public void Critical_path_test_passes_when_the_plan_ends_on_a_weekend_with_a_milestone_and_the_delay_spans_holidays()
+    {
+        // Project 1001's plan: the chain's last task and an unlinked milestone both end on Sunday Nov 8. The milestone's date
+        // snaps to Monday Nov 9 while the task's last working day is Friday Nov 6, though both end the network at the same
+        // point. Measuring between those dates made a 100-day delay look like 99.
+        var tasks = new[]
+        {
+            Task(2, "Kickoff meeting", new(2026, 10, 19), new(2026, 10, 19)),
+            Task(3, "Requirements review", new(2026, 10, 20), new(2026, 10, 29)),
+            Task(4, "Baseline schedule", new(2026, 10, 30), new(2026, 11, 8)),
+            Task(5, "Planning complete (baseline approved)", new(2026, 11, 8), new(2026, 11, 8), milestone: true),
+        };
+
+        var test = CriticalPathTest(Holidays, tasks, (0, 1), (1, 2));
+
+        Assert.Equal(HealthCheckStatus.Pass, test.Status);
+        Assert.Equal("Delayed 100 working days: the finish moved 100 working days", test.Tasks[0].Detail);
+    }
+
+    [Fact]
+    public void Critical_path_test_passes_on_a_chain_whose_delay_spans_holidays_and_ends_on_a_weekend()
+    {
+        var tasks = new[]
+        {
+            Task(1, "Design", new(2026, 11, 9), new(2026, 11, 20)),     // spans Veterans Day
+            Task(2, "Build", new(2026, 11, 23), new(2026, 12, 5)),      // spans Thanksgiving, ends on a Saturday
+            Task(3, "Test", new(2026, 12, 7), new(2026, 12, 27)),       // spans Christmas, ends on a Sunday
+        };
+
+        var test = CriticalPathTest(Holidays, tasks, (0, 1), (1, 2));
+
+        Assert.Equal(HealthCheckStatus.Pass, test.Status);
+        Assert.Equal(tasks[0].Id, test.Tasks[0].ItemId);
+    }
+
+    [Fact]
+    public void Critical_path_test_keeps_the_delayed_tasks_own_start_constraint()
+    {
+        // The first task can't start until Wednesday (Must Start On), two days after its planned start. Lifting that
+        // constraint used to pull it back two days, so the delay looked two days short.
+        var tasks = new[]
+        {
+            Task(1, "Site access", new(2026, 11, 2), new(2026, 11, 6), constraint: new(PlanConstraintKind.MustStartOn, new(2026, 11, 4))),
+            Task(2, "Install", new(2026, 11, 9), new(2026, 11, 13)),
+        };
+
+        var test = CriticalPathTest(Holidays, tasks, (0, 1));
+
+        Assert.Equal(HealthCheckStatus.Pass, test.Status);
+    }
+
+    [Theory]
+    [InlineData(PlanConstraintKind.MustStartOn)]
+    [InlineData(PlanConstraintKind.MustFinishOn)]
+    public void Critical_path_test_still_fails_when_a_pinned_successor_absorbs_the_slip(PlanConstraintKind pin)
+    {
+        var last = new DateOnly(2026, 12, 7);
+        var tasks = new[]
+        {
+            Task(1, "Design", new(2026, 11, 9), new(2026, 11, 20)),
+            Task(2, "Build", new(2026, 11, 23), new(2026, 12, 4)),
+            Task(3, "Ship", last, last, constraint: new(pin, last)),
+        };
+
+        var test = CriticalPathTest(Holidays, tasks, (0, 1), (1, 2));
+
+        Assert.Equal(HealthCheckStatus.Fail, test.Status);
+        Assert.Contains("moved the finish only", test.Result, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Critical_path_test_can_delay_a_milestone()
     {
