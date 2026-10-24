@@ -1,11 +1,15 @@
 @* The New project dialog: the short start form (name first) from the Projects page and Setup › Projects. *@
 <MudDialog>
     <DialogContent>
-        <NewProjectForm OnCancel="() => MudDialog.Cancel()" OnCreated="p => MudDialog.Close(DialogResult.Ok(p))" />
+        <NewProjectForm ContractId="ContractId" OnCancel="() => MudDialog.Cancel()" OnCreated="p => MudDialog.Close(DialogResult.Ok(p))" />
     </DialogContent>
 </MudDialog>
 
 @code {
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Opened from a contract: the project starts from it.</summary>
+    [Parameter]
+    public Guid? ContractId { get; set; }
 }

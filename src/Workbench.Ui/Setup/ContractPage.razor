@@ -11,6 +11,12 @@
 <PageTitle>@(_contract?.ContractNumber ?? "New contract") · Setup · Workbench</PageTitle>
 
 <SetupHeader Title="@(_contract is null ? "New contract" : $"{_contract.ContractNumber} · {_contract.Name}")">
+    @if (_contract is not null)
+    {
+        @* The next step after the award: a project to plan and charge against, prefilled from this contract. *@
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartProjectAsync" Class="mr-2"
+                   data-testid="contract-start-project">Start a project</MudButton>
+    }
     <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">All contracts</MudButton>
 </SetupHeader>
 
@@ -49,7 +55,7 @@ else
                             <MudSelect T="ContractKind" @bind-Value="_type" Label="Type">
                                 @foreach (var kind in Enum.GetValues<ContractKind>())
                                 {
-                                    <MudSelectItem T="ContractKind" Value="kind">@SetupFormat.Label(kind) · @kind</MudSelectItem>
+                                    <MudSelectItem T="ContractKind" Value="kind">@SetupFormat.Label(kind) · @SetupFormat.Name(kind)</MudSelectItem>
                                 }
                             </MudSelect>
                         </FormField>
@@ -180,6 +186,12 @@ else
     private bool HasClins => _clins.Count > 0;
 
     private ContractDto? _contract;
+
+    // The form opens the new project's plan itself.
+    private Task StartProjectAsync() =>
+        DialogService.ShowAsync<Workbench.Ui.Projects.NewProjectDialog>("New project",
+            new DialogParameters<Workbench.Ui.Projects.NewProjectDialog> { { d => d.ContractId, _contract?.Id } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
     private IReadOnlyList<CustomerDto> _customers = [];
     private IReadOnlyList<LaborCategoryDto> _categories = [];
     private IReadOnlyList<BillRateDto> _rates = [];

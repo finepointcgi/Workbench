@@ -32,6 +32,18 @@ public static class SetupFormat
         _ => kind.ToString(),
     };
 
+    /// <summary>The spelled-out type for pickers ("T&amp;M · Time and materials"), not the code name.</summary>
+    public static string Name(ContractKind kind) => kind switch
+    {
+        ContractKind.FirmFixedPrice => "Firm fixed price",
+        ContractKind.TimeAndMaterials => "Time and materials",
+        ContractKind.LaborHour => "Labor hour",
+        ContractKind.CostPlusFixedFee => "Cost plus fixed fee",
+        ContractKind.CostPlusAwardFee => "Cost plus award fee",
+        ContractKind.CostPlusIncentiveFee => "Cost plus incentive fee",
+        _ => kind.ToString(),
+    };
+
     public static string Label(ProjectState state) => state == ProjectState.OnHold ? "On hold" : state.ToString();
 
     /// <summary>The user-facing message for a failed save: the service's validation message, or a generic one.</summary>

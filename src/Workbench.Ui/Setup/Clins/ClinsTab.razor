@@ -107,6 +107,8 @@
             { d => d.Clin, clin },
             { d => d.DefaultStart, Contract.PeriodStart },
             { d => d.DefaultEnd, Contract.PeriodEnd },
+            { d => d.DefaultPricing, ClinFormat.PricingFor(Contract.Type) },
+            { d => d.DefaultNumber, ClinFormat.NextNumber(Clins.Where(c => !c.IsSlin).Select(c => c.Number)) },
         };
         var dialog = await DialogService.ShowAsync<ClinDialog>(clin is null ? "Add CLIN" : $"Edit CLIN {clin.Number}", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });

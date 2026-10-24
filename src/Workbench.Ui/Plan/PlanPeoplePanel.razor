@@ -60,7 +60,7 @@
                     }
                 </div>
             }
-            <PlanApprovalBar ProjectId="ProjectId" Version="_approvalVersion" />
+            <PlanApprovalBar ProjectId="ProjectId" Version="_approvalVersion" Changed="ApprovalChangedAsync" />
             <div class="wb-plan-stats">
                 <div class="wb-plan-stat" data-testid="plan-finish">
                     <span class="wb-plan-label">Finishes</span>
@@ -263,6 +263,9 @@ else if (_error is not null)
     [Parameter, EditorRequired] public Guid SheetId { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>Raised when the plan is submitted, approved or returned, or its terms change (the page's budget and health follow).</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
     private ResourcePlanDto? _plan;
     private PlanTryDto? _try;
     private AssignmentGrid? _grid;
@@ -332,6 +335,13 @@ else if (_error is not null)
     {
         await LoadAsync();
         StateHasChanged();
+    }
+
+    // Approving makes the plan the budget: the hours and cost cards ("of 680 budgeted") and the page's health chip change too.
+    private async Task ApprovalChangedAsync()
+    {
+        await ReloadAsync();
+        await Changed.InvokeAsync();
     }
 
     // ---- The grid's extra columns ----

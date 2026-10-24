@@ -31,11 +31,11 @@
 
         @if (plan.Status == PlanApprovalStatus.Returned && plan.ReviewComment is { } why)
         {
-            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1" data-testid="plan-returned">@plan.ReviewedBy returned it: "@why"</MudAlert>
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1" data-testid="plan-returned">@(plan.ReviewedByName ?? plan.ReviewedBy) returned it: "@why"</MudAlert>
         }
         @if (plan.Status == PlanApprovalStatus.Submitted && plan.SubmitNote is { } note)
         {
-            <span class="wb-approval-text d-block mt-1">Note from @plan.SubmittedBy: "@note"</span>
+            <span class="wb-approval-text d-block mt-1">Note from @(plan.SubmittedByName ?? plan.SubmittedBy): "@note"</span>
         }
         @if (plan.SinceBaseline.Count > 0 && (plan.ChangedSinceApproval || plan.CanReview))
         {
@@ -85,6 +85,9 @@
 
     /// <summary>Changes when the plan changes, so "changed since approval" is fresh.</summary>
     [Parameter] public int Version { get; set; }
+
+    /// <summary>Raised after a submit, approval, return or terms change, so the page around the bar can refresh.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
 
     private ProjectPlanDto? _plan;
     private int _loadedVersion = -1;
@@ -153,6 +156,7 @@
             Set(await action(plans));
             (_note, _comment, _editing) = (null, null, false);
             Snackbar.Add(done, Severity.Success);
+            await Changed.InvokeAsync();
         }
         catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
@@ -184,10 +188,10 @@
 
     private static string Explain(ProjectPlanDto plan) => plan.Status switch
     {
-        PlanApprovalStatus.Submitted => $"Submitted by {plan.SubmittedBy}{When(plan.SubmittedAtUtc)}. Finance approves it or sends it back.",
+        PlanApprovalStatus.Submitted => $"Submitted by {plan.SubmittedByName ?? plan.SubmittedBy}{When(plan.SubmittedAtUtc)}. Finance approves it or sends it back.",
         PlanApprovalStatus.Approved when plan.ChangedSinceApproval =>
             $"Since the approved baseline: {Signed(plan.HoursChange)} h. Submit the changes when they're ready.",
-        PlanApprovalStatus.Approved => $"Approved by {plan.ReviewedBy}{When(plan.ReviewedAtUtc)}. It's the project's baseline budget.",
+        PlanApprovalStatus.Approved => $"Approved by {plan.ReviewedByName ?? plan.ReviewedBy}{When(plan.ReviewedAtUtc)}. It's the project's baseline budget.",
         PlanApprovalStatus.Returned => "Make the changes Finance asked for, then submit it again.",
         _ => "Build the WBS and assign people, then submit the plan to Finance.",
     };
