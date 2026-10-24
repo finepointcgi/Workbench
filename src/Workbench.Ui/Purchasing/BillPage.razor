@@ -19,8 +19,12 @@ else if (_bill is not { } bill)
 else
 {
     var b = bill.Bill;
-    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} invoice {b.InvoiceNumber}")" BackHref="@BackHref" BackLabel="@BackLabel">
+    <PurchasingHeader Title="@($"{b.Number} · {b.VendorName} {DocWord(b.Kind)} {b.InvoiceNumber}")" BackHref="@BackHref" BackLabel="@BackLabel">
         <BillStatusChip Status="b.Status" />
+        @if (b.Kind != BillKind.Bill)
+        {
+            <MudChip T="string" Size="Size.Small" Class="ma-0" data-testid="bill-kind">@PurchasingFormat.Label(b.Kind)</MudChip>
+        }
         <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApBillsManage">
             @if (bill.CanEdit)
             {
@@ -38,13 +42,41 @@ else
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(() => Bills.PostAsync(b.Id), "Posted."))" data-testid="retry-post">Retry posting</MudButton>
             }
-            @if (b.Status is BillState.Draft or BillState.Rejected or BillState.PendingApproval)
+            @if (b.Status == BillState.Posted && b.Kind == BillKind.Bill && !b.IsForeignCurrency)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" OnClick="CreditThisBillAsync" data-testid="credit-bill">Credit this bill</MudButton>
+            }
+            @if (b.Status == BillState.Posted && b.IsCredit && b.Balance > 0)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyCreditAsync" data-testid="apply-credit">Apply to bills</MudButton>
+            }
+            @if (b.Status != BillState.Void)
             {
                 <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="VoidAsync" data-testid="void">Void</MudButton>
             }
         </FinanceOnly>
+        <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApPaymentsManage">
+            @if (b.Status == BillState.Posted && b.IsCredit && b.Balance > 0)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="RefundAsync" data-testid="record-refund">Record refund</MudButton>
+            }
+        </FinanceOnly>
     </PurchasingHeader>
 
+    @if (b.Status == BillState.Void && bill.VoidReason is not null)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" data-testid="void-info">
+            Voided by @bill.VoidedBy: @bill.VoidReason.
+            @if (bill.VoidReversalDate is { } reversed) { <span> Every posting was reversed on @PurchasingFormat.Date(reversed); see the trail below.</span> }
+        </MudAlert>
+    }
+    @if (b.CreditsBillId is { } credited)
+    {
+        <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-3">
+            Credits bill <MudLink Href="@($"purchasing/bills/{credited}")">@(bill.CreditsBillNumber ?? "the original")</MudLink>.
+            @(b.Status == BillState.Posted ? "" : "When it posts, it's applied to that bill's open balance; anything left stays an open credit for the next payment run.")
+        </MudAlert>
+    }
     @if (b.PostingProblem is not null)
     {
         <MudAlert Severity="Severity.Warning" Class="mb-3">Approved but not posted: @b.PostingProblem</MudAlert>
@@ -77,8 +109,7 @@ else
         </MudAlert>
     }
     <MudGrid Spacing="2" Class="mb-3">
-        @foreach (var (label, value) in new[] { ("Invoice date", PurchasingFormat.Date(b.InvoiceDate)), ("Due", PurchasingFormat.Date(b.DueDate)), ("Amount", PurchasingFormat.Amount(b.Amount)),
-            ("Retainage held", PurchasingFormat.Amount(b.RetainageAmount)), ("Paid", PurchasingFormat.Amount(b.PaidAmount)), ("Balance", b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "—") })
+        @foreach (var (label, value) in Tiles(b))
         {
             <MudItem xs="6" sm="4" md="2">
                 <MudPaper Outlined="true" Class="pa-3">
@@ -105,14 +136,14 @@ else
         <BillLinesTable Lines="bill.Lines" CanCapitalize="@(_capitalizable.Count > 0 ? l => _capitalizable.Contains(l.Id) : null)" OnCapitalize="CapitalizeAsync" />
     </MudPaper>
 
-    @if (Access?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true && bill.Bill.Status is not (BillState.Void or BillState.Rejected))
+    @if (Access?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true && bill.Bill.Status is not (BillState.Void or BillState.Rejected) && bill.Bill.Kind == BillKind.Bill)
     {
         <Workbench.Ui.SalesTax.BillTaxCard BillId="BillId" Status="bill.Bill.Status" />
     }
 
     @if (bill.Payments.Count > 0)
     {
-        <MudPaper Outlined="true" Class="pa-4">
+        <MudPaper Outlined="true" Class="pa-4 mb-3">
             <MudText Typo="Typo.h6" Class="mb-2">Payments</MudText>
             <MudSimpleTable Dense="true" Elevation="0">
                 <thead><tr><th>Run</th><th>Paid on</th><th>Method</th><th>Reference</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
@@ -135,6 +166,9 @@ else
             </MudSimpleTable>
         </MudPaper>
     }
+    <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApBillsManage">
+        <BillTrailPanel @key="_trailVersion" Bill="bill" OnChanged="ReloadAsync" />
+    </FinanceOnly>
     <CustomFieldsSection EntityType="@CustomizableEntityTypes.ApBill" RecordId="BillId" Class="mt-3" />
 }
 
@@ -254,9 +288,91 @@ else
 
     private async Task VoidAsync()
     {
-        if (await ReasonDialog.AskAsync(DialogService, "Void bill", "Void", color: Color.Error) is { } reason)
+        var b = _bill!.Bill;
+        var posted = b.Status is BillState.Approved or BillState.Posted;
+        var what = PurchasingFormat.Label(b.Kind).ToLowerInvariant();
+        if (await ReasonDialog.AskAsync(DialogService, $"Void {what}", "Void",
+                posted ? $"Every posting of this {what} is reversed (its project costs too), in its own period when that's open, otherwise today. Payments and applied credits have to be undone first." : null,
+                color: Color.Error) is { } reason)
         {
             await RunAsync(() => Bills.VoidAsync(BillId, new BillReasonRequest(reason)), "Voided.");
+            _trailVersion++;
+        }
+    }
+
+    private int _trailVersion;
+
+    private async Task ReloadAsync()
+    {
+        _bill = await Bills.GetAsync(BillId);
+        _trailVersion++;
+    }
+
+    private static string DocWord(BillKind kind) => kind switch
+    {
+        BillKind.CreditMemo => "credit",
+        BillKind.DebitMemo => "debit memo",
+        BillKind.RetainageRelease => "retainage release",
+        _ => "invoice",
+    };
+
+    private static IEnumerable<(string Label, string Value)> Tiles(BillSummaryDto b)
+    {
+        string Posted(decimal v) => b.Status == BillState.Posted ? PurchasingFormat.Amount(v) : "—";
+        if (b.IsCredit)
+        {
+            return [("Credit date", PurchasingFormat.Date(b.InvoiceDate)), ("Amount", PurchasingFormat.Amount(b.Amount)), ("Applied to bills", PurchasingFormat.Amount(b.AppliedAmount)),
+                ("Refunded", PurchasingFormat.Amount(b.PaidAmount)), ("Credit left", Posted(b.Balance))];
+        }
+
+        var tiles = new List<(string, string)> { ("Invoice date", PurchasingFormat.Date(b.InvoiceDate)), ("Due", PurchasingFormat.Date(b.DueDate)), ("Amount", PurchasingFormat.Amount(b.Amount)) };
+        if (b.Kind == BillKind.Bill)
+        {
+            tiles.Add(("Retainage held", PurchasingFormat.Amount(b.RetainageAmount)));
+        }
+
+        tiles.Add(("Paid", PurchasingFormat.Amount(b.PaidAmount)));
+        if (b.AppliedAmount != 0)
+        {
+            tiles.Add(("Credits applied", PurchasingFormat.Amount(b.AppliedAmount)));
+        }
+
+        tiles.Add(("Balance", Posted(b.Balance)));
+        return tiles;
+    }
+
+    private async Task CreditThisBillAsync()
+    {
+        var dialog = await DialogService.ShowAsync<CreditBillDialog>($"Credit {_bill!.Bill.Number}", new DialogParameters<CreditBillDialog> { { d => d.Bill, _bill } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: BillDto memo })
+        {
+            Snackbar.Add($"{memo.Bill.Number} drafted. Check it and submit it for approval.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/bills/{memo.Bill.Id}");
+        }
+    }
+
+    private async Task ApplyCreditAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ApplyCreditDialog>($"Apply {_bill!.Bill.Number}", new DialogParameters<ApplyCreditDialog> { { d => d.Credit, _bill } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: BillDto updated })
+        {
+            _bill = updated;
+            _trailVersion++;
+            Snackbar.Add("Credit applied.", Severity.Success);
+        }
+    }
+
+    private async Task RefundAsync()
+    {
+        var dialog = await DialogService.ShowAsync<RefundDialog>("Record a vendor refund", new DialogParameters<RefundDialog> { { d => d.Credit, _bill! } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: BillDto updated })
+        {
+            _bill = updated;
+            _trailVersion++;
+            Snackbar.Add("Refund recorded.", Severity.Success);
         }
     }
 }

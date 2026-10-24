@@ -1,0 +1,88 @@
+@* Releases held retainage of a subcontract's bills: a payable to the vendor, sent for approval like a bill. *@
+@inject IApCreditService Credits
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2">Release what the work now earns (for example at completion or a milestone). The release goes to the project manager to approve, then it's paid like a bill.</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Bill</th><th>Invoice</th><th style="text-align:right">Held</th><th style="text-align:right">Left to release</th><th style="text-align:right">Release</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>@row.Bill.Number</td><td>@row.Bill.InvoiceNumber</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(row.Bill.Held)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(row.Bill.Open)</td>
+                            <td style="text-align:right; max-width:140px">
+                                <MudNumericField T="decimal" @bind-Value="row.Amount" Format="N2" Min="0" Max="row.Bill.Open" Margin="Margin.Dense"
+                                                 aria-label="@($"Retainage to release on {row.Bill.Number}")" data-testid="release-amount" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                <MudDatePicker @bind-Date="_date" Label="Release date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:180px" />
+                <MudTextField T="string" @bind-Value="_invoice" Label="Vendor's retainage invoice (optional)" MaxLength="64" Style="max-width:260px" />
+            </MudStack>
+            @if (_needsOverride)
+            {
+                <MudTextField T="string" @bind-Value="_override" Label="Funding override reason (Finance)" Lines="2" MaxLength="1000" data-testid="release-override" />
+            }
+            <MudText Typo="Typo.body2">Releasing <b>@PurchasingFormat.Amount(_rows.Sum(r => r.Amount))</b></MudText>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" data-testid="release-error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="@(_busy || _rows.Sum(r => r.Amount) <= 0)" data-testid="release-submit">Release and send for approval</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Guid SubcontractId { get; set; }
+    [Parameter] public IReadOnlyList<RetainageBillDto> Retainage { get; set; } = [];
+
+    private sealed class Row(RetainageBillDto bill)
+    {
+        public RetainageBillDto Bill { get; } = bill;
+        public decimal Amount { get; set; } = bill.Open;
+    }
+
+    private List<Row> _rows = [];
+    private DateTime? _date = DateTime.Today;
+    private string? _invoice;
+    private string? _override;
+    private bool _needsOverride;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized() => _rows = Retainage.Where(r => r.Open > 0).Select(r => new Row(r)).ToList();
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var release = await Credits.ReleaseRetainageAsync(new ReleaseRetainageRequest(SubcontractId,
+                _rows.Where(r => r.Amount > 0).Select(r => new RetainageReleaseItem(r.Bill.BillId, r.Amount)).ToList(),
+                PurchasingFormat.ToDateOnly(_date) ?? DateOnly.FromDateTime(DateTime.Today), _invoice, null, string.IsNullOrWhiteSpace(_override) ? null : _override));
+            MudDialog.Close(DialogResult.Ok(release));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+            _needsOverride |= _error.Contains("funded value", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

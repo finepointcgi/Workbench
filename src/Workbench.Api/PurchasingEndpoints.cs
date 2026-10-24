@@ -78,6 +78,18 @@ internal static class PurchasingEndpoints
         p.MapPost("/bills/{id:guid}/post", (Guid id, IApBillService s, CancellationToken ct) => s.PostAsync(id, ct));
         p.MapPost("/bills/{id:guid}/void", (Guid id, BillReasonRequest r, IApBillService s, CancellationToken ct) => s.VoidAsync(id, r, ct));
 
+        // Credits, refunds and retainage releases
+        p.MapPost("/bills/{id:guid}/credit", (Guid id, CreditBillRequest r, IApCreditService s, CancellationToken ct) => s.CreditBillAsync(id, r, ct));
+        p.MapGet("/bills/{id:guid}/trail", (Guid id, IApCreditService s, CancellationToken ct) => s.GetTrailAsync(id, ct));
+        p.MapGet("/credits/open", (Guid? vendorId, IApCreditService s, CancellationToken ct) => s.ListOpenCreditsAsync(vendorId, ct));
+        p.MapPost("/credits/{id:guid}/apply", (Guid id, ApplyCreditRequest r, IApCreditService s, CancellationToken ct) => s.ApplyAsync(id, r, ct));
+        p.MapPost("/credit-applications/{id:guid}/unapply", (Guid id, BillReasonRequest r, IApCreditService s, CancellationToken ct) => s.UnapplyAsync(id, r, ct));
+        p.MapPost("/credits/{id:guid}/refunds", (Guid id, RecordRefundRequest r, IApCreditService s, CancellationToken ct) => s.RecordRefundAsync(id, r, ct));
+        p.MapPost("/refunds/{id:guid}/void", (Guid id, BillReasonRequest r, IApCreditService s, CancellationToken ct) => s.VoidRefundAsync(id, r, ct));
+        p.MapGet("/subcontracts/{id:guid}/retainage", (Guid id, IApCreditService s, CancellationToken ct) => s.ListRetainageAsync(id, ct));
+        p.MapPost("/retainage-releases", (ReleaseRetainageRequest r, IApCreditService s, CancellationToken ct) => s.ReleaseRetainageAsync(r, ct));
+        p.MapPost("/credits/from-quality-return/{id:guid}", (Guid id, IApCreditService s, CancellationToken ct) => s.CreateFromQualityReturnAsync(id, ct));
+
         // Payments
         p.MapGet("/payments/due", (DateOnly? dueOnOrBefore, Guid? vendorId, IApPaymentService s, CancellationToken ct) => s.ListDueBillsAsync(new DueBillQuery(dueOnOrBefore, vendorId), ct));
         p.MapGet("/payment-runs", (IApPaymentService s, CancellationToken ct) => s.ListRunsAsync(ct));

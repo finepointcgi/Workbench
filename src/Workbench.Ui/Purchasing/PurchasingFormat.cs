@@ -37,8 +37,23 @@ public static class PurchasingFormat
     {
         BillLineKind.ProjectCost => "Project cost",
         BillLineKind.Account => "GL account (overhead)",
+        BillLineKind.Retainage => "Retainage released",
         _ => "Subcontract",
     };
+
+    /// <summary>The line kinds a person can enter (retainage lines come from a retainage release).</summary>
+    public static IReadOnlyList<BillLineKind> EnterableLineKinds { get; } = [BillLineKind.ProjectCost, BillLineKind.Account, BillLineKind.Subcontract];
+
+    public static string Label(BillKind k) => k switch
+    {
+        BillKind.CreditMemo => "Credit memo",
+        BillKind.DebitMemo => "Debit memo",
+        BillKind.RetainageRelease => "Retainage release",
+        _ => "Bill",
+    };
+
+    /// <summary>A memo's amounts read negative (what the vendor owes back), a bill's positive.</summary>
+    public static decimal Signed(BillSummaryDto b, decimal amount) => b.IsCredit ? -amount : amount;
 
     public static string Label(SubcontractPricing p) => p switch
     {

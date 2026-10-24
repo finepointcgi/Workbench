@@ -226,19 +226,21 @@ public sealed partial class StandardReportService
         var aging = await apReports.GetAgingAsync(asOf, ct);
         await using var db = await dbFactory.CreateAsync(ct);
         var bills = await db.Set<ApBill>().AsNoTracking()
-            .Where(x => x.VendorId == vendorId && x.Status == ApBillStatus.Posted && x.InvoiceDate <= asOf && x.Amount > x.PaidAmount)
+            .Where(x => x.VendorId == vendorId && x.Status == ApBillStatus.Posted && x.InvoiceDate <= asOf)
             .OrderBy(x => x.DueDate)
             .ToListAsync(ct);
+        bills = bills.Where(x => x.Balance != 0).ToList(); // Open bills and open credits (shown negative).
         var vendor = aging.Rows.FirstOrDefault(r => r.VendorId == vendorId);
         b.Subtitle = $"{vendor?.VendorName ?? "Vendor"} · open bills as of {asOf:yyyy-MM-dd}";
         b.Column("bill", "Bill").Column("invoice", "Vendor invoice").Column("date", "Invoice date", ReportColumnType.Date).Column("due", "Due", ReportColumnType.Date)
             .Column("days", "Days past due", ReportColumnType.Number).Column("amount", "Amount", ReportColumnType.Money).Column("open", "Open", ReportColumnType.Money);
         foreach (var x in bills)
         {
-            b.Add(ReportRowKind.Detail, 0, null, $"purchasing/bills/{x.Id}", x.Number, x.InvoiceNumber, x.InvoiceDate, x.DueDate, Math.Max(0, asOf.DayNumber - x.DueDate.DayNumber), x.Amount, x.Amount - x.PaidAmount);
+            b.Add(ReportRowKind.Detail, 0, null, $"purchasing/bills/{x.Id}", x.Number, x.InvoiceNumber, x.InvoiceDate, x.DueDate, Math.Max(0, asOf.DayNumber - x.DueDate.DayNumber),
+                x.IsCredit ? -x.Amount : x.Amount, x.SignedBalance);
         }
 
-        b.Add(ReportRowKind.Total, 0, null, null, "Total", null, null, null, null, bills.Sum(x => x.Amount), bills.Sum(x => x.Amount - x.PaidAmount));
+        b.Add(ReportRowKind.Total, 0, null, null, "Total", null, null, null, null, bills.Sum(x => x.IsCredit ? -x.Amount : x.Amount), bills.Sum(x => x.SignedBalance));
     }
 
     private static void AgingColumns(ReportBuilder b, string party, bool withCount = true)

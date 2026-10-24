@@ -76,7 +76,7 @@ public sealed class AssetService(
         var capitalized = (await db.Set<FixedAsset>().AsNoTracking().Where(a => a.SourceBillLineId != null).Select(a => a.SourceBillLineId!.Value).ToListAsync(cancellationToken)).ToHashSet();
         var rows = await db.Set<ApBillLine>().AsNoTracking()
             .Where(l => l.Kind == ApBillLineKind.Account)
-            .Join(db.Set<ApBill>().AsNoTracking().Where(b => b.Status == ApBillStatus.Posted), l => l.BillId, b => b.Id, (l, b) => new { l, b })
+            .Join(db.Set<ApBill>().AsNoTracking().Where(b => b.Status == ApBillStatus.Posted && b.Kind == ApDocumentKind.Bill), l => l.BillId, b => b.Id, (l, b) => new { l, b })
             .ToListAsync(cancellationToken);
         rows = rows.Where(r => r.l.Amount >= threshold && !capitalized.Contains(r.l.Id)).OrderByDescending(r => r.b.InvoiceDate).ThenBy(r => r.b.Number).ThenBy(r => r.l.LineNumber).ToList();
         var accountIds = rows.Select(r => r.l.AccountId!.Value).Distinct().ToList();
@@ -105,6 +105,11 @@ public sealed class AssetService(
         if (bill.Status != ApBillStatus.Posted)
         {
             throw new ArgumentException($"Bill {bill.Number} is {bill.Status}; capitalize lines once the bill is posted.");
+        }
+
+        if (bill.Kind != ApDocumentKind.Bill)
+        {
+            throw new ArgumentException($"{bill.Number} is a credit, not a purchase; only bill lines can be capitalized.");
         }
 
         var category = await db.Set<AssetCategory>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.CategoryId, cancellationToken)

@@ -12,10 +12,12 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<PageTitle>@(BillId is null ? "New bill" : "Edit bill") · Purchasing · Workbench</PageTitle>
+<PageTitle>@(BillId is null ? $"New {What}" : $"Edit {What}") · Purchasing · Workbench</PageTitle>
 
-<PurchasingHeader Title="@(BillId is null ? "New bill" : $"Edit {_number}")" BackHref="purchasing/bills" BackLabel="Bills"
-                  Subtitle="Project cost lines become vendor ODCs on the project (approved by its manager); GL account lines are overhead (approved by Finance); subcontract lines bill a subcontract." />
+<PurchasingHeader Title="@(BillId is null ? $"New {What}" : $"Edit {_number}")" BackHref="purchasing/bills" BackLabel="Bills"
+                  Subtitle="@(IsMemo
+                      ? "Each line takes cost back off a project, subcontract or GL account. It's approved like a bill; once posted it's applied to the bill it credits, or netted in the vendor's next payment run."
+                      : "Project cost lines become vendor ODCs on the project (approved by its manager); GL account lines are overhead (approved by Finance); subcontract lines bill a subcontract.")" />
 
 @if (_error is not null)
 {
@@ -38,11 +40,15 @@ else
                 </MudSelect>
             </FormField>
             <FormField Key="invoiceNumber" Xs="6" Md="2">
-                <MudTextField T="string" Value="_invoiceNumber" ValueChanged="InvoiceNumberChanged" Label="Invoice number" Required="true" DebounceInterval="400" Immediate="true" data-testid="bill-invoice" />
+                <MudTextField T="string" Value="_invoiceNumber" ValueChanged="InvoiceNumberChanged" Required="@(_kind != BillKind.DebitMemo)" DebounceInterval="400" Immediate="true" data-testid="bill-invoice"
+                              Label="@(_kind switch { BillKind.CreditMemo => "Vendor's credit number", BillKind.DebitMemo => "Reference", _ => "Invoice number" })"
+                              HelperText="@(_kind == BillKind.DebitMemo ? "Optional: defaults to our number" : null)" />
             </FormField>
             <FormField Key="invoiceDate" Xs="6" Md="2">
-                <MudDatePicker Date="_invoiceDate" DateChanged="InvoiceDateChanged" Label="Invoice date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
+                <MudDatePicker Date="_invoiceDate" DateChanged="InvoiceDateChanged" Label="@(IsMemo ? "Credit date" : "Invoice date")" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
             </FormField>
+            @if (!IsMemo)
+            {
             <FormField Key="dueDate" Xs="6" Md="2" Context="field">
                 <MudDatePicker @bind-Date="_dueDate" Label="Due date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Clearable="true" Required="field.Required"
                                HelperText="@(_dueDate is null && Vendor is { } v ? $"Net {v.PaymentTermsDays}: {PurchasingFormat.Date(DefaultDue)}" : null)" />
@@ -52,6 +58,7 @@ else
                                                         DefaultLabel="@(VendorCurrency is { } vc ? $"Vendor's currency ({vc})" : "Vendor's currency")" DefaultCode="@VendorCurrency"
                                                         Date="@(_invoiceDate is { } d ? DateOnly.FromDateTime(d) : null)" />
             </FormField>
+            }
             <FormField Key="description" Md="10" Context="field">
                 <MudTextField T="string" @bind-Value="_description" Label="Description" Required="field.Required" />
             </FormField>
@@ -83,7 +90,7 @@ else
             <MudText Typo="Typo.h6">Lines</MudText>
             <MudSpacer />
             <MudText Class="mr-4">Total <b>@(ForeignCode is { } tc ? Workbench.Ui.Currencies.CurrencyFormat.Amount(_lines.Sum(l => l.Amount), tc) : PurchasingFormat.Amount(_lines.Sum(l => l.Amount)))</b></MudText>
-            @if (_openOrders.Count > 0)
+            @if (_openOrders.Count > 0 && !IsMemo)
             {
                 <MudSelect T="Guid?" @bind-Value="_fromOrderId" Label="Purchase order" Dense="true" Clearable="true" Style="max-width:280px" Class="mr-2" data-testid="bill-po">
                     @foreach (var o in _openOrders.Where(o => _vendorId is null || o.VendorId == _vendorId))
@@ -94,7 +101,7 @@ else
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="AddFromOrderAsync" Disabled="_fromOrderId is null" Class="mr-2" data-testid="bill-from-po">Create bill from PO</MudButton>
             }
             <MudMenu Label="Add line" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" data-testid="add-line">
-                @foreach (var kind in Enum.GetValues<BillLineKind>())
+                @foreach (var kind in PurchasingFormat.EnterableLineKinds)
                 {
                     <MudMenuItem OnClick="@(() => AddLine(kind))">@PurchasingFormat.Label(kind)</MudMenuItem>
                 }
@@ -131,7 +138,7 @@ else
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="2">
                         <MudSelect T="BillLineKind" @bind-Value="line.Kind" Label="Type" Dense="true">
-                            @foreach (var kind in Enum.GetValues<BillLineKind>())
+                            @foreach (var kind in PurchasingFormat.EnterableLineKinds)
                             {
                                 <MudSelectItem Value="kind">@PurchasingFormat.Label(kind)</MudSelectItem>
                             }
@@ -162,13 +169,15 @@ else
                         {
                             <MudItem xs="12" md="2">
                                 <MudSelect T="Guid?" Value="line.SubcontractId" ValueChanged="@(v => SubcontractChanged(line, v))" Label="Subcontract" Dense="true">
-                                    @foreach (var s in _subcontracts.Where(s => s.VendorId == _vendorId && s.Status == SubcontractState.Active))
+                                    @foreach (var s in _subcontracts.Where(s => s.VendorId == _vendorId && (s.Status == SubcontractState.Active || (IsMemo && s.Status == SubcontractState.Closed) || s.Id == line.SubcontractId)))
                                     {
                                         <MudSelectItem T="Guid?" Value="s.Id">@s.Number (@PurchasingFormat.Amount(s.RemainingFunding) left)</MudSelectItem>
                                     }
                                 </MudSelect>
                             </MudItem>
                         }
+                        @if (!IsMemo)
+                        {
                         <MudItem xs="12" md="@(line.Kind == BillLineKind.Subcontract ? 3 : 5)">
                             <MudSelect T="Guid?" Value="line.OdcEntryId" ValueChanged="@(v => LinkOdc(line, v))" Label="Link an existing vendor ODC" Dense="true" Clearable="true"
                                        HelperText="Reuse a cost already entered on the project (it isn't posted twice)">
@@ -178,6 +187,7 @@ else
                                 }
                             </MudSelect>
                         </MudItem>
+                        }
                         @if (line.OdcEntryId is null)
                         {
                             <MudItem xs="12" md="2">
@@ -219,7 +229,11 @@ else
                         <MudIconButton Icon="@Icons.Material.Outlined.Delete" aria-label="Remove line" OnClick="@(() => RemoveLine(line))" />
                     </MudItem>
                 </MudGrid>
-                @if (line.Kind == BillLineKind.Subcontract && SubFor(line) is { RetainagePercent: > 0 } sub)
+                @if (line.CreditsLineId is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Credits a line of the original bill, charged the same way.</MudText>
+                }
+                @if (line.Kind == BillLineKind.Subcontract && SubFor(line) is { RetainagePercent: > 0 } sub && !IsMemo)
                 {
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">Retainage @sub.RetainagePercent.ToString("0.##")% (@PurchasingFormat.Amount(Math.Round(line.Amount * sub.RetainagePercent / 100m, 2, MidpointRounding.AwayFromZero))) is held back from payment.</MudText>
                 }
@@ -262,6 +276,16 @@ else
     /// <summary>Procure-to-pay: start the bill from this purchase order's received, unbilled quantities.</summary>
     [SupplyParameterFromQuery(Name = "po")] public Guid? OrderQuery { get; set; }
 
+    /// <summary>AP credits: "credit" for a vendor credit memo, "debit" for a debit memo (billing the vendor back).</summary>
+    [SupplyParameterFromQuery(Name = "kind")] public string? KindQuery { get; set; }
+
+    private BillKind _kind = BillKind.Bill;
+    private Guid? _creditsBillId;
+
+    private bool IsMemo => _kind is BillKind.CreditMemo or BillKind.DebitMemo;
+
+    private string What => PurchasingFormat.Label(_kind).ToLowerInvariant();
+
     private sealed class LineModel
     {
         public BillLineKind Kind { get; set; }
@@ -274,6 +298,9 @@ else
         public Guid? OdcEntryId { get; set; }
         public Guid? AccountId { get; set; }
         public Guid? OrgUnitId { get; set; }
+
+        /// <summary>On a memo made with "Credit this bill": the original line it credits.</summary>
+        public Guid? CreditsLineId { get; set; }
 
         // Billed from a PO line (procure-to-pay): the charging comes from the PO; amount = quantity × unit price.
         public Guid? PurchaseOrderLineId { get; set; }
@@ -320,11 +347,11 @@ else
 
     private string? VendorCurrency => _vendorId is { } v ? _vendorCurrencies.GetValueOrDefault(v) : null;
 
-    private string? ForeignCode => (_currency ?? VendorCurrency) is { } c && c != _functional ? c : null;
+    private string? ForeignCode => !IsMemo && (_currency ?? VendorCurrency) is { } c && c != _functional ? c : null;
 
     private DateOnly DefaultDue => DateOnly.FromDateTime(_invoiceDate ?? DateTime.Today).AddDays(Vendor?.PaymentTermsDays ?? 30);
 
-    private bool CanSave => !_saving && _vendorId is not null && !string.IsNullOrWhiteSpace(_invoiceNumber) && _invoiceDate is not null && _lines.Count > 0;
+    private bool CanSave => !_saving && _vendorId is not null && (_kind == BillKind.DebitMemo || !string.IsNullOrWhiteSpace(_invoiceNumber)) && _invoiceDate is not null && _lines.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -334,7 +361,9 @@ else
             _subcontracts = await Subcontracts.ListAsync();
             _projects = (await Projects.ListProjectsAsync()).Where(p => p.Status == ProjectState.Active).ToList();
             var accounts = await Chart.ListAccountsAsync(includeInactive: false);
-            _accounts = accounts.Where(a => !a.HasChildren && a.Type is AccountKind.Expense or AccountKind.Asset).ToList();
+            // Liability lines pay what's owed elsewhere, such as a corporate card issuer (never AP itself).
+            _accounts = accounts.Where(a => !a.HasChildren && (a.Type is AccountKind.Expense or AccountKind.Asset || (a.Type == AccountKind.Liability && a.Number is not ("2010" or "2020")))).ToList();
+            _kind = KindQuery?.ToLowerInvariant() switch { "credit" => BillKind.CreditMemo, "debit" => BillKind.DebitMemo, _ => BillKind.Bill };
             _orgs = await People.ListOrgUnitsAsync();
             _openOrders = await Orders.ListAsync(new PurchaseOrderQuery(OpenOnly: true));
             try
@@ -358,6 +387,7 @@ else
                 }
 
                 var b = bill.Bill;
+                (_kind, _creditsBillId) = (b.Kind, b.CreditsBillId);
                 (_number, _vendorId, _invoiceNumber, _invoiceDate, _dueDate, _description) =
                     (b.Number, b.VendorId, b.InvoiceNumber, PurchasingFormat.ToDateTime(b.InvoiceDate), PurchasingFormat.ToDateTime(b.DueDate), bill.Description);
                 _currency = b.CurrencyCode ?? (VendorCurrency is not null ? _functional : null);
@@ -367,7 +397,7 @@ else
                     {
                         Kind = l.Kind, Description = l.Description, Amount = l.TransactionAmount ?? l.Amount, ProjectId = l.ProjectId, WbsElementId = l.WbsElementId,
                         OdcType = l.OdcType ?? OdcCostType.Materials, SubcontractId = l.SubcontractId, OdcEntryId = l.OdcEntryId, AccountId = l.AccountId, OrgUnitId = l.OrgUnitId,
-                        PurchaseOrderLineId = l.PurchaseOrderLineId, Quantity = l.Quantity ?? 0, UnitPrice = l.UnitPrice ?? 0, PoLabel = l.PurchaseOrderNumber,
+                        PurchaseOrderLineId = l.PurchaseOrderLineId, Quantity = l.Quantity ?? 0, UnitPrice = l.UnitPrice ?? 0, PoLabel = l.PurchaseOrderNumber, CreditsLineId = l.CreditsLineId,
                         ChargeLabel = l.AccountNumber is { } acct ? $"{acct} {l.AccountName}" : $"{l.ProjectCode} {l.WbsCode}",
                     });
                     await EnsureWbsAsync(l.ProjectId);
@@ -460,7 +490,7 @@ else
 
     private async Task CheckDuplicatesAsync()
     {
-        if (_vendorId is not { } vendor || _invoiceDate is null)
+        if (_vendorId is not { } vendor || _invoiceDate is null || IsMemo)
         {
             _duplicates = [];
             return;
@@ -574,7 +604,7 @@ else
     {
         _saving = true;
         _saveError = null;
-        var request = new SaveBillRequest(_vendorId!.Value, _invoiceNumber!, DateOnly.FromDateTime(_invoiceDate!.Value),
+        var request = new SaveBillRequest(_vendorId!.Value, _invoiceNumber ?? "", DateOnly.FromDateTime(_invoiceDate!.Value),
             _lines.Select(l => new SaveBillLineRequest(l.Kind, l.Description ?? "", l.Amount,
                 l.Kind == BillLineKind.Account || l.OdcEntryId is not null ? null : l.WbsElementId,
                 l.Kind == BillLineKind.ProjectCost ? l.OdcType : null,
@@ -584,8 +614,9 @@ else
                 l.Kind == BillLineKind.Account ? l.OrgUnitId : null,
                 l.PurchaseOrderLineId,
                 l.PurchaseOrderLineId is null ? null : l.Quantity,
-                l.PurchaseOrderLineId is null ? null : l.UnitPrice)).ToList(),
-            PurchasingFormat.ToDateOnly(_dueDate), _description, _currency);
+                l.PurchaseOrderLineId is null ? null : l.UnitPrice,
+                l.CreditsLineId)).ToList(),
+            IsMemo ? null : PurchasingFormat.ToDateOnly(_dueDate), _description, IsMemo ? null : _currency, Kind: _kind, CreditsBillId: _creditsBillId);
         try
         {
             var saved = BillId is { } id ? await Bills.UpdateAsync(id, request) : await Bills.CreateAsync(request);

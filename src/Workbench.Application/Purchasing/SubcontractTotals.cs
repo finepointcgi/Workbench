@@ -5,7 +5,9 @@ using Workbench.Domain.Purchasing;
 namespace Workbench.Application.Purchasing;
 
 /// <summary>What has been invoiced against subcontracts, from AP bill lines and vendor ODCs entered outside AP.</summary>
-internal sealed record SubcontractBilling(Guid SubcontractId, decimal Billed, decimal Retainage, decimal Paid, IReadOnlyList<Contracts.Purchasing.SubcontractInvoiceDto> Invoices);
+/// <summary>Retainage is what's still held (withheld less credited less released); Released is what posted releases made payable.</summary>
+internal sealed record SubcontractBilling(Guid SubcontractId, decimal Billed, decimal Retainage, decimal Paid, IReadOnlyList<Contracts.Purchasing.SubcontractInvoiceDto> Invoices,
+    decimal Released = 0);
 
 internal static class SubcontractTotals
 {
@@ -34,6 +36,16 @@ internal static class SubcontractTotals
             .Where(x => x.Id == excludeBillId || PurchasingSupport.BilledStatuses.Contains(x.Status))
             .Select(x => x.OdcEntryId!.Value).ToHashSet();
 
+        // A voided posted bill took its ODCs back off with offsets; neither the ODCs nor the offsets are invoices.
+        foreach (var voided in await db.Set<ApBillLine>().AsNoTracking().Where(l => l.ReversalOdcEntryId != null).Select(l => new { l.OdcEntryId, l.ReversalOdcEntryId }).ToListAsync(ct))
+        {
+            linkedOdcs.Add(voided.ReversalOdcEntryId!.Value);
+            if (voided.OdcEntryId is { } original)
+            {
+                linkedOdcs.Add(original);
+            }
+        }
+
         var odcQuery = db.Set<OdcEntry>().AsNoTracking()
             .Where(o => o.SubcontractId != null && (o.Status == OdcStatus.Submitted || o.Status == OdcStatus.Approved));
         if (subcontractIds is not null)
@@ -48,20 +60,38 @@ internal static class SubcontractTotals
         foreach (var id in ids)
         {
             var invoices = new List<Contracts.Purchasing.SubcontractInvoiceDto>();
-            decimal billed = 0, retainage = 0, paid = 0;
+            decimal billed = 0, retainage = 0, paid = 0, released = 0;
             foreach (var group in lines.Where(l => l.SubcontractId == id).GroupBy(l => l.BillId))
             {
                 var bill = bills[group.Key];
-                var amount = group.Sum(l => l.Amount);
-                var held = group.Sum(l => l.RetainageAmount);
-                invoices.Add(new(bill.Id, bill.Number, bill.InvoiceNumber, bill.InvoiceDate, amount, held, bill.Status.ToString()));
+
+                // Credit and debit memos take billed (and the retainage on it) back; a release pays out retainage already billed.
+                var sign = bill.IsCredit ? -1 : 1;
+                var amount = sign * group.Sum(l => l.Amount);
+                var held = sign * group.Sum(l => l.RetainageAmount);
+                invoices.Add(new(bill.Id, bill.Number, bill.InvoiceNumber, bill.InvoiceDate, amount, held, bill.Status.ToString(), bill.Kind.ToContract()));
                 if (bill.Id == excludeBillId || !PurchasingSupport.BilledStatuses.Contains(bill.Status))
                 {
                     continue;
                 }
 
+                if (bill.Kind == ApDocumentKind.RetainageRelease)
+                {
+                    if (bill.Status == ApBillStatus.Posted)
+                    {
+                        released += amount;
+                        paid += bill.Payable is > 0 and var due ? Financials.Money.Round(bill.PaidAmount * amount / due) : 0;
+                    }
+
+                    continue;
+                }
+
                 billed += amount;
                 retainage += held;
+                if (bill.IsCredit)
+                {
+                    continue; // A memo's "paid" is a refund to us, not a payment on the subcontract.
+                }
 
                 // Payments apply to the bill as a whole; this subcontract's share is in proportion to its payable lines.
                 if (bill.Amount - bill.RetainageAmount is > 0 and var payable)
@@ -76,7 +106,7 @@ internal static class SubcontractTotals
                 billed += odc.Amount;
             }
 
-            result[id] = new SubcontractBilling(id, billed, retainage, paid, invoices.OrderBy(i => i.InvoiceDate).ToList());
+            result[id] = new SubcontractBilling(id, billed, retainage - released, paid, invoices.OrderBy(i => i.InvoiceDate).ToList(), released);
         }
 
         return result;

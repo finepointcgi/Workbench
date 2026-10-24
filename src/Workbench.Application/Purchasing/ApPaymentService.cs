@@ -38,7 +38,7 @@ public sealed class ApPaymentService(
     public async Task<IReadOnlyList<DueBillDto>> ListDueBillsAsync(DueBillQuery query, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var q = db.Set<ApBill>().AsNoTracking().Where(b => b.Status == ApBillStatus.Posted);
+        var q = db.Set<ApBill>().AsNoTracking().Where(b => b.Status == ApBillStatus.Posted && b.Kind != ApDocumentKind.CreditMemo && b.Kind != ApDocumentKind.DebitMemo);
         if (query.VendorId is { } vendorId)
         {
             q = q.Where(b => b.VendorId == vendorId);
@@ -53,7 +53,18 @@ public sealed class ApPaymentService(
         var scheduled = await ScheduledAsync(db, bills.Select(b => b.Id).ToList(), null, cancellationToken);
         var scheduledTx = await ScheduledTransactionAsync(db, bills.Select(b => b.Id).ToList(), cancellationToken);
         var summaries = await ApBillService.SummariesAsync(db, bills, cancellationToken);
-        return summaries.Select(s => new DueBillDto(s, scheduled.GetValueOrDefault(s.Id), scheduledTx.GetValueOrDefault(s.Id))).ToList();
+        var credits = await OpenCreditByVendorAsync(db, bills.Select(b => b.VendorId).Distinct().ToList(), cancellationToken);
+        return summaries.Select(s => new DueBillDto(s, scheduled.GetValueOrDefault(s.Id), scheduledTx.GetValueOrDefault(s.Id), s.IsForeignCurrency ? 0 : credits.GetValueOrDefault((s.VendorId, BillCompany(bills, s.Id))))).ToList();
+    }
+
+    private static Guid BillCompany(IEnumerable<ApBill> bills, Guid id) => bills.First(b => b.Id == id).CompanyId;
+
+    /// <summary>Open credit per vendor and company not yet netted in an open run.</summary>
+    private static async Task<Dictionary<(Guid Vendor, Guid Company), decimal>> OpenCreditByVendorAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> vendorIds, CancellationToken ct)
+    {
+        var open = await ApCredits.OpenCreditsAsync(db, vendorIds, ct);
+        var scheduled = await ApCredits.ScheduledByCreditAsync(db, open.Select(c => c.Id).ToList(), ct);
+        return open.GroupBy(c => (c.VendorId, c.CompanyId)).ToDictionary(g => g.Key, g => g.Sum(c => c.Balance - scheduled.GetValueOrDefault(c.Id)));
     }
 
     public async Task<IReadOnlyList<PaymentRunDto>> ListRunsAsync(CancellationToken cancellationToken = default)
@@ -97,7 +108,23 @@ public sealed class ApPaymentService(
             CreatedAtUtc = UtcNow,
         };
         db.Set<ApPaymentRun>().Add(run);
-        foreach (var item in request.Items)
+
+        // Open vendor credits to net, oldest first, with what's left of each after other open runs.
+        var credits = new Dictionary<(Guid, Guid), List<ApBill>>();
+        var creditLeft = new Dictionary<Guid, decimal>();
+        if (request.NetCredits)
+        {
+            var open = await ApCredits.OpenCreditsAsync(db, vendorIds, cancellationToken);
+            var reserved = await ApCredits.ScheduledByCreditAsync(db, open.Select(c => c.Id).ToList(), cancellationToken);
+            foreach (var credit in open)
+            {
+                creditLeft[credit.Id] = credit.Balance - reserved.GetValueOrDefault(credit.Id);
+            }
+
+            credits = open.Where(c => creditLeft[c.Id] > 0).GroupBy(c => (c.VendorId, c.CompanyId)).ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        foreach (var item in request.Items.OrderBy(i => bills.GetValueOrDefault(i.BillId)?.DueDate).ThenBy(i => bills.GetValueOrDefault(i.BillId)?.Number, StringComparer.Ordinal))
         {
             var bill = bills.GetValueOrDefault(item.BillId) ?? throw WorkbenchNotFoundException.For("Bill", item.BillId);
             var vendor = vendors[bill.VendorId];
@@ -105,6 +132,11 @@ public sealed class ApPaymentService(
             if (bill.Status != ApBillStatus.Posted)
             {
                 throw new ArgumentException($"Bill {bill.Number} is {bill.Status}; only posted bills can be paid.");
+            }
+
+            if (bill.IsCredit)
+            {
+                throw new ArgumentException($"{ApCredits.Title(bill)} is a credit; it's netted against the vendor's bills, not paid.");
             }
 
             if (bill.IsForeignCurrency)
@@ -139,10 +171,20 @@ public sealed class ApPaymentService(
                 throw new ArgumentException($"Bill {bill.Number} has {available:N2} left to pay (balance {bill.Balance:N2}, {scheduled.GetValueOrDefault(bill.Id):N2} already in open runs).");
             }
 
-            db.Set<ApPayment>().Add(new ApPayment { RunId = run.Id, BillId = bill.Id, VendorId = vendor.Id, Amount = amount, Method = run.Method });
+            if (request.NetCredits)
+            {
+                // The vendor's open credits come off this bill first (oldest credit first); the check is for what's left.
+                amount -= NetCredits(db, run, bill, amount, credits.GetValueOrDefault((bill.VendorId, bill.CompanyId)) ?? [], creditLeft);
+            }
+
+            if (amount > 0)
+            {
+                db.Set<ApPayment>().Add(new ApPayment { RunId = run.Id, BillId = bill.Id, VendorId = vendor.Id, Amount = amount, Method = run.Method });
+            }
         }
 
-        audit.Record(db, PurchasingSupport.RunEntity, run.Id, "Created", after: new { run.Number, run.PaymentDate, Method = run.Method.ToString(), Bills = request.Items.Count, Total = request.Items.Sum(i => i.Amount) });
+        var netted = db.Set<ApCreditApplication>().Local.Where(a => a.RunId == run.Id).Sum(a => a.Amount);
+        audit.Record(db, PurchasingSupport.RunEntity, run.Id, "Created", after: new { run.Number, run.PaymentDate, Method = run.Method.ToString(), Bills = request.Items.Count, Total = request.Items.Sum(i => i.Amount), CreditsNetted = netted });
         await db.SaveChangesAsync(cancellationToken);
         return await RunDtoAsync(db, run.Id, cancellationToken);
     }
@@ -184,6 +226,14 @@ public sealed class ApPaymentService(
             payment.VoidReason = "Run cancelled";
             payment.VoidedBy = access.Email;
             payment.VoidedAtUtc = UtcNow;
+        }
+
+        foreach (var application in await db.Set<ApCreditApplication>().Where(a => a.RunId == run.Id && a.Status == ApCreditApplicationStatus.Scheduled).ToListAsync(cancellationToken))
+        {
+            application.Status = ApCreditApplicationStatus.Reversed;
+            application.ReversalReason = "Run cancelled";
+            application.ReversedBy = access.Email;
+            application.ReversedAtUtc = UtcNow;
         }
 
         var before = run.Status.ToString();
@@ -311,9 +361,37 @@ public sealed class ApPaymentService(
             }
         }
 
+        // Credits the run netted are applied now, on the payment date.
+        var applications = await db.Set<ApCreditApplication>().Where(a => a.RunId == run.Id && a.Status == ApCreditApplicationStatus.Scheduled).ToListAsync(cancellationToken);
+        var docIds = applications.SelectMany(a => new[] { a.CreditId, a.BillId }).Distinct().ToList();
+        var docs = await db.Set<ApBill>().Where(b => docIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, cancellationToken);
+        foreach (var application in applications)
+        {
+            var credit = docs[application.CreditId];
+            var bill = docs[application.BillId];
+            if (credit.Status != ApBillStatus.Posted || application.Amount > credit.Balance)
+            {
+                throw new ArgumentException($"{ApCredits.Title(credit)} no longer has {application.Amount:N2} of credit to net. Cancel the run and create it again.");
+            }
+
+            if (bill.Status != ApBillStatus.Posted || application.Amount > bill.Balance)
+            {
+                throw new ArgumentException($"Bill {bill.Number} no longer has {application.Amount:N2} open for the credit. Cancel the run and create it again.");
+            }
+
+            application.Status = ApCreditApplicationStatus.Applied;
+            application.AppliedOn = request.PaidOn;
+            credit.AppliedAmount += application.Amount;
+            bill.AppliedAmount += application.Amount;
+            if (bill.Balance <= 0)
+            {
+                IntegrationOutbox.Raise(db, Domain.Integrations.IntegrationEventType.BillPaid, IntegrationEventPayloads.Bill(bill), access.Email, UtcNow);
+            }
+        }
+
         run.Status = PaymentRunStatus.Completed;
         run.CompletedAtUtc = UtcNow;
-        audit.Record(db, PurchasingSupport.RunEntity, run.Id, "Paid", after: new { PaidOn = request.PaidOn, Payments = payments.Count, Total = payments.Sum(p => p.Amount) });
+        audit.Record(db, PurchasingSupport.RunEntity, run.Id, "Paid", after: new { PaidOn = request.PaidOn, Payments = payments.Count, Total = payments.Sum(p => p.Amount), CreditsApplied = applications.Sum(a => a.Amount) });
         await db.SaveChangesAsync(cancellationToken);
         return await RunDtoAsync(db, run.Id, cancellationToken);
     }
@@ -395,14 +473,40 @@ public sealed class ApPaymentService(
     private static async Task<ApPaymentRun> LoadRunAsync(IWorkbenchDbContext db, Guid runId, CancellationToken ct) =>
         await db.Set<ApPaymentRun>().FirstOrDefaultAsync(r => r.Id == runId, ct) ?? throw WorkbenchNotFoundException.For("Payment run", runId);
 
-    /// <summary>Amounts in open (draft or approved) runs not yet paid, per bill.</summary>
+    /// <summary>Amounts in open (draft or approved) runs not yet paid, per bill: payments and the credits netted against it.</summary>
     private static async Task<Dictionary<Guid, decimal>> ScheduledAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> billIds, Guid? exceptRunId, CancellationToken ct)
     {
         var rows = await db.Set<ApPayment>().AsNoTracking()
             .Where(p => billIds.Contains(p.BillId) && p.Status == ApPaymentStatus.Scheduled && p.RunId != exceptRunId)
             .Join(db.Set<ApPaymentRun>().Where(r => OpenRuns.Contains(r.Status)), p => p.RunId, r => r.Id, (p, r) => new { p.BillId, p.Amount })
             .ToListAsync(ct);
-        return rows.GroupBy(r => r.BillId).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+        var credits = await ApCredits.ScheduledByBillAsync(db, billIds, ct);
+        return rows.Select(r => (r.BillId, r.Amount)).Concat(credits.Select(c => (BillId: c.Key, Amount: c.Value)))
+            .GroupBy(r => r.BillId).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+    }
+
+    /// <summary>Schedules the vendor's open credits against a bill in the run, up to <paramref name="amount"/>; returns what was netted.</summary>
+    private decimal NetCredits(IWorkbenchDbContext db, ApPaymentRun run, ApBill bill, decimal amount, List<ApBill> credits, Dictionary<Guid, decimal> left)
+    {
+        var netted = 0m;
+        foreach (var credit in credits)
+        {
+            var take = Math.Min(left[credit.Id], amount - netted);
+            if (take <= 0)
+            {
+                continue;
+            }
+
+            ApCredits.Apply(db, credit, bill, take, run.PaymentDate, access.Email, UtcNow, run.Id, scheduled: true);
+            left[credit.Id] -= take;
+            netted += take;
+            if (netted == amount)
+            {
+                break;
+            }
+        }
+
+        return netted;
     }
 
     /// <summary>Amounts in the bill's currency in open runs not yet paid, per foreign bill.</summary>
@@ -430,11 +534,14 @@ public sealed class ApPaymentService(
         var vendorIds = payments.Select(p => p.VendorId).Distinct().ToList();
         var vendors = await db.Set<Vendor>().AsNoTracking().Where(v => vendorIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, ct);
         var byRun = payments.ToLookup(p => p.RunId);
+        var credits = (await ApCreditService.ApplicationDtosAsync(db, db.Set<ApCreditApplication>().AsNoTracking().Where(a => a.RunId != null && runIds.Contains(a.RunId!.Value)), ct))
+            .ToLookup(a => a.RunId);
         return runs.Select(r => new PaymentRunDto(
             r.Id, r.Number, r.PaymentDate, r.Method.ToContract(), r.Status.ToContract(), r.CreatedBy, r.ApprovedBy, r.ApprovedAtUtc,
             byRun[r.Id].OrderBy(p => vendors[p.VendorId].Code).ThenBy(p => bills[p.BillId].Number).Select(p => new PaymentDto(
                 p.Id, r.Id, r.Number, p.BillId, bills[p.BillId].Number, bills[p.BillId].InvoiceNumber, p.VendorId, vendors[p.VendorId].Code, vendors[p.VendorId].Name,
                 p.Amount, p.Method.ToContract(), p.Status.ToContract(), p.Reference, p.PaidOn, p.JournalEntryId, p.VoidReason,
-                p.CurrencyCode, p.TransactionAmount, p.CurrencyCode is null ? 1m : p.ExchangeRate, p.CashAmount, p.RealizedGainLoss)).ToList())).ToList();
+                p.CurrencyCode, p.TransactionAmount, p.CurrencyCode is null ? 1m : p.ExchangeRate, p.CashAmount, p.RealizedGainLoss)).ToList(),
+            credits[r.Id].ToList())).ToList();
     }
 }

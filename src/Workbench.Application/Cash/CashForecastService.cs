@@ -87,7 +87,7 @@ public sealed class CashForecastService(IWorkbenchDbContextFactory dbFactory, Au
         var inRuns = scheduled.GroupBy(s => s.BillId).ToDictionary(g => g.Key, g => g.Sum(s => s.Amount));
         var bills = await db.Set<ApBill>().AsNoTracking().Where(b => b.Status == ApBillStatus.Posted || b.Status == ApBillStatus.Approved).ToListAsync(cancellationToken);
         var vendors = await db.Set<Vendor>().AsNoTracking().ToDictionaryAsync(v => v.Id, v => v.Name, cancellationToken);
-        foreach (var bill in bills)
+        foreach (var bill in bills.Where(b => !b.IsCredit)) // Credits come off bills when a payment run nets them, so they aren't cash on their own.
         {
             var remaining = bill.Balance - inRuns.GetValueOrDefault(bill.Id);
             if (remaining > 0)
