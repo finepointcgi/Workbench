@@ -7,7 +7,7 @@ using Workbench.Application.Integrations;
 
 namespace Workbench.Application.ProjectAccounting;
 
-public sealed class PeopleService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, ICurrentUser currentUser, TimeProvider clock) : IPeopleService
+public sealed class PeopleService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, ICurrentUser currentUser, TimeProvider clock, Payroll.LaborRateChanges? laborRates = null) : IPeopleService
 {
     public async Task<IReadOnlyList<EmployeeDto>> ListEmployeesAsync(bool includeInactive = false, CancellationToken cancellationToken = default)
     {
@@ -147,6 +147,12 @@ public sealed class PeopleService(IWorkbenchDbContextFactory dbFactory, AuditRec
         db.Set<EmployeeCostRate>().Add(rate);
         audit.Record(db, nameof(EmployeeCostRate), rate.Id, "Created", after: rate.ToDto(), reason: reason);
         await db.SaveChangesAsync(cancellationToken);
+        if (laborRates is not null)
+        {
+            // A back-dated cost rate re-costs labor already posted from that date (adjusting entries, audited).
+            await laborRates.AdjustPostedLaborAsync(employeeId, rate.EffectiveFrom, $"Cost rate effective {rate.EffectiveFrom:yyyy-MM-dd}: {reason}", cancellationToken);
+        }
+
         return rate.ToDto();
     }
 

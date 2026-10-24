@@ -210,15 +210,17 @@ public sealed class PayrollRunTests
     }
 
     [Fact]
-    public async Task Providers_list_paylocity_and_the_coming_soon_adapters()
+    public async Task Providers_list_paylocity_first_and_the_connectable_adapters()
     {
         await using var kit = await PayrollKit.CreateAsync();
         var providers = await kit.Providers.ListProvidersAsync();
         Assert.Equal("paylocity", providers[0].Key);
-        Assert.True(providers[0].IsSupported);
-        Assert.Equal(["adp", "gusto", "paychex"], providers.Where(p => !p.IsSupported).Select(p => p.Key).Order());
-        Assert.All(providers.Where(p => !p.IsSupported), p => Assert.Equal("Coming soon", p.Status));
-        await Assert.ThrowsAsync<ArgumentException>(() => kit.Groups.CreateAsync(new SavePayGroupRequest("ADP", "ADP", PayFrequencyKind.Weekly, "adp", "1", PayrollKit.PeriodStart)));
+        Assert.All(providers, p => Assert.True(p.IsSupported));
+        Assert.Equal(["adp", "gusto", "paychex"], providers.Where(p => p.HasConnectScreen).Select(p => p.Key).Order());
+        Assert.All(providers.Where(p => p.HasConnectScreen), p => Assert.False(p.ApiConfigured));
+        Assert.All(providers.Where(p => p.HasConnectScreen), p => Assert.Equal("Not connected", p.Status));
+        var adp = await kit.Groups.CreateAsync(new SavePayGroupRequest("ADP", "ADP", PayFrequencyKind.Weekly, "adp", "1", PayrollKit.PeriodStart));
+        Assert.Equal("adp", adp.ProviderKey);
 
         var settings = await kit.Providers.SaveSettingsAsync("paylocity", new SavePayrollProviderSettingsRequest([new("REG", "R1"), new("OT", "O1"), new("LV.PTO", "VAC")], false));
         Assert.Equal("VAC", settings.EarningCodes.Single(m => m.Category == "LV.PTO").EarningCode);

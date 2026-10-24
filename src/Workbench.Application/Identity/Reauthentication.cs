@@ -100,6 +100,9 @@ internal sealed class ReauthPayrollProfileService(IPayrollProfileService inner, 
         await guard.RequireRecentAsync(SensitiveActions.PayRateReveal, cancellationToken);
         return await inner.RevealAsync(employeeId, cancellationToken);
     }
+
+    public Task<IReadOnlyList<LaborAdjustmentDto>> ListLaborAdjustmentsAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
+        inner.ListLaborAdjustmentsAsync(employeeId, cancellationToken);
 }
 
 internal sealed class ReauthBankAccountService(IBankAccountService inner, ReauthenticationGuard guard) : IBankAccountService

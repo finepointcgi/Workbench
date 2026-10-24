@@ -28,6 +28,8 @@
     <None Include="Receipts\Samples\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- MS Project XML files for the import and export tests. -->
     <None Include="Scheduling\Samples\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Recorded ADP, Paychex and Gusto API responses for the payroll adapter tests. -->
+    <None Include="Payroll\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

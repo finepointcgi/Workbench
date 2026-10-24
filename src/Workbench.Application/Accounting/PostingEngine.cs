@@ -33,7 +33,7 @@ public sealed record PostingOutcome(int Posted, int Reversed, int AlreadyPosted,
 /// Finance), while <see cref="IPostingService"/> is the Finance-only face for people.
 /// </para>
 /// </summary>
-public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralLedger ledger, ILogger<PostingEngine> logger)
+public sealed partial class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralLedger ledger, ILogger<PostingEngine> logger)
 {
     // ---- Posting one source ----
 
@@ -93,19 +93,20 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
     {
         await using var db = await dbFactory.CreateAsync(ct);
         var active = await ActiveEntriesAsync(db, source, sourceId, ct);
-        if (active.Count == 0)
+        var adjustments = source == JournalSource.Timesheet ? await ActiveLaborAdjustmentEntriesAsync(db, sourceId, null, ct) : [];
+        if (active.Count == 0 && adjustments.Count == 0)
         {
             return PostingOutcome.Nothing;
         }
 
         var context = await PostingContext.LoadAsync(db, redirectClosedPeriods, ct);
-        foreach (var entry in active)
+        foreach (var entry in active.Concat(adjustments))
         {
             await ledger.ReverseAsync(db, entry, context.ReversalDate(entry), reason, ct);
         }
 
         await db.SaveChangesAsync(ct);
-        return new PostingOutcome(0, active.Count, 0, []);
+        return new PostingOutcome(0, active.Count + adjustments.Count, 0, []);
     }
 
     private async Task<PostingOutcome> PostAsync(
@@ -130,6 +131,16 @@ public sealed class PostingEngine(IWorkbenchDbContextFactory dbFactory, GeneralL
         {
             await ledger.ReverseAsync(db, stale, context.ReversalDate(stale), $"Superseded by revision {revision}", ct);
             reversed++;
+        }
+
+        // Rate-change adjustments of an earlier revision go too: the new revision is costed at today's rates.
+        if (source == JournalSource.Timesheet)
+        {
+            foreach (var stale in await ActiveLaborAdjustmentEntriesAsync(db, sourceId, revision, ct))
+            {
+                await ledger.ReverseAsync(db, stale, context.ReversalDate(stale), $"Superseded by revision {revision}", ct);
+                reversed++;
+            }
         }
 
         foreach (var entry in planned.Entries)

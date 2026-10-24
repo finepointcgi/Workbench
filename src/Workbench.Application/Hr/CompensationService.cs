@@ -36,7 +36,8 @@ public sealed class CompensationService(
     IPositionService positions,
     TimeProvider clock,
     ApprovalEngine? approvals = null,
-    SecurityEventLog? securityLog = null) : ICompensationService
+    SecurityEventLog? securityLog = null,
+    LaborRateChanges? laborRates = null) : ICompensationService
 {
     public const string AuditEntityType = "CompensationChange";
     private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock);
@@ -291,9 +292,10 @@ public sealed class CompensationService(
         change.DecidedBy = viewer.Email;
         change.DecidedAtUtc = UtcNow;
         change.DecisionComment = note;
+        var costChanged = false;
         if (approve)
         {
-            await ApplyAsync(db, change, ct);
+            costChanged = await ApplyAsync(db, change, ct);
         }
         else
         {
@@ -307,16 +309,27 @@ public sealed class CompensationService(
             await securityLog.RecordAsync(PayrollSecurityEvents.PayRateChanged, $"employee {employee.EmployeeNumber}", detail: $"Pay rate changed from {change.EffectiveFrom:yyyy-MM-dd} (compensation change)", cancellationToken: ct);
         }
 
+        // A back-dated change re-costs labor already posted from its effective date (adjusting entries, audited).
+        if (costChanged && laborRates is not null)
+        {
+            await laborRates.AdjustPostedLaborAsync(change.EmployeeId, change.EffectiveFrom,
+                $"Pay change effective {change.EffectiveFrom:yyyy-MM-dd} ({Label(change.Reason)}), approved by {change.DecidedBy}", ct);
+        }
+
         await notifications.PublishAsync(change.RequestedBy, HrNotificationKinds.CompensationRequested,
             $"Pay change for {employee.DisplayName} {(approve ? "approved" : "rejected")}", approve ? $"In effect from {change.EffectiveFrom:MMM d, yyyy}" : note, link: "hr/compensation");
         return (await MapAsync(db, [change], ct))[0];
     }
 
-    /// <summary>Appends the pay rate row (storing the derived history first for profiles that had none) and mirrors it on the profile.</summary>
-    private async Task ApplyAsync(IWorkbenchDbContext db, D.CompensationChange change, CancellationToken ct)
+    /// <summary>
+    /// Appends the pay rate row (storing the derived history first for profiles that had none), mirrors it on the profile
+    /// and writes the matching labor cost rate. Returns whether the cost rate changed.
+    /// </summary>
+    private async Task<bool> ApplyAsync(IWorkbenchDbContext db, D.CompensationChange change, CancellationToken ct)
     {
         var employee = await db.Set<Employee>().AsNoTracking().FirstAsync(e => e.Id == change.EmployeeId, ct);
         var profile = await db.Set<EmployeePayProfile>().FirstOrDefaultAsync(p => p.EmployeeId == change.EmployeeId, ct);
+        var initial = profile is null;
         var hr = await db.Set<D.EmployeeHrProfile>().AsNoTracking().FirstOrDefaultAsync(p => p.EmployeeId == change.EmployeeId, ct);
         List<EmployeePayRate> history = [];
         if (profile is null)
@@ -352,6 +365,7 @@ public sealed class CompensationService(
         change.Status = D.CompensationChangeStatus.Applied;
         audit.Record(db, AuditEntityType, change.Id, "Applied", null, new { change.EffectiveFrom, PayType = change.PayType.ToString(), Employee = employee.EmployeeNumber });
         audit.Record(db, PayrollProfileService.AuditEntityType, profile.Id, "Pay rate changed", null, new { rate.EffectiveFrom, PayType = rate.PayType.ToString() }, "Compensation change");
+        return await LaborRateChanges.SyncCostRateAsync(db, rate, initial, ct);
     }
 
     private async Task<D.CompensationChange> BuildAsync(IWorkbenchDbContext db, Employee employee, DateOnly effective, PayTypeKind payType, decimal? salary, decimal? hourly,

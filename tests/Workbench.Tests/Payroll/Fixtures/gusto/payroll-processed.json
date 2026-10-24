@@ -1,0 +1,20 @@
+{
+  "payroll_uuid": "p-oct", "processed": true, "check_date": "2026-10-23",
+  "pay_period": { "start_date": "2026-10-05", "end_date": "2026-10-18" },
+  "employee_compensations": [
+    { "employee_uuid": "e-alex", "first_name": "Alex", "last_name": "Rivera", "excluded": false,
+      "gross_pay": "400.00", "net_pay": "320.00", "check_amount": "345.00",
+      "taxes": [ { "name": "Federal Income Tax", "employer": false, "amount": "35.00" }, { "name": "Social Security", "employer": false, "amount": "24.80" },
+                 { "name": "Medicare", "employer": false, "amount": "0.20" }, { "name": "Social Security", "employer": true, "amount": "24.80" },
+                 { "name": "FUTA", "employer": true, "amount": "5.80" } ],
+      "benefits": [ { "name": "Medical", "employee_deduction": "15.00", "company_contribution": "50.00" } ],
+      "deductions": [ { "name": "Garnishment", "amount": "5.00" } ],
+      "reimbursements": [ { "description": "Mileage", "amount": "25.00" } ] },
+    { "employee_uuid": "e-pat", "first_name": "Pat", "last_name": "Morgan", "excluded": false,
+      "gross_pay": "4000.00", "net_pay": "3050.00",
+      "taxes": [ { "name": "Federal Income Tax", "employer": false, "amount": "800.00" }, { "name": "Social Security", "employer": true, "amount": "306.00" } ],
+      "benefits": [ { "name": "401(k)", "employee_deduction": "150.00", "company_contribution": "400.00" } ],
+      "deductions": [] },
+    { "employee_uuid": "e-gone", "excluded": true, "gross_pay": "0.00", "net_pay": "0.00" }
+  ]
+}

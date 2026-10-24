@@ -1,0 +1,1 @@
+{ "uuid": "j-new", "version": "jv1", "hire_date": "2024-01-01", "compensations": [ { "uuid": "comp-new", "version": "cv1", "rate": "0.00", "payment_unit": "Hour" } ] }

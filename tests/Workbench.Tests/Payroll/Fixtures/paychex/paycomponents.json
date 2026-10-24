@@ -1,0 +1,5 @@
+{ "content": [
+  { "componentId": "2000051", "name": "Hourly", "classificationType": "EARNING" },
+  { "componentId": "2000052", "name": "Overtime", "classificationType": "EARNING" },
+  { "componentId": "2000060", "name": "PTO", "classificationType": "EARNING" }
+] }

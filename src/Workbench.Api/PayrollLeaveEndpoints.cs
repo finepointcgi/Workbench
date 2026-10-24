@@ -24,10 +24,15 @@ internal static class PayrollLeaveEndpoints
         p.MapGet("/profiles/{employeeId:guid}", (Guid employeeId, IPayrollProfileService s, CancellationToken ct) => s.GetAsync(employeeId, ct));
         p.MapPut("/profiles/{employeeId:guid}", (Guid employeeId, SavePayProfileRequest r, IPayrollProfileService s, CancellationToken ct) => s.SaveAsync(employeeId, r, ct));
         p.MapPost("/profiles/{employeeId:guid}/reveal", (Guid employeeId, IPayrollProfileService s, CancellationToken ct) => s.RevealAsync(employeeId, ct));
+        p.MapGet("/profiles/{employeeId:guid}/labor-adjustments", (Guid employeeId, IPayrollProfileService s, CancellationToken ct) => s.ListLaborAdjustmentsAsync(employeeId, ct));
 
         p.MapGet("/providers", (IPayrollProviderService s, CancellationToken ct) => s.ListProvidersAsync(ct));
         p.MapGet("/providers/{key}/settings", (string key, IPayrollProviderService s, CancellationToken ct) => s.GetSettingsAsync(key, ct));
         p.MapPut("/providers/{key}/settings", (string key, SavePayrollProviderSettingsRequest r, IPayrollProviderService s, CancellationToken ct) => s.SaveSettingsAsync(key, r, ct));
+        p.MapGet("/providers/{key}/connection", (string key, IPayrollProviderService s, CancellationToken ct) => s.GetConnectionAsync(key, ct));
+        p.MapPut("/providers/{key}/connection", (string key, SavePayrollConnectionRequest r, IPayrollProviderService s, CancellationToken ct) => s.SaveConnectionAsync(key, r, ct));
+        p.MapPost("/providers/{key}/connection/test", (string key, IPayrollProviderService s, CancellationToken ct) => s.TestConnectionAsync(key, ct));
+        p.MapDelete("/providers/{key}/connection", (string key, IPayrollProviderService s, CancellationToken ct) => s.DisconnectAsync(key, ct));
 
         p.MapGet("/runs", (Guid? payGroupId, IPayrollRunService s, CancellationToken ct) => s.ListAsync(payGroupId, ct));
         p.MapGet("/runs/{id:guid}", (Guid id, IPayrollRunService s, CancellationToken ct) => s.GetAsync(id, ct));
@@ -35,6 +40,8 @@ internal static class PayrollLeaveEndpoints
         p.MapGet("/runs/{id:guid}/hours", (Guid id, IPayrollRunService s, CancellationToken ct) => s.PreviewHoursAsync(id, ct));
         p.MapPost("/runs/{id:guid}/export", (Guid id, ExportHoursRequest r, IPayrollRunService s, CancellationToken ct) => s.ExportHoursAsync(id, r, ct));
         p.MapPost("/runs/{id:guid}/register", (Guid id, ImportRegisterRequest r, IPayrollRunService s, CancellationToken ct) => s.ImportRegisterAsync(id, r, ct));
+        p.MapPost("/runs/{id:guid}/send-hours", (Guid id, ExportHoursRequest r, IPayrollRunService s, CancellationToken ct) => s.SendHoursToProviderAsync(id, r, ct));
+        p.MapPost("/runs/{id:guid}/register/from-provider", (Guid id, IPayrollRunService s, CancellationToken ct) => s.ImportRegisterFromProviderAsync(id, ct));
         p.MapGet("/runs/{id:guid}/register", (Guid id, IPayrollRunService s, CancellationToken ct) => s.GetRegisterAsync(id, ct));
         p.MapGet("/runs/{id:guid}/reconciliation", (Guid id, IPayrollRunService s, CancellationToken ct) => s.GetReconciliationAsync(id, ct));
         p.MapPost("/runs/{id:guid}/post", (Guid id, IPayrollRunService s, CancellationToken ct) => s.PostAsync(id, ct));

@@ -1,0 +1,4 @@
+{ "payStatement": { "payDate": "2026-10-23", "grossPayAmount": { "amountValue": 400.00 }, "netPayAmount": { "amountValue": 320.00 },
+  "statutoryDeductions": [ { "statutoryDeductionTypeCode": { "codeValue": "FIT" }, "deductionAmount": { "amountValue": -35.00 } },
+                           { "statutoryDeductionTypeCode": { "codeValue": "SS" }, "deductionAmount": { "amountValue": -25.00 } } ],
+  "deductions": [ { "deductionCode": { "codeValue": "MED" }, "deductionAmount": { "amountValue": -20.00 } } ] } }

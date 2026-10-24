@@ -74,18 +74,6 @@ public sealed class PaylocityFormatTests
     }
 
     [Fact]
-    public async Task Coming_soon_providers_say_so()
-    {
-        foreach (IPayrollProvider provider in new ComingSoonPayrollProvider[] { new AdpPayrollProvider(), new PaychexPayrollProvider(), new GustoPayrollProvider() })
-        {
-            Assert.False(provider.IsSupported);
-            Assert.Contains("coming soon", Assert.Throws<NotSupportedException>(() => provider.ParseRegister("x")).Message);
-            Assert.Throws<NotSupportedException>(() => provider.ExportHours(new PayrollHoursExport("C", "G", default, default, default, [])));
-            await Assert.ThrowsAsync<NotSupportedException>(() => provider.SyncEmployeesAsync("C", [], CancellationToken.None));
-        }
-    }
-
-    [Fact]
     public async Task Employee_sync_goes_through_the_api_client_only_when_configured()
     {
         var fake = new FakePaylocityApi();

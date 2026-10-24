@@ -1,5 +1,6 @@
 @page "/payroll/runs/{RunId:guid}"
 @inject IPayrollRunService Runs
+@inject IPayrollProviderService Providers
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -90,9 +91,24 @@ else
             {
                 <MudCheckBox T="bool" @bind-Value="_acknowledge" Label="Export anyway: flagged employees' unapproved hours are left out" Color="Color.Warning" data-testid="acknowledge" />
             }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="export">
-                @(_run.Status == PayrollRunState.Exported ? "Export again" : "Export Paylocity hours file")
-            </MudButton>
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                @if (CanUseApi(_provider?.SupportsHoursApi))
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SendAsync" Disabled="_busy" data-testid="send-hours">
+                        Send hours to @ProviderName
+                    </MudButton>
+                }
+                <MudButton Variant="@(CanUseApi(_provider?.SupportsHoursApi) ? Variant.Outlined : Variant.Filled)" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="ExportAsync" Disabled="_busy" data-testid="export">
+                    @(_run.Status == PayrollRunState.Exported ? "Export again" : $"Download {ProviderName} hours file")
+                </MudButton>
+            </MudStack>
+            @if (_provider is { HasConnectScreen: true, ApiConfigured: false })
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+                    <MudLink Href="@($"payroll/providers/{_provider.Key}")">Connect @ProviderName</MudLink> to send hours and read payroll results through its API.
+                </MudText>
+            }
         }
     </Step>
 
@@ -104,7 +120,13 @@ else
         }
         @if (_run.Status is PayrollRunState.Exported or PayrollRunState.RegisterImported)
         {
-            <MudText Class="mud-text-secondary mb-2">Export the payroll register from Paylocity as CSV, then choose the file or paste its contents.</MudText>
+            @if (CanUseApi(_provider?.SupportsRegisterApi))
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudDownload" OnClick="ImportFromProviderAsync" Disabled="_busy"
+                           Class="mb-3" data-testid="import-from-provider">Import payroll results from @ProviderName</MudButton>
+                <MudText Class="mud-text-secondary mb-2">Or import the register file:</MudText>
+            }
+            <MudText Class="mud-text-secondary mb-2">Export the payroll register from @ProviderName as CSV, then choose the file or paste its contents.</MudText>
             <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
                 <MudFileUpload T="IBrowserFile" Accept=".csv,text/csv" FilesChanged="FileChosenAsync" Class="mt-0">
                     <CustomContent>
@@ -195,6 +217,7 @@ else
     [Parameter] public Guid RunId { get; set; }
 
     private PayrollRunDto? _run;
+    private PayrollProviderDto? _provider;
     private HoursPreviewDto? _hours;
     private IReadOnlyList<RegisterLineDto> _register = [];
     private PayrollReconciliationDto? _recon;
@@ -223,6 +246,15 @@ else
     private async Task LoadAsync()
     {
         _run = await Runs.GetAsync(RunId);
+        try
+        {
+            _provider ??= (await Providers.ListProvidersAsync()).FirstOrDefault(p => p.Key == _run.ProviderKey);
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            // Running payroll doesn't need provider setup rights: the file buttons still work.
+            _provider = null;
+        }
         _hours = await Runs.PreviewHoursAsync(RunId);
         _register = await Runs.GetRegisterAsync(RunId);
         _recon = _register.Count > 0 ? await Runs.GetReconciliationAsync(RunId) : null;
@@ -234,7 +266,30 @@ else
         {
             var file = await Runs.ExportHoursAsync(RunId, new ExportHoursRequest(_acknowledge));
             await PayrollFormat.DownloadAsync(JS, file.FileName, file.ContentType, file.Content);
-            Snackbar.Add($"Exported {file.FileName}. Import it into Paylocity, run payroll there, then import the register.", Severity.Success);
+            Snackbar.Add($"Exported {file.FileName}. Import it into {ProviderName}, run payroll there, then import the register.", Severity.Success);
+        });
+    }
+
+    private string ProviderName => _provider?.Name ?? (_run?.ProviderKey == "paylocity" ? "Paylocity" : "the provider");
+
+    private bool CanUseApi(bool? supported) => supported == true && _provider?.ApiConfigured == true;
+
+    private async Task SendAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var result = await Runs.SendHoursToProviderAsync(RunId, new ExportHoursRequest(_acknowledge));
+            Snackbar.Add(result.Message, Severity.Success);
+        });
+    }
+
+    private async Task ImportFromProviderAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var result = await Runs.ImportRegisterFromProviderAsync(RunId);
+            _importWarnings = result.Warnings;
+            Snackbar.Add(result.AlreadyImported ? "Those results were already imported." : $"Imported {result.Lines.Count} check(s) from {ProviderName}.", Severity.Success);
         });
     }
 

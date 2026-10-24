@@ -1,0 +1,1 @@
+{ "email": "owner@acme.example", "roles": { "payroll_admin": { "companies": [ { "uuid": "c0a1-company", "name": "Acme Federal LLC" } ] } } }

@@ -118,7 +118,7 @@ else
         </MudTabPanel>
 
         <MudTabPanel Text="Employee profiles" data-testid="tab-profiles">
-            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">Pay rates are what employees are paid, not the cost rates projects are charged. They're masked; revealing one is recorded in the security log.</MudAlert>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">Pay rates are what employees are paid; a change also sets the labor cost rate from the same date, and a back-dated change adjusts labor already posted. Rates are masked; revealing one is recorded in the security log.</MudAlert>
             <MudTable T="PayProfileDto" Items="_profiles" Dense="true" data-testid="profiles">
                 <HeaderContent>
                     <MudTh>Employee</MudTh><MudTh>Exempt</MudTh><MudTh>Pay group</MudTh><MudTh>Provider id</MudTh><MudTh>Pay type</MudTh><MudTh>Pay rate</MudTh><MudTh></MudTh>
@@ -154,9 +154,21 @@ else
                 @foreach (var p in _providers)
                 {
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Outlined="true" Class="pa-4" data-provider="@p.Key">
+                        <MudPaper Outlined="true" Class="pa-4" data-provider="@p.Key" Style="height:100%">
                             <MudText Typo="Typo.subtitle1"><b>@p.Name</b></MudText>
-                            <MudChip T="string" Size="Size.Small" Color="@(p.IsSupported ? Color.Success : Color.Default)" Variant="Variant.Outlined" Class="ml-0">@p.Status</MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="@(p.ApiConfigured ? Color.Success : Color.Default)" Variant="Variant.Outlined" Class="ml-0">@p.Status</MudChip>
+                            @if (p.HasConnectScreen && !p.ApiConfigured)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Hours and registers still work by file.</MudText>
+                            }
+                            <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                                @if (p.HasConnectScreen)
+                                {
+                                    <MudButton Size="Size.Small" Variant="@(p.ApiConfigured ? Variant.Text : Variant.Outlined)" Color="Color.Primary" Href="@($"payroll/providers/{p.Key}")"
+                                               data-testid="@($"connect-{p.Key}")">@(p.ApiConfigured ? "Manage connection" : "Connect")</MudButton>
+                                }
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SelectSettingsAsync(p.Key)" data-testid="@($"codes-{p.Key}")">Earning codes</MudButton>
+                            </MudStack>
                         </MudPaper>
                     </MudItem>
                 }
@@ -164,8 +176,8 @@ else
             @if (_settings is not null)
             {
                 <MudPaper Outlined="true" Class="pa-4 mt-4" Style="max-width:720px">
-                    <MudText Typo="Typo.h6" HtmlTag="h2">Paylocity earning codes</MudText>
-                    <MudText Class="mud-text-secondary mb-3">REG and OT, plus each leave charge code, map to a Paylocity earning (Det) code in the hours import.</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="h2" data-testid="codes-title">@SettingsName earning codes</MudText>
+                    <MudText Class="mud-text-secondary mb-3">REG and OT, plus each leave charge code, map to the @SettingsName earning code (or pay component) hours are sent under.</MudText>
                     @foreach (var row in _mappings)
                     {
                         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-1">
@@ -176,11 +188,14 @@ else
                         </MudStack>
                     }
                     <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="() => _mappings.Add(new MappingRow())">Add mapping</MudButton>
-                    <MudSwitch T="bool" @bind-Value="_exportSalariedRegular" Label="Export salaried employees' regular hours (off: Paylocity pays their salary)" Color="Color.Primary" Class="mt-2" />
+                    <MudSwitch T="bool" @bind-Value="_exportSalariedRegular" Label="@($"Export salaried employees' regular hours (off: {SettingsName} pays their salary)")" Color="Color.Primary" Class="mt-2" />
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="SaveSettingsAsync" Disabled="_busy">Save earning codes</MudButton>
                 </MudPaper>
             }
-            <PaylocityLayoutEditor />
+            @if (_settingsKey == "paylocity")
+            {
+                <PaylocityLayoutEditor />
+            }
         </MudTabPanel>
     </MudTabs>
 }
@@ -193,6 +208,7 @@ else
     private IReadOnlyList<PayrollProviderDto> _providers = [];
     private readonly Dictionary<Guid, PayProfileDto> _revealed = [];
     private PayrollProviderSettingsDto? _settings;
+    private string _settingsKey = "paylocity";
     private List<MappingRow> _mappings = [];
     private bool _exportSalariedRegular;
     private Guid? _groupId;
@@ -243,9 +259,22 @@ else
         _runs = await Runs.ListAsync();
         _profiles = await Profiles.ListAsync();
         _providers = await Providers.ListProvidersAsync();
-        _settings = await Providers.GetSettingsAsync("paylocity");
+        await LoadSettingsAsync();
+    }
+
+    private string SettingsName => _providers.FirstOrDefault(p => p.Key == _settingsKey)?.Name ?? _settingsKey;
+
+    private async Task LoadSettingsAsync()
+    {
+        _settings = await Providers.GetSettingsAsync(_settingsKey);
         _mappings = _settings.EarningCodes.Select(m => new MappingRow { Category = m.Category, Code = m.EarningCode }).ToList();
         _exportSalariedRegular = _settings.ExportSalariedRegularHours;
+    }
+
+    private async Task SelectSettingsAsync(string key)
+    {
+        _settingsKey = key;
+        await RunAsync(LoadSettingsAsync);
     }
 
     private async Task GroupChangedAsync(Guid? id)
@@ -295,7 +324,9 @@ else
         {
             var result = await Providers.SyncEmployeesAsync(group.Id, dryRun: true);
             Snackbar.Add($"Dry run: {string.Join(", ", result.Items.GroupBy(i => i.Action).Select(g => $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}"))}. "
-                + (_providers.Any(p => p.Key == group.ProviderKey && p.ApiConfigured) ? "" : "Configure Payroll:Paylocity API credentials to sync."), Severity.Info);
+                + (_providers.FirstOrDefault(p => p.Key == group.ProviderKey) is { ApiConfigured: false } p
+                    ? p.HasConnectScreen ? $"Connect {p.Name} under Providers to sync." : "Configure Payroll:Paylocity API credentials to sync."
+                    : ""), Severity.Info);
         });
     }
 
@@ -330,7 +361,7 @@ else
     {
         await RunAsync(async () =>
         {
-            _settings = await Providers.SaveSettingsAsync("paylocity", new SavePayrollProviderSettingsRequest(
+            _settings = await Providers.SaveSettingsAsync(_settingsKey, new SavePayrollProviderSettingsRequest(
                 _mappings.Where(m => m.Category.Length > 0).Select(m => new EarningCodeMapping(m.Category, m.Code)).ToList(), _exportSalariedRegular));
             Snackbar.Add("Earning codes saved.", Severity.Success);
         });

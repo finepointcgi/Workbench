@@ -77,11 +77,14 @@ public sealed class PayrollRunService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var run = await LoadAsync(db, runId, cancellationToken);
-        var data = await PayrollData.LoadAsync(db, run, cancellationToken);
+        var data = await PayrollData.LoadAsync(db, run, cancellationToken, providers);
         return new HoursPreviewDto(run.Id, data.Period.Start, data.Period.End, data.Employees.Select(e => e.Hours).ToList());
     }
 
-    public async Task<PayrollFileDto> ExportHoursAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default)
+    public Task<PayrollFileDto> ExportHoursAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default) =>
+        ExportHoursCoreAsync(runId, request, null, cancellationToken);
+
+    private async Task<PayrollFileDto> ExportHoursCoreAsync(Guid runId, ExportHoursRequest request, Action<PayrollHoursExport>? exported, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var run = await db.Set<PayrollRun>().Include(r => r.ExportLines).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken)
@@ -93,7 +96,7 @@ public sealed class PayrollRunService(
                 : "The register is already imported, so the hours can't be exported again. Void the run to start over.");
         }
 
-        var data = await PayrollData.LoadAsync(db, run, cancellationToken);
+        var data = await PayrollData.LoadAsync(db, run, cancellationToken, providers);
         var flagged = data.Employees.Where(e => e.Hours.Issues.Count > 0).ToList();
         if (flagged.Count > 0 && request is not { AcknowledgeIssues: true })
         {
@@ -114,7 +117,7 @@ public sealed class PayrollRunService(
                 }
 
                 var code = EarningCodes.Resolve(data.EarningCodes, category).Code;
-                lines.Add((e.Employee.Id, category, code, hours, new PayrollHoursLine(id, e.Employee.DisplayName, code, hours, e.CostCenter)));
+                lines.Add((e.Employee.Id, category, code, hours, new PayrollHoursLine(id, e.Employee.DisplayName, code, hours, e.CostCenter, category)));
             }
 
             if (e.PayType == PayType.Hourly || data.Settings?.ExportSalariedRegularHours == true)
@@ -129,8 +132,9 @@ public sealed class PayrollRunService(
             }
         }
 
-        var file = await provider.ExportHoursAsync(db, new PayrollHoursExport(data.Group.CompanyCode, data.Group.Code, data.Period.Start, data.Period.End, data.Period.CheckDate,
-            lines.Select(l => l.Line).ToList()), cancellationToken);
+        var export = new PayrollHoursExport(data.Group.CompanyCode, data.Group.Code, data.Period.Start, data.Period.End, data.Period.CheckDate, lines.Select(l => l.Line).ToList());
+        var file = await provider.ExportHoursAsync(db, export, cancellationToken);
+        exported?.Invoke(export);
         db.Set<PayrollExportLine>().RemoveRange(run.ExportLines);
         run.ExportLines.Clear();
         foreach (var l in lines)
@@ -175,6 +179,96 @@ public sealed class PayrollRunService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var run = await LoadTrackedAsync(db, runId, cancellationToken);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Content.ReplaceLineEndings("\n").Trim())));
+        var fileName = string.IsNullOrWhiteSpace(request.FileName) ? "register.csv" : Path.GetFileName(request.FileName.Trim());
+        return await ImportAsync(db, run, fileName, hash, group => providers.Get(group.ProviderKey).ParseRegisterAsync(db, request.Content, cancellationToken), cancellationToken);
+    }
+
+    public async Task<RegisterImportResultDto> ImportRegisterFromProviderAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var run = await LoadTrackedAsync(db, runId, cancellationToken);
+        var group = await db.Set<PayGroup>().AsNoTracking().FirstAsync(g => g.Id == run.PayGroupId, cancellationToken);
+        var period = await db.Set<PayPeriod>().AsNoTracking().FirstAsync(p => p.Id == run.PayPeriodId, cancellationToken);
+        var provider = providers.Get(group.ProviderKey);
+        if (!provider.SupportsRegisterApi)
+        {
+            throw new NotSupportedException($"{provider.Name} payroll results come from the register file. Export it from {provider.Name} and import it here.");
+        }
+
+        if (run.Status is not (PayrollRunStatus.Exported or PayrollRunStatus.RegisterImported))
+        {
+            throw new ArgumentException(run.Status switch
+            {
+                PayrollRunStatus.Draft => "Send or export the hours first: the register must pay the approved hours that were sent to the provider.",
+                PayrollRunStatus.Posted => "This run is posted. Void it to import a corrected register.",
+                _ => "This run is voided. Start a new run for the period.",
+            });
+        }
+
+        var ids = await db.Set<EmployeePayProfile>().AsNoTracking().Where(p => p.PayGroupId == group.Id && p.ProviderEmployeeId != null)
+            .Select(p => p.ProviderEmployeeId!).ToListAsync(cancellationToken);
+        ParsedPayrollRegister parsed;
+        try
+        {
+            parsed = await provider.FetchRegisterAsync(new PayrollRegisterQuery(group.CompanyCode, period.Start, period.End, period.CheckDate, ids), cancellationToken);
+        }
+        catch (PayrollProviderApiException ex)
+        {
+            throw new ArgumentException(ex.Message);
+        }
+
+        // The same results fetched again hash the same, so a second import returns the register already in use.
+        var canonical = string.Join("\n", parsed.Rows.OrderBy(r => r.ProviderEmployeeId, StringComparer.Ordinal).ThenBy(r => r.CheckDate)
+            .Select(r => $"{r.ProviderEmployeeId}|{r.CheckDate:yyyy-MM-dd}|{r.GrossWages}|{r.EmployeeTaxes}|{r.EmployerTaxes}|{r.Deductions}|{r.EmployerBenefits}|{r.NetPay}"));
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{provider.Key}-api\n{canonical}")));
+        return await ImportAsync(db, run, $"{provider.Key}-api-{period.CheckDate:yyyyMMdd}.json", hash, _ => Task.FromResult(parsed), cancellationToken);
+    }
+
+    public async Task<ProviderHoursResultDto> SendHoursToProviderAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default)
+    {
+        PayrollHoursExport? sent = null;
+        IPayrollProvider? provider = null;
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            var run = await LoadAsync(db, runId, cancellationToken);
+            var group = await db.Set<PayGroup>().AsNoTracking().FirstAsync(g => g.Id == run.PayGroupId, cancellationToken);
+            provider = providers.Get(group.ProviderKey);
+            if (!provider.SupportsHoursApi)
+            {
+                throw new NotSupportedException($"{provider.Name} takes hours as an import file only. Download the file and import it in {provider.Name}.");
+            }
+
+            if (!await provider.IsConnectedAsync(cancellationToken))
+            {
+                throw new ArgumentException($"{provider.Name} isn't connected. Connect it under Payroll › Providers, or download the hours file instead.");
+            }
+        }
+
+        // Export first: the run keeps the exact file as evidence of what was sent, whichever way it went.
+        var file = await ExportHoursCoreAsync(runId, request, e => sent = e, cancellationToken);
+        PayrollHoursSubmission submission;
+        try
+        {
+            submission = await provider.SendHoursAsync(sent!, cancellationToken);
+        }
+        catch (PayrollProviderApiException ex)
+        {
+            throw new ArgumentException($"The hours were exported but {provider.Name} didn't take them: {ex.Message} You can import the downloaded file in {provider.Name} instead.");
+        }
+
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            audit.Record(db, AuditEntityType, runId, "Hours sent to provider", null,
+                new { Provider = provider.Key, submission.Employees, submission.Lines });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return new ProviderHoursResultDto(file, submission.Employees, submission.Lines, submission.Message);
+    }
+
+    private async Task<RegisterImportResultDto> ImportAsync(IWorkbenchDbContext db, PayrollRun run, string fileName, string hash,
+        Func<PayGroup, Task<ParsedPayrollRegister>> parse, CancellationToken cancellationToken)
+    {
         if (run.RegisterId is { } currentId
             && await db.Set<PayrollRegister>().AsNoTracking().Include(r => r.Lines).FirstOrDefaultAsync(r => r.Id == currentId, cancellationToken) is { } current
             && current.ContentHash == hash && current.Status == PayrollRegisterStatus.Active)
@@ -194,7 +288,7 @@ public sealed class PayrollRunService(
 
         var group = await db.Set<PayGroup>().AsNoTracking().FirstAsync(g => g.Id == run.PayGroupId, cancellationToken);
         var period = await db.Set<PayPeriod>().AsNoTracking().FirstAsync(p => p.Id == run.PayPeriodId, cancellationToken);
-        var parsed = await providers.Get(group.ProviderKey).ParseRegisterAsync(db, request.Content, cancellationToken);
+        var parsed = await parse(group);
         var warnings = parsed.Warnings.ToList();
         var profiles = await db.Set<EmployeePayProfile>().AsNoTracking().Where(p => p.PayGroupId == group.Id && p.ProviderEmployeeId != null).ToListAsync(cancellationToken);
         var byProviderId = profiles.ToDictionary(p => p.ProviderEmployeeId!, p => p.EmployeeId, StringComparer.OrdinalIgnoreCase);
@@ -203,7 +297,7 @@ public sealed class PayrollRunService(
         var register = new PayrollRegister
         {
             RunId = run.Id,
-            FileName = string.IsNullOrWhiteSpace(request.FileName) ? "register.csv" : Path.GetFileName(request.FileName.Trim()),
+            FileName = fileName,
             ContentHash = hash,
             ImportedBy = audit.Actor,
             ImportedAtUtc = UtcNow,
@@ -408,7 +502,7 @@ public sealed class PayrollRunService(
         var lines = run.RegisterId is { } registerId
             ? await db.Set<PayrollRegisterLine>().AsNoTracking().Where(l => l.RegisterId == registerId).ToListAsync(ct)
             : [];
-        var data = await PayrollData.LoadAsync(db, run, ct);
+        var data = await PayrollData.LoadAsync(db, run, ct, providers);
         var perYear = PayCalendar.PeriodsPerYear(data.Group.Frequency);
         var rows = new List<ReconciliationRowDto>();
         var totals = new List<EmployeeTotals>();
@@ -431,10 +525,13 @@ public sealed class PayrollRunService(
 
             foreach (var change in e.RateChanges)
             {
-                notes.Add($"Pay rate changed {change:MMM d}, within the period: reconciled at the rate in effect on {data.Period.End:MMM d}.");
+                notes.Add($"Pay rate changed {change:MMM d}, within the period: hours are reconciled at the rate in effect on their work date"
+                    + (e.PayType == PayType.Salaried ? ", the salary by working days." : "."));
             }
 
-            var x = PayrollReconciliation.Explain(new PayBasis(e.PayType, e.Rate?.AnnualSalary, e.Rate?.HourlyRate, perYear), e.Split, gross);
+            var x = e.RateChanges.Count == 0
+                ? PayrollReconciliation.Explain(new PayBasis(e.PayType, e.Rate?.AnnualSalary, e.Rate?.HourlyRate, perYear), e.Split, gross)
+                : PayrollReconciliation.Explain(RateParts(e, data.Period, perYear), gross);
             if (lines.Count == 0)
             {
                 x = x with { Unexplained = 0 };
@@ -462,6 +559,27 @@ public sealed class PayrollRunService(
         var dto = new PayrollReconciliationDto(run.Id, rows, total, lines.Sum(l => l.EmployerTaxes), lines.Sum(l => l.EmployerBenefits), lines.Sum(l => l.NetPay),
             lines.Sum(l => l.EmployeeTaxes + l.Deductions));
         return (dto, totals, lines);
+    }
+
+    /// <summary>The period split at each rate change: each part's hours (overtime still counted by whole workweek) and pay basis.</summary>
+    private static List<(PayBasis Pay, HoursSplit Hours)> RateParts(PayrollData.EmployeePayroll e, PayPeriod period, int perYear)
+    {
+        var bounds = new List<DateOnly> { period.Start };
+        bounds.AddRange(e.RateChanges.Where(d => d > period.Start && d <= period.End).Order());
+        var periodDays = Math.Max(1, PayrollReconciliation.WorkingDays(period.Start, period.End));
+        var parts = new List<(PayBasis, HoursSplit)>();
+        for (var i = 0; i < bounds.Count; i++)
+        {
+            var from = bounds[i];
+            var to = i + 1 < bounds.Count ? bounds[i + 1].AddDays(-1) : period.End;
+            var rate = PayRates.InEffect(e.PayRates, from);
+            var payType = rate?.PayType ?? e.Profile.PayType;
+            var split = PayrollHours.Split(!e.Employee.IsExempt, from, to, e.Entries);
+            var share = (decimal)PayrollReconciliation.WorkingDays(from, to) / periodDays;
+            parts.Add((new PayBasis(payType, rate?.AnnualSalary, rate?.HourlyRate, perYear, share), split));
+        }
+
+        return parts;
     }
 
     // ---- Mapping and loading ----
@@ -512,15 +630,21 @@ internal sealed class PayrollData
     internal sealed record EmployeePayroll(Employee Employee, EmployeePayProfile Profile, EmployeePayRate? Rate, IReadOnlyList<DateOnly> RateChanges,
         string? CostCenter, HoursSplit Split, EmployeeHoursDto Hours, decimal AccruedCost)
     {
+        /// <summary>The employee's pay rate history (for a period whose rate changed).</summary>
+        public IReadOnlyList<EmployeePayRate> PayRates { get; init; } = [];
+
+        /// <summary>Approved hours over the whole workweeks around the period.</summary>
+        public IReadOnlyList<ApprovedHours> Entries { get; init; } = [];
+
         public PayType PayType => Rate?.PayType ?? Profile.PayType;
     }
 
-    public static async Task<PayrollData> LoadAsync(IWorkbenchDbContext db, PayrollRun run, CancellationToken ct)
+    public static async Task<PayrollData> LoadAsync(IWorkbenchDbContext db, PayrollRun run, CancellationToken ct, PayrollProviders? providers = null)
     {
         var group = await db.Set<PayGroup>().AsNoTracking().FirstAsync(g => g.Id == run.PayGroupId, ct);
         var period = await db.Set<PayPeriod>().AsNoTracking().FirstAsync(p => p.Id == run.PayPeriodId, ct);
         var settings = await db.Set<PayrollProviderSetting>().AsNoTracking().FirstOrDefaultAsync(s => s.ProviderKey == group.ProviderKey, ct);
-        var mappings = Payroll.EarningCodes.Parse(settings?.EarningCodes);
+        var mappings = Payroll.EarningCodes.Parse(settings?.EarningCodes, providers?.Find(group.ProviderKey)?.DefaultEarningCodes);
         var profiles = await db.Set<EmployeePayProfile>().AsNoTracking().Where(p => p.PayGroupId == group.Id).ToListAsync(ct);
         var history = await PayRates.HistoryAsync(db, profiles, ct);
         var ids = profiles.Select(p => p.EmployeeId).ToList();
@@ -552,8 +676,8 @@ internal sealed class PayrollData
             var rate = PayRates.InEffect(payRates, period.End);
             var payType = rate?.PayType ?? profile.PayType;
             var mine = entries.Where(e => e.EmployeeId == employee.Id).ToList();
-            var split = PayrollHours.Split(!employee.IsExempt, period.Start, period.End,
-                mine.Select(e => new ApprovedHours(e.WorkDate, e.Code, e.Kind == ChargeKind.Leave, e.Hours)));
+            var approved = mine.Select(e => new ApprovedHours(e.WorkDate, e.Code, e.Kind == ChargeKind.Leave, e.Hours)).ToList();
+            var split = PayrollHours.Split(!employee.IsExempt, period.Start, period.End, approved);
 
             // Labor the GL accrued (credited to 2100) for these hours: hours × the cost rate on the work date, per entry, by the
             // labor cost method (an exempt employee's uncompensated hours under total time accounting).
@@ -611,7 +735,11 @@ internal sealed class PayrollData
             var hoursDto = new EmployeeHoursDto(employee.Id, employee.DisplayName, profile.ProviderEmployeeId, employee.IsExempt, (PayTypeKind)(int)payType,
                 split.Regular, split.Overtime, leave, issues);
             var changes = PayRates.ChangesWithin(payRates, period.Start, period.End).Select(r => r.EffectiveFrom).Distinct().ToList();
-            result.Add(new EmployeePayroll(employee, profile, rate, changes, employee.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null, split, hoursDto, accrued));
+            result.Add(new EmployeePayroll(employee, profile, rate, changes, employee.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null, split, hoursDto, accrued)
+            {
+                PayRates = payRates,
+                Entries = approved,
+            });
         }
 
         return new PayrollData

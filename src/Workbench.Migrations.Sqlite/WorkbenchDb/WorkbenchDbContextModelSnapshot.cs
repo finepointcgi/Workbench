@@ -12961,6 +12961,58 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("EmployeePayRate");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Payroll.LaborCostAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("RateEffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Redirected")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TimesheetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TimesheetRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WorkPeriods")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("TimesheetId", "TimesheetRevision");
+
+                    b.ToTable("LaborCostAdjustment");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.PayGroup", b =>
                 {
                     b.Property<Guid>("Id")
@@ -13112,6 +13164,59 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("PayrollFileLayout");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollProviderConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ConnectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConnectedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastCheckMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("LastCheckSucceeded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastCheckedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedCredentials")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique();
+
+                    b.ToTable("PayrollProviderConnection");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollProviderSetting", b =>
@@ -24117,6 +24222,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
                         .WithMany()
                         .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.LaborCostAdjustment", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Timesheet", null)
+                        .WithMany()
+                        .HasForeignKey("TimesheetId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

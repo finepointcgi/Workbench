@@ -1,0 +1,12 @@
+{
+  "payroll_uuid": "p-oct",
+  "employee_compensations": [
+    { "employee_uuid": "e-alex", "version": "v-alex-1", "excluded": false,
+      "hourly_compensations": [
+        { "name": "Regular Hours", "job_uuid": "j-alex", "compensation_multiplier": 1, "hours": "0.000" },
+        { "name": "Overtime", "job_uuid": "j-alex", "compensation_multiplier": 1.5, "hours": "0.000" }
+      ],
+      "paid_time_off": [ { "name": "Vacation Hours", "hours": "0.000" }, { "name": "Holiday Hours", "hours": "0.000" } ] },
+    { "employee_uuid": "e-pat", "version": "v-pat-1", "excluded": false, "hourly_compensations": [], "paid_time_off": [ { "name": "Vacation Hours", "hours": "0.000" } ] }
+  ]
+}

@@ -43,6 +43,9 @@ public sealed class HttpPayrollProfileService(HttpClient http) : IPayrollProfile
 
     public async Task<PayProfileDto> RevealAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
         await (await http.PostAsync($"{Base}/{employeeId}/reveal", null, cancellationToken)).ReadAsync<PayProfileDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<LaborAdjustmentDto>> ListLaborAdjustmentsAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{employeeId}/labor-adjustments", cancellationToken)).ReadAsync<List<LaborAdjustmentDto>>(cancellationToken);
 }
 
 public sealed class HttpPayrollProviderService(HttpClient http) : IPayrollProviderService
@@ -60,6 +63,18 @@ public sealed class HttpPayrollProviderService(HttpClient http) : IPayrollProvid
 
     public async Task<EmployeeSyncResultDto> SyncEmployeesAsync(Guid payGroupId, bool dryRun, CancellationToken cancellationToken = default) =>
         await (await http.PostAsync($"api/v1/payroll/pay-groups/{payGroupId}/sync-employees?dryRun={dryRun}", null, cancellationToken)).ReadAsync<EmployeeSyncResultDto>(cancellationToken);
+
+    public async Task<PayrollConnectionDto> GetConnectionAsync(string providerKey, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{Uri.EscapeDataString(providerKey)}/connection", cancellationToken)).ReadAsync<PayrollConnectionDto>(cancellationToken);
+
+    public async Task<PayrollConnectionDto> SaveConnectionAsync(string providerKey, SavePayrollConnectionRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/{Uri.EscapeDataString(providerKey)}/connection", request, cancellationToken)).ReadAsync<PayrollConnectionDto>(cancellationToken);
+
+    public async Task<PayrollConnectionTestDto> TestConnectionAsync(string providerKey, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"{Base}/{Uri.EscapeDataString(providerKey)}/connection/test", null, cancellationToken)).ReadAsync<PayrollConnectionTestDto>(cancellationToken);
+
+    public async Task<PayrollConnectionDto> DisconnectAsync(string providerKey, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Base}/{Uri.EscapeDataString(providerKey)}/connection", cancellationToken)).ReadAsync<PayrollConnectionDto>(cancellationToken);
 }
 
 public sealed class HttpPayrollRunService(HttpClient http) : IPayrollRunService
@@ -83,6 +98,12 @@ public sealed class HttpPayrollRunService(HttpClient http) : IPayrollRunService
 
     public async Task<RegisterImportResultDto> ImportRegisterAsync(Guid runId, ImportRegisterRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"{Base}/{runId}/register", request, cancellationToken)).ReadAsync<RegisterImportResultDto>(cancellationToken);
+
+    public async Task<ProviderHoursResultDto> SendHoursToProviderAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/{runId}/send-hours", request, cancellationToken)).ReadAsync<ProviderHoursResultDto>(cancellationToken);
+
+    public async Task<RegisterImportResultDto> ImportRegisterFromProviderAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"{Base}/{runId}/register/from-provider", null, cancellationToken)).ReadAsync<RegisterImportResultDto>(cancellationToken);
 
     public async Task<IReadOnlyList<RegisterLineDto>> GetRegisterAsync(Guid runId, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Base}/{runId}/register", cancellationToken)).ReadAsync<List<RegisterLineDto>>(cancellationToken);

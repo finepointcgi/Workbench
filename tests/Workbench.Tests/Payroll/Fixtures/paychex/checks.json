@@ -1,0 +1,10 @@
+{ "content": [
+  { "paycheckId": "chk-1", "workerId": "00Z5V9BTI8J4ZRS2S1QB", "checkDate": "2026-10-23T00:00:00Z", "grossAmount": 400.00, "netAmount": 320.00,
+    "earnings": [ { "componentId": "2000051", "payHours": "8.00", "amount": 400.00 } ],
+    "taxes": [ { "name": "FITW", "amount": 35.00 }, { "name": "SS", "amount": 25.00 }, { "name": "ER SS", "amount": 24.80, "isEmployerTax": true }, { "name": "FUTA", "amount": 5.80, "payerType": "EMPLOYER" } ],
+    "deductions": [ { "name": "Medical", "amount": 20.00, "employerAmount": 50.00 } ] },
+  { "paycheckId": "chk-2", "workerId": "00Z5V9BTI8J4ZRS2S1QC", "checkDate": "2026-10-23T00:00:00Z", "netAmount": 3050.00,
+    "earnings": [ { "componentId": "2000099", "amount": 3800.00 }, { "componentId": "2000060", "amount": 200.00 } ],
+    "taxes": [ { "name": "FITW", "amount": 800.00 }, { "name": "ER SS", "amount": 306.00, "isEmployerTax": true } ],
+    "deductions": [ { "name": "401k", "amount": 150.00, "employerAmount": 400.00 } ] }
+] }
