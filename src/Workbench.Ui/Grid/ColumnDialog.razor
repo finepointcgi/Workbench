@@ -5,7 +5,7 @@
             <MudTextField @bind-Value="_name" Label="Name" Required="true" AutoFocus="true" Immediate="true" />
             @if (Column is null)
             {
-                <MudSelect T="ColumnKind" @bind-Value="_type" Label="Type">
+                <MudSelect T="ColumnKind" Value="_type" ValueChanged="SetType" Label="Type" data-testid="column-type">
                     @foreach (var kind in Enum.GetValues<ColumnKind>())
                     {
                         <MudSelectItem T="ColumnKind" Value="kind">@CellFormat.KindName(kind)</MudSelectItem>
@@ -16,11 +16,53 @@
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">Type: @CellFormat.KindName(_type)</MudText>
             }
-            @if (_type == ColumnKind.Dropdown)
+            @if (_type == ColumnKind.Symbol)
+            {
+                <MudSelect T="string" @bind-Value="_symbols" Label="Symbols" data-testid="symbol-set">
+                    @foreach (var set in SymbolSets.All)
+                    {
+                        <MudSelectItem T="string" Value="set">
+                            @foreach (var option in SymbolSets.Options(set).Take(4))
+                            {
+                                <span style="color:@option.Color.Background" aria-hidden="true">@option.Glyph </span>
+                            }
+                            @SymbolSets.Name(set)
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">Each symbol shows its name too (Red, High, 3 stars), so it never relies on color.</MudText>
+            }
+            else if (_type == ColumnKind.AutoNumber)
+            {
+                <MudStack Row="true" Spacing="2">
+                    <MudTextField T="string" @bind-Value="_prefix" Label="Prefix" Placeholder="REQ-" MaxLength="20" Immediate="true" data-testid="autonumber-prefix" />
+                    <MudNumericField T="int" @bind-Value="_digits" Label="Digits" Min="0" Max="10" data-testid="autonumber-digits" />
+                    @if (Column is null)
+                    {
+                        <MudNumericField T="int" @bind-Value="_start" Label="Start at" Min="0" data-testid="autonumber-start" />
+                    }
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">
+                    Every row gets the next number when it's added, like @ColumnValues.AutoNumber([_prefix ?? string.Empty, _digits.ToString(), _start.ToString()], _start). Numbers are never reused@(Column is null ? "; rows already on the sheet are numbered in order" : "").
+                </MudText>
+            }
+            else if (ColumnValues.IsSystem(_type))
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Filled in by Workbench for every row and can't be edited.</MudText>
+            }
+            else if (_type == ColumnKind.Progress)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Percent complete from 0 to 100, shown as a bar with the number.</MudText>
+            }
+            else if (_type == ColumnKind.Hyperlink)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">A web address, with optional text to show instead of it.</MudText>
+            }
+            @if (_type is ColumnKind.Dropdown or ColumnKind.MultiSelect)
             {
                 @* Status labels: each option has a color from an accessible palette (its text stays readable) and always shows its name. *@
                 <MudText Typo="Typo.subtitle2">Labels</MudText>
-                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">People pick a label with one click. The order here is the order labels sort in.</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">@(_type == ColumnKind.MultiSelect ? "People pick any number of these." : "People pick a label with one click.") The order here is the order labels sort in.</MudText>
                 @for (var i = 0; i < _labels.Count; i++)
                 {
                     var index = i;
@@ -102,6 +144,10 @@
 
     private readonly List<Label> _labels = [];
     private bool _restricted;
+    private string _symbols = SymbolSets.Rag;
+    private string? _prefix;
+    private int _digits = 3;
+    private int _start = 1;
 
     protected override void OnInitialized()
     {
@@ -111,12 +157,32 @@
             _type = Column.Type;
             _labels.AddRange(Column.Options.Select(o => new Label { Name = o, Color = Column.ColorOf(o).Key }));
             _restricted = Column.IsRestricted;
+            _symbols = Column.Type == ColumnKind.Symbol ? SymbolSets.Of(Column) : SymbolSets.Rag;
+            if (Column.Type == ColumnKind.AutoNumber)
+            {
+                (_prefix, _digits, _start) = ColumnValues.AutoNumberSettings(Column.Options);
+            }
         }
         else
         {
             // A new status column starts with the usual labels; they're easy to rename or remove.
             _labels.AddRange(StatusColors.Defaults.Select(d => new Label { Name = d.Label, Color = d.Color.Key }));
         }
+    }
+
+    private void SetType(ColumnKind type)
+    {
+        // A multi-select starts with no choices (the status defaults suit a status column); switching back restores them.
+        if (Column is null && (type == ColumnKind.MultiSelect) != (_type == ColumnKind.MultiSelect))
+        {
+            _labels.Clear();
+            if (type != ColumnKind.MultiSelect)
+            {
+                _labels.AddRange(StatusColors.Defaults.Select(d => new Label { Name = d.Label, Color = d.Color.Key }));
+            }
+        }
+
+        _type = type;
     }
 
     private void AddLabel() => _labels.Add(new Label { Color = StatusColors.Gray.Key });
@@ -132,11 +198,18 @@
 
     private void Submit()
     {
-        var labels = _type == ColumnKind.Dropdown
+        var labels = _type is ColumnKind.Dropdown or ColumnKind.MultiSelect
             ? _labels.Where(l => !string.IsNullOrWhiteSpace(l.Name)).DistinctBy(l => l.Name.Trim(), StringComparer.OrdinalIgnoreCase).ToList()
             : [];
-        var options = _extras.OptionsFor(_type)?.ToList() ?? labels.Select(l => l.Name.Trim()).ToList();
+        var options = _type switch
+        {
+            ColumnKind.Symbol => [_symbols],
+            ColumnKind.AutoNumber => [(_prefix ?? string.Empty).Trim(), Math.Clamp(_digits, 0, 10).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Math.Max(0, _start).ToString(System.Globalization.CultureInfo.InvariantCulture)],
+            _ => _extras.OptionsFor(_type)?.ToList() ?? labels.Select(l => l.Name.Trim()).ToList(),
+        };
         MudDialog.Close(DialogResult.Ok(new ColumnDialogResult(_name.Trim(), _type, options, _restricted,
-            OptionColors: _type == ColumnKind.Dropdown ? labels.Select(l => l.Color).ToList() : null, Formula: _extras.FormulaFor(_type, Column))));
+            OptionColors: _type is ColumnKind.Dropdown or ColumnKind.MultiSelect ? labels.Select(l => l.Color).ToList() : null,
+            Formula: ColumnValues.IsAutomatic(_type) ? null : _extras.FormulaFor(_type, Column))));
     }
 }

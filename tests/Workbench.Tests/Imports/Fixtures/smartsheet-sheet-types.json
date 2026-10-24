@@ -1,0 +1,47 @@
+{
+  "id": 2331373580117892,
+  "name": "Risk Register",
+  "version": 3,
+  "totalRowCount": 2,
+  "accessLevel": "EDITOR",
+  "dependenciesEnabled": false,
+  "ganttEnabled": false,
+  "columns": [
+    { "id": 1001, "index": 0, "title": "Risk", "type": "TEXT_NUMBER", "primary": true },
+    { "id": 1002, "index": 1, "title": "Areas", "type": "MULTI_PICKLIST", "options": ["Cost", "Schedule", "Scope"] },
+    { "id": 1003, "index": 2, "title": "Health", "type": "PICKLIST", "symbol": "RYG", "options": ["Red", "Yellow", "Green"] },
+    { "id": 1004, "index": 3, "title": "Rating", "type": "PICKLIST", "symbol": "STAR_RATING", "options": ["One", "Two", "Three", "Four", "Five"] },
+    { "id": 1005, "index": 4, "title": "Watch", "type": "CHECKBOX", "symbol": "FLAG" },
+    { "id": 1006, "index": 5, "title": "Mitigated", "type": "PICKLIST", "symbol": "HARVEY_BALLS", "options": ["Empty", "Quarter", "Half", "Three Quarter", "Full"] },
+    { "id": 1007, "index": 6, "title": "Reference", "type": "TEXT_NUMBER" },
+    { "id": 1008, "index": 7, "title": "Risk ID", "type": "TEXT_NUMBER", "systemColumnType": "AUTO_NUMBER" },
+    { "id": 1009, "index": 8, "title": "Priority", "type": "PICKLIST", "symbol": "PRIORITY_HML", "options": ["High", "Medium", "Low"] }
+  ],
+  "rows": [
+    {
+      "id": 5001, "rowNumber": 1,
+      "cells": [
+        { "columnId": 1001, "value": "Vendor slips", "displayValue": "Vendor slips" },
+        { "columnId": 1002, "displayValue": "Cost, Schedule", "objectValue": { "objectType": "MULTI_PICKLIST", "values": ["Cost", "Schedule"] } },
+        { "columnId": 1003, "value": "Red", "displayValue": "Red" },
+        { "columnId": 1004, "value": "Four", "displayValue": "Four" },
+        { "columnId": 1005, "value": true, "displayValue": "true" },
+        { "columnId": 1006, "value": "Half", "displayValue": "Half" },
+        { "columnId": 1007, "value": "Contract", "displayValue": "Contract", "hyperlink": { "url": "https://example.com/contract" } },
+        { "columnId": 1008, "value": "RSK-0012", "displayValue": "RSK-0012" },
+        { "columnId": 1009, "value": "High", "displayValue": "High" }
+      ]
+    },
+    {
+      "id": 5002, "rowNumber": 2,
+      "cells": [
+        { "columnId": 1001, "value": "Scope creep", "displayValue": "Scope creep" },
+        { "columnId": 1003, "value": "Green", "displayValue": "Green" },
+        { "columnId": 1005, "value": false, "displayValue": "false" },
+        { "columnId": 1006, "value": "Full", "displayValue": "Full" },
+        { "columnId": 1007, "value": "https://example.com/scope", "displayValue": "https://example.com/scope", "hyperlink": { "url": "https://example.com/scope" } },
+        { "columnId": 1008, "value": "RSK-0013", "displayValue": "RSK-0013" }
+      ]
+    }
+  ]
+}

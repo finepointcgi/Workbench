@@ -4430,6 +4430,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("character varying(200)")
                         .UseCollation("C");
 
+                    b.Property<int>("NextNumber")
+                        .HasColumnType("integer");
+
                     b.PrimitiveCollection<List<string>>("OptionColors")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -10428,11 +10431,27 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
 
+                    b.Property<DateTime?>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
                     b.Property<DateOnly?>("Finish")
                         .HasColumnType("date");
 
                     b.Property<bool>("IsMilestone")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
@@ -21918,6 +21937,39 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("Sheets");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.SheetFormatRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)")
+                        .UseCollation("C");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SheetId", "Order");
+
+                    b.ToTable("SheetFormatRule");
+                });
+
             modelBuilder.Entity("Workbench.Domain.SheetView", b =>
                 {
                     b.Property<Guid>("Id")
@@ -27363,6 +27415,15 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.SheetFormatRule", b =>
+                {
+                    b.HasOne("Workbench.Domain.Sheet", null)
+                        .WithMany()
+                        .HasForeignKey("SheetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.SheetView", b =>

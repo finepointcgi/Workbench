@@ -321,6 +321,8 @@ public sealed class FormService(
         { Formula: not null } => $"\"{column.Name}\" is a formula, so it's worked out, not filled in.",
         { Type: ColumnType.Lookup } => $"\"{column.Name}\" is a lookup, so it's worked out, not filled in.",
         { Type: ColumnType.LinkedRow } => $"\"{column.Name}\" links to another sheet's rows, which people filling in a form can't see.",
+        { Type: ColumnType.AutoNumber or ColumnType.CreatedBy or ColumnType.CreatedDate or ColumnType.ModifiedBy or ColumnType.ModifiedDate } =>
+            $"\"{column.Name}\" is filled in automatically.",
         { IsRestricted: true } => $"\"{column.Name}\" is restricted to Finance and owners, so it can't be on a form.",
         { Type: ColumnType.Person } when isPublic => $"\"{column.Name}\" picks a person, which isn't offered on a public form.",
         _ => null,
@@ -457,7 +459,7 @@ public sealed class FormService(
                 f.Field.HelpText,
                 f.Field.Required,
                 f.Column?.Type.ToContractKind() ?? (f.Field.Key == "title" ? ColumnKind.Text : ColumnKind.Date),
-                f.Column?.Type == ColumnType.Dropdown ? f.Column.Options.ToList() : []))
+                f.Column is { } c ? ColumnValues.Choices(Sheets.Mapping.ToDto(c)).ToList() : []))
             .ToList();
         return new FillFormDto(form.Id, form.Title, form.Description, fields, form.IsOpen);
     }
@@ -506,6 +508,16 @@ public sealed class FormService(
                 return MailAddress.TryCreate(raw, out var address) && address.Address == raw
                     ? raw.ToLowerInvariant()
                     : throw new ArgumentException($"\"{label}\" needs an email address.");
+            case ColumnType.MultiSelect:
+                var picked = ColumnValues.Selected(raw);
+                return picked.All(p => column.Options.Contains(p, StringComparer.OrdinalIgnoreCase))
+                    && ColumnValues.TryNormalize(raw, ColumnKind.MultiSelect, column.Options, out var selected, out _) && selected is not null
+                    ? selected
+                    : throw new ArgumentException($"Pick from the choices for \"{label}\".");
+            case ColumnType.Hyperlink or ColumnType.Symbol or ColumnType.Progress:
+                return ColumnValues.TryNormalize(raw.Trim(), column.Type.ToContractKind(), column.Options, out var value, out var error) && value is not null
+                    ? value
+                    : throw new ArgumentException($"\"{label}\": {error}");
             default:
                 return raw;
         }

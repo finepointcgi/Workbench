@@ -15,7 +15,7 @@ public static partial class SmartsheetSources
     public static SourceSheet FromApi(SmartsheetSheet sheet)
     {
         var columns = sheet.Columns.OrderBy(c => c.Index).Select(c => new SourceColumn(
-            c.Id.ToString(CultureInfo.InvariantCulture), c.Title, c.Type, c.Primary, c.Options ?? [], c.Tags ?? [], c.SystemColumnType)).ToList();
+            c.Id.ToString(CultureInfo.InvariantCulture), c.Title, c.Type, c.Primary, c.Options ?? [], c.Tags ?? [], c.SystemColumnType, c.Symbol)).ToList();
         var byId = sheet.Columns.ToDictionary(c => c.Id);
         var rows = new List<SourceRow>();
         var number = 0;
@@ -97,7 +97,8 @@ public static partial class SmartsheetSources
             email = value;
         }
 
-        return new SourceCell(value, cell.DisplayValue ?? value, predecessors, duration, email);
+        var url = cell.Hyperlink is { ValueKind: JsonValueKind.Object } link && link.TryGetProperty("url", out var u) ? u.GetString() : null;
+        return new SourceCell(value, cell.DisplayValue ?? value, predecessors, duration, email, url);
     }
 
     private static int DurationDays(JsonElement duration) => (int)Math.Round(DurationDaysDecimal(duration), MidpointRounding.AwayFromZero);

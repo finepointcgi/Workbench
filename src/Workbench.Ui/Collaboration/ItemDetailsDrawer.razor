@@ -133,7 +133,7 @@
             ColumnKind.Checkbox => value == "true" ? "Yes" : "No",
             ColumnKind.Currency when decimal.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var amount) => amount.ToString("C"),
             ColumnKind.Date when DateOnly.TryParseExact(value, "yyyy-MM-dd", out var date) => date.ToString("MMM d, yyyy"),
-            _ => value,
+            _ => ColumnValues.Text(value, column.Type) ?? value, // multi-select, links, symbols, progress, system dates as the grid shows them
         };
     }
 

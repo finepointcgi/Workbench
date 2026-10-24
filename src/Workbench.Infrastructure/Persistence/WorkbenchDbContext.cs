@@ -17,6 +17,19 @@ public sealed class WorkbenchDbContext(DbContextOptions<WorkbenchDbContext> opti
     public DbSet<Column> Columns => Set<Column>();
     public DbSet<Item> Items => Set<Item>();
 
+    // Sheet rows are stamped (added/changed, auto-numbers, system columns) whichever feature saves them.
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        Application.Sheets.SheetRowStamps.Apply(this);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        await Application.Sheets.SheetRowStamps.ApplyAsync(this, cancellationToken);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         ProviderConventions.Apply(configurationBuilder);
 

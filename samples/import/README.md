@@ -60,7 +60,9 @@ Notes:
   posted on it; a job rolls back until then too. Government property (GFP/CAP) isn't imported here; enter it on the
   register. The sample is as of 2026-09-30, so the October 2026 run depreciates 1,566.67.
 - **Smartsheet**: TEXT_NUMBER becomes Text or Number/Currency, DATE Date, CHECKBOX Checkbox, PICKLIST Dropdown with its
-  options, CONTACT_LIST Person (email). Duration fills a missing finish date (working days). Predecessors (`3FS +2d`,
+  options, CONTACT_LIST Person (email), MULTI_PICKLIST Multi-select, symbol columns Symbols (RYG, flag, star rating,
+  priority; Harvey balls become Progress), links in text columns Link, and the system columns (auto-number, created and
+  modified by/date) the matching system columns, filled in by Workbench (off by default). Duration fills a missing finish date (working days). Predecessors (`3FS +2d`,
   `4SS -1d`, `9FF +1w`) become Gantt dependencies with lag in working days. In an `.xlsx` export the row hierarchy comes
   from the outline (grouping) level, or else from the indentation of the cells. Choose a project and map a WBS column
   to link rows to the project's WBS elements and make the sheet its plan sheet.

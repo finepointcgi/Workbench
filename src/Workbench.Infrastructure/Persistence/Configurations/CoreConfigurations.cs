@@ -42,6 +42,8 @@ internal sealed class ItemConfiguration : IEntityTypeConfiguration<Item>
     {
         b.Property(i => i.Title).HasMaxLength(500);
         b.Property(i => i.CostpointWbsId).HasMaxLength(64);
+        b.Property(i => i.CreatedBy).HasMaxLength(320);
+        b.Property(i => i.ModifiedBy).HasMaxLength(320);
         b.HasIndex(i => new { i.SheetId, i.ParentId, i.Order });
         b.Property(i => i.Values)
             .HasConversion(

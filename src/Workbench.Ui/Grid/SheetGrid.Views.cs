@@ -32,7 +32,7 @@ public partial class SheetGrid
     private IReadOnlyList<ViewField> Fields =>
         _allColumns
             .Where(c => c.Kind is GridColumnKind.Title or GridColumnKind.Start or GridColumnKind.Finish or GridColumnKind.Custom or GridColumnKind.Wbs)
-            .Select(c => new ViewField(c.Key, c.Name, c.ValueKind, c.Column?.Options ?? []))
+            .Select(c => new ViewField(c.Key, c.Name, c.ValueKind, c.Column is { } column ? ColumnValues.Choices(column) : []))
             .ToList();
 
     private static string Json(SheetViewDefinition definition) => JsonSerializer.Serialize(new
@@ -41,13 +41,15 @@ public partial class SheetGrid
         Filters = definition.Filters ?? [],
         Hidden = (definition.HiddenColumns ?? []).Order(StringComparer.Ordinal),
         definition.BaselineId,
+        definition.ShowFloat,
+        definition.CriticalOnly,
     });
 
     /// <summary>Shown columns: every column but the hidden ones (Title always shows).</summary>
     private void RebuildColumns()
     {
         _allColumns = GridColumn.For(Sheet, assignees: Tasks is not null, plan: Scheduling && Plan is not null,
-            baseline: CanCompareBaselines && _view.BaselineId is not null);
+            baseline: CanCompareBaselines && _view.BaselineId is not null, floats: CanShowFloat && _view.ShowFloat);
         _columns = _allColumns.Where(c => c.Kind == GridColumnKind.Title || !_view.IsHidden(c.Key)).ToList();
         _activeCol = Math.Clamp(_activeCol, 0, Math.Max(0, _columns.Count - 1));
     }
@@ -55,11 +57,17 @@ public partial class SheetGrid
     private void SetView(SheetViewDefinition definition)
     {
         var baselineChanged = definition.BaselineId != _view.BaselineId;
+        var floatChanged = (definition.ShowFloat || definition.CriticalOnly) != (_view.ShowFloat || _view.CriticalOnly);
         _view = definition;
         if (baselineChanged)
         {
             _comparison = null;
             _ = RefreshComparisonAsync();
+        }
+
+        if (floatChanged)
+        {
+            _ = RefreshFloatAsync();
         }
 
         CollapseRange();
@@ -167,7 +175,9 @@ public partial class SheetGrid
     private string Describe(ListFilterCondition filter)
     {
         var field = Fields.FirstOrDefault(f => f.Key == filter.Field);
-        var values = SheetViewEngine.Values(filter.Value).Select(v => field is null ? v : CellFormat.Display(v, field.Kind == ColumnKind.Checkbox ? ColumnKind.Text : field.Kind));
+        var values = SheetViewEngine.Values(filter.Value).Select(v => field is null ? v
+            : ViewField.IsChoice(field.Kind) ? ViewField.ChoiceLabel(field.Kind, v)
+            : CellFormat.Display(v, field.Kind is ColumnKind.Checkbox or ColumnKind.CreatedDate or ColumnKind.ModifiedDate ? (field.Kind == ColumnKind.Checkbox ? ColumnKind.Text : ColumnKind.Date) : field.Kind));
         var shown = field?.Kind == ColumnKind.Checkbox ? (filter.Value == "true" ? "checked" : "not checked") : string.Join(" or ", values);
         return field?.Kind == ColumnKind.Checkbox
             ? $"{FieldName(filter.Field)} is {shown}"
@@ -319,8 +329,15 @@ public partial class SheetGrid
     }
 }
 
-/// <summary>A field a view can sort or filter on.</summary>
-public sealed record ViewField(string Key, string Name, ColumnKind Kind, IReadOnlyList<string> Options);
+/// <summary>A field a view can sort or filter on. <see cref="Options"/>: the labels to pick from (<see cref="ColumnValues.Choices"/>).</summary>
+public sealed record ViewField(string Key, string Name, ColumnKind Kind, IReadOnlyList<string> Options)
+{
+    /// <summary>Types filtered by picking labels: status, multi-select and symbols.</summary>
+    public static bool IsChoice(ColumnKind kind) => kind is ColumnKind.Dropdown or ColumnKind.MultiSelect or ColumnKind.Symbol;
+
+    /// <summary>A choice as people read it: a symbol's label ("3 stars"), other options as they are.</summary>
+    public static string ChoiceLabel(ColumnKind kind, string option) => kind == ColumnKind.Symbol ? SymbolSets.Find(option)?.Label ?? option : option;
+}
 
 /// <summary>What <see cref="SaveViewDialog"/> returns.</summary>
 public sealed record SaveViewResult(string Name, bool IsShared, bool IsMyDefault, bool IsSheetDefault);
