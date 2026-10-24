@@ -114,6 +114,15 @@ public sealed class ProjectPlanTests
         var items = host.As(Pm).Get<IItemService>();
         var schedule = host.As(Pm).Get<Workbench.Contracts.Scheduling.IPlanScheduleService>();
         var phase = await ItemAsync(host, "Phase 1");
+        await AddClinsAsync(host, await ContractAsync(host), ("0001", "Base", 6_000m, 3_000m, null));
+        Guid clin;
+        await using (var db = await host.Db.CreateAsync())
+        {
+            clin = (await db.Set<Clin>().SingleAsync()).Id;
+            (await db.Set<WbsElement>().SingleAsync(w => w.Id == host.Root1)).ClinId = clin; // Phase 1 is CLIN 0001
+            await db.SaveChangesAsync();
+        }
+
         var analysis = await items.CreateAsync(host.SheetId, new CreateItemRequest("Analysis", null));
         var migration = await items.CreateAsync(host.SheetId, new CreateItemRequest("Migration", null));
         var wbs = (await host.Get<IProjectService>().ListWbsAsync(host.Project1)).ToDictionary(w => w.ItemId ?? Guid.Empty);
@@ -129,6 +138,15 @@ public sealed class ProjectPlanTests
         Assert.Equal(parent.Id, wbs[migration.Id].ParentId!.Value);
         Assert.StartsWith(parent.Code + ".", wbs[analysis.Id].Code);
         Assert.StartsWith(parent.Code + ".", wbs[migration.Id].Code);
+
+        // Under the CLIN's row they bill to the CLIN (an invoice leaves out cost on a code with no CLIN), as does a row
+        // added there directly.
+        var review = await items.CreateAsync(host.SheetId, new CreateItemRequest("Review", phase));
+        await using (var db = await host.Db.CreateAsync())
+        {
+            var clins = await db.Set<WbsElement>().Where(w => w.ItemId != null).ToDictionaryAsync(w => w.ItemId!.Value, w => w.ClinId);
+            Assert.Equal((clin, clin, clin), (clins[analysis.Id], clins[migration.Id], clins[review.Id]));
+        }
 
         await schedule.OutdentAsync(host.SheetId, migration.Id);
         wbs = (await host.Get<IProjectService>().ListWbsAsync(host.Project1)).ToDictionary(w => w.ItemId ?? Guid.Empty);
