@@ -65,12 +65,7 @@ public sealed record ScheduleHealthDto(
 /// </summary>
 public sealed record ScheduleHealthRequest(DateOnly? StatusDate = null, Guid? BaselineId = null);
 
-/// <summary>
-/// Float for one detail task, in working days on the plan's calendar. Total float is how far it can slip before the plan
-/// finish (or a deadline) moves; free float how far before any successor moves. Negative total float means a deadline can't
-/// be met.
-/// </summary>
-public sealed record TaskFloatDto(Guid ItemId, int TotalFloatDays, int FreeFloatDays, bool IsCritical);
+// TaskFloatDto (one task's total and free float) is in PlanFloatContracts.cs, shared with the plan grid's float columns.
 
 public interface IScheduleHealthService
 {

@@ -61,6 +61,23 @@ public sealed class PlanFloatTests
     }
 
     [Fact]
+    public async Task The_schedule_health_check_and_the_grid_agree_on_float()
+    {
+        var (host, sheetId, ids) = await PlanAsync();
+        await using var _ = host;
+
+        var grid = await host.Get<IPlanFloatService>().GetAsync(sheetId);
+        var health = await host.Get<IScheduleHealthService>().GetFloatAsync(sheetId);
+
+        foreach (var name in new[] { "A", "B", "C", "D", "F", "G" })
+        {
+            var fromGrid = grid.For(ids[name]);
+            var fromHealth = health.SingleOrDefault(t => t.ItemId == ids[name]);
+            Assert.True(fromGrid == fromHealth, $"{name}: grid {fromGrid}, schedule health {fromHealth}");
+        }
+    }
+
+    [Fact]
     public async Task Critical_only_keeps_critical_tasks_with_their_parents_and_exports_the_float()
     {
         var (host, sheetId, ids) = await PlanAsync();
