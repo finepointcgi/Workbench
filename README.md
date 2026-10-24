@@ -116,6 +116,8 @@ dotnet build src/Workbench.Desktop -t:Run
 - Timesheet approval follows roles, not configuration: the supervisor approves; administrators approve for employees without a supervisor; Timekeeper, Finance and Admin can view every timesheet
 - `Payroll:Paylocity:ClientId`, `:ClientSecret` (secret), `:BaseUrl`, `:TokenUrl`, `:Scope`: Paylocity REST API for employee sync (OAuth client
   credentials; only used when configured). Hours export and register import are CSV files and need no credentials.
+- ADP Workforce Now, Paychex Flex and Gusto: no server settings. Each customer connects with their own API credentials under
+  Payroll › Providers (stored encrypted with Data Protection); hours and registers also work by file without a connection.
 - Security (ISO 27001 controls; details and every key in `docs/security/configuration.md`):
   `Authentication:RequireInvite` (default true outside Development), `Authentication:Session:*` (idle 30 min,
   absolute 12 h), `Scim:Enabled` / `Scim:BearerToken` (secret, 32+ chars), `RateLimiting:*`,

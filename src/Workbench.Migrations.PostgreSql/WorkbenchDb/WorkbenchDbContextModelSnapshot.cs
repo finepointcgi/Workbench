@@ -13848,6 +13848,61 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("EmployeePayRate");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Payroll.LaborCostAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("RateEffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("Redirected")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TimesheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TimesheetRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("WorkPeriods")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("TimesheetId", "TimesheetRevision");
+
+                    b.ToTable("LaborCostAdjustment");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.PayGroup", b =>
                 {
                     b.Property<Guid>("Id")
@@ -14009,6 +14064,65 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("PayrollFileLayout");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollProviderConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ConnectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConnectedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LastCheckMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<bool?>("LastCheckSucceeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastCheckedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProtectedCredentials")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .UseCollation("C");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderKey")
+                        .IsUnique();
+
+                    b.ToTable("PayrollProviderConnection");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollProviderSetting", b =>
@@ -25551,6 +25665,21 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
                         .WithMany()
                         .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.LaborCostAdjustment", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Timesheet", null)
+                        .WithMany()
+                        .HasForeignKey("TimesheetId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

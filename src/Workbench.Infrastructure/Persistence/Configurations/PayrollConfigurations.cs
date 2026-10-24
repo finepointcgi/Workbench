@@ -131,3 +131,31 @@ internal sealed class PayrollRegisterLineConfiguration : IEntityTypeConfiguratio
         b.HasOne<Employee>().WithMany().HasForeignKey(l => l.EmployeeId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class PayrollProviderConnectionConfiguration : IEntityTypeConfiguration<PayrollProviderConnection>
+{
+    public void Configure(EntityTypeBuilder<PayrollProviderConnection> b)
+    {
+        b.Property(c => c.ProviderKey).HasMaxLength(32);
+        b.Property(c => c.Environment).HasMaxLength(16);
+        b.Property(c => c.Summary).HasMaxLength(200);
+        b.Property(c => c.ConnectedBy).HasMaxLength(320);
+        b.Property(c => c.LastCheckMessage).HasMaxLength(500);
+        b.HasIndex(c => c.ProviderKey).IsUnique();
+    }
+}
+
+internal sealed class LaborCostAdjustmentConfiguration : IEntityTypeConfiguration<LaborCostAdjustment>
+{
+    public void Configure(EntityTypeBuilder<LaborCostAdjustment> b)
+    {
+        b.Property(a => a.Amount).HasPrecision(18, 2);
+        b.Property(a => a.WorkPeriods).HasMaxLength(500);
+        b.Property(a => a.Reason).HasMaxLength(500);
+        b.Property(a => a.CreatedBy).HasMaxLength(320);
+        b.HasIndex(a => new { a.TimesheetId, a.TimesheetRevision });
+        b.HasIndex(a => a.EmployeeId);
+        b.HasOne<Timesheet>().WithMany().HasForeignKey(a => a.TimesheetId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Employee>().WithMany().HasForeignKey(a => a.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
