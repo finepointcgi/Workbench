@@ -1,0 +1,102 @@
+@* Applies a posted credit or debit memo to the vendor's open bills (oldest first by default). *@
+@inject IApBillService Bills
+@inject IApCreditService Credits
+
+<MudDialog>
+    <DialogContent>
+        @if (_rows is null)
+        {
+            <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_rows.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">@Credit.Bill.VendorCode has no open bills. The credit stays open and is netted in the vendor's next payment run.</MudText>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.body2">@PurchasingFormat.Amount(Credit.Bill.Balance) of credit to apply. Applying moves nothing in the general ledger; it settles the bills.</MudText>
+                <MudSimpleTable Dense="true" Elevation="0">
+                    <thead><tr><th>Bill</th><th>Invoice</th><th>Due</th><th style="text-align:right">Open</th><th style="text-align:right">Apply</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Bill.Number</td><td>@row.Bill.InvoiceNumber</td><td>@PurchasingFormat.Date(row.Bill.DueDate)</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(row.Bill.Balance)</td>
+                                <td style="text-align:right; max-width:140px">
+                                    <MudNumericField T="decimal" @bind-Value="row.Amount" Format="N2" Min="0" Max="row.Bill.Balance" Margin="Margin.Dense"
+                                                     aria-label="@($"Amount to apply to {row.Bill.Number}")" data-testid="apply-amount" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.body2">Applying <b>@PurchasingFormat.Amount(_rows.Sum(r => r.Amount))</b>; @PurchasingFormat.Amount(Credit.Bill.Balance - _rows.Sum(r => r.Amount)) stays open.</MudText>
+            </MudStack>
+        }
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2" data-testid="apply-error">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="@(_busy || _rows is not { Count: > 0 } || _rows.Sum(r => r.Amount) <= 0)" data-testid="apply-submit">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public BillDto Credit { get; set; } = default!;
+
+    private sealed class Row(BillSummaryDto bill)
+    {
+        public BillSummaryDto Bill { get; } = bill;
+        public decimal Amount { get; set; }
+    }
+
+    private List<Row>? _rows;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var open = (await Bills.ListAsync(new BillQuery(BillState.Posted, Credit.Bill.VendorId)))
+                .Where(b => !b.IsCredit && b.Balance > 0 && !b.IsForeignCurrency).OrderBy(b => b.DueDate).ThenBy(b => b.Number).ToList();
+            var left = Credit.Bill.Balance;
+            _rows = open.Select(b =>
+            {
+                var take = Math.Min(left, b.Balance);
+                left -= take;
+                return new Row(b) { Amount = take };
+            }).ToList();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+            _rows = [];
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Credits.ApplyAsync(Credit.Bill.Id, new ApplyCreditRequest(_rows!.Where(r => r.Amount > 0).Select(r => new ApplyCreditItem(r.Bill.Id, r.Amount)).ToList()));
+            MudDialog.Close(DialogResult.Ok(result));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

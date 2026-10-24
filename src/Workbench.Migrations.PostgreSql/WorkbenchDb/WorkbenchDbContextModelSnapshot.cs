@@ -17153,6 +17153,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<Guid?>("AttachmentFileId")
                         .HasColumnType("uuid");
 
@@ -17163,6 +17167,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreditsBillId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CurrencyCode")
                         .HasMaxLength(3)
@@ -17214,6 +17221,11 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
                     b.Property<string>("Number")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -17231,6 +17243,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .UseCollation("C");
+
+                    b.Property<Guid?>("QualityDebitMemoId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(1000)
@@ -17269,11 +17284,24 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("character varying(1000)")
                         .UseCollation("C");
 
+                    b.Property<DateOnly?>("VoidReversalDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VoidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AttachmentFileId");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("CreditsBillId");
 
                     b.HasIndex("CurrencyCode");
 
@@ -17285,6 +17313,8 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("Status", "DueDate");
 
                     b.HasIndex("VendorId", "InvoiceNumber");
+
+                    b.HasIndex("VendorId", "Kind", "Status");
 
                     b.ToTable("ApBill");
                 });
@@ -17308,6 +17338,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .UseCollation("C");
 
                     b.Property<Guid>("BillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CreditsLineId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("DecidedAtUtc")
@@ -17370,9 +17403,15 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<Guid?>("ReleasesBillId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("RetainageAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("ReversalOdcEntryId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -17399,6 +17438,8 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
                     b.HasIndex("BillId");
 
+                    b.HasIndex("CreditsLineId");
+
                     b.HasIndex("OdcEntryId");
 
                     b.HasIndex("OrgUnitId");
@@ -17407,11 +17448,80 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
                     b.HasIndex("PurchaseOrderLineId");
 
+                    b.HasIndex("ReleasesBillId");
+
+                    b.HasIndex("ReversalOdcEntryId");
+
                     b.HasIndex("SubcontractId");
 
                     b.HasIndex("WbsElementId");
 
                     b.ToTable("ApBillLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApCreditApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("AppliedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AppliedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<DateOnly>("AppliedOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("BillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CreditId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BillId");
+
+                    b.HasIndex("CreditId");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("ApCreditApplication");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.ApPayment", b =>
@@ -17564,6 +17674,72 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("ApPaymentRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApRefund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("CreditId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VoidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("VendorId", "ReceivedOn");
+
+                    b.ToTable("ApRefund");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.EdiMessage", b =>
@@ -26473,6 +26649,11 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("CreditsBillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
@@ -26498,6 +26679,11 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Workbench.Domain.Purchasing.ApBillLine", null)
+                        .WithMany()
+                        .HasForeignKey("CreditsLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.OdcEntry", null)
                         .WithMany()
                         .HasForeignKey("OdcEntryId")
@@ -26518,6 +26704,16 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasForeignKey("PurchaseOrderLineId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("ReleasesBillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OdcEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReversalOdcEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.Purchasing.Subcontract", null)
                         .WithMany()
                         .HasForeignKey("SubcontractId")
@@ -26527,6 +26723,32 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("WbsElementId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApCreditApplication", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("BillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("CreditId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Purchasing.ApPaymentRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.ApPayment", b =>
@@ -26560,6 +26782,26 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasOne("Workbench.Domain.Companies.Company", null)
                         .WithMany()
                         .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApRefund", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("CreditId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

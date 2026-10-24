@@ -258,7 +258,7 @@ public sealed class LandedCostService(
         var used = await db.Set<LandedCharge>().AsNoTracking().Where(c => c.ApBillLineId != null && c.Status != LandedChargeStatus.Cancelled).Select(c => c.ApBillLineId!.Value).ToListAsync(cancellationToken);
         var since = DateOnly.FromDateTime(UtcNow).AddDays(-365);
         var rows = await db.Set<ApBillLine>().AsNoTracking().Where(l => l.Kind == ApBillLineKind.Account && l.AccountId != null && l.Amount > 0)
-            .Join(db.Set<ApBill>().AsNoTracking().Where(b => (b.Status == ApBillStatus.Approved || b.Status == ApBillStatus.Posted) && b.InvoiceDate >= since),
+            .Join(db.Set<ApBill>().AsNoTracking().Where(b => (b.Status == ApBillStatus.Approved || b.Status == ApBillStatus.Posted) && b.Kind == ApDocumentKind.Bill && b.InvoiceDate >= since),
                 l => l.BillId, b => b.Id, (l, b) => new { l, b })
             .ToListAsync(cancellationToken);
         var vendorIds = rows.Select(r => r.b.VendorId).Distinct().ToList();
@@ -359,7 +359,7 @@ public sealed class LandedCostService(
         {
             var line = await db.Set<ApBillLine>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == billLineId, ct) ?? throw WorkbenchNotFoundException.For("Bill line", billLineId);
             var bill = await db.Set<ApBill>().AsNoTracking().FirstAsync(b => b.Id == line.BillId, ct);
-            if (bill.Status is not (ApBillStatus.Approved or ApBillStatus.Posted) || line.Kind != ApBillLineKind.Account || line.AccountId is null)
+            if (bill.Status is not (ApBillStatus.Approved or ApBillStatus.Posted) || bill.Kind != ApDocumentKind.Bill || line.Kind != ApBillLineKind.Account || line.AccountId is null)
             {
                 throw new ArgumentException($"Line {line.LineNumber} of {bill.Number} isn't an account line of an approved or posted bill.");
             }

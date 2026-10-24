@@ -27,6 +27,7 @@ public static class PurchasingRegistration
         services.AddScoped<IApBillService, ApBillService>();
         services.AddScoped<IApPaymentService, ApPaymentService>();
         services.AddScoped<IApReportService, ApReportService>();
+        services.AddScoped<IApCreditService, ApCreditService>();
 
         // Procure-to-pay: requisitions, purchase orders and receiving, the three-way match, commitments.
         services.AddScoped<RequisitionAccess>();

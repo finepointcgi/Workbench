@@ -259,7 +259,8 @@ public sealed class ProgressPaymentService(
                 join b in db.Set<ApBill>().AsNoTracking() on l.BillId equals b.Id
                 where l.ProjectId != null && projectIds.Contains(l.ProjectId.Value) && b.InvoiceDate <= through
                       && (b.Status == ApBillStatus.Approved || b.Status == ApBillStatus.Posted) && l.Kind != ApBillLineKind.Account
-                select new { l.Amount, l.RetainageAmount, Bill = b.Amount, BillRetainage = b.RetainageAmount, b.PaidAmount })
+                      && b.Kind == ApDocumentKind.Bill
+                select new { l.Amount, l.RetainageAmount, Bill = b.Amount, BillRetainage = b.RetainageAmount, PaidAmount = b.PaidAmount + b.AppliedAmount })
             .ToListAsync(ct);
         return Money.Round(lines.Sum(l =>
         {

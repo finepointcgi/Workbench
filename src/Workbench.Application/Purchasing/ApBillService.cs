@@ -89,7 +89,16 @@ public sealed class ApBillService(
     public async Task<BillDto> CreateAsync(SaveBillRequest request, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var bill = new ApBill { Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.ApBill, cancellationToken: cancellationToken), InvoiceNumber = "", EnteredBy = Me, CreatedAtUtc = UtcNow };
+        if (request.Kind == BillKind.RetainageRelease)
+        {
+            throw new ArgumentException("Release retainage from the subcontract instead.");
+        }
+
+        var bill = new ApBill
+        {
+            Number = await DocNumbers.NextAsync(Customization.DocumentNumberTypes.ApBill, cancellationToken: cancellationToken), InvoiceNumber = "", EnteredBy = Me, CreatedAtUtc = UtcNow,
+            Kind = request.Kind.ToDomain(),
+        };
         await ApplyAsync(db, bill, request, cancellationToken);
         db.Set<ApBill>().Add(bill);
         audit.Record(db, PurchasingSupport.BillEntity, bill.Id, "Created", after: Snapshot(bill));
@@ -102,6 +111,11 @@ public sealed class ApBillService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var bill = await LoadAsync(db, billId, cancellationToken);
         EnsureEditable(bill);
+        if (bill.Kind == ApDocumentKind.RetainageRelease)
+        {
+            throw new InvalidOperationException($"{ApCredits.Title(bill)} can't be edited; void it and release the retainage again.");
+        }
+
         var before = Snapshot(bill);
         db.Set<ApBillLine>().RemoveRange(bill.Lines);
         bill.Lines.Clear();
@@ -148,14 +162,18 @@ public sealed class ApBillService(
             await ValidateLineAsync(db, bill, vendor, line, cancellationToken);
         }
 
-        var duplicates = await DuplicatesAsync(db, bill.VendorId, bill.InvoiceNumber, bill.InvoiceDate, bill.Amount, bill.Id, cancellationToken);
+        var duplicates = await DuplicatesAsync(db, bill.VendorId, bill.InvoiceNumber, bill.InvoiceDate, bill.Amount, bill.Id, cancellationToken, bill.Kind);
         if (duplicates.Count > 0 && !request.ConfirmPossibleDuplicate)
         {
             throw new ArgumentException($"Possible duplicate of {string.Join(", ", duplicates.Select(d => $"{d.Number} ({d.Reason.ToLowerInvariant()})"))}. Confirm to submit anyway.");
         }
 
         bill.DuplicateConfirmedBy = duplicates.Count > 0 ? Me : null;
-        await CheckSubcontractFundingAsync(db, bill, request.FundingOverrideReason, cancellationToken);
+        if (bill.Kind == ApDocumentKind.Bill)
+        {
+            // Credits lower billed to date and releases don't change it, so only bills can push past funding.
+            await CheckSubcontractFundingAsync(db, bill, request.FundingOverrideReason, cancellationToken);
+        }
 
         // Three-way match (procure-to-pay): mismatches are recorded now and block approval until they clear or Finance overrides.
         await ThreeWayMatch.EvaluateAsync(db, bill, options.Value.MatchPriceTolerancePercent, cancellationToken);
@@ -180,6 +198,7 @@ public sealed class ApBillService(
         bill.RejectionReason = null;
         audit.Record(db, PurchasingSupport.BillEntity, bill.Id, "Submitted", after: new
         {
+            Kind = bill.Kind.ToString(),
             bill.Amount,
             Routes = bill.Lines.Select(l => l.ApproverEmail ?? PurchasingSupport.FinanceRoute).Distinct(),
             bill.FundingOverrideReason,
@@ -191,13 +210,13 @@ public sealed class ApBillService(
         var pms = bill.Lines.Where(l => l.ApproverEmail != null).Select(l => l.ApproverEmail!).Distinct().ToList();
         if (pms.Count > 0)
         {
-            notify.Add((pms, $"{bill.EnteredBy} sent a {vendor.Name} bill for your approval"));
+            notify.Add((pms, $"{bill.EnteredBy} sent a {vendor.Name} {ApCredits.Label(bill.Kind)} for your approval"));
         }
 
         var others = route.NotifyEmails.Where(e => !pms.Contains(e, StringComparer.OrdinalIgnoreCase)).ToList();
         if (others.Count > 0)
         {
-            notify.Add((others, $"{vendor.Name} bill {bill.InvoiceNumber} needs Finance approval"));
+            notify.Add((others, $"{vendor.Name} {ApCredits.Label(bill.Kind)} {bill.InvoiceNumber} needs Finance approval"));
         }
 
         foreach (var (to, title) in notify)
@@ -362,19 +381,175 @@ public sealed class ApBillService(
         var reason = PurchasingSupport.Required(request?.Reason, "A reason", 1000);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var bill = await LoadAsync(db, billId, cancellationToken);
-        if (bill.Status is not (ApBillStatus.Draft or ApBillStatus.Rejected or ApBillStatus.PendingApproval))
+        if (bill.Status == ApBillStatus.Void)
         {
-            throw new InvalidOperationException(bill.Status == ApBillStatus.Void
-                ? $"Bill {bill.Number} is already void."
-                : $"Bill {bill.Number} is {bill.Status}; approved and posted bills are corrected with a credit, not voided.");
+            throw new InvalidOperationException($"{ApCredits.Title(bill)} is already void.");
+        }
+
+        var wasPosted = bill.Status is ApBillStatus.Approved or ApBillStatus.Posted;
+        object? reversed = null;
+        if (wasPosted)
+        {
+            await EnsureNothingDependsOnAsync(db, bill, cancellationToken);
+            reversed = await ReversePostingsAsync(db, bill, reason, cancellationToken);
+        }
+        else
+        {
+            await _approvals.CancelAsync(db, ApprovalDocumentTypes.ApBill, bill.Id, Me, reason, cancellationToken);
         }
 
         bill.Status = ApBillStatus.Void;
         bill.VoidReason = reason;
-        await _approvals.CancelAsync(db, ApprovalDocumentTypes.ApBill, bill.Id, Me, reason, cancellationToken);
-        audit.Record(db, PurchasingSupport.BillEntity, bill.Id, "Voided", reason: reason);
+        bill.VoidedBy = Me;
+        bill.VoidedAtUtc = UtcNow;
+        bill.PostingProblem = null;
+        await ReopenQualityReturnAsync(db, bill, cancellationToken);
+        audit.Record(db, PurchasingSupport.BillEntity, bill.Id, "Voided", after: reversed, reason: reason);
         await db.SaveChangesAsync(cancellationToken);
         return await DetailAsync(db, bill.Id, cancellationToken);
+    }
+
+    /// <summary>A posted document can only be voided once nothing settles against it or was built on it.</summary>
+    private static async Task EnsureNothingDependsOnAsync(IWorkbenchDbContext db, ApBill bill, CancellationToken ct)
+    {
+        var title = ApCredits.Title(bill);
+        var paid = await db.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id && p.Status != ApPaymentStatus.Void)
+            .Join(db.Set<ApPaymentRun>(), p => p.RunId, r => r.Id, (p, r) => new { p.Status, p.Reference, r.Number }).ToListAsync(ct);
+        if (paid.FirstOrDefault(p => p.Status == ApPaymentStatus.Paid) is { } payment)
+        {
+            throw new InvalidOperationException($"{title} is paid (payment {payment.Reference} in {payment.Number}). Void the payment first, then the bill.");
+        }
+
+        if (paid.FirstOrDefault() is { } scheduled)
+        {
+            throw new InvalidOperationException($"{title} is in payment run {scheduled.Number}. Cancel the run first.");
+        }
+
+        var applications = await ApCredits.Live(db).AsNoTracking().Where(a => a.BillId == bill.Id || a.CreditId == bill.Id).Select(a => new { a.Status, Other = a.BillId == bill.Id ? a.CreditId : a.BillId }).ToListAsync(ct);
+        if (applications.Count > 0)
+        {
+            var others = applications.Select(a => a.Other).Distinct().ToList();
+            var numbers = await db.Set<ApBill>().AsNoTracking().Where(b => others.Contains(b.Id)).Select(b => b.Number).OrderBy(n => n).ToListAsync(ct);
+            throw new InvalidOperationException(applications.Any(a => a.Status == ApCreditApplicationStatus.Scheduled)
+                ? $"{title} has credit netted in an open payment run ({string.Join(", ", numbers)}). Cancel the run first."
+                : $"{title} has credit applied ({string.Join(", ", numbers)}). Unapply it first.");
+        }
+
+        if (await db.Set<ApRefund>().AsNoTracking().AnyAsync(r => r.CreditId == bill.Id && r.Status == ApRefundStatus.Received, ct))
+        {
+            throw new InvalidOperationException($"The vendor refunded part of {title}. Void the refund first.");
+        }
+
+        var memos = await db.Set<ApBill>().AsNoTracking().Where(b => b.CreditsBillId == bill.Id && b.Status != ApBillStatus.Void).Select(b => b.Number).ToListAsync(ct);
+        if (memos.Count > 0)
+        {
+            throw new InvalidOperationException($"{string.Join(", ", memos.Order())} {(memos.Count == 1 ? "credits" : "credit")} {title}. Void {(memos.Count == 1 ? "it" : "them")} first.");
+        }
+
+        var releases = await db.Set<ApBillLine>().AsNoTracking().Where(l => l.ReleasesBillId == bill.Id)
+            .Join(db.Set<ApBill>().Where(b => b.Status != ApBillStatus.Void), l => l.BillId, b => b.Id, (l, b) => b.Number).Distinct().ToListAsync(ct);
+        if (releases.Count > 0)
+        {
+            throw new InvalidOperationException($"Retainage of {title} was released on {string.Join(", ", releases.Order())}. Void the release first.");
+        }
+
+        var lineIds = bill.Lines.Select(l => l.Id).ToList();
+        if (await db.Set<Domain.Assets.FixedAsset>().AsNoTracking().Where(a => a.SourceBillLineId != null && lineIds.Contains(a.SourceBillLineId!.Value)).Select(a => a.TagNumber).FirstOrDefaultAsync(ct) is { } tag)
+        {
+            throw new InvalidOperationException($"A line of {title} is fixed asset {tag}. Remove the asset first.");
+        }
+
+        if (await db.Set<Domain.Materials.LandedCharge>().AsNoTracking().AnyAsync(c => c.ApBillLineId != null && lineIds.Contains(c.ApBillLineId!.Value) && c.Status != Domain.Materials.LandedChargeStatus.Cancelled, ct))
+        {
+            throw new InvalidOperationException($"A line of {title} is allocated as a landed cost. Cancel that charge first.");
+        }
+    }
+
+    /// <summary>
+    /// Reverses every posting of an approved or posted document: its AP entry, the project cost of its ODCs (an offsetting ODC
+    /// each, with an entry that mirrors the original, so project cost and the ledger agree) and its use tax. Everything is dated
+    /// in the document's own period when that's open, otherwise today; a closed current period refuses the void.
+    /// </summary>
+    private async Task<object> ReversePostingsAsync(IWorkbenchDbContext db, ApBill bill, string reason, CancellationToken ct)
+    {
+        var date = (await GeneralLedger.PeriodForAsync(db, bill.InvoiceDate, ct)) is { Status: PeriodStatus.Open } ? bill.InvoiceDate : DateOnly.FromDateTime(UtcNow);
+        await GeneralLedger.OpenPeriodForAsync(db, date, ct);
+        var memo = $"Void {bill.Number}: {reason}";
+        var reversals = new List<string>();
+        var apEntries = await db.Set<JournalEntry>().Include(e => e.Lines)
+            .Where(e => e.Source == JournalSource.AP && e.SourceId == bill.Id && e.Status == JournalStatus.Posted).ToListAsync(ct);
+        foreach (var entry in apEntries)
+        {
+            reversals.Add((await ledger.ReverseAsync(db, entry, date, Clip(memo, 500), ct)).Number);
+        }
+
+        var odcIds = bill.Lines.Where(l => l.OdcEntryId != null && l.ReversalOdcEntryId == null).Select(l => l.OdcEntryId!.Value).ToList();
+        var odcs = await db.Set<OdcEntry>().AsNoTracking().Where(o => odcIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, ct);
+        foreach (var line in bill.Lines.Where(l => l.OdcEntryId != null && l.ReversalOdcEntryId == null).OrderBy(l => l.LineNumber))
+        {
+            if (!odcs.TryGetValue(line.OdcEntryId!.Value, out var odc) || odc.Status != OdcStatus.Approved)
+            {
+                continue;
+            }
+
+            var offset = new OdcEntry
+            {
+                ProjectId = odc.ProjectId, WbsElementId = odc.WbsElementId, Type = odc.Type, IncurredOn = date, Amount = -odc.Amount,
+                Description = Clip($"Void of {bill.Number}: {odc.Description}", 500), Vendor = odc.Vendor, VendorId = odc.VendorId, SubcontractId = odc.SubcontractId,
+                InvoiceNumber = odc.InvoiceNumber, EmployeeId = odc.EmployeeId, IsUnallowable = odc.IsUnallowable, UnallowableReason = odc.UnallowableReason,
+                CurrencyCode = odc.CurrencyCode, TransactionAmount = -odc.TransactionAmount, ExchangeRate = odc.ExchangeRate,
+                Status = OdcStatus.Approved, SubmittedBy = Me, CreatedAtUtc = UtcNow, SubmittedAtUtc = UtcNow, ApprovedBy = Me, ApprovedAtUtc = UtcNow,
+            };
+            db.Set<OdcEntry>().Add(offset);
+            line.ReversalOdcEntryId = offset.Id;
+            audit.Record(db, OdcWorkflow.OdcEntityType, offset.Id, "Created", after: new { offset.Amount, Voids = odc.Id, Bill = bill.Number, Status = "Approved" }, reason: reason);
+
+            // The offset posts what the original posted, the other way round (same accounts and segments), as its own ODC entry.
+            var posted = await db.Set<JournalEntry>().Include(e => e.Lines)
+                .Where(e => e.Source == JournalSource.Odc && e.SourceId == odc.Id && e.Status == JournalStatus.Posted).ToListAsync(ct);
+            foreach (var original in posted)
+            {
+                var mirror = original.CreateReversal(date, (await GeneralLedger.PeriodForAsync(db, date, ct)).Id, reason, ledger.Actor, ledger.UtcNow);
+                mirror.Source = JournalSource.Odc;
+                mirror.SourceId = offset.Id;
+                mirror.SourceRevision = 0;
+                mirror.ReversalOfId = null;
+                mirror.ReversalReason = null;
+                mirror.Description = Clip($"ODC: void of {bill.Number} ({original.Number}): {odc.Description}", 500);
+                db.Set<JournalEntry>().Add(mirror);
+                await ledger.PostAsync(db, mirror, ct);
+                reversals.Add(mirror.Number);
+            }
+        }
+
+        var tax = await db.Set<Domain.SalesTax.ApBillTax>().FirstOrDefaultAsync(t => t.BillId == bill.Id, ct);
+        if (tax?.UseTaxJournalEntryId is { } useTaxEntry)
+        {
+            var entry = await db.Set<JournalEntry>().Include(e => e.Lines).FirstAsync(e => e.Id == useTaxEntry, ct);
+            if (entry.Status == JournalStatus.Posted)
+            {
+                reversals.Add((await ledger.ReverseAsync(db, entry, date, Clip(memo, 500), ct)).Number);
+            }
+        }
+
+        bill.VoidReversalDate = date;
+        return new { ReversedOn = date, Entries = reversals };
+    }
+
+    /// <summary>A void AP debit memo from a quality return puts the return's debit memo back to open.</summary>
+    private async Task ReopenQualityReturnAsync(IWorkbenchDbContext db, ApBill bill, CancellationToken ct)
+    {
+        if (bill.QualityDebitMemoId is not { } id || await db.Set<Domain.Quality.VendorDebitMemo>().FirstOrDefaultAsync(m => m.Id == id, ct) is not { } quality
+            || quality.Status != Domain.Quality.DebitMemoStatus.Applied)
+        {
+            return;
+        }
+
+        quality.Status = Domain.Quality.DebitMemoStatus.Open;
+        quality.AppliedBy = null;
+        quality.AppliedAtUtc = null;
+        quality.AppliedReference = null;
+        audit.Record(db, "VendorDebitMemo", quality.Id, "Reopened", new { Status = "Applied" }, new { Status = "Open" }, $"{bill.Number} was voided");
     }
 
     public async Task<IReadOnlyList<LinkableOdcDto>> ListLinkableOdcsAsync(Guid vendorId, CancellationToken cancellationToken = default)
@@ -385,7 +560,7 @@ public sealed class ApBillService(
         var odcs = (await db.Set<OdcEntry>().AsNoTracking()
                 .Where(o => o.ExpenseReportId == null && o.Status != OdcStatus.Rejected && (o.VendorId == vendorId || (o.VendorId == null && o.Vendor == vendor.Name)))
                 .ToListAsync(cancellationToken))
-            .Where(o => !linked.Contains(o.Id) && !PostingEngine.IsEmployeeExpense(o))
+            .Where(o => o.Amount > 0 && !linked.Contains(o.Id) && !PostingEngine.IsEmployeeExpense(o))
             .OrderBy(o => o.IncurredOn).ToList();
         var wbsIds = odcs.Select(o => o.WbsElementId).Distinct().ToList();
         var wbs = await db.Set<WbsElement>().AsNoTracking().Where(w => wbsIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, cancellationToken);
@@ -434,7 +609,7 @@ public sealed class ApBillService(
         {
             var bill = await LoadAsync(db, billId, ct);
             var vendor = await PurchasingSupport.FindVendorAsync(db, bill.VendorId, ct);
-            foreach (var line in bill.Lines.Where(l => l.Kind != ApBillLineKind.Account).OrderBy(l => l.LineNumber))
+            foreach (var line in bill.Lines.Where(l => l.Kind is ApBillLineKind.ProjectCost or ApBillLineKind.Subcontract).OrderBy(l => l.LineNumber))
             {
                 await EnsureOdcAsync(db, bill, vendor, line, ct);
             }
@@ -490,10 +665,54 @@ public sealed class ApBillService(
             await db.SaveChangesAsync(ct);
         }
 
-        if (problems.Count == 0 && useTax is not null)
+        if (problems.Count == 0)
         {
-            await useTax.TryAccrueAsync(billId, ct); // Sales tax: use tax on taxable purchases the vendor didn't tax (never fails the posting).
+            await AfterPostingAsync(billId, ct);
         }
+    }
+
+    /// <summary>
+    /// Bills accrue use tax; a memo against a bill is applied to that bill's open balance (what's left stays an open credit
+    /// for the next payment run).
+    /// </summary>
+    private async Task AfterPostingAsync(Guid billId, CancellationToken ct)
+    {
+        await using (var db = await dbFactory.CreateAsync(ct))
+        {
+            var doc = await db.Set<ApBill>().AsNoTracking().FirstAsync(b => b.Id == billId, ct);
+            if (doc.Kind == ApDocumentKind.Bill && useTax is not null)
+            {
+                await useTax.TryAccrueAsync(billId, ct); // Sales tax: use tax on taxable purchases the vendor didn't tax (never fails the posting).
+            }
+
+            if (!doc.IsCredit || doc.CreditsBillId is not { } target)
+            {
+                return;
+            }
+        }
+
+        await using var write = await dbFactory.CreateAsync(ct);
+        var memo = await write.Set<ApBill>().FirstAsync(b => b.Id == billId, ct);
+        var bill = await write.Set<ApBill>().FirstOrDefaultAsync(b => b.Id == memo.CreditsBillId, ct);
+        if (bill is null || bill.Status != ApBillStatus.Posted || bill.IsForeignCurrency || bill.CompanyId != memo.CompanyId)
+        {
+            return;
+        }
+
+        var inRuns = await write.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id && p.Status == ApPaymentStatus.Scheduled)
+            .Join(write.Set<ApPaymentRun>().Where(r => r.Status == PaymentRunStatus.Draft || r.Status == PaymentRunStatus.Approved), p => p.RunId, r => r.Id, (p, r) => p.Amount)
+            .SumAsync(ct);
+        var scheduled = (await ApCredits.ScheduledByBillAsync(write, [bill.Id], ct)).GetValueOrDefault(bill.Id);
+        var amount = Math.Min(memo.Balance, bill.Balance - inRuns - scheduled);
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        var application = ApCredits.Apply(write, memo, bill, amount, memo.InvoiceDate, Me, UtcNow);
+        audit.Record(write, PurchasingSupport.BillEntity, memo.Id, "CreditApplied", after: new { Bill = bill.Number, application.Amount, Automatic = true });
+        audit.Record(write, PurchasingSupport.BillEntity, bill.Id, "CreditApplied", after: new { Credit = memo.Number, application.Amount, Automatic = true });
+        await write.SaveChangesAsync(ct);
     }
 
     /// <summary>Approves the linked vendor ODC, or creates an approved one for the line, so the ODC engine posts it.</summary>
@@ -501,6 +720,7 @@ public sealed class ApBillService(
     {
         if (line.OdcEntryId is { } odcId)
         {
+            // Memo lines never link an existing ODC, so this is a bill line (or a memo retried after its ODC was created).
             var odc = await db.Set<OdcEntry>().FirstOrDefaultAsync(o => o.Id == odcId, ct) ?? throw WorkbenchNotFoundException.For("ODC", odcId);
             odc.VendorId ??= vendor.Id;
             odc.SubcontractId ??= line.SubcontractId;
@@ -524,8 +744,10 @@ public sealed class ApBillService(
             WbsElementId = line.WbsElementId!.Value,
             Type = line.OdcType ?? (line.Kind == ApBillLineKind.Subcontract ? OdcType.Subcontract : OdcType.Other),
             IncurredOn = bill.InvoiceDate,
-            Amount = line.Amount,
-            Description = line.Description,
+
+            // A memo's ODC is negative: it takes the cost back off the same project, WBS and cost type.
+            Amount = bill.IsCredit ? -line.Amount : line.Amount,
+            Description = bill.IsCredit ? Clip($"{(bill.Kind == ApDocumentKind.CreditMemo ? "Vendor credit" : "Debit memo")} {bill.InvoiceNumber}: {line.Description}", 500) : line.Description,
             Vendor = vendor.Name,
             VendorId = vendor.Id,
             SubcontractId = line.SubcontractId,
@@ -546,8 +768,9 @@ public sealed class ApBillService(
     }
 
     /// <summary>
-    /// The AP entry: account lines (debit the account, credit AP) and retainage on subcontract lines (debit AP, credit AP
-    /// retainage, moving the held part out of the payable). Returns the entry (existing or new), or null when there's nothing to post.
+    /// The AP entry: account lines (debit the account, credit AP), retainage on subcontract lines (debit AP, credit AP
+    /// retainage, moving the held part out of the payable) and retainage releases (debit AP retainage, credit AP). A credit or
+    /// debit memo posts the same lines the other way round. Returns the entry (existing or new), or null when there's nothing to post.
     /// </summary>
     private async Task<Guid?> PostApEntryAsync(Guid billId, CancellationToken ct)
     {
@@ -561,33 +784,42 @@ public sealed class ApBillService(
 
         var bill = await LoadAsync(db, billId, ct);
         var accountLines = bill.Lines.Where(l => l.Kind == ApBillLineKind.Account).OrderBy(l => l.LineNumber).ToList();
-        if (accountLines.Count == 0 && bill.RetainageAmount == 0)
+        var releaseLines = bill.Lines.Where(l => l.Kind == ApBillLineKind.Retainage).OrderBy(l => l.LineNumber).ToList();
+        if (accountLines.Count == 0 && releaseLines.Count == 0 && bill.RetainageAmount == 0)
         {
             return null;
         }
 
         var vendor = await PurchasingSupport.FindVendorAsync(db, bill.VendorId, ct);
         var payables = await PurchasingSupport.PayablesAccountAsync(db, ct);
+        var sign = bill.IsCredit ? -1 : 1;
         var entry = new JournalEntry
         {
             CompanyId = bill.CompanyId,
             Date = bill.InvoiceDate,
             Source = JournalSource.AP,
             SourceId = bill.Id,
-            Description = $"AP bill {bill.Number}: {vendor.Name} invoice {bill.InvoiceNumber}",
+            Description = bill.Kind switch
+            {
+                ApDocumentKind.CreditMemo => $"AP credit memo {bill.Number}: {vendor.Name} credit {bill.InvoiceNumber}",
+                ApDocumentKind.DebitMemo => $"AP debit memo {bill.Number}: {vendor.Name} {bill.InvoiceNumber}",
+                ApDocumentKind.RetainageRelease => $"Retainage release {bill.Number}: {vendor.Name}",
+                _ => $"AP bill {bill.Number}: {vendor.Name} invoice {bill.InvoiceNumber}",
+            },
             CreatedBy = ledger.Actor,
             CreatedAtUtc = ledger.UtcNow,
         };
 
-        void Line(Guid account, decimal debit, decimal credit, string memo, Guid? org = null, decimal? transaction = null) => entry.Lines.Add(new JournalLine
+        // A positive amount debits the account, a negative one credits it.
+        void Line(Guid account, decimal amount, string memo, Guid? org = null, decimal? transaction = null) => entry.Lines.Add(new JournalLine
         {
             JournalEntryId = entry.Id,
             LineNumber = entry.Lines.Count + 1,
             AccountId = account,
             OrgUnitId = org,
-            Debit = debit,
-            Credit = credit,
-            Memo = memo.Length > 500 ? memo[..500] : memo,
+            Debit = amount > 0 ? amount : 0,
+            Credit = amount < 0 ? -amount : 0,
+            Memo = Clip(memo, 500),
             TransactionCurrency = transaction is null ? null : bill.CurrencyCode,
             TransactionAmount = transaction is null ? null : Math.Abs(transaction.Value),
             ExchangeRate = transaction is null ? null : bill.ExchangeRate,
@@ -596,20 +828,31 @@ public sealed class ApBillService(
 
         foreach (var line in accountLines)
         {
-            Line(line.AccountId!.Value, line.Amount, 0, line.Description, line.OrgUnitId);
+            Line(line.AccountId!.Value, sign * line.Amount, line.Description, line.OrgUnitId);
         }
 
         var accountTotal = accountLines.Sum(l => l.Amount);
         if (accountTotal > 0)
         {
-            Line(payables.Id, 0, accountTotal, $"{vendor.Code} {bill.InvoiceNumber}", transaction: Tx(accountLines.Sum(l => l.TransactionAmount ?? 0)));
+            Line(payables.Id, -sign * accountTotal, $"{vendor.Code} {bill.InvoiceNumber}", transaction: Tx(accountLines.Sum(l => l.TransactionAmount ?? 0)));
         }
 
-        if (bill.RetainageAmount > 0)
+        if (bill.RetainageAmount > 0 || releaseLines.Count > 0)
         {
             var retainage = await PurchasingSupport.EnsureRetainageAccountAsync(db, options.Value, UtcNow, ct);
-            Line(payables.Id, bill.RetainageAmount, 0, $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}", transaction: Tx(bill.TransactionRetainage));
-            Line(retainage.Id, 0, bill.RetainageAmount, $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}", transaction: Tx(bill.TransactionRetainage));
+            if (bill.RetainageAmount > 0)
+            {
+                var memo = bill.IsCredit ? $"Retainage credited: {vendor.Code} {bill.InvoiceNumber}" : $"Retainage withheld: {vendor.Code} {bill.InvoiceNumber}";
+                Line(payables.Id, sign * bill.RetainageAmount, memo, transaction: Tx(bill.TransactionRetainage));
+                Line(retainage.Id, -sign * bill.RetainageAmount, memo, transaction: Tx(bill.TransactionRetainage));
+            }
+
+            var released = releaseLines.Sum(l => l.Amount);
+            if (released > 0)
+            {
+                Line(retainage.Id, released, $"Retainage released: {vendor.Code} {bill.Number}");
+                Line(payables.Id, -released, $"Retainage released: {vendor.Code} {bill.Number}");
+            }
         }
 
         // A new retainage account has to exist before the ledger validates the lines against it.
@@ -621,30 +864,56 @@ public sealed class ApBillService(
         return entry.Id;
     }
 
+    private static string Clip(string text, int max) => text.Length > max ? text[..max] : text;
+
     // ---- Entry and validation ----
 
     private async Task ApplyAsync(IWorkbenchDbContext db, ApBill bill, SaveBillRequest r, CancellationToken ct)
     {
         var vendor = await PurchasingSupport.FindVendorAsync(db, r.VendorId, ct);
-        PurchasingSupport.EnsureVendorCanTransact(vendor, "entering bills");
-        var invoice = PurchasingSupport.Required(r.InvoiceNumber, "Invoice number", 64);
-        var sameNumber = (await DuplicatesAsync(db, vendor.Id, invoice, r.InvoiceDate, null, bill.Id, ct)).FirstOrDefault(d => d.Reason == SameInvoiceNumber);
+        PurchasingSupport.EnsureVendorCanTransact(vendor, bill.IsCredit ? "entering credits" : "entering bills");
+        var what = ApCredits.Label(bill.Kind);
+
+        // A debit memo is ours, so its number defaults to our document number; a vendor credit carries the vendor's number.
+        var invoice = bill.Kind == ApDocumentKind.DebitMemo && string.IsNullOrWhiteSpace(r.InvoiceNumber)
+            ? bill.Number
+            : PurchasingSupport.Required(r.InvoiceNumber, bill.Kind == ApDocumentKind.CreditMemo ? "The vendor's credit memo number" : "Invoice number", 64);
+        var sameNumber = (await DuplicatesAsync(db, vendor.Id, invoice, r.InvoiceDate, null, bill.Id, ct, bill.Kind)).FirstOrDefault(d => d.Reason == SameInvoiceNumber);
         if (sameNumber is not null)
         {
-            throw new ArgumentException($"{vendor.Code} invoice {invoice} is already on bill {sameNumber.Number}.");
+            throw new ArgumentException($"{vendor.Code} {(bill.IsCredit ? "credit" : "invoice")} {invoice} is already on {sameNumber.Number}.");
         }
 
         if (r.Lines is null || r.Lines.Count == 0)
         {
-            throw new ArgumentException("A bill needs at least one line.");
+            throw new ArgumentException($"A {what} needs at least one line.");
         }
 
         if (r.Lines.Count > 200)
         {
-            throw new ArgumentException("A bill can have at most 200 lines.");
+            throw new ArgumentException($"A {what} can have at most 200 lines.");
         }
 
-        var due = r.DueDate ?? r.InvoiceDate.AddDays(vendor.PaymentTermsDays);
+        bill.CreditsBillId = null;
+        if (bill.IsCredit && r.CreditsBillId is { } creditsId)
+        {
+            var original = await db.Set<ApBill>().AsNoTracking().FirstOrDefaultAsync(b => b.Id == creditsId, ct) ?? throw WorkbenchNotFoundException.For("Bill", creditsId);
+            if (original.VendorId != vendor.Id || original.Kind != ApDocumentKind.Bill || original.Status != ApBillStatus.Posted)
+            {
+                throw new ArgumentException($"{original.Number} isn't a posted bill of {vendor.Code}, so it can't be credited.");
+            }
+
+            bill.CreditsBillId = original.Id;
+            bill.CompanyId = original.CompanyId;
+        }
+
+        if (bill.IsCredit && r.Lines.Where(l => l.CreditsLineId != null).GroupBy(l => l.CreditsLineId).Any(g => g.Count() > 1))
+        {
+            throw new ArgumentException("The same bill line is credited twice.");
+        }
+
+        // A memo isn't due; it's applied or netted from its date.
+        var due = bill.IsCredit ? r.InvoiceDate : r.DueDate ?? r.InvoiceDate.AddDays(vendor.PaymentTermsDays);
         if (due < r.InvoiceDate)
         {
             throw new ArgumentException("The due date is before the invoice date.");
@@ -657,7 +926,12 @@ public sealed class ApBillService(
         bill.Description = PurchasingSupport.Optional(r.Description, "Description", 500);
 
         // Multicurrency: lines are entered in the bill's currency and kept in the functional currency at the bill's rate.
-        var currency = await CurrencySupport.ResolveAsync(db, r.CurrencyCode ?? vendor.CurrencyCode, r.InvoiceDate, r.ExchangeRate, ct);
+        var currency = await CurrencySupport.ResolveAsync(db, bill.IsCredit ? r.CurrencyCode : r.CurrencyCode ?? vendor.CurrencyCode, r.InvoiceDate, r.ExchangeRate, ct);
+        if (bill.IsCredit && currency.IsForeign)
+        {
+            throw new ArgumentException($"Credit and debit memos are in {await CurrencySupport.FunctionalAsync(db, ct)}; enter the credit at its dollar amount.");
+        }
+
         foreach (var input in r.Lines)
         {
             decimal? transactionAmount = null;
@@ -695,6 +969,7 @@ public sealed class ApBillService(
                 PurchaseOrderLineId = input.PurchaseOrderLineId,
                 Quantity = input.Quantity,
                 UnitPrice = input.UnitPrice,
+                CreditsLineId = bill.IsCredit ? input.CreditsLineId : null,
             };
             bill.Lines.Add(line);
             await ValidateLineAsync(db, bill, vendor, line, ct);
@@ -725,6 +1000,42 @@ public sealed class ApBillService(
     private async Task ValidateLineAsync(IWorkbenchDbContext db, ApBill bill, Vendor vendor, ApBillLine line, CancellationToken ct)
     {
         var n = line.LineNumber;
+        if (line.Kind == ApBillLineKind.Retainage || bill.Kind == ApDocumentKind.RetainageRelease)
+        {
+            if (line.Kind != ApBillLineKind.Retainage || bill.Kind != ApDocumentKind.RetainageRelease || line.ReleasesBillId is null)
+            {
+                throw new ArgumentException($"Line {n}: retainage is released from the subcontract, on a retainage release of its own.");
+            }
+
+            line.Description = PurchasingSupport.Required(line.Description, $"Line {n}: description", 500);
+            line.Amount = PurchasingSupport.Money(line.Amount, $"Line {n}: amount");
+            line.RetainageAmount = 0;
+            return;
+        }
+
+        ApBillLine? credited = null;
+        if (bill.IsCredit)
+        {
+            if (line.PurchaseOrderLineId is not null)
+            {
+                throw new ArgumentException($"Line {n}: a credit can't bill a purchase order line; credit the bill line that billed it.");
+            }
+
+            if (line.OdcEntryId is not null)
+            {
+                throw new ArgumentException($"Line {n}: a credit can't link a project ODC; it reverses the cost with an ODC of its own.");
+            }
+
+            if (line.CreditsLineId is not null)
+            {
+                credited = await CreditedLineAsync(db, bill, vendor, line, ct);
+            }
+        }
+        else
+        {
+            line.CreditsLineId = null;
+        }
+
         if (line.PurchaseOrderLineId is not null)
         {
             // Billed from a purchase order: the PO line decides the charging and price (procure-to-pay).
@@ -747,7 +1058,7 @@ public sealed class ApBillService(
                 throw new ArgumentException($"Line {n}: subcontract {sub.Number} is with another vendor.");
             }
 
-            if (sub.Status != SubcontractStatus.Active)
+            if (sub.Status != SubcontractStatus.Active && !(bill.IsCredit && sub.Status == SubcontractStatus.Closed))
             {
                 throw new ArgumentException($"Line {n}: subcontract {sub.Number} is {sub.Status}; only active subcontracts can be billed.");
             }
@@ -768,9 +1079,11 @@ public sealed class ApBillService(
             var account = line.AccountId is { } aid
                 ? await db.Set<Account>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == aid, ct) ?? throw WorkbenchNotFoundException.For("Account", aid)
                 : throw new ArgumentException($"Line {n}: choose a GL account.");
-            if (!account.IsActive || account.Type is not (AccountType.Expense or AccountType.Asset))
+            // Liability lines pay what's owed elsewhere (a corporate card issuer, a tax); never AP itself or AP retainage.
+            if (!account.IsActive || account.Type is not (AccountType.Expense or AccountType.Asset or AccountType.Liability)
+                || (account.Type == AccountType.Liability && await IsPayablesControlAsync(db, account, ct)))
             {
-                throw new ArgumentException($"Line {n}: {account.Number} {account.Name} must be an active expense or asset account.");
+                throw new ArgumentException($"Line {n}: {account.Number} {account.Name} must be an active expense, asset or liability account other than accounts payable.");
             }
 
             if (await db.Set<Account>().AnyAsync(a => a.ParentId == account.Id, ct))
@@ -828,12 +1141,17 @@ public sealed class ApBillService(
                 ? await db.Set<WbsElement>().AsNoTracking().FirstOrDefaultAsync(w => w.Id == wid, ct) ?? throw WorkbenchNotFoundException.For("WBS element", wid)
                 : throw new ArgumentException($"Line {n}: choose the project WBS element to charge.");
             var project = await db.Set<Project>().AsNoTracking().FirstAsync(p => p.Id == wbs.ProjectId, ct);
-            if (line.OdcEntryId is null)
+            if (line.OdcEntryId is null && !bill.IsCredit)
             {
                 if (project.Status != ProjectStatus.Active || !wbs.IsOpen || !wbs.IsChargeable || await db.Set<WbsElement>().AnyAsync(w => w.ParentId == wbs.Id, ct))
                 {
                     throw new ArgumentException($"Line {n}: {wbs.Code} isn't an open, chargeable lowest-level WBS element of an active project.");
                 }
+            }
+            else if (bill.IsCredit && await db.Set<WbsElement>().AnyAsync(w => w.ParentId == wbs.Id, ct))
+            {
+                // A credit may go back to a closed WBS element (the cost it reverses was charged there), but always to a lowest level.
+                throw new ArgumentException($"Line {n}: {wbs.Code} is a summary WBS element; credit one of its lowest-level elements.");
             }
 
             if (sub?.ProjectId is { } sp && sp != project.Id)
@@ -847,8 +1165,53 @@ public sealed class ApBillService(
 
         line.Description = PurchasingSupport.Required(line.Description, $"Line {n}: description", 500);
         line.Amount = PurchasingSupport.Money(line.Amount, $"Line {n}: amount");
-        line.RetainageAmount = sub is null ? 0 : Financials.Money.Round(line.Amount * sub.RetainagePercent / 100m);
+        line.RetainageAmount = sub is null ? 0
+            : credited is { Amount: > 0 } ? Financials.Money.Round(credited.RetainageAmount * line.Amount / credited.Amount)
+            : Financials.Money.Round(line.Amount * sub.RetainagePercent / 100m);
     }
+
+    /// <summary>
+    /// A memo line that credits a bill line takes that line's charging (kind, WBS, cost type, subcontract, account, org) and
+    /// can't credit more than is left of it.
+    /// </summary>
+    private static async Task<ApBillLine> CreditedLineAsync(IWorkbenchDbContext db, ApBill memo, Vendor vendor, ApBillLine line, CancellationToken ct)
+    {
+        var n = line.LineNumber;
+        var original = await db.Set<ApBillLine>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == line.CreditsLineId, ct) ?? throw WorkbenchNotFoundException.For("Bill line", line.CreditsLineId!.Value);
+        var source = await db.Set<ApBill>().AsNoTracking().FirstAsync(b => b.Id == original.BillId, ct);
+        if (source.VendorId != vendor.Id || source.Kind != ApDocumentKind.Bill || source.Status != ApBillStatus.Posted || original.Kind == ApBillLineKind.Retainage)
+        {
+            throw new ArgumentException($"Line {n}: the line it credits isn't on a posted bill of {vendor.Code}.");
+        }
+
+        if (memo.CreditsBillId is { } against && against != source.Id)
+        {
+            throw new ArgumentException($"Line {n}: the line it credits is on {source.Number}, not the bill this credit is against.");
+        }
+
+        memo.CreditsBillId ??= source.Id;
+        line.Kind = original.Kind;
+        line.WbsElementId = original.WbsElementId;
+        line.OdcType = original.OdcType;
+        line.SubcontractId = original.SubcontractId;
+        line.AccountId = original.AccountId;
+        line.OrgUnitId = original.OrgUnitId;
+        if (string.IsNullOrWhiteSpace(line.Description))
+        {
+            line.Description = original.Description;
+        }
+
+        var already = (await ApCredits.CreditedByLineAsync(db, [original.Id], memo.Id, ct)).GetValueOrDefault(original.Id).Amount;
+        if (line.Amount > original.Amount - already)
+        {
+            throw new ArgumentException($"Line {n}: only {original.Amount - already:N2} of {source.Number} line {original.LineNumber} is left to credit.");
+        }
+
+        return original;
+    }
+
+    private async Task<bool> IsPayablesControlAsync(IWorkbenchDbContext db, Account account, CancellationToken ct) =>
+        account.Number == options.Value.RetainageAccountNumber || account.Id == (await PurchasingSupport.PayablesAccountAsync(db, ct)).Id;
 
     private static async Task<List<WbsElement>> ChargeableLeavesAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct)
     {
@@ -911,12 +1274,14 @@ public sealed class ApBillService(
 
     private const string SameInvoiceNumber = "Same invoice number";
 
+    /// <summary>Possible duplicates among the vendor's documents of the same kind (a credit memo may reuse an invoice's number).</summary>
     private static async Task<IReadOnlyList<BillDuplicateDto>> DuplicatesAsync(
-        IWorkbenchDbContext db, Guid vendorId, string? invoiceNumber, DateOnly invoiceDate, decimal? amount, Guid? excludeId, CancellationToken ct)
+        IWorkbenchDbContext db, Guid vendorId, string? invoiceNumber, DateOnly invoiceDate, decimal? amount, Guid? excludeId, CancellationToken ct,
+        ApDocumentKind kind = ApDocumentKind.Bill)
     {
         var number = invoiceNumber?.Trim().ToUpperInvariant() ?? "";
         var candidates = await db.Set<ApBill>().AsNoTracking()
-            .Where(b => b.VendorId == vendorId && b.Status != ApBillStatus.Void && b.Id != excludeId)
+            .Where(b => b.VendorId == vendorId && b.Status != ApBillStatus.Void && b.Id != excludeId && b.Kind == kind)
             .ToListAsync(ct);
         var result = new List<BillDuplicateDto>();
         foreach (var b in candidates.OrderBy(b => b.Number))
@@ -933,11 +1298,19 @@ public sealed class ApBillService(
         return result;
     }
 
-    /// <summary>ODCs linked from lines of live bills other than <paramref name="exceptBillId"/>.</summary>
-    private static async Task<HashSet<Guid>> LinkedOdcIdsAsync(IWorkbenchDbContext db, Guid? exceptBillId, CancellationToken ct) =>
-        (await db.Set<ApBillLine>().AsNoTracking().Where(l => l.OdcEntryId != null && l.BillId != exceptBillId)
+    /// <summary>
+    /// ODCs linked from lines of live bills other than <paramref name="exceptBillId"/>, plus ODCs a void took back off the
+    /// project (and their offsets): those are settled and can't be billed again.
+    /// </summary>
+    private static async Task<HashSet<Guid>> LinkedOdcIdsAsync(IWorkbenchDbContext db, Guid? exceptBillId, CancellationToken ct)
+    {
+        var live = await db.Set<ApBillLine>().AsNoTracking().Where(l => l.OdcEntryId != null && l.BillId != exceptBillId)
             .Join(db.Set<ApBill>().Where(b => b.Status != ApBillStatus.Void), l => l.BillId, b => b.Id, (l, b) => l.OdcEntryId!.Value)
-            .ToListAsync(ct)).ToHashSet();
+            .ToListAsync(ct);
+        var voided = await db.Set<ApBillLine>().AsNoTracking().Where(l => l.ReversalOdcEntryId != null)
+            .Select(l => new { l.OdcEntryId, l.ReversalOdcEntryId }).ToListAsync(ct);
+        return live.Concat(voided.Where(v => v.OdcEntryId != null).Select(v => v.OdcEntryId!.Value)).Concat(voided.Select(v => v.ReversalOdcEntryId!.Value)).ToHashSet();
+    }
 
     private static async Task<Dictionary<Guid, string>> LinkedOdcSubmittersAsync(IWorkbenchDbContext db, IEnumerable<ApBillLine> lines, CancellationToken ct)
     {
@@ -1009,14 +1382,16 @@ public sealed class ApBillService(
     internal static BillSummaryDto Summary(ApBill b, Vendor v) => new(
         b.Id, b.Number, b.VendorId, v.Code, v.Name, b.InvoiceNumber, b.InvoiceDate, b.DueDate, b.Status.ToContract(),
         b.Amount, b.RetainageAmount, b.PaidAmount, b.EnteredBy, b.PostingProblem,
-        b.CurrencyCode, b.CurrencyCode is null ? 1m : b.ExchangeRate, b.TransactionAmount, b.IsForeignCurrency ? b.TransactionBalance : 0m);
+        b.CurrencyCode, b.CurrencyCode is null ? 1m : b.ExchangeRate, b.TransactionAmount, b.IsForeignCurrency ? b.TransactionBalance : 0m,
+        b.Kind.ToContract(), b.AppliedAmount, b.CreditsBillId);
 
     private async Task<BillDto> DetailAsync(IWorkbenchDbContext db, Guid billId, CancellationToken ct)
     {
         var bill = await db.Set<ApBill>().AsNoTracking().Include(b => b.Lines).FirstOrDefaultAsync(b => b.Id == billId, ct) ?? throw WorkbenchNotFoundException.For("Bill", billId);
         var vendor = await PurchasingSupport.FindVendorAsync(db, bill.VendorId, ct);
         var lookups = await LineLookups.LoadAsync(db, bill.Lines, ct);
-        var duplicates = bill.Status == ApBillStatus.Void ? [] : await DuplicatesAsync(db, bill.VendorId, bill.InvoiceNumber, bill.InvoiceDate, bill.Amount, bill.Id, ct);
+        var duplicates = bill.Status == ApBillStatus.Void ? [] : await DuplicatesAsync(db, bill.VendorId, bill.InvoiceNumber, bill.InvoiceDate, bill.Amount, bill.Id, ct, bill.Kind);
+        var creditsNumber = bill.CreditsBillId is { } cb ? await db.Set<ApBill>().AsNoTracking().Where(b => b.Id == cb).Select(b => b.Number).FirstOrDefaultAsync(ct) : null;
         var payments = await db.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id)
             .Join(db.Set<ApPaymentRun>(), p => p.RunId, r => r.Id, (p, r) => new { p, r.Number }).ToListAsync(ct);
         var submitters = await LinkedOdcSubmittersAsync(db, bill.Lines, ct);
@@ -1033,8 +1408,11 @@ public sealed class ApBillService(
             bill.FundingOverrideReason,
             bill.RejectionReason,
             bill.VoidReason,
-            bill.Status is ApBillStatus.Draft or ApBillStatus.Rejected,
-            canDecide);
+            bill.Status is ApBillStatus.Draft or ApBillStatus.Rejected && bill.Kind != ApDocumentKind.RetainageRelease,
+            canDecide,
+            creditsNumber,
+            bill.VoidedBy,
+            bill.VoidReversalDate);
     }
 
     private sealed class LineLookups
@@ -1045,6 +1423,7 @@ public sealed class ApBillService(
         private Dictionary<Guid, Account> _accounts = [];
         private Dictionary<Guid, string> _orgs = [];
         private Dictionary<Guid, string> _poNumbers = [];
+        private Dictionary<Guid, string> _released = [];
 
         public static async Task<LineLookups> LoadAsync(IWorkbenchDbContext db, IEnumerable<ApBillLine> lines, CancellationToken ct)
         {
@@ -1056,6 +1435,7 @@ public sealed class ApBillService(
             var accountIds = Ids(l => l.AccountId);
             var orgIds = Ids(l => l.OrgUnitId);
             var poLineIds = Ids(l => l.PurchaseOrderLineId);
+            var releasedIds = Ids(l => l.ReleasesBillId);
             return new LineLookups
             {
                 _projects = await db.Set<Project>().AsNoTracking().Where(p => projectIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Code, ct),
@@ -1066,6 +1446,7 @@ public sealed class ApBillService(
                 _poNumbers = await db.Set<PurchaseOrderLine>().AsNoTracking().Where(l => poLineIds.Contains(l.Id))
                     .Join(db.Set<PurchaseOrder>(), l => l.PurchaseOrderId, o => o.Id, (l, o) => new { l.Id, Number = o.Number + " line " + l.LineNumber })
                     .ToDictionaryAsync(x => x.Id, x => x.Number, ct),
+                _released = await db.Set<ApBill>().AsNoTracking().Where(b => releasedIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Number, ct),
             };
         }
 
@@ -1081,7 +1462,8 @@ public sealed class ApBillService(
                 l.OrgUnitId, l.OrgUnitId is { } o ? _orgs.GetValueOrDefault(o) : null,
                 l.RetainageAmount, l.Status.ToContract(), l.ApproverEmail ?? PurchasingSupport.FinanceRoute, l.DecidedBy, l.DecidedAtUtc,
                 l.PurchaseOrderLineId, l.PurchaseOrderLineId is { } po ? _poNumbers.GetValueOrDefault(po) : null, l.Quantity, l.UnitPrice,
-                l.MatchProblem, l.MatchOverrideBy, l.MatchOverrideReason, l.TransactionAmount);
+                l.MatchProblem, l.MatchOverrideBy, l.MatchOverrideReason, l.TransactionAmount,
+                l.CreditsLineId, l.ReleasesBillId, l.ReleasesBillId is { } r ? _released.GetValueOrDefault(r) : null);
         }
     }
 }

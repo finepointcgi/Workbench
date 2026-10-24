@@ -12,19 +12,25 @@ else
                 @foreach (var b in Bills)
                 {
                     <tr>
-                        <td style="white-space:nowrap"><MudLink Href="@($"purchasing/bills/{b.Id}")">@b.Number</MudLink></td>
+                        <td style="white-space:nowrap">
+                            <MudLink Href="@($"purchasing/bills/{b.Id}")">@b.Number</MudLink>
+                            @if (b.Kind != BillKind.Bill)
+                            {
+                                <MudChip T="string" Size="Size.Small" Class="ma-0 ml-1">@PurchasingFormat.Label(b.Kind)</MudChip>
+                            }
+                        </td>
                         <td>@b.VendorCode</td>
                         <td>@b.InvoiceNumber</td>
                         <td style="white-space:nowrap">@PurchasingFormat.Date(b.InvoiceDate)</td>
                         <td style="white-space:nowrap">@PurchasingFormat.Date(b.DueDate)</td>
-                        <td style="text-align:right">@PurchasingFormat.Amount(b.Amount)</td>
+                        <td style="text-align:right">@PurchasingFormat.Amount(PurchasingFormat.Signed(b, b.Amount))</td>
                         <td style="text-align:right">@(b.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(b.RetainageAmount))</td>
-                        <td style="text-align:right">@(b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "")</td>
+                        <td style="text-align:right">@(b.Status == BillState.Posted ? PurchasingFormat.Amount(b.SignedBalance) : "")</td>
                         <td>
                             <BillStatusChip Status="b.Status" />
                             @if (b.IsPaid)
                             {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0 ml-1">Paid</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0 ml-1">@(b.IsCredit ? "Used" : "Paid")</MudChip>
                             }
                             @if (b.PostingProblem is not null)
                             {

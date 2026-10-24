@@ -15,7 +15,14 @@ public enum SubcontractState { Draft, Active, Closed }
 
 public enum BillState { Draft, PendingApproval, Approved, Posted, Rejected, Void }
 
-public enum BillLineKind { ProjectCost, Account, Subcontract }
+/// <summary><see cref="Retainage"/> lines are created by a retainage release (they can't be entered on a bill).</summary>
+public enum BillLineKind { ProjectCost, Account, Subcontract, Retainage }
+
+/// <summary>
+/// What an AP document is. Credit memos (from the vendor) and debit memos (the company billing the vendor back) reduce what's
+/// owed; their lines take cost back off the project or account. A retainage release makes held subcontract retainage payable.
+/// </summary>
+public enum BillKind { Bill, CreditMemo, DebitMemo, RetainageRelease }
 
 public enum BillLineState { Pending, Approved, Rejected }
 
@@ -176,7 +183,10 @@ public sealed record SubcontractDto(
     decimal RetainageHeld,
     decimal PaidToDate,
     int FlowDownsIncluded,
-    int FlowDownsTotal)
+    int FlowDownsTotal,
+
+    /// <summary>Added by AP credits: retainage released to the vendor (posted releases); <see cref="RetainageHeld"/> is what's still held.</summary>
+    decimal RetainageReleased = 0m)
 {
     public decimal RemainingFunding => FundedValue - BilledToDate;
 
@@ -196,7 +206,8 @@ public sealed record SubcontractFundingDto(
 public sealed record FlowDownDto(Guid Id, string ClauseNumber, string? Title, bool IsIncluded, string? Note);
 
 /// <summary>An invoice against the subcontract: an AP bill line, or a vendor ODC entered outside AP.</summary>
-public sealed record SubcontractInvoiceDto(Guid? BillId, string? BillNumber, string? InvoiceNumber, DateOnly InvoiceDate, decimal Amount, decimal Retainage, string Status);
+public sealed record SubcontractInvoiceDto(Guid? BillId, string? BillNumber, string? InvoiceNumber, DateOnly InvoiceDate, decimal Amount, decimal Retainage, string Status,
+    BillKind Kind = BillKind.Bill);
 
 public sealed record SubcontractDetailDto(
     SubcontractDto Subcontract,
@@ -271,16 +282,27 @@ public sealed record BillSummaryDto(
     string? CurrencyCode = null,
     decimal ExchangeRate = 1m,
     decimal TransactionAmount = 0m,
-    decimal TransactionBalance = 0m)
+    decimal TransactionBalance = 0m,
+
+    // Added by AP credits: the document kind, credits applied (to a bill, or out of a memo) and the bill a memo credits.
+    BillKind Kind = BillKind.Bill,
+    decimal AppliedAmount = 0m,
+    Guid? CreditsBillId = null)
 {
     /// <summary>What's owed now: the amount less retainage.</summary>
     public decimal Payable => Amount - RetainageAmount;
 
-    public decimal Balance => Payable - PaidAmount;
+    /// <summary>A bill's amount left to pay, or a memo's credit not yet applied or refunded (both positive).</summary>
+    public decimal Balance => Payable - PaidAmount - AppliedAmount;
 
     public bool IsPaid => Status == BillState.Posted && Balance == 0;
 
     public bool IsForeignCurrency => CurrencyCode is not null;
+
+    public bool IsCredit => Kind is BillKind.CreditMemo or BillKind.DebitMemo;
+
+    /// <summary>The balance with its sign: owed to the vendor is positive, credit is negative.</summary>
+    public decimal SignedBalance => IsCredit ? -Balance : Balance;
 }
 
 public sealed record BillLineDto(
@@ -320,7 +342,12 @@ public sealed record BillLineDto(
     string? MatchOverrideReason = null,
 
     // Added by multicurrency: the line in the bill's currency (null on functional-currency bills).
-    decimal? TransactionAmount = null);
+    decimal? TransactionAmount = null,
+
+    // Added by AP credits: the original line a memo line credits, and the bill a retainage release line releases.
+    Guid? CreditsLineId = null,
+    Guid? ReleasesBillId = null,
+    string? ReleasesBillNumber = null);
 
 public sealed record BillDuplicateDto(Guid BillId, string Number, string InvoiceNumber, DateOnly InvoiceDate, decimal Amount, BillState Status, string Reason);
 
@@ -344,7 +371,12 @@ public sealed record BillDto(
     string? RejectionReason,
     string? VoidReason,
     bool CanEdit,
-    bool CanApprove);
+    bool CanApprove,
+
+    // Added by AP credits.
+    string? CreditsBillNumber = null,
+    string? VoidedBy = null,
+    DateOnly? VoidReversalDate = null);
 
 /// <summary>
 /// One bill line. <see cref="BillLineKind.ProjectCost"/>: a WBS element and ODC type (or <see cref="OdcEntryId"/> to link an
@@ -368,7 +400,10 @@ public sealed record SaveBillLineRequest(
     /// </summary>
     Guid? PurchaseOrderLineId = null,
     decimal? Quantity = null,
-    decimal? UnitPrice = null);
+    decimal? UnitPrice = null,
+
+    /// <summary>Added by AP credits: on a credit or debit memo, the bill line this line credits (it takes that line's charging).</summary>
+    Guid? CreditsLineId = null);
 
 /// <summary>A bill. The due date defaults to the invoice date plus the vendor's payment terms.</summary>
 public sealed record SaveBillRequest(
@@ -385,7 +420,15 @@ public sealed record SaveBillRequest(
     /// Foreign-currency bills can't bill purchase order lines or link existing ODCs, which are in the functional currency.
     /// </summary>
     string? CurrencyCode = null,
-    decimal? ExchangeRate = null);
+    decimal? ExchangeRate = null,
+
+    /// <summary>
+    /// Added by AP credits: a credit memo (the vendor's credit; <see cref="InvoiceNumber"/> is their credit memo number) or a
+    /// debit memo (we bill the vendor back; the number defaults to ours). <see cref="CreditsBillId"/> ties it to a bill.
+    /// Memos are in the functional currency and can't bill purchase orders or link ODCs.
+    /// </summary>
+    BillKind Kind = BillKind.Bill,
+    Guid? CreditsBillId = null);
 
 /// <summary>
 /// Submits a bill for approval. A possible duplicate (same vendor, amount and date) needs <see cref="ConfirmPossibleDuplicate"/>;
@@ -446,7 +489,11 @@ public interface IApBillService
     /// <summary>Retries posting an approved bill whose posting failed (for example, after a period was reopened).</summary>
     Task<BillDto> PostAsync(Guid billId, CancellationToken cancellationToken = default);
 
-    /// <summary>Voids a bill that hasn't posted (draft, rejected or waiting for approval).</summary>
+    /// <summary>
+    /// Voids a bill, credit or debit memo with a reason. A posted one has every posting reversed (the AP entry, its project
+    /// costs, use tax), dated in its own period when that's open, otherwise today. Refused while payments, applied credits,
+    /// refunds, retainage releases, credit memos or fixed assets depend on it: undo those first.
+    /// </summary>
     Task<BillDto> VoidAsync(Guid billId, BillReasonRequest request, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<LinkableOdcDto>> ListLinkableOdcsAsync(Guid vendorId, CancellationToken cancellationToken = default);
@@ -457,8 +504,10 @@ public interface IApBillService
 
 // ---- Payments ----
 
-public sealed record DueBillDto(BillSummaryDto Bill, decimal ScheduledAmount, decimal TransactionScheduled = 0m)
+public sealed record DueBillDto(BillSummaryDto Bill, decimal ScheduledAmount, decimal TransactionScheduled = 0m, decimal VendorCredits = 0m)
 {
+    // VendorCredits (added by AP credits): the vendor's open credit not yet in a run, netted when a run is created.
+
     /// <summary>The balance not yet in an open payment run.</summary>
     public decimal Available => Bill.Balance - ScheduledAmount;
 
@@ -502,9 +551,15 @@ public sealed record PaymentRunDto(
     string CreatedBy,
     string? ApprovedBy,
     DateTime? ApprovedAtUtc,
-    IReadOnlyList<PaymentDto> Payments)
+    IReadOnlyList<PaymentDto> Payments,
+
+    /// <summary>Added by AP credits: vendor credits the run nets against its bills (applied when the run is paid).</summary>
+    IReadOnlyList<CreditApplicationDto>? Credits = null)
 {
+    /// <summary>The cash paid (credits netted out).</summary>
     public decimal Total => Payments.Where(p => p.Status != PaymentState.Void).Sum(p => p.Amount);
+
+    public decimal CreditTotal => (Credits ?? []).Where(c => c.Status != CreditApplicationState.Reversed).Sum(c => c.Amount);
 }
 
 /// <summary>
@@ -513,7 +568,11 @@ public sealed record PaymentRunDto(
 /// </summary>
 public sealed record PaymentRunItemRequest(Guid BillId, decimal Amount);
 
-public sealed record CreatePaymentRunRequest(DateOnly PaymentDate, PaymentKind Method, IReadOnlyList<PaymentRunItemRequest> Items);
+/// <summary>
+/// A payment run. With <see cref="NetCredits"/> (the default) each vendor's open credit and debit memos are taken off its
+/// bills in the run, oldest first; a bill the credits cover entirely needs no check.
+/// </summary>
+public sealed record CreatePaymentRunRequest(DateOnly PaymentDate, PaymentKind Method, IReadOnlyList<PaymentRunItemRequest> Items, bool NetCredits = true);
 
 public sealed record PaymentReferenceRequest(Guid PaymentId, string Reference);
 
@@ -571,7 +630,10 @@ public sealed record AgingRowDto(
     decimal Days31To60,
     decimal Days61To90,
     decimal Over90,
-    decimal Retainage)
+    decimal Retainage,
+
+    /// <summary>Added by AP credits: open credit and debit memos (negative), already counted in the buckets.</summary>
+    decimal Credits = 0m)
 {
     public decimal Total => Current + Days1To30 + Days31To60 + Days61To90 + Over90;
 }

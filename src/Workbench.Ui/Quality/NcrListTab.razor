@@ -5,6 +5,7 @@
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject Workbench.Contracts.Purchasing.IApCreditService ApCredits
 
 <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap" Class="mb-3" AlignItems="AlignItems.Center">
     <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => { _openOnly = v; return LoadAsync(); }" Label="Open only" Color="Color.Primary" />
@@ -78,6 +79,10 @@ else
                             <td>@m.ReturnAuthorization</td>
                             <td>@(m.Status == DebitMemoState.Applied ? $"Applied ({m.AppliedReference})" : m.Status.ToString())</td>
                             <td>
+                                @if (m.Status == DebitMemoState.Open && CanSendToAp)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => SendToApAsync(m)" aria-label="@($"Create an AP debit memo for {m.Number}")" data-testid="send-to-ap">Bill the vendor in AP</MudButton>
+                                }
                                 @if (m.Status == DebitMemoState.Open && CanApply)
                                 {
                                     <MudButton Size="Size.Small" OnClick="() => ApplyAsync(m)" aria-label="@($"Mark {m.Number} applied")">Mark applied</MudButton>
@@ -101,6 +106,23 @@ else
     private bool _forbidden;
 
     private bool CanApply => User is null || User.Can(Workbench.Contracts.Identity.Permission.QualityDispositions);
+
+    private bool CanSendToAp => User?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true;
+
+    /// <summary>Starts an AP debit memo for the return (a draft to check and submit); the memo here is marked applied to it.</summary>
+    private async Task SendToApAsync(DebitMemoDto memo)
+    {
+        try
+        {
+            var bill = await ApCredits.CreateFromQualityReturnAsync(memo.Id);
+            Snackbar.Add($"{bill.Bill.Number} drafted in AP. Check it and submit it for approval.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/bills/{bill.Bill.Id}");
+        }
+        catch (Exception ex) when (MaterialsFormat.IsExpected(ex))
+        {
+            Snackbar.Add(MaterialsFormat.Error(ex), Severity.Error);
+        }
+    }
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

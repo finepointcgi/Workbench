@@ -258,8 +258,8 @@ reveals. Admin holds every permission.
 | Permission | Key | What it allows | Built-in roles | Opens |
 |---|---|---|---|---|
 | Manage vendors | `ap.vendors.manage` | Add and change vendors and subcontracts. | Admin, Finance | Vendors, Subcontracts |
-| Enter and approve AP bills | `ap.bills.manage` | Every AP bill: enter, approve and post them. | Admin, Finance | Approvals, Bills, ODC approvals, Bill approvals |
-| Pay vendors | `ap.payments.manage` | Payment runs and bank payment files. | Admin, Finance | Payment runs |
+| Enter and approve AP bills | `ap.bills.manage` | Every AP bill, credit and debit memo: enter, approve, post, void and apply them, and release subcontract retainage. | Admin, Finance | Approvals, Bills, ODC approvals, Bill approvals |
+| Pay vendors | `ap.payments.manage` | Payment runs (which net vendor credits), vendor refunds and bank payment files. | Admin, Finance | Payment runs |
 | See AP reports | `ap.reports.view` | Payables aging and 1099 reports. | Admin, Finance | AP reports |
 | Manage purchase orders | `purchasing.orders.manage` | Every purchase order and requisition, receiving and the three-way match (and its overrides). | Admin, Finance | Receiving, Purchase orders, Match exceptions |
 | Sourcing | `purchasing.sourcing.manage` | Requests for quote, the supplier portal and EDI. | Admin, Finance | Requests for quote, Supplier portal, EDI |

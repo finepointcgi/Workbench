@@ -92,6 +92,14 @@ internal sealed class ApBillConfiguration : IEntityTypeConfiguration<ApBill>
         b.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.AttachmentFileId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(l => l.BillId).OnDelete(DeleteBehavior.Cascade);
+
+        // AP credits.
+        b.Property(x => x.Kind).HasConversion<string>().HasMaxLength(24);
+        b.Property(x => x.AppliedAmount).Money();
+        b.Property(x => x.VoidedBy).HasMaxLength(320);
+        b.HasIndex(x => new { x.VendorId, x.Kind, x.Status });
+        b.HasIndex(x => x.CreditsBillId);
+        b.HasOne<ApBill>().WithMany().HasForeignKey(x => x.CreditsBillId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -115,6 +123,13 @@ internal sealed class ApBillLineConfiguration : IEntityTypeConfiguration<ApBillL
         b.HasOne<OdcEntry>().WithMany().HasForeignKey(l => l.OdcEntryId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Account>().WithMany().HasForeignKey(l => l.AccountId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<OrgUnit>().WithMany().HasForeignKey(l => l.OrgUnitId).OnDelete(DeleteBehavior.Restrict);
+
+        // AP credits.
+        b.HasIndex(l => l.CreditsLineId);
+        b.HasIndex(l => l.ReleasesBillId);
+        b.HasOne<ApBillLine>().WithMany().HasForeignKey(l => l.CreditsLineId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<ApBill>().WithMany().HasForeignKey(l => l.ReleasesBillId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<OdcEntry>().WithMany().HasForeignKey(l => l.ReversalOdcEntryId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -148,5 +163,42 @@ internal sealed class ApPaymentConfiguration : IEntityTypeConfiguration<ApPaymen
         b.HasOne<ApBill>().WithMany().HasForeignKey(p => p.BillId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Vendor>().WithMany().HasForeignKey(p => p.VendorId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<JournalEntry>().WithMany().HasForeignKey(p => p.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ApCreditApplicationConfiguration : IEntityTypeConfiguration<ApCreditApplication>
+{
+    public void Configure(EntityTypeBuilder<ApCreditApplication> b)
+    {
+        b.Property(a => a.Amount).Money();
+        b.Property(a => a.Status).HasConversion<string>().HasMaxLength(16);
+        b.Property(a => a.AppliedBy).HasMaxLength(320);
+        b.Property(a => a.ReversedBy).HasMaxLength(320);
+        b.Property(a => a.ReversalReason).HasMaxLength(1000);
+        b.HasIndex(a => a.CreditId);
+        b.HasIndex(a => a.BillId);
+        b.HasIndex(a => a.RunId);
+        b.HasOne<ApBill>().WithMany().HasForeignKey(a => a.CreditId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<ApBill>().WithMany().HasForeignKey(a => a.BillId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Vendor>().WithMany().HasForeignKey(a => a.VendorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<ApPaymentRun>().WithMany().HasForeignKey(a => a.RunId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ApRefundConfiguration : IEntityTypeConfiguration<ApRefund>
+{
+    public void Configure(EntityTypeBuilder<ApRefund> b)
+    {
+        b.Property(r => r.Amount).Money();
+        b.Property(r => r.Reference).HasMaxLength(64);
+        b.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
+        b.Property(r => r.RecordedBy).HasMaxLength(320);
+        b.Property(r => r.VoidReason).HasMaxLength(1000);
+        b.Property(r => r.VoidedBy).HasMaxLength(320);
+        b.HasIndex(r => r.CreditId);
+        b.HasIndex(r => new { r.VendorId, r.ReceivedOn });
+        b.HasOne<ApBill>().WithMany().HasForeignKey(r => r.CreditId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Vendor>().WithMany().HasForeignKey(r => r.VendorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
     }
 }

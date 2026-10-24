@@ -246,7 +246,9 @@ public sealed class CeilingCheckingApBillService(IApBillService inner, IWorkbenc
             await guard.EnsureOpenAsync(db, lines.Select(l => l.WbsElementId), "this bill", cancellationToken);
 
             // Lines linked to an ODC already count; PO lines move cost from the commitment to actuals (no net change).
-            deltas = lines.Where(l => l.OdcEntryId == null && l.PurchaseOrderLineId == null).GroupBy(l => l.WbsElementId)
+            // A credit or debit memo takes cost off, so it never pushes past a ceiling.
+            var credit = await db.Set<ApBill>().AsNoTracking().AnyAsync(b => b.Id == billId && (b.Kind == ApDocumentKind.CreditMemo || b.Kind == ApDocumentKind.DebitMemo), cancellationToken);
+            deltas = credit ? [] : lines.Where(l => l.OdcEntryId == null && l.PurchaseOrderLineId == null).GroupBy(l => l.WbsElementId)
                 .Select(g => new ChargeDelta(g.Key, null, 0, g.Sum(l => l.Amount))).ToList();
         }
 

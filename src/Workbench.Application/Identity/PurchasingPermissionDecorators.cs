@@ -24,6 +24,7 @@ public static class PurchasingPermissionRegistration
         services.Decorate<IApBillService, PermissionCheckingApBillService>();
         services.Decorate<IApPaymentService, PermissionCheckingApPaymentService>();
         services.Decorate<IApReportService, PermissionCheckingApReportService>();
+        services.Decorate<IApCreditService, PermissionCheckingApCreditService>();
         return services;
     }
 }
@@ -274,6 +275,100 @@ public sealed class PermissionCheckingApBillService(IApBillService inner, Access
         }
 
         return allowed.Count == 0 ? [] : await inner.GetOdcLinksAsync(allowed, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Credits are bill work (Enter and approve AP bills); refunds are cash (Pay vendors). Every document is also checked
+/// against the companies the user may see.
+/// </summary>
+public sealed class PermissionCheckingApCreditService(IApCreditService inner, AccessControl access, Companies.CompanyGuard companies, IWorkbenchDbContextFactory dbFactory) : IApCreditService
+{
+    private const string What = "work with AP credits";
+
+    private async Task RequireBillsAsync(Guid? billId, CancellationToken ct)
+    {
+        await access.RequireAsync(Permission.ApBillsManage, What, ct);
+        if (billId is { } id)
+        {
+            await companies.EnsureAsync<ApBill>(id, "AP bill", ct);
+        }
+    }
+
+    public async Task<BillDto> CreditBillAsync(Guid billId, CreditBillRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireBillsAsync(billId, cancellationToken);
+        return await inner.CreditBillAsync(billId, request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<OpenCreditDto>> ListOpenCreditsAsync(Guid? vendorId = null, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(p => p.Has(Permission.ApBillsManage) || p.Has(Permission.ApPaymentsManage), "Only Finance and administrators can see vendor credits.", cancellationToken);
+        return await companies.FilterAsync<ApBill, OpenCreditDto>(await inner.ListOpenCreditsAsync(vendorId, cancellationToken), c => c.Credit.Id, cancellationToken);
+    }
+
+    public async Task<BillDto> ApplyAsync(Guid creditId, ApplyCreditRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireBillsAsync(creditId, cancellationToken);
+        await companies.EnsureAllAsync<ApBill>((request.Items ?? []).Select(i => i.BillId), "AP bill", cancellationToken);
+        return await inner.ApplyAsync(creditId, request, cancellationToken);
+    }
+
+    public async Task<BillDto> UnapplyAsync(Guid applicationId, BillReasonRequest request, CancellationToken cancellationToken = default)
+    {
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            var creditId = await db.Set<ApCreditApplication>().AsNoTracking().Where(a => a.Id == applicationId).Select(a => (Guid?)a.CreditId).FirstOrDefaultAsync(cancellationToken);
+            await RequireBillsAsync(creditId, cancellationToken);
+        }
+
+        return await inner.UnapplyAsync(applicationId, request, cancellationToken);
+    }
+
+    public async Task<BillDto> RecordRefundAsync(Guid creditId, RecordRefundRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.ApPaymentsManage, "record vendor refunds", cancellationToken);
+        await companies.EnsureAsync<ApBill>(creditId, "AP bill", cancellationToken);
+        return await inner.RecordRefundAsync(creditId, request, cancellationToken);
+    }
+
+    public async Task<BillDto> VoidRefundAsync(Guid refundId, BillReasonRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.ApPaymentsManage, "void vendor refunds", cancellationToken);
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            if (await db.Set<ApRefund>().AsNoTracking().Where(r => r.Id == refundId).Select(r => (Guid?)r.CreditId).FirstOrDefaultAsync(cancellationToken) is { } creditId)
+            {
+                await companies.EnsureAsync<ApBill>(creditId, "AP bill", cancellationToken);
+            }
+        }
+
+        return await inner.VoidRefundAsync(refundId, request, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<RetainageBillDto>> ListRetainageAsync(Guid subcontractId, CancellationToken cancellationToken = default)
+    {
+        await RequireBillsAsync(null, cancellationToken);
+        return await companies.FilterAsync<ApBill, RetainageBillDto>(await inner.ListRetainageAsync(subcontractId, cancellationToken), r => r.BillId, cancellationToken);
+    }
+
+    public async Task<BillDto> ReleaseRetainageAsync(ReleaseRetainageRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireBillsAsync(null, cancellationToken);
+        await companies.EnsureAllAsync<ApBill>((request.Items ?? []).Select(i => i.BillId), "AP bill", cancellationToken);
+        return await inner.ReleaseRetainageAsync(request, cancellationToken);
+    }
+
+    public async Task<BillDto> CreateFromQualityReturnAsync(Guid qualityDebitMemoId, CancellationToken cancellationToken = default)
+    {
+        await RequireBillsAsync(null, cancellationToken);
+        return await inner.CreateFromQualityReturnAsync(qualityDebitMemoId, cancellationToken);
+    }
+
+    public async Task<BillTrailDto> GetTrailAsync(Guid billId, CancellationToken cancellationToken = default)
+    {
+        await RequireBillsAsync(billId, cancellationToken);
+        return await inner.GetTrailAsync(billId, cancellationToken);
     }
 }
 
