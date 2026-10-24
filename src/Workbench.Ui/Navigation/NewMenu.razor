@@ -80,6 +80,14 @@
         }
     });
 
+    /// <summary>The contract whose page is open (setup/contracts/{id}), if any.</summary>
+    private Guid? ContractOnPage()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+        const string prefix = "setup/contracts/";
+        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && Guid.TryParse(path[prefix.Length..], out var id) ? id : null;
+    }
+
     /// <summary>Starts the item with <paramref name="key"/> (from Ctrl+K), if this user may.</summary>
     public Task LaunchAsync(string key) =>
         NewCatalog.Find(key) is { } action && action.IsVisible(Access) ? LaunchAsync(action) : Task.CompletedTask;
@@ -92,8 +100,10 @@
         switch (action.Kind)
         {
             case NewKind.ProjectDialog:
-                // The form opens the new project's plan itself.
-                await Dialogs.ShowAsync<Workbench.Ui.Projects.NewProjectDialog>("New project", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+                // The form opens the new project's plan itself. From a contract's page, it starts from that contract.
+                await Dialogs.ShowAsync<Workbench.Ui.Projects.NewProjectDialog>("New project",
+                    new DialogParameters<Workbench.Ui.Projects.NewProjectDialog> { { d => d.ContractId, ContractOnPage() } },
+                    new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
                 break;
             case NewKind.SheetDialog:
                 await NewSheetAsync();
