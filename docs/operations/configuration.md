@@ -218,6 +218,23 @@ Server-wide connections; each organization turns the assistant on and picks a co
 Outbound integration traffic goes straight from the web host (no proxy) to public addresses only. Allow egress on 443 (and the
 SFTP ports you use) from the web hosts. Signing secrets and connector secrets are encrypted with the Data Protection key ring.
 
+## GitLab sync (docs/integrations/gitlab.md)
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `GitLab:ReconcileEnabled` | `true` | Runs the reconcile job on this host (the backstop for missed webhooks, staffing and dependency changes). Safe on several hosts: each project's reconcile is claimed first. |
+| `GitLab:ReconcileMinutes` | `10` | Minutes between reconciles of each linked project. |
+| `GitLab:AllowedPrivateHosts` | `[]` | Host names of self-managed GitLab servers on your own network. Only these may resolve to private addresses; the token's tenant admins can't add to this list. |
+| `GitLab:UseSystemProxy` | `false` | Sends GitLab calls through the system proxy (`HTTPS_PROXY`). The address guard is then the proxy's job. |
+| `GitLab:RequestTimeoutSeconds` | `30` | Per GitLab call. |
+| `GitLab:MaxPagesPerReconcile` | `20` | Pages of 100 issues one reconcile reads at most. |
+| `GitLab:RateLimitReserve` | `5` | When GitLab says fewer requests than this are left (`RateLimit-Remaining`), calls wait for the window to reset. |
+| `GitLab:ReceiptRetentionDays` | `14` | Webhook receipts (the replay ledger) are kept this long. |
+
+GitLab webhooks reach `POST /webhooks/gitlab/{linkId}` on the tenant's address; Workbench registers them itself when the token has the
+Maintainer role, using `Notifications:PublicBaseUrl` (or the address the web host was last reached on). A private certificate
+authority for a self-managed server is pasted on Admin › Integrations › GitLab; nothing to configure on the host.
+
 ## Automation (Admin › Automation)
 
 | Key | Default | Notes |

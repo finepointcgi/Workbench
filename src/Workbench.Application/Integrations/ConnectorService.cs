@@ -28,7 +28,7 @@ public sealed class ConnectorService(
     public async Task<IReadOnlyList<ConnectorKindDto>> ListKindsAsync(CancellationToken cancellationToken = default)
     {
         var kinds = new List<ConnectorKindDto>();
-        foreach (var c in connectors)
+        foreach (var c in connectors.Where(c => c.IsListed))
         {
             kinds.Add(new ConnectorKindDto(c.Kind, c.Name, c.Description, c.Mode, await c.GetFieldsAsync(cancellationToken)));
         }
