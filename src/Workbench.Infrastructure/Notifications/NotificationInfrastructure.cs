@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Workbench.Application.Notifications;
 
 namespace Workbench.Infrastructure.Notifications;
@@ -30,10 +32,12 @@ public static class NotificationInfrastructure
             SmtpUserName = email["Smtp:UserName"],
             SmtpPassword = email["Smtp:Password"],
             SendGridApiKey = email["SendGrid:ApiKey"],
+            SendGridWebhookVerificationKey = email["SendGrid:WebhookVerificationKey"],
             SesRegion = email["Ses:Region"],
             SesConfigurationSet = email["Ses:ConfigurationSet"],
             SesAccessKeyId = email["Ses:AccessKeyId"],
             SesSecretAccessKey = email["Ses:SecretAccessKey"],
+            SesBounceTopicArns = ListOf(email.GetSection("Ses:BounceTopicArns")),
         };
         settings.Mode = email["Mode"] is { Length: > 0 } mode ? mode : string.IsNullOrWhiteSpace(settings.SmtpHost) ? "Pickup" : "Smtp";
         services.AddSingleton(settings);
@@ -49,8 +53,17 @@ public static class NotificationInfrastructure
             "ses" => _ => new SesEmailSender(settings),
             _ => throw new InvalidOperationException($"Unsupported Email:Mode '{settings.Mode}'. Use Smtp, SendGrid, Ses or Pickup."),
         };
-        services.AddSingleton<IEmailSender>(sp => new InstrumentedEmailSender(
-            sender(sp), settings.Mode.ToLowerInvariant(), sp.GetRequiredService<EmailDeliveryStatus>(), sp.GetRequiredService<TimeProvider>()));
+        // Outermost: hold back non-essential mail to bouncing addresses (and record SMTP refusals) before counting a send.
+        var provider = settings.Mode.ToLowerInvariant();
+        services.AddSingleton<IEmailSender>(sp => new SuppressingEmailSender(
+            new InstrumentedEmailSender(sender(sp), provider, sp.GetRequiredService<EmailDeliveryStatus>(), sp.GetRequiredService<TimeProvider>()),
+            provider, sp, sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<ILoggerFactory>()?.CreateLogger<SuppressingEmailSender>() ?? NullLogger<SuppressingEmailSender>.Instance));
+
+        // Bounce and complaint webhooks (docs/operations/email.md).
+        services.TryAddSingleton<ISnsCertificateSource, HttpSnsCertificateSource>();
+        services.TryAddSingleton<SnsMessageVerifier>();
+        services.TryAddSingleton<EmailEventRecorder>();
 
         var notifications = configuration.GetSection("Notifications");
         services.RemoveAll<NotificationOptions>();
@@ -60,5 +73,13 @@ public static class NotificationInfrastructure
             DigestHourLocal = Math.Clamp(int.TryParse(notifications["DigestHourLocal"], out var hour) ? hour : 7, 0, 23),
         });
         return services;
+    }
+
+    /// <summary>A list from configuration: array entries (<c>X__0</c>, <c>X__1</c>) or one comma-separated value.</summary>
+    private static IReadOnlyList<string> ListOf(IConfigurationSection section)
+    {
+        var values = section.GetChildren().Select(c => c.Value).Append(section.Value)
+            .SelectMany(v => (v ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return values.Distinct(StringComparer.Ordinal).ToList();
     }
 }

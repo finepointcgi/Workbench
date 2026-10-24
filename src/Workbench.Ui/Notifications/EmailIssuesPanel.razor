@@ -1,0 +1,120 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Notifications
+@inject IEmailDeliverabilityService Deliverability
+@inject ISnackbar Snackbar
+
+@* Admins: every address the mail provider reports as bouncing or complaining, users and contacts alike. *@
+<MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="email-issues">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1">
+        <MudText Typo="Typo.h6" HtmlTag="h2">Email addresses that bounce</MudText>
+        <MudSpacer />
+        <MudSwitch T="bool" Value="_includeCleared" ValueChanged="ToggleClearedAsync" Color="Color.Primary" Label="Show cleared" />
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Reported by the mail provider (bounces and spam complaints) or refused by the mail server. Workbench sends these addresses
+        only essential email (password resets, invitations, sign-in links). Clear an address once its mailbox works again.
+    </MudText>
+    @if (_loading)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_issues.Count == 0)
+    {
+        <MudText Typo="Typo.body2">No address is bouncing.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead>
+                <tr><th>Address</th><th>Problem</th><th>Last reported (UTC)</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var issue in _issues)
+                {
+                    <tr data-testid="email-issue-row">
+                        <td>
+                            <div>@issue.Address</div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@(issue.UserDisplayName is { } name ? $"User: {name}" : "Not a user (a contact or another recipient)")</MudText>
+                        </td>
+                        <td>
+                            <MudChip T="string" Size="Size.Small" Color="@(issue.Suppressed ? Color.Warning : Color.Default)">@KindLabel(issue)</MudChip>
+                            @if (!string.IsNullOrWhiteSpace(issue.Detail))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@issue.Detail</MudText>
+                            }
+                        </td>
+                        <td>@issue.LastAtUtc.ToString("yyyy-MM-dd HH:mm") (@issue.EventCount×)</td>
+                        <td>
+                            @if (issue.ClearedAtUtc is { } cleared)
+                            {
+                                <MudText Typo="Typo.caption">Cleared @cleared.ToString("yyyy-MM-dd") by @issue.ClearedBy</MudText>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busy" OnClick="() => ClearAsync(issue)" aria-label="@($"Clear {issue.Address}")">Clear</MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@code {
+    private IReadOnlyList<EmailAddressIssueDto> _issues = [];
+    private bool _loading = true;
+    private bool _busy;
+    private bool _includeCleared;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static string KindLabel(EmailAddressIssueDto issue) => issue.Kind switch
+    {
+        EmailIssueKind.Complaint => "Marked as spam",
+        EmailIssueKind.Bounce => "Bouncing",
+        _ => "Delivery failed",
+    };
+
+    private async Task ToggleClearedAsync(bool value)
+    {
+        _includeCleared = value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _issues = await Deliverability.ListAsync(_includeCleared);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or WorkbenchForbiddenException)
+        {
+            Snackbar.Add($"Couldn't load bouncing addresses: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ClearAsync(EmailAddressIssueDto issue)
+    {
+        _busy = true;
+        try
+        {
+            await Deliverability.ClearAsync(issue.Address);
+            Snackbar.Add($"Cleared {issue.Address}. Workbench emails it normally again.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException or WorkbenchForbiddenException or ArgumentException)
+        {
+            Snackbar.Add($"Couldn't clear it: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

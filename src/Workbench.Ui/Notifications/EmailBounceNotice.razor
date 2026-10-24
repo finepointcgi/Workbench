@@ -1,0 +1,63 @@
+@using Workbench.Contracts
+@using Workbench.Contracts.Notifications
+@inject IEmailDeliverabilityService Deliverability
+@inject ISnackbar Snackbar
+
+@* The signed-in person's own notice: their address bounces or complained, so Workbench holds back most email. *@
+@if (_issue is { } issue)
+{
+    <MudAlert Severity="@(issue.Suppressed ? Severity.Warning : Severity.Info)" Variant="Variant.Outlined" Class="mb-3" data-testid="my-email-bouncing">
+        <div><strong>@issue.Address:</strong> @issue.Message</div>
+        @if (!string.IsNullOrWhiteSpace(issue.Detail))
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">The mail server said: @issue.Detail</MudText>
+        }
+        <MudText Typo="Typo.body2" Class="mt-1">
+            If your mailbox works again (it was full, or IT fixed it), let Workbench try again. Otherwise ask an administrator to update your email address.
+        </MudText>
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2" Disabled="_busy" OnClick="ClearAsync" data-testid="my-email-retry">
+            My mailbox works now
+        </MudButton>
+    </MudAlert>
+}
+
+@code {
+    private EmailAddressIssueDto? _issue;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _issue = await Deliverability.GetMineAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or WorkbenchForbiddenException)
+        {
+            // A notice, not the page: stay quiet if it can't load.
+        }
+    }
+
+    private async Task ClearAsync()
+    {
+        if (_issue is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Deliverability.ClearAsync(_issue.Address);
+            _issue = null;
+            Snackbar.Add("Workbench will email you again. If it bounces, this notice comes back.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or WorkbenchNotFoundException or WorkbenchForbiddenException or ArgumentException)
+        {
+            Snackbar.Add($"Couldn't do that: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

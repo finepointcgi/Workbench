@@ -319,7 +319,7 @@ public sealed class PasswordAccounts(
         var html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p><p>Someone (hopefully you) asked to reset the Workbench password for {WebUtility.HtmlEncode(address)}. "
             + $"Set a new password within {minutes} minutes:</p><p><a href=\"{WebUtility.HtmlEncode(link)}\">Reset your password</a></p>"
             + "<p>The link works once. If you didn't ask for this, ignore this email: your password hasn't changed.</p>";
-        await SendAsync(new EmailMessage(address, "Reset your Workbench password", text, html), cancellationToken);
+        await SendAsync(new EmailMessage(address, "Reset your Workbench password", text, html) { Essential = true }, cancellationToken);
     }
 
     /// <summary>The token's row when it's unused, unexpired and for <paramref name="purpose"/>; otherwise null. Doesn't use it.</summary>

@@ -21,7 +21,7 @@ public sealed class SupplierPortalMail(IEmailSender sender, NotificationOptions 
         await SendAsync(contact.Email, $"Sign in to the {vendorName} supplier portal",
             $"Hello {contact.Name},",
             $"Use this link to sign in to the supplier portal for {vendorName}. It works once and expires in {SupplierSignIn.LinkLifetime.TotalMinutes:0} minutes. If you didn't ask for it, ignore this email.",
-            link, "Sign in", ct);
+            link, "Sign in", ct, essential: true);
     }
 
     /// <summary>Tells the active portal contacts of each vendor about an RFQ they're invited to.</summary>
@@ -44,7 +44,7 @@ public sealed class SupplierPortalMail(IEmailSender sender, NotificationOptions 
         return string.IsNullOrWhiteSpace(root) ? path : root.TrimEnd('/') + path;
     }
 
-    private async Task SendAsync(string to, string subject, string greeting, string body, string link, string action, CancellationToken ct)
+    private async Task SendAsync(string to, string subject, string greeting, string body, string link, string action, CancellationToken ct, bool essential = false)
     {
         var text = new StringBuilder().AppendLine(greeting).AppendLine().AppendLine(body).AppendLine().AppendLine($"{action}: {link}").ToString();
         var html = $"""
@@ -58,7 +58,7 @@ public sealed class SupplierPortalMail(IEmailSender sender, NotificationOptions 
             """;
         try
         {
-            await sender.SendAsync(new EmailMessage(to, subject, text, html), ct);
+            await sender.SendAsync(new EmailMessage(to, subject, text, html) { Essential = essential }, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -1,6 +1,8 @@
 @using Workbench.Contracts
 @using Workbench.Contracts.Security
+@using Workbench.Contracts.Notifications
 @inject IUserAdminService UserAdmin
+@inject IEmailDeliverabilityService Deliverability
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
@@ -30,6 +32,14 @@
         <MudTd DataLabel="Name">
             <div>@context.DisplayName</div>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Email</MudText>
+            @if (_emailIssues.GetValueOrDefault(context.Email.ToLowerInvariant()) is { } emailIssue)
+            {
+                <MudTooltip Text="@(emailIssue.Message + (emailIssue.Detail is { } d ? $" ({d})" : "") + " Clear it under Security events.")">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" data-testid="user-email-bouncing">
+                        Emails to this address are bouncing
+                    </MudChip>
+                </MudTooltip>
+            }
         </MudTd>
         <MudTd DataLabel="Status">
             @if (context.IsActive)
@@ -119,6 +129,7 @@
     public UserDto Me { get; set; } = null!;
 
     private IReadOnlyList<UserAdminDto> _users = [];
+    private IReadOnlyDictionary<string, EmailAddressIssueDto> _emailIssues = new Dictionary<string, EmailAddressIssueDto>();
     private bool _loading = true;
     private bool _showInactive;
     private string? _search;
@@ -134,6 +145,14 @@
         try
         {
             _users = await UserAdmin.ListUsersAsync(null, includeInactive: true);
+            try
+            {
+                _emailIssues = (await Deliverability.ListAsync()).Where(i => i.Suppressed).ToDictionary(i => i.Address);
+            }
+            catch (WorkbenchForbiddenException)
+            {
+                // The chips are extra; the list still works without them.
+            }
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
         {

@@ -63,20 +63,54 @@ unnoticed.
 
 ## Bounces and complaints
 
-Workbench doesn't process bounces itself yet: it hands each message to the provider and records only whether the
-provider accepted it. A hard bounce happens later and never reaches the app. Handle them at the provider:
+Workbench receives the provider's bounce and complaint events and keeps a list of addresses mail can't reach, in each
+tenant's database:
 
-- **Suppression**: SendGrid and SES keep suppression lists automatically (hard bounces, spam complaints, unsubscribes);
-  they then silently drop mail to those addresses. Review the lists weekly: a suppressed address is usually a person
-  who left (deactivate them in Workbench, which SCIM/your IdP should already do) or a typo in an invite.
-- **SES**: attach an SNS topic for `Bounce` and `Complaint` events to the configuration set (`Email:Ses:ConfigurationSet`)
-  and subscribe your ops mailbox or ticketing system. Keep the complaint rate under 0.1% and bounce rate under 5%, or
-  SES pauses sending.
-- **SendGrid**: enable the Event Webhook (bounce, dropped, spamreport) to your ticketing system, or check
-  *Suppressions* in the dashboard.
-- **SMTP relays**: bounces return to the envelope sender (`Email:From`). Make it a monitored mailbox, or set it to a
-  mailbox your mail admin reviews.
+- **What it does with them.** A hard bounce or a spam complaint marks the address. Workbench then sends it only
+  essential mail (password resets, invitations, sign-in links, "your organization is ready"); notifications, digests,
+  automation emails and scheduled reports to it are held back (counted as `outcome=suppressed` in
+  `workbench.email.sent`). Soft bounces and temporary refusals are recorded but don't stop mail.
+- **Who sees it.** Admins (*Administer users* or *Manage sign-in and security*) see "Emails to this address are
+  bouncing" next to the user on **Admin › Users and security › Users**, and every bouncing address (users and
+  contacts) with the provider's reason on the **Security events** tab, where they can clear it. The person sees a
+  notice on **My profile** and can press **My mailbox works now**. Clearing resumes mail; a new bounce marks it again,
+  while an event older than the clear (a late or replayed webhook) is ignored.
+- **Tenants.** In MultiTenant mode every message carries the tenant (`wb_tenant`: a SendGrid custom argument, an SES
+  message tag), and each event is recorded in that tenant's database. Point the provider at the base domain.
+
+### SendGrid: signed Event Webhook
+
+1. *Settings › Mail Settings › Event Webhook*: post URL `https://<host>/webhooks/email/sendgrid` (MultiTenant: the
+   base domain), events **Bounced**, **Dropped** and **Spam Reports** (others are ignored).
+2. Turn on **Signed Event Webhook** and copy the verification key into `Email__SendGrid__WebhookVerificationKey`.
+   Every request must carry a valid ECDSA signature over its timestamp and body; others get 401. Without the key the
+   endpoint answers 404.
+
+### Amazon SES: events through SNS
+
+1. Create an SNS topic (e.g. `workbench-ses-events`) and add an event destination to the configuration set
+   (`Email:Ses:ConfigurationSet`) publishing **Bounce** and **Complaint** to it. (Identity notifications to the same
+   topic work too.)
+2. Set `Email__Ses__BounceTopicArns=arn:aws:sns:REGION:ACCOUNT:workbench-ses-events` (several: comma-separated, or
+   `__0`, `__1`). Messages from any other topic get 403: anyone can create an SNS topic, and SNS signs those too.
+3. Subscribe `https://<host>/webhooks/email/ses` to the topic (protocol HTTPS). Workbench verifies the signature and
+   confirms the subscription by itself.
+
+Signatures are checked as AWS documents: the signing certificate must come over HTTPS from an
+`sns.<region>.amazonaws.com` host, be in date, and verify the message (SignatureVersion 1 or 2).
+
+### SMTP relays
+
+SMTP has no webhook. When the relay refuses a recipient during the send (`550 user unknown`), Workbench records it:
+a 5xx refusal counts as a bounce, a 4xx as a failed send. Bounces the relay accepts first and returns later go to the
+envelope sender (`Email:From`): make it a monitored mailbox and clear or fix addresses by hand.
+
+### Also
+
+- SendGrid and SES keep their own suppression lists and silently drop mail to listed addresses; with the webhooks on,
+  those drops show up in Workbench too ("dropped: Bounced Address"). Keep the SES complaint rate under 0.1% and the
+  bounce rate under 5%, or SES pauses sending.
+- A bouncing address usually means someone left (deactivate them; SCIM or your IdP should already) or a typo in an
+  invite or contact record.
 - People choose whether they get notification email right away, in the daily digest, or not at all in their
   notification preferences; that is the "unsubscribe" for app mail.
-
-A follow-up could receive the SES/SendGrid webhooks and show undeliverable addresses on the user's admin page.

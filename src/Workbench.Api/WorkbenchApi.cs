@@ -24,6 +24,7 @@ public static class WorkbenchApi
         v1.MapIdentityEndpoints();
         v1.MapAutomationEndpoints();
         v1.MapNotificationEndpoints();
+        v1.MapEmailDeliverabilityEndpoints();
         v1.MapMyWorkEndpoints();
         v1.MapDashboardEndpoints();
         v1.MapTimeEndpoints();

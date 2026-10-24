@@ -41,6 +41,12 @@ public sealed class EmailSettings
     public string? SmtpPassword { get; set; }
     public string? SendGridApiKey { get; set; }
 
+    /// <summary>
+    /// The Event Webhook's verification key (base64 ECDSA public key, shown when "Signed Event Webhook" is turned on).
+    /// Set it to accept bounce and spam report events at <c>/webhooks/email/sendgrid</c>; unset, that address answers 404.
+    /// </summary>
+    public string? SendGridWebhookVerificationKey { get; set; }
+
     /// <summary>SES region (e.g. <c>us-gov-west-1</c>); the SDK default (AWS_REGION) when empty.</summary>
     public string? SesRegion { get; set; }
 
@@ -50,6 +56,12 @@ public sealed class EmailSettings
     /// <summary>Optional static credentials; prefer an IAM role (the SDK's default credential chain).</summary>
     public string? SesAccessKeyId { get; set; }
     public string? SesSecretAccessKey { get; set; }
+
+    /// <summary>
+    /// The SNS topics (ARNs) whose bounce and complaint notifications <c>/webhooks/email/ses</c> accepts. Empty: that
+    /// address answers 404. Subscriptions to these topics are confirmed automatically.
+    /// </summary>
+    public IReadOnlyList<string> SesBounceTopicArns { get; set; } = [];
 
     public SecureSocketOptions SmtpSocketOptions() => SmtpSecurity.ToLowerInvariant() switch
     {
@@ -136,6 +148,12 @@ public sealed class SendGridEmailSender(EmailSettings settings, HttpClient http)
             // Links in notifications carry no tracking: click tracking would rewrite them through SendGrid.
             ["tracking_settings"] = new { click_tracking = new { enable = false }, open_tracking = new { enable = false } },
         };
+        if (EmailEventTags.CurrentTenant is { } tenant)
+        {
+            // Comes back on every event for this message, so bounces reach the right tenant (EmailEventRecorder).
+            payload["custom_args"] = new Dictionary<string, string> { [EmailEventTags.Tenant] = tenant };
+        }
+
         if (!string.IsNullOrWhiteSpace(settings.ReplyTo))
         {
             payload["reply_to"] = new { email = settings.ReplyTo };
@@ -176,6 +194,7 @@ public sealed class SesEmailSender(EmailSettings settings, IAmazonSimpleEmailSer
         {
             Content = new EmailContent { Raw = new RawMessage { Data = raw } },
             ConfigurationSetName = string.IsNullOrWhiteSpace(settings.SesConfigurationSet) ? null : settings.SesConfigurationSet,
+            EmailTags = EmailEventTags.CurrentTenant is { } tenant ? [new MessageTag { Name = EmailEventTags.Tenant, Value = tenant }] : null,
         }, cancellationToken);
     }
 

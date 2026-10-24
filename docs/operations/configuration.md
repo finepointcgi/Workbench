@@ -22,7 +22,9 @@ MultiTenant deployment shares them.
 | `ForwardedHeaders:KnownNetworks` | `[]` | CIDR ranges of trusted proxies (a container network, an ingress pod range). |
 | `Security:HstsMaxAgeDays` | `365` | HSTS max-age, sent outside Development. |
 | `Security:ConnectSources` | `[]` | Extra origins for the CSP `connect-src`. |
-| `Storage:Root` | `App_Data/blobs` (`/data/blobs` in the image) | Attachments and receipts. Shared storage when running several replicas. |
+| `Storage:Provider` | `Local` | `Local` (a folder), `Gcs` or `S3`. Use a bucket to run more than one server. All `Storage:*` keys: [object-storage.md](object-storage.md). |
+| `Storage:Root` | `App_Data/blobs` (`/data/blobs` in the image) | `Local`: attachments, receipts and exports. Also the source of `--copy-blobs`. |
+| `Storage:Bucket` / `Storage:Prefix` | — | `Gcs`/`S3`: the bucket, and an optional key prefix ending in `/`. |
 
 ## Database and tenancy
 
@@ -108,9 +110,11 @@ Details: [email.md](email.md).
 | `Email:Smtp:EnableSsl` | `true` | Legacy switch; `false` means `None` when `Security` isn't set. |
 | `Email:Smtp:UserName` / `:Password` | — | Password is a **secret**. |
 | `Email:SendGrid:ApiKey` | — | **Secret.** A key with only *Mail Send* permission. |
+| `Email:SendGrid:WebhookVerificationKey` | — | The signed Event Webhook's public key. Turns on `/webhooks/email/sendgrid` (bounces, spam reports; [email.md](email.md)). |
 | `Email:Ses:Region` | SDK default | |
 | `Email:Ses:ConfigurationSet` | — | Publishes bounce/complaint events (see [email.md](email.md)). |
 | `Email:Ses:AccessKeyId` / `:SecretAccessKey` | — | **Secret.** Prefer an IAM role. |
+| `Email:Ses:BounceTopicArns` | `[]` | SNS topics whose bounce and complaint events `/webhooks/email/ses` accepts. Empty: the endpoint is off. |
 | `Notifications:PublicBaseUrl` | — | Absolute base for links in emails; may contain `{tenant}` (`https://{tenant}.workbench.example.com`). |
 | `Notifications:DigestHourLocal` | `7` | Hour the daily digest goes out. |
 

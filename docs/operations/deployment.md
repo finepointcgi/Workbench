@@ -14,12 +14,13 @@
 - **One image** (`Dockerfile`): .NET 10 on Ubuntu chiseled (no shell, no package manager), runs as the non-root
   `app` user (UID 1654), listens on 8080, has a `HEALTHCHECK`, and works with a read-only root filesystem
   (mount `/tmp` as tmpfs and a volume at `/data/blobs`).
-- **Web hosts are stateless** apart from attachments in `/data/blobs` (`Storage:Root`). Data Protection keys,
+- **Web hosts are stateless** once files are in a bucket (`Storage:Provider=Gcs` or `S3`, [object-storage.md](object-storage.md)); with the default `Local` they're in `/data/blobs`. Data Protection keys,
   sessions and everything else are in PostgreSQL, so you can run several replicas behind the proxy. Blazor Server
   keeps a WebSocket per user: enable **sticky sessions** (cookie or source-IP affinity) on the load balancer when
   running more than one replica, and allow WebSockets with an idle timeout of at least 100 seconds.
-- **The attachment store is a local folder.** With several replicas it must be shared storage (NFS, Azure Files,
-  EFS). An object-storage blob store is a planned follow-up.
+- **Files go in a bucket when there's more than one replica**: Google Cloud Storage or S3/MinIO, private, encrypted,
+  with the platform's identity (Cloud Run service account, IAM role) instead of keys. `--copy-blobs` moves an existing
+  `/data/blobs` folder into the bucket ([object-storage.md](object-storage.md)).
 - **Migrations are a separate step**: `Database:MigrateOnStartup` is false outside Development, so a deploy runs the
   image once with `--migrate` (a Kubernetes Job, an ECS task, a compose one-shot service) and only then rolls out the
   web hosts. For zero-downtime rollouts, migrations must leave the schema usable by the previous version

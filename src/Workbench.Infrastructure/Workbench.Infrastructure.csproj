@@ -7,7 +7,9 @@
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="12.58.0" />
     <PackageReference Include="Anthropic.Bedrock" Version="0.14.0" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.6" />
     <PackageReference Include="AWSSDK.SimpleEmailV2" Version="4.0.106.4" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="5.0.0" />
     <PackageReference Include="MailKit" Version="4.18.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
