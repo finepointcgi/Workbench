@@ -1,7 +1,14 @@
 namespace Workbench.Application.Notifications;
 
 /// <summary>An email with a plain-text and an HTML body. Implemented in infrastructure (SMTP or a pickup folder).</summary>
-public sealed record EmailMessage(string To, string Subject, string TextBody, string HtmlBody, IReadOnlyList<EmailAttachment>? Attachments = null);
+public sealed record EmailMessage(string To, string Subject, string TextBody, string HtmlBody, IReadOnlyList<EmailAttachment>? Attachments = null)
+{
+    /// <summary>
+    /// Mail the person needs to get into or keep their account (password resets, invitations, sign-in links). It still
+    /// goes to an address that bounces or complained; everything else (notifications, digests, reports) is held back.
+    /// </summary>
+    public bool Essential { get; init; }
+}
 
 /// <summary>A file attached to an email (e.g. a scheduled report).</summary>
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);

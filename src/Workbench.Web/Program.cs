@@ -13,6 +13,7 @@ using Workbench.Web.Security;
 using Workbench.Web.Supplier;
 using Workbench.Web.Forms;
 using Workbench.Web.Tenancy;
+using Workbench.Web.Storage;
 
 // `Workbench.Web --health-check`: the container HEALTHCHECK probe (GET /health/live), without starting a host.
 if (args.Contains("--health-check", StringComparer.OrdinalIgnoreCase))
@@ -25,10 +26,14 @@ if (args.Contains("--health-check", StringComparer.OrdinalIgnoreCase))
 // `--rewrap-data-protection-keys` re-encrypts the stored key ring with the configured key encryption and exits (after
 // rotating the certificate or vault key; docs/operations/data-protection-keys.md).
 // `--reset-demo` deletes the public demo's data and exits; the next start seeds it afresh (docs/demo-hosting.md).
+// `--copy-blobs [--apply]` copies files from the local folder (Storage:Root) into the configured bucket, checksums
+// verified; without --apply it's a dry run (docs/operations/object-storage.md).
 var migrateOnly = args.Contains("--migrate", StringComparer.OrdinalIgnoreCase);
 var rewrapKeys = args.Contains("--rewrap-data-protection-keys", StringComparer.OrdinalIgnoreCase);
 var resetDemo = args.Contains("--reset-demo", StringComparer.OrdinalIgnoreCase);
-string[] commands = ["--migrate", "--rewrap-data-protection-keys", "--reset-demo"];
+var copyBlobs = args.Contains("--copy-blobs", StringComparer.OrdinalIgnoreCase);
+var copyBlobsApply = copyBlobs && args.Contains("--apply", StringComparer.OrdinalIgnoreCase);
+string[] commands = ["--migrate", "--rewrap-data-protection-keys", "--reset-demo", "--copy-blobs", "--apply"];
 args = args.Where(a => !commands.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -73,6 +78,12 @@ if (resetDemo)
     return 0;
 }
 
+if (copyBlobs)
+{
+    var report = await BlobCopyCommand.RunAsync(app.Services, copyBlobsApply, Console.Out);
+    return report.Applied ? (report.Complete ? 0 : 1) : (report.Conflicts.Count == 0 ? 0 : 1);
+}
+
 await app.Services.InitializeWorkbenchDatabaseAsync();
 app.UseWorkbenchServerTiming();
 app.UseWorkbenchSecurityHeaders();
@@ -107,6 +118,7 @@ app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
+app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddAdditionalAssemblies(typeof(Workbench.Ui.Routes).Assembly);

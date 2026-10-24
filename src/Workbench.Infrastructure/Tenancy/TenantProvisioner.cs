@@ -222,7 +222,7 @@ public sealed class TenantProvisioner(
             + $"{how} ({WebUtility.HtmlEncode(email)}) at <a href=\"{WebUtility.HtmlEncode(start)}\">{WebUtility.HtmlEncode(start)}</a> before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.</p>";
         try
         {
-            await scope.ServiceProvider.GetRequiredService<IEmailSender>().SendAsync(new EmailMessage(email, "Your Workbench organization is ready", text, html), cancellationToken);
+            await scope.ServiceProvider.GetRequiredService<IEmailSender>().SendAsync(new EmailMessage(email, "Your Workbench organization is ready", text, html) { Essential = true }, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

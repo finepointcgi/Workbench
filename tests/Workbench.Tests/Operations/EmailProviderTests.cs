@@ -44,6 +44,23 @@ public sealed class EmailProviderTests
     }
 
     [Fact]
+    public async Task SendGrid_messages_carry_the_tenant_so_bounces_come_back_to_it()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.Accepted);
+        var sender = new SendGridEmailSender(new EmailSettings { SendGridApiKey = "SG.test-key" }, new HttpClient(handler));
+
+        using (Workbench.Application.Tenancy.TenantScope.Enter(new(Guid.NewGuid(), "acme", "Acme")))
+        {
+            await sender.SendAsync(new EmailMessage("pm@example.com", "S", "T", "H"));
+        }
+
+        Assert.Equal("acme", (string?)JsonNode.Parse(handler.Body!)!["custom_args"]![EmailEventTags.Tenant]);
+
+        await sender.SendAsync(new EmailMessage("pm@example.com", "S", "T", "H"));
+        Assert.Null(JsonNode.Parse(handler.Body!)!["custom_args"]); // SingleTenant: no tag.
+    }
+
+    [Fact]
     public async Task A_refused_message_fails_and_is_counted_as_a_failed_delivery()
     {
         var status = new EmailDeliveryStatus();

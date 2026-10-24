@@ -256,7 +256,7 @@ public sealed class InviteService(
 
         try
         {
-            await email.SendAsync(new EmailMessage(invite.Email, "You're invited to Workbench", text, html), cancellationToken);
+            await email.SendAsync(new EmailMessage(invite.Email, "You're invited to Workbench", text, html) { Essential = true }, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

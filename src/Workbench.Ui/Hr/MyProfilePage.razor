@@ -9,6 +9,8 @@
     <MudButton Href="hr/benefits/me" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.HealthAndSafety">My benefits</MudButton>
 </MudStack>
 
+<Workbench.Ui.Notifications.EmailBounceNotice />
+
 @if (Error is not null)
 {
     <MudAlert Severity="Severity.Info">@Error</MudAlert>

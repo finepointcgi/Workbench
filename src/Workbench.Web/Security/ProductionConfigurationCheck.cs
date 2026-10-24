@@ -1,5 +1,6 @@
 using Workbench.Application.Tenancy;
 using Workbench.Infrastructure.Persistence;
+using Workbench.Infrastructure.Storage;
 using Workbench.Web.Identity;
 
 namespace Workbench.Web.Security;
@@ -105,7 +106,24 @@ public static class ProductionConfigurationCheck
 
         problems.AddRange(AssistantProblems(configuration, allowFakeProvider: demo));
         problems.AddRange(IntegrationProblems(configuration));
+        problems.AddRange(StorageProblems(configuration, environment));
         return problems;
+    }
+
+    /// <summary>Bucket storage must be complete, and S3 objects must be encrypted at rest in Production (A.8.24).</summary>
+    public static IEnumerable<string> StorageProblems(IConfiguration configuration, IHostEnvironment environment)
+    {
+        var storage = BlobStorageSettings.FromConfiguration(configuration);
+        foreach (var problem in storage.Problems())
+        {
+            yield return problem;
+        }
+
+        if (environment.IsProduction() && storage.Provider.Equals("S3", StringComparison.OrdinalIgnoreCase)
+            && storage.S3.ServerSideEncryption.Trim().Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "Storage:S3:ServerSideEncryption is None in Production. Use AES256 or aws:kms (MinIO: configure its KMS, e.g. MINIO_KMS_SECRET_KEY).";
+        }
     }
 
     /// <summary>Webhooks and connectors must use https and public addresses outside Development (the SSRF guard).</summary>

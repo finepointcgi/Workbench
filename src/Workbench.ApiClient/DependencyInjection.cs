@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddSetupClients(serverBaseAddress);
         services.AddAccountingClients(serverBaseAddress);
         services.AddSecurityAdminClients(serverBaseAddress);
+        services.AddHttpClient<Contracts.Notifications.IEmailDeliverabilityService, HttpEmailDeliverabilityService>(client => client.BaseAddress = serverBaseAddress);
         services.AddContractDetailClients(serverBaseAddress);
         services.AddIndirectRateClients(serverBaseAddress);
         services.AddBillingClients(serverBaseAddress);

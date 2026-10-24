@@ -1,6 +1,8 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Workbench.Infrastructure.Collaboration;
 using Workbench.Infrastructure.Persistence;
+using Workbench.Infrastructure.Storage;
 
 namespace Workbench.Web.Security;
 
@@ -47,6 +49,21 @@ public static class DemoReset
 
         EmptyFolder(configuration["Storage:Root"]);
         EmptyFolder(configuration["Email:PickupFolder"]);
+
+        // With a bucket (Storage:Provider Gcs or S3) the demo's files live there; the folder above is then empty anyway.
+        if (services.GetService<UnscopedBlobStore>()?.Store is { } blobs and not LocalDiskBlobStore and IBlobKeyListing listing)
+        {
+            var keys = new List<string>();
+            await foreach (var key in listing.ListKeysAsync(cancellationToken: cancellationToken))
+            {
+                keys.Add(key);
+            }
+
+            foreach (var key in keys)
+            {
+                await blobs.DeleteAsync(key, cancellationToken);
+            }
+        }
     }
 
     /// <summary>Deletes what's inside the folder but keeps the folder: it's usually a mounted volume.</summary>

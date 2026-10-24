@@ -23,7 +23,7 @@ restore time is dominated by data size and by provisioning the replacement envir
 | Item | Where | How |
 | --- | --- | --- |
 | Database(s): business data, users, security events, Data Protection keys | PostgreSQL: the SingleTenant database, or the catalog plus one database per tenant | `scripts/backup-all.sh` (logical, encrypted) **and** PITR |
-| Attachments and receipts | `Storage:Root` (`/data/blobs` volume) | Volume snapshots, or object-store versioning and replication |
+| Attachments and receipts | The bucket (`Storage:Provider=Gcs`/`S3`), or `Storage:Root` (`/data/blobs` volume) | Bucket versioning or soft delete plus cross-region replication; volume snapshots for `Local` |
 | Data Protection key-encryption certificate (or vault/KMS key) and its password | Your vault | Vault backup / escrow; **never in the same place as the database backups** |
 | Backup decryption key (gpg private key) | Your vault, offline copy | Escrow; without it the logical backups are unreadable |
 | Configuration and secrets | Deployment tooling and vault | Version-controlled deployment config; vault backup |

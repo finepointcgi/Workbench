@@ -97,6 +97,7 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, TenancyOpti
         if (IsHostOnlyPath(path) || path.StartsWithSegments("/account") || path.StartsWithSegments("/health")
             || path.StartsWithSegments("/_blazor") || path.StartsWithSegments("/_framework") || path.StartsWithSegments("/_content")
             || path.StartsWithSegments("/not-found") || path.StartsWithSegments("/signin-oidc") || path.StartsWithSegments("/signout-callback-oidc")
+            || path.StartsWithSegments("/webhooks/email")
             || Path.HasExtension(path.Value))
         {
             context.Items[HostKey] = true;

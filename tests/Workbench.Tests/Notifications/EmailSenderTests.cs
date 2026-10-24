@@ -47,7 +47,8 @@ public sealed class EmailSenderTests : IDisposable
 
         services.AddNotificationInfrastructure(configuration);
 
-        var sender = Assert.IsType<InstrumentedEmailSender>(services.BuildServiceProvider().GetRequiredService<IEmailSender>());
+        var outer = Assert.IsType<SuppressingEmailSender>(services.BuildServiceProvider().GetRequiredService<IEmailSender>());
+        var sender = Assert.IsType<InstrumentedEmailSender>(outer.Inner);
         Assert.IsType(expected, sender.Inner);
     }
 

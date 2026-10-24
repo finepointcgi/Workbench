@@ -36,6 +36,8 @@ public static class SecurityRegistration
         services.AddScoped<ISecurityEventService, SecurityEventService>();
         services.AddScoped<RetentionService>();
         services.AddScoped<IRetentionService>(sp => sp.GetRequiredService<RetentionService>());
+        services.TryAddSingleton<Notifications.EmailDeliverabilityRecorder>(); // Bounces and complaints from the mail provider.
+        services.AddScoped<Contracts.Notifications.IEmailDeliverabilityService, Notifications.EmailDeliverabilityService>();
 
         services.Decorate<ITimeReportService, SecurityLoggingTimeReportService>();
         services.Decorate<IFinancialExportService, SecurityLoggingFinancialExportService>();

@@ -12780,6 +12780,55 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("ReconciliationRun");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Notifications.EmailAddressIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClearedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClearedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EventCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FirstAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Address")
+                        .IsUnique();
+
+                    b.ToTable("EmailAddressIssue");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Notifications.Notification", b =>
                 {
                     b.Property<Guid>("Id")

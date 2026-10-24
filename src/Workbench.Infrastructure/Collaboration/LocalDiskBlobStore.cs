@@ -1,10 +1,11 @@
-using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 using Workbench.Application.Collaboration;
+using Workbench.Infrastructure.Storage;
 
 namespace Workbench.Infrastructure.Collaboration;
 
 /// <summary>Stores blobs as files under a root folder (config <c>Storage:Root</c>, default <c>App_Data/blobs</c>).</summary>
-public sealed partial class LocalDiskBlobStore : IBlobStore
+public sealed class LocalDiskBlobStore : IBlobStore, IBlobKeyListing
 {
     private readonly string _root;
 
@@ -50,21 +51,41 @@ public sealed partial class LocalDiskBlobStore : IBlobStore
 
     public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
-        File.Delete(PathFor(key));
+        var path = PathFor(key);
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+
         return Task.CompletedTask;
     }
+
+    /// <summary>Every file under the root whose relative path is a valid key (leftover <c>.partial</c> files and strays are skipped).</summary>
+    public async IAsyncEnumerable<string> ListKeysAsync(string prefix = "", [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var path in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = Path.GetRelativePath(_root, path).Replace(Path.DirectorySeparatorChar, '/');
+            if (BlobKey.IsValid(key) && key.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                yield return key;
+            }
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>Files under the root that aren't valid keys, so <c>--copy-blobs</c> can report them instead of silently skipping.</summary>
+    public IEnumerable<string> ListStrayFiles() =>
+        Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(_root, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Where(key => !BlobKey.IsValid(key));
 
     private string PathFor(string key)
     {
         // Keys are app-generated, but refuse anything that could escape the root anyway.
-        if (!KeyPattern().IsMatch(key))
-        {
-            throw new ArgumentException($"Invalid blob key '{key}'.", nameof(key));
-        }
-
+        BlobKey.Validate(key);
         return Path.Combine(_root, key.Replace('/', Path.DirectorySeparatorChar));
     }
-
-    [GeneratedRegex(@"^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$")]
-    private static partial Regex KeyPattern();
 }
