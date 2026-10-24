@@ -75,6 +75,7 @@ public static class WorkbenchApi
         v1.MapBankFileEndpoints();
         v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
+        v1.MapGitLabEndpoints(); // GitLab sync: connection and project links (under /integrations).
         v1.MapComplianceEndpoints();
         v1.MapReceiptEndpoints();
         v1.MapCustomizationEndpoints();

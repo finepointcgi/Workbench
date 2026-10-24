@@ -34,6 +34,7 @@ public static class IntegrationRegistration
         services.AddScoped<IWebhookService, WebhookService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
         services.AddScoped<IConnectorService, ConnectorService>();
+        GitLab.GitLabRegistration.AddWorkbenchGitLab(services); // GitLab sync of project plans (issues, epics, milestones).
         return services;
     }
 
@@ -41,6 +42,7 @@ public static class IntegrationRegistration
     public static IServiceCollection AddWorkbenchIntegrationsHosting(this IServiceCollection services)
     {
         services.AddHostedService<IntegrationDispatcherBackgroundService>();
+        GitLab.GitLabRegistration.AddWorkbenchGitLabHosting(services);
         return services;
     }
 }
