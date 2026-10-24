@@ -50,7 +50,7 @@ internal static class DashboardEndpoints
         dashboards.MapPost("/{dashboardId:guid}/widgets/reorder", (Guid dashboardId, ReorderWidgetsRequest request, IDashboardService service, CancellationToken ct) =>
             service.ReorderWidgetsAsync(dashboardId, request, ct));
 
-        dashboards.MapGet("/{dashboardId:guid}/widgets/{widgetId:guid}/data", (Guid dashboardId, Guid widgetId, IWidgetDataService service, CancellationToken ct) =>
-            service.GetAsync(dashboardId, widgetId, ct));
+        dashboards.MapGet("/{dashboardId:guid}/widgets/{widgetId:guid}/data", (Guid dashboardId, Guid widgetId, Guid? companyId, IWidgetDataService service, CancellationToken ct) =>
+            service.GetAsync(dashboardId, widgetId, companyId, ct));
     }
 }

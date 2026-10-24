@@ -167,12 +167,12 @@ public sealed class FinancialPermissionTests
         var pm = seeded.As(Owner).Host.Get<IContractService>();
         var pmContracts = await pm.ListContractsAsync();
         Assert.Equal((1_000_000m, 400_000m), Values(pmContracts.Single(c => c.Id == f.Contract1)));
-        Assert.Equal((0m, 0m), Values(pmContracts.Single(c => c.Id == f.Contract2)));
-        Assert.Equal((0m, 0m), Values((await pm.GetContractAsync(f.Contract2))!));
+        Assert.DoesNotContain(pmContracts, c => c.Id == f.Contract2); // 2002 isn't theirs: its contract follows it
+        Assert.Null(await pm.GetContractAsync(f.Contract2));
 
         var analyst = seeded.As(Editor).Host.Get<IContractService>();
         var listed = await analyst.ListContractsAsync();
-        Assert.Equal(2, listed.Count); // still listed by number and name, for pickers
+        Assert.Equal([f.Contract1], listed.Select(c => c.Id)); // the project they charge, by number and name, without funding
         Assert.All(listed, c => Assert.Equal((0m, 0m), Values(c)));
         Assert.Equal((0m, 0m), Values((await analyst.GetContractAsync(f.Contract1))!));
     }

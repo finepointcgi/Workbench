@@ -41,6 +41,10 @@ else
             }
             else
             {
+                @if (!c.CanClose)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="CloseAnywayAsync" Disabled="_busy" data-testid="close-anyway">Close anyway…</MudButton>
+                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Lock" OnClick="ClosePeriodAsync" Disabled="@(_busy || !c.CanClose)"
                            data-testid="close-button">Close @c.FiscalPeriodName</MudButton>
             }
@@ -190,9 +194,11 @@ else
 
     private async Task ClosePeriodAsync() => await ChangeAsync(true);
 
+    private async Task CloseAnywayAsync() => await ChangeAsync(true, anyway: true);
+
     private async Task ReopenAsync() => await ChangeAsync(false);
 
-    private async Task ChangeAsync(bool closing)
+    private async Task ChangeAsync(bool closing, bool anyway = false)
     {
         if (_checklist is not { } c)
         {
@@ -201,10 +207,13 @@ else
 
         var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog>
         {
-            { d => d.Message, closing ? $"Closing {c.FiscalPeriodName} stops postings and any time or ODC change dated in it." : $"Reopening {c.FiscalPeriodName} allows postings and changes dated in it again." },
-            { d => d.ConfirmText, closing ? "Close period" : "Reopen period" },
+            { d => d.Message, anyway ? $"These checks haven't passed. Closing {c.FiscalPeriodName} anyway stops postings and any time or ODC change dated in it, and the skipped checks and your reason go into the audit trail."
+                : closing ? $"Closing {c.FiscalPeriodName} stops postings and any time or ODC change dated in it." : $"Reopening {c.FiscalPeriodName} allows postings and changes dated in it again." },
+            { d => d.ConfirmText, anyway ? "Close anyway" : closing ? "Close period" : "Reopen period" },
+            { d => d.Warnings, anyway ? c.Checks.Where(x => !x.Passed).Select(x => $"{x.Title}: {x.Summary}").ToList() : null },
+            { d => d.ConfirmColor, anyway ? Color.Error : Color.Primary },
         };
-        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>(closing ? $"Close {c.FiscalPeriodName}" : $"Reopen {c.FiscalPeriodName}", parameters,
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>(anyway ? $"Close {c.FiscalPeriodName} anyway" : closing ? $"Close {c.FiscalPeriodName}" : $"Reopen {c.FiscalPeriodName}", parameters,
             new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
         if (await dialog.Result is not { Canceled: false, Data: string reason })
         {
@@ -214,7 +223,7 @@ else
         _busy = true;
         try
         {
-            _checklist = closing ? await Close.CloseAsync(c.FiscalPeriodId, new ClosePeriodRequest(reason)) : await Close.ReopenAsync(c.FiscalPeriodId, new ClosePeriodRequest(reason));
+            _checklist = closing ? await Close.CloseAsync(c.FiscalPeriodId, new ClosePeriodRequest(reason, anyway)) : await Close.ReopenAsync(c.FiscalPeriodId, new ClosePeriodRequest(reason));
             _periods = await Calendar.ListPeriodsAsync();
             Snackbar.Add($"{c.FiscalPeriodName} {(closing ? "closed" : "reopened")}.", Severity.Success);
             await LoadAsync();

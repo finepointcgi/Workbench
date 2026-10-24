@@ -49,9 +49,13 @@ The rule is enforced in the permission decorators (`AddWorkbenchIdentity`), not 
 
 - **Project list and pages** (`PermissionCheckingProjectService`): the list is filtered. Get and get-for-sheet return
   null when the project is hidden. WBS and charge-assignment lists are not found.
-- **Charge codes:** a person's own list, and the lists their timekeeper, supervisor, Finance, Admin or resource manager
-  sees, are unchanged. Anyone else asking for someone's codes (an approver reading a timesheet, say) gets only codes on
-  projects they can see.
+- **Contracts** (`PermissionCheckingContractService`, `VisibleContractIdsAsync`): a contract is listed and found when a
+  project on it is visible. Everyone who sees every project sees every contract. A contract with no project yet is
+  listed for those who may create projects (so a PM can request the first one). Funding stays Finance, Admin and the
+  managers of a project on it.
+- **Charge codes:** a person's list is theirs, their supervisor's and their timekeeper's, Finance's and Admin's
+  (`time.view_all`). Anyone else is refused (403, logged), so the list can't be used to learn who works on what. A
+  timesheet opened by its approver carries no charge codes.
 - **Projects hub** (`ProjectHubService`, `PermissionCheckingProjectHubService`): the list, the project page, and the
   team, financials, budgets, revenue, earned value, ceilings, CLINs, commitments, narratives and workload tabs. These go
   through `ProjectAccess`, which checks visibility first.

@@ -241,17 +241,28 @@ public sealed record PeriodCloseChecklistDto(
     public bool CanClose => !IsClosed && Checks.All(c => c.Passed);
 }
 
-public sealed record ClosePeriodRequest(string Reason);
+/// <param name="CloseAnyway">
+/// Close even though checks fail. Only for holders of the close permission, with a reason; the failing checks and the
+/// reason are kept in the audit trail and the security event log.
+/// </param>
+public sealed record ClosePeriodRequest(string Reason, bool CloseAnyway = false);
 
 public interface IPeriodCloseService
 {
     Task<PeriodCloseChecklistDto> GetChecklistAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Closes the period when every check passes (otherwise <see cref="InvalidOperationException"/>). A closed period
-    /// rejects postings and any time or ODC change dated in it. Audited.
+    /// Closes the period when every check passes (otherwise <see cref="InvalidOperationException"/>), or when the request
+    /// says close anyway. A closed period rejects postings and any time or ODC change dated in it. Audited.
     /// </summary>
     Task<PeriodCloseChecklistDto> CloseAsync(Guid fiscalPeriodId, ClosePeriodRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One company's checklist for the period: its employees' timesheets and expenses and the time and ODCs charged to its
+    /// projects, its unposted items and draft entries, and its own trial balance (plus the tenant-wide module checks).
+    /// Closing a company's period (<c>ICompanyService.SetPeriodClosedAsync</c>) needs it to pass, or close anyway.
+    /// </summary>
+    Task<PeriodCloseChecklistDto> GetCompanyChecklistAsync(Guid fiscalPeriodId, Guid companyId, CancellationToken cancellationToken = default);
 
     /// <summary>Reopens a closed period (reason required, audited).</summary>
     Task<PeriodCloseChecklistDto> ReopenAsync(Guid fiscalPeriodId, ClosePeriodRequest request, CancellationToken cancellationToken = default);

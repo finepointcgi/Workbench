@@ -67,6 +67,22 @@ Admin can't be limited.
 - Users, the access review, dev sign-in and role members show a limited role as "Finance (company B)". Limiting or
   widening an assignment is audited like any other role change.
 
+## Records that follow other records
+
+Some reads have no permission of their own; they follow the record they belong to:
+
+- **Contracts** follow project visibility (`docs/project-visibility.md`): someone sees a contract when they can see a
+  project on it. Finance and Admin (and resource managers, who see every project) see every contract. A contract with
+  no project yet is listed for holders of **Create projects**, so a project manager can request the first project on it.
+  A hidden contract is left out of lists and not found; funding stays limited to Finance, Admin and the managers of a
+  project on the contract.
+- **An employee's charge codes** (what they may charge, on which projects) are for the employee, their supervisor and
+  holders of **See everyone's time** (Timekeeper, Finance, Admin; a scoped role for the people it covers). Anyone else is
+  refused, and the refusal is a `permission.denied` security event.
+- **Closing a period** (for the tenant, or one company) needs its close checklist to pass. A holder of **Close fiscal
+  periods** can close anyway with a reason: the failing checks and the reason go into the audit trail (`ClosedAnyway`,
+  `PeriodClosedAnyway`) and the `period.closed_anyway` security event.
+
 ## Sensitive fields
 
 Some fields are permissions of their own, under **Sensitive fields**. A role that lacks one gets the field masked (shown
@@ -189,7 +205,7 @@ reveals. Admin holds every permission.
 
 | Permission | Key | What it allows | Built-in roles | Opens |
 |---|---|---|---|---|
-| See everyone's time | `time.view_all` | Everyone's timesheets, hours, daily entries, leave requests and utilization. | Admin, Timekeeper, Finance | Timesheet flags |
+| See everyone's time | `time.view_all` | Everyone's timesheets, hours, daily entries, leave requests, utilization and charge codes. | Admin, Timekeeper, Finance | Timesheet flags |
 | Team time for everyone | `time.team` | The Team time page and timesheet approvals list for the whole organization. | Admin, Timekeeper | Team time, Approvals, Timesheet flags, Timesheet approvals, ODC approvals, Bill approvals |
 | Change cost rates ⚠ | `labor.cost_rates.manage` | Add employee cost rates. | Admin, Finance | — |
 | Total time accounting | `time.total_time` | The labor cost method, uncompensated overtime and effective labor rates. | Admin, Finance | Total time accounting |
@@ -216,7 +232,7 @@ reveals. Admin holds every permission.
 | Manage the chart of accounts | `gl.accounts.manage` | Add and change general ledger accounts. | Admin, Finance | Chart of accounts |
 | Post journal entries | `gl.journals.post` | Draft, post and reverse manual journal entries. | Admin, Finance | Journal entries |
 | Manage posting rules | `gl.posting.manage` | General ledger posting setup. | Admin, Finance | Posting rules |
-| Close fiscal periods | `gl.close` | The period close checklist and closing accounting periods. | Admin, Finance | Period close |
+| Close fiscal periods | `gl.close` | The period close checklist and closing accounting periods, including closing anyway (with a reason) when a check fails. | Admin, Finance | Period close |
 | See financial statements | `gl.reports.view` | Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer. | Admin, Finance | Financial statements, Consolidated statements |
 | Manage recurring journals | `gl.recurring.manage` | Recurring journal templates and runs. | Admin, Finance | Recurring journals |
 | Revalue foreign currency | `gl.revaluation` | Currency revaluation and the foreign currency report. | Admin, Finance | Currency revaluation, Foreign currency report |

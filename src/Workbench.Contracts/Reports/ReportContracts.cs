@@ -182,7 +182,8 @@ public sealed record ReportDefinition(
     DateOnly? From = null,
     DateOnly? To = null,
     bool ShowDetails = true,
-    string? Title = null);
+    string? Title = null,
+    Guid? CompanyId = null);
 
 public interface IReportWriterService
 {
