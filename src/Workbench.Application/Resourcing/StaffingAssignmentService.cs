@@ -103,13 +103,19 @@ public sealed class StaffingAssignmentService(
     public async Task DeleteAsync(Guid assignmentId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var assignment = await db.Set<StaffingAssignment>().FirstOrDefaultAsync(a => a.Id == assignmentId, cancellationToken)
+        await DeleteOneAsync(db, assignmentId, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Removes the assignment and its weekly rows in <paramref name="db"/> without saving (the caller saves).</summary>
+    internal async Task DeleteOneAsync(IWorkbenchDbContext db, Guid assignmentId, CancellationToken ct)
+    {
+        var assignment = await db.Set<StaffingAssignment>().FirstOrDefaultAsync(a => a.Id == assignmentId, ct)
             ?? throw WorkbenchNotFoundException.For("Assignment", assignmentId);
-        var rows = await db.Set<ResourceAllocation>().Where(a => a.AssignmentId == assignmentId).ToListAsync(cancellationToken);
+        var rows = await db.Set<ResourceAllocation>().Where(a => a.AssignmentId == assignmentId).ToListAsync(ct);
         db.Set<ResourceAllocation>().RemoveRange(rows);
         db.Set<StaffingAssignment>().Remove(assignment);
         audit.Record(db, EntityType, assignment.Id, "Deleted", before: Snapshot(assignment));
-        await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<StaffingAssignmentDto> SetWeekAsync(Guid assignmentId, DateOnly weekStart, decimal hours, CancellationToken cancellationToken = default)
@@ -344,7 +350,7 @@ public sealed class StaffingAssignmentService(
     // ---- Saving ----
 
     /// <summary>A validated assignment: the resolved dates and labor category and the weekly spread, before anything is saved.</summary>
-    private sealed record AssignmentPlan(
+    internal sealed record AssignmentPlan(
         SaveAssignmentRequest Request,
         StaffingAssignment? Existing,
         Employee Employee,
@@ -357,9 +363,18 @@ public sealed class StaffingAssignmentService(
         /// <summary>True when an edit changed nothing that moves hours, so the weeks (and any by-week adjustments) stay.</summary>
         bool KeepsWeeks);
 
-    private async Task<StaffingAssignment> SaveOneAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, CancellationToken ct)
+    /// <summary>
+    /// Creates or changes an assignment in <paramref name="db"/> without saving (the caller saves). With
+    /// <paramref name="exactWeeks"/> the weekly rows are exactly those (an undo putting back adjusted weeks) and the total is their sum.
+    /// </summary>
+    internal async Task<StaffingAssignment> SaveOneAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, CancellationToken ct, IReadOnlyList<AssignmentWeekDto>? exactWeeks = null)
     {
         var plan = await PlanAsync(db, request, ct);
+        if (exactWeeks is not null)
+        {
+            plan = plan with { Weeks = exactWeeks.Where(w => w.Hours > 0).OrderBy(w => w.WeekStart).ToList(), KeepsWeeks = false };
+        }
+
         var now = clock.GetUtcNow().UtcDateTime;
         var assignment = plan.Existing is { } existing
             ? await db.Set<StaffingAssignment>().FirstAsync(a => a.Id == existing.Id, ct)
@@ -382,7 +397,7 @@ public sealed class StaffingAssignmentService(
         assignment.LaborCategoryId = plan.LaborCategoryId;
         assignment.From = plan.From;
         assignment.To = plan.To;
-        assignment.TotalHours = Math.Round(request.TotalHours, 2, MidpointRounding.AwayFromZero);
+        assignment.TotalHours = exactWeeks is null ? Math.Round(request.TotalHours, 2, MidpointRounding.AwayFromZero) : plan.Weeks.Sum(w => w.Hours);
         assignment.Notes = Clean(request.Notes);
 
         var rows = plan.Existing is null ? [] : await db.Set<ResourceAllocation>().Where(a => a.AssignmentId == assignment.Id).ToListAsync(ct);
@@ -419,7 +434,8 @@ public sealed class StaffingAssignmentService(
         AssignmentId = assignment.Id, Notes = assignment.Notes, CreatedBy = audit.Actor, CreatedAtUtc = now,
     };
 
-    private async Task<AssignmentPlan> PlanAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, CancellationToken ct)
+    /// <summary>Validates a request and works out its dates, labor category and weekly spread. Reads only.</summary>
+    internal async Task<AssignmentPlan> PlanAsync(IWorkbenchDbContext db, SaveAssignmentRequest request, CancellationToken ct)
     {
         if (request.TotalHours is <= 0 or > MaxTotalHours)
         {
@@ -601,7 +617,7 @@ public sealed class StaffingAssignmentService(
             weeks.Select(w => w.WeekStart).ToList(), holidays, leave, 0m).ToDictionary(c => c.WeekStart, c => c.Capacity);
         return weeks
             .Select(w => new AssignmentOverbookedWeekDto(w.WeekStart, w.Hours, others.GetValueOrDefault(w.WeekStart), capacity.GetValueOrDefault(w.WeekStart)))
-            .Where(w => w.ThisAssignment + w.OtherHours > w.Capacity + 0.005m)
+            .Where(w => CapacityCalculator.IsOverbooked(w.ThisAssignment + w.OtherHours, w.Capacity))
             .ToList();
     }
 

@@ -234,7 +234,7 @@
                                     <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
                                     <MudDivider />
                                 }
-                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors) && !column.IsBaseline && !column.IsFloat)
+                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors or GridColumnKind.Extra) && !column.IsBaseline && !column.IsFloat)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.ArrowUpward" OnClick="() => SortBy(column, false)" data-testid="sort-asc">Sort ascending</MudMenuItem>
                                     <MudMenuItem Icon="@Icons.Material.Filled.ArrowDownward" OnClick="() => SortBy(column, true)" data-testid="sort-desc">Sort descending</MudMenuItem>
@@ -345,6 +345,10 @@
                                         <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
                                     </a>
                                 </div>
+                            }
+                            else if (column.Extra is { } extra)
+                            {
+                                @extra.Cell(row.Item)
                             }
                             else if (column.Kind == GridColumnKind.Assignees)
                             {
@@ -501,6 +505,12 @@
     [Parameter]
     public string Height { get; set; } = "calc(100vh - 300px)";
 
+    /// <summary>Columns the page around the grid adds (the Plan tab's people, hours and cost); null adds none.</summary>
+    [CascadingParameter]
+    public GridExtraColumns? Extras { get; set; }
+
+    private GridExtraColumns? _lastExtras;
+
     private ElementReference _container;
     private ElementReference _editorRef;
     private MudDatePicker? _datePicker;
@@ -553,10 +563,21 @@
 
     protected override void OnParametersSet()
     {
-        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet) && ReferenceEquals(Tasks, _lastTasks) && ReferenceEquals(Plan, _lastPlan))
+        if (ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet) && ReferenceEquals(Tasks, _lastTasks) && ReferenceEquals(Plan, _lastPlan)
+            && ReferenceEquals(Extras, _lastExtras))
         {
             return;
         }
+
+        if (!ReferenceEquals(Extras, _lastExtras) && ReferenceEquals(Items, _lastItems) && ReferenceEquals(Sheet, _lastSheet) && ReferenceEquals(Tasks, _lastTasks) && ReferenceEquals(Plan, _lastPlan))
+        {
+            // Only the page's extra columns changed (e.g. the people on the plan): redraw them, keep everything else.
+            _lastExtras = Extras;
+            RebuildColumns();
+            return;
+        }
+
+        _lastExtras = Extras;
 
         var rowsChanged = !ReferenceEquals(Items, _lastItems) || !ReferenceEquals(Sheet, _lastSheet);
         _lastItems = Items;
@@ -1651,6 +1672,7 @@
         GridColumnKind.Predecessors => _plan.TryGetValue(item.Id, out var t) && t.Predecessors.Length > 0 ? t.Predecessors : null,
         GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish or GridColumnKind.FinishVariance => BaselineRaw(item, column),
         GridColumnKind.TotalFloat or GridColumnKind.FreeFloat => FloatRaw(item, column),
+        GridColumnKind.Extra => column.Extra!.Text(item),
         _ => CellFormat.GetRaw(item, column),
     };
 
@@ -1665,7 +1687,8 @@
     private static string CellClass(GridColumn column, bool active, bool editing, bool locked = false, bool inRange = false)
     {
         var css = column.Kind == GridColumnKind.Title ? "wb-cell wb-title wb-sticky" : "wb-cell";
-        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency || column.Kind is GridColumnKind.Duration or GridColumnKind.TotalFloat or GridColumnKind.FreeFloat)
+        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency || column.Kind is GridColumnKind.Duration or GridColumnKind.TotalFloat or GridColumnKind.FreeFloat
+            || column.Extra is { AlignRight: true })
         {
             css += " wb-num";
         }

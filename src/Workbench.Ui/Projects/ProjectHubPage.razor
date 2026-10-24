@@ -159,7 +159,10 @@ else
             {
                 <PlanChargeCodesBanner ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value" />
             }
-            <Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />
+            @* The plan with its people, hours and cost (and "Try changes"), around the plan grid. *@
+            <Workbench.Ui.Plan.PlanPeoplePanel ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value">
+                <Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />
+            </Workbench.Ui.Plan.PlanPeoplePanel>
         </div>,
         "financials" => @<Workbench.Ui.Pages.Projects.ProjectFinancialsPage ProjectId="ProjectId" Embedded="true" />,
         "budgets" => @<Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />,

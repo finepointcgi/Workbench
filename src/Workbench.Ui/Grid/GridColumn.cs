@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Workbench.Contracts.Sheets;
 
 namespace Workbench.Ui.Grid;
@@ -33,10 +34,23 @@ public enum GridColumnKind
 
     /// <summary>Read-only: working days the task can slip without moving any successor.</summary>
     FreeFloat,
+
+    /// <summary>A column another feature adds to the grid (<see cref="GridExtraColumns"/>); it draws its own cells.</summary>
+    Extra,
 }
 
+/// <summary>
+/// A column a page adds to the grid around it, e.g. the Plan tab's people, hours and cost. The grid places it after the
+/// plan's date columns and treats it as read-only; <see cref="Cell"/> draws the cell (it may hold its own buttons) and
+/// <see cref="Text"/> is what copying the cell gives.
+/// </summary>
+public sealed record GridExtraColumn(string Key, string Name, int Width, Func<ItemDto, RenderFragment?> Cell, Func<ItemDto, string?> Text, bool AlignRight = false);
+
+/// <summary>Extra columns for the grid, cascaded by the page (a new instance redraws the grid).</summary>
+public sealed record GridExtraColumns(IReadOnlyList<GridExtraColumn> Columns);
+
 /// <summary>A column as the grid shows it: one of the built-in item fields or a sheet column.</summary>
-public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, ColumnDto? Column, int DefaultWidth)
+public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, ColumnDto? Column, int DefaultWidth, GridExtraColumn? Extra = null)
 {
     /// <summary>How values in this column are edited and displayed.</summary>
     public ColumnKind ValueKind => Kind switch
@@ -54,7 +68,7 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     public const string AssigneesKey = "assignees";
 
     /// <summary>Formula and lookup columns are computed server-side and can't be edited in the grid; baseline columns are history.</summary>
-    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup || IsBaseline || IsFloat || Column is { } c && ColumnValues.IsAutomatic(c.Type);
+    public bool ReadOnly => IsFormula || Column?.Type == ColumnKind.Lookup || IsBaseline || IsFloat || Extra is not null || Column is { } c && ColumnValues.IsAutomatic(c.Type);
 
     /// <summary>Total and free float, read from the plan's critical-path analysis.</summary>
     public bool IsFloat => Kind is GridColumnKind.TotalFloat or GridColumnKind.FreeFloat;
@@ -65,7 +79,8 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
     /// Title, then Assignees (when shown), then Start/Finish when scheduling is on (with Duration and Predecessors when the
     /// plan is loaded, and the baseline columns when comparing to a baseline), then the sheet's columns, then WBS.
     /// </summary>
-    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false, bool baseline = false, bool floats = false)
+    public static IReadOnlyList<GridColumn> For(SheetDetail sheet, bool assignees = false, bool plan = false, bool baseline = false, bool floats = false,
+        IReadOnlyList<GridExtraColumn>? extras = null)
     {
         var columns = new List<GridColumn> { new("title", "Title", GridColumnKind.Title, null, 320) };
         if (assignees)
@@ -95,6 +110,11 @@ public sealed record GridColumn(string Key, string Name, GridColumnKind Kind, Co
                 columns.Add(new(SheetFields.TotalFloat, "Total float", GridColumnKind.TotalFloat, null, 160));
                 columns.Add(new(SheetFields.FreeFloat, "Free float", GridColumnKind.FreeFloat, null, 110));
             }
+        }
+
+        foreach (var extra in extras ?? [])
+        {
+            columns.Add(new(extra.Key, extra.Name, GridColumnKind.Extra, null, extra.Width, extra));
         }
 
         columns.AddRange(sheet.Columns

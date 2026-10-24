@@ -206,6 +206,23 @@ public sealed class HttpStaffingAssignmentService(HttpClient http) : IStaffingAs
             .ReadAsync<List<AssignmentHoursLeftDto>>(cancellationToken);
 }
 
+public sealed class HttpResourcePlanService(HttpClient http) : IResourcePlanService
+{
+    private const string Root = "api/v1/resourcing";
+
+    public async Task<ResourcePlanDto> GetAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/projects/{projectId}/resource-plan", cancellationToken)).ReadAsync<ResourcePlanDto>(cancellationToken);
+
+    public async Task<PlanTryDto> TryAsync(Guid projectId, IReadOnlyList<PlanChange> changes, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/projects/{projectId}/resource-plan/try", new PlanChangesRequest(changes), cancellationToken)).ReadAsync<PlanTryDto>(cancellationToken);
+
+    public async Task<PlanAppliedDto> ApplyAsync(Guid projectId, IReadOnlyList<PlanChange> changes, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/projects/{projectId}/resource-plan/apply", new PlanChangesRequest(changes), cancellationToken)).ReadAsync<PlanAppliedDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<OverbookingFixDto>> ListFixesAsync(Guid projectId, Guid assignmentId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/projects/{projectId}/resource-plan/fixes/{assignmentId}", cancellationToken)).ReadAsync<List<OverbookingFixDto>>(cancellationToken);
+}
+
 public static class PerDiemResourcingClientRegistration
 {
     public static IServiceCollection AddPerDiemResourcingClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -217,6 +234,7 @@ public static class PerDiemResourcingClientRegistration
         services.AddHttpClient<IAllocationForecastService, HttpAllocationForecastService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProjectStaffingService, HttpProjectStaffingService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IStaffingAssignmentService, HttpStaffingAssignmentService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IResourcePlanService, HttpResourcePlanService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }
