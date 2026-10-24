@@ -1,0 +1,101 @@
+@* Funds one CLIN in a single step: writes a one-change modification and executes it, so the funding history and the
+   contract's totals are the same as funding through the Modifications tab. *@
+@inject IContractModificationService Modifications
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            CLIN @Clin.Number · @Clin.Description: @ClinFormat.Money(Clin.FundedValue) funded of @ClinFormat.Money(Clin.CeilingValue).
+            Up to @ClinFormat.Money(Room) more can be funded.
+        </MudText>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal?" @bind-Value="_amount" Label="Amount to fund" Adornment="Adornment.Start" AdornmentText="$" Format="N2"
+                                     Min="0" Max="Room" Required="true" RequiredError="Enter the amount." Immediate="true" AutoFocus="true"
+                                     Validation="@(new Func<decimal?, string?>(ValidateAmount))" data-testid="fund-amount" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_effective" Label="Effective date" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_number" Label="Modification number" Required="true" RequiredError="Enter the modification number." Immediate="true"
+                                  HelperText="From the funding document" data-testid="fund-mod-number" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_description" Label="Description" Required="true" RequiredError="Enter a description." Immediate="true" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy" data-testid="fund-save">Fund</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid ContractId { get; set; }
+
+    [Parameter, EditorRequired]
+    public ClinDto Clin { get; set; } = default!;
+
+    private MudForm _form = default!;
+    private decimal? _amount;
+    private DateTime? _effective = DateTime.Today;
+    private string? _number;
+    private string? _description;
+    private bool _busy;
+
+    private decimal Room => Math.Max(0, Clin.CeilingValue - Clin.FundedValue);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var mods = await Modifications.ListAsync(ContractId);
+        _number = ClinFormat.NextModificationNumber(mods.Select(m => m.Number));
+        _description = $"Fund CLIN {Clin.Number}";
+        _amount = Room > 0 ? Room : null;
+    }
+
+    private string? ValidateAmount(decimal? amount) =>
+        amount is not > 0 ? "Enter an amount above zero." : amount > Room ? $"Only {ClinFormat.Money(Room)} is left to fund on this CLIN." : null;
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || _effective is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var draft = await Modifications.CreateDraftAsync(ContractId, new SaveModificationRequest(_number!.Trim(), SetupFormat.ToDateOnly(_effective)!.Value,
+                _description!.Trim(), [new ModificationChangeDto(ModificationChangeKind.Fund, Clin.Number, _amount)]));
+            try
+            {
+                MudDialog.Close(DialogResult.Ok(await Modifications.ExecuteAsync(draft.Id)));
+            }
+            catch
+            {
+                // Leave no half-done draft behind when the funding is refused.
+                await Modifications.DeleteDraftAsync(draft.Id);
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

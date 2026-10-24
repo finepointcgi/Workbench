@@ -54,7 +54,7 @@
     {
         FundingLevel.Exhausted or FundingLevel.Critical => "error",
         FundingLevel.Warning => "warning",
-        FundingLevel.NotActive => "text-disabled",
+        FundingLevel.NotActive or FundingLevel.Unfunded => "text-disabled",
         _ => "success",
     };
 }

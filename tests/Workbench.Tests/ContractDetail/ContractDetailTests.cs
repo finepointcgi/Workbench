@@ -215,6 +215,16 @@ public sealed class ContractDetailTests : IAsyncLifetime
         Assert.Null(await Funding.GetProjectFundingStatusAsync(await IndirectProjectAsync()));
     }
 
+    [Fact]
+    public async Task A_clin_with_no_money_on_it_reads_not_funded_until_it_is_funded()
+    {
+        Assert.Equal(FundingLevel.Unfunded, Assert.Single((await Funding.GetFundingStatusAsync(_fx.Contract1)).Clins).Level);
+
+        await ExecuteAsync("P00001", Fund("0001", 4_000m));
+
+        Assert.Equal(FundingLevel.Ok, Assert.Single((await Funding.GetFundingStatusAsync(_fx.Contract1)).Clins).Level);
+    }
+
     private async Task<Guid> IndirectProjectAsync() =>
         (await _seeded.Host.Get<IProjectService>().CreateProjectAsync(new SaveProjectRequest("9000", "Overhead", null, null, ProjectState.Active, null, null))).Id;
 
