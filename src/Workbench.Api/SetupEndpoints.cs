@@ -21,6 +21,15 @@ internal static class SetupEndpoints
         start.MapPost("", (StartProjectRequest r, IProjectStartService s, CancellationToken ct) => s.StartAsync(r, ct));
         start.MapPost("/check-import", (Workbench.Contracts.Scheduling.PlanImportRequest r, IProjectStartService s, CancellationToken ct) => s.CheckImportAsync(r, ct));
 
+        // The project's plan with Finance: ceiling-first terms, submit, approve or return.
+        var plans = v1.MapGroup("/project-plans").WithTags("Project plans");
+        plans.MapGet("/{projectId:guid}", (Guid projectId, IProjectPlanService s, CancellationToken ct) => s.GetAsync(projectId, ct));
+        plans.MapGet("/from-contract/{contractId:guid}", (Guid contractId, IProjectPlanService s, CancellationToken ct) => s.TermsFromContractAsync(contractId, ct));
+        plans.MapPut("/{projectId:guid}/terms", (Guid projectId, SaveProjectTermsRequest r, IProjectPlanService s, CancellationToken ct) => s.SaveTermsAsync(projectId, r, ct));
+        plans.MapPost("/{projectId:guid}/submit", (Guid projectId, PlanReviewRequest r, IProjectPlanService s, CancellationToken ct) => s.SubmitAsync(projectId, r.Comment, ct));
+        plans.MapPost("/{projectId:guid}/approve", (Guid projectId, PlanReviewRequest r, IProjectPlanService s, CancellationToken ct) => s.ApproveAsync(projectId, r.Comment, ct));
+        plans.MapPost("/{projectId:guid}/return", (Guid projectId, PlanReviewRequest r, IProjectPlanService s, CancellationToken ct) => s.ReturnAsync(projectId, r.Comment ?? "", ct));
+
         var setup = v1.MapGroup("/setup").WithTags("Setup");
         setup.MapPut("/org-units/{id:guid}", (Guid id, CreateOrgUnitRequest r, ISetupAdminService s, CancellationToken ct) => s.UpdateOrgUnitAsync(id, r, ct));
         setup.MapPut("/customers/{id:guid}", (Guid id, SaveCustomerRequest r, ISetupAdminService s, CancellationToken ct) => s.UpdateCustomerAsync(id, r, ct));

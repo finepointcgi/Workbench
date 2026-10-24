@@ -113,6 +113,26 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
     }
 }
 
+internal sealed class ProjectPlanConfiguration : IEntityTypeConfiguration<ProjectPlan>
+{
+    public void Configure(EntityTypeBuilder<ProjectPlan> b)
+    {
+        b.HasIndex(p => p.ProjectId).IsUnique();
+        b.HasOne<Project>().WithMany().HasForeignKey(p => p.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        b.Property(p => p.CeilingValue).HasPrecision(18, 2);
+        b.Property(p => p.FundedValue).HasPrecision(18, 2);
+        b.Property(p => p.FeeRate).HasPrecision(9, 6);
+        b.Property(p => p.Pricing).HasConversion<string>().HasMaxLength(32);
+        b.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
+        b.Property(p => p.SubmittedBy).HasMaxLength(256);
+        b.Property(p => p.ReviewedBy).HasMaxLength(256);
+        b.Property(p => p.SubmitNote).HasMaxLength(2000);
+        b.Property(p => p.ReviewComment).HasMaxLength(2000);
+        b.Property(p => p.CreatedBy).HasMaxLength(256);
+        b.Property(p => p.UpdatedBy).HasMaxLength(256);
+    }
+}
+
 internal sealed class WbsElementConfiguration : IEntityTypeConfiguration<WbsElement>
 {
     public void Configure(EntityTypeBuilder<WbsElement> b)

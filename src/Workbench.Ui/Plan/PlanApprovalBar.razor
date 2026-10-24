@@ -1,0 +1,200 @@
+@* The plan with Finance, on the Plan tab: the project's terms (ceiling, funding, type, fee: Finance changes them here),
+   where approval stands, and the one next step: the PM submits; Finance approves or returns it with comments. Once
+   approved, changes are the working version and show against the baseline until they're submitted and approved too.
+   Hidden for people who can't see the project's financials. *@
+@using Workbench.Contracts
+@using Workbench.Contracts.ProjectAccounting
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (_plan is { } plan)
+{
+    <div class="wb-approval" data-testid="plan-approval">
+        <div class="wb-approval-row">
+            <MudChip T="string" Size="Size.Small" Color="@StatusColor(plan)" Variant="Variant.Filled" data-testid="plan-approval-status">@StatusText(plan)</MudChip>
+            <span class="wb-approval-text">@Explain(plan)</span>
+            <MudSpacer />
+            @if (plan.CanSubmit && !_reviewing)
+            {
+                <input class="wb-approval-note" placeholder="Note for Finance (optional)" aria-label="Note for Finance" @bind="_note" />
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="_busy"
+                           data-testid="plan-submit">@(plan.Status == PlanApprovalStatus.Approved ? "Submit the changes" : "Submit plan for approval")</MudButton>
+            }
+            @if (plan.CanReview)
+            {
+                <input class="wb-approval-note" placeholder="Comments (needed to return it)" aria-label="Comments for the project manager" @bind="_comment" @bind:event="oninput" />
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ReturnAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_comment))" data-testid="plan-return">Return to PM</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="ApproveAsync" Disabled="_busy"
+                           data-testid="plan-approve">Approve</MudButton>
+            }
+        </div>
+
+        @if (plan.Status == PlanApprovalStatus.Returned && plan.ReviewComment is { } why)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1" data-testid="plan-returned">@plan.ReviewedBy returned it: "@why"</MudAlert>
+        }
+        @if (plan.Status == PlanApprovalStatus.Submitted && plan.SubmitNote is { } note)
+        {
+            <span class="wb-approval-text d-block mt-1">Note from @plan.SubmittedBy: "@note"</span>
+        }
+        @if (plan.SinceBaseline.Count > 0 && (plan.ChangedSinceApproval || plan.CanReview))
+        {
+            <table class="wb-approval-table" data-testid="plan-since-baseline" aria-label="The plan against the approved baseline">
+                <thead>
+                    <tr><th>Labor category</th><th class="wb-num">Baseline</th><th class="wb-num">Plan now</th><th class="wb-num">Change</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in plan.SinceBaseline)
+                    {
+                        <tr>
+                            <td>@line.LaborCategory</td>
+                            <td class="wb-num">@PlanPeopleFormat.Hours(line.BaselineHours) h</td>
+                            <td class="wb-num">@PlanPeopleFormat.Hours(line.PlanHours) h</td>
+                            <td class="wb-num">@(line.HoursChange > 0 ? "+" : "")@PlanPeopleFormat.Hours(line.HoursChange) h</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="wb-approval-terms" data-testid="plan-terms">
+            <span>
+                @plan.Terms.PricingLabel@(plan.Terms.ContractNumber is { } c ? $" · contract {c}" : "")@(plan.Terms.FeeRate > 0 ? $" · {Percent(plan.Terms.FeeRate)} fee" : "")
+                @(plan.Terms.Start is { } s && plan.Terms.Finish is { } f ? $" · {PlanPeopleFormat.Range(s, f)}" : "")
+            </span>
+            @if (plan.CanEditTerms)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editing = !_editing" data-testid="plan-terms-edit">@(_editing ? "Close" : "Change the ceiling or funding")</MudButton>
+            }
+        </div>
+        @if (_editing)
+        {
+            <div class="wb-approval-row mt-1" data-testid="plan-terms-form">
+                <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="Ceiling ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                <MudNumericField T="decimal?" @bind-Value="_fee" Label="Fee (%)" Min="0" Max="99" Style="max-width:110px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTermsAsync" Disabled="_busy">Save</MudButton>
+                <span class="wb-approval-text">Leave a box as the contract says to keep following it.</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    /// <summary>Changes when the plan changes, so "changed since approval" is fresh.</summary>
+    [Parameter] public int Version { get; set; }
+
+    private ProjectPlanDto? _plan;
+    private int _loadedVersion = -1;
+    private string? _note;
+    private string? _comment;
+    private bool _busy;
+    private bool _editing;
+    private bool _reviewing;
+    private decimal? _ceiling;
+    private decimal? _funded;
+    private decimal? _fee;
+
+    private IProjectPlanService? Plans => Services.GetService(typeof(IProjectPlanService)) as IProjectPlanService;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedVersion != Version)
+        {
+            _loadedVersion = Version;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Plans is not { } plans)
+        {
+            return;
+        }
+
+        try
+        {
+            Set(await plans.GetAsync(ProjectId));
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            _plan = null;
+        }
+    }
+
+    private void Set(ProjectPlanDto plan)
+    {
+        _plan = plan;
+        (_ceiling, _funded, _fee) = (plan.Terms.Ceiling, plan.Terms.Funded, Math.Round(plan.Terms.FeeRate * 100, 2));
+    }
+
+    private Task SubmitAsync() => RunAsync(p => p.SubmitAsync(ProjectId, _note), "Sent to Finance. You'll be notified when they approve it or send it back.");
+
+    private Task ApproveAsync() => RunAsync(p => p.ApproveAsync(ProjectId, _comment), "Approved. The plan is the project's budget now.");
+
+    private Task ReturnAsync() => RunAsync(p => p.ReturnAsync(ProjectId, _comment ?? ""), "Returned to the project manager with your comments.");
+
+    private Task SaveTermsAsync() =>
+        RunAsync(p => p.SaveTermsAsync(ProjectId, new SaveProjectTermsRequest(_ceiling, _funded, _plan?.Terms.Pricing, _fee is { } f ? f / 100m : null)), "Saved the project's ceiling and funding.");
+
+    private async Task RunAsync(Func<IProjectPlanService, Task<ProjectPlanDto>> action, string done)
+    {
+        if (Plans is not { } plans)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Set(await action(plans));
+            (_note, _comment, _editing) = (null, null, false);
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string StatusText(ProjectPlanDto plan) => plan.Status switch
+    {
+        PlanApprovalStatus.Submitted => "With Finance",
+        PlanApprovalStatus.Approved when plan.ChangedSinceApproval => "Changed since approval",
+        PlanApprovalStatus.Approved => "Approved",
+        PlanApprovalStatus.Returned => "Returned",
+        _ => "Draft",
+    };
+
+    private static Color StatusColor(ProjectPlanDto plan) => plan.Status switch
+    {
+        PlanApprovalStatus.Submitted => Color.Info,
+        PlanApprovalStatus.Approved when plan.ChangedSinceApproval => Color.Warning,
+        PlanApprovalStatus.Approved => Color.Success,
+        PlanApprovalStatus.Returned => Color.Warning,
+        _ => Color.Default,
+    };
+
+    private static string Explain(ProjectPlanDto plan) => plan.Status switch
+    {
+        PlanApprovalStatus.Submitted => $"Submitted by {plan.SubmittedBy}{When(plan.SubmittedAtUtc)}. Finance approves it or sends it back.",
+        PlanApprovalStatus.Approved when plan.ChangedSinceApproval =>
+            $"Since the approved baseline: {Signed(plan.HoursChange)} h. Submit the changes when they're ready.",
+        PlanApprovalStatus.Approved => $"Approved by {plan.ReviewedBy}{When(plan.ReviewedAtUtc)}. It's the project's baseline budget.",
+        PlanApprovalStatus.Returned => "Make the changes Finance asked for, then submit it again.",
+        _ => "Build the WBS and assign people, then submit the plan to Finance.",
+    };
+
+    private static string When(DateTime? utc) => utc is { } t ? $" on {t:MMM d}" : "";
+
+    private static string Signed(decimal hours) => (hours > 0 ? "+" : "") + PlanPeopleFormat.Hours(hours);
+
+    private static string Percent(decimal rate) => (rate * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

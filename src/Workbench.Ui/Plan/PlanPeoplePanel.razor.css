@@ -89,3 +89,65 @@ a.wb-plan-detail {
     font-weight: 600;
     color: var(--mud-palette-info-darken);
 }
+
+.wb-plan-money {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    border-left: 4px solid var(--mud-palette-success);
+    background: color-mix(in srgb, var(--mud-palette-success) 8%, transparent);
+}
+
+.wb-plan-money.wb-money-amber {
+    border-left-color: var(--mud-palette-warning);
+    background: color-mix(in srgb, var(--mud-palette-warning) 14%, transparent);
+}
+
+.wb-plan-money.wb-money-red {
+    border-left-color: var(--mud-palette-error);
+    background: color-mix(in srgb, var(--mud-palette-error) 12%, transparent);
+}
+
+.wb-plan-money-main {
+    font-size: 1.05rem;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.wb-plan-clins {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.wb-plan-clin {
+    font-size: 0.8rem;
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+.wb-plan-clin.wb-money-amber {
+    border-color: var(--mud-palette-warning);
+    background: color-mix(in srgb, var(--mud-palette-warning) 14%, transparent);
+}
+
+.wb-plan-clin.wb-money-red {
+    border-color: var(--mud-palette-error);
+    background: color-mix(in srgb, var(--mud-palette-error) 12%, transparent);
+}
+
+.wb-plan-input {
+    padding: 3px 6px;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 4px;
+    background: var(--mud-palette-surface);
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+}

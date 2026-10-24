@@ -419,6 +419,7 @@ public sealed class SheetBulkEditService(
             added = children.Count > 0;
         }
 
+        await Scheduling.PlanWbsSync.BeforeRowsDeletedAsync(db, sheetId, doomed, cancellationToken);
         db.Items.RemoveRange(items.Where(i => doomed.Contains(i.Id)));
         foreach (var siblings in items.Where(i => !doomed.Contains(i.Id)).GroupBy(i => i.ParentId))
         {

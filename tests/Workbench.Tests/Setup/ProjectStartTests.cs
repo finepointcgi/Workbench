@@ -74,7 +74,7 @@ public sealed class ProjectStartTests
     }
 
     [Fact]
-    public async Task A_blank_plan_numbers_new_tasks_and_makes_them_charge_codes_in_one_step()
+    public async Task A_blank_plan_numbers_new_tasks_and_they_are_charge_codes_as_they_are_added()
     {
         await using var seeded = await SeededHost.CreateAsync();
         await ProjectAccountingFixture.SeedAsync(seeded);
@@ -84,12 +84,11 @@ public sealed class ProjectStartTests
         await items.CreateAsync(project.SheetId.Value, new CreateItemRequest("Sketches", design.Id));
 
         var sync = seeded.Host.Get<IPlanSyncService>();
-        var waiting = (await sync.DiffAsync(project.Id)).Differences.Where(d => d.Kind == PlanDifferenceKind.TaskWithoutWbs).ToList();
-        Assert.Equal(2, waiting.Count);
-        await sync.ApplyAsync(project.Id, new ApplyPlanSyncRequest(PlanSyncDirection.PlanToWbs, waiting.Select(d => d.Key).ToList()));
+        Assert.Empty((await sync.DiffAsync(project.Id)).Differences); // nothing waits for a "make charge codes" step
 
         var wbs = await seeded.Host.Get<IProjectService>().ListWbsAsync(project.Id);
         Assert.Equal(["3005.01", "3005.01.01"], wbs.Select(w => w.Code).Order(StringComparer.Ordinal)); // the codes the plan gave them
+        Assert.Equal([false, true], wbs.OrderBy(w => w.Code, StringComparer.Ordinal).Select(w => w.IsChargeable)); // only the lowest rows take time
     }
 
     [Fact]

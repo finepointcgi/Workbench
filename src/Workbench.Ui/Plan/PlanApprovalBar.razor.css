@@ -1,0 +1,53 @@
+.wb-approval {
+    padding: 8px 0 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.wb-approval-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.wb-approval-text {
+    font-size: 0.85rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.wb-approval-note {
+    min-width: 220px;
+    padding: 4px 8px;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 4px;
+    background: var(--mud-palette-surface);
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+}
+
+.wb-approval-terms {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.wb-approval-table {
+    margin-top: 6px;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.wb-approval-table th,
+.wb-approval-table td {
+    padding: 2px 10px 2px 0;
+    text-align: left;
+}
+
+.wb-num {
+    text-align: right !important;
+}

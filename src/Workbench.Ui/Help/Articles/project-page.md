@@ -21,15 +21,17 @@ On a contract, a project manager's new project waits for Finance to activate it 
 
 - Type a task in **Type a task and press Enter**, or press Enter after the last task's name to start the next one.
 - **Tab** makes a task a subtask of the one above; **Shift+Tab** moves it back out. **Add subtask** adds one under the selected task.
-- WBS codes are numbered for you under the parent (the third subtask of 1001.02 is 1001.02.03) and follow tasks when you move them. A code you type yourself is kept; clear it to get the automatic one back. Tasks that are already charge codes keep their codes.
-- When the plan is ready, **Make charge codes** turns its tasks into charge codes so people can charge time to them.
+- The plan's rows are the WBS. Codes are numbered for you under the parent (the third subtask of 1001.02 is 1001.02.03) and follow rows when you move them. A code you type yourself is kept; clear it to get the automatic one back.
+- Every row is a WBS element as soon as you add it, and the lowest rows are the charge codes people charge time to (milestones aren't). Once time is charged to a code it keeps its code, and its row can't be deleted (close the code in Setup instead).
+- Assign people in the **People** grid under the plan: type in the last row or paste rows from Excel. The bar above the plan shows what's planned against the ceiling and funding.
+- When it's ready, **Submit plan for approval**. Finance approves it (it becomes the baseline budget) or returns it with comments.
 
 ## The tabs
 
 | Tab | What it shows |
 | --- | --- |
 | Overview | Health (on track, at risk or over), spend against budget, funding used, what needs your attention, and the setup steps with a button for each. |
-| Plan | The project's plan and WBS: tasks, durations, predecessors and the Gantt chart. It works like MS Project (Tab indents) and imports and exports Excel. |
+| Plan | The project's WBS and plan in one grid: rows, dates, predecessors, people, hours and cost, the money against the ceiling, approval, and the Gantt chart. It works like MS Project (Tab indents) and imports and exports Excel. |
 | Budget & staffing | The budget by labor category and your [EAC](term:eac) (estimate at completion), then the people staffed into each category and who charged hours. |
 | Financials | Cost, revenue and margin by task, direct and [burdened](term:burdened). |
 | Costs | Other direct costs ([ODCs](term:odc)) such as vendor invoices and travel. |

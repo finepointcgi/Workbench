@@ -15,14 +15,13 @@
         <MudSpacer />
         @if (_canManage)
         {
-            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ContentPaste" OnClick="() => ManyAsync(false)" Disabled="_busy" data-testid="assign-paste">Paste from Excel</MudButton>
             <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.GroupAdd" OnClick="() => ManyAsync(true)" Disabled="_busy" data-testid="assign-copy-team">Copy a team</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => EditAsync(null, null)" Disabled="_busy" data-testid="assign-button">Assign a person</MudButton>
         }
     </MudStack>
     <MudText Typo="Typo.body2" HtmlTag="div" Class="mud-text-secondary mb-3" Style="max-width: 76ch">
-        Give each person their hours and dates. Workbench spreads the hours over the working weeks (no weekends or holidays),
-        lets them charge the task, and shows them their hours left on their timesheet.
+        Give each person their task, hours and dates: type in the last row, or paste rows from Excel. Workbench spreads the
+        hours over the working weeks (no weekends or holidays), lets them charge the task, and shows them their hours left
+        on their timesheet. It's the same list as the People grid on the Plan tab.
     </MudText>
 
     @if (_error is not null)
@@ -52,74 +51,15 @@
             </MudToggleGroup>
         }
 
-        @if (_data.Assignments.Count == 0)
-        {
-            <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="assign-empty">
-                <MudText Typo="Typo.subtitle1" HtmlTag="h3">Nobody is assigned yet</MudText>
-                <MudText Class="mud-text-secondary">
-                    @(_canManage ? "Choose Assign a person, or paste a list from Excel. For each person, give the task, their hours in total and the dates." : "The project manager assigns people here.")
-                </MudText>
-            </MudPaper>
-        }
-        else if (_byWeek)
+        @if (_byWeek && _data.Assignments.Count > 0)
         {
             @WeekGrid()
         }
         else
         {
-            <MudSimpleTable Dense="true" Outlined="true" Hover="true" Class="mb-3" data-testid="assignments">
-                <thead>
-                    <tr>
-                        <th scope="col">Person</th>
-                        <th scope="col">Task</th>
-                        <th scope="col" style="text-align: right">Hours</th>
-                        <th scope="col">Dates</th>
-                        <th scope="col" style="text-align: right">
-                            <MudTooltip Text="Hours they've put on timesheets for it between the dates (draft, submitted or approved)."><span>Charged</span></MudTooltip>
-                        </th>
-                        @if (_canManage)
-                        {
-                            <th scope="col"><span class="wb-sr-only">Actions</span></th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in _data.Assignments)
-                    {
-                        <tr data-assignment="@a.EmployeeName">
-                            <td>@a.EmployeeName</td>
-                            <td>@a.WbsLabel</td>
-                            <td style="text-align: right" data-testid="assignment-hours">@ResourcingFormat.Hours(a.TotalHours)</td>
-                            <td style="white-space: nowrap">@a.From.ToString("MMM d") – @a.To.ToString("MMM d, yyyy")</td>
-                            <td style="text-align: right">
-                                @ResourcingFormat.Hours(a.ChargedHours)
-                                <span class="@(a.LeftHours < 0 ? "mud-warning-text" : "mud-text-secondary")" style="font-size: 0.8rem">
-                                    @(a.LeftHours < 0 ? $" · {ResourcingFormat.Hours(-a.LeftHours)} over" : $" · {ResourcingFormat.Hours(a.LeftHours)} left")
-                                </span>
-                            </td>
-                            @if (_canManage)
-                            {
-                                <td style="text-align: right; white-space: nowrap">
-                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => EditAsync(a, null)" Disabled="_busy" aria-label="@($"Change {a.EmployeeName} on {a.WbsLabel}")" />
-                                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" OnClick="() => RemoveAsync(a)" Disabled="_busy" aria-label="@($"Remove {a.EmployeeName} from {a.WbsLabel}")" />
-                                </td>
-                            }
-                        </tr>
-                    }
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <th scope="row" colspan="2" style="text-align: left">@(_data.Assignments.Select(a => a.EmployeeId).Distinct().Count() is var n && n == 1 ? "1 person" : $"{n} people")</th>
-                        <td style="text-align: right" data-testid="assignments-total"><b>@ResourcingFormat.Hours(_data.Assignments.Sum(a => a.TotalHours))</b></td>
-                        <td></td>
-                        <td style="text-align: right">@ResourcingFormat.Hours(_data.Assignments.Sum(a => a.ChargedHours))</td>
-                        @if (_canManage)
-                        {
-                            <td></td>
-                        }
-                    </tr>
-                </tfoot>
-            </MudSimpleTable>
+            <div class="mb-3">
+                <Workbench.Ui.Plan.AssignmentGrid @key="_reloads" ProjectId="ProjectId" Changed="AfterGridChangeAsync" />
+            </div>
         }
 
         @if (_data.WeekByWeek.Count > 0)
@@ -227,6 +167,12 @@
         {
             _error = ex.Message;
         }
+    }
+
+    private async Task AfterGridChangeAsync()
+    {
+        await LoadAsync();
+        await Changed.InvokeAsync();
     }
 
     // ---- Adjust by week ----

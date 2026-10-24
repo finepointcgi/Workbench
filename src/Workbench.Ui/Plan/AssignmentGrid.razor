@@ -1,0 +1,657 @@
+@* Assigning people as a spreadsheet: one row per person × WBS element with their labor category, hours and dates. Type
+   in the last row to add someone, Tab between cells, and paste rows copied from Excel (person, task, hours, from, to)
+   anywhere in the grid. Each row saves when a cell changes, with any problem shown on the row. Rows are the same
+   StaffingAssignments the Budget & staffing tab and timesheets use. On the Plan tab the page decides whether a change is
+   made or tried (Submit); on its own the grid makes it. *@
+@using Microsoft.JSInterop
+@using Workbench.Contracts
+@using Workbench.Contracts.ProjectAccounting
+@using Workbench.Contracts.Resourcing
+@using Workbench.Ui.Resourcing
+@implements IAsyncDisposable
+@inject IServiceProvider Services
+@inject IJSRuntime JS
+
+<section id="@GridId" aria-labelledby="@($"{GridId}-heading")" class="wb-assign" data-testid="assignment-grid">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mb-1">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="@($"{GridId}-heading")">People</MudText>
+        @if (FilterWbsElementId is { } filtered && Plan?.Tasks.FirstOrDefault(t => t.WbsElementId == filtered) is { } task)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" OnClose="ClearFilterAsync" data-testid="assign-grid-filter">On @task.OutlineNumber @task.Title</MudChip>
+        }
+        <MudSpacer />
+        @if (CanChange)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Type in the last row to add someone · Tab moves between cells · paste rows from Excel anywhere here</MudText>
+        }
+    </MudStack>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_error</MudAlert>
+    }
+
+    <div class="wb-assign-scroll" @ref="_container">
+        <table class="wb-assign-table" role="grid" aria-label="People on the plan: person, task, labor category, hours and dates">
+            <thead>
+                <tr>
+                    <th scope="col">Person</th>
+                    <th scope="col">Task</th>
+                    <th scope="col">Labor category</th>
+                    <th scope="col" class="wb-num">Hours</th>
+                    <th scope="col">From</th>
+                    <th scope="col">To</th>
+                    @if (Plan?.ShowsCost == true)
+                    {
+                        <th scope="col" class="wb-num">Cost</th>
+                    }
+                    <th scope="col"><span class="wb-sr-only">Status and actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in VisibleRows)
+                {
+                    var r = row;
+                    <tr @key="r.Key" class="@RowClass(r)" data-testid="assign-row">
+                        @if (r.ReadOnlyReason is not null || !CanChange)
+                        {
+                            <td>@r.PersonText</td>
+                            <td>@r.TaskLabel</td>
+                            <td>@CategoryLabel(r.CategoryId)</td>
+                            <td class="wb-num">@(r.Hours is { } h ? PlanPeopleFormat.Hours(h) : "")</td>
+                            <td>@PlanPeopleFormat.Date(r.From)</td>
+                            <td>@PlanPeopleFormat.Date(r.To)</td>
+                        }
+                        else
+                        {
+                            <td>
+                                <input class="wb-assign-input" list="@($"{GridId}-people")" value="@r.PersonText" aria-label="Person" placeholder="@(r.IsNew ? "Add a person…" : null)"
+                                       @onchange="e => SetPersonAsync(r, e.Value as string)" data-testid="assign-person-cell" />
+                            </td>
+                            <td>
+                                @if (r.TaskFixed)
+                                {
+                                    <span>@r.TaskLabel</span>
+                                }
+                                else
+                                {
+                                    <select class="wb-assign-input" aria-label="Task" value="@(r.WbsElementId?.ToString() ?? "")" @onchange="e => SetTaskAsync(r, e.Value as string)" data-testid="assign-task-cell">
+                                        <option value="">Whole project</option>
+                                        @foreach (var t in Tasks)
+                                        {
+                                            <option value="@t.WbsElementId">@t.WbsCode @t.Title</option>
+                                        }
+                                    </select>
+                                }
+                            </td>
+                            <td>
+                                <select class="wb-assign-input" aria-label="Labor category" value="@(r.CategoryId?.ToString() ?? "")" @onchange="e => SetCategoryAsync(r, e.Value as string)">
+                                    <option value="">Their own</option>
+                                    @foreach (var c in _categories.Where(c => c.IsActive || c.Id == r.CategoryId))
+                                    {
+                                        <option value="@c.Id">@c.Code @c.Name</option>
+                                    }
+                                </select>
+                            </td>
+                            <td class="wb-num">
+                                <input class="wb-assign-input wb-num" type="number" min="0.25" step="0.25" value="@(r.Hours?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
+                                       aria-label="Hours in total" @onchange="e => SetHoursAsync(r, e.Value as string)" data-testid="assign-hours-cell" />
+                            </td>
+                            <td>
+                                <input class="wb-assign-input" type="date" value="@Iso(r.From)" aria-label="From" title="@(r.IsNew ? "Leave empty to use the task's dates" : null)"
+                                       @onchange="e => SetDateAsync(r, e.Value as string, from: true)" />
+                            </td>
+                            <td>
+                                <input class="wb-assign-input" type="date" value="@Iso(r.To)" aria-label="To" @onchange="e => SetDateAsync(r, e.Value as string, from: false)" />
+                            </td>
+                        }
+                        @if (Plan?.ShowsCost == true)
+                        {
+                            <td class="wb-num">@(r.Source?.Cost is { } cost ? PlanPeopleFormat.Money(cost) : "")</td>
+                        }
+                        <td class="wb-assign-status">
+                            @if (r.Busy)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" aria-label="Saving" />
+                            }
+                            else if (r.Source is { IsOverbooked: true } over)
+                            {
+                                <span class="wb-assign-over" title="@($"{over.Name} is {PlanPeopleFormat.Overbooked(over.Overbooked[0])}")">
+                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" /> Over their hours
+                                </span>
+                                @if (CanChange && !Trying && r.AssignmentId is not null)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="() => ToggleFixesAsync(r)" data-testid="assign-fix">Fix</MudButton>
+                                }
+                            }
+                            @if (r.Source?.Changed == true && Trying)
+                            {
+                                <span class="wb-assign-changed">changed</span>
+                            }
+                            @if (CanChange && !r.IsNew && r.AssignmentId is not null && r.ReadOnlyReason is null)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Outlined.PersonRemove" Size="Size.Small" OnClick="() => RemoveAsync(r)" aria-label="@($"Take {r.PersonText} off {r.TaskLabel}")" />
+                            }
+                        </td>
+                    </tr>
+                    @if (r.Error is not null || r.ReadOnlyReason is not null)
+                    {
+                        <tr class="wb-assign-note">
+                            <td colspan="9" class="@(r.Error is not null ? "wb-assign-error" : "mud-text-secondary")" role="@(r.Error is not null ? "alert" : null)">@(r.Error ?? r.ReadOnlyReason)</td>
+                        </tr>
+                    }
+                    @if (r.Fixes is { } fixes)
+                    {
+                        <tr class="wb-assign-note">
+                            <td colspan="9" data-testid="assign-fixes">
+                                @if (fixes.Count == 0)
+                                {
+                                    <span class="mud-text-secondary">No quick fix fits within a year: lower their hours or give them to someone else.</span>
+                                }
+                                @foreach (var fix in fixes)
+                                {
+                                    <div class="wb-assign-fix">
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => ApplyFixAsync(r, fix)" data-testid="assign-fix-option">@fix.Label</MudButton>
+                                        <span>@fix.Explanation</span>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_pasted is { Count: > 0 } pasted)
+    {
+        <MudPaper Outlined="true" Class="pa-2 mt-2" data-testid="assign-pasted">
+            <MudText Typo="Typo.subtitle2">Pasted rows</MudText>
+            <table class="wb-assign-table">
+                <tbody>
+                    @foreach (var p in pasted)
+                    {
+                        <tr class="@(p.IsValid ? null : "wb-assign-invalid")">
+                            <td>Row @p.Line</td>
+                            <td>@p.Person</td>
+                            <td>@p.Task</td>
+                            <td class="wb-num">@(p.Hours is { } h ? PlanPeopleFormat.Hours(h) : "")</td>
+                            <td>@PlanPeopleFormat.Range(p.Request?.From ?? p.From, p.Request?.To ?? p.To)</td>
+                            <td class="@(p.IsValid ? "mud-text-secondary" : "wb-assign-error")">@string.Join(" ", p.Errors.Concat(p.Warnings))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="d-flex gap-2 mt-2">
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="@(pasted.All(p => !p.IsValid) || _busy)" OnClick="AddPastedAsync" data-testid="assign-pasted-add">
+                    Add @(pasted.Count(p => p.IsValid) == 1 ? "1 row" : $"{pasted.Count(p => p.IsValid)} rows")@(pasted.Any(p => !p.IsValid) ? " (skip the rest)" : "")
+                </MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _pasted = null">Don't add</MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    <datalist id="@($"{GridId}-people")">
+        @foreach (var c in _candidates)
+        {
+            <option value="@c.Name">@(c.LaborCategory ?? "no labor category") · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h a week booked</option>
+        }
+    </datalist>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    /// <summary>The plan the rows come from; null loads it here.</summary>
+    [Parameter] public ResourcePlanDto? Plan { get; set; }
+
+    /// <summary>What's being tried (its rows win over the plan's).</summary>
+    [Parameter] public PlanTryDto? Tried { get; set; }
+
+    [Parameter] public bool Trying { get; set; }
+
+    /// <summary>Shows only the people on this WBS element (a row picked in the plan grid).</summary>
+    [Parameter] public Guid? FilterWbsElementId { get; set; }
+
+    [Parameter] public EventCallback ClearFilter { get; set; }
+
+    /// <summary>Makes (or tries) changes and returns the problem in words, or null. Null: the grid makes them itself.</summary>
+    [Parameter] public Func<IReadOnlyList<PlanChange>, Task<string?>>? Submit { get; set; }
+
+    /// <summary>Raised after the grid made changes itself.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private sealed class Row
+    {
+        public Guid Key { get; } = Guid.NewGuid();
+        public Guid? AssignmentId { get; set; }
+        public PlanPersonDto? Source { get; set; }
+        public Guid? EmployeeId { get; set; }
+        public string PersonText { get; set; } = "";
+        public Guid? WbsElementId { get; set; }
+        public Guid? OriginalWbsElementId { get; init; }
+        public string TaskLabel { get; set; } = "Whole project";
+        public bool TaskFixed { get; set; }
+        public Guid? CategoryId { get; set; }
+        public decimal? Hours { get; set; }
+        public DateOnly? From { get; set; }
+        public DateOnly? To { get; set; }
+        public string? Error { get; set; }
+        public string? ReadOnlyReason { get; set; }
+        public bool Busy { get; set; }
+        public bool IsNew => AssignmentId is null && Source is null;
+        public IReadOnlyList<OverbookingFixDto>? Fixes { get; set; }
+    }
+
+    private readonly string GridId = $"wb-assign-{Guid.NewGuid():N}";
+    private ResourcePlanDto? _loaded;
+    private List<Row> _rows = [];
+    private Row _new = new();
+    private IReadOnlyList<StaffingCandidateDto> _candidates = [];
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private IReadOnlyList<AssignmentPasteRowDto>? _pasted;
+    private object? _builtFrom;
+    private string? _error;
+    private bool _busy;
+    private ElementReference _container;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _handle;
+    private DotNetObjectReference<AssignmentGrid>? _dotNet;
+
+    private IResourcePlanService? Plans => Services.GetService(typeof(IResourcePlanService)) as IResourcePlanService;
+
+    private ResourcePlanDto? Current => Plan ?? _loaded;
+
+    private bool CanChange => Current?.CanChange == true;
+
+    private IEnumerable<PlanTaskRowDto> Tasks => (Tried?.Tasks ?? Current?.Tasks ?? []).Where(t => t.CanAssign);
+
+    private IEnumerable<Row> VisibleRows => (FilterWbsElementId is { } f ? _rows.Where(r => r.WbsElementId == f) : _rows).Append(_new).Where(r => CanChange || !r.IsNew);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (Plan is null && Plans is { } plans)
+            {
+                _loaded = await plans.GetAsync(ProjectId);
+            }
+
+            if (Services.GetService(typeof(IProjectStaffingService)) is IProjectStaffingService staffing)
+            {
+                _candidates = await staffing.ListCandidatesAsync(ProjectId, null);
+            }
+
+            if (Services.GetService(typeof(IPeopleService)) is IPeopleService people)
+            {
+                _categories = await people.ListLaborCategoriesAsync();
+            }
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var source = (object?)Tried ?? Current;
+        if (!ReferenceEquals(source, _builtFrom))
+        {
+            _builtFrom = source;
+            Build();
+        }
+
+        _new.WbsElementId ??= FilterWbsElementId;
+        _new.TaskFixed = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/assignmentGrid.js");
+            _dotNet = DotNetObjectReference.Create(this);
+            _handle = await _module.InvokeAsync<IJSObjectReference>("init", _container, _dotNet);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException)
+        {
+            // Prerendering or a closed circuit: typing still works, pasting several rows doesn't.
+        }
+    }
+
+    /// <summary>Scrolls the grid into view and puts the cursor in it (the plan grid's People cell does this).</summary>
+    public async Task FocusAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("scrollIntoView", GridId);
+            }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    private void Build()
+    {
+        var rows = new List<Row>();
+        var plan = Current;
+        if (plan is null)
+        {
+            _rows = rows;
+            return;
+        }
+
+        foreach (var task in Tried?.Tasks ?? plan.Tasks)
+        {
+            foreach (var p in task.People)
+            {
+                rows.Add(From(p, task.WbsElementId, $"{task.WbsCode} {task.Title}".Trim(), taskFixed: false));
+            }
+        }
+
+        foreach (var p in Tried?.NotOnATask ?? plan.NotOnATask)
+        {
+            rows.Add(From(p, null, "Whole project (or a code not on the plan)", taskFixed: true));
+        }
+
+        // Keep a row someone is fixing (its error and values) across reloads.
+        foreach (var kept in _rows.Where(r => r.Error is not null && r.AssignmentId is { } id && rows.All(x => x.AssignmentId != id)))
+        {
+            rows.Add(kept);
+        }
+
+        _rows = rows;
+    }
+
+    private static Row From(PlanPersonDto p, Guid? wbs, string label, bool taskFixed) => new()
+    {
+        AssignmentId = p.AssignmentId, Source = p, EmployeeId = p.EmployeeId, PersonText = p.Name, WbsElementId = wbs, OriginalWbsElementId = wbs, TaskLabel = label,
+        TaskFixed = taskFixed, CategoryId = p.LaborCategoryId, Hours = p.Hours, From = p.From, To = p.To,
+        ReadOnlyReason = p.AssignmentId is null ? "Staffed week by week: change these hours on Budget & staffing (Assign by total turns them into a row here)." : null,
+    };
+
+    // ---- Editing ----
+
+    private async Task SetPersonAsync(Row row, string? text)
+    {
+        row.PersonText = text?.Trim() ?? "";
+        var matches = _candidates.Where(c => string.Equals(c.Name, row.PersonText, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matches.Count == 0 && row.PersonText.Length > 0)
+        {
+            matches = _candidates.Where(c => c.Name.Contains(row.PersonText, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (row.PersonText.Length == 0)
+        {
+            row.EmployeeId = row.Source?.EmployeeId;
+            row.Error = row.IsNew ? null : "Pick a person.";
+            return;
+        }
+
+        if (matches.Count != 1)
+        {
+            row.Error = matches.Count == 0 ? $"Nobody called \"{row.PersonText}\". Pick a name from the list." : $"\"{row.PersonText}\" matches {matches.Count} people. Type more of the name.";
+            return;
+        }
+
+        row.EmployeeId = matches[0].EmployeeId;
+        row.PersonText = matches[0].Name;
+        row.Error = null;
+        await CommitAsync(row);
+    }
+
+    private async Task SetTaskAsync(Row row, string? value)
+    {
+        row.WbsElementId = Guid.TryParse(value, out var id) ? id : null;
+        await CommitAsync(row);
+    }
+
+    private async Task SetCategoryAsync(Row row, string? value)
+    {
+        row.CategoryId = Guid.TryParse(value, out var id) ? id : null;
+        await CommitAsync(row);
+    }
+
+    private async Task SetHoursAsync(Row row, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            row.Hours = null;
+            row.Error = row.IsNew ? null : "Enter their hours (or take them off the task).";
+            return;
+        }
+
+        if (!decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var hours) || hours <= 0)
+        {
+            row.Error = "Hours must be a number above 0.";
+            return;
+        }
+
+        row.Hours = hours;
+        row.Error = null;
+        await CommitAsync(row);
+    }
+
+    private async Task SetDateAsync(Row row, string? value, bool from)
+    {
+        DateOnly? date = DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+        if (from)
+        {
+            row.From = date;
+        }
+        else
+        {
+            row.To = date;
+        }
+
+        if (row.From is { } f && row.To is { } t && t < f)
+        {
+            row.Error = "The end date is before the start date.";
+            return;
+        }
+
+        await CommitAsync(row);
+    }
+
+    /// <summary>Saves (or tries) the row once it has a person and hours.</summary>
+    private async Task CommitAsync(Row row)
+    {
+        if (!CanChange || row.EmployeeId is null || row.Hours is not > 0 || row.Busy)
+        {
+            return;
+        }
+
+        List<PlanChange> changes;
+        if (row.IsNew)
+        {
+            changes = [new PlanChange(PlanChangeKind.SetPerson, WbsElementId: row.WbsElementId, EmployeeId: row.EmployeeId, Hours: row.Hours,
+                LaborCategoryId: row.CategoryId, From: row.From, To: row.To)];
+        }
+        else if (row.Source is { } was && row.AssignmentId is { } id)
+        {
+            var movedTask = !row.TaskFixed && row.WbsElementId != row.OriginalWbsElementId;
+            changes = movedTask
+                ?
+                [
+                    new PlanChange(PlanChangeKind.RemovePerson, AssignmentId: id),
+                    new PlanChange(PlanChangeKind.SetPerson, WbsElementId: row.WbsElementId, EmployeeId: row.EmployeeId, Hours: row.Hours,
+                        LaborCategoryId: row.CategoryId, From: row.From == was.From ? null : row.From, To: row.To == was.To ? null : row.To),
+                ]
+                :
+                [
+                    new PlanChange(PlanChangeKind.SetPerson, AssignmentId: id,
+                        EmployeeId: row.EmployeeId != was.EmployeeId ? row.EmployeeId : null,
+                        Hours: row.Hours != was.Hours ? row.Hours : null,
+                        LaborCategoryId: row.CategoryId != was.LaborCategoryId ? row.CategoryId : null,
+                        From: row.From != was.From ? row.From : null,
+                        To: row.To != was.To ? row.To : null),
+                ];
+            if (!movedTask && changes[0] is { EmployeeId: null, Hours: null, LaborCategoryId: null, From: null, To: null })
+            {
+                return; // nothing changed
+            }
+        }
+        else
+        {
+            return;
+        }
+
+        row.Busy = true;
+        var error = await SendAsync(changes);
+        row.Busy = false;
+        row.Error = error;
+        if (error is null && row.IsNew)
+        {
+            _new = new Row { WbsElementId = FilterWbsElementId };
+        }
+    }
+
+    private async Task RemoveAsync(Row row)
+    {
+        if (row.AssignmentId is { } id)
+        {
+            row.Busy = true;
+            row.Error = await SendAsync([new PlanChange(PlanChangeKind.RemovePerson, AssignmentId: id)]);
+            row.Busy = false;
+        }
+    }
+
+    private async Task ToggleFixesAsync(Row row)
+    {
+        if (row.Fixes is not null)
+        {
+            row.Fixes = null;
+            return;
+        }
+
+        if (Plans is { } plans && row.AssignmentId is { } id)
+        {
+            try
+            {
+                row.Fixes = await plans.ListFixesAsync(ProjectId, id);
+            }
+            catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+            {
+                row.Error = ex.Message;
+            }
+        }
+    }
+
+    private async Task ApplyFixAsync(Row row, OverbookingFixDto fix)
+    {
+        row.Fixes = null;
+        row.Busy = true;
+        row.Error = await SendAsync(fix.Changes);
+        row.Busy = false;
+    }
+
+    // ---- Pasting from Excel ----
+
+    [JSInvokable]
+    public async Task OnPaste(string text)
+    {
+        if (!CanChange || Services.GetService(typeof(IStaffingAssignmentService)) is not IStaffingAssignmentService assignments)
+        {
+            return;
+        }
+
+        try
+        {
+            _pasted = (await assignments.PreviewPasteAsync(ProjectId, text)).Rows;
+            _error = null;
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            _error = ex.Message;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddPastedAsync()
+    {
+        if (_pasted is not { } rows)
+        {
+            return;
+        }
+
+        var changes = rows.Where(r => r.IsValid).Select(r => r.Request!)
+            .Select(q => new PlanChange(PlanChangeKind.SetPerson, WbsElementId: q.WbsElementId, EmployeeId: q.EmployeeId, Hours: q.TotalHours,
+                LaborCategoryId: q.LaborCategoryId, From: q.From, To: q.To))
+            .ToList();
+        _busy = true;
+        _error = await SendAsync(changes);
+        _busy = false;
+        if (_error is null)
+        {
+            _pasted = null;
+        }
+    }
+
+    private async Task<string?> SendAsync(IReadOnlyList<PlanChange> changes)
+    {
+        if (Submit is not null)
+        {
+            return await Submit(changes);
+        }
+
+        if (Plans is not { } plans)
+        {
+            return "Assigning isn't available here.";
+        }
+
+        try
+        {
+            await plans.ApplyAsync(ProjectId, changes);
+            _loaded = await plans.GetAsync(ProjectId);
+            _builtFrom = null;
+            OnParametersSet();
+            await Changed.InvokeAsync();
+            return null;
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            return ex.Message;
+        }
+    }
+
+    private async Task ClearFilterAsync() => await ClearFilter.InvokeAsync();
+
+    private string CategoryLabel(Guid? id) => id is { } c && _categories.FirstOrDefault(x => x.Id == c) is { } cat ? $"{cat.Code} {cat.Name}" : "";
+
+    private static string? Iso(DateOnly? date) => date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string RowClass(Row r) =>
+        (r.IsNew ? "wb-assign-new " : "") + (r.Error is not null ? "wb-assign-invalid " : "") + (r.Source?.IsOverbooked == true ? "wb-assign-overrow" : "");
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_handle is not null)
+            {
+                await _handle.InvokeVoidAsync("dispose");
+                await _handle.DisposeAsync();
+            }
+
+            if (_module is not null)
+            {
+                await _module.DisposeAsync();
+            }
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or JSException or TaskCanceledException)
+        {
+        }
+
+        _dotNet?.Dispose();
+    }
+}

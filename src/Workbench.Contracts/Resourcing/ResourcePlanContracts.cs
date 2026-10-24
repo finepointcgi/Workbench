@@ -94,7 +94,10 @@ public sealed record PlanTotalsDto(
     DateOnly? Start,
     DateOnly? Finish,
     int? CriticalFloatDays,
-    IReadOnlyList<string> OverbookedPeople)
+    IReadOnlyList<string> OverbookedPeople,
+
+    /// <summary>The plan's dollars against the ceiling and funding (null for those who may not see cost).</summary>
+    ProjectAccounting.PlanMoneyDto? Money = null)
 {
     public decimal? Cost => BurdenedCost ?? DirectCost;
 

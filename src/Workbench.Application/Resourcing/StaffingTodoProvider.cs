@@ -20,8 +20,19 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
             return [];
         }
 
+        // A project Finance handed over is planned from its plan to-do (ProjectPlanTodoProvider), not "assign people".
+        var managed = await context.ManagedProjectsAsync(cancellationToken);
+        var ids = managed.Select(p => p.Id).ToList();
+        HashSet<Guid> handedOver;
+        await using (var db = await context.DbFactory.CreateAsync(cancellationToken))
+        {
+            handedOver = (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+                db.Set<Domain.ProjectAccounting.ProjectPlan>().Where(p => ids.Contains(p.ProjectId) && p.Status != Domain.ProjectAccounting.ProjectPlanStatus.Approved)
+                    .Select(p => p.ProjectId), cancellationToken)).ToHashSet();
+        }
+
         var plans = new List<ProjectStaffingPlanDto>();
-        foreach (var project in await context.ManagedProjectsAsync(cancellationToken))
+        foreach (var project in managed.Where(p => !handedOver.Contains(p.Id)))
         {
             plans.Add(await staffing.GetPlanAsync(project.Id, cancellationToken));
         }
