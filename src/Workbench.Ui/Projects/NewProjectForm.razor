@@ -5,6 +5,7 @@
 @inject IProjectStartService Start
 @inject IProjectService Projects
 @inject IContractService Contracts
+@inject IServiceProvider Services
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -23,11 +24,53 @@
 
         @if (_from == ProjectStartFrom.Contract)
         {
-            <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Required="true" RequiredError="Pick the contract." data-testid="start-contract-pick"
+            <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChangedAsync" Label="Contract" Required="true" RequiredError="Pick the contract." data-testid="start-contract-pick"
                        HelperText="Its dates set the project's, its CLINs become the top of the WBS, and its labor-category hours start the budget.">
                 @foreach (var c in _contracts)
                 {
                     <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        @if (_finance && _contractId is not null)
+        {
+            @* Ceiling first: Finance sets what the project may spend, then hands it to the PM to plan within it. *@
+            <MudPaper Outlined="true" Class="pa-3" data-testid="start-terms">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">The money</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    Filled in from the contract@(_terms?.SharedWith.Count > 0 ? $" (also used by {string.Join(", ", _terms.SharedWith)}: set this project's share)" : "").
+                    The PM plans people and hours against these.
+                </MudText>
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="Ceiling ($)" Format="N0" Min="0" Style="max-width:180px" data-testid="start-ceiling"
+                                     HelperText="The most it can be worth" />
+                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded ($)" Format="N0" Min="0" Style="max-width:180px" data-testid="start-funded"
+                                     HelperText="Money obligated so far" />
+                    <MudSelect T="ContractKind?" @bind-Value="_pricing" Label="Contract type" Style="max-width:220px" data-testid="start-type">
+                        <MudSelectItem T="ContractKind?" Value="ContractKind.TimeAndMaterials">Time and materials</MudSelectItem>
+                        <MudSelectItem T="ContractKind?" Value="ContractKind.LaborHour">Labor hour</MudSelectItem>
+                        <MudSelectItem T="ContractKind?" Value="ContractKind.CostPlusFixedFee">Cost plus fixed fee</MudSelectItem>
+                        <MudSelectItem T="ContractKind?" Value="ContractKind.CostPlusAwardFee">Cost plus award fee</MudSelectItem>
+                        <MudSelectItem T="ContractKind?" Value="ContractKind.CostPlusIncentiveFee">Cost plus incentive fee</MudSelectItem>
+                        <MudSelectItem T="ContractKind?" Value="ContractKind.FirmFixedPrice">Firm fixed price</MudSelectItem>
+                    </MudSelect>
+                    <MudNumericField T="decimal?" @bind-Value="_feePercent" Label="Fee (%)" Min="0" Max="99" Style="max-width:120px" data-testid="start-fee" />
+                </MudStack>
+                @if (_terms is { Start: { } ps, Finish: { } pf })
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Period of performance @ps.ToString("MMM d, yyyy") – @pf.ToString("MMM d, yyyy")</MudText>
+                }
+            </MudPaper>
+        }
+
+        @if (_finance)
+        {
+            <MudSelect T="Guid?" @bind-Value="_managerId" Label="Project manager" Clearable="true" data-testid="start-manager"
+                       HelperText="They get a to-do to plan it. Leave it empty to manage it yourself.">
+                @foreach (var e in _employees)
+                {
+                    <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
                 }
             </MudSelect>
         }
@@ -90,7 +133,7 @@
 
         @if (_from != ProjectStartFrom.Contract)
         {
-            <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract (optional)" Clearable="true"
+            <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChangedAsync" Label="Contract (optional)" Clearable="true"
                        HelperText="Leave it empty for internal work; you can add it later.">
                 @foreach (var c in _contracts)
                 {
@@ -133,6 +176,17 @@
     private IReadOnlyList<ProjectDto> _projects = [];
     private IReadOnlyList<ContractDto> _contracts = [];
 
+    private bool _finance;
+    private IReadOnlyList<EmployeeDto> _employees = [];
+    private Guid? _managerId;
+    private ProjectTermsDto? _terms;
+    private decimal? _ceiling;
+    private decimal? _funded;
+    private ContractKind? _pricing;
+    private decimal? _feePercent;
+
+    private IProjectPlanService? PlanTerms => Services.GetService(typeof(IProjectPlanService)) as IProjectPlanService;
+
     private string? TemplateKey => _copyFrom is { } c && c.StartsWith("t:", StringComparison.Ordinal) ? c[2..] : null;
 
     private Guid? SourceProjectId => _copyFrom is { } c && c.StartsWith("p:", StringComparison.Ordinal) && Guid.TryParse(c[2..], out var id) ? id : null;
@@ -145,10 +199,34 @@
             _templates = await Start.ListTemplatesAsync();
             _projects = (await Projects.ListProjectsAsync()).OrderBy(p => p.Code, StringComparer.Ordinal).ToList();
             _contracts = await Contracts.ListContractsAsync();
+            if (Services.GetService(typeof(ICurrentUserContext)) is ICurrentUserContext me && (await me.GetAsync()).Can(Permission.SetupProjects)
+                && Services.GetService(typeof(IPeopleService)) is IPeopleService people)
+            {
+                _finance = PlanTerms is not null;
+                _employees = (await people.ListEmployeesAsync()).OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+            }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             Snackbar.Add($"Couldn't load everything: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task ContractChangedAsync(Guid? contractId)
+    {
+        _contractId = contractId;
+        _terms = null;
+        if (_finance && contractId is { } id && PlanTerms is { } plans)
+        {
+            try
+            {
+                _terms = await plans.TermsFromContractAsync(id);
+                (_ceiling, _funded, _pricing, _feePercent) = (_terms.Ceiling, _terms.Funded, _terms.Pricing, Math.Round(_terms.FeeRate * 100, 2));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException or WorkbenchForbiddenException)
+            {
+                Snackbar.Add($"Couldn't read the contract's terms: {ex.Message}", Severity.Warning);
+            }
         }
     }
 
@@ -196,9 +274,15 @@
         try
         {
             var from = _from == ProjectStartFrom.CopyProject && TemplateKey is not null ? ProjectStartFrom.Template : _from;
+            var terms = _finance && _contractId is not null
+                ? new SaveProjectTermsRequest(_ceiling, _funded, _pricing, _feePercent is { } fee ? fee / 100m : null)
+                : null;
             var project = await Start.StartAsync(new StartProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, from,
-                TemplateKey, SourceProjectId, Import: _from == ProjectStartFrom.ImportExcel ? _import : null));
-            Snackbar.Add($"Created {project.Code}. Add its WBS: type a task and press Enter; Tab makes a subtask.", Severity.Success);
+                TemplateKey, SourceProjectId, Import: _from == ProjectStartFrom.ImportExcel ? _import : null, ProjectManagerId: _managerId, Terms: terms));
+            var handedOver = _managerId is { } pm && _employees.FirstOrDefault(e => e.Id == pm) is { } manager && project.ProjectManagerId == pm;
+            Snackbar.Add(handedOver
+                ? $"Created {project.Code}. {_employees.First(e => e.Id == _managerId).DisplayName} has a to-do to plan it."
+                : $"Created {project.Code}. Add its WBS: type a task and press Enter; Tab makes a subtask.", Severity.Success);
             await OnCreated.InvokeAsync(project);
             Navigation.NavigateTo($"projects/{project.Id}/plan");
         }

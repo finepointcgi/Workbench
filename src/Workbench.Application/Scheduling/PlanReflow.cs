@@ -76,7 +76,15 @@ internal static class PlanReflow
 
         var state = await LoadAsync(db, sheet, cancellationToken);
         var changed = sheet.SchedulingEnabled && ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.PercentColumn?.Id, state.Constraints);
-        return await NumberAsync(db, project, state.Items, cancellationToken) | changed;
+        changed |= await NumberAsync(db, project, state.Items, cancellationToken);
+
+        // On a project's plan the rows are the WBS: keep the charge codes in step with them.
+        if (project is not null)
+        {
+            changed |= await PlanWbsSync.ApplyAsync(db, project, state.Items, cancellationToken);
+        }
+
+        return changed;
     }
 
     /// <summary>Numbers the WBS codes of a project's plan (see <see cref="WbsNumbering"/>). Sheets that aren't a project's plan are left alone.</summary>
@@ -87,10 +95,13 @@ internal static class PlanReflow
             return false;
         }
 
+        // Codes follow the outline until time is posted to them; then they're kept and numbering works around them.
         var elements = await db.Set<WbsElement>().AsNoTracking().Where(w => w.ProjectId == project.Id)
-            .Select(w => new { w.Code, w.ItemId }).ToListAsync(cancellationToken);
-        var locked = elements.Where(e => e.ItemId is not null).Select(e => e.ItemId!.Value).ToHashSet();
-        var taken = elements.Select(e => e.Code).ToHashSet(StringComparer.Ordinal);
+            .Select(w => new { w.Id, w.Code, w.ItemId }).ToListAsync(cancellationToken);
+        var posted = await PlanWbsSync.PostedAsync(db, elements.Select(e => e.Id).ToList(), cancellationToken);
+        var itemIds = items.Select(i => i.Id).ToHashSet();
+        var locked = elements.Where(e => e.ItemId is { } i && posted.Contains(e.Id)).Select(e => e.ItemId!.Value).ToHashSet();
+        var taken = elements.Where(e => e.ItemId is not { } i || !itemIds.Contains(i) || locked.Contains(i)).Select(e => e.Code).ToHashSet(StringComparer.Ordinal);
         return WbsNumbering.Apply(new PlanOutline(items), project.Code, locked, taken);
     }
 

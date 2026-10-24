@@ -155,11 +155,8 @@ else
     {
         "overview" => @<ProjectOverviewTab Hub="_hub!" />,
         "plan" => @<div>
-            @if (_hub!.Tabs.Setup)
-            {
-                <PlanChargeCodesBanner ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value" />
-            }
-            @* The plan with its people, hours and cost (and "Try changes"), around the plan grid. *@
+            @* One WBS grid: its rows are the charge codes (made as they're added), with the money, approval, people, hours
+               and cost around it, and "Try changes". *@
             <Workbench.Ui.Plan.PlanPeoplePanel ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value">
                 <Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />
             </Workbench.Ui.Plan.PlanPeoplePanel>

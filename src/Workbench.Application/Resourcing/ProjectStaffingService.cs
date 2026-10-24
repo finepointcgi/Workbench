@@ -387,7 +387,7 @@ public static class SetupSteps
         return new ProjectSetupProgressDto(projectId,
         [
             new ProjectSetupStepDto("wbs", "Plan the work",
-                "List the work on the Plan tab: type a task and press Enter, Tab makes it a subtask, and codes are numbered for you. Then make the tasks charge codes so people can charge time.",
+                "Build the WBS on the Plan tab: type a task and press Enter, Tab makes it a subtask, and codes are numbered for you. The lowest rows are the charge codes people charge time to.",
                 chargeCodes > 0,
                 $"{(contractNumber is null ? "No contract (internal work)" : $"Contract {contractNumber}")} · {(chargeCodes == 1 ? "1 charge code" : $"{chargeCodes} charge codes")}",
                 "plan", chargeCodes > 0 ? "Open the plan" : "Plan the work"),

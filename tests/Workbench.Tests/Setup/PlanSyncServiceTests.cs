@@ -64,7 +64,7 @@ public sealed class PlanSyncServiceTests
     }
 
     [Fact]
-    public async Task Diff_reports_missing_tasks_unlinked_tasks_and_renames()
+    public async Task The_plan_keeps_the_wbs_in_step_and_diff_reports_elements_added_outside_the_plan()
     {
         var (project, root, design, _, build) = await NewProjectAsync();
         var sheetId = (await _sync.CreatePlanSheetAsync(project.Id)).SheetId!.Value;
@@ -72,40 +72,35 @@ public sealed class PlanSyncServiceTests
         var designItem = items.Single(i => i.Title == "Design");
         await _items.UpdateAsync(sheetId, designItem.Id, new UpdateItemRequest("Design and prototyping", null, null, designItem.CostpointWbsId, designItem.Values));
         var extra = await _items.CreateAsync(sheetId, new CreateItemRequest("Test", items.Single(i => i.Title == "Program").Id));
-        var added = await _projects.CreateWbsElementAsync(project.Id, new SaveWbsElementRequest(root.Id, "1001.01.03", "Deploy"));
+        var added = await _projects.CreateWbsElementAsync(project.Id, new SaveWbsElementRequest(root.Id, "1001.01.04", "Deploy"));
 
         var report = await _sync.DiffAsync(project.Id);
 
-        Assert.Equal(3, report.Differences.Count);
-        var missing = Assert.Single(report.Differences, d => d.Kind == PlanDifferenceKind.WbsWithoutTask);
-        Assert.Equal(added.Id, missing.WbsElementId);
+        // Renaming and adding in the plan changed the WBS as they happened; only the element added in Setup is waiting.
+        var missing = Assert.Single(report.Differences);
+        Assert.Equal((PlanDifferenceKind.WbsWithoutTask, added.Id), (missing.Kind, missing.WbsElementId!.Value));
         Assert.True(missing.CanApplyToPlan);
-        Assert.False(missing.CanApplyToWbs);
-        var unlinked = Assert.Single(report.Differences, d => d.Kind == PlanDifferenceKind.TaskWithoutWbs);
-        Assert.Equal(extra.Id, unlinked.ItemId);
-        var renamed = Assert.Single(report.Differences, d => d.Kind == PlanDifferenceKind.Renamed);
-        Assert.Equal((design.Id, "Design", "Design and prototyping"), (renamed.WbsElementId!.Value, renamed.WbsName, renamed.ItemTitle));
-        Assert.True(renamed.CanApplyToPlan && renamed.CanApplyToWbs);
+        var wbs = await _projects.ListWbsAsync(project.Id);
+        Assert.Equal("Design and prototyping", wbs.Single(w => w.Id == design.Id).Name);
+        Assert.Equal(("1001.01.03", root.Id, true), (wbs.Single(w => w.ItemId == extra.Id).Code, wbs.Single(w => w.ItemId == extra.Id).ParentId!.Value, wbs.Single(w => w.ItemId == extra.Id).IsChargeable));
     }
 
     [Fact]
-    public async Task Apply_wbs_to_plan_creates_tasks_under_their_parent_and_renames_tasks()
+    public async Task Apply_wbs_to_plan_creates_tasks_under_their_parent_without_a_second_element()
     {
         var (project, _, design, detail, _) = await NewProjectAsync();
         var sheetId = (await _sync.CreatePlanSheetAsync(project.Id)).SheetId!.Value;
-        var designItem = (await _items.ListAsync(sheetId)).Single(i => i.Title == "Design");
-        await _items.UpdateAsync(sheetId, designItem.Id, new UpdateItemRequest("Renamed in plan", null, null, null, designItem.Values));
         var added = await _projects.CreateWbsElementAsync(project.Id, new SaveWbsElementRequest(detail.Id, "1001.01.01.01.01", "Interfaces"));
 
         var report = await _sync.ApplyAsync(project.Id, new ApplyPlanSyncRequest(PlanSyncDirection.WbsToPlan));
 
         Assert.Empty(report.Differences);
         var items = await _items.ListAsync(sheetId);
-        Assert.Equal("Design", items.Single(i => i.Id == designItem.Id).Title);
-        Assert.Equal("1001.01.01", items.Single(i => i.Id == designItem.Id).CostpointWbsId);
         var wbs = (await _projects.ListWbsAsync(project.Id)).ToDictionary(w => w.Id);
         var newItem = items.Single(i => i.Id == wbs[added.Id].ItemId);
         Assert.Equal(("Interfaces", "1001.01.01.01.01", wbs[detail.Id].ItemId), (newItem.Title, newItem.CostpointWbsId, newItem.ParentId));
+        Assert.Single(wbs.Values, w => w.ItemId == newItem.Id);
+        Assert.Equal(5, wbs.Count); // the four, plus Interfaces once
         Assert.Equal("Design", wbs[design.Id].Name);
     }
 

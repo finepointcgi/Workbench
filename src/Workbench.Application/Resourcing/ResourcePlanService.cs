@@ -6,6 +6,7 @@ using Workbench.Application.IndirectRates;
 using Workbench.Application.Scheduling;
 using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Resourcing;
 using Workbench.Contracts.Scheduling;
 using Workbench.Domain;
@@ -297,6 +298,12 @@ public sealed class ResourcePlanService(
         public required Dictionary<Guid, (DateOnly? Start, DateOnly? Finish)> BaseDates { get; init; }
         public required List<string> Notes { get; init; }
 
+        /// <summary>The ceiling, funding, type and fee the plan's dollars are measured against.</summary>
+        public required ProjectAccounting.ProjectTerms.Loaded Terms { get; init; }
+
+        /// <summary>The contract's bill rates by labor category (T&amp;M and labor-hour work bills at them).</summary>
+        public required EffectiveRateTable<Guid> BillRates { get; init; }
+
         /// <summary>The plan task a charge code was made from, if it's on this plan.</summary>
         public Guid? ItemOf(Guid? wbsElementId) =>
             wbsElementId is { } w && Wbs.TryGetValue(w, out var e) && e.ItemId is { } item && BaseDates.ContainsKey(item) ? item : null;
@@ -350,6 +357,16 @@ public sealed class ResourcePlanService(
             multiplier = BurdenCascade.LaborMultiplier(book.Steps, book.For(year, IndirectRateBasis.Actual).Of);
         }
 
+        var terms = await ProjectAccounting.ProjectTerms.LoadAsync(db, project, ct);
+        var billRates = new EffectiveRateTable<Guid>();
+        if (project.ContractId is { } contractId)
+        {
+            foreach (var r in await db.Set<ContractLaborRate>().AsNoTracking().Where(r => r.ContractId == contractId).ToListAsync(ct))
+            {
+                billRates.Add(r.LaborCategoryId, r.EffectiveFrom, r.HourlyBillRate);
+            }
+        }
+
         var versions = await db.Set<BudgetVersion>().AsNoTracking().Where(v => v.ProjectId == projectId).ToListAsync(ct);
         var version = versions.Where(v => v.Kind == BudgetKind.Current).MaxBy(v => v.CreatedAtUtc)
             ?? versions.Where(v => v.Kind == BudgetKind.Baseline).MaxBy(v => v.CreatedAtUtc);
@@ -373,6 +390,8 @@ public sealed class ResourcePlanService(
             LaborBudget = budget,
             BaseDates = plan?.Items.ToDictionary(i => i.Id, i => (i.Start, i.Finish)) ?? [],
             Notes = notes,
+            Terms = terms,
+            BillRates = billRates,
         };
         model.Outline = plan is null ? null : new PlanOutline(plan.Items);
         return model;
@@ -497,7 +516,7 @@ public sealed class ResourcePlanService(
                 wbsId = model.WbsOf(itemId);
                 if (wbsId is null)
                 {
-                    errors.Add($"{item.Title} isn't a charge code yet, so nobody can be assigned to it. Make the plan's tasks charge codes first.");
+                    errors.Add($"{item.Title} isn't a charge code yet (milestones never are), so nobody can be assigned to it.");
                     continue;
                 }
 
@@ -604,6 +623,7 @@ public sealed class ResourcePlanService(
         var lastWeek = bookings.SelectMany(b => b.Weeks).Select(w => w.WeekStart).DefaultIfEmpty(ThisWeek).Max();
         var capacity = await CapacityAsync(employeeIds.Select(id => model.People[id]).ToList(), ThisWeek, Max(lastWeek, ThisWeek), ct);
         var missingRate = 0m;
+        var unrated = 0m;
 
         PlanPersonDto Person(Booking b)
         {
@@ -635,6 +655,7 @@ public sealed class ResourcePlanService(
         }
 
         var people = bookings.Select(b => (Booking: b, Person: Person(b))).ToList();
+        var priced = people.ToDictionary(p => p.Booking, p => Price(model, p.Booking, p.Person, ref unrated));
         var rows = new List<PlanTaskRowDto>();
         var onTasks = new HashSet<Booking>();
         if (model.Plan is { } plan)
@@ -684,7 +705,7 @@ public sealed class ResourcePlanService(
         }
 
         var all = people.Select(p => p.Person).ToList();
-        var totals = Totals(model, all, rows);
+        var totals = Totals(model, all, rows) with { Money = MoneyAgainstCeiling(model, people.Select(p => p.Booking).ToList(), priced, unrated) };
         return new Snapshot(rows, notOnTask, totals, notes);
     }
 
@@ -715,6 +736,86 @@ public sealed class ResourcePlanService(
             dated.Count == 0 ? null : dated.Max(r => (r.Finish ?? r.Start)!.Value),
             floats.Count == 0 ? null : floats.Min(),
             people.Where(p => p.IsOverbooked).Select(p => p.Name).Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    /// <summary>
+    /// A booking priced as the contract bills it: T&amp;M and labor-hour hours at the contract's bill rate for the labor
+    /// category in each week; otherwise (and for hours without a bill rate) cost (burdened when there are indirect rates)
+    /// plus the fee. Hours with no bill rate are added to <paramref name="unrated"/>.
+    /// </summary>
+    private static decimal Price(Model model, Booking booking, PlanPersonDto person, ref decimal unrated)
+    {
+        var terms = model.Terms.Terms;
+        var cost = person.BurdenedCost ?? person.DirectCost ?? 0m;
+        var markup = 1m + terms.FeeRate;
+        if (!terms.IsBilledByRate || booking.Hours == 0)
+        {
+            return Money.Round(cost * markup);
+        }
+
+        var price = 0m;
+        var costPerHour = cost / booking.Hours;
+        foreach (var w in booking.Weeks)
+        {
+            if (person.LaborCategoryId is { } category && model.BillRates.Find(category, w.WeekStart) is { } rate)
+            {
+                price += w.Hours * rate;
+            }
+            else
+            {
+                unrated += w.Hours;
+                price += w.Hours * costPerHour * markup;
+            }
+        }
+
+        return Money.Round(price);
+    }
+
+    /// <summary>The plan's dollars against the project's and each top WBS element's (CLIN's) ceiling and funding.</summary>
+    private static PlanMoneyDto MoneyAgainstCeiling(Model model, IReadOnlyList<Booking> bookings, IReadOnlyDictionary<Booking, decimal> priced, decimal unrated)
+    {
+        var terms = model.Terms.Terms;
+        static PlanMoneyStatus Status(decimal planned, decimal? ceiling, decimal? funded) =>
+            ceiling is { } c && planned > c + 0.005m ? PlanMoneyStatus.OverCeiling
+            : funded is { } f && planned > f + 0.005m ? PlanMoneyStatus.OverFunding
+            : PlanMoneyStatus.Ok;
+
+        var total = bookings.Sum(b => priced[b]);
+        var project = new PlanMoneyLineDto(null, model.Project.Code, null, total, terms.Ceiling, terms.Funded, Status(total, terms.Ceiling, terms.Funded));
+        var lines = new List<PlanMoneyLineDto>();
+        if (model.Plan is { } plan && model.Outline is { } outline)
+        {
+            foreach (var top in outline.ChildrenOf(null))
+            {
+                var ids = outline.Descendants(top.Id).Select(d => model.WbsOf(d.Id)).Append(model.WbsOf(top.Id)).OfType<Guid>().ToHashSet();
+                var planned = bookings.Where(b => b.WbsElementId is { } w && ids.Contains(w)).Sum(b => priced[b]);
+                var clin = model.WbsOf(top.Id) is { } wbs ? model.Terms.ClinOfTopElement.GetValueOrDefault(wbs) : null;
+                lines.Add(new PlanMoneyLineDto(model.WbsOf(top.Id), $"{top.CostpointWbsId} {top.Title}".Trim(), clin?.Number, planned,
+                    clin?.Ceiling, clin?.Funded, clin is null ? PlanMoneyStatus.Ok : Status(planned, clin.Ceiling, clin.Funded)));
+            }
+        }
+
+        var basis = terms.IsBilledByRate
+            ? "hours at the contract's bill rates"
+            : (model.Multiplier is null ? "labor cost" : "labor cost with fringe, overhead and G&A")
+                + (terms.FeeRate > 0 ? $" plus {(terms.FeeRate * 100).ToString("0.##", CultureInfo.InvariantCulture)}% fee" : "");
+        var notes = new List<string>();
+        if (unrated > 0)
+        {
+            notes.Add($"{H(unrated)} hours are in labor categories with no bill rate on the contract, so they're priced at cost plus fee.");
+        }
+
+        if (terms.Ceiling is null)
+        {
+            notes.Add(terms.ContractId is null ? "There's no contract or ceiling yet. Finance can set one under Setup." : "The contract has no ceiling yet.");
+        }
+
+        if (terms.SharedWith.Count > 0 && (terms.CeilingFromContract || terms.FundedFromContract))
+        {
+            notes.Add($"The contract's ceiling and funding are shared with {string.Join(", ", terms.SharedWith)}; this compares only this project's plan.");
+        }
+
+        return new PlanMoneyDto(project, lines, basis, notes);
     }
 
     /// <summary>Total float of the plan's dated leaf tasks, as the critical path and the grid's float columns work it out.</summary>

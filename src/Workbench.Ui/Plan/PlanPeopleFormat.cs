@@ -3,9 +3,6 @@ using Workbench.Contracts.Resourcing;
 
 namespace Workbench.Ui.Plan;
 
-/// <summary>What the task dialog asks for: the changes, whether to try them first, and the names of people it mentions.</summary>
-public sealed record PlanTaskPeopleResult(IReadOnlyList<PlanChange> Changes, bool TryFirst, IReadOnlyDictionary<Guid, string> Names);
-
 /// <summary>Plain words for the Plan tab's people, hours and cost.</summary>
 public static class PlanPeopleFormat
 {

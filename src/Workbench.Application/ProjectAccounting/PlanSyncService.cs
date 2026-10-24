@@ -21,6 +21,8 @@ public sealed class PlanSyncService(
 {
     public async Task<ProjectDto> CreatePlanSheetAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
+        // The tasks are made from the elements and linked here, so the plan's own WBS sync waits.
+        using var paused = Scheduling.PlanWbsSync.Pause();
         var project = await GetProjectAsync(projectId, cancellationToken);
         if (project.SheetId is { } existing && await sheets.GetAsync(existing, cancellationToken) is not null)
         {
@@ -74,6 +76,7 @@ public sealed class PlanSyncService(
         Guid? ItemFor(Guid? elementId) =>
             elementId is { } id ? links.TryGetValue(id, out var linked) ? linked : elements[id].ItemId is { } i && itemsById.ContainsKey(i) ? i : null : null;
 
+        using var paused = Scheduling.PlanWbsSync.Pause(); // links are saved here, after the tasks or elements exist
         if (toPlan)
         {
             // Codes sort parents before children, so a new task's parent task already exists.

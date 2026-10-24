@@ -169,6 +169,7 @@ public sealed class ItemService(
         }
         while (added);
 
+        await PlanWbsSync.BeforeRowsDeletedAsync(db, sheetId, doomed, cancellationToken);
         db.Items.RemoveRange(items.Where(i => doomed.Contains(i.Id)));
         Renumber(items.Where(i => i.ParentId == item.ParentId && !doomed.Contains(i.Id)));
         await TouchSheetAsync(db, sheetId, cancellationToken);

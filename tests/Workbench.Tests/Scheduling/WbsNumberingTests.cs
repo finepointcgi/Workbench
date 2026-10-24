@@ -80,18 +80,15 @@ public sealed class WbsNumberingTests
     }
 
     [Fact]
-    public async Task Typed_codes_and_charge_codes_are_kept_and_numbering_works_around_them()
+    public async Task Typed_codes_are_kept_and_charge_codes_follow_the_outline_until_time_is_posted()
     {
         var sheet = await ProjectPlanAsync();
         var manage = await AddAsync(sheet, "Manage");
         var travel = await AddAsync(sheet, "Travel");
-        var build = await AddAsync(sheet, "Build");
+        var build = await AddAsync(sheet, "Build"); // a charge code as soon as it's added (2001.03), with no time on it yet
         await using (var db = await _factory.CreateAsync())
         {
-            // Build is already a charge code.
-            var project = db.Set<Project>().Single(p => p.SheetId == sheet);
-            db.Set<WbsElement>().Add(new WbsElement { ProjectId = project.Id, Code = "2001.03", Name = "Build", ItemId = build.Id });
-            await db.SaveChangesAsync();
+            Assert.Equal("2001.03", db.Set<WbsElement>().Single(w => w.ItemId == build.Id).Code);
         }
 
         await _items.UpdateAsync(sheet, travel.Id, new UpdateItemRequest("Travel", null, null, "2001-ODC", travel.Values));
@@ -101,11 +98,11 @@ public sealed class WbsNumberingTests
         Assert.Equal("2001.01", codes["Report"]);
         Assert.Equal("2001.02", codes["Manage"]);
         Assert.Equal("2001-ODC", codes["Travel"]); // typed
-        Assert.Equal("2001.03", codes["Build"]); // a charge code keeps its code
+        Assert.Equal("2001.03", codes["Build"]);
 
-        // Clearing a typed code gives the task an automatic one again (2001.03 is taken).
+        // Clearing a typed code gives the task an automatic one again; Build has no time on it yet, so it moves along.
         await _items.UpdateAsync(sheet, travel.Id, new UpdateItemRequest("Travel", null, null, null, travel.Values));
-        Assert.Equal("2001.04", (await CodesAsync(sheet))["Travel"]);
+        Assert.Equal(("2001.03", "2001.04"), ((await CodesAsync(sheet))["Travel"], (await CodesAsync(sheet))["Build"]));
         _ = manage;
     }
 

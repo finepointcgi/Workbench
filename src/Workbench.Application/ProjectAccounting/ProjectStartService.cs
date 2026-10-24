@@ -31,7 +31,9 @@ public sealed class ProjectStartService(
     IPlanScheduleService plans,
     IClinService clins,
     IBudgetService budgets,
-    TimeProvider clock) : IProjectStartService
+    TimeProvider clock,
+    IProjectPlanService? planTerms = null,
+    ProjectPlanService? handOff = null) : IProjectStartService
 {
     private static readonly IReadOnlyList<ProjectTemplateDto> Templates =
     [
@@ -94,9 +96,10 @@ public sealed class ProjectStartService(
 
         var (start, finish, calendar) = await DatesAsync(request, cancellationToken);
         var code = request.Code.Trim();
-        var me = (await currentUser.GetAsync(cancellationToken)).EmployeeId; // its creator manages it
+        var me = (await currentUser.GetAsync(cancellationToken)).EmployeeId;
+        var manager = request.ProjectManagerId ?? me; // Finance picks the PM; otherwise its creator manages it
         var project = await projects.CreateProjectAsync(
-            new SaveProjectRequest(code, request.Name.Trim(), request.ContractId, me, ProjectState.Active, start, finish), cancellationToken);
+            new SaveProjectRequest(code, request.Name.Trim(), request.ContractId, manager, ProjectState.Active, start, finish), cancellationToken);
 
         // Source element id -> new element id, for copying the plan's dates and links after the sheet exists.
         var copied = new Dictionary<Guid, Guid>();
@@ -139,6 +142,17 @@ public sealed class ProjectStartService(
                     await items.UpdateAsync(sheetId, item.Id, new UpdateItemRequest(item.Title, start, start, item.CostpointWbsId, item.Values), cancellationToken);
                 }
             }
+        }
+
+        // Finance's terms (ceiling, funding, type, fee), then the hand-off: the PM gets a to-do and a notification.
+        if (request.Terms is { } terms && planTerms is not null)
+        {
+            await planTerms.SaveTermsAsync(project.Id, terms, cancellationToken);
+        }
+
+        if (handOff is not null && manager is not null && manager != me)
+        {
+            await handOff.HandOffAsync(project.Id, cancellationToken);
         }
 
         return await projects.GetProjectAsync(project.Id, cancellationToken) ?? project;

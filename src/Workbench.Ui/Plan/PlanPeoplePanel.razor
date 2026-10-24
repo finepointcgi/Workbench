@@ -1,14 +1,15 @@
-@* The Plan tab's people, hours and cost: a bar with the plan's totals (finish and float, hours and cost by labor category
-   against the budget, who's overbooked, the schedule check), People / Hours / Cost columns added to the plan grid, and
-   "Try changes", which shows what moving dates or changing people would do before anything is saved. People are the same
-   assignments as on Budget & staffing. Without the service, or for someone who can't see the project's staffing, it shows
-   the plan alone. *@
+@* The Plan tab: one WBS grid with its people, hours and cost. Above it, the money (planned against the ceiling and funding,
+   for the project and each CLIN), the plan's approval with Finance, and the totals (finish and float, hours and cost by
+   labor category, who's overbooked, the schedule check); on the grid, People / Hours / Cost columns; below it, the people
+   grid where they're assigned. "Try changes" shows what moving dates or changing people would do before anything is saved.
+   People are the same assignments as on Budget & staffing. Without the service, or for someone who can't see the
+   project's staffing, it shows the plan alone. *@
 @using Workbench.Contracts
+@using Workbench.Contracts.ProjectAccounting
 @using Workbench.Contracts.Resourcing
 @using Workbench.Ui.Collaboration
 @using Workbench.Ui.Resourcing
 @inject IServiceProvider Services
-@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
 @if (_plan is { } plan)
@@ -17,6 +18,49 @@
     <section class="wb-plan-bar mb-3" aria-labelledby="plan-totals-heading" data-testid="plan-totals">
         <h2 id="plan-totals-heading" class="wb-sr-only">Plan totals</h2>
         <MudPaper Outlined="true" Class="pa-3">
+            @if (totals.Money is { } money)
+            {
+                <div class="@($"wb-plan-money {MoneyClass(money.Project.Status)}")" data-testid="plan-money" role="status" aria-live="polite">
+                    <span class="wb-plan-money-main">
+                        @if (money.Project.Status != PlanMoneyStatus.Ok)
+                        {
+                            <MudIcon Icon="@(money.Project.Status == PlanMoneyStatus.OverCeiling ? Icons.Material.Filled.Error : Icons.Material.Filled.WarningAmber)" Size="Size.Small" aria-hidden="true" />
+                        }
+                        Planned <b>@PlanPeopleFormat.Money(money.Project.Planned)</b>
+                        @if (money.Project.Ceiling is { } ceiling)
+                        {
+                            <span> of @PlanPeopleFormat.Money(ceiling) ceiling</span>
+                        }
+                        @if (money.Project.Funded is { } funded)
+                        {
+                            <span> · @PlanPeopleFormat.Money(funded) funded</span>
+                        }
+                        @if (money.Project.Left is { } left)
+                        {
+                            <span> · @(left >= 0 ? $"{PlanPeopleFormat.Money(left)} left" : $"{PlanPeopleFormat.Money(-left)} over the ceiling")</span>
+                        }
+                    </span>
+                    <span class="wb-plan-detail">
+                        @MoneyWords(money.Project.Status) Priced as @money.Basis.@(plan.Totals.Money is { } was && was.Project.Planned != money.Project.Planned ? $" Was {PlanPeopleFormat.Money(was.Project.Planned)}." : "")
+                    </span>
+                    @if (money.Lines.Any(l => l.ClinNumber is not null))
+                    {
+                        <div class="wb-plan-clins" data-testid="plan-money-clins">
+                            @foreach (var line in money.Lines.Where(l => l.ClinNumber is not null))
+                            {
+                                <span class="@($"wb-plan-clin {MoneyClass(line.Status)}")" title="@MoneyWords(line.Status)">
+                                    CLIN @line.ClinNumber: @PlanPeopleFormat.Money(line.Planned)@(line.Ceiling is { } lineCeiling ? $" of {PlanPeopleFormat.Money(lineCeiling)}" : "")@(line.Funded is { } lineFunded ? $" · {PlanPeopleFormat.Money(lineFunded)} funded" : "")
+                                </span>
+                            }
+                        </div>
+                    }
+                    @foreach (var note in money.Notes)
+                    {
+                        <span class="wb-plan-detail d-block">@note</span>
+                    }
+                </div>
+            }
+            <PlanApprovalBar ProjectId="ProjectId" Version="_approvalVersion" />
             <div class="wb-plan-stats">
                 <div class="wb-plan-stat" data-testid="plan-finish">
                     <span class="wb-plan-label">Finishes</span>
@@ -50,7 +94,7 @@
                     else
                     {
                         <span class="wb-plan-value wb-plan-bad"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" /> @Overbooked(totals.OverbookedPeople.Count)</span>
-                        <span class="wb-plan-detail">@string.Join(", ", totals.OverbookedPeople.Take(3))@(totals.OverbookedPeople.Count > 3 ? $" and {totals.OverbookedPeople.Count - 3} more" : "") · open their task to fix it</span>
+                        <span class="wb-plan-detail">@string.Join(", ", totals.OverbookedPeople.Take(3))@(totals.OverbookedPeople.Count > 3 ? $" and {totals.OverbookedPeople.Count - 3} more" : "") · fix it in People below</span>
                     }
                 </div>
                 @if (plan.Health is { } health)
@@ -126,9 +170,25 @@
             {
                 <MudAlert Severity="Severity.Info" Class="mt-3" Icon="@Icons.Material.Filled.Science" data-testid="plan-trying">
                     <MudText Typo="Typo.subtitle2">Trying changes. Nothing is saved until you apply them.</MudText>
+                    @if (plan.CanMoveTasks)
+                    {
+                        <div class="d-flex flex-wrap align-center gap-2 mt-1" data-testid="plan-try-move">
+                            <span>Move</span>
+                            <select class="wb-plan-input" aria-label="Task to move" @bind="_moveItem">
+                                <option value="">a task…</option>
+                                @foreach (var t in plan.Tasks.Where(t => !t.IsSummary))
+                                {
+                                    <option value="@t.ItemId">@t.OutlineNumber @t.Title (@PlanPeopleFormat.Range(t.Start, t.Finish))</option>
+                                }
+                            </select>
+                            <span>to start</span>
+                            <input class="wb-plan-input" type="date" aria-label="New start" @bind="_moveStart" />
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_moveItem is null || _moveStart is null)" OnClick="TryMoveAsync" data-testid="plan-try-move-add">Try it</MudButton>
+                        </div>
+                    }
                     @if (_changes.Count == 0)
                     {
-                        <MudText Typo="Typo.body2">Open a task's People cell to move its dates or change its people. The bar and the columns show the result.</MudText>
+                        <MudText Typo="Typo.body2" Class="mt-1">Change people, hours or dates in the People grid below, or move a task here. The bar and the columns show the result.</MudText>
                     }
                     else
                     {
@@ -186,6 +246,13 @@ else if (_error is not null)
 <CascadingValue Value="_columns">
     @ChildContent
 </CascadingValue>
+@if (_plan is { } shown)
+{
+    <div class="mt-4">
+        <AssignmentGrid @ref="_grid" ProjectId="ProjectId" Plan="shown" Tried="_try" Trying="@(_trying || _changes.Count > 0)" FilterWbsElementId="_filter"
+                        ClearFilter="() => _filter = null" Submit="SubmitAsync" />
+    </div>
+}
 @if (_plan is not null)
 {
     <SheetLiveRefresher SheetId="SheetId" Changed="ReloadAsync" />
@@ -198,6 +265,11 @@ else if (_error is not null)
 
     private ResourcePlanDto? _plan;
     private PlanTryDto? _try;
+    private AssignmentGrid? _grid;
+    private Guid? _filter;
+    private Guid? _moveItem;
+    private DateTime? _moveStart;
+    private int _approvalVersion;
     private readonly List<PlanChange> _changes = [];
     private readonly Dictionary<Guid, string> _names = [];
     private PlanAppliedDto? _undo;
@@ -232,6 +304,7 @@ else if (_error is not null)
         try
         {
             _plan = await plans.GetAsync(ProjectId);
+            _approvalVersion++;
             _error = null;
             foreach (var p in _plan.Tasks.SelectMany(t => t.People).Concat(_plan.NotOnATask))
             {
@@ -309,7 +382,7 @@ else if (_error is not null)
 
     private RenderFragment PeopleCell(PlanTaskRowDto row) =>
         @<button type="button" class="@($"wb-plan-cell {(row.IsOverbooked ? "wb-plan-over" : "")} {(row.Changed && _try is not null ? "wb-plan-changed" : "")}")"
-                 @onclick="() => OpenAsync(row)" @onclick:stopPropagation="true" data-testid="plan-people-cell"
+                 @onclick="() => ShowPeopleAsync(row)" @onclick:stopPropagation="true" data-testid="plan-people-cell"
                  aria-label="@($"People on {row.Title}: {(row.People.Count == 0 ? "nobody" : string.Join(", ", row.People.Select(p => $"{p.Name} {PlanPeopleFormat.Hours(p.Hours)} hours")))}{(row.IsOverbooked ? ". Someone is booked past their hours" : "")}")">
             @foreach (var p in row.People.Take(3))
             {
@@ -340,43 +413,43 @@ else if (_error is not null)
 
     // ---- A task's people ----
 
-    private async Task OpenAsync(PlanTaskRowDto row)
+    private async Task ShowPeopleAsync(PlanTaskRowDto row)
     {
-        if (_plan is not { } plan)
+        _filter = row.WbsElementId;
+        if (_grid is not null)
         {
-            return;
+            await _grid.FocusAsync();
         }
+    }
 
-        var parameters = new DialogParameters<PlanTaskPeopleDialog>
-        {
-            { d => d.ProjectId, ProjectId },
-            { d => d.Row, row },
-            { d => d.CanChange, plan.CanChange },
-            { d => d.CanMoveTasks, plan.CanMoveTasks },
-            { d => d.ShowsCost, plan.ShowsCost },
-            { d => d.Trying, _trying || _changes.Count > 0 },
-        };
-        var dialog = await DialogService.ShowAsync<PlanTaskPeopleDialog>($"{row.Title}", parameters,
-            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
-        if (await dialog.Result is not { Canceled: false, Data: PlanTaskPeopleResult result })
-        {
-            return;
-        }
-
-        foreach (var (id, name) in result.Names)
-        {
-            _names[id] = name;
-        }
-
-        if (result.TryFirst || _trying || _changes.Count > 0)
+    /// <summary>The people grid's changes: tried while trying, otherwise made (with an undo). Returns the problem, or null.</summary>
+    private async Task<string?> SubmitAsync(IReadOnlyList<PlanChange> changes)
+    {
+        string? error;
+        if (_trying || _changes.Count > 0)
         {
             _trying = true;
-            _changes.AddRange(result.Changes);
+            _changes.AddRange(changes);
             await TryAsync();
+            error = _try?.Errors.Count > 0 ? string.Join(" ", _try.Errors) : null;
         }
         else
         {
-            await ApplyAsync(result.Changes);
+            error = await ApplyAsync(changes);
+        }
+
+        // The grid calls in directly, so redraw the bar and the columns here.
+        await InvokeAsync(StateHasChanged);
+        return error;
+    }
+
+    private async Task TryMoveAsync()
+    {
+        if (_moveItem is { } item && _moveStart is { } start)
+        {
+            _changes.Add(new PlanChange(PlanChangeKind.MoveTask, ItemId: item, Start: DateOnly.FromDateTime(start)));
+            (_moveItem, _moveStart) = (null, null);
+            await TryAsync();
         }
     }
 
@@ -400,6 +473,10 @@ else if (_error is not null)
         try
         {
             _try = await plans.TryAsync(ProjectId, _changes.ToList());
+            foreach (var p in _try.Tasks.SelectMany(t => t.People).Concat(_try.NotOnATask))
+            {
+                _names.TryAdd(p.EmployeeId, p.Name);
+            }
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
         {
@@ -425,7 +502,7 @@ else if (_error is not null)
 
     private async Task ApplyTriedAsync()
     {
-        if (await ApplyAsync(_changes.ToList()))
+        if (await ApplyAsync(_changes.ToList()) is null)
         {
             _changes.Clear();
             (_try, _trying) = (null, false);
@@ -433,11 +510,11 @@ else if (_error is not null)
         }
     }
 
-    private async Task<bool> ApplyAsync(IReadOnlyList<PlanChange> changes)
+    private async Task<string?> ApplyAsync(IReadOnlyList<PlanChange> changes)
     {
         if (Plans is not { } plans || changes.Count == 0)
         {
-            return false;
+            return null;
         }
 
         _busy = true;
@@ -446,12 +523,11 @@ else if (_error is not null)
             _undo = await plans.ApplyAsync(ProjectId, changes);
             Snackbar.Add($"{_undo.Summary} You can undo it from the bar above the plan.", Severity.Success);
             await LoadAsync();
-            return true;
+            return null;
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
         {
-            Snackbar.Add(ex.Message, Severity.Error);
-            return false;
+            return ex.Message;
         }
         finally
         {
@@ -485,6 +561,20 @@ else if (_error is not null)
     }
 
     // ---- Words ----
+
+    private static string MoneyClass(PlanMoneyStatus status) => status switch
+    {
+        PlanMoneyStatus.OverCeiling => "wb-money-red",
+        PlanMoneyStatus.OverFunding => "wb-money-amber",
+        _ => "wb-money-ok",
+    };
+
+    private static string MoneyWords(PlanMoneyStatus status) => status switch
+    {
+        PlanMoneyStatus.OverCeiling => "Past the ceiling: cut hours or ask Finance for more.",
+        PlanMoneyStatus.OverFunding => "Past what's funded so far: within the ceiling, but more funding is needed before the work runs.",
+        _ => "Within funding.",
+    };
 
     private static string Was(bool changed, string was) => changed ? $"was {was} · " : "";
 

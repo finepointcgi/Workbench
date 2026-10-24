@@ -58,12 +58,36 @@ public sealed class HttpProjectStartService(HttpClient http) : IProjectStartServ
     private sealed record SuggestedCode(string Code);
 }
 
+public sealed class HttpProjectPlanService(HttpClient http) : IProjectPlanService
+{
+    private const string Root = "api/v1/project-plans";
+
+    public async Task<ProjectPlanDto> GetAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/{projectId}", cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
+
+    public async Task<ProjectTermsDto> TermsFromContractAsync(Guid contractId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/from-contract/{contractId}", cancellationToken)).ReadAsync<ProjectTermsDto>(cancellationToken);
+
+    public async Task<ProjectPlanDto> SaveTermsAsync(Guid projectId, SaveProjectTermsRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Root}/{projectId}/terms", request, cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
+
+    public async Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/{projectId}/submit", new PlanReviewRequest(note), cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
+
+    public async Task<ProjectPlanDto> ApproveAsync(Guid projectId, string? comment = null, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/{projectId}/approve", new PlanReviewRequest(comment), cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
+
+    public async Task<ProjectPlanDto> ReturnAsync(Guid projectId, string comment, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Root}/{projectId}/return", new PlanReviewRequest(comment), cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
+}
+
 public static class SetupClientRegistration
 {
     public static IServiceCollection AddSetupClients(this IServiceCollection services, Uri serverBaseAddress)
     {
         services.AddHttpClient<IPlanSyncService, HttpPlanSyncService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProjectStartService, HttpProjectStartService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IProjectPlanService, HttpProjectPlanService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ISetupAdminService, HttpSetupAdminService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }

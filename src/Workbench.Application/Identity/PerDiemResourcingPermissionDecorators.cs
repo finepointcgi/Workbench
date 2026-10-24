@@ -429,6 +429,7 @@ public sealed class PermissionCheckingResourcePlanService(IResourcePlanService i
         DirectCost = cost ? t.DirectCost : null,
         BurdenedCost = cost && burden ? t.BurdenedCost : null,
         BudgetAmount = cost ? t.BudgetAmount : null,
+        Money = cost ? t.Money : null,
         Categories = t.Categories.Select(c => c with
         {
             DirectCost = cost ? c.DirectCost : null,

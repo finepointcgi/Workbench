@@ -1,0 +1,106 @@
+.wb-assign-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 6px;
+}
+
+.wb-assign-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.wb-assign-table th {
+    text-align: left;
+    font-weight: 500;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    background: var(--mud-palette-background-gray);
+    white-space: nowrap;
+}
+
+.wb-assign-table td {
+    padding: 2px 4px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    vertical-align: middle;
+}
+
+.wb-num {
+    text-align: right;
+}
+
+.wb-assign-input {
+    width: 100%;
+    min-width: 90px;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+}
+
+.wb-assign-input:hover {
+    border-color: var(--mud-palette-lines-inputs);
+}
+
+.wb-assign-input:focus {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: -1px;
+    background: var(--mud-palette-surface);
+}
+
+input.wb-assign-input.wb-num {
+    text-align: right;
+    min-width: 70px;
+}
+
+.wb-assign-new td {
+    background: color-mix(in srgb, var(--mud-palette-primary) 4%, transparent);
+}
+
+.wb-assign-invalid td {
+    background: color-mix(in srgb, var(--mud-palette-error) 8%, transparent);
+}
+
+.wb-assign-overrow td:first-child {
+    box-shadow: inset 3px 0 0 var(--mud-palette-warning);
+}
+
+.wb-assign-error {
+    color: var(--mud-palette-error);
+    font-size: 0.8rem;
+}
+
+.wb-assign-note td {
+    font-size: 0.8rem;
+    padding: 2px 8px 6px;
+}
+
+.wb-assign-status {
+    white-space: nowrap;
+}
+
+.wb-assign-over {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--mud-palette-warning-darken);
+    font-size: 0.8rem;
+}
+
+.wb-assign-changed {
+    color: var(--mud-palette-info-darken);
+    font-weight: 600;
+    font-size: 0.8rem;
+    margin-left: 4px;
+}
+
+.wb-assign-fix {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+}

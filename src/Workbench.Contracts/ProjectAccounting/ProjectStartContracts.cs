@@ -28,7 +28,8 @@ public enum ProjectStartFrom
 public sealed record ProjectTemplateDto(string Key, string Name, string Description, IReadOnlyList<string> Outline);
 
 /// <summary>
-/// Starts a project; its creator is its manager. <paramref name="Start"/> defaults to the contract's period of performance
+/// Starts a project; its manager is <paramref name="ProjectManagerId"/>, else its creator, and is asked to plan it when
+/// that's someone else. <paramref name="Terms"/> sets its ceiling, funding, type and fee (Finance). <paramref name="Start"/> defaults to the contract's period of performance
 /// (or today without one). <paramref name="TemplateKey"/> goes with <see cref="ProjectStartFrom.Template"/>,
 /// <paramref name="SourceProjectId"/> with <see cref="ProjectStartFrom.CopyProject"/>, <paramref name="Import"/> with
 /// <see cref="ProjectStartFrom.ImportExcel"/>.
@@ -41,7 +42,9 @@ public sealed record StartProjectRequest(
     string? TemplateKey = null,
     Guid? SourceProjectId = null,
     DateOnly? Start = null,
-    Scheduling.PlanImportRequest? Import = null);
+    Scheduling.PlanImportRequest? Import = null,
+    Guid? ProjectManagerId = null,
+    SaveProjectTermsRequest? Terms = null);
 
 public interface IProjectStartService
 {
