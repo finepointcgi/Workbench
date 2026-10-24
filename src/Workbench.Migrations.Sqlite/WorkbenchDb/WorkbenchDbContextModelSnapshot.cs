@@ -16153,6 +16153,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("AttachmentFileId")
                         .HasColumnType("TEXT");
 
@@ -16162,6 +16166,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
 
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CreditsBillId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CurrencyCode")
@@ -16207,6 +16214,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Number")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -16221,6 +16233,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.Property<string>("PostingProblem")
                         .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("QualityDebitMemoId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RejectionReason")
@@ -16258,11 +16273,23 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("VoidReversalDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VoidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AttachmentFileId");
 
                     b.HasIndex("CompanyId");
+
+                    b.HasIndex("CreditsBillId");
 
                     b.HasIndex("CurrencyCode");
 
@@ -16274,6 +16301,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("Status", "DueDate");
 
                     b.HasIndex("VendorId", "InvoiceNumber");
+
+                    b.HasIndex("VendorId", "Kind", "Status");
 
                     b.ToTable("ApBill");
                 });
@@ -16296,6 +16325,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("BillId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CreditsLineId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("DecidedAtUtc")
@@ -16353,8 +16385,14 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 4)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ReleasesBillId")
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("RetainageAmount")
                         .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReversalOdcEntryId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -16382,6 +16420,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.HasIndex("BillId");
 
+                    b.HasIndex("CreditsLineId");
+
                     b.HasIndex("OdcEntryId");
 
                     b.HasIndex("OrgUnitId");
@@ -16390,11 +16430,77 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
                     b.HasIndex("PurchaseOrderLineId");
 
+                    b.HasIndex("ReleasesBillId");
+
+                    b.HasIndex("ReversalOdcEntryId");
+
                     b.HasIndex("SubcontractId");
 
                     b.HasIndex("WbsElementId");
 
                     b.ToTable("ApBillLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApCreditApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AppliedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppliedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("AppliedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BillId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreditId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BillId");
+
+                    b.HasIndex("CreditId");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("ApCreditApplication");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.ApPayment", b =>
@@ -16539,6 +16645,68 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("ApPaymentRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApRefund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreditId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VoidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("VendorId", "ReceivedOn");
+
+                    b.ToTable("ApRefund");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.EdiMessage", b =>
@@ -25104,6 +25272,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("CreditsBillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
@@ -25129,6 +25302,11 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Workbench.Domain.Purchasing.ApBillLine", null)
+                        .WithMany()
+                        .HasForeignKey("CreditsLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.ProjectAccounting.OdcEntry", null)
                         .WithMany()
                         .HasForeignKey("OdcEntryId")
@@ -25149,6 +25327,16 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("PurchaseOrderLineId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("ReleasesBillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OdcEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReversalOdcEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Workbench.Domain.Purchasing.Subcontract", null)
                         .WithMany()
                         .HasForeignKey("SubcontractId")
@@ -25158,6 +25346,32 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("WbsElementId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApCreditApplication", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("BillId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("CreditId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Purchasing.ApPaymentRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Purchasing.ApPayment", b =>
@@ -25191,6 +25405,26 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasOne("Workbench.Domain.Companies.Company", null)
                         .WithMany()
                         .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Purchasing.ApRefund", b =>
+                {
+                    b.HasOne("Workbench.Domain.Purchasing.ApBill", null)
+                        .WithMany()
+                        .HasForeignKey("CreditId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Workbench.Domain.Purchasing.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

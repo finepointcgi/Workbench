@@ -4,6 +4,8 @@
 @inject IContractService ContractService
 @inject IProjectService Projects
 @inject IDialogService DialogService
+@inject IApCreditService Credits
+@inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
 <PageTitle>@(_detail?.Subcontract.Number ?? "Subcontract") · Purchasing · Workbench</PageTitle>
@@ -48,6 +50,7 @@ else
         {
             ("Ceiling", s.CeilingValue, false), ("Funded", s.FundedValue, false), ("Billed to date", s.BilledToDate, false),
             ("Remaining funding", s.RemainingFunding, s.RemainingFunding < 0), ("Remaining ceiling", s.RemainingCeiling, false), ("Retainage held", s.RetainageHeld, false),
+            ("Retainage released", s.RetainageReleased, false),
         })
         {
             <MudItem xs="6" sm="4" md="2">
@@ -136,7 +139,7 @@ else
                                     <td>@if (i.BillId is { } b) { <MudLink Href="@($"purchasing/bills/{b}")">@i.BillNumber</MudLink> }</td>
                                     <td>@i.InvoiceNumber</td><td>@PurchasingFormat.Date(i.InvoiceDate)</td>
                                     <td style="text-align:right">@PurchasingFormat.Amount(i.Amount)</td><td style="text-align:right">@PurchasingFormat.Amount(i.Retainage)</td>
-                                    <td>@i.Status</td>
+                                    <td>@(i.Kind == BillKind.Bill ? i.Status : $"{PurchasingFormat.Label(i.Kind)} · {i.Status}")</td>
                                 </tr>
                             }
                         </tbody>
@@ -144,6 +147,36 @@ else
                 }
             </MudPaper>
         </MudItem>
+        @if (_retainage.Count > 0)
+        {
+            <MudItem xs="12">
+                <MudPaper Outlined="true" Class="pa-4" data-testid="sub-retainage">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h6">Retainage</MudText>
+                        <MudSpacer />
+                        <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApBillsManage">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ReleaseAsync" Disabled="@(_retainage.All(r => r.Open <= 0))" data-testid="release-retainage">Release retainage</MudButton>
+                        </FinanceOnly>
+                    </MudStack>
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <thead><tr><th>Bill</th><th>Invoice</th><th>Date</th><th style="text-align:right">Held</th><th style="text-align:right">Credited</th><th style="text-align:right">Released</th><th style="text-align:right">Waiting for approval</th><th style="text-align:right">Still held</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _retainage)
+                            {
+                                <tr>
+                                    <td><MudLink Href="@($"purchasing/bills/{r.BillId}")">@r.Number</MudLink></td><td>@r.InvoiceNumber</td><td>@PurchasingFormat.Date(r.InvoiceDate)</td>
+                                    <td style="text-align:right">@PurchasingFormat.Amount(r.Held)</td>
+                                    <td style="text-align:right">@(r.Credited == 0 ? "" : PurchasingFormat.Amount(r.Credited))</td>
+                                    <td style="text-align:right">@(r.Released == 0 ? "" : PurchasingFormat.Amount(r.Released))</td>
+                                    <td style="text-align:right">@(r.Pending == 0 ? "" : PurchasingFormat.Amount(r.Pending))</td>
+                                    <td style="text-align:right"><b>@PurchasingFormat.Amount(r.Open)</b></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudPaper>
+            </MudItem>
+        }
     </MudGrid>
 }
 
@@ -159,12 +192,38 @@ else
     private string? _modDescription;
     private string? _clause;
     private string? _clauseTitle;
+    private IReadOnlyList<RetainageBillDto> _retainage = [];
+
+    private async Task LoadRetainageAsync()
+    {
+        try
+        {
+            _retainage = await Credits.ListRetainageAsync(SubcontractId);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _retainage = [];
+        }
+    }
+
+    private async Task ReleaseAsync()
+    {
+        var dialog = await DialogService.ShowAsync<ReleaseRetainageDialog>($"Release retainage on {_detail!.Subcontract.Number}",
+            new DialogParameters<ReleaseRetainageDialog> { { x => x.SubcontractId, SubcontractId }, { x => x.Retainage, _retainage } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: BillDto release })
+        {
+            Snackbar.Add($"{release.Bill.Number} sent for approval; it's paid like a bill once approved.", Severity.Success);
+            Navigation.NavigateTo($"purchasing/bills/{release.Bill.Id}");
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         try
         {
             _detail = await Subcontracts.GetAsync(SubcontractId);
+            await LoadRetainageAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {

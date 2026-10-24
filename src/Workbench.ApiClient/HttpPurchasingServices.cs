@@ -140,6 +140,41 @@ public sealed class HttpApBillService(HttpClient http) : IApBillService
         await (await http.PostAsJsonAsync($"{Base}/odc-links", odcEntryIds, cancellationToken)).ReadLedgerAsync<List<OdcBillLinkDto>>(cancellationToken);
 }
 
+public sealed class HttpApCreditService(HttpClient http) : IApCreditService
+{
+    private const string Base = "api/v1/purchasing";
+
+    public async Task<BillDto> CreditBillAsync(Guid billId, CreditBillRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/bills/{billId}/credit", request, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<OpenCreditDto>> ListOpenCreditsAsync(Guid? vendorId = null, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(LedgerUrls.With($"{Base}/credits/open", ("vendorId", vendorId)), cancellationToken)).ReadLedgerAsync<List<OpenCreditDto>>(cancellationToken);
+
+    public async Task<BillDto> ApplyAsync(Guid creditId, ApplyCreditRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/credits/{creditId}/apply", request, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<BillDto> UnapplyAsync(Guid applicationId, BillReasonRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/credit-applications/{applicationId}/unapply", request, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<BillDto> RecordRefundAsync(Guid creditId, RecordRefundRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/credits/{creditId}/refunds", request, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<BillDto> VoidRefundAsync(Guid refundId, BillReasonRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/refunds/{refundId}/void", request, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<RetainageBillDto>> ListRetainageAsync(Guid subcontractId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/subcontracts/{subcontractId}/retainage", cancellationToken)).ReadLedgerAsync<List<RetainageBillDto>>(cancellationToken);
+
+    public async Task<BillDto> ReleaseRetainageAsync(ReleaseRetainageRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/retainage-releases", request, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<BillDto> CreateFromQualityReturnAsync(Guid qualityDebitMemoId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"{Base}/credits/from-quality-return/{qualityDebitMemoId}", null, cancellationToken)).ReadLedgerAsync<BillDto>(cancellationToken);
+
+    public async Task<BillTrailDto> GetTrailAsync(Guid billId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/bills/{billId}/trail", cancellationToken)).ReadLedgerAsync<BillTrailDto>(cancellationToken);
+}
+
 public sealed class HttpApPaymentService(HttpClient http) : IApPaymentService
 {
     private const string Base = "api/v1/purchasing";
@@ -211,6 +246,7 @@ public static class PurchasingClientRegistration
         services.AddHttpClient<IApBillService, HttpApBillService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IApPaymentService, HttpApPaymentService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IApReportService, HttpApReportService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IApCreditService, HttpApCreditService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

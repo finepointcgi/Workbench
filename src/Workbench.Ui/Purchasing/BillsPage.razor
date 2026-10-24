@@ -6,10 +6,14 @@
 
 <PageTitle>Bills · Purchasing · Workbench</PageTitle>
 
-<PurchasingHeader Title="AP bills" Subtitle="Vendor invoices: enter them, route them for approval, and they post to the general ledger when approved.">
+<PurchasingHeader Title="AP bills" Subtitle="Vendor invoices and credits: enter them, route them for approval, and they post to the general ledger when approved.">
     <MudButton Variant="Variant.Outlined" Href="purchasing/approvals" StartIcon="@Icons.Material.Filled.FactCheck">Approval queue</MudButton>
     <MudButton Variant="Variant.Outlined" Href="purchasing/payments" StartIcon="@Icons.Material.Filled.Payments" data-testid="pay-bills">Pay bills</MudButton>
     <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.ApBillsManage">
+        <MudMenu Label="New credit" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" Disabled="_error is not null" data-testid="new-credit">
+            <MudMenuItem Href="purchasing/bills/new?kind=credit">Credit from the vendor (credit memo)</MudMenuItem>
+            <MudMenuItem Href="purchasing/bills/new?kind=debit">Bill the vendor back (debit memo)</MudMenuItem>
+        </MudMenu>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="purchasing/bills/new" Disabled="_error is not null" data-testid="new-bill">New bill</MudButton>
     </FinanceOnly>
 </PurchasingHeader>
@@ -58,7 +62,8 @@ else
         Columns =
         [
             new() { Key = "voucher", Title = "Voucher", Value = b => b.Number, Groupable = false,
-                    Cell = b => @<span style="white-space:nowrap"><MudLink Href="@($"purchasing/bills/{b.Id}")">@b.Number</MudLink></span> },
+                    Cell = b => @<span style="white-space:nowrap"><MudLink Href="@($"purchasing/bills/{b.Id}")">@b.Number</MudLink>@if (b.Kind != BillKind.Bill) { <MudChip T="string" Size="Size.Small" Class="ma-0 ml-1">@PurchasingFormat.Label(b.Kind)</MudChip> }</span> },
+            new() { Key = "kind", Title = "Kind", Value = b => b.Kind, Display = b => PurchasingFormat.Label(b.Kind), Standard = false },
             new() { Key = "vendor", Title = "Vendor", Value = b => b.VendorCode },
             new() { Key = "vendorName", Title = "Vendor name", Value = b => b.VendorName, Standard = false },
             new() { Key = "invoice", Title = "Invoice", Value = b => b.InvoiceNumber, Groupable = false },
@@ -66,17 +71,17 @@ else
                     Cell = b => @<span style="white-space:nowrap">@PurchasingFormat.Date(b.InvoiceDate)</span> },
             new() { Key = "due", Title = "Due", Value = b => b.DueDate, Kind = ListColumnKind.Date, Groupable = false,
                     Cell = b => @<span style="white-space:nowrap">@PurchasingFormat.Date(b.DueDate)</span> },
-            new() { Key = "amount", Title = "Amount", Value = b => b.Amount, Kind = ListColumnKind.Money, Groupable = false, Cell = b => @<text>@PurchasingFormat.Amount(b.Amount)</text> },
+            new() { Key = "amount", Title = "Amount", Value = b => PurchasingFormat.Signed(b, b.Amount), Kind = ListColumnKind.Money, Groupable = false, Cell = b => @<text>@PurchasingFormat.Amount(PurchasingFormat.Signed(b, b.Amount))</text> },
             new() { Key = "retainage", Title = "Retainage", Value = b => b.RetainageAmount == 0 ? null : b.RetainageAmount, Kind = ListColumnKind.Money, Groupable = false,
                     Cell = b => @<text>@(b.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(b.RetainageAmount))</text> },
-            new() { Key = "balance", Title = "Balance", Value = b => b.Status == BillState.Posted ? b.Balance : null, Kind = ListColumnKind.Money, Groupable = false,
-                    Cell = b => @<text>@(b.Status == BillState.Posted ? PurchasingFormat.Amount(b.Balance) : "")</text> },
+            new() { Key = "balance", Title = "Balance", Value = b => b.Status == BillState.Posted ? b.SignedBalance : null, Kind = ListColumnKind.Money, Groupable = false,
+                    Cell = b => @<text>@(b.Status == BillState.Posted ? PurchasingFormat.Amount(b.SignedBalance) : "")</text> },
             new() { Key = "status", Title = "Status", Value = b => b.Status, Display = b => PurchasingFormat.Label(b.Status),
                     Cell = b => @<text>
                         <BillStatusChip Status="b.Status" />
                         @if (b.IsPaid)
                         {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0 ml-1">Paid</MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-0 ml-1">@(b.IsCredit ? "Used" : "Paid")</MudChip>
                         }
                         @if (b.PostingProblem is not null)
                         {

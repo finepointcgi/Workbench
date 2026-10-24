@@ -1,0 +1,55 @@
+@* Records money the vendor sent back against an open credit (debit cash, credit accounts payable). *@
+@inject IApCreditService Credits
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2">@Credit.Bill.VendorName owes back @PurchasingFormat.Amount(Credit.Bill.Balance) on @Credit.Bill.Number.</MudText>
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount received" Format="N2" Min="0" Max="Credit.Bill.Balance" Style="max-width:180px" data-testid="refund-amount" />
+                <MudDatePicker @bind-Date="_date" Label="Received on" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:180px" />
+                <MudTextField T="string" @bind-Value="_reference" Label="Their check number or deposit reference" Required="true" MaxLength="64" Style="max-width:260px" data-testid="refund-reference" />
+            </MudStack>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" data-testid="refund-error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="@(_busy || _amount <= 0 || string.IsNullOrWhiteSpace(_reference))" data-testid="refund-submit">Record refund</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public BillDto Credit { get; set; } = default!;
+
+    private decimal _amount;
+    private DateTime? _date = DateTime.Today;
+    private string? _reference;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized() => _amount = Credit.Bill.Balance;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Credits.RecordRefundAsync(Credit.Bill.Id, new RecordRefundRequest(_amount, PurchasingFormat.ToDateOnly(_date) ?? DateOnly.FromDateTime(DateTime.Today), _reference ?? ""));
+            MudDialog.Close(DialogResult.Ok(result));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

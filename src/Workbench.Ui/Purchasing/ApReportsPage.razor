@@ -25,7 +25,7 @@ else
             @if (_aging is { } aging)
             {
                 <MudSimpleTable Dense="true" Outlined="true" data-testid="aging">
-                    <thead><tr><th>Vendor</th><th style="text-align:right">Current</th><th style="text-align:right">1-30</th><th style="text-align:right">31-60</th><th style="text-align:right">61-90</th><th style="text-align:right">Over 90</th><th style="text-align:right">Total</th><th style="text-align:right">Retainage held</th></tr></thead>
+                    <thead><tr><th>Vendor</th><th style="text-align:right">Current</th><th style="text-align:right">1-30</th><th style="text-align:right">31-60</th><th style="text-align:right">61-90</th><th style="text-align:right">Over 90</th><th style="text-align:right">Total</th><th style="text-align:right">Open credits</th><th style="text-align:right">Retainage held</th></tr></thead>
                     <tbody>
                         @foreach (var r in aging.Rows)
                         {
@@ -37,6 +37,7 @@ else
                                 <td style="text-align:right">@PurchasingFormat.Amount(r.Days61To90)</td>
                                 <td style="text-align:right">@PurchasingFormat.Amount(r.Over90)</td>
                                 <td style="text-align:right"><b>@PurchasingFormat.Amount(r.Total)</b></td>
+                                <td style="text-align:right">@(r.Credits == 0 ? "" : PurchasingFormat.Amount(r.Credits))</td>
                                 <td style="text-align:right">@PurchasingFormat.Amount(r.Retainage)</td>
                             </tr>
                         }
@@ -48,6 +49,7 @@ else
                             <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Days61To90))</td>
                             <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Over90))</td>
                             <td style="text-align:right">@PurchasingFormat.Amount(aging.Total)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Credits))</td>
                             <td style="text-align:right">@PurchasingFormat.Amount(aging.Rows.Sum(r => r.Retainage))</td>
                         </tr>
                     </tbody>
@@ -70,7 +72,7 @@ else
             @if (_ledger is { } ledger)
             {
                 <MudSimpleTable Dense="true" Outlined="true" data-testid="vendor-ledger">
-                    <thead><tr><th>Date</th><th>Kind</th><th>Reference</th><th>Description</th><th style="text-align:right">Charges</th><th style="text-align:right">Payments</th><th style="text-align:right">Balance</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Kind</th><th>Reference</th><th>Description</th><th style="text-align:right">Charges</th><th style="text-align:right">Payments and credits</th><th style="text-align:right">Balance</th></tr></thead>
                     <tbody>
                         <tr><td colspan="6" class="mud-text-secondary">Opening balance</td><td style="text-align:right">@PurchasingFormat.Amount(ledger.OpeningBalance)</td></tr>
                         @foreach (var l in ledger.Lines)
