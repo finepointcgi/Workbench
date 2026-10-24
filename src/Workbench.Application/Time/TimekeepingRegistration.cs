@@ -15,6 +15,7 @@ public static class TimekeepingRegistration
 
         services.AddScoped<ITimesheetService, TimesheetService>();
         services.AddScoped<ITimesheetApprovalService, TimesheetApprovalService>();
+        services.AddScoped<ITimesheetTimerService, TimesheetTimerService>();
         services.AddScoped<ITimeReportService, TimeReportService>();
         services.AddScoped<IOrganizationSettingsService, OrganizationSettingsService>();
         return services;

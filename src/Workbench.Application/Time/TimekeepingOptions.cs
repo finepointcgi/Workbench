@@ -35,6 +35,9 @@ public sealed class TimekeepingOptions
     /// reminder goes out.
     /// </summary>
     public int MissingTimeReminderHour { get; set; } = 9;
+
+    /// <summary>The start/stop timer rounds elapsed time to this many hours (nearest; 0.25 = quarter hours).</summary>
+    public decimal TimerIncrementHours { get; set; } = 0.25m;
 }
 
 /// <summary>Today's date in the configured time zone, and the derived timesheet periods (periods are never stored).</summary>
