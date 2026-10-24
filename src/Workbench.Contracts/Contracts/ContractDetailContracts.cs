@@ -162,7 +162,8 @@ public sealed record FundingActionDto(
     DateTime CreatedAtUtc,
     string CreatedBy);
 
-public enum FundingLevel { Ok, Warning, Critical, Exhausted, NotActive }
+/// <summary>A CLIN's funding state. <see cref="Unfunded"/>: active, nothing obligated yet and nothing spent.</summary>
+public enum FundingLevel { Ok, Warning, Critical, Exhausted, NotActive, Unfunded }
 
 /// <summary>
 /// Funding status of one leaf CLIN. <see cref="Incurred"/> is approved cost to date (fully burdened when indirect rates

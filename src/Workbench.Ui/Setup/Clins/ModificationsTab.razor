@@ -231,8 +231,7 @@
     private void NewDraft()
     {
         _editing = null;
-        var next = _mods.Select(m => m.Number).Where(n => n.Length == 6 && n[0] == 'P' && int.TryParse(n[1..], out _)).Select(n => int.Parse(n[1..])).DefaultIfEmpty(0).Max() + 1;
-        _draft = new DraftModel { Number = $"P{next:00000}", EffectiveDate = DateTime.Today, Description = "" };
+        _draft = new DraftModel { Number = ClinFormat.NextModificationNumber(_mods.Select(m => m.Number)), EffectiveDate = DateTime.Today, Description = "" };
     }
 
     private void Select(ContractModificationDto mod)
@@ -241,14 +240,19 @@
         _draft = mod.Status == ModificationState.Draft ? DraftModel.From(mod) : null;
     }
 
-    private void AddChange(ModificationChangeKind kind) =>
+    private void AddChange(ModificationChangeKind kind)
+    {
+        // With only one CLIN to pick, pick it (a period extension left empty extends the whole contract, so it stays empty).
+        var choices = kind is ModificationChangeKind.AddClin or ModificationChangeKind.ExtendPeriod ? [] : ClinChoices(kind).Take(2).ToList();
         _draft!.Changes.Add(new ChangeRow
         {
             Kind = kind,
+            ClinNumber = choices.Count == 1 ? choices[0] : null,
             PeriodStart = SetupFormat.ToDateTime(Contract.PeriodStart),
             PeriodEnd = SetupFormat.ToDateTime(Contract.PeriodEnd),
             Pricing = ClinPricingKind.CostPlusFixedFee,
         });
+    }
 
     private async Task<bool> SaveAsync(bool quiet = false)
     {

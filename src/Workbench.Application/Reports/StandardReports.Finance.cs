@@ -121,7 +121,13 @@ public sealed partial class StandardReportService
             var funded = clins.Sum(c => c.FundedValue);
             var incurred = clins.Sum(c => c.Incurred);
             var committed = clins.Sum(c => c.Committed);
-            var worst = clins.Max(c => c.Level is FundingLevel.NotActive ? FundingLevel.Ok : c.Level);
+            // Unfunded sorts after Exhausted in the enum, so it only shows when nothing is worse.
+            var worst = clins.Max(c => c.Level is FundingLevel.NotActive or FundingLevel.Unfunded ? FundingLevel.Ok : c.Level);
+            if (worst == FundingLevel.Ok && clins.Any(c => c.Level == FundingLevel.Unfunded))
+            {
+                worst = FundingLevel.Unfunded;
+            }
+
             b.Add(ReportRowKind.Subtotal, 0, null, $"setup/contracts/{contract.Id}", contract.ContractNumber, null, contract.Name, contract.PeriodEnd,
                 ceiling, funded, incurred, committed, funded - incurred - committed, ceiling - funded, ReportValues.Ratio(incurred, funded),
                 clins.Where(c => c.ProjectedExhaustion is not null).Min(c => c.ProjectedExhaustion), ReportValues.Words(worst.ToString()));

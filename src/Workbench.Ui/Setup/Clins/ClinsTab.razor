@@ -64,7 +64,15 @@
                     <td>
                         @if (CanEdit)
                         {
-                            <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(clin)" aria-label="@($"Edit CLIN {clin.Number}")" />
+                            <MudStack Row="true" Spacing="0" AlignItems="AlignItems.Center" Style="white-space:nowrap">
+                                @if (CanFund(clin))
+                                {
+                                    <MudButton Size="Size.Small" Variant="@(clin.FundedValue == 0 ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.AttachMoney" OnClick="() => FundAsync(clin)" data-testid="clin-fund"
+                                               aria-label="@($"Fund CLIN {clin.Number}")">Fund</MudButton>
+                                }
+                                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="() => EditAsync(clin)" aria-label="@($"Edit CLIN {clin.Number}")" />
+                            </MudStack>
                         }
                     </td>
                 </tr>
@@ -99,6 +107,21 @@
 
     [Parameter]
     public EventCallback Changed { get; set; }
+
+    /// <summary>Funding goes on leaf CLINs that are in force and still have room under their value.</summary>
+    private static bool CanFund(ClinDto clin) => !clin.HasSlins && (!clin.IsOption || clin.IsExercised) && clin.FundedValue < clin.CeilingValue;
+
+    private async Task FundAsync(ClinDto clin)
+    {
+        var parameters = new DialogParameters<FundClinDialog> { { d => d.ContractId, Contract.Id }, { d => d.Clin, clin } };
+        var dialog = await DialogService.ShowAsync<FundClinDialog>($"Fund CLIN {clin.Number}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ContractModificationDto mod })
+        {
+            Snackbar.Add($"Funded CLIN {clin.Number} {ClinFormat.Money(mod.FundingDelta)} ({mod.Number}).", Severity.Success);
+            await Changed.InvokeAsync();
+        }
+    }
 
     private async Task EditAsync(ClinDto? clin)
     {
