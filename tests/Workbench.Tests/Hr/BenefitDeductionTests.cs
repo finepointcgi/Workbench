@@ -22,7 +22,7 @@ public sealed class BenefitDeductionTests
         Assert.Equal("Company Code,Employee Id,Employee Name,Check Date,Det,Det Code,Amount,Rate,Calc Code,ER Amount,Pre Tax", lines[0]);
         Assert.Equal("W1234,1001,Pat Morgan,10/23/2026,D,401K,,6,%,,Y", lines[1]);
         Assert.Equal("W1234,2002,Alex Rivera,10/23/2026,D,MEDPPO,46.15,,$,230.77,Y", lines[2]);
-        Assert.Throws<NotSupportedException>(() => new AdpPayrollProvider().ExportDeductions(new PayrollDeductionExport("C", "G", default, default, default, [])));
+        Assert.Throws<NotSupportedException>(() => ((IPayrollProvider)new AdpPayrollProvider(null!, null!)).ExportDeductions(new PayrollDeductionExport("C", "G", default, default, default, [])));
     }
 
     [Fact]

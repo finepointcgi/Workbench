@@ -1,0 +1,6 @@
+{ "payStatements": [
+  { "payDate": "2026-10-23", "grossPayAmount": { "amountValue": 400.00, "currencyCode": "USD" }, "netPayAmount": { "amountValue": 320.00 },
+    "payDetailUri": { "href": "/payroll/v1/workers/G3BGDW1CRJ2Z1X7M/pay-statements/ps-alex-1023" } },
+  { "payDate": "2026-10-09", "grossPayAmount": { "amountValue": 380.00 }, "netPayAmount": { "amountValue": 300.00 },
+    "payDetailUri": { "href": "/payroll/v1/workers/G3BGDW1CRJ2Z1X7M/pay-statements/ps-alex-1009" } }
+] }

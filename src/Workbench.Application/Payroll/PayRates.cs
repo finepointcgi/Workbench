@@ -6,8 +6,9 @@ namespace Workbench.Application.Payroll;
 
 /// <summary>
 /// Effective-dated pay rates (<see cref="EmployeePayRate"/>). A profile saved before rates had a history has no rows: it
-/// reads as one rate effective from the hire date (<see cref="BackfillAsync"/> stores that row, and the first rate
-/// change stores it too), so nothing changes for it.
+/// reads as one rate effective from the hire date, or the first day with time when that's earlier
+/// (<see cref="BackfillAsync"/> and the <c>PayRateHistoryBackfill</c> migration store that row, and the first rate change
+/// stores it too), so nothing changes for it.
 /// </summary>
 public static class PayRates
 {
@@ -21,9 +22,7 @@ public static class PayRates
         var rows = (await db.Set<EmployeePayRate>().AsNoTracking().Where(r => ids.Contains(r.EmployeeId)).ToListAsync(ct))
             .ToLookup(r => r.EmployeeId);
         var missing = profiles.Where(p => !rows[p.EmployeeId].Any() && HasRate(p)).Select(p => p.EmployeeId).ToList();
-        var hired = missing.Count == 0
-            ? []
-            : await db.Set<Employee>().AsNoTracking().Where(e => missing.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.HireDate, ct);
+        var hired = missing.Count == 0 ? [] : await StartDatesAsync(db, missing, ct);
         return profiles.ToDictionary(p => p.EmployeeId, p => rows[p.EmployeeId].Any()
             ? Order(rows[p.EmployeeId])
             : HasRate(p) ? [FromProfile(p, hired.GetValueOrDefault(p.EmployeeId, p.EffectiveFrom))] : []);
@@ -55,7 +54,7 @@ public static class PayRates
         }
 
         var ids = profiles.Select(p => p.EmployeeId).ToList();
-        var hired = await db.Set<Employee>().AsNoTracking().Where(e => ids.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.HireDate, ct);
+        var hired = await StartDatesAsync(db, ids, ct);
         foreach (var p in profiles)
         {
             var row = FromProfile(p, hired.GetValueOrDefault(p.EmployeeId, p.EffectiveFrom));
@@ -67,6 +66,31 @@ public static class PayRates
 
         await db.SaveChangesAsync(ct);
         return profiles.Count;
+    }
+
+    /// <summary>
+    /// Where a rate on file before the history starts: the hire date, or the first day with time if that's earlier (time
+    /// imported from before the recorded hire date), so no labor is left without a rate.
+    /// </summary>
+    public static async Task<Dictionary<Guid, DateOnly>> StartDatesAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> employeeIds, CancellationToken ct)
+    {
+        var hired = await db.Set<Employee>().AsNoTracking().Where(e => employeeIds.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.HireDate, ct);
+        var firstTime = await (
+                from e in db.Set<TimeEntry>().AsNoTracking()
+                join t in db.Set<Timesheet>().AsNoTracking() on e.TimesheetId equals t.Id
+                where employeeIds.Contains(t.EmployeeId) && e.Hours != 0
+                group e.WorkDate by t.EmployeeId into g
+                select new { EmployeeId = g.Key, First = g.Min() })
+            .ToListAsync(ct);
+        foreach (var f in firstTime)
+        {
+            if (!hired.TryGetValue(f.EmployeeId, out var h) || f.First < h)
+            {
+                hired[f.EmployeeId] = f.First;
+            }
+        }
+
+        return hired;
     }
 
     public static bool HasRate(EmployeePayProfile p) => (p.AnnualSalary ?? p.HourlyRate) is not null;

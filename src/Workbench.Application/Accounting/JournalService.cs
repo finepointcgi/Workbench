@@ -147,11 +147,14 @@ public sealed class JournalService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var entry = await db.Set<JournalEntry>().Include(e => e.Lines).FirstOrDefaultAsync(e => e.Id == entryId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Journal entry", entryId);
-        if (entry.Source is JournalSource.Timesheet or JournalSource.Odc && entry.Status == JournalStatus.Posted)
+        if (entry.Source is JournalSource.Timesheet or JournalSource.Odc or JournalSource.LaborAdjustment && entry.Status == JournalStatus.Posted)
         {
-            throw new InvalidOperationException(entry.Source == JournalSource.Timesheet
-                ? "This entry was posted from an approved timesheet. Reopen the timesheet to reverse it."
-                : "This entry was posted from an approved ODC or expense. Reopen it to reverse the entry.");
+            throw new InvalidOperationException(entry.Source switch
+            {
+                JournalSource.Timesheet => "This entry was posted from an approved timesheet. Reopen the timesheet to reverse it.",
+                JournalSource.LaborAdjustment => "This entry adjusts a timesheet's labor for a rate change. Correct the pay or cost rate, or reopen the timesheet, to reverse it.",
+                _ => "This entry was posted from an approved ODC or expense. Reopen it to reverse the entry.",
+            });
         }
 
         var reversal = await ledger.ReverseAsync(db, entry, request.Date ?? entry.Date, request.Reason, cancellationToken);

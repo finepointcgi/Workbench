@@ -35,7 +35,7 @@
             @if (RateChanging)
             {
                 <MudDatePicker @bind-Date="_effective" Editable="true" Label="New rate effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="rate-effective"
-                               HelperText="Pay periods ending before this date keep the earlier rate" />
+                               HelperText="Work before this date keeps the earlier rate. A date in the past adjusts labor already posted." />
                 <MudTextField @bind-Value="_reason" Label="Reason for the change" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" data-testid="rate-reason" />
             }
             @if (_history is { Count: > 0 })
@@ -56,11 +56,47 @@
                     </tbody>
                 </MudSimpleTable>
             }
+            @if (_adjusted is { Count: > 0 })
+            {
+                <MudAlert Severity="@(_adjusted.Any(a => a.Problem is not null) ? Severity.Warning : Severity.Success)" Dense="true" Class="mt-2" data-testid="adjusted-now">
+                    The rate change re-costed labor already posted:
+                    @foreach (var a in _adjusted)
+                    {
+                        <div>@AdjustmentText(a)</div>
+                    }
+                </MudAlert>
+            }
+            @if (_adjustments is { Count: > 0 })
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-2">Labor cost adjustments</MudText>
+                <MudSimpleTable Dense="true" data-testid="labor-adjustments">
+                    <thead><tr><th>Week of</th><th>Rate from</th><th style="text-align:right">Labor cost</th><th>Posted</th><th>Reason</th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _adjustments)
+                        {
+                            <tr>
+                                <td>@a.WeekOf.ToString("yyyy-MM-dd")</td>
+                                <td>@a.RateEffectiveFrom.ToString("yyyy-MM-dd")</td>
+                                <td style="text-align:right">@(a.Amount >= 0 ? "+" : "")@PayrollFormat.Money(a.Amount)</td>
+                                <td>@string.Join(", ", a.EntryNumbers) · @string.Join(", ", a.PostedPeriods)@(a.Redirected ? $" (period {a.WorkPeriods} closed)" : "")</td>
+                                <td class="mud-text-secondary">@a.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
         </MudStack>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+        @if (_saved is not null)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="() => MudDialog.Close(DialogResult.Ok(_saved))" data-testid="done">Done</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">Save</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -80,6 +116,9 @@
     private DateTime? _effective;
     private string? _reason;
     private IReadOnlyList<PayRateDto>? _history;
+    private IReadOnlyList<LaborAdjustmentDto>? _adjustments;
+    private IReadOnlyList<LaborAdjustmentDto>? _adjusted;
+    private PayProfileDto? _saved;
     private bool _busy;
 
     /// <summary>A new rate is entered (or the pay type changes) on a profile that has one: it's dated and explained.</summary>
@@ -105,7 +144,24 @@
                 _history = null;
             }
         }
+
+        if (Profile.HasProfile)
+        {
+            try
+            {
+                _adjustments = await Profiles.ListLaborAdjustmentsAsync(Profile.EmployeeId);
+            }
+            catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+            {
+                _adjustments = null;
+            }
+        }
     }
+
+    private static string AdjustmentText(LaborAdjustmentDto a) => a.Problem is { } problem
+        ? $"Week of {a.WeekOf:MMM d}: not adjusted ({problem})"
+        : $"Week of {a.WeekOf:MMM d}: {(a.Amount >= 0 ? "+" : "")}{PayrollFormat.Money(a.Amount)} in {string.Join(", ", a.EntryNumbers)}"
+            + $" ({string.Join(", ", a.PostedPeriods)}{(a.Redirected ? $"; {a.WorkPeriods} is closed" : "")})";
 
     private async Task SaveAsync()
     {
@@ -116,6 +172,14 @@
                 _payType == PayTypeKind.Salaried ? _salary : null, _payType == PayTypeKind.Hourly ? _hourly : null,
                 RateChanging && _effective is { } d ? DateOnly.FromDateTime(d) : null, RateChanging ? _reason : null, _employmentType));
             Snackbar.Add("Payroll profile saved.", Severity.Success);
+            if (saved.LaborAdjustments is { Count: > 0 } adjusted)
+            {
+                // Stay open so Finance sees the adjusting entries the change made.
+                (_saved, _adjusted, _history) = (saved, adjusted, saved.Rates ?? _history);
+                _adjustments = await Profiles.ListLaborAdjustmentsAsync(Profile.EmployeeId);
+                return;
+            }
+
             MudDialog.Close(DialogResult.Ok(saved));
         }
         catch (Exception ex) when (PayrollFormat.IsExpected(ex))

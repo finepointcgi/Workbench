@@ -115,8 +115,11 @@ public static class PayrollHours
     }
 }
 
-/// <summary>The pay side of one employee for reconciliation.</summary>
-public sealed record PayBasis(PayType PayType, decimal? AnnualSalary, decimal? HourlyRate, int PeriodsPerYear);
+/// <summary>
+/// The pay side of one employee for reconciliation. <see cref="Share"/> is the part of the pay period this rate covers
+/// (working days in its part over the period's working days) when the rate changed within the period.
+/// </summary>
+public sealed record PayBasis(PayType PayType, decimal? AnnualSalary, decimal? HourlyRate, int PeriodsPerYear, decimal Share = 1m);
 
 public sealed record ReconciliationLine(
     decimal PayRate,
@@ -146,10 +149,35 @@ public static class PayrollReconciliation
         var leave = Round(hours.LeaveTotal * rate);
         var premium = Round(hours.Overtime * rate * OvertimePremiumFactor);
         var salaried = pay.PayType == PayType.Salaried && pay.AnnualSalary is { } salary
-            ? Round(salary / pay.PeriodsPerYear) - worked - leave
+            ? Round(salary / pay.PeriodsPerYear * pay.Share) - worked - leave
             : 0;
         var expected = worked + leave + premium + salaried;
         return new ReconciliationLine(rate, worked, leave, premium, salaried, expected, registerGross - expected);
+    }
+
+    /// <summary>
+    /// As <see cref="Explain(PayBasis, HoursSplit, decimal)"/> for a period whose pay rate changed: each part is explained at
+    /// the rate in effect for it (hours by work date, a salary by its share of the working days) and the parts are added.
+    /// <see cref="ReconciliationLine.PayRate"/> is the last part's rate.
+    /// </summary>
+    public static ReconciliationLine Explain(IReadOnlyList<(PayBasis Pay, HoursSplit Hours)> parts, decimal registerGross)
+    {
+        var lines = parts.Select(p => Explain(p.Pay, p.Hours, 0)).ToList();
+        var expected = lines.Sum(l => l.ExpectedGross);
+        return new ReconciliationLine(lines[^1].PayRate, lines.Sum(l => l.WorkedAtPayRate), lines.Sum(l => l.LeavePay), lines.Sum(l => l.OvertimePremium),
+            lines.Sum(l => l.SalariedVariance), expected, registerGross - expected);
+    }
+
+    /// <summary>Monday–Friday days in [from, to].</summary>
+    public static int WorkingDays(DateOnly from, DateOnly to)
+    {
+        var days = 0;
+        for (var d = from; d <= to; d = d.AddDays(1))
+        {
+            days += d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? 0 : 1;
+        }
+
+        return days;
     }
 
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);

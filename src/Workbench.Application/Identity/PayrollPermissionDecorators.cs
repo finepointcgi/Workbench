@@ -90,6 +90,12 @@ public sealed class PermissionCheckingPayrollProfileService(IPayrollProfileServi
         await access.RequireAsync(Permission.PayRatesView, "see pay rates", cancellationToken);
         return await inner.RevealAsync(employeeId, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<LaborAdjustmentDto>> ListLaborAdjustmentsAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollProfilesManage, What, cancellationToken);
+        return await inner.ListLaborAdjustmentsAsync(employeeId, cancellationToken);
+    }
 }
 
 public sealed class PermissionCheckingPayrollProviderService(IPayrollProviderService inner, AccessControl access) : IPayrollProviderService
@@ -118,6 +124,30 @@ public sealed class PermissionCheckingPayrollProviderService(IPayrollProviderSer
     {
         await access.RequireAsync(Permission.PayrollSetup, What, cancellationToken);
         return await inner.SyncEmployeesAsync(payGroupId, dryRun, cancellationToken);
+    }
+
+    public async Task<PayrollConnectionDto> GetConnectionAsync(string providerKey, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollSetup, What, cancellationToken);
+        return await inner.GetConnectionAsync(providerKey, cancellationToken);
+    }
+
+    public async Task<PayrollConnectionDto> SaveConnectionAsync(string providerKey, SavePayrollConnectionRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollSetup, What, cancellationToken);
+        return await inner.SaveConnectionAsync(providerKey, request, cancellationToken);
+    }
+
+    public async Task<PayrollConnectionTestDto> TestConnectionAsync(string providerKey, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollSetup, What, cancellationToken);
+        return await inner.TestConnectionAsync(providerKey, cancellationToken);
+    }
+
+    public async Task<PayrollConnectionDto> DisconnectAsync(string providerKey, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollSetup, What, cancellationToken);
+        return await inner.DisconnectAsync(providerKey, cancellationToken);
     }
 }
 
@@ -159,6 +189,18 @@ public sealed class PermissionCheckingPayrollRunService(IPayrollRunService inner
     {
         await access.RequireAsync(Permission.PayrollRun, What, cancellationToken);
         return await inner.ImportRegisterAsync(runId, request, cancellationToken);
+    }
+
+    public async Task<ProviderHoursResultDto> SendHoursToProviderAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollRun, What, cancellationToken);
+        return await inner.SendHoursToProviderAsync(runId, request, cancellationToken);
+    }
+
+    public async Task<RegisterImportResultDto> ImportRegisterFromProviderAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.PayrollRun, What, cancellationToken);
+        return await inner.ImportRegisterFromProviderAsync(runId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<RegisterLineDto>> GetRegisterAsync(Guid runId, CancellationToken cancellationToken = default)

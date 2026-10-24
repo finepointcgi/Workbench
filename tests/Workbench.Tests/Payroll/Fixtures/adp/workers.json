@@ -1,0 +1,8 @@
+{ "workers": [
+  { "associateOID": "G3BGDW1CRJ2Z1X7M", "workerID": { "idValue": "RIVA001" },
+    "person": { "legalName": { "givenName": "Alex", "familyName1": "Rivera", "formattedName": "Rivera, Alex" } },
+    "workAssignments": [ { "itemID": "35477309N", "payrollFileNumber": "002002", "payrollGroupCode": { "codeValue": "W1A" } } ] },
+  { "associateOID": "G3BGDW1CRJ2Z1X8N", "workerID": { "idValue": "MORP001" },
+    "person": { "legalName": { "givenName": "Pat", "familyName1": "Morgan" } },
+    "workAssignments": [ { "itemID": "35477310N", "payrollFileNumber": "001001", "payrollGroupCode": { "codeValue": "W1A" } } ] }
+] }

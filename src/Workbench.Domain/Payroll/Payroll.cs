@@ -233,3 +233,27 @@ public sealed class PayrollRegisterLine : Entity
     public decimal EmployerBenefits { get; set; }
     public decimal NetPay { get; set; }
 }
+
+/// <summary>
+/// The customer's own API credentials for a payroll provider (ADP, Paychex, Gusto). <see cref="ProtectedCredentials"/>
+/// is encrypted with Data Protection and never logged or returned; <see cref="Summary"/> is what the setup screen shows.
+/// </summary>
+public sealed class PayrollProviderConnection : Entity
+{
+    public required string ProviderKey { get; set; }
+
+    /// <summary><c>production</c> or <c>sandbox</c> (the provider's test environment).</summary>
+    public string Environment { get; set; } = "production";
+
+    public required string ProtectedCredentials { get; set; }
+
+    /// <summary>Non-secret description, e.g. "Client id 3f2a…".</summary>
+    public string? Summary { get; set; }
+
+    public required string ConnectedBy { get; set; }
+    public DateTime ConnectedAtUtc { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+    public DateTime? LastCheckedAtUtc { get; set; }
+    public bool? LastCheckSucceeded { get; set; }
+    public string? LastCheckMessage { get; set; }
+}

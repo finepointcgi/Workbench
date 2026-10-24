@@ -107,7 +107,27 @@ public sealed record PayProfileDto(
     DateOnly? EffectiveFrom,
     DateTime? UpdatedAtUtc,
     EmploymentTypeKind EmploymentType = EmploymentTypeKind.FullTime,
-    IReadOnlyList<PayRateDto>? Rates = null);
+    IReadOnlyList<PayRateDto>? Rates = null,
+    IReadOnlyList<LaborAdjustmentDto>? LaborAdjustments = null);
+
+/// <summary>
+/// A labor cost adjustment: a posted timesheet re-costed after a back-dated pay or cost rate change. <see cref="Amount"/>
+/// is the change in labor cost (positive = more). <see cref="Redirected"/>: a work period was closed, so it posted to
+/// the open period. <see cref="Problem"/> is set when the timesheet couldn't be adjusted (it stays as posted).
+/// </summary>
+public sealed record LaborAdjustmentDto(
+    Guid? Id,
+    Guid TimesheetId,
+    DateOnly WeekOf,
+    DateOnly RateEffectiveFrom,
+    decimal Amount,
+    string WorkPeriods,
+    IReadOnlyList<string> PostedPeriods,
+    IReadOnlyList<string> EntryNumbers,
+    bool Redirected,
+    string? Reason,
+    DateTime? CreatedAtUtc,
+    string? Problem = null);
 
 /// <summary>
 /// Creates or changes a profile. Salaried employees need <see cref="AnnualSalary"/>, hourly ones <see cref="HourlyRate"/>.
@@ -137,12 +157,49 @@ public interface IPayrollProfileService
 
     /// <summary>The profile with its pay rate. Recorded in the security event log as <c>payroll.pay_rate_revealed</c>.</summary>
     Task<PayProfileDto> RevealAsync(Guid employeeId, CancellationToken cancellationToken = default);
+
+    /// <summary>Labor cost adjustments made for the employee's rate changes, newest first.</summary>
+    Task<IReadOnlyList<LaborAdjustmentDto>> ListLaborAdjustmentsAsync(Guid employeeId, CancellationToken cancellationToken = default);
 }
 
 // ---- Providers ----
 
 /// <summary>A payroll provider adapter. Unsupported ones show as "coming soon".</summary>
-public sealed record PayrollProviderDto(string Key, string Name, bool IsSupported, bool SupportsEmployeeSync, bool ApiConfigured, string Status);
+public sealed record PayrollProviderDto(string Key, string Name, bool IsSupported, bool SupportsEmployeeSync, bool ApiConfigured, string Status,
+    bool HasConnectScreen = false, bool SupportsHoursApi = false, bool SupportsRegisterApi = false);
+
+/// <summary>A field on a provider's connect screen. Secret fields are never sent back: <see cref="PayrollConnectionDto.SecretsOnFile"/> says which are saved.</summary>
+public sealed record PayrollConnectionFieldDto(string Key, string Label, bool IsSecret, bool Required, bool Multiline, string? Help, string? Placeholder);
+
+/// <summary>
+/// A provider's connection: what the connect screen asks for and what's saved. <see cref="Values"/> holds only the
+/// non-secret fields (the client id); secrets stay encrypted on the server.
+/// </summary>
+public sealed record PayrollConnectionDto(
+    string ProviderKey,
+    string ProviderName,
+    IReadOnlyList<PayrollConnectionFieldDto> Fields,
+    IReadOnlyList<string> Environments,
+    string SetupHelp,
+    string? DocsUrl,
+    bool Connected,
+    string? Environment,
+    string? Summary,
+    IReadOnlyDictionary<string, string> Values,
+    IReadOnlyList<string> SecretsOnFile,
+    string? ConnectedBy,
+    DateTime? ConnectedAtUtc,
+    DateTime? LastCheckedAtUtc,
+    bool? LastCheckSucceeded,
+    string? LastCheckMessage);
+
+/// <summary>Saves a connection. A secret left blank keeps the one on file.</summary>
+public sealed record SavePayrollConnectionRequest(string Environment, IReadOnlyDictionary<string, string?> Values, bool TestNow = true);
+
+public sealed record PayrollConnectionTestDto(bool Succeeded, string Message, DateTime CheckedAtUtc);
+
+/// <summary>What sending the hours through the provider's API did.</summary>
+public sealed record ProviderHoursResultDto(PayrollFileDto File, int Employees, int Lines, string Message);
 
 /// <summary>
 /// The earning codes for a provider: <c>REG</c>, <c>OT</c> and each leave charge code (<c>LV.PTO</c>) mapped to the
@@ -178,6 +235,18 @@ public interface IPayrollProviderService
     /// would change. Needs the provider's API to be configured.
     /// </summary>
     Task<EmployeeSyncResultDto> SyncEmployeesAsync(Guid payGroupId, bool dryRun, CancellationToken cancellationToken = default);
+
+    /// <summary>The provider's connect screen: fields, help and what's saved (never the secrets).</summary>
+    Task<PayrollConnectionDto> GetConnectionAsync(string providerKey, CancellationToken cancellationToken = default);
+
+    /// <summary>Saves the customer's API credentials (encrypted, audited without values) and, by default, tests them.</summary>
+    Task<PayrollConnectionDto> SaveConnectionAsync(string providerKey, SavePayrollConnectionRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Signs in to the provider with the saved credentials.</summary>
+    Task<PayrollConnectionTestDto> TestConnectionAsync(string providerKey, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the saved credentials.</summary>
+    Task<PayrollConnectionDto> DisconnectAsync(string providerKey, CancellationToken cancellationToken = default);
 }
 
 // ---- Payroll runs ----
@@ -312,6 +381,15 @@ public interface IPayrollRunService
 
     /// <summary>Step 4: imports the provider's payroll register. The same file again is a no-op.</summary>
     Task<RegisterImportResultDto> ImportRegisterAsync(Guid runId, ImportRegisterRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Exports the hours (as <see cref="ExportHoursAsync"/>, keeping the file as evidence) and puts them on the provider's
+    /// open payroll through its API. The payroll still has to be reviewed and submitted in the provider.
+    /// </summary>
+    Task<ProviderHoursResultDto> SendHoursToProviderAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads the processed payroll's checks from the provider's API and imports them as the run's register.</summary>
+    Task<RegisterImportResultDto> ImportRegisterFromProviderAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>The register lines in use.</summary>
     Task<IReadOnlyList<RegisterLineDto>> GetRegisterAsync(Guid runId, CancellationToken cancellationToken = default);

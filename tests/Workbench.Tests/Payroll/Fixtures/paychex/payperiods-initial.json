@@ -1,0 +1,4 @@
+{ "content": [
+  { "payPeriodId": "1080104833144450", "intervalCode": "BI_WEEKLY", "status": "INITIAL", "startDate": "2026-10-05T00:00:00Z", "endDate": "2026-10-18T00:00:00Z", "checkDate": "2026-10-23T00:00:00Z" },
+  { "payPeriodId": "1080104833144451", "intervalCode": "BI_WEEKLY", "status": "INITIAL", "startDate": "2026-10-19T00:00:00Z", "endDate": "2026-11-01T00:00:00Z", "checkDate": "2026-11-06T00:00:00Z" }
+] }

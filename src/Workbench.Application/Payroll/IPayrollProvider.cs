@@ -1,7 +1,10 @@
 namespace Workbench.Application.Payroll;
 
-/// <summary>One line of the hours export: an employee's hours under one earning code.</summary>
-public sealed record PayrollHoursLine(string ProviderEmployeeId, string EmployeeName, string EarningCode, decimal Hours, string? CostCenter);
+/// <summary>
+/// One line of the hours export: an employee's hours under one earning code. <see cref="Category"/> is the Workbench
+/// category (<c>REG</c>, <c>OT</c> or a leave charge code), for formats that put regular and overtime hours in their own columns.
+/// </summary>
+public sealed record PayrollHoursLine(string ProviderEmployeeId, string EmployeeName, string EarningCode, decimal Hours, string? CostCenter, string? Category = null);
 
 /// <summary>Approved hours for a pay period, ready for a provider to format.</summary>
 public sealed record PayrollHoursExport(string CompanyCode, string PayGroupCode, DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly CheckDate, IReadOnlyList<PayrollHoursLine> Lines);
@@ -51,6 +54,12 @@ public sealed record PayrollDeductionExport(string CompanyCode, string PayGroupC
 
 public sealed record PayrollSyncOutcome(Guid EmployeeId, PayrollSyncAction Action, bool Succeeded, string? ProviderEmployeeId, string Message);
 
+/// <summary>Which payroll results to fetch from the provider's API.</summary>
+public sealed record PayrollRegisterQuery(string CompanyCode, DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly CheckDate, IReadOnlyList<string> ProviderEmployeeIds);
+
+/// <summary>What sending hours through the provider's API did. The provider's payroll still has to be reviewed and submitted there.</summary>
+public sealed record PayrollHoursSubmission(int Employees, int Lines, string Message);
+
 /// <summary>
 /// A payroll provider adapter. Workbench never calculates payroll taxes: the provider does. An adapter turns approved
 /// hours into the provider's import file, reads the provider's payroll register back, and (optionally) keeps the
@@ -83,51 +92,34 @@ public interface IPayrollProvider
 
     /// <summary>Creates, updates or terminates employees in the provider. Live API calls; never used in tests.</summary>
     Task<IReadOnlyList<PayrollSyncOutcome>> SyncEmployeesAsync(string companyCode, IReadOnlyList<(PayrollEmployeeRecord Employee, PayrollSyncAction Action)> changes, CancellationToken cancellationToken);
-}
 
-/// <summary>Adapters that are listed but not built yet. Every operation says so clearly.</summary>
-public abstract class ComingSoonPayrollProvider : IPayrollProvider
-{
-    public abstract string Key { get; }
+    /// <summary>The provider's own earning codes for <c>REG</c>, <c>OT</c> and the usual leave codes, until Finance maps them.</summary>
+    IReadOnlyList<Contracts.Payroll.EarningCodeMapping> DefaultEarningCodes => EarningCodes.Defaults;
 
-    public abstract string Name { get; }
+    /// <summary>
+    /// What the connect screen asks for (the customer's own API credentials, stored encrypted). Null when the adapter
+    /// has no customer connection (Paylocity's API credentials come from server configuration).
+    /// </summary>
+    PayrollConnectionSpec? ConnectionSpec => null;
 
-    public bool IsSupported => false;
+    /// <summary>True when the API can be called: credentials saved (or configured on the server).</summary>
+    Task<bool> IsConnectedAsync(CancellationToken cancellationToken) => Task.FromResult(ApiConfigured);
 
-    public bool SupportsEmployeeSync => false;
+    /// <summary>Signs in with the saved credentials and reads something harmless. Returns what it found.</summary>
+    Task<string> TestConnectionAsync(CancellationToken cancellationToken) =>
+        throw new NotSupportedException($"{Name} has no connection to test here.");
 
-    public bool ApiConfigured => false;
+    /// <summary>True when hours can be sent through the API (as well as the import file).</summary>
+    bool SupportsHoursApi => false;
 
-    public PayrollExportFile ExportHours(PayrollHoursExport export) => throw NotYet("hours export");
+    /// <summary>Puts the hours on the provider's open payroll for the period. The customer reviews and submits it there.</summary>
+    Task<PayrollHoursSubmission> SendHoursAsync(PayrollHoursExport export, CancellationToken cancellationToken) =>
+        throw new NotSupportedException($"{Name} takes hours as an import file only. Download the file and import it in {Name}.");
 
-    public ParsedPayrollRegister ParseRegister(string content) => throw NotYet("payroll register import");
+    /// <summary>True when processed payroll results can be read through the API (as well as the register file).</summary>
+    bool SupportsRegisterApi => false;
 
-    public PayrollExportFile ExportDeductions(PayrollDeductionExport export) => throw NotYet("benefit deduction export");
-
-    public Task<IReadOnlyList<PayrollSyncOutcome>> SyncEmployeesAsync(string companyCode, IReadOnlyList<(PayrollEmployeeRecord Employee, PayrollSyncAction Action)> changes, CancellationToken cancellationToken) =>
-        throw NotYet("employee sync");
-
-    private NotSupportedException NotYet(string what) =>
-        new($"{Name} {what} isn't supported yet (coming soon). Workbench integrates with Paylocity today; use a Paylocity pay group or export hours manually.");
-}
-
-public sealed class AdpPayrollProvider : ComingSoonPayrollProvider
-{
-    public override string Key => "adp";
-
-    public override string Name => "ADP Workforce Now";
-}
-
-public sealed class PaychexPayrollProvider : ComingSoonPayrollProvider
-{
-    public override string Key => "paychex";
-
-    public override string Name => "Paychex Flex";
-}
-
-public sealed class GustoPayrollProvider : ComingSoonPayrollProvider
-{
-    public override string Key => "gusto";
-
-    public override string Name => "Gusto";
+    /// <summary>The processed payroll's checks for the period, as register rows (gross, taxes, deductions, net).</summary>
+    Task<ParsedPayrollRegister> FetchRegisterAsync(PayrollRegisterQuery query, CancellationToken cancellationToken) =>
+        throw new NotSupportedException($"{Name} payroll results come from the register file. Export it from {Name} and import it here.");
 }

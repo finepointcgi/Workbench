@@ -192,7 +192,7 @@ public sealed class CashForecastService(IWorkbenchDbContextFactory dbFactory, Au
                 from l in db.Set<JournalLine>().AsNoTracking()
                 join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
                 where l.AccountId == rule.AccountId && e.Status != JournalStatus.Draft && e.Date >= since && e.Date < today
-                    && (e.Source == JournalSource.Timesheet || e.Source == JournalSource.Payroll || e.Source == JournalSource.Reversal)
+                    && (e.Source == JournalSource.Timesheet || e.Source == JournalSource.LaborAdjustment || e.Source == JournalSource.Payroll || e.Source == JournalSource.Reversal)
                 select new { e.Date, Net = l.Credit - l.Debit })
             .ToListAsync(ct);
         var byCycle = rows.GroupBy(r => (r.Date.DayNumber - since.DayNumber) / cycle).Select(g => g.Sum(r => r.Net)).Where(v => v > 0).ToList();

@@ -1,0 +1,179 @@
+@page "/payroll/providers/{ProviderKey}"
+@inject IPayrollProviderService Providers
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Connect @(_connection?.ProviderName ?? "payroll provider") · Workbench</PageTitle>
+
+<AccessibleBreadcrumbs Items="_crumbs" Class="px-0" />
+
+@if (_forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="Payroll setup is for Finance and administrators" Message="@_error" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_connection is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.h4" HtmlTag="h1">Connect @_connection.ProviderName</MudText>
+        <MudChip T="string" Variant="Variant.Outlined" Color="@(_connection.Connected ? (_connection.LastCheckSucceeded == false ? Color.Warning : Color.Success) : Color.Default)" data-testid="connection-status">
+            @Status
+        </MudChip>
+    </MudStack>
+    <MudText Class="mud-text-secondary mb-4" Style="max-width:760px">@_connection.SetupHelp</MudText>
+
+    <MudPaper Outlined="true" Class="pa-4" Style="max-width:760px">
+        @if (_connection.Connected)
+        {
+            <MudText Typo="Typo.body2" Class="mb-3" data-testid="connection-summary">
+                Connected by @_connection.ConnectedBy on @_connection.ConnectedAtUtc?.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)@(_connection.Summary is { } s ? $" · {s}" : "").
+                @if (_connection.LastCheckedAtUtc is { } checkedAt)
+                {
+                    <span> Last check @checkedAt.ToLocalTime().ToString("MMM d h:mm tt", CultureInfo.InvariantCulture): @_connection.LastCheckMessage</span>
+                }
+            </MudText>
+        }
+
+        @if (_connection.Environments.Count > 1)
+        {
+            <MudRadioGroup T="string" @bind-Value="_environment" Class="mb-2" data-testid="environment">
+                @foreach (var env in _connection.Environments)
+                {
+                    <MudRadio T="string" Value="env" Color="Color.Primary">@(env == "sandbox" ? "Sandbox (test company)" : "Production")</MudRadio>
+                }
+            </MudRadioGroup>
+        }
+
+        @foreach (var field in _connection.Fields)
+        {
+            var onFile = field.IsSecret && _connection.SecretsOnFile.Contains(field.Key);
+            <MudTextField T="string" Value="@_values.GetValueOrDefault(field.Key)" ValueChanged="@(v => _values[field.Key] = v)"
+                          Label="@field.Label" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2"
+                          InputType="@(field.IsSecret && !field.Multiline ? InputType.Password : InputType.Text)"
+                          Lines="@(field.Multiline ? 4 : 1)" AutoGrow="@field.Multiline"
+                          Placeholder="@(onFile ? "Saved (encrypted). Leave blank to keep it." : field.Placeholder)"
+                          HelperText="@field.Help" Required="@(field.Required && !onFile)" data-testid="@($"field-{field.Key}")"
+                          Style="@(field.Multiline ? "font-family:monospace;font-size:12px" : null)" />
+        }
+
+        <MudStack Row="true" Spacing="2" Class="mt-2" Wrap="Wrap.Wrap">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" OnClick="SaveAsync" Disabled="_busy" data-testid="save-connection">
+                @(_connection.Connected ? "Save and test" : "Connect")
+            </MudButton>
+            @if (_connection.Connected)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NetworkCheck" OnClick="TestAsync" Disabled="_busy" data-testid="test-connection">Test connection</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DisconnectAsync" Disabled="_busy" data-testid="disconnect">Disconnect</MudButton>
+            }
+            @if (_connection.DocsUrl is { } docs)
+            {
+                <MudSpacer />
+                <MudLink Href="@docs" Target="_blank" Typo="Typo.body2">@_connection.ProviderName API documentation</MudLink>
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
+            Credentials are encrypted on the server and never shown again. Workbench never calculates payroll taxes: @_connection.ProviderName does.
+        </MudText>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public string ProviderKey { get; set; } = "";
+
+    private PayrollConnectionDto? _connection;
+    private Dictionary<string, string?> _values = [];
+    private string _environment = "production";
+    private bool _busy;
+    private bool _forbidden;
+    private string? _error;
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Payroll", "payroll"), new("Providers", null, disabled: true)];
+
+    private string Status => _connection switch
+    {
+        null or { Connected: false } => "Not connected",
+        { LastCheckSucceeded: true } => "Connected",
+        { LastCheckSucceeded: false } => "Connected · last check failed",
+        _ => "Connected · not checked",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Show(await Providers.GetConnectionAsync(ProviderKey));
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PayrollFormat.Error(ex), PayrollFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Show(PayrollConnectionDto connection)
+    {
+        _connection = connection;
+        _environment = connection.Environment ?? connection.Environments.FirstOrDefault() ?? "production";
+        _values = connection.Fields.ToDictionary(f => f.Key, f => f.IsSecret ? null : connection.Values.GetValueOrDefault(f.Key));
+    }
+
+    private async Task SaveAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var saved = await Providers.SaveConnectionAsync(ProviderKey, new SavePayrollConnectionRequest(_environment, _values));
+            Show(saved);
+            Snackbar.Add(saved.LastCheckSucceeded == true ? $"Connected: {saved.LastCheckMessage}" : $"Saved, but the test failed: {saved.LastCheckMessage}",
+                saved.LastCheckSucceeded == true ? Severity.Success : Severity.Warning);
+        });
+    }
+
+    private async Task TestAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var result = await Providers.TestConnectionAsync(ProviderKey);
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Warning);
+            Show(await Providers.GetConnectionAsync(ProviderKey));
+        });
+    }
+
+    private async Task DisconnectAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync($"Disconnect {_connection!.ProviderName}?",
+            "The saved credentials are deleted. Hours and registers can still go by file.", yesText: "Disconnect", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            Show(await Providers.DisconnectAsync(ProviderKey));
+            Snackbar.Add("Disconnected.", Severity.Info);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PayrollFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -13,6 +13,7 @@ public static class PayrollSecurityEvents
     public const string PayRateRevealed = "payroll.pay_rate_revealed";
     public const string PayRateChanged = "payroll.pay_rate_changed";
     public const string HoursExported = "export.payroll_hours";
+    public const string ProviderConnected = "payroll.provider_connected";
 }
 
 /// <summary>The registered provider adapters by key.</summary>
@@ -42,11 +43,11 @@ public static class EarningCodes
         new("LV.SICK", "SICK"),
     ];
 
-    public static IReadOnlyList<EarningCodeMapping> Parse(string? stored)
+    public static IReadOnlyList<EarningCodeMapping> Parse(string? stored, IReadOnlyList<EarningCodeMapping>? defaults = null)
     {
         if (string.IsNullOrWhiteSpace(stored))
         {
-            return Defaults;
+            return defaults ?? Defaults;
         }
 
         return stored.Split(';', StringSplitOptions.RemoveEmptyEntries)
@@ -234,7 +235,7 @@ public sealed class PayGroupService(IWorkbenchDbContextFactory dbFactory, AuditR
 /// Employee payroll profiles. Pay rates are masked in every response except <see cref="RevealAsync"/>, which records a
 /// security event; rate changes record one too. Audit rows say a rate changed, never what it is.
 /// </summary>
-public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, TimeProvider clock, SecurityEventLog? securityLog = null) : IPayrollProfileService
+public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, TimeProvider clock, SecurityEventLog? securityLog = null, LaborRateChanges? laborRates = null) : IPayrollProfileService
 {
     public const string AuditEntityType = nameof(EmployeePayProfile);
 
@@ -371,6 +372,8 @@ public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, 
             db.Set<EmployeePayProfile>().Add(profile);
         }
 
+        // Labor cost follows pay: the matching cost rate from the same date (a first profile only fills a gap).
+        var costChanged = added is not null && await LaborRateChanges.SyncCostRateAsync(db, added, isNew, cancellationToken);
         var rateChanged = added is not null && !isNew;
         audit.Record(db, AuditEntityType, profile.Id, isNew ? "Created" : "Updated", before, Snapshot(profile), rateChanged ? "Pay rate changed" : null);
         if (rateChanged)
@@ -387,7 +390,22 @@ public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, 
                 detail: $"Pay rate changed from {added!.EffectiveFrom:yyyy-MM-dd}", cancellationToken: cancellationToken);
         }
 
-        return await LoadAsync(db, employeeId, reveal: false, cancellationToken);
+        // A change dated before labor that's already posted re-costs that labor (adjusting entries, audited).
+        IReadOnlyList<LaborAdjustmentDto>? adjustments = null;
+        if (costChanged && laborRates is not null)
+        {
+            var outcomes = await laborRates.AdjustPostedLaborAsync(employeeId, added!.EffectiveFrom,
+                $"Pay rate change effective {added.EffectiveFrom:yyyy-MM-dd}" + (reason is null ? "" : $": {reason}"), cancellationToken);
+            adjustments = await LaborAdjustments.ToDtosAsync(db, outcomes, cancellationToken);
+        }
+
+        return await LoadAsync(db, employeeId, reveal: false, cancellationToken) with { LaborAdjustments = adjustments };
+    }
+
+    public async Task<IReadOnlyList<LaborAdjustmentDto>> ListLaborAdjustmentsAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await LaborAdjustments.ListAsync(db, employeeId, cancellationToken);
     }
 
     private DateOnly Today => DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
@@ -423,20 +441,201 @@ public sealed class PayrollProfileService(IWorkbenchDbContextFactory dbFactory, 
     private static object Snapshot(EmployeePayProfile p) => new { p.PayGroupId, p.ProviderEmployeeId, PayType = p.PayType.ToString(), EmploymentType = p.EmploymentType.ToString(), p.EffectiveFrom };
 }
 
-public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, PayrollProviders providers, TimeProvider clock) : IPayrollProviderService
+public sealed class PayrollProviderService(
+    IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, PayrollProviders providers, TimeProvider clock,
+    PayrollConnections? connections = null, SecurityEventLog? securityLog = null) : IPayrollProviderService
 {
-    public Task<IReadOnlyList<PayrollProviderDto>> ListProvidersAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<PayrollProviderDto>>(providers.All
-            .Select(p => new PayrollProviderDto(p.Key, p.Name, p.IsSupported, p.SupportsEmployeeSync, p.ApiConfigured,
-                !p.IsSupported ? "Coming soon" : p.ApiConfigured ? "Available · API connected" : "Available · file import"))
-            .OrderByDescending(p => p.IsSupported).ThenBy(p => p.Name).ToList());
+    public const string ConnectionAuditType = nameof(PayrollProviderConnection);
+
+    public async Task<IReadOnlyList<PayrollProviderDto>> ListProvidersAsync(CancellationToken cancellationToken = default)
+    {
+        var list = new List<PayrollProviderDto>();
+        foreach (var p in providers.All)
+        {
+            var connected = p.IsSupported && await p.IsConnectedAsync(cancellationToken);
+            list.Add(new PayrollProviderDto(p.Key, p.Name, p.IsSupported, p.SupportsEmployeeSync, connected,
+                !p.IsSupported ? "Coming soon" : connected ? "API connected" : p.ConnectionSpec is not null ? "Not connected" : "File import",
+                p.ConnectionSpec is not null, p.SupportsHoursApi, p.SupportsRegisterApi));
+        }
+
+        return list.OrderByDescending(p => p.IsSupported).ThenBy(p => p.Key == PaylocityPayrollProvider.ProviderKey ? 0 : 1).ThenBy(p => p.Name).ToList();
+    }
+
+    public async Task<PayrollConnectionDto> GetConnectionAsync(string providerKey, CancellationToken cancellationToken = default)
+    {
+        var (provider, spec) = Connectable(providerKey);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await ConnectionDtoAsync(db, provider, spec, cancellationToken);
+    }
+
+    public async Task<PayrollConnectionDto> SaveConnectionAsync(string providerKey, SavePayrollConnectionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var (provider, spec) = Connectable(providerKey);
+        var store = connections ?? throw new InvalidOperationException("Payroll connections aren't available.");
+        var environment = (request.Environment ?? "").Trim().ToLowerInvariant();
+        if (!spec.Environments.Contains(environment))
+        {
+            throw new ArgumentException($"Choose the {provider.Name} environment: {string.Join(" or ", spec.Environments)}.");
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var row = await db.Set<PayrollProviderConnection>().FirstOrDefaultAsync(c => c.ProviderKey == provider.Key, cancellationToken);
+        var values = row is null ? [] : store.Unprotect(row.ProtectedCredentials);
+        foreach (var field in spec.Fields)
+        {
+            var given = request.Values.TryGetValue(field.Key, out var v) ? v?.Trim() : null;
+            if (!string.IsNullOrEmpty(given))
+            {
+                if (given.Length > 20_000)
+                {
+                    throw new ArgumentException($"{field.Label} is too long.");
+                }
+
+                values[field.Key] = given;
+            }
+            else if (!field.IsSecret)
+            {
+                // A non-secret field left blank is cleared; a secret left blank keeps the one on file.
+                values.Remove(field.Key);
+            }
+
+            if (field.Required && !values.ContainsKey(field.Key))
+            {
+                throw new ArgumentException($"Enter the {field.Label}.");
+            }
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var isNew = row is null;
+        row ??= new PayrollProviderConnection { ProviderKey = provider.Key, ProtectedCredentials = "", ConnectedBy = audit.Actor, ConnectedAtUtc = now };
+        row.Environment = environment;
+        row.ProtectedCredentials = store.Protect(values);
+        row.Summary = Summary(spec, values);
+        row.UpdatedAtUtc = now;
+        row.LastCheckedAtUtc = null;
+        row.LastCheckSucceeded = null;
+        row.LastCheckMessage = null;
+        if (isNew)
+        {
+            db.Set<PayrollProviderConnection>().Add(row);
+        }
+
+        // Which fields changed, never their values.
+        audit.Record(db, ConnectionAuditType, row.Id, isNew ? "Connected" : "Credentials changed", null,
+            new { Provider = provider.Key, Environment = environment, Fields = request.Values.Where(kv => !string.IsNullOrEmpty(kv.Value)).Select(kv => kv.Key).Order().ToList() });
+        await db.SaveChangesAsync(cancellationToken);
+        if (securityLog is not null)
+        {
+            await securityLog.RecordAsync(PayrollSecurityEvents.ProviderConnected, $"payroll provider {provider.Key}", detail: isNew ? "Connected" : "Credentials changed", cancellationToken: cancellationToken);
+        }
+
+        if (request.TestNow)
+        {
+            await TestConnectionAsync(provider.Key, cancellationToken);
+        }
+
+        await using var read = await dbFactory.CreateAsync(cancellationToken);
+        return await ConnectionDtoAsync(read, provider, spec, cancellationToken);
+    }
+
+    public async Task<PayrollConnectionTestDto> TestConnectionAsync(string providerKey, CancellationToken cancellationToken = default)
+    {
+        var (provider, _) = Connectable(providerKey);
+        bool ok;
+        string message;
+        try
+        {
+            message = await provider.TestConnectionAsync(cancellationToken);
+            ok = true;
+        }
+        catch (Exception ex) when (ex is PayrollProviderApiException or HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            (ok, message) = (false, ex.Message);
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        if (await db.Set<PayrollProviderConnection>().FirstOrDefaultAsync(c => c.ProviderKey == provider.Key, cancellationToken) is { } row)
+        {
+            row.LastCheckedAtUtc = now;
+            row.LastCheckSucceeded = ok;
+            row.LastCheckMessage = message.Length > 500 ? message[..500] : message;
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return new PayrollConnectionTestDto(ok, message, now);
+    }
+
+    public async Task<PayrollConnectionDto> DisconnectAsync(string providerKey, CancellationToken cancellationToken = default)
+    {
+        var (provider, spec) = Connectable(providerKey);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        if (await db.Set<PayrollProviderConnection>().FirstOrDefaultAsync(c => c.ProviderKey == provider.Key, cancellationToken) is { } row)
+        {
+            db.Set<PayrollProviderConnection>().Remove(row);
+            audit.Record(db, ConnectionAuditType, row.Id, "Disconnected", null, new { Provider = provider.Key });
+            await db.SaveChangesAsync(cancellationToken);
+            if (securityLog is not null)
+            {
+                await securityLog.RecordAsync(PayrollSecurityEvents.ProviderConnected, $"payroll provider {provider.Key}", detail: "Disconnected", cancellationToken: cancellationToken);
+            }
+        }
+
+        return await ConnectionDtoAsync(db, provider, spec, cancellationToken);
+    }
+
+    private (IPayrollProvider Provider, PayrollConnectionSpec Spec) Connectable(string providerKey)
+    {
+        var provider = providers.Get(providerKey);
+        return provider.ConnectionSpec is { } spec
+            ? (provider, spec)
+            : throw new ArgumentException($"{provider.Name} doesn't connect with customer credentials here"
+                + (provider.Key == PaylocityPayrollProvider.ProviderKey ? ": its API credentials are server settings (Payroll:Paylocity:ClientId and ClientSecret)." : "."));
+    }
+
+    private async Task<PayrollConnectionDto> ConnectionDtoAsync(IWorkbenchDbContext db, IPayrollProvider provider, PayrollConnectionSpec spec, CancellationToken ct)
+    {
+        var row = await db.Set<PayrollProviderConnection>().AsNoTracking().FirstOrDefaultAsync(c => c.ProviderKey == provider.Key, ct);
+        Dictionary<string, string> values = [];
+        if (row is not null && connections is not null)
+        {
+            try
+            {
+                values = connections.Unprotect(row.ProtectedCredentials);
+            }
+            catch (PayrollProviderApiException)
+            {
+                // Unreadable on this server: shown as connected with nothing on file, so the customer re-enters it.
+            }
+        }
+
+        return new PayrollConnectionDto(provider.Key, provider.Name,
+            spec.Fields.Select(f => new PayrollConnectionFieldDto(f.Key, f.Label, f.IsSecret, f.Required, f.Multiline, f.Help, f.Placeholder)).ToList(),
+            spec.Environments, spec.SetupHelp, spec.DocsUrl, row is not null, row?.Environment, row?.Summary,
+            spec.Fields.Where(f => !f.IsSecret && values.ContainsKey(f.Key)).ToDictionary(f => f.Key, f => values[f.Key]),
+            spec.Fields.Where(f => f.IsSecret && values.ContainsKey(f.Key)).Select(f => f.Key).ToList(),
+            row?.ConnectedBy, row?.ConnectedAtUtc, row?.LastCheckedAtUtc, row?.LastCheckSucceeded, row?.LastCheckMessage);
+    }
+
+    private static string? Summary(PayrollConnectionSpec spec, IReadOnlyDictionary<string, string> values)
+    {
+        var id = spec.Fields.FirstOrDefault(f => !f.IsSecret && values.ContainsKey(f.Key));
+        if (id is null)
+        {
+            return null;
+        }
+
+        var value = values[id.Key];
+        return $"{id.Label} {(value.Length <= 8 ? value : value[..6] + "…")}";
+    }
 
     public async Task<PayrollProviderSettingsDto> GetSettingsAsync(string providerKey, CancellationToken cancellationToken = default)
     {
         var provider = providers.Get(providerKey);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var setting = await db.Set<PayrollProviderSetting>().AsNoTracking().FirstOrDefaultAsync(s => s.ProviderKey == provider.Key, cancellationToken);
-        return ToDto(provider.Key, setting);
+        return ToDto(provider, setting);
     }
 
     public async Task<PayrollProviderSettingsDto> SaveSettingsAsync(string providerKey, SavePayrollProviderSettingsRequest request, CancellationToken cancellationToken = default)
@@ -477,7 +676,7 @@ public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory,
         setting.UpdatedBy = audit.Actor;
         audit.Record(db, nameof(PayrollProviderSetting), setting.Id, "Updated", before, new { setting.EarningCodes, setting.ExportSalariedRegularHours });
         await db.SaveChangesAsync(cancellationToken);
-        return ToDto(provider.Key, setting);
+        return ToDto(provider, setting);
     }
 
     public async Task<EmployeeSyncResultDto> SyncEmployeesAsync(Guid payGroupId, bool dryRun, CancellationToken cancellationToken = default)
@@ -488,6 +687,13 @@ public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory,
         if (!provider.SupportsEmployeeSync)
         {
             throw new NotSupportedException($"{provider.Name} employee sync isn't supported yet (coming soon).");
+        }
+
+        if (!dryRun && !await provider.IsConnectedAsync(cancellationToken))
+        {
+            throw new ArgumentException(provider.ConnectionSpec is not null
+                ? $"{provider.Name} isn't connected. Connect it under Payroll › Providers first."
+                : $"The {provider.Name} API isn't configured. Set Payroll:Paylocity:ClientId and ClientSecret (from a vault or environment variables).");
         }
 
         var profiles = await db.Set<EmployeePayProfile>().Where(p => p.PayGroupId == group.Id).ToListAsync(cancellationToken);
@@ -525,7 +731,15 @@ public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory,
             return new EmployeeSyncResultDto(provider.Key, dryRun, items);
         }
 
-        var outcomes = await provider.SyncEmployeesAsync(group.CompanyCode, changes, cancellationToken);
+        IReadOnlyList<PayrollSyncOutcome> outcomes;
+        try
+        {
+            outcomes = await provider.SyncEmployeesAsync(group.CompanyCode, changes, cancellationToken);
+        }
+        catch (PayrollProviderApiException ex)
+        {
+            throw new ArgumentException(ex.Message);
+        }
         var now = clock.GetUtcNow().UtcDateTime;
         foreach (var outcome in outcomes.Where(o => o.Succeeded && o.Action == PayrollSyncAction.Create && o.ProviderEmployeeId is not null))
         {
@@ -551,6 +765,6 @@ public sealed class PayrollProviderService(IWorkbenchDbContextFactory dbFactory,
         return space <= 0 ? (trimmed, trimmed) : (trimmed[..space], trimmed[(space + 1)..]);
     }
 
-    private static PayrollProviderSettingsDto ToDto(string key, PayrollProviderSetting? s) =>
-        new(key, EarningCodes.Parse(s?.EarningCodes), s?.ExportSalariedRegularHours ?? false, s?.UpdatedAtUtc, s?.UpdatedBy);
+    private static PayrollProviderSettingsDto ToDto(IPayrollProvider provider, PayrollProviderSetting? s) =>
+        new(provider.Key, EarningCodes.Parse(s?.EarningCodes, provider.DefaultEarningCodes), s?.ExportSalariedRegularHours ?? false, s?.UpdatedAtUtc, s?.UpdatedBy);
 }

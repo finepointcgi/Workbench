@@ -1,0 +1,2 @@
+{ "uuid": "e-alex", "version": "ev7", "first_name": "Alex", "last_name": "Rivera",
+  "jobs": [ { "uuid": "j-alex", "primary": true, "current_compensation_uuid": "comp-a", "compensations": [ { "uuid": "comp-a", "rate": "50.00", "payment_unit": "Hour" } ] } ] }

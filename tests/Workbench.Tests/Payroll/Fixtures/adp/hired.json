@@ -1,0 +1,1 @@
+{ "events": [ { "data": { "output": { "worker": { "associateOID": "G3NEW", "workAssignments": [ { "payrollFileNumber": "003003", "itemID": "NEW1" } ] } } } } ] }
