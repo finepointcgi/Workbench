@@ -23,8 +23,12 @@ public sealed record PlanPersonDto(
     decimal? DirectCost,
     decimal? BurdenedCost,
     IReadOnlyList<AssignmentOverbookedWeekDto> Overbooked,
-    bool Changed = false)
+    bool Changed = false,
+    IReadOnlyList<AssignmentWeekDto>? Weeks = null)
 {
+    /// <summary>The hours in one week (Monday), 0 when none.</summary>
+    public decimal HoursIn(DateOnly weekStart) => Weeks?.FirstOrDefault(w => w.WeekStart == weekStart)?.Hours ?? 0m;
+
     /// <summary>What the viewer may see: burdened when they may see burden, else direct.</summary>
     public decimal? Cost => BurdenedCost ?? DirectCost;
 
