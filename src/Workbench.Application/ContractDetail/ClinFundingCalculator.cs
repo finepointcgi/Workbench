@@ -77,6 +77,7 @@ public sealed class ClinFundingCalculator(
 
         var level = !clin.IsActive() ? FundingLevel.NotActive
             : (clin.FundedValue > 0 && remaining <= 0) || (clin.FundedValue == 0 && cost.Incurred > 0) ? FundingLevel.Exhausted
+            : clin.FundedValue == 0 ? FundingLevel.Unfunded
             : clin.FundedValue > 0 && exposure / clin.FundedValue >= options.CriticalThreshold ? FundingLevel.Critical
             : clin.FundedValue > 0 && exposure / clin.FundedValue >= options.WarningThreshold ? FundingLevel.Warning
             : FundingLevel.Ok;
