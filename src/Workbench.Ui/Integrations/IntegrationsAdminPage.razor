@@ -8,7 +8,7 @@
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Integrations</MudText>
 <MudText Class="mud-text-secondary mb-4">
     Connect Workbench to other systems: send events to your own services (webhooks), give programs access to the API with
-    keys, and set up ready-made connections to Teams, Slack, QuickBooks and SFTP.
+    keys, and set up ready-made connections to Teams, Slack, QuickBooks, SFTP and GitLab.
 </MudText>
 
 @if (_me is null && _loading)
@@ -35,11 +35,14 @@ else
         <MudTabPanel Text="Connectors" Icon="@Icons.Material.Filled.Hub">
             <ConnectorsTab />
         </MudTabPanel>
+        <MudTabPanel Text="GitLab" Icon="@Icons.Material.Filled.AccountTree">
+            <Workbench.Ui.Integrations.GitLab.GitLabTab />
+        </MudTabPanel>
     </MudTabs>
 }
 
 @code {
-    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors"];
+    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "gitlab"];
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }

@@ -58,6 +58,8 @@
                 </tbody>
             </MudSimpleTable>
 
+            <Workbench.Ui.Integrations.GitLab.GitLabTaskLink SheetId="Sheet.Summary.Id" ItemId="item.Id" />
+
             @if (Sheet.Summary.SchedulingEnabled)
             {
                 <Workbench.Ui.Gantt.ItemDependencies SheetId="Sheet.Summary.Id" Item="item" Items="Items" Version="Version" />
