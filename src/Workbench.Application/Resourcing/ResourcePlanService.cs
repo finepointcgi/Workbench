@@ -675,7 +675,7 @@ public sealed class ResourcePlanService(
             var category = model.CategoryOf(b.LaborCategoryId, b.EmployeeId);
             return new PlanPersonDto(b.AssignmentId, b.EmployeeId, model.People.GetValueOrDefault(b.EmployeeId)?.DisplayName ?? "?",
                 category, category is { } c && model.Categories.TryGetValue(c, out var cat) ? ProjectStaffingService.Label(cat) : null,
-                b.From, b.To, b.Hours, Money.Round(direct), model.Multiplier is { } m ? Money.Round(direct * m) : null, over, b.Changed);
+                b.From, b.To, b.Hours, Money.Round(direct), model.Multiplier is { } m ? Money.Round(direct * m) : null, over, b.Changed, b.Weeks);
         }
 
         var people = bookings.Select(b => (Booking: b, Person: Person(b))).ToList();
