@@ -8,6 +8,7 @@ using Workbench.Web.Components;
 using Workbench.Web.Diagnostics;
 using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
+using Workbench.Web.Integrations;
 using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Supplier;
@@ -119,6 +120,7 @@ app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
+app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks for linked projects (docs/integrations/gitlab.md).
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddAdditionalAssemblies(typeof(Workbench.Ui.Routes).Assembly);

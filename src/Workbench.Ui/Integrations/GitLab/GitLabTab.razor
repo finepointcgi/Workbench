@@ -1,0 +1,221 @@
+@* Admin › Integrations › GitLab: the organization's GitLab server and token, a connection test, and who is who in GitLab.
+   Each project is linked on its own Setup tab. *@
+@inject IGitLabConnectionService GitLab
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Sync project plans with GitLab: tasks become issues, phases become epics (or milestones), and the people assigned follow
+    each other. Workbench owns the schedule (dates, WBS codes, hours, dependencies); GitLab owns open/closed and progress.
+    Time logged in GitLab doesn't go to timesheets. After connecting, link a project on its Setup tab.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_connection?.IsConfigured == true)
+    {
+        <MudAlert Severity="@(_connection.LastTestOk == false ? Severity.Error : Severity.Success)" Variant="Variant.Outlined" Class="mb-4" data-testid="gitlab-status">
+            @if (_connection.LastTestOk == false)
+            {
+                <b>Not working:</b> @_connection.LastTestMessage
+            }
+            else
+            {
+                <span>Connected to <b>@_connection.BaseUrl</b> as <b>@@@_connection.ConnectedAsUsername</b>@(_connection.ServerVersion is { } v ? $" (GitLab {v})" : "").</span>
+                <span> @Projects(_connection.LinkedProjects) linked. Last checked @IntegrationFormat.When(_connection.LastTestedAtUtc) UTC.</span>
+            }
+        </MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="gitlab-connection-form">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_connection?.IsConfigured == true ? "Connection" : "Connect GitLab")</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_baseUrl" Label="GitLab address" Placeholder="https://gitlab.com" Variant="Variant.Outlined" Required="true"
+                              HelperText="gitlab.com, or your own server such as https://gitlab.example.com" data-testid="gitlab-url" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_token" Label="Access token" InputType="InputType.Password" Variant="Variant.Outlined" autocomplete="off"
+                              HelperText="@TokenHelp" data-testid="gitlab-token" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="_showCa" Color="Color.Primary" Label="My GitLab server uses a certificate from our own certificate authority" data-testid="gitlab-ca-toggle" />
+                @if (_showCa)
+                {
+                    <MudTextField @bind-Value="_caPem" Label="Certificate authority (PEM)" Variant="Variant.Outlined" Lines="5" Class="mt-2"
+                                  Placeholder="-----BEGIN CERTIFICATE-----" HelperText="@(_connection?.CaSummary is { } ca ? $"Saved: {ca}" : "Paste your organization's root (and any intermediate) certificates. For air-gapped and internal servers.")"
+                                  Style="font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8rem;" data-testid="gitlab-ca" />
+                }
+            </MudItem>
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="_active" Color="Color.Primary" Label="Sync is on" />
+            </MudItem>
+        </MudGrid>
+
+        @if (_test is not null)
+        {
+            <MudAlert Severity="@(_test.Ok ? Severity.Success : Severity.Error)" Variant="Variant.Text" Class="mt-3" data-testid="gitlab-test-result">
+                <div>@_test.Message</div>
+                @if (_test.Hint is { } hint)
+                {
+                    <div class="mt-1"><b>What to do:</b> @hint</div>
+                }
+            </MudAlert>
+        }
+
+        <MudStack Row="true" Class="mt-3" Wrap="Wrap.Wrap" Spacing="2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.NetworkCheck" OnClick="TestAsync" Disabled="_busy" data-testid="gitlab-test">Test connection</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="_busy" data-testid="gitlab-save">Save</MudButton>
+            @if (_connection?.IsConfigured == true)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DisconnectAsync" Disabled="_busy" data-testid="gitlab-disconnect">Disconnect</MudButton>
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+            Create the token in GitLab under your avatar › Preferences › Access tokens (or a group or project access token) with the <code>api</code> scope.
+            A token with the Maintainer role can also add the webhooks that bring GitLab's changes in within seconds.
+        </MudText>
+    </MudPaper>
+
+    @if (_connection?.IsConfigured == true)
+    {
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">People in GitLab</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            Workbench matches people to GitLab users by email, or by a GitLab user name that matches their email and name. Match anyone it missed here.
+        </MudText>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="MatchAsync" Class="mb-2" data-testid="gitlab-match">Match a person</MudButton>
+        <MudTable T="GitLabUserMapDto" Items="_people" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="People matched to GitLab users" data-testid="gitlab-people">
+            <HeaderContent>
+                <MudTh>Person</MudTh>
+                <MudTh>GitLab user</MudTh>
+                <MudTh>Matched by</MudTh>
+                <MudTh><span class="wb-sr-only">Actions</span></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Person">@(context.DisplayName ?? context.Email) <span class="mud-text-secondary">@context.Email</span></MudTd>
+                <MudTd DataLabel="GitLab user">@@@context.GitLabUsername @(context.GitLabName is { } n ? $"({n})" : "")</MudTd>
+                <MudTd DataLabel="Matched by">@(context.MatchedBy switch { "email" => "Email", "username" => "User name", _ => "By hand" })</MudTd>
+                <MudTd><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => UnmatchAsync(context)" aria-label="@($"Unmatch {context.Email}")">Unmatch</MudButton></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>Nobody is matched yet. Matches are made as tasks sync.</MudText></NoRecordsContent>
+        </MudTable>
+    }
+}
+
+@code {
+    private GitLabConnectionDto? _connection;
+    private IReadOnlyList<GitLabUserMapDto> _people = [];
+    private GitLabTestResult? _test;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _baseUrl = "https://gitlab.com";
+    private string? _token;
+    private string? _caPem;
+    private bool _showCa;
+    private bool _active = true;
+
+    private string TokenHelp => _connection?.TokenHint is { } hint ? $"Saved token ends in …{hint}. Leave blank to keep it." : "A token with the api scope.";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _connection = await GitLab.GetAsync();
+            if (_connection.IsConfigured)
+            {
+                _baseUrl = _connection.BaseUrl;
+                _active = _connection.IsActive;
+                _showCa = _connection.HasCustomCa;
+                _caPem = _connection.CaCertificatePem;
+                _people = await GitLab.ListPeopleAsync();
+            }
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the GitLab connection: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private SaveGitLabConnectionRequest Request() => new(_baseUrl ?? "", _token, _showCa ? _caPem : null, _active);
+
+    private Task TestAsync() => RunAsync(async () => _test = await GitLab.TestAsync(Request()));
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        _connection = await GitLab.SaveAsync(Request());
+        _token = null;
+        _test = new GitLabTestResult(_connection.LastTestOk == true, _connection.LastTestMessage ?? "Saved.", null, null, null, null, null);
+        _people = await GitLab.ListPeopleAsync();
+        Snackbar.Add(_connection.LastTestOk == true ? "GitLab connected." : "Saved, but the connection test failed. See the message above.", _connection.LastTestOk == true ? Severity.Success : Severity.Warning);
+    });
+
+    private async Task DisconnectAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Disconnect GitLab?", "The token is deleted and nothing syncs any more. Issues in GitLab and tasks in Workbench stay as they are.",
+                yesText: "Disconnect", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await GitLab.DeleteAsync();
+            _connection = await GitLab.GetAsync();
+            _people = [];
+            _test = null;
+            _token = null;
+            Snackbar.Add("GitLab disconnected.", Severity.Success);
+        });
+    }
+
+    private async Task MatchAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<GitLabMatchPersonDialog>("Match a person to a GitLab user",
+            new DialogParameters<GitLabMatchPersonDialog> { { d => d.Search, q => GitLab.SearchUsersAsync(q) } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: MatchGitLabPersonRequest request })
+        {
+            await RunAsync(async () =>
+            {
+                var map = await GitLab.MatchPersonAsync(request);
+                _people = await GitLab.ListPeopleAsync();
+                Snackbar.Add($"{map.DisplayName ?? map.Email} is @{map.GitLabUsername} in GitLab.", Severity.Success);
+            });
+        }
+    }
+
+    private Task UnmatchAsync(GitLabUserMapDto map) => RunAsync(async () =>
+    {
+        await GitLab.UnmatchPersonAsync(map.Email);
+        _people = await GitLab.ListPeopleAsync();
+    });
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Projects(int n) => n == 1 ? "1 project" : $"{n} projects";
+}
