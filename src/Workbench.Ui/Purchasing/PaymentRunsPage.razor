@@ -40,7 +40,13 @@ else
                         <tr>
                             <td><MudCheckBox T="bool" Value="_selected.ContainsKey(d.Bill.Id)" aria-label="@($"Pay bill {d.Bill.Number}")" ValueChanged="@(v => Toggle(d, v))" Disabled="@(onHold || (d.Bill.IsForeignCurrency ? d.TransactionAvailable : d.Available) <= 0)" Dense="true" /></td>
                             <td><MudLink Href="@($"purchasing/bills/{d.Bill.Id}")">@d.Bill.Number</MudLink></td>
-                            <td>@d.Bill.VendorCode @(onHold ? "(on hold)" : "")</td>
+                            <td>
+                                @d.Bill.VendorCode @(onHold ? "(on hold)" : "")
+                                @if (d.VendorCredits > 0)
+                                {
+                                    <div class="mud-text-secondary" style="font-size:0.8rem" data-testid="vendor-credit">@PurchasingFormat.Amount(d.VendorCredits) open credit</div>
+                                }
+                            </td>
                             <td>@d.Bill.InvoiceNumber</td>
                             <td style="@(d.Bill.DueDate < DateOnly.FromDateTime(DateTime.Today) ? "color:var(--mud-palette-error)" : "")">@PurchasingFormat.Date(d.Bill.DueDate)</td>
                             <td style="text-align:right">
@@ -72,8 +78,15 @@ else
                     <MudSelectItem Value="PaymentKind.Ach">ACH</MudSelectItem>
                 </MudSelect>
                 <MudDatePicker @bind-Date="_paymentDate" Label="Payment date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:170px" />
+                <MudCheckBox T="bool" @bind-Value="_netCredits" Label="Take open vendor credits off" Dense="true" data-testid="net-credits" />
                 <MudSpacer />
-                <MudText>@_selected.Count bills · <b>@SelectedTotal</b></MudText>
+                <MudText>
+                    @_selected.Count bills · <b>@SelectedTotal</b>
+                    @if (_netCredits && CreditsToNet > 0)
+                    {
+                        <span data-testid="credits-to-net"> · credits @PurchasingFormat.Amount(-CreditsToNet) · to pay <b>@PurchasingFormat.Amount(DollarsSelected - CreditsToNet)</b></span>
+                    }
+                </MudText>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync" Disabled="@(_selected.Count == 0 || _paymentDate is null)" data-testid="create-run">Create payment run</MudButton>
             </MudStack>
         }
@@ -105,6 +118,15 @@ else
     private DateTime? _dueBy;
     private Guid? _vendorId;
     private PaymentKind _method = PaymentKind.Check;
+    private bool _netCredits = true;
+
+    private decimal DollarsSelected => _selected.Where(s => _due.FirstOrDefault(d => d.Bill.Id == s.Key) is { Bill.IsForeignCurrency: false }).Sum(s => s.Value);
+
+    /// <summary>What the run will take off: per vendor, its open credit up to what's selected of its dollar bills.</summary>
+    private decimal CreditsToNet => _selected
+        .Select(s => _due.FirstOrDefault(d => d.Bill.Id == s.Key) is { Bill.IsForeignCurrency: false } d ? (d.Bill.VendorId, d.VendorCredits, s.Value) : default)
+        .Where(x => x.VendorId != Guid.Empty)
+        .GroupBy(x => x.VendorId).Sum(g => Math.Min(g.First().VendorCredits, g.Sum(x => x.Value)));
     private DateTime? _paymentDate = DateTime.Today;
     private string? _error;
     private bool _forbidden;
@@ -155,7 +177,7 @@ else
         try
         {
             var run = await Payments.CreateRunAsync(new CreatePaymentRunRequest(DateOnly.FromDateTime(_paymentDate!.Value), _method,
-                _selected.Select(s => new PaymentRunItemRequest(s.Key, s.Value)).ToList()));
+                _selected.Select(s => new PaymentRunItemRequest(s.Key, s.Value)).ToList(), _netCredits));
             Snackbar.Add($"{run.Number} created; another Finance user approves it next.", Severity.Success);
             Navigation.NavigateTo($"purchasing/payments/{run.Id}");
         }

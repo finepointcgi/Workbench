@@ -69,6 +69,27 @@ public enum ApBillLineKind
 
     /// <summary>A subcontractor invoice against a <see cref="Subcontract"/>; also becomes an ODC on the subcontract's project.</summary>
     Subcontract,
+
+    /// <summary>
+    /// Retainage released from an earlier subcontract bill (<see cref="ApBillLine.ReleasesBillId"/>): moves the held amount
+    /// from AP retainage to accounts payable. The cost was recognized by the original bill, so no ODC.
+    /// </summary>
+    Retainage,
+}
+
+/// <summary>What an AP document is. Credit and debit memos reduce what's owed to the vendor; their lines reverse cost.</summary>
+public enum ApDocumentKind
+{
+    Bill,
+
+    /// <summary>A credit from the vendor (a return, overbilling, a rebate).</summary>
+    CreditMemo,
+
+    /// <summary>The company billing the vendor back (for example returned goods).</summary>
+    DebitMemo,
+
+    /// <summary>A payable for retainage released from subcontract bills.</summary>
+    RetainageRelease,
 }
 
 public enum ApLineStatus
@@ -135,7 +156,38 @@ public sealed class ApBill : Entity, Companies.ICompanyOwned
     /// <summary>What's owed now: the amount less retainage.</summary>
     public decimal Payable => Amount - RetainageAmount;
 
-    public decimal Balance => Payable - PaidAmount;
+    /// <summary>
+    /// What's left: for a bill, still to pay; for a credit or debit memo, credit not yet applied or refunded. Always shown
+    /// positive; <see cref="IsCredit"/> says which way it goes.
+    /// </summary>
+    public decimal Balance => Payable - PaidAmount - AppliedAmount;
+
+    // ---- Added by AP credits (additive) ----
+
+    public ApDocumentKind Kind { get; set; } = ApDocumentKind.Bill;
+
+    /// <summary>For a credit or debit memo: the bill it credits, when it's against a specific bill.</summary>
+    public Guid? CreditsBillId { get; set; }
+
+    /// <summary>
+    /// Credits applied: on a bill, credit memos taken against it; on a memo, what was applied to bills. A running total kept
+    /// with <see cref="ApCreditApplication"/> rows. On a memo, <see cref="PaidAmount"/> is what the vendor refunded.
+    /// </summary>
+    public decimal AppliedAmount { get; set; }
+
+    /// <summary>A debit memo created from a quality return to vendor (the quality module's <c>VendorDebitMemo</c>).</summary>
+    public Guid? QualityDebitMemoId { get; set; }
+
+    public string? VoidedBy { get; set; }
+    public DateTime? VoidedAtUtc { get; set; }
+
+    /// <summary>The date a posted document's reversals were dated (its own date when that period was open, else the void date).</summary>
+    public DateOnly? VoidReversalDate { get; set; }
+
+    public bool IsCredit => Kind is ApDocumentKind.CreditMemo or ApDocumentKind.DebitMemo;
+
+    /// <summary>The balance with its sign: what's owed to the vendor is positive, credit is negative.</summary>
+    public decimal SignedBalance => IsCredit ? -Balance : Balance;
 
     // ---- Added by multicurrency (additive). Amount, RetainageAmount and PaidAmount stay in the functional currency. ----
 
@@ -208,6 +260,77 @@ public sealed class ApBillLine : Entity
 
     /// <summary>Added by multicurrency: the line in the bill's currency (null on functional-currency bills); <see cref="Amount"/> is functional.</summary>
     public decimal? TransactionAmount { get; set; }
+
+    // ---- Added by AP credits (additive) ----
+
+    /// <summary>On a credit or debit memo: the original bill line this line credits (same charging, reversed).</summary>
+    public Guid? CreditsLineId { get; set; }
+
+    /// <summary>On a retainage release: the subcontract bill whose retainage is released.</summary>
+    public Guid? ReleasesBillId { get; set; }
+
+    /// <summary>Set when a posted document was voided: the offsetting ODC that took the line's cost back off the project.</summary>
+    public Guid? ReversalOdcEntryId { get; set; }
+}
+
+public enum ApCreditApplicationStatus
+{
+    /// <summary>Netted in an open payment run; applies when the run is paid.</summary>
+    Scheduled,
+
+    Applied,
+
+    /// <summary>Unapplied, or the payment run was cancelled.</summary>
+    Reversed,
+}
+
+/// <summary>
+/// A credit or debit memo taken against a bill of the same vendor. Both sides are accounts payable, so applying moves no
+/// money in the general ledger; it only settles the two documents against each other.
+/// </summary>
+public sealed class ApCreditApplication : Entity
+{
+    public Guid CreditId { get; set; }
+    public Guid BillId { get; set; }
+    public Guid VendorId { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly AppliedOn { get; set; }
+    public ApCreditApplicationStatus Status { get; set; } = ApCreditApplicationStatus.Applied;
+
+    /// <summary>The payment run that netted the credit, when it came from one.</summary>
+    public Guid? RunId { get; set; }
+
+    public required string AppliedBy { get; set; }
+    public DateTime AppliedAtUtc { get; set; }
+    public string? ReversedBy { get; set; }
+    public DateTime? ReversedAtUtc { get; set; }
+    public string? ReversalReason { get; set; }
+}
+
+public enum ApRefundStatus
+{
+    Received,
+    Void,
+}
+
+/// <summary>Money a vendor paid back against an open credit or debit memo (debit cash, credit accounts payable).</summary>
+public sealed class ApRefund : Entity
+{
+    public Guid CreditId { get; set; }
+    public Guid VendorId { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly ReceivedOn { get; set; }
+
+    /// <summary>The vendor's check number or the deposit reference.</summary>
+    public required string Reference { get; set; }
+
+    public ApRefundStatus Status { get; set; } = ApRefundStatus.Received;
+    public Guid? JournalEntryId { get; set; }
+    public required string RecordedBy { get; set; }
+    public DateTime RecordedAtUtc { get; set; }
+    public string? VoidReason { get; set; }
+    public string? VoidedBy { get; set; }
+    public DateTime? VoidedAtUtc { get; set; }
 }
 
 public enum PaymentMethod

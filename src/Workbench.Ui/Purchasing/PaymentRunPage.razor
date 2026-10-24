@@ -27,7 +27,7 @@ else
             <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="@(() => RunAsync(() => Payments.CancelRunAsync(run.Id), "Run cancelled."))">Cancel run</MudButton>
         }
     </PurchasingHeader>
-    <MudText Class="mud-text-secondary mb-3">Created by @run.CreatedBy@(run.ApprovedBy is null ? "; needs approval by another Finance user." : $"; approved by {run.ApprovedBy}.") Total @PurchasingFormat.Amount(run.Total).</MudText>
+    <MudText Class="mud-text-secondary mb-3">Created by @run.CreatedBy@(run.ApprovedBy is null ? "; needs approval by another Finance user." : $"; approved by {run.ApprovedBy}.") Total @PurchasingFormat.Amount(run.Total)@(run.CreditTotal > 0 ? $" after {PurchasingFormat.Amount(run.CreditTotal)} of vendor credits" : "").</MudText>
 
     <PaymentRunFilesPanel Run="run" Changed="ReloadAsync" />
 
@@ -94,6 +94,29 @@ else
             </tbody>
         </MudSimpleTable>
     </MudPaper>
+
+    @if (run.Credits is { Count: > 0 } credits)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="run-credits">
+            <MudText Typo="Typo.h6" Class="mb-1">Vendor credits netted</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">These come off the bills when the run is paid; cancelling the run gives them back. A bill the credits cover entirely gets no check.</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Vendor</th><th>Credit</th><th>Against bill</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var c in credits)
+                    {
+                        <tr>
+                            <td>@c.VendorCode</td>
+                            <td><MudLink Href="@($"purchasing/bills/{c.CreditId}")">@c.CreditNumber</MudLink> (@c.CreditInvoiceNumber)</td>
+                            <td><MudLink Href="@($"purchasing/bills/{c.BillId}")">@c.BillNumber</MudLink></td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(c.Amount)</td>
+                            <td>@(c.Status switch { CreditApplicationState.Scheduled => "Applies when paid", CreditApplicationState.Applied => $"Applied {PurchasingFormat.Date(c.AppliedOn)}", _ => "Released" })</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
 }
 
 @code {

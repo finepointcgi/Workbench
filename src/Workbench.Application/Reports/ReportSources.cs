@@ -407,10 +407,11 @@ public sealed class ApBillSource : ReportSource
         new("amount", "Amount", ReportColumnType.Money),
         new("retainage", "Retainage", ReportColumnType.Money),
         new("paid", "Paid", ReportColumnType.Money),
-        new("open_balance", "Open balance", ReportColumnType.Money, Description: "Posted bills: amount less payments."),
+        new("open_balance", "Open balance", ReportColumnType.Money, Description: "Posted bills: amount less retainage, payments and credits applied. Open credits are negative."),
         new("days_past_due", "Days past due", ReportColumnType.Number),
         new("description", "Description", ReportColumnType.Text),
         new("entered_by", "Entered by", ReportColumnType.Text),
+        new("kind", "Kind", ReportColumnType.Text, Description: "Bill, credit memo, debit memo or retainage release."),
     ];
 
     public override string? Unavailable(ReportAccessContext access) =>
@@ -434,9 +435,10 @@ public sealed class ApBillSource : ReportSource
         return Rows(loaded, b =>
         {
             var vendor = vendors.GetValueOrDefault(b.VendorId);
-            var open = b.Status == ApBillStatus.Posted ? b.Amount - b.PaidAmount : 0m;
-            return [b.Number, vendor?.Code, vendor?.Name, b.InvoiceNumber, b.InvoiceDate, b.DueDate, b.Status, b.Amount, b.RetainageAmount, b.PaidAmount, open,
-                open > 0 && today > b.DueDate ? today.DayNumber - b.DueDate.DayNumber : 0, b.Description, b.EnteredBy];
+            var open = b.Status == ApBillStatus.Posted ? b.SignedBalance : 0m;
+            var sign = b.IsCredit ? -1 : 1;
+            return [b.Number, vendor?.Code, vendor?.Name, b.InvoiceNumber, b.InvoiceDate, b.DueDate, b.Status, sign * b.Amount, sign * b.RetainageAmount, b.PaidAmount, open,
+                open > 0 && today > b.DueDate ? today.DayNumber - b.DueDate.DayNumber : 0, b.Description, b.EnteredBy, Purchasing.ApCredits.Label(b.Kind)];
         }, b => (Guid?)b.Id);
     }
 }

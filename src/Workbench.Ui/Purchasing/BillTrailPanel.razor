@@ -1,0 +1,172 @@
+@* A bill's or memo's full trail: related documents, credits applied, refunds, journal entries and history. *@
+@inject IApCreditService Credits
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_trail is { } t)
+{
+    @if (t.Related.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="bill-related">
+            <MudText Typo="Typo.h6" Class="mb-2">Related documents</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Document</th><th>What</th><th>Number</th><th>Date</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var d in t.Related)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"purchasing/bills/{d.Id}")">@d.Number</MudLink> · @PurchasingFormat.Label(d.Kind)</td>
+                            <td>@d.Relation</td><td>@d.InvoiceNumber</td><td>@PurchasingFormat.Date(d.Date)</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(d.Amount)</td><td><BillStatusChip Status="d.Status" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    @if (t.Applications.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="bill-credits">
+            <MudText Typo="Typo.h6" Class="mb-2">Credits</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Credit</th><th>Bill</th><th>Applied on</th><th>How</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var a in t.Applications)
+                    {
+                        <tr>
+                            <td><MudLink Href="@($"purchasing/bills/{a.CreditId}")">@a.CreditNumber</MudLink> (@a.CreditInvoiceNumber)</td>
+                            <td><MudLink Href="@($"purchasing/bills/{a.BillId}")">@a.BillNumber</MudLink> (@a.BillInvoiceNumber)</td>
+                            <td>@PurchasingFormat.Date(a.AppliedOn)</td>
+                            <td>@if (a.RunId is { } run) { <MudLink Href="@($"purchasing/payments/{run}")">Netted in @a.RunNumber</MudLink> } else { <span>Applied by @a.AppliedBy</span> }</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(a.Amount)</td>
+                            <td>@(a.Status switch { CreditApplicationState.Scheduled => "In an open run", CreditApplicationState.Reversed => $"Taken back{(a.ReversalReason is { } r ? $": {r}" : "")}", _ => "Applied" })</td>
+                            <td>
+                                @if (a.Status == CreditApplicationState.Applied)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => UnapplyAsync(a))" data-testid="unapply">Unapply</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    @if (t.Refunds.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="bill-refunds">
+            <MudText Typo="Typo.h6" Class="mb-2">Refunds</MudText>
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>Received</th><th>Reference</th><th style="text-align:right">Amount</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in t.Refunds)
+                    {
+                        <tr>
+                            <td>@PurchasingFormat.Date(r.ReceivedOn)</td><td>@r.Reference</td><td style="text-align:right">@PurchasingFormat.Amount(r.Amount)</td>
+                            <td>@(r.Status == RefundState.Void ? $"Void: {r.VoidReason}" : "Received")</td>
+                            <td>
+                                @if (r.Status == RefundState.Received)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => VoidRefundAsync(r))">Void</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    <MudExpansionPanels Outlined="true" Class="mb-3" data-testid="bill-trail">
+        <MudExpansionPanel Text="@($"Trail: {t.JournalEntries.Count} journal entr{(t.JournalEntries.Count == 1 ? "y" : "ies")}, {t.History.Count} event{(t.History.Count == 1 ? "" : "s")}")" Expanded="@(Bill.Bill.Status == BillState.Void)">
+            @if (t.JournalEntries.Count > 0)
+            {
+                <MudSimpleTable Dense="true" Elevation="0" Class="mb-3">
+                    <thead><tr><th>Entry</th><th>Date</th><th>What</th><th>Description</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in t.JournalEntries)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"accounting/journal/{e.Id}")">@e.Number</MudLink></td><td>@PurchasingFormat.Date(e.Date)</td><td>@e.What</td><td>@e.Description</td>
+                                <td style="text-align:right">@PurchasingFormat.Amount(e.Amount)</td><td>@e.Status</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th>When</th><th>Who</th><th>What</th><th>Reason</th></tr></thead>
+                <tbody>
+                    @foreach (var h in t.History)
+                    {
+                        <tr><td style="white-space:nowrap">@h.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td><td>@h.Actor</td><td>@Words(h.Action)</td><td>@h.Reason</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter] public BillDto Bill { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private BillTrailDto? _trail;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _trail = await Credits.GetTrailAsync(Bill.Bill.Id);
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _trail = null;
+        }
+    }
+
+    /// <summary>"CreditApplied" → "Credit applied".</summary>
+    private static string Words(string action) =>
+        string.Concat(action.Select((c, i) => i > 0 && char.IsUpper(c) ? $" {char.ToLowerInvariant(c)}" : c.ToString()));
+
+    private async Task UnapplyAsync(CreditApplicationDto application)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, $"Take {application.CreditNumber} off {application.BillNumber}", "Unapply",
+                $"{PurchasingFormat.Amount(application.Amount)} goes back to being open credit, and the bill's balance goes up by the same.") is not { } reason)
+        {
+            return;
+        }
+
+        try
+        {
+            await Credits.UnapplyAsync(application.Id, new BillReasonRequest(reason));
+            Snackbar.Add("Credit taken back.", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task VoidRefundAsync(RefundDto refund)
+    {
+        if (await ReasonDialog.AskAsync(DialogService, $"Void refund {refund.Reference}", "Void", "The refund's entry is reversed and the credit is open again.", color: Color.Error) is not { } reason)
+        {
+            return;
+        }
+
+        try
+        {
+            await Credits.VoidRefundAsync(refund.Id, new BillReasonRequest(reason));
+            Snackbar.Add("Refund voided.", Severity.Success);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

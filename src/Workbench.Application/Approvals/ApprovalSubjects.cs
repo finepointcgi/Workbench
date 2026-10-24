@@ -47,7 +47,7 @@ public static class ApprovalSubjects
         var odcIds = bill.Lines.Where(l => l.OdcEntryId != null).Select(l => l.OdcEntryId!.Value).Distinct().ToList();
         var submitters = odcIds.Count == 0 ? [] : await db.Set<OdcEntry>().AsNoTracking().Where(o => odcIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.SubmittedBy, ct);
         var vendor = await db.Set<Vendor>().AsNoTracking().Where(v => v.Id == bill.VendorId).Select(v => v.Name).FirstOrDefaultAsync(ct);
-        return new ApprovalSubject(ApprovalDocumentTypes.ApBill, bill.Id, $"Bill {bill.Number}: {vendor} {bill.InvoiceNumber}", bill.EnteredBy, $"purchasing/bills/{bill.Id}",
+        return new ApprovalSubject(ApprovalDocumentTypes.ApBill, bill.Id, $"{Purchasing.ApCredits.Title(bill)}: {vendor} {bill.InvoiceNumber}", bill.EnteredBy, $"purchasing/bills/{bill.Id}",
             bill.Amount, bill.Description, Charges: bill.Lines.Select(l =>
             {
                 var account = l.Kind == ApBillLineKind.Account || l.ProjectId is null;

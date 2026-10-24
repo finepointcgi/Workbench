@@ -1,0 +1,88 @@
+@* "Credit this bill": picks the lines (and how much of each) a credit or debit memo takes back. The memo opens as a draft to submit. *@
+@inject IApCreditService Credits
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudRadioGroup T="BillKind" @bind-Value="_kind">
+                <MudRadio T="BillKind" Value="BillKind.CreditMemo" Color="Color.Primary">The vendor sent a credit</MudRadio>
+                <MudRadio T="BillKind" Value="BillKind.DebitMemo" Color="Color.Primary">We're billing the vendor back</MudRadio>
+            </MudRadioGroup>
+            <MudStack Row="true" Spacing="3" Wrap="Wrap.Wrap">
+                <MudTextField T="string" @bind-Value="_number" Label="@(_kind == BillKind.CreditMemo ? "Vendor's credit number" : "Reference")" MaxLength="64" Style="max-width:220px"
+                              HelperText="@(_kind == BillKind.CreditMemo ? $"Defaults to CR-{Bill.Bill.InvoiceNumber}" : "Defaults to our number")" data-testid="credit-number" />
+                <MudDatePicker @bind-Date="_date" Label="Credit date" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" Style="max-width:180px" />
+            </MudStack>
+            <MudTextField T="string" @bind-Value="_reason" Label="Why (returned goods, overbilling, rebate…)" MaxLength="500" data-testid="credit-reason" />
+            <MudSimpleTable Dense="true" Elevation="0">
+                <thead><tr><th></th><th>Line</th><th>Charged to</th><th style="text-align:right">Billed</th><th style="text-align:right">Credit</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td><MudCheckBox T="bool" @bind-Value="row.Selected" Dense="true" aria-label="@($"Credit line {row.Line.LineNumber}")" /></td>
+                            <td>@row.Line.LineNumber · @row.Line.Description</td>
+                            <td>@(row.Line.AccountNumber is { } a ? $"{a} {row.Line.AccountName}" : $"{row.Line.SubcontractNumber} {row.Line.ProjectCode} {row.Line.WbsCode}".Trim())</td>
+                            <td style="text-align:right">@PurchasingFormat.Amount(row.Line.Amount)</td>
+                            <td style="text-align:right; max-width:140px">
+                                <MudNumericField T="decimal" @bind-Value="row.Amount" Format="N2" Min="0" Max="row.Line.Amount" Margin="Margin.Dense" Disabled="!row.Selected"
+                                                 aria-label="@($"Credit amount for line {row.Line.LineNumber}")" data-testid="credit-amount" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudText Typo="Typo.body2">Credit total <b>@PurchasingFormat.Amount(_rows.Where(r => r.Selected).Sum(r => r.Amount))</b></MudText>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" data-testid="credit-error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitAsync" Disabled="@(_busy || !_rows.Any(r => r.Selected && r.Amount > 0))" data-testid="credit-create">Create draft memo</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public BillDto Bill { get; set; } = default!;
+
+    private sealed class Row(BillLineDto line)
+    {
+        public BillLineDto Line { get; } = line;
+        public bool Selected { get; set; } = true;
+        public decimal Amount { get; set; } = line.Amount;
+    }
+
+    private List<Row> _rows = [];
+    private BillKind _kind = BillKind.CreditMemo;
+    private string? _number;
+    private DateTime? _date = DateTime.Today;
+    private string? _reason;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized() => _rows = Bill.Lines.Where(l => l.Kind != BillLineKind.Retainage).Select(l => new Row(l)).ToList();
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var memo = await Credits.CreditBillAsync(Bill.Bill.Id, new CreditBillRequest(string.IsNullOrWhiteSpace(_number) ? null : _number, PurchasingFormat.ToDateOnly(_date), _reason,
+                _rows.Where(r => r.Selected && r.Amount > 0).Select(r => new CreditBillLineRequest(r.Line.Id, r.Amount)).ToList(), _kind));
+            MudDialog.Close(DialogResult.Ok(memo));
+        }
+        catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
+        {
+            _error = PurchasingFormat.Error(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

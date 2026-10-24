@@ -19,6 +19,7 @@
                             @if (l.ProjectId is { } p) { <MudLink Href="@($"projects/{p}/odcs")">@l.ProjectCode</MudLink> }
                             <span>@($" {l.WbsCode}{(l.OdcType is { } t ? $" · {t}" : "")}")</span>
                             @if (l.OdcEntryId is not null) { <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">ODC</MudChip> }
+                            @if (l.ReleasesBillId is { } released) { <span>· held on </span><MudLink Href="@($"purchasing/bills/{released}")">@l.ReleasesBillNumber</MudLink> }
                         </span>
                     }
                 </td>

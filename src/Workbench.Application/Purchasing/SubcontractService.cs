@@ -337,7 +337,7 @@ public sealed class SubcontractService(IWorkbenchDbContextFactory dbFactory, Aud
                 s.ProjectId, s.ProjectId is { } p ? projects.GetValueOrDefault(p) : null,
                 s.Pricing.ToContract(), s.Status.ToContract(), s.PeriodStart, s.PeriodEnd, s.CeilingValue, s.FundedValue, s.RetainagePercent,
                 b?.Billed ?? 0, b?.Retainage ?? 0, b?.Paid ?? 0,
-                flowDowns[s.Id].Count(f => f.IsIncluded), flowDowns[s.Id].Count());
+                flowDowns[s.Id].Count(f => f.IsIncluded), flowDowns[s.Id].Count(), b?.Released ?? 0);
         }).ToList();
     }
 }
