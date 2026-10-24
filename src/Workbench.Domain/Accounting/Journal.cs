@@ -33,6 +33,12 @@ public enum JournalSource
     Recurring,
     /// <summary>Period-end foreign currency revaluation (source id = the revaluation run); reversed on the next period's first day.</summary>
     Revaluation,
+
+    /// <summary>
+    /// Labor cost adjustments for a back-dated pay or cost rate change (source id = the <c>LaborCostAdjustment</c>); reversed
+    /// with the timesheet's own entries when it is reopened or re-approved.
+    /// </summary>
+    LaborAdjustment,
 }
 
 public enum JournalStatus

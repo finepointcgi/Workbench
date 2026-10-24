@@ -319,9 +319,14 @@ await notifications.PublishAsync(
 
 ## Payroll and leave (wave 6)
 
-- Workbench never calculates payroll taxes. `Application/Payroll/IPayrollProvider` adapters (Paylocity; ADP, Paychex and Gusto
-  are "coming soon" stubs that throw `NotSupportedException`) format the hours export and parse the provider's register.
-  The Paylocity file formats Workbench assumes are documented on `PaylocityFormats`; sample: `samples/payroll/paylocity-register-sample.csv`.
+- Workbench never calculates payroll taxes. `Application/Payroll/IPayrollProvider` adapters format the hours export and parse
+  the provider's register: Paylocity (API credentials are server settings), and ADP Workforce Now, Paychex Flex and Gusto
+  (`Application/Payroll/Providers`, base `ConnectedPayrollProvider`), which also send hours to the open payroll, read processed
+  payroll back and sync employees with the customer's own API credentials. Those are saved on the connect screen
+  (`/payroll/providers/{key}`) as `PayrollProviderConnection`, encrypted with Data Protection (`PayrollConnections`), never
+  returned, logged or audited. Each adapter's doc comment lists the API contract it assumes; tests replay recorded responses
+  (`tests/.../Payroll/Fixtures`) through `IPayrollHttpHandlerFactory`. The file formats are on `PaylocityFormats`,
+  `AdpFormats`, `PaychexFormats` and `GustoFormats`; sample: `samples/payroll/paylocity-register-sample.csv`.
 - Pay rates (`EmployeePayProfile`) are what employees are paid, not cost rates. Every payroll service is Finance/Admin; rates are
   masked except `IPayrollProfileService.RevealAsync` (security event `payroll.pay_rate_revealed`); audit rows never hold rates.
 - Payroll hours come from approved timesheets only; missing and unapproved timesheets are flagged. Overtime: non-exempt, over 40
@@ -331,8 +336,17 @@ await notifications.PublishAsync(
   per approved timesheet on the policy's charge code. Accrual (per pay period, idempotent by `SourceKey`) runs when payroll posts.
   Holidays aren't a balance. Seeds: `PayrollSeed.cs`, `LeaveSeed.cs`.
 - Pay rates are effective-dated and append-only (`EmployeePayRate`; the profile's rate fields mirror the latest row). Read the
-  rate for a date with `PayRates.HistoryAsync` + `InEffect`: runs use the rate in effect on the pay period's last day. A
-  profile without rows reads as one rate from the hire date (`PayRates.BackfillAsync` stores it).
+  rate for a date with `PayRates.HistoryAsync` + `InEffect`. A profile without rows reads as one rate from the hire date, or
+  the first day with time when that's earlier (`PayRates.BackfillAsync` and the `PayRateHistoryLaborAdjustments` migration
+  store it). The reconciliation explains each part of a period at the rate in effect for it (hours by work date, a salary
+  by working days).
+- Labor cost follows pay (`LaborRateChanges`): a pay rate change (payroll profile or an approved HR compensation change)
+  writes the matching `EmployeeCostRate` (hourly pay, or salary / 2,080) from the same date; a first profile only fills a gap,
+  so a cost rate imported from Costpoint isn't replaced. Everything that costs labor reads `EmployeeCostRate` on the work date.
+  A pay or cost rate dated before posted labor re-costs those timesheets (`PostingEngine.AdjustTimesheetLaborAsync`): the
+  difference posts as `JournalSource.LaborAdjustment` (source id = the `LaborCostAdjustment`) into the work date's period, or
+  the next open one when it's closed, audited as "Labor cost adjusted". Adjustments belong to the timesheet revision and are
+  reversed with its entries on reopen or re-approval; the journal refuses to reverse them by hand.
 - Leave requests go through the approval engine (document type `leave-request`, default = the timesheet rule). Voiding a
   posted payroll run reverses that period's accrual (`LeaveEngine.ReverseAccrualAsync`); an accrual key counts as done while
   its rows net above zero, so posting again accrues again. Policy eligibility (`LeaveEligibility`: org units with sub-units,
