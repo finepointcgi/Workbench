@@ -1,6 +1,7 @@
 @* Assigning people as a spreadsheet: one row per person × WBS element with their labor category, hours and dates. Type
    in the last row to add someone, Tab between cells, and paste rows copied from Excel (person, task, hours, from, to)
-   anywhere in the grid. Each row saves when a cell changes, with any problem shown on the row. Rows are the same
+   anywhere in the grid. "By week" swaps the hours and dates for a column per week: type each week's hours and the
+   assignment's total and dates follow the weeks. Each row saves when a cell changes, with any problem shown on the row. Rows are the same
    StaffingAssignments the Budget & staffing tab and timesheets use. On the Plan tab the page decides whether a change is
    made or tried (Submit); on its own the grid makes it. *@
 @using Microsoft.JSInterop
@@ -24,7 +25,24 @@
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary">Type in the last row to add someone · Tab moves between cells · paste rows from Excel anywhere here</MudText>
         }
+        <MudToggleGroup T="bool" Value="_byWeek" ValueChanged="SetByWeek" Size="Size.Small" Outlined="true" Delimiters="true" data-testid="assign-mode">
+            <MudToggleItem Value="false" Text="Total hours" />
+            <MudToggleItem Value="true" Text="By week" />
+        </MudToggleGroup>
     </MudStack>
+
+    @if (_byWeek)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1" data-testid="assign-weeks-nav">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" OnClick="() => ShiftWeeks(-WeekPage)" aria-label="Earlier weeks" data-testid="assign-weeks-earlier" />
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ToThisWeek">This week</MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" OnClick="() => ShiftWeeks(WeekPage)" aria-label="Later weeks" data-testid="assign-weeks-later" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Weeks of @Weeks[0].ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture) – @Weeks[^1].ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)
+                @(CanChange ? " · type each week's hours; the total and dates follow" : "")
+            </MudText>
+        </MudStack>
+    }
 
     @if (_error is not null)
     {
@@ -38,9 +56,20 @@
                     <th scope="col">Person</th>
                     <th scope="col">Task</th>
                     <th scope="col">Labor category</th>
-                    <th scope="col" class="wb-num">Hours</th>
-                    <th scope="col">From</th>
-                    <th scope="col">To</th>
+                    @if (_byWeek)
+                    {
+                        @foreach (var week in Weeks)
+                        {
+                            <th scope="col" class="wb-num wb-assign-weekhead" title="@($"Week of {week:MMM d, yyyy}")">@week.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture)</th>
+                        }
+                        <th scope="col" class="wb-num">Total</th>
+                    }
+                    else
+                    {
+                        <th scope="col" class="wb-num">Hours</th>
+                        <th scope="col">From</th>
+                        <th scope="col">To</th>
+                    }
                     @if (Plan?.ShowsCost == true)
                     {
                         <th scope="col" class="wb-num">Cost</th>
@@ -58,9 +87,20 @@
                             <td>@r.PersonText</td>
                             <td>@r.TaskLabel</td>
                             <td>@CategoryLabel(r.CategoryId)</td>
-                            <td class="wb-num">@(r.Hours is { } h ? PlanPeopleFormat.Hours(h) : "")</td>
-                            <td>@PlanPeopleFormat.Date(r.From)</td>
-                            <td>@PlanPeopleFormat.Date(r.To)</td>
+                            @if (_byWeek)
+                            {
+                                @foreach (var week in Weeks)
+                                {
+                                    <td class="wb-num @WeekClass(r, week)" title="@WeekTitle(r, week)">@WeekText(r, week)</td>
+                                }
+                                <td class="wb-num">@PlanPeopleFormat.Hours(r.WeekTotal)</td>
+                            }
+                            else
+                            {
+                                <td class="wb-num">@(r.Hours is { } h ? PlanPeopleFormat.Hours(h) : "")</td>
+                                <td>@PlanPeopleFormat.Date(r.From)</td>
+                                <td>@PlanPeopleFormat.Date(r.To)</td>
+                            }
                         }
                         else
                         {
@@ -93,17 +133,33 @@
                                     }
                                 </select>
                             </td>
-                            <td class="wb-num">
-                                <input class="wb-assign-input wb-num" type="number" min="0.25" step="0.25" value="@(r.Hours?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
-                                       aria-label="Hours in total" @onchange="e => SetHoursAsync(r, e.Value as string)" data-testid="assign-hours-cell" />
-                            </td>
-                            <td>
-                                <input class="wb-assign-input" type="date" value="@Iso(r.From)" aria-label="From" title="@(r.IsNew ? "Leave empty to use the task's dates" : null)"
-                                       @onchange="e => SetDateAsync(r, e.Value as string, from: true)" />
-                            </td>
-                            <td>
-                                <input class="wb-assign-input" type="date" value="@Iso(r.To)" aria-label="To" @onchange="e => SetDateAsync(r, e.Value as string, from: false)" />
-                            </td>
+                            @if (_byWeek)
+                            {
+                                @foreach (var week in Weeks)
+                                {
+                                    var w = week;
+                                    <td class="wb-num @WeekClass(r, w)" title="@WeekTitle(r, w)">
+                                        <input class="wb-assign-input wb-num wb-assign-week" type="number" min="0" max="168" step="0.25" value="@WeekText(r, w)"
+                                               aria-label="@($"{(r.PersonText.Length > 0 ? r.PersonText : "New person")}: hours the week of {w:MMM d}")"
+                                               @onchange="e => SetWeekAsync(r, w, e.Value as string)" data-testid="assign-week-cell" />
+                                    </td>
+                                }
+                                <td class="wb-num" data-testid="assign-week-total">@PlanPeopleFormat.Hours(r.WeekTotal)</td>
+                            }
+                            else
+                            {
+                                <td class="wb-num">
+                                    <input class="wb-assign-input wb-num" type="number" min="0.25" step="0.25" value="@(r.Hours?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
+                                           aria-label="Hours in total" @onchange="e => SetHoursAsync(r, e.Value as string)" data-testid="assign-hours-cell" />
+                                </td>
+                                <td>
+                                    <input class="wb-assign-input" type="date" value="@Iso(r.From)" aria-label="From" title="@(r.IsNew ? "Leave empty to use the task's dates" : null)"
+                                           @onchange="e => SetDateAsync(r, e.Value as string, from: true)" />
+                                </td>
+                                <td>
+                                    <input class="wb-assign-input" type="date" value="@Iso(r.To)" aria-label="To" @onchange="e => SetDateAsync(r, e.Value as string, from: false)" />
+                                </td>
+                            }
                         }
                         @if (Plan?.ShowsCost == true)
                         {
@@ -137,13 +193,13 @@
                     @if (r.Error is not null)
                     {
                         <tr class="wb-assign-note">
-                            <td colspan="9" class="wb-assign-error" role="alert">@r.Error</td>
+                            <td colspan="@ColumnCount" class="wb-assign-error" role="alert">@r.Error</td>
                         </tr>
                     }
                     @if (r.Fixes is { } fixes)
                     {
                         <tr class="wb-assign-note">
-                            <td colspan="9" data-testid="assign-fixes">
+                            <td colspan="@ColumnCount" data-testid="assign-fixes">
                                 @if (fixes.Count == 0)
                                 {
                                     <span class="mud-text-secondary">No quick fix fits within a year: lower their hours or give them to someone else.</span>
@@ -240,7 +296,15 @@
         public bool Busy { get; set; }
         public bool IsNew => AssignmentId is null && Source is null;
         public IReadOnlyList<OverbookingFixDto>? Fixes { get; set; }
+
+        /// <summary>Hours by week (Monday) as shown in "By week"; edits land here before they're saved.</summary>
+        public Dictionary<DateOnly, decimal> Weeks { get; set; } = [];
+
+        public decimal WeekTotal => Weeks.Values.Sum();
     }
+
+    /// <summary>Weeks shown at once in "By week", and how far the arrows move.</summary>
+    private const int WeekCount = 12, WeekPage = 4;
 
     private readonly string GridId = $"wb-assign-{Guid.NewGuid():N}";
     private ResourcePlanDto? _loaded;
@@ -252,6 +316,8 @@
     private object? _builtFrom;
     private string? _error;
     private bool _busy;
+    private bool _byWeek;
+    private DateOnly? _firstWeek;
     private ElementReference _container;
     private IJSObjectReference? _module;
     private IJSObjectReference? _handle;
@@ -375,7 +441,119 @@
     {
         AssignmentId = p.AssignmentId, Source = p, EmployeeId = p.EmployeeId, PersonText = p.Name, WbsElementId = wbs, OriginalWbsElementId = wbs, TaskLabel = label,
         TaskFixed = taskFixed, CategoryId = p.LaborCategoryId, Hours = p.Hours, From = p.From, To = p.To,
+        Weeks = (p.Weeks ?? []).Where(w => w.Hours != 0).GroupBy(w => w.WeekStart).ToDictionary(g => g.Key, g => g.Sum(w => w.Hours)),
     };
+
+    // ---- By week ----
+
+    private IReadOnlyList<DateOnly> Weeks => Enumerable.Range(0, WeekCount).Select(i => FirstWeek.AddDays(7 * i)).ToList();
+
+    /// <summary>The first week shown: picked with the arrows, else this week (or the plan's first week, when that's later).</summary>
+    private DateOnly FirstWeek => _firstWeek ?? DefaultFirstWeek();
+
+    private DateOnly DefaultFirstWeek()
+    {
+        var thisWeek = ResourcingFormat.ThisWeek;
+        var starts = _rows.Select(r => r.From).OfType<DateOnly>().ToList();
+        var earliest = starts.Count > 0 ? ResourcingFormat.WeekStart(starts.Min()) : thisWeek;
+        return earliest > thisWeek ? earliest : thisWeek;
+    }
+
+    private void SetByWeek(bool byWeek) => _byWeek = byWeek;
+
+    private void ShiftWeeks(int weeks) => _firstWeek = FirstWeek.AddDays(7 * weeks);
+
+    private void ToThisWeek() => _firstWeek = ResourcingFormat.ThisWeek;
+
+    private int ColumnCount => 4 + (_byWeek ? WeekCount + 1 : 3) + (Plan?.ShowsCost == true ? 1 : 0);
+
+    private static string? WeekText(Row r, DateOnly week) =>
+        r.Weeks.TryGetValue(week, out var h) && h != 0 ? h.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : null;
+
+    private static AssignmentOverbookedWeekDto? OverIn(Row r, DateOnly week) => r.Source?.Overbooked.FirstOrDefault(o => o.WeekStart == week);
+
+    private static string WeekClass(Row r, DateOnly week) => OverIn(r, week) is not null ? "wb-assign-weekover" : "";
+
+    private static string? WeekTitle(Row r, DateOnly week) =>
+        OverIn(r, week) is { } over ? $"{r.PersonText} is {PlanPeopleFormat.Overbooked(over)}" : null;
+
+    /// <summary>Sets one week's hours and saves the row's weeks: its total and dates become the weeks'.</summary>
+    private async Task SetWeekAsync(Row row, DateOnly week, string? value)
+    {
+        decimal hours = 0;
+        if (!string.IsNullOrWhiteSpace(value)
+            && (!decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out hours) || hours is < 0 or > 168))
+        {
+            row.Error = "A week's hours must be a number from 0 to 168.";
+            return;
+        }
+
+        if (hours == 0)
+        {
+            row.Weeks.Remove(week);
+        }
+        else
+        {
+            row.Weeks[week] = hours;
+        }
+
+        row.Error = null;
+        await CommitWeeksAsync(row);
+    }
+
+    private async Task CommitWeeksAsync(Row row)
+    {
+        if (!CanChange || row.Busy)
+        {
+            return;
+        }
+
+        if (row.EmployeeId is null)
+        {
+            row.Error = row.PersonText.Length == 0 ? "Pick a person first." : row.Error;
+            return;
+        }
+
+        var weeks = row.Weeks.Where(w => w.Value > 0).OrderBy(w => w.Key).Select(w => new AssignmentWeekDto(w.Key, w.Value)).ToList();
+        if (weeks.Count == 0)
+        {
+            row.Error = row.IsNew ? null : "Enter hours in at least one week, or take them off the task.";
+            return;
+        }
+
+        // The dates cover the weeks: keep a start or end day that's already in the first or last week, else the week's Monday or Friday.
+        var (first, last) = (weeks[0].WeekStart, weeks[^1].WeekStart);
+        var from = row.From is { } f && ResourcingFormat.WeekStart(f) == first ? f : first;
+        var to = row.To is { } t && ResourcingFormat.WeekStart(t) == last ? t : last.AddDays(4);
+        var total = weeks.Sum(w => w.Hours);
+        PlanChange change;
+        if (row.IsNew)
+        {
+            change = new PlanChange(PlanChangeKind.SetPerson, WbsElementId: row.WbsElementId, EmployeeId: row.EmployeeId, Hours: total,
+                LaborCategoryId: row.CategoryId, From: from, To: to, Weeks: weeks);
+        }
+        else if (row.AssignmentId is { } id)
+        {
+            change = new PlanChange(PlanChangeKind.SetPerson, AssignmentId: id, From: from, To: to, Weeks: weeks);
+        }
+        else
+        {
+            return;
+        }
+
+        row.Busy = true;
+        var error = await SendAsync([change]);
+        row.Busy = false;
+        row.Error = error;
+        if (error is null)
+        {
+            (row.Hours, row.From, row.To) = (total, from, to);
+            if (row.IsNew)
+            {
+                _new = new Row { WbsElementId = FilterWbsElementId };
+            }
+        }
+    }
 
     // ---- Editing ----
 
@@ -463,6 +641,12 @@
     /// <summary>Saves (or tries) the row once it has a person and hours.</summary>
     private async Task CommitAsync(Row row)
     {
+        if (_byWeek && row.IsNew)
+        {
+            await CommitWeeksAsync(row);
+            return;
+        }
+
         if (!CanChange || row.EmployeeId is null || row.Hours is not > 0 || row.Busy)
         {
             return;

@@ -61,6 +61,33 @@ public sealed class ResourcePlanTests
     }
 
     [Fact]
+    public async Task People_can_be_planned_week_by_week_and_the_total_dates_and_cost_follow_the_weeks()
+    {
+        await using var host = await CreateAsync();
+        var build = await ItemAsync(host, "Build");
+        var plans = host.As(Pm).Get<IResourcePlanService>();
+        var nov2 = new DateOnly(2026, 11, 2);
+
+        // 40 h the week of Oct 19, none the next, 20 h the week of Nov 2 (as the grid's "By week" sends them).
+        await plans.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, WbsElementId: host.Build, EmployeeId: host.DevId, Hours: 60m,
+            From: Oct19, To: Nov6, Weeks: [new(Oct19, 40m), new(nov2, 20m)])]);
+
+        var dana = (await plans.GetAsync(host.Project1)).Task(build)!.People.Single();
+        Assert.Equal((60m, Oct19, Nov6), (dana.Hours, dana.From, dana.To));
+        Assert.Equal((40m, 0m, 20m), (dana.HoursIn(Oct19), dana.HoursIn(Oct26), dana.HoursIn(nov2)));
+
+        // Filling in the empty week keeps the others; the total follows, and each week costs at that week's rate ($60, then $70 from Nov 2).
+        await plans.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: dana.AssignmentId, From: Oct19, To: Nov6,
+            Weeks: [new(Oct19, 40m), new(Oct26, 16m), new(nov2, 20m)])]);
+
+        dana = (await plans.GetAsync(host.Project1)).Task(build)!.People.Single();
+        Assert.Equal((76m, 40m, 16m, 20m, 4760m), (dana.Hours, dana.HoursIn(Oct19), dana.HoursIn(Oct26), dana.HoursIn(nov2), dana.DirectCost));
+        var saved = Assert.Single((await host.Get<IStaffingAssignmentService>().ListAsync(host.Project1)).Assignments);
+        Assert.Equal(76m, saved.TotalHours);
+        Assert.Equal([(Oct19, 40m), (Oct26, 16m), (nov2, 20m)], saved.Weeks.Select(w => (w.WeekStart, w.Hours)));
+    }
+
+    [Fact]
     public async Task Cost_is_hours_at_the_cost_rate_in_each_week_plus_burden()
     {
         await using var host = await CreateAsync();
