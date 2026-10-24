@@ -159,6 +159,10 @@
     [Parameter]
     public EventCallback OnCancel { get; set; }
 
+    /// <summary>Starts from this contract (opened from a contract's page): "A contract" picked, its name and money filled in.</summary>
+    [Parameter]
+    public Guid? ContractId { get; set; }
+
     /// <summary>Called with the new project before the page moves to its plan.</summary>
     [Parameter]
     public EventCallback<ProjectDto> OnCreated { get; set; }
@@ -210,12 +214,25 @@
         {
             Snackbar.Add($"Couldn't load everything: {ex.Message}", Severity.Warning);
         }
+
+        if (ContractId is { } start && _contracts.Any(c => c.Id == start))
+        {
+            _from = ProjectStartFrom.Contract;
+            await ContractChangedAsync(start);
+        }
     }
 
     private async Task ContractChangedAsync(Guid? contractId)
     {
         _contractId = contractId;
         _terms = null;
+
+        // Most projects are named for their contract: suggest it until someone types a name.
+        if (string.IsNullOrWhiteSpace(_name) && _contracts.FirstOrDefault(c => c.Id == contractId) is { } picked)
+        {
+            _name = picked.Name;
+        }
+
         if (_finance && contractId is { } id && PlanTerms is { } plans)
         {
             try

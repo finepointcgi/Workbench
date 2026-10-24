@@ -118,7 +118,7 @@
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3" Style="max-width: 640px">
         @* Picking a code adds its row: no separate button. *@
-        <MudSelect T="Guid?" Value="_newCode" ValueChanged="AddRow" Label="Add a charge code" Dense="true" Variant="Variant.Outlined" data-testid="add-code">
+        <MudSelect T="Guid?" @key="_addPicks" Value="_newCode" ValueChanged="AddRow" Label="Add a charge code" Dense="true" Variant="Variant.Outlined" data-testid="add-code">
             @foreach (var option in AvailableCodes)
             {
                 <MudSelectItem T="Guid?" Value="option.ChargeCode.WbsElementId">
@@ -133,6 +133,9 @@
     private readonly List<Row> _rows = [];
     private TimesheetDetailDto? _loaded;
     private Guid? _newCode;
+
+    // A fresh picker after each pick: the picked code leaves the list, and the old picker would show its id.
+    private int _addPicks;
 
     [Parameter, EditorRequired] public TimesheetDetailDto Detail { get; set; } = default!;
 
@@ -414,6 +417,7 @@
         }
 
         _newCode = null;
+        _addPicks++;
     }
 
     /// <summary>Company holidays come pre-filled under the holiday's name; approved leave requests say "Approved ...".</summary>

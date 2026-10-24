@@ -23,6 +23,36 @@ public static class ClinFormat
         _ => "Cost",
     };
 
+    /// <summary>A new CLIN's pricing: the contract's type (a T&amp;M contract's CLINs are T&amp;M unless someone says otherwise).</summary>
+    public static ClinPricingKind PricingFor(Workbench.Contracts.ProjectAccounting.ContractKind kind) => kind switch
+    {
+        Workbench.Contracts.ProjectAccounting.ContractKind.FirmFixedPrice => ClinPricingKind.FirmFixedPrice,
+        Workbench.Contracts.ProjectAccounting.ContractKind.TimeAndMaterials => ClinPricingKind.TimeAndMaterials,
+        Workbench.Contracts.ProjectAccounting.ContractKind.LaborHour => ClinPricingKind.LaborHour,
+        Workbench.Contracts.ProjectAccounting.ContractKind.CostPlusAwardFee => ClinPricingKind.CostPlusAwardFee,
+        Workbench.Contracts.ProjectAccounting.ContractKind.CostPlusIncentiveFee => ClinPricingKind.CostPlusIncentiveFee,
+        _ => ClinPricingKind.CostPlusFixedFee,
+    };
+
+    /// <summary>The next CLIN number: one past the highest four-digit CLIN ("0001" for the first).</summary>
+    public static string NextNumber(IEnumerable<string> numbers)
+    {
+        var highest = numbers.Select(n => n.Trim()).Where(n => n.Length == 4 && n.All(char.IsAsciiDigit)).Select(n => int.Parse(n, CultureInfo.InvariantCulture)).DefaultIfEmpty(0).Max();
+        return highest >= 9999 ? "" : (highest + 1).ToString("D4", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The spelled-out pricing for pickers ("CPFF · Cost plus fixed fee"), not the code name.</summary>
+    public static string Name(ClinPricingKind pricing) => pricing switch
+    {
+        ClinPricingKind.FirmFixedPrice => "Firm fixed price",
+        ClinPricingKind.TimeAndMaterials => "Time and materials",
+        ClinPricingKind.LaborHour => "Labor hour",
+        ClinPricingKind.CostPlusFixedFee => "Cost plus fixed fee",
+        ClinPricingKind.CostPlusAwardFee => "Cost plus award fee",
+        ClinPricingKind.CostPlusIncentiveFee => "Cost plus incentive fee",
+        _ => "Cost, no fee",
+    };
+
     public static string Label(ModificationChangeKind kind) => kind switch
     {
         ModificationChangeKind.AddClin => "Add CLIN",

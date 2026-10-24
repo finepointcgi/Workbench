@@ -705,7 +705,14 @@ public sealed class PlanScheduleService(
             ScheduleEngine.Reflow(state.Items, state.Links, state.Calendar, state.RollupPercentId, state.Constraints);
         }
 
-        await PlanReflow.NumberAsync(db, await PlanReflow.ProjectForAsync(db, state.Sheet.Id, cancellationToken), state.Items, cancellationToken);
+        var project = await PlanReflow.ProjectForAsync(db, state.Sheet.Id, cancellationToken);
+        await PlanReflow.NumberAsync(db, project, state.Items, cancellationToken);
+
+        // On a project's plan the rows are the WBS: indenting or outdenting moves the charge codes too.
+        if (project is not null)
+        {
+            await PlanWbsSync.ApplyAsync(db, project, state.Items, cancellationToken);
+        }
 
         state.Sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);

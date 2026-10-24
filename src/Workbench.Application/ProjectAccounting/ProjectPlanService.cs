@@ -10,6 +10,7 @@ using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.ProjectAccounting;
+using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Resourcing;
 
@@ -94,7 +95,7 @@ public sealed class ProjectPlanService(
             var finance = await ApproverRoles.MembersAsync(db, ApprovalOrgRole.Finance.ToString(), cancellationToken);
             await notifications.PublishAsync(finance.Where(e => !string.Equals(e, audit.Actor, StringComparison.OrdinalIgnoreCase)), NotificationKind,
                 $"Review the plan for {project.Code} {project.Name}",
-                $"{audit.Actor} submitted it for approval." + (plan.SubmitNote is { } n ? $" \"{n}\"" : ""),
+                $"{await NameAsync(db, audit.Actor, cancellationToken)} submitted it for approval." + (plan.SubmitNote is { } n ? $" \"{n}\"" : ""),
                 Link(project.Id));
         }
 
@@ -297,8 +298,15 @@ public sealed class ProjectPlanService(
         return new ProjectPlanDto(project.Id, project.Code, project.Name, manager, loaded.Terms,
             (PlanApprovalStatus)(int)(plan?.Status ?? ProjectPlanStatus.Draft),
             plan?.SubmittedBy, plan?.SubmittedAtUtc, plan?.SubmitNote, plan?.ReviewedBy, plan?.ReviewedAtUtc, plan?.ReviewComment, plan?.Approvals ?? 0,
-            baseline?.Id, changed, since, CanEditTerms: false, CanSubmit: false, CanReview: false);
+            baseline?.Id, changed, since, CanEditTerms: false, CanSubmit: false, CanReview: false,
+            SubmittedByName: await NameAsync(db, plan?.SubmittedBy, ct), ReviewedByName: await NameAsync(db, plan?.ReviewedBy, ct));
     }
+
+    /// <summary>A person's name for a stored email (who submitted or reviewed); the email when there's no such user.</summary>
+    internal static async Task<string?> NameAsync(IWorkbenchDbContext db, string? email, CancellationToken ct) =>
+        string.IsNullOrWhiteSpace(email)
+            ? email
+            : await db.Set<AppUser>().AsNoTracking().Where(u => u.Email == email).Select(u => u.DisplayName).FirstOrDefaultAsync(ct) is { Length: > 0 } name ? name : email;
 
     private static async Task<Project> ProjectAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct) =>
         await db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, ct) ?? throw WorkbenchNotFoundException.For("Project", projectId);
@@ -407,7 +415,7 @@ public sealed class ProjectPlanTodoProvider : IMyTodoProvider
             foreach (var w in waiting.Where(w => !string.Equals(w.SubmittedBy, context.User.Email, StringComparison.OrdinalIgnoreCase)))
             {
                 items.Add(new MyTodoItem($"plan:{w.Id}:review", TodoCategories.Project, $"Review the plan for {w.Code} {w.Name}",
-                    $"{w.SubmittedBy} submitted it for approval.", TodoUrgency.ThisWeek, null, $"projects/{w.Id}/plan", "Review", Priority: 7));
+                    $"{await ProjectPlanService.NameAsync(db, w.SubmittedBy, cancellationToken)} submitted it for approval.", TodoUrgency.ThisWeek, null, $"projects/{w.Id}/plan", "Review", Priority: 7));
             }
         }
 

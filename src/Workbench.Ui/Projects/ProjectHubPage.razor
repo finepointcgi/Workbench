@@ -157,7 +157,7 @@ else
         "plan" => @<div>
             @* One WBS grid: its rows are the charge codes (made as they're added), with the money, approval, people, hours
                and cost around it, and "Try changes". *@
-            <Workbench.Ui.Plan.PlanPeoplePanel ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value">
+            <Workbench.Ui.Plan.PlanPeoplePanel ProjectId="ProjectId" SheetId="_hub!.Project.SheetId!.Value" Changed="ReloadAsync">
                 <Workbench.Ui.Pages.SheetPage SheetId="_hub!.Project.SheetId!.Value" Embedded="true" />
             </Workbench.Ui.Plan.PlanPeoplePanel>
         </div>,

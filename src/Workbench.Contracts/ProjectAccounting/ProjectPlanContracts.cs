@@ -134,7 +134,11 @@ public sealed record ProjectPlanDto(
     IReadOnlyList<PlanChangeLineDto> SinceBaseline,
     bool CanEditTerms,
     bool CanSubmit,
-    bool CanReview)
+    bool CanReview,
+
+    /// <summary>The names of who submitted and who reviewed it, for display (<see cref="SubmittedBy"/> and <see cref="ReviewedBy"/> are their emails).</summary>
+    string? SubmittedByName = null,
+    string? ReviewedByName = null)
 {
     public decimal HoursChange => SinceBaseline.Sum(l => l.HoursChange);
 
