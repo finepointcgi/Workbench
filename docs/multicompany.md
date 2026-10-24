@@ -16,7 +16,7 @@ outside world or the workforce's skills is shared.**
 | Company-owned (`CompanyId`) | Why |
 |---|---|
 | Journal entries and journal lines | The ledger. A line's company is the ledger it posts to; an entry can span companies (intercompany). |
-| Per-company period close (`CompanyPeriodClose`) | Subsidiaries close on their own schedule. A period closed for the tenant is closed for all. |
+| Per-company period close (`CompanyPeriodClose`) | Subsidiaries close on their own schedule. A period closed for the tenant is closed for all. A company closes when its own close checklist passes (its employees' and projects' time and ODCs, its unposted items and drafts, its trial balance), or by "close anyway" with a reason (audited). |
 | Contracts and projects | A contract is signed by one legal entity; its projects (and their cost) are that company's. |
 | AR invoices and receipts | Billed by, and paid to, the contract's company. A receipt pays one company's invoices. |
 | AP bills and payment runs | Owed and paid by one company. A payment run pays one company's bills. |
@@ -85,13 +85,32 @@ companies disagree about what they owe each other, or when balances with a compa
   company decorators (`Identity/CompanyPermissionDecorators.cs`, outermost) make records of other companies not found
   and drop them from lists for journal entries, contracts, projects, invoices, receipts, AP bills and payment runs,
   assets and bank accounts. The ledger reports (`AccountingReportService`) filter their sums by the same companies.
-- Charge codes and people aren't filtered: anyone may charge time to another company's project.
+- Charge codes and people aren't filtered by company: anyone may charge time to another company's project.
+
+### Company filters on pages
+
+People who work in two or more companies (they may use several and the switcher is on "All companies") get a
+**Company** filter on the Projects list (with a Company column), the report writer and dashboards. It defaults to all of
+their companies; everyone else sees nothing new.
+
+- **Projects list:** filters the rows (the list is already limited to the user's companies).
+- **Report writer:** `ReportDefinition.CompanyId` (saved with a saved report). Every source follows it: ledger lines by
+  their company, hours and ODCs by their project's, invoices, AP bills and projects by theirs, employees by their home
+  company. Without it the sources show the user's companies (they used to ignore companies). GL budget lines are
+  corporate and aren't filtered.
+- **Dashboards:** the choice is in the address (`?company=`), so a link keeps it; `IWidgetDataService.GetAsync(…,
+  companyId)` computes every widget inside it. A widget about another company's contract or plan sheet says so. KPIs
+  that aren't kept per company (utilization, open purchase orders, pipeline) say they cover all companies; open
+  receivables follow their contracts' company.
+- All three narrow the one company scope for the call (`CompanyScope.CheckFilterAsync` then `CompanyScope.Narrow`), so
+  the company decorators, project visibility and the ledger reports follow without a second filter. A company the user
+  can't use is not found.
 
 ## Not yet
 
 - Indirect pools carry a company, but the allocation run still allocates the tenant's pools (lines inherit their
   projects' companies, so burden applied across companies books intercompany balances).
 - Payroll registers post to the default company; Paylocity company codes per company are a follow-up.
-- Read models outside the services above (projects hub, report writer, dashboards, project financials) show every
-  company's records to people their role lets see them.
+- Project financials and standard reports outside the ledger show every company's records to people their role lets
+  see them (the projects hub, report writer and dashboards follow the company scope; see above).
 - Intercompany billing (one company invoicing another at a markup) and multicurrency translation.

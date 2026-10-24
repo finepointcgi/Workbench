@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
+using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
 using Workbench.Domain.Companies;
 using Workbench.Domain.Identity;
@@ -33,10 +34,62 @@ public sealed class CompanyScope(IWorkbenchDbContextFactory dbFactory, AccessCon
                 : Companies.Where(c => Accessible.Contains(c.Id) && c.IsActive).Select(c => c.Id).FirstOrDefault(Company.DefaultId));
     }
 
+    // A page's company filter (the report writer, a dashboard) for the call in progress: an AsyncLocal, so it flows into
+    // everything awaited inside Narrow's block and never into other calls on the same Blazor circuit.
+    private static readonly AsyncLocal<Guid?> Narrowed = new();
+
+    /// <summary>
+    /// Checks a page's company filter: null (no filter) stays null; a company the user can't see now (not theirs, or
+    /// outside the switcher's pick) is not found. Pass the result to <see cref="Narrow"/>.
+    /// </summary>
+    public async Task<Company?> CheckFilterAsync(Guid? companyId, CancellationToken ct = default)
+    {
+        if (companyId is not { } id)
+        {
+            return null;
+        }
+
+        var view = await GetAsync(ct);
+        if (view.Companies.FirstOrDefault(c => c.Id == id) is not { } company || view.Visible?.Contains(id) == false)
+        {
+            throw WorkbenchNotFoundException.For("Company", id);
+        }
+
+        return company;
+    }
+
+    /// <summary>
+    /// For the code inside the returned block, reads are limited to <paramref name="companyId"/> (checked with
+    /// <see cref="CheckFilterAsync"/>) as if it were picked in the switcher: every company decorator, project visibility
+    /// and the ledger reports follow it. Null changes nothing. Synchronous on purpose: an AsyncLocal set inside an async
+    /// method doesn't reach its caller.
+    /// </summary>
+    public static IDisposable Narrow(Guid? companyId)
+    {
+        var previous = Narrowed.Value;
+        if (companyId is not null)
+        {
+            Narrowed.Value = companyId;
+        }
+
+        return new Restore(previous);
+    }
+
+    private sealed class Restore(Guid? previous) : IDisposable
+    {
+        public void Dispose() => Narrowed.Value = previous;
+    }
+
     private bool Unrestricted =>
         !access.IsAuthenticated || access.IsSystemReader || (currentUser is SystemCurrentUser && access.Email == SystemCurrentUser.SystemEmail);
 
     public async Task<View> GetAsync(CancellationToken ct = default)
+    {
+        var view = await LoadAsync(ct);
+        return Narrowed.Value is { } narrowed && view.CanUse(narrowed) ? view with { Selected = narrowed } : view;
+    }
+
+    private async Task<View> LoadAsync(CancellationToken ct)
     {
         await using var db = await dbFactory.CreateAsync(ct);
         var companies = (await db.Set<Company>().AsNoTracking().ToListAsync(ct)).OrderBy(c => c.Code, StringComparer.Ordinal).ToList();

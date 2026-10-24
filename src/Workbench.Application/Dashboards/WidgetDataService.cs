@@ -26,14 +26,66 @@ public sealed class WidgetDataService(
     IFinancialAccessService financialAccess,
     TimeProvider clock,
     Contracts.Evm.IEvmService? evm = null,
-    Customization.HomeWidgetData? home = null) : IWidgetDataService
+    Customization.HomeWidgetData? home = null,
+    Companies.CompanyScope? companies = null) : IWidgetDataService
 {
-    public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default)
+    public Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, CancellationToken cancellationToken = default) =>
+        GetAsync(dashboardId, widgetId, null, cancellationToken);
+
+    /// <summary>
+    /// The widget's data within the dashboard's company choice: the company decorators, project visibility and the
+    /// ledger reports all follow it while the widget is computed (<see cref="Companies.CompanyScope.Narrow"/>).
+    /// </summary>
+    public async Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, Guid? companyId, CancellationToken cancellationToken = default)
     {
         var dashboard = await dashboards.GetAsync(dashboardId, cancellationToken);
         var widget = dashboard.Widgets.FirstOrDefault(w => w.Id == widgetId)
             ?? throw WorkbenchNotFoundException.For("Widget", widgetId);
+        var company = companies is null ? null : await companies.CheckFilterAsync(companyId, cancellationToken);
+        if (company is not null && await InAnotherCompanyAsync(widget, company.Id, cancellationToken) is { } elsewhere)
+        {
+            return Error(widget, widget.Config.SheetId, null, $"{elsewhere} isn't in {company.Code}. Pick \"All my companies\" or its company to see this widget.");
+        }
+
+        using var narrowed = Companies.CompanyScope.Narrow(company?.Id);
         return await ComputeAsync(widget, cancellationToken);
+    }
+
+    /// <summary>
+    /// The project (by its plan sheet) or contract a widget is about, when the viewer can see it but it belongs to another
+    /// company than <paramref name="companyId"/>; null otherwise (company-neutral widgets, sheets that aren't plans).
+    /// </summary>
+    private async Task<string?> InAnotherCompanyAsync(WidgetDto widget, Guid companyId, CancellationToken ct)
+    {
+        if (widget.Type == WidgetType.ContractFunding && widget.Config.ContractId is { } contractId)
+        {
+            var contract = await contracts.GetContractAsync(contractId, ct);
+            if (contract is null)
+            {
+                return null;
+            }
+
+            using (Companies.CompanyScope.Narrow(companyId))
+            {
+                return await contracts.GetContractAsync(contractId, ct) is null ? $"Contract {contract.ContractNumber}" : null;
+            }
+        }
+
+        if (Customization.HomeWidgetData.Handles(widget.Type) || widget.Type == WidgetType.RichText || widget.Config.SheetId is not { } sheetId)
+        {
+            return null;
+        }
+
+        var project = await projects.GetProjectForSheetAsync(sheetId, ct);
+        if (project is null)
+        {
+            return null;
+        }
+
+        using (Companies.CompanyScope.Narrow(companyId))
+        {
+            return await projects.GetProjectForSheetAsync(sheetId, ct) is null ? $"Project {project.Code}" : null;
+        }
     }
 
     public async Task<WidgetDataDto> ComputeAsync(WidgetDto widget, CancellationToken cancellationToken = default)

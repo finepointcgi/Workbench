@@ -71,6 +71,15 @@ Status: **M** = mitigated in the product, **P** = partly mitigated, **O** = the 
 | Denial of service | Many open circuits | Server circuit limits (defaults); operator capacity monitoring (`/health`, OTel metrics) | P / O |
 | Elevation | Long-lived hub connection after deactivation | Hub calls re-check permissions per call; **open hub connections aren't closed on deactivation** (they receive notifications until they disconnect) | P |
 
+### Record-level access (project accounting)
+
+| Threat | Example | Mitigation | Status |
+| --- | --- | --- | --- |
+| Info disclosure | An employee lists contracts (numbers, customers, funding, CLINs) of projects they aren't on | The contract decorator filters by project visibility: a contract with no visible project is left out of lists and not found (API 404); funding and CLINs need Finance, Admin or the managers of a project on it | M |
+| Info disclosure | Anyone asks for another employee's charge codes (`/employees/{id}/charge-codes`) to learn which projects they work on | Only the employee, their supervisor and holders of `time.view_all` (Timekeeper, Finance, Admin) get the list; others get 403, logged as `permission.denied` | M |
+| Tampering | A period is closed with unapproved time, unposted items or an unbalanced ledger | The close (tenant and per company) runs the close checklist; closing anyway needs `gl.close`, a reason, and leaves `ClosedAnyway` audit rows with the failing checks and a `period.closed_anyway` security event | M |
+| Info disclosure | A report or dashboard shows another company's records to someone limited to one | Report writer sources and dashboard widgets run inside the company scope (the user's companies, the switcher, or the page's company filter); a company the user can't use is not found | M |
+
 ### Desktop client (MAUI)
 
 | Threat | Example | Mitigation | Status |

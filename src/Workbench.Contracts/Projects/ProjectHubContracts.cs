@@ -57,7 +57,11 @@ public sealed record ProjectHubRowDto(
 
     /// <summary>Plan sheet tasks (leaves) that aren't Done; null without a plan sheet with a Status column, or when hidden.</summary>
     int? OpenItems,
-    ProjectMoneyDto? Money)
+    ProjectMoneyDto? Money,
+
+    /// <summary>The project's company and its code (multicompany: the Projects list's company filter and column).</summary>
+    Guid? CompanyId = null,
+    string? CompanyCode = null)
 {
     public bool IsMine => IsManager || ChargesTo;
 }

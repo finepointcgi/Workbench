@@ -202,7 +202,7 @@ public sealed class ProjectVisibilityTests
     }
 
     [Fact]
-    public async Task Charge_codes_still_follow_eligibility_and_someone_elses_list_shows_only_visible_projects()
+    public async Task Charge_codes_still_follow_eligibility_and_someone_elses_list_is_refused()
     {
         await using var seeded = await CreateAsync();
         var f = await SeedAsync(seeded);
@@ -218,7 +218,7 @@ public sealed class ProjectVisibilityTests
         Assert.Equal(["1001.01"], await CodesAsync(Editor, f.AnalystId)); // their own: exactly what they may charge
         Assert.Equal(["1001.01"], await CodesAsync(Owner, f.AnalystId)); // their supervisor
         Assert.Equal(["1001.01"], await CodesAsync(Timekeeper, f.AnalystId));
-        Assert.Empty(await CodesAsync(Outsider, f.AnalystId)); // can't use it to discover 1001
+        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => CodesAsync(Outsider, f.AnalystId)); // can't use it to discover 1001
         Assert.Empty(await CodesAsync(Outsider, f.OutsiderId)); // 2002.01 needs an assignment they don't have
     }
 

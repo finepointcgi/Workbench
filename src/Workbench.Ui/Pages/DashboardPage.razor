@@ -9,6 +9,8 @@
 @inject ISheetService SheetService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <PageTitle>@(_dashboard?.Summary.Name ?? "Dashboard") · Workbench</PageTitle>
 
@@ -31,6 +33,10 @@ else
             }
         </div>
         <MudSpacer />
+        @if (_companiesLoaded)
+        {
+            <Workbench.Ui.Companies.CompanyFilter Value="_companyId" ValueChanged="CompanyChanged" Context="_companies" TestId="dashboard-company" />
+        }
         @if (_editing)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddWidgetAsync" data-action="add-widget">Add widget</MudButton>
@@ -99,11 +105,18 @@ else
     [Parameter]
     public Guid DashboardId { get; set; }
 
+    /// <summary>The dashboard's company choice (multicompany): every widget shows that company's data; none = all the viewer's.</summary>
+    [SupplyParameterFromQuery(Name = "company")]
+    public Guid? CompanyId { get; set; }
+
     /// <summary>How long to wait after the last change to a sheet before recomputing its widgets.</summary>
     [Parameter]
     public TimeSpan LiveDebounce { get; set; } = TimeSpan.FromSeconds(1);
 
     private DashboardDto? _dashboard;
+    private Workbench.Contracts.Companies.CompanyContextDto? _companies;
+    private bool _companiesLoaded;
+    private Guid? _companyId; // The company widgets follow: CompanyId when it's one of the filter's choices.
     private readonly Dictionary<Guid, WidgetDataDto> _data = [];
     private IReadOnlyList<SheetSummary>? _sheets;
     private bool _editing;
@@ -115,6 +128,14 @@ else
         _data.Clear();
         _dashboard = null;
         _notFound = false;
+        if (!_companiesLoaded)
+        {
+            _companies = await Workbench.Ui.Companies.CompanyFilter.LoadAsync(Services);
+            _companiesLoaded = true;
+        }
+
+        // A company from the link that isn't one of the filter's choices now (the switcher moved, access changed) is ignored.
+        _companyId = Workbench.Ui.Companies.CompanyFilter.ShowsFor(_companies) && _companies!.Companies.Any(c => c.Id == CompanyId) ? CompanyId : null;
         await LoadDashboardAsync();
         await RefreshAllAsync();
     }
@@ -162,7 +183,7 @@ else
     {
         try
         {
-            _data[widget.Id] = await WidgetData.GetAsync(DashboardId, widget.Id, _cts.Token);
+            _data[widget.Id] = await WidgetData.GetAsync(DashboardId, widget.Id, _companyId, _cts.Token);
         }
         catch (WorkbenchNotFoundException)
         {
@@ -173,6 +194,10 @@ else
             _data[widget.Id] = new WidgetDataDto(widget.Id, widget.Type, widget.Config.SheetId, null, $"Couldn't load: {ex.Message}");
         }
     }
+
+    /// <summary>The choice lives in the address (?company=), so a link to the dashboard keeps it; the page reloads its widgets.</summary>
+    private void CompanyChanged(Guid? companyId) =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("company", companyId), replace: true);
 
     private async Task<SaveWidgetRequest?> ConfigureAsync(WidgetDto? widget)
     {

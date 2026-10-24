@@ -87,6 +87,41 @@ public sealed class ProjectVisibility(IWorkbenchDbContextFactory dbFactory, Acce
         return (await projects.Select(p => p.Id).ToListAsync(cancellationToken)).ToHashSet();
     }
 
+    /// <summary>
+    /// The contracts the user may see, or null for every contract: those with a project they can see. Someone who sees
+    /// every project (Finance, Admin, resource managers) sees every contract. A contract with no project yet is shown to
+    /// those who may create projects (<see cref="Permission.ProjectsCreate"/>), so a project manager can request the first
+    /// project on it; there's no project of anyone's to protect.
+    /// </summary>
+    public async Task<IReadOnlySet<Guid>?> VisibleContractIdsAsync(CancellationToken cancellationToken = default)
+    {
+        if (await VisibleProjectIdsAsync(cancellationToken) is not { } visible)
+        {
+            return null;
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var projectIds = visible.ToList();
+        var ids = (await db.Set<Project>().AsNoTracking()
+                .Where(p => p.ContractId != null && projectIds.Contains(p.Id))
+                .Select(p => p.ContractId!.Value).Distinct().ToListAsync(cancellationToken))
+            .ToHashSet();
+        if (access.IsAuthenticated && await access.HasAsync(Permission.ProjectsCreate, cancellationToken))
+        {
+            var withProjects = db.Set<Project>().Where(p => p.ContractId != null).Select(p => p.ContractId!.Value);
+            var contracts = db.Set<Domain.ProjectAccounting.Contract>().AsNoTracking().Where(c => !withProjects.Contains(c.Id));
+            if (companies is not null && await companies.VisibleCompanyIdsAsync(cancellationToken) is { } inCompanies)
+            {
+                var companyIds = inCompanies.ToList();
+                contracts = contracts.Where(c => companyIds.Contains(c.CompanyId));
+            }
+
+            ids.UnionWith(await contracts.Select(c => c.Id).ToListAsync(cancellationToken));
+        }
+
+        return ids;
+    }
+
     /// <summary>True when the user may see the project (false when it doesn't exist).</summary>
     public async Task<bool> CanSeeAsync(Guid projectId, CancellationToken cancellationToken = default)
     {

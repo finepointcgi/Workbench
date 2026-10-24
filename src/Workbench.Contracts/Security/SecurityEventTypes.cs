@@ -55,6 +55,7 @@ public static class SecurityEventTypes
     public const string ExportPricing = "export.pricing"; // Proposal cost volume workbooks (cost, indirect and bill rates).
 
     public const string PeriodStatusChanged = "period.status_changed";
+    public const string PeriodClosedAnyway = "period.closed_anyway"; // A period (or one company's period) closed with failing close checks, by override.
     public const string SettingChanged = "settings.changed";
     public const string SignInSettingsChanged = "settings.sso";
     public const string AssistantSettingsChanged = "settings.assistant"; // AI assistant turned on/off, connection, model, limits, notice accepted.

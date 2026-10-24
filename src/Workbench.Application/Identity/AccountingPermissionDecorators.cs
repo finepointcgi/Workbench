@@ -178,6 +178,12 @@ public sealed class PermissionCheckingPeriodCloseService(IPeriodCloseService inn
         await access.RequireAsync(Permission.GlClose, What, cancellationToken);
         return await inner.ReopenAsync(fiscalPeriodId, request, cancellationToken);
     }
+
+    public async Task<PeriodCloseChecklistDto> GetCompanyChecklistAsync(Guid fiscalPeriodId, Guid companyId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.GlClose, What, cancellationToken);
+        return await inner.GetCompanyChecklistAsync(fiscalPeriodId, companyId, cancellationToken);
+    }
 }
 
 public sealed class PermissionCheckingAccountingReportService(IAccountingReportService inner, AccessControl access) : IAccountingReportService
