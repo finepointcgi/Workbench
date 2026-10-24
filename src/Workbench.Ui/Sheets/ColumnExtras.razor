@@ -38,7 +38,7 @@
             </MudSelect>
         }
     }
-    else
+    else if (!ColumnValues.IsAutomatic(Type)) @* auto-numbers and system columns are filled in by Workbench *@
     {
         <MudSwitch T="bool" Value="State.UseFormula" ValueChanged="OnUseFormulaChanged" Color="Color.Primary" Label="Calculate with a formula" data-testid="use-formula" />
         @if (State.UseFormula)

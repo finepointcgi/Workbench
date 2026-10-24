@@ -88,7 +88,7 @@
     private Guid? _focusItemId;
 
     private IEnumerable<ColumnDto> DropdownColumns =>
-        Sheet.Columns.Where(c => c.Type == ColumnKind.Dropdown).OrderBy(c => c.Order);
+        Sheet.Columns.Where(c => c.Type is ColumnKind.Dropdown or ColumnKind.Symbol).OrderBy(c => c.Order); // symbols: lanes like Red / Yellow / Green
 
     private ColumnDto? PersonColumn =>
         Sheet.Columns.Where(c => c.Type == ColumnKind.Person).OrderBy(c => c.Order).FirstOrDefault();

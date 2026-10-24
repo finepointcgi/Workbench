@@ -455,3 +455,79 @@
 .wb-variance.wb-early {
     color: var(--mud-palette-success-darken, var(--mud-palette-success));
 }
+
+/* Newer column types: multi-select pills, links, symbols with labels, progress bars, float. */
+.wb-pill.wb-pill-small {
+    width: auto;
+    min-height: 20px;
+    margin-right: 4px;
+    padding: 0 6px;
+    font-size: 12px;
+}
+
+.wb-link {
+    color: var(--mud-palette-primary);
+    text-decoration: underline;
+}
+
+.wb-symbol {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.wb-symbol-glyph {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.wb-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.wb-progress-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--mud-palette-lines-default);
+    overflow: hidden;
+}
+
+.wb-progress-fill {
+    display: block;
+    height: 100%;
+    background: #127A3E;
+}
+
+.wb-progress-text {
+    min-width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.wb-critical {
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: #C62828;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* A cell colored by a formatting rule: its contents take the rule's text color (readable on the palette color), except pills,
+   which keep their own label colors. */
+td.wb-formatted ::deep .wb-link,
+td.wb-formatted ::deep .wb-symbol-glyph,
+td.wb-formatted ::deep .wb-progress-text,
+td.wb-formatted ::deep .mud-typography,
+td.wb-formatted ::deep .mud-text-secondary {
+    color: inherit !important;
+}
+
+td.wb-formatted ::deep .wb-progress-track {
+    background: rgba(255, 255, 255, 0.6);
+}

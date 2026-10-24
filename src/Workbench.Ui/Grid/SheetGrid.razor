@@ -80,6 +80,22 @@
             }
         </MudMenu>
     }
+    @if (RuleService is not null && (CanEdit || _rules.Rules.Count > 0))
+    {
+        <MudButton StartIcon="@Icons.Material.Filled.FormatColorFill" Size="Size.Small" Variant="Variant.Text" OnClick="FormatRulesDialogAsync" data-testid="grid-formatting"
+                   Color="@(_rules.Rules.Count > 0 ? Color.Primary : Color.Default)">Formatting@(_rules.Rules.Count > 0 ? $" ({_rules.Rules.Count})" : "")</MudButton>
+    }
+    @if (CanShowFloat)
+    {
+        <MudMenu Label="@(_view.CriticalOnly ? "Critical only" : "Float")" StartIcon="@Icons.Material.Filled.Timeline" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                 Variant="Variant.Text" Size="Size.Small" Dense="true" Color="@(_view.ShowFloat || _view.CriticalOnly ? Color.Primary : Color.Default)"
+                 AriaLabel="Float and critical path" data-testid="grid-float">
+            <MudMenuItem Icon="@(_view.ShowFloat ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)" OnClick="ToggleFloatColumns"
+                         data-testid="grid-float-columns">Show total and free float</MudMenuItem>
+            <MudMenuItem Icon="@(_view.CriticalOnly ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)" OnClick="ToggleCriticalOnly"
+                         data-testid="grid-critical-only">Critical tasks only</MudMenuItem>
+        </MudMenu>
+    }
     @if (CanEdit)
     {
         <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Disabled="!_history.CanUndo" OnClick="UndoAsync" data-testid="grid-undo"
@@ -107,9 +123,13 @@
         <MudSwitch T="bool" Value="_myTasks" ValueChanged="SetMyTasks" Color="Color.Primary" Size="Size.Small" Label="My tasks" data-testid="grid-my-tasks" />
     }
 </div>
-@if (_myTasks || _view.HasSort || _view.HasFilters || ViewChanged)
+@if (_myTasks || _view.HasSort || _view.HasFilters || ViewChanged || (_view.CriticalOnly && CanShowFloat))
 {
     <div class="wb-view-chips" data-testid="grid-view-summary">
+        @if (_view.CriticalOnly && CanShowFloat)
+        {
+            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Timeline" OnClose="_ => ToggleCriticalOnly()" data-testid="critical-chip">Critical tasks only</MudChip>
+        }
         @foreach (var sort in _view.Sort ?? [])
         {
             <MudChip T="string" Size="Size.Small" Icon="@(sort.Descending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
@@ -125,7 +145,7 @@
             {
                 @($"Showing {_rows.Count} {(_rows.Count == 1 ? "row" : "rows")} assigned to you (and their parents).")
             }
-            else if (_view.HasFilters)
+            else if (_view.HasFilters || (_view.CriticalOnly && CanShowFloat))
             {
                 @($"Showing {_rows.Count} of {Items.Count} rows.")
             }
@@ -207,14 +227,14 @@
                                         <MudMenuItem Icon="@(custom.IsRestricted ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
                                                      OnClick="() => EditColumnAsync(custom)">@(custom.IsRestricted ? "Lift restriction" : "Restrict to Finance and owners")</MudMenuItem>
                                     }
-                                    @if (custom.Type == ColumnKind.Dropdown)
+                                    @if (custom.Type is ColumnKind.Dropdown or ColumnKind.MultiSelect)
                                     {
                                         <MudMenuItem Icon="@Icons.Material.Filled.Palette" OnClick="() => EditColumnAsync(custom)">Edit labels and colors</MudMenuItem>
                                     }
                                     <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => DeleteColumnAsync(custom)">Delete column</MudMenuItem>
                                     <MudDivider />
                                 }
-                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors) && !column.IsBaseline)
+                                @if (column.Kind is not (GridColumnKind.Assignees or GridColumnKind.Duration or GridColumnKind.Predecessors) && !column.IsBaseline && !column.IsFloat)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Filled.ArrowUpward" OnClick="() => SortBy(column, false)" data-testid="sort-asc">Sort ascending</MudMenuItem>
                                     <MudMenuItem Icon="@Icons.Material.Filled.ArrowDownward" OnClick="() => SortBy(column, true)" data-testid="sort-desc">Sort descending</MudMenuItem>
@@ -252,7 +272,7 @@
             <Virtualize Items="_rows" ItemSize="RowHeight" OverscanCount="10" SpacerElement="tr" Context="row">
                 @{ var rowIndex = IndexOf(row); }
                 <tr class="@RowClass(row)" role="row" aria-rowindex="@(rowIndex + 2)" data-row="@rowIndex">
-                    <td class="wb-gutter wb-sticky" role="rowheader" aria-colindex="1">
+                    <td class="wb-gutter wb-sticky" role="rowheader" aria-colindex="1" title="@FormatReasons(row)">
                         <div class="wb-gutter-cell">
                         <span class="wb-rownum" title="@(_plan.ContainsKey(row.Item.Id) ? "Task ID (for Predecessors)" : null)">@RowNumber(row)</span>
                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="wb-row-menu" AriaLabel="Row actions">
@@ -285,9 +305,10 @@
                         var raw = Raw(row.Item, column);
                         var locked = IsRolledUp(row, column);
                         var inRange = InRange(rowIndex, colIndex);
-                        <td class="@CellClass(column, active, editing, locked, inRange)" data-col="@colIndex" role="gridcell"
+                        var cellStyle = CellStyle(row, column);
+                        <td class="@(CellClass(column, active, editing, locked, inRange) + (cellStyle?.Contains("background", StringComparison.Ordinal) == true ? " wb-formatted" : ""))" data-col="@colIndex" role="gridcell"
                             id="@(active ? ActiveCellId : null)" aria-colindex="@(colIndex + 2)" title="@(locked ? "Summary task: rolled up from its subtasks" : FormulaErrorText.Explain(raw))"
-                            aria-selected="@(active || inRange ? "true" : "false")" aria-readonly="@(!column.ReadOnly && !locked && CanEdit ? null : "true")"
+                            aria-selected="@(active || inRange ? "true" : "false")" aria-readonly="@(!column.ReadOnly && !locked && CanEdit ? null : "true")" style="@cellStyle"
                             @onclick="e => OnCellClickAsync(row, colIndex, e)" @ondblclick="() => OnCellDoubleClick(row, colIndex)">
                             @if (editing)
                             {
@@ -353,6 +374,48 @@
                             {
                                 var (varianceText, varianceCss, varianceTitle) = Variance(raw);
                                 <span class="@($"wb-variance {varianceCss}")" title="@varianceTitle" data-testid="finish-variance">@varianceText</span>
+                            }
+                            else if (column.IsFloat)
+                            {
+                                var (floatText, critical) = FloatText(raw, column);
+                                <span data-testid="float-cell">@floatText</span>
+                                @if (critical)
+                                {
+                                    <span class="wb-critical" data-testid="critical-mark">Critical</span>
+                                }
+                            }
+                            else if (column.ValueKind == ColumnKind.MultiSelect && column.Column is { } multi)
+                            {
+                                @foreach (var picked in ColumnValues.Selected(raw))
+                                {
+                                    <span class="wb-pill wb-pill-small" style="@PillStyle(multi.ColorOf(picked))" data-testid="multi-pill">@picked</span>
+                                }
+                            }
+                            else if (column.ValueKind == ColumnKind.Hyperlink)
+                            {
+                                @if (ColumnValues.Link(raw) is { } link)
+                                {
+                                    <a class="wb-link" href="@link.Url" target="_blank" rel="noopener noreferrer" title="@link.Url" @onclick:stopPropagation="true"
+                                       data-testid="link-cell">@link.Text</a>
+                                }
+                            }
+                            else if (column.ValueKind == ColumnKind.Symbol)
+                            {
+                                @if (SymbolOf(raw) is { } symbol)
+                                {
+                                    <span class="wb-symbol" data-testid="symbol-cell"><span class="wb-symbol-glyph" style="color:@symbol.Color.Background" aria-hidden="true">@symbol.Glyph</span>@symbol.Label</span>
+                                }
+                            }
+                            else if (column.ValueKind == ColumnKind.Progress)
+                            {
+                                @if (ColumnValues.Percent(raw) is { } percent)
+                                {
+                                    <span class="wb-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@ProgressWidth(raw).TrimEnd('%')"
+                                          aria-label="@column.Name" data-testid="progress-cell">
+                                        <span class="wb-progress-track"><span class="wb-progress-fill" style="width:@ProgressWidth(raw)"></span></span>
+                                        <span class="wb-progress-text">@CellFormat.Display(raw, ColumnKind.Progress)</span>
+                                    </span>
+                                }
                             }
                             else if (column.ValueKind == ColumnKind.LinkedRow)
                             {
@@ -507,6 +570,16 @@
             _ = RefreshComparisonAsync(); // the plan moved: the variance did too
         }
 
+        if (rowsChanged && (_view.ShowFloat || _view.CriticalOnly) && _viewsFor == SheetId)
+        {
+            _ = RefreshFloatAsync(); // and so did the float
+        }
+
+        if (rowsChanged)
+        {
+            RecomputeFormats();
+        }
+
         _mine = TaskView.MineWithAncestors(Tasks, Sheet, Items);
         _children = Items.ToLookup(i => i.ParentId);
         // A reload (our own save echoed back by live refresh, or someone else's change) keeps an open edit while its row is
@@ -537,6 +610,7 @@
             _viewsFor = SheetId;
             _history.Clear();
             await LoadBaselinesAsync();
+            await LoadRulesAsync();
             await LoadViewsAsync(openDefault: true);
         }
     }
@@ -636,7 +710,7 @@
     private void RebuildRows()
     {
         var rows = new List<GridRow>(Items.Count);
-        var visible = SheetViewEngine.Visible(Items, Sheet.Columns, _view);
+        var visible = SheetViewEngine.Visible(Items, Sheet.Columns, _view, CriticalOnly);
         var order = SheetViewEngine.Comparer(_view.Sort, Sheet.Columns);
         AddRows(null, 0);
         _rows = rows;
@@ -955,7 +1029,9 @@
 
         if (column.ReadOnly)
         {
-            Snackbar.Add($"{column.Name} is {(column.IsFormula ? "a formula" : "a lookup")} column and can't be edited.", Severity.Info);
+            Snackbar.Add(column.IsFloat || column.Column is { } auto && ColumnValues.IsAutomatic(auto.Type)
+                ? $"{column.Name} is filled in automatically."
+                : $"{column.Name} is {(column.IsFormula ? "a formula" : "a lookup")} column and can't be edited.", Severity.Info);
             return;
         }
 
@@ -976,8 +1052,15 @@
             return;
         }
 
+        // Enter, F2 or a double-click picks choices (or a link's address and text) in a dialog; typing goes straight into the cell.
+        if (initialText is null && column.ValueKind is ColumnKind.MultiSelect or ColumnKind.Hyperlink && column.Column is not null)
+        {
+            _ = EditInDialogAsync(row.Item, column);
+            return;
+        }
+
         var raw = Raw(row.Item, column);
-        var useInitial = initialText is not null && column.ValueKind is not (ColumnKind.Date or ColumnKind.Dropdown);
+        var useInitial = initialText is not null && column.ValueKind is not (ColumnKind.Date or ColumnKind.Dropdown or ColumnKind.Symbol);
         _editText = useInitial ? initialText! : CellFormat.EditText(raw, column.ValueKind);
         _editDate = CellFormat.ToDateTime(raw);
         _datePicker = null;
@@ -1015,7 +1098,7 @@
             return false;
         }
 
-        if (!CellFormat.TryNormalize(text, column.ValueKind, out var value, out var error))
+        if (!CellFormat.TryNormalize(text, column, out var value, out var error))
         {
             Snackbar.Add(error!, Severity.Warning);
             return false;
@@ -1187,12 +1270,19 @@
                                         <option value="@_editText">@_editText</option>
                                     }
                                 </select>,
+        ColumnKind.Symbol => @<select class="wb-editor" @ref="_editorRef" value="@_editText" @onchange="OnSelectChangedAsync" aria-label="@column.Name">
+                                  <option value=""></option>
+                                  @foreach (var option in ColumnValues.Choices(column.Column!))
+                                  {
+                                      <option value="@option">@(SymbolSets.Find(option) is { } symbol ? $"{symbol.Glyph} {symbol.Label}" : option)</option>
+                                  }
+                              </select>,
         ColumnKind.Date => @<MudDatePicker @ref="_datePicker" Date="_editDate" DateChanged="OnDatePickedAsync"
                                            PickerClosed="OnDatePickerClosed" PickerVariant="PickerVariant.Inline" ShowToolbar="false"
                                            Editable="true" DateFormat="MM/dd/yyyy" Margin="Margin.Dense"
                                            Underline="false" AutoClose="true" Class="wb-date-editor" />,
         _ => @<input class="wb-editor" @ref="_editorRef" type="@InputType(column.ValueKind)"
-                     inputmode="@(column.ValueKind is ColumnKind.Number or ColumnKind.Currency ? "decimal" : null)"
+                     inputmode="@(column.ValueKind is ColumnKind.Number or ColumnKind.Currency or ColumnKind.Progress ? "decimal" : null)"
                      value="@_editText" @oninput="EditorInputHandler()" aria-label="@column.Name" />,
     };
 
@@ -1560,6 +1650,7 @@
         GridColumnKind.Duration => _plan.TryGetValue(item.Id, out var t) && t.DurationDays is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
         GridColumnKind.Predecessors => _plan.TryGetValue(item.Id, out var t) && t.Predecessors.Length > 0 ? t.Predecessors : null,
         GridColumnKind.BaselineStart or GridColumnKind.BaselineFinish or GridColumnKind.FinishVariance => BaselineRaw(item, column),
+        GridColumnKind.TotalFloat or GridColumnKind.FreeFloat => FloatRaw(item, column),
         _ => CellFormat.GetRaw(item, column),
     };
 
@@ -1574,7 +1665,7 @@
     private static string CellClass(GridColumn column, bool active, bool editing, bool locked = false, bool inRange = false)
     {
         var css = column.Kind == GridColumnKind.Title ? "wb-cell wb-title wb-sticky" : "wb-cell";
-        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency || column.Kind == GridColumnKind.Duration)
+        if (column.ValueKind is ColumnKind.Number or ColumnKind.Currency || column.Kind is GridColumnKind.Duration or GridColumnKind.TotalFloat or GridColumnKind.FreeFloat)
         {
             css += " wb-num";
         }

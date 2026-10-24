@@ -6,7 +6,8 @@ using Workbench.Domain;
 
 namespace Workbench.Application.Sheets;
 
-public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvider clock, SheetCalculator? calculator = null) : IItemService
+public sealed class ItemService(
+    IWorkbenchDbContextFactory dbFactory, TimeProvider clock, SheetCalculator? calculator = null, Contracts.Collaboration.ICurrentUser? currentUser = null) : IItemService
 {
     private readonly SheetCalculator _calculator = calculator ?? new SheetCalculator(dbFactory, clock);
 
@@ -40,6 +41,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
 
     public async Task<ItemDto> CreateAsync(Guid sheetId, CreateItemRequest request, CancellationToken cancellationToken = default)
     {
+        using var author = SheetRowStamps.As(currentUser?.Email);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
         ValidateDates(request.Start, request.Finish);
 
@@ -79,6 +81,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
 
     public async Task<ItemDto> UpdateAsync(Guid sheetId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken = default)
     {
+        using var author = SheetRowStamps.As(currentUser?.Email);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
         ValidateDates(request.Start, request.Finish);
 
@@ -106,6 +109,7 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
 
     public async Task<ItemDto> MoveAsync(Guid sheetId, Guid itemId, MoveItemRequest request, CancellationToken cancellationToken = default)
     {
+        using var author = SheetRowStamps.As(currentUser?.Email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var items = await db.Items.Where(i => i.SheetId == sheetId).ToListAsync(cancellationToken);
         var item = items.FirstOrDefault(i => i.Id == itemId) ?? throw WorkbenchNotFoundException.For("Item", itemId);
@@ -184,6 +188,21 @@ public sealed class ItemService(IWorkbenchDbContextFactory dbFactory, TimeProvid
         var computedIds = columns.Where(c => c.Formula != null || c.Type == ColumnType.Lookup).Select(c => c.Id).ToHashSet();
         var stored = new Dictionary<string, string?>(
             (values ?? new Dictionary<string, string?>()).Where(kv => !(Guid.TryParse(kv.Key, out var id) && computedIds.Contains(id))));
+
+        // Auto-numbers and the system columns are Workbench's: whatever was sent, the row keeps what it has.
+        foreach (var automatic in columns.Where(c => ColumnValues.IsAutomatic(c.Type.ToContract())))
+        {
+            var key = automatic.Id.ToString();
+            foreach (var sent in stored.Keys.Where(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                stored.Remove(sent);
+            }
+
+            if (existing?.GetValueOrDefault(key) is { } kept)
+            {
+                stored[key] = kept;
+            }
+        }
 
         foreach (var link in columns.Where(c => c.Type == ColumnType.LinkedRow))
         {

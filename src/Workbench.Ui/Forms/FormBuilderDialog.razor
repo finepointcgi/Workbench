@@ -118,6 +118,7 @@
                 { Formula: not null } => "A formula: it's worked out, not asked.",
                 { Type: ColumnKind.Lookup } => "A lookup: it's worked out, not asked.",
                 { Type: ColumnKind.LinkedRow } => "Links to another sheet's rows, which people filling in a form can't see.",
+                { Type: var kind } when ColumnValues.IsAutomatic(kind) => "Filled in automatically.",
                 { IsEffectivelyRestricted: true } => "Restricted to Finance and owners.",
                 _ => null,
             };

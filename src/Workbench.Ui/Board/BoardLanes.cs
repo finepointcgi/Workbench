@@ -47,11 +47,11 @@ public static class BoardLanes
             .ToDictionary(g => g.Key, g => (IReadOnlyList<ItemDto>)g.ToList(), StringComparer.Ordinal);
 
         var values = new List<string> { string.Empty };
-        values.AddRange(column.Options.Where(o => !string.IsNullOrWhiteSpace(o)).Distinct(StringComparer.Ordinal));
+        values.AddRange(ColumnValues.Choices(column).Where(o => !string.IsNullOrWhiteSpace(o)).Distinct(StringComparer.Ordinal));
         values.AddRange(byValue.Keys.Where(k => !values.Contains(k, StringComparer.Ordinal)).Order(StringComparer.Ordinal));
 
         return values
-            .Select(v => new BoardLane(v, v.Length == 0 ? "Unassigned" : v, byValue.GetValueOrDefault(v) ?? []))
+            .Select(v => new BoardLane(v, v.Length == 0 ? "Unassigned" : column.Type == ColumnKind.Symbol ? SymbolSets.Find(v)?.Label ?? v : v, byValue.GetValueOrDefault(v) ?? []))
             .ToList();
     }
 
@@ -65,7 +65,20 @@ public static class BoardLanes
     /// <summary>A stable colour for a lane value: by option position, or Default for Unassigned / unknown values.</summary>
     public static Color ColorFor(ColumnDto column, string value)
     {
-        var index = column.Options.ToList().IndexOf(value);
+        // A symbol lane takes its symbol's own color (a Red lane is red), not a color by position.
+        if (column.Type == ColumnKind.Symbol)
+        {
+            return SymbolSets.Find(value)?.Color.Key switch
+            {
+                "red" => Color.Error,
+                "amber" or "orange" => Color.Warning,
+                "green" => Color.Success,
+                "blue" => Color.Info,
+                _ => Color.Default,
+            };
+        }
+
+        var index = ColumnValues.Choices(column).ToList().IndexOf(value);
         return index < 0 ? Color.Default : Palette[index % Palette.Length];
     }
 

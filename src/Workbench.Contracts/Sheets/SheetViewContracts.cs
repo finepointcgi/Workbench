@@ -25,6 +25,11 @@ public static class SheetFields
 
     /// <summary>Plan working days the finish has moved since the baseline (positive = later).</summary>
     public const string FinishVariance = "finish-variance";
+
+    /// <summary>Read-only float fields of a plan (working days), shown when a view turns on <see cref="SheetViewDefinition.ShowFloat"/>.</summary>
+    public const string TotalFloat = "total-float";
+
+    public const string FreeFloat = "free-float";
 }
 
 /// <summary>
@@ -32,13 +37,16 @@ public static class SheetFields
 /// every filter must match (AND), and a matching row keeps its parents for context. Equals and NotEquals take several
 /// values separated by new lines ("is any of" / "is none of"). <see cref="HiddenColumns"/> are field keys.
 /// <see cref="BaselineId"/>: on a scheduled sheet, compare to this saved baseline (adds the read-only Baseline start, Baseline
-/// finish and Finish variance columns).
+/// finish and Finish variance columns). <see cref="ShowFloat"/>: on a plan, add the read-only Total float and Free float columns;
+/// <see cref="CriticalOnly"/>: show only critical tasks (total float 0 or less) and their parents.
 /// </summary>
 public sealed record SheetViewDefinition(
     IReadOnlyList<ListSort>? Sort = null,
     IReadOnlyList<ListFilterCondition>? Filters = null,
     IReadOnlyList<string>? HiddenColumns = null,
-    Guid? BaselineId = null)
+    Guid? BaselineId = null,
+    bool ShowFloat = false,
+    bool CriticalOnly = false)
 {
     public static SheetViewDefinition Standard { get; } = new();
 
@@ -46,7 +54,7 @@ public sealed record SheetViewDefinition(
 
     public bool HasFilters => Filters is { Count: > 0 };
 
-    public bool IsStandard => !HasSort && !HasFilters && HiddenColumns is not { Count: > 0 } && BaselineId is null;
+    public bool IsStandard => !HasSort && !HasFilters && HiddenColumns is not { Count: > 0 } && BaselineId is null && !ShowFloat && !CriticalOnly;
 
     public bool IsHidden(string field) => HiddenColumns?.Contains(field) == true;
 }
