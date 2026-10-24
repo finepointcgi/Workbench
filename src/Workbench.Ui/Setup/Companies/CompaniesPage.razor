@@ -6,6 +6,7 @@
 @inject IIntercompanyService Intercompany
 @inject IChartOfAccountsService Chart
 @inject IFiscalCalendarService Calendar
+@inject IPeriodCloseService PeriodClose
 @inject ICurrentUserContext CurrentUser
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -372,12 +373,32 @@ else
 
     private async Task SetClosedAsync(CompanyPeriodDto period, bool close)
     {
+        // Closing runs the company's close checklist: failing checks can only be skipped on purpose ("close anyway").
+        IReadOnlyList<string> failing = [];
+        if (close)
+        {
+            try
+            {
+                var checklist = await PeriodClose.GetCompanyChecklistAsync(period.FiscalPeriodId, period.CompanyId);
+                failing = checklist.Checks.Where(c => !c.Passed).Select(c => $"{c.Title}: {c.Summary}").ToList();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+                return;
+            }
+        }
+
+        var anyway = failing.Count > 0;
         var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog>
         {
-            { d => d.Message, close ? $"Close {period.FiscalPeriodName} for {period.CompanyCode}? Postings into it will be refused." : $"Reopen {period.FiscalPeriodName} for {period.CompanyCode}?" },
-            { d => d.ConfirmText, close ? "Close period" : "Reopen period" },
+            { d => d.Message, anyway ? $"{period.FiscalPeriodName} for {period.CompanyCode} hasn't passed its close checklist. Closing it anyway refuses postings into it, and the skipped checks and your reason go into the audit trail."
+                : close ? $"Close {period.FiscalPeriodName} for {period.CompanyCode}? Its close checklist has passed; postings into it will be refused." : $"Reopen {period.FiscalPeriodName} for {period.CompanyCode}?" },
+            { d => d.ConfirmText, anyway ? "Close anyway" : close ? "Close period" : "Reopen period" },
+            { d => d.Warnings, anyway ? failing : null },
+            { d => d.ConfirmColor, anyway ? Color.Error : Color.Primary },
         };
-        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>(close ? "Close period" : "Reopen period", parameters,
+        var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>(anyway ? "Close anyway" : close ? "Close period" : "Reopen period", parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is not { Canceled: false, Data: string reason })
         {
@@ -386,7 +407,7 @@ else
 
         try
         {
-            await Companies.SetPeriodClosedAsync(period.CompanyId, period.FiscalPeriodId, new SetCompanyPeriodRequest(close, reason));
+            await Companies.SetPeriodClosedAsync(period.CompanyId, period.FiscalPeriodId, new SetCompanyPeriodRequest(close, reason, anyway));
             _companyPeriods = await Companies.ListPeriodsAsync(period.FiscalPeriodId);
             Snackbar.Add(close ? "Period closed." : "Period reopened.", Severity.Success);
         }

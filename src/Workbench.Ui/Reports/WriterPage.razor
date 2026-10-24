@@ -43,6 +43,7 @@ else
                     }
                 </MudSelect>
                 <MudTextField @bind-Value="_title" Label="Title" Placeholder="@(_source?.Name)" Style="min-width:220px" />
+                <Workbench.Ui.Companies.CompanyFilter @bind-Value="_companyId" Style="min-width:200px" TestId="writer-company" />
                 @if (_source?.DateField is not null)
                 {
                     <MudSelect T="ReportDateRange" @bind-Value="_range" Label="@($"{FieldLabel(_source.DateField)} range")" Style="min-width:180px" data-testid="writer-range">
@@ -179,6 +180,7 @@ else
     private string? _sortField;
     private bool _descending;
     private bool _details = true;
+    private Guid? _companyId; // Multicompany: the company the report shows; null = every company the user is working in.
 
     protected override async Task OnParametersSetAsync()
     {
@@ -216,7 +218,7 @@ else
 
         var visible = _source.Fields.Select(f => f.Key).ToHashSet();
         _title = d.Title;
-        (_range, _from, _to, _details) = (d.Range, ReportFormat.ToDateTime(d.From), ReportFormat.ToDateTime(d.To), d.ShowDetails);
+        (_range, _from, _to, _details, _companyId) = (d.Range, ReportFormat.ToDateTime(d.From), ReportFormat.ToDateTime(d.To), d.ShowDetails, d.CompanyId);
         _columns = d.Columns.Where(c => visible.Contains(c.Field)).ToList();
         _filters = (d.Filters ?? []).Where(f => visible.Contains(f.Field)).Select(f => new FilterRow { Field = f.Field, Operator = f.Operator, Value = f.Value }).ToList();
         _groups = (d.GroupBy ?? []).Where(visible.Contains).ToList();
@@ -273,7 +275,8 @@ else
         _range == ReportDateRange.Custom ? ReportFormat.ToDateOnly(_from) : null,
         _range == ReportDateRange.Custom ? ReportFormat.ToDateOnly(_to) : null,
         _details,
-        string.IsNullOrWhiteSpace(_title) ? null : _title.Trim());
+        string.IsNullOrWhiteSpace(_title) ? null : _title.Trim(),
+        _companyId);
 
     private async Task RunAsync()
     {

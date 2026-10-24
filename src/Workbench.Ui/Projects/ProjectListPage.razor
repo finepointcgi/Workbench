@@ -41,7 +41,7 @@ else
     }
     else
     {
-        <ConfigurableList T="ProjectHubRowDto" Definition="@(_list.ShowsMoney ? MoneyDefinition : PlainDefinition)" Items="Visible.ToList()" TestId="project-table"
+        <ConfigurableList T="ProjectHubRowDto" Definition="@Definition" Items="Visible.ToList()" TestId="project-table"
                           SearchLabel="Search by code, name, manager or contract" SearchTestId="project-search" AriaLabel="Projects" Elevation="0" Outlined="true"
                           RowClick="@(p => Navigation.NavigateTo($"projects/{p.Id}"))">
             <ToolBarContent>
@@ -52,6 +52,7 @@ else
                     <MudToggleItem Value="false" Text="All" />
                 </MudToggleGroup>
             }
+            <Workbench.Ui.Companies.CompanyFilter @bind-Value="_companyId" Context="_companies" Style="max-width: 220px" TestId="project-company-filter" />
             <MudSelect T="string" @bind-Value="_status" Label="Status" Dense="true" Style="max-width: 180px" data-testid="status-filter">
                 <MudSelectItem T="string" Value="@OpenStatus">Open (not closed)</MudSelectItem>
                 <MudSelectItem T="string" Value="@AnyStatus">Any status</MudSelectItem>
@@ -96,6 +97,9 @@ else
     private string? _error;
     private bool _mineOnly; // Finance sees every project by default; "Mine" narrows to what they manage or charge to.
     private string _status = OpenStatus;
+    private Guid? _companyId; // Multicompany: null = every company the user is working in.
+    private Workbench.Contracts.Companies.CompanyContextDto? _companies;
+    private bool _multicompany; // The company filter shows, so does the Company column.
     private bool _canCreate; // Finance, administrators and project managers (a project on a contract is then a request).
 
     private StatusLabels _labels = StatusLabels.Empty;
@@ -112,6 +116,8 @@ else
         {
         }
 
+        _companies = await Workbench.Ui.Companies.CompanyFilter.LoadAsync(Services);
+        _multicompany = Workbench.Ui.Companies.CompanyFilter.ShowsFor(_companies);
         await LoadAsync();
     }
 
@@ -131,9 +137,22 @@ else
 
     private IEnumerable<ProjectHubRowDto> Visible => (_list?.Projects ?? []).Where(Matches);
 
+    private ListDefinition<ProjectHubRowDto> Definition => (_list?.ShowsMoney, _multicompany) switch
+    {
+        (true, true) => MoneyWithCompany,
+        (true, false) => MoneyDefinition,
+        (_, true) => PlainWithCompany,
+        _ => PlainDefinition,
+    };
+
     private bool Matches(ProjectHubRowDto p)
     {
         if (_mineOnly && !p.IsMine)
+        {
+            return false;
+        }
+
+        if (_companyId is { } company && p.CompanyId != company)
         {
             return false;
         }
@@ -263,6 +282,24 @@ else
         StandardSort = [new ListSort("project")],
         Columns = [ProjectColumn(false), Manager, Contract, Status(true), Period(true), Mine],
     };
+
+    private static ListColumn<ProjectHubRowDto> Company => new() { Key = "company", Title = "Company", Value = p => p.CompanyCode, Display = p => p.CompanyCode ?? "—" };
+
+    /// <summary>The same lists with a Company column after Contract, for people working in several companies.</summary>
+    internal static readonly ListDefinition<ProjectHubRowDto> MoneyWithCompany = WithCompany(MoneyDefinition);
+
+    internal static readonly ListDefinition<ProjectHubRowDto> PlainWithCompany = WithCompany(PlainDefinition);
+
+    private static ListDefinition<ProjectHubRowDto> WithCompany(ListDefinition<ProjectHubRowDto> list)
+    {
+        var columns = list.Columns.ToList();
+        columns.Insert(columns.FindIndex(c => c.Key == "contract") + 1, Company);
+        return new ListDefinition<ProjectHubRowDto>
+        {
+            ListKey = list.ListKey, EntityType = list.EntityType, Title = list.Title, Id = list.Id, StandardSort = list.StandardSort,
+            StandardGroupBy = list.StandardGroupBy, Columns = columns,
+        };
+    }
 
     /// <summary>The quick start: code, name and where the plan comes from; it opens the new project's plan.</summary>
     private Task NewProjectAsync() =>

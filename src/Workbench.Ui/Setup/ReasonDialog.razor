@@ -6,13 +6,24 @@
             {
                 <MudText>@Message</MudText>
             }
+            @if (Warnings is { Count: > 0 })
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" data-testid="reason-warnings">
+                    <ul class="mb-0" style="padding-left:20px">
+                        @foreach (var w in Warnings)
+                        {
+                            <li>@w</li>
+                        }
+                    </ul>
+                </MudAlert>
+            }
             <MudTextField @bind-Value="_reason" Label="Reason" Required="true" RequiredError="A reason is required."
                           AutoFocus="true" Immediate="true" Lines="2" HelperText="Recorded in the audit log." />
         </MudStack>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_reason)"
+        <MudButton Color="ConfirmColor" Variant="Variant.Filled" Disabled="string.IsNullOrWhiteSpace(_reason)"
                    OnClick="() => MudDialog.Close(DialogResult.Ok(_reason!.Trim()))">@ConfirmText</MudButton>
     </DialogActions>
 </MudDialog>
@@ -26,6 +37,13 @@
 
     [Parameter]
     public string ConfirmText { get; set; } = "Save";
+
+    /// <summary>Shown above the reason, for example the checks a "close anyway" skips.</summary>
+    [Parameter]
+    public IReadOnlyList<string>? Warnings { get; set; }
+
+    [Parameter]
+    public Color ConfirmColor { get; set; } = Color.Primary;
 
     private string? _reason;
 }

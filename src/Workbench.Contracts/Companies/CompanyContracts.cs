@@ -54,7 +54,8 @@ public sealed record CompanyPeriodDto(
     DateTime? ChangedAtUtc,
     string? Reason);
 
-public sealed record SetCompanyPeriodRequest(bool Closed, string Reason);
+/// <param name="CloseAnyway">Close although the company's close checklist fails (reason required; audited).</param>
+public sealed record SetCompanyPeriodRequest(bool Closed, string Reason, bool CloseAnyway = false);
 
 public interface ICompanyService
 {

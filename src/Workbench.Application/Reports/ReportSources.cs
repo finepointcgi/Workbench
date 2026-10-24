@@ -115,6 +115,12 @@ public sealed class GlLineSource : ReportSource
                     join e in db.Set<JournalEntry>() on l.JournalEntryId equals e.Id
                     where e.Status != JournalStatus.Draft
                     select new { l, e };
+        if (access.VisibleCompanies is { } companies)
+        {
+            var companyIds = companies.ToList();
+            query = query.Where(x => companyIds.Contains(x.l.CompanyId)); // A line's company is the ledger it posts to.
+        }
+
         if (from is { } f)
         {
             query = query.Where(x => x.e.Date >= f);
@@ -185,6 +191,14 @@ public sealed class TimeEntrySource : ReportSource
         {
             var ids = visible.ToList();
             query = query.Where(x => ids.Contains(x.t.EmployeeId));
+        }
+
+        if (access.VisibleCompanies is { } companies)
+        {
+            // Hours belong to the company of the project they're charged to.
+            var companyIds = companies.ToList();
+            var wbsInCompanies = from w in db.Set<WbsElement>() join p in db.Set<Project>() on w.ProjectId equals p.Id where companyIds.Contains(p.CompanyId) select w.Id;
+            query = query.Where(x => wbsInCompanies.Contains(x.e.WbsElementId));
         }
 
         if (from is { } f)
@@ -302,6 +316,13 @@ public sealed class OdcSource : ReportSource
             query = query.Where(o => managed.Contains(o.ProjectId) || (me != null && o.EmployeeId == me) || o.SubmittedBy == email);
         }
 
+        if (access.VisibleCompanies is { } companies)
+        {
+            var companyIds = companies.ToList();
+            var projectsInCompanies = db.Set<Project>().Where(p => companyIds.Contains(p.CompanyId)).Select(p => p.Id);
+            query = query.Where(o => projectsInCompanies.Contains(o.ProjectId));
+        }
+
         if (from is { } f)
         {
             query = query.Where(o => o.IncurredOn >= f);
@@ -358,6 +379,12 @@ public sealed class InvoiceSource : ReportSource
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
         var query = db.Set<Invoice>().AsNoTracking();
+        if (access.VisibleCompanies is { } companies)
+        {
+            var companyIds = companies.ToList();
+            query = query.Where(i => companyIds.Contains(i.CompanyId));
+        }
+
         if (access.FinancialContracts is { } readable)
         {
             var ids = readable.ToList();
@@ -419,6 +446,12 @@ public sealed class ApBillSource : ReportSource
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
         var query = db.Set<ApBill>().AsNoTracking();
+        if (access.VisibleCompanies is { } companies)
+        {
+            var companyIds = companies.ToList();
+            query = query.Where(b => companyIds.Contains(b.CompanyId));
+        }
+
         if (from is { } f)
         {
             query = query.Where(b => b.InvoiceDate >= f);
@@ -476,7 +509,7 @@ public sealed class ProjectWbsSource : ReportSource
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
-        var projects = (await db.Set<Project>().AsNoTracking().OrderBy(p => p.Code).ToListAsync(ct)).Where(p => access.CanSeeProject(p.Id)).ToList();
+        var projects = (await db.Set<Project>().AsNoTracking().OrderBy(p => p.Code).ToListAsync(ct)).Where(p => access.CanSeeProject(p.Id) && access.InCompany(p.CompanyId)).ToList();
         var wbs = await db.Set<WbsElement>().AsNoTracking().ToListAsync(ct);
         var parents = wbs.Where(w => w.ParentId != null).Select(w => w.ParentId!.Value).ToHashSet();
         var contracts = await db.Set<Contract>().AsNoTracking().ToDictionaryAsync(c => c.Id, ct);
@@ -530,7 +563,14 @@ public sealed class EmployeeSource : ReportSource
 
     public override async Task<SourceRows> LoadAsync(IWorkbenchDbContext db, ReportAccessContext access, DateOnly? from, DateOnly? to, DateOnly today, CancellationToken ct)
     {
-        var loaded = await db.Set<Employee>().AsNoTracking().OrderBy(e => e.EmployeeNumber).Take(RowLimit + 1).ToListAsync(ct);
+        var employees = db.Set<Employee>().AsNoTracking();
+        if (access.VisibleCompanies is { } companies)
+        {
+            var companyIds = companies.ToList();
+            employees = employees.Where(e => companyIds.Contains(e.CompanyId)); // Their home company (the employer of record).
+        }
+
+        var loaded = await employees.OrderBy(e => e.EmployeeNumber).Take(RowLimit + 1).ToListAsync(ct);
         var lookups = await TimeLookups.LoadAsync(db, loaded.Select(e => e.Id), [], access.SeesLaborCost, ct);
         var names = loaded.ToDictionary(e => e.Id, e => e.DisplayName);
         return Rows(loaded, e =>

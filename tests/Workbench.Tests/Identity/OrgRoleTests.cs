@@ -52,9 +52,10 @@ public sealed class OrgRoleTests
             host.Get<IFiscalCalendarService>().SetPeriodStatusAsync(periodId, FiscalPeriodState.Closed, "Month end"));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IAuditLogService>().ListAsync());
 
-        // Setup data itself stays readable: timesheets and plans need it.
+        // Setup data itself stays readable: timesheets and plans need it. Contracts follow project visibility: W91-1 has no
+        // project anyone here is on, so it isn't listed (ContractAndChargeCodeAccessTests).
         Assert.NotEmpty(await people.ListEmployeesAsync());
-        Assert.NotEmpty(await contracts.ListContractsAsync());
+        Assert.Empty(await contracts.ListContractsAsync());
         Assert.NotEmpty(await host.Get<IFiscalCalendarService>().ListPeriodsAsync(2026));
     }
 

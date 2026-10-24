@@ -49,6 +49,19 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
 
     private async Task<KpiData> KpiAsync(KpiKind kind, CancellationToken ct)
     {
+        var kpi = await KpiForAllAsync(kind, ct);
+        // Multicompany, within one company: figures that aren't kept per company say they cover every company.
+        return kind is KpiKind.Utilization or KpiKind.OpenPurchaseOrders or KpiKind.Pipeline && await CompanyLimitedAsync(ct)
+            ? kpi with { Detail = $"{kpi.Detail} · all companies" }
+            : kpi;
+    }
+
+    /// <summary>True when the viewer works in some of several companies (their access, the switcher or a dashboard's choice).</summary>
+    private async Task<bool> CompanyLimitedAsync(CancellationToken ct) =>
+        services.GetService<Companies.CompanyScope>() is { } scope && await scope.GetAsync(ct) is { IsMulticompany: true, Visible: not null };
+
+    private async Task<KpiData> KpiForAllAsync(KpiKind kind, CancellationToken ct)
+    {
         var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
         switch (kind)
         {
@@ -93,7 +106,16 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
 
             case KpiKind.ArAging:
             {
-                var totals = (await services.GetRequiredService<IArReportService>().GetAgingAsync(today, ct)).Totals;
+                var aging = await services.GetRequiredService<IArReportService>().GetAgingAsync(today, ct);
+                var totals = aging.Totals;
+                if (await CompanyLimitedAsync(ct))
+                {
+                    // Receivables belong to their contract's company: add up the visible companies' contracts only.
+                    var visible = (await services.GetRequiredService<IContractService>().ListContractsAsync(ct)).Select(c => c.Id).ToHashSet();
+                    var rows = aging.Contracts.Where(r => r.ContractId is { } c && visible.Contains(c)).Select(r => r.Buckets).ToList();
+                    totals = new AgingBuckets(rows.Sum(b => b.Current), rows.Sum(b => b.Days1To30), rows.Sum(b => b.Days31To60), rows.Sum(b => b.Days61To90), rows.Sum(b => b.Over90));
+                }
+
                 var open = totals.Current + totals.Days1To30 + totals.Days31To60 + totals.Days61To90 + totals.Over90;
                 var over90 = open == 0 ? 0 : totals.Over90 / open;
                 return new KpiData(kind, "Open receivables", open, true, false, $"{over90.ToString("P0", Us)} more than 90 days past due", "billing/aging");

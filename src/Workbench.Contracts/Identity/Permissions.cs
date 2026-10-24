@@ -222,7 +222,7 @@ public static class PermissionCatalog
         new(Permission.SetupCurrencies, AreaSetup, "Manage currencies", "Currencies and exchange rates.", F),
         new(Permission.SetupCompanies, AreaSetup, "Manage companies", "Companies, intercompany accounts and company periods.", F),
 
-        new(Permission.TimeViewAll, AreaTime, "See everyone's time", "Everyone's timesheets, hours, daily entries, leave requests and utilization.", OrgRoles.Timekeeper | F),
+        new(Permission.TimeViewAll, AreaTime, "See everyone's time", "Everyone's timesheets, hours, daily entries, leave requests, utilization and charge codes.", OrgRoles.Timekeeper | F),
         new(Permission.TimeTeam, AreaTime, "Team time for everyone", "The Team time page and timesheet approvals list for the whole organization.", OrgRoles.Timekeeper),
         new(Permission.LaborCostView, AreaFields, "See cost rates and labor cost", "Employee cost rates, labor cost in reports and the labor distribution.", F, Sensitive: true),
         new(Permission.LaborCostRatesManage, AreaTime, "Change cost rates", "Add employee cost rates.", F, Sensitive: true),
@@ -242,7 +242,7 @@ public static class PermissionCatalog
         new(Permission.GlAccountsManage, AreaAccounting, "Manage the chart of accounts", "Add and change general ledger accounts.", F),
         new(Permission.GlJournalsPost, AreaAccounting, "Post journal entries", "Draft, post and reverse manual journal entries.", F),
         new(Permission.GlPostingManage, AreaAccounting, "Manage posting rules", "General ledger posting setup.", F),
-        new(Permission.GlClose, AreaAccounting, "Close fiscal periods", "The period close checklist and closing accounting periods.", F),
+        new(Permission.GlClose, AreaAccounting, "Close fiscal periods", "The period close checklist and closing accounting periods, including closing anyway (with a reason) when a check fails.", F),
         new(Permission.GlReportsView, AreaAccounting, "See financial statements", "Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer.", F),
         new(Permission.GlRecurringManage, AreaAccounting, "Manage recurring journals", "Recurring journal templates and runs.", F),
         new(Permission.GlRevaluation, AreaAccounting, "Revalue foreign currency", "Currency revaluation and the foreign currency report.", F),

@@ -85,9 +85,10 @@ public sealed class PermissionCheckingPeopleService(IPeopleService inner, Access
 }
 
 /// <summary>
-/// Anyone signed in can list contracts (pickers and labels need their numbers and names), but ceiling and funded values
-/// are funding data: only Finance, administrators and the managers of a project on the contract see them; everyone else
-/// gets zeros.
+/// Contracts follow project visibility (<see cref="ProjectVisibility.VisibleContractIdsAsync"/>): someone sees a contract
+/// when they can see a project on it (Finance and Admin see every one); any other contract is left out of lists and not
+/// found. Ceiling and funded values are funding data on top of that: only Finance, administrators and the managers of a
+/// project on the contract see them; everyone else gets zeros.
 /// </summary>
 public sealed class PermissionCheckingContractService(IContractService inner, AccessControl access, ProjectAccess projects) : IContractService
 {
@@ -107,6 +108,11 @@ public sealed class PermissionCheckingContractService(IContractService inner, Ac
     {
         access.RequireSignedIn();
         var contracts = await inner.ListContractsAsync(cancellationToken);
+        if (await projects.Visibility.VisibleContractIdsAsync(cancellationToken) is { } visible)
+        {
+            contracts = contracts.Where(c => visible.Contains(c.Id)).ToList();
+        }
+
         var managed = await projects.ManagedContractIdsAsync(cancellationToken);
         return managed is null ? contracts : contracts.Select(c => WithoutFunding(c, managed)).ToList();
     }
@@ -114,6 +120,11 @@ public sealed class PermissionCheckingContractService(IContractService inner, Ac
     public async Task<ContractDto?> GetContractAsync(Guid contractId, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
+        if (await projects.Visibility.VisibleContractIdsAsync(cancellationToken) is { } visible && !visible.Contains(contractId))
+        {
+            return null;
+        }
+
         var contract = await inner.GetContractAsync(contractId, cancellationToken);
         var managed = contract is null ? null : await projects.ManagedContractIdsAsync(cancellationToken);
         return contract is null || managed is null ? contract : WithoutFunding(contract, managed);
@@ -279,29 +290,25 @@ public sealed class PermissionCheckingProjectService(
         (await ListChargeCodesForDatesAsync(employeeId, [date], cancellationToken))[date];
 
     /// <summary>
-    /// An employee's charge codes are theirs to see in full, and their timekeepers', Finance's, administrators', resource
-    /// managers' and supervisor's. Anyone else (an approver reading a timesheet, say) sees only the codes on projects they
-    /// can see, so the list can't be used to discover other projects.
+    /// An employee's charge codes (what they may charge, on which projects) are for the employee themselves, their
+    /// supervisor, timekeepers and Finance and administrators (<see cref="Permission.TimeViewAll"/>, for the people a
+    /// scoped role covers) and trusted background readers. Anyone else is refused, and the refusal is a security event:
+    /// the list would show which projects someone works on. Timesheets, expenses and trips ask for the signed-in user's own
+    /// codes; staffing someone authorizes their charging inside the service, not through this list.
     /// </summary>
     public async Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>> ListChargeCodesForDatesAsync(
         Guid employeeId, IReadOnlyCollection<DateOnly> dates, CancellationToken cancellationToken = default)
     {
         access.RequireSignedIn();
-        var codes = await inner.ListChargeCodesForDatesAsync(employeeId, dates, cancellationToken);
-        var roles = await access.GetOrgRolesAsync(cancellationToken);
-        if (roles.CanViewAllTimesheets() || ProjectVisibility.SeesEveryProject(roles) || access.IsSystemReader
-            || await access.GetEmployeeIdAsync(cancellationToken) == employeeId || await projects.SupervisesAsync(employeeId, null, cancellationToken))
+        if (!access.IsSystemReader
+            && await access.GetEmployeeIdAsync(cancellationToken) != employeeId
+            && !await access.HasForEmployeeAsync(Permission.TimeViewAll, employeeId, cancellationToken)
+            && !await projects.SupervisesAsync(employeeId, null, cancellationToken))
         {
-            return codes;
+            throw await access.DenyAsync("You can see your own charge codes. Timekeepers, Finance and a person's supervisor can see theirs.", cancellationToken);
         }
 
-        var result = new Dictionary<DateOnly, IReadOnlyList<ChargeCodeDto>>();
-        foreach (var (date, list) in codes)
-        {
-            result[date] = await projects.Visibility.FilterAsync(list, c => c.ProjectId, cancellationToken);
-        }
-
-        return result;
+        return await inner.ListChargeCodesForDatesAsync(employeeId, dates, cancellationToken);
     }
 
     /// <summary>The project's manager becomes Owner of its plan sheet's workspace (when they have the role).</summary>
