@@ -1,0 +1,443 @@
+@* A project's GitLab link and sync panel (the project's Setup tab, section "gitlab"): link the plan to a GitLab project,
+   see how the sync stands, settle what it couldn't decide alone, approve issues added in GitLab and match people. *@
+@implements IAsyncDisposable
+@inject IGitLabProjectSyncService Sync
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+@if (_dto is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_dto.Link is not { } link)
+{
+    @if (!_dto.ConnectionReady)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" data-testid="gitlab-not-connected">@_dto.ConnectionProblem</MudAlert>
+    }
+    else if (!_dto.CanManage)
+    {
+        <MudText Class="mud-text-secondary">This project isn't linked to GitLab. Finance, administrators and the project's manager can link it.</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Link the plan to a GitLab project. Tasks become issues and phases become epics (or milestones), with the WBS code as a label,
+            the people assigned, due dates and hours. Workbench keeps owning the schedule; GitLab's open/closed and progress come back here.
+        </MudText>
+        <MudGrid Spacing="2" data-testid="gitlab-link-form">
+            <MudItem xs="12" md="6">
+                <MudAutocomplete T="GitLabProjectOptionDto" @bind-Value="_choice" Label="GitLab project" SearchFunc="SearchProjectsAsync"
+                                 ToStringFunc="@(p => p?.PathWithNamespace ?? "")" CoerceText="false" CoerceValue="false" DebounceInterval="300"
+                                 Variant="Variant.Outlined" HelperText="Search, or paste its address or path (group/project)" OnBlur="KeepTyped" TextChanged="t => _typed = t"
+                                 data-testid="gitlab-project-picker" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="int" @bind-Value="_levels" Label="Summary tasks that become phases" Variant="Variant.Outlined" data-testid="gitlab-levels">
+                    <MudSelectItem Value="1">Top-level summary tasks</MudSelectItem>
+                    <MudSelectItem Value="2">Two levels of summary tasks</MudSelectItem>
+                    <MudSelectItem Value="0">Every summary task</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudRadioGroup T="GitLabPhaseChoice" @bind-Value="_phases" data-testid="gitlab-phases">
+                    <MudRadio Value="GitLabPhaseChoice.Auto" Color="Color.Primary">Epics if the GitLab group has them, otherwise milestones (recommended)</MudRadio>
+                    <MudRadio Value="GitLabPhaseChoice.Epics" Color="Color.Primary">Epics (GitLab Premium or Ultimate)</MudRadio>
+                    <MudRadio Value="GitLabPhaseChoice.Milestones" Color="Color.Primary">Milestones</MudRadio>
+                </MudRadioGroup>
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" Class="mt-2" OnClick="LinkAsync"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(ProjectText))" data-testid="gitlab-link">Link and send the plan</MudButton>
+    }
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2" data-testid="gitlab-linked">
+        <MudText Typo="Typo.subtitle1">
+            Linked to GitLab project <MudLink Href="@link.GitLabProjectUrl" Target="_blank" rel="noopener">@link.GitLabProjectPath</MudLink>
+        </MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@StateColor(link.State)" Icon="@StateIcon(link.State)" data-testid="gitlab-state">@link.State</MudChip>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        Phases are @(link.PhaseMode == "epics" ? $"epics in {link.GroupPath}" : "milestones") (@LevelsText(link.PhaseLevels)).
+        Last synced @Ago(link.LastSyncedAtUtc).
+        @if (_dto.ChangesWaiting > 0)
+        {
+            <span> @_dto.ChangesWaiting change@(_dto.ChangesWaiting == 1 ? "" : "s") on the way.</span>
+        }
+        @if (_dto.ChangesFailed > 0)
+        {
+            <span> @_dto.ChangesFailed couldn't be sent (Admin › Integrations › Deliveries has the details).</span>
+        }
+    </MudText>
+
+    @if (link.LastError is { } error)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-3" data-testid="gitlab-error">
+            <div>@error</div>
+            @if (link.LastErrorHint is { } hint)
+            {
+                <div class="mt-1"><b>What to do:</b> @hint</div>
+            }
+        </MudAlert>
+    }
+
+    @if (_dto.CanManage)
+    {
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync" OnClick="SyncNowAsync" Disabled="_busy" data-testid="gitlab-sync-now">Sync now</MudButton>
+            @if (!link.WebhookRegistered)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Webhook" OnClick="ToggleWebhookAsync" data-testid="gitlab-webhook-setup">Set up the webhook</MudButton>
+            }
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.LinkOff" OnClick="UnlinkAsync" Disabled="_busy" data-testid="gitlab-unlink">Unlink</MudButton>
+        </MudStack>
+    }
+
+    @if (_webhook is { } hook)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="gitlab-webhook-box">
+            <MudText Typo="Typo.body2" Class="mb-2">
+                Workbench couldn't add the webhook itself (that needs the Maintainer role). Without it, GitLab's changes come in every few minutes.
+                To get them within seconds, add a webhook in GitLab under the project's Settings › Webhooks:
+            </MudText>
+            <MudText Typo="Typo.body2"><b>URL:</b> <code>@hook.Url</code> <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" aria-label="Copy the URL" OnClick="() => CopyAsync(hook.Url)" /></MudText>
+            <MudText Typo="Typo.body2"><b>Secret token:</b> <code>@hook.SecretToken</code> <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" aria-label="Copy the secret token" OnClick="() => CopyAsync(hook.SecretToken)" /></MudText>
+            <MudText Typo="Typo.body2"><b>Trigger:</b> @string.Join(", ", hook.Events)</MudText>
+        </MudPaper>
+    }
+
+    @if (_dto.Conflicts.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2 mb-1">Needs your attention (@_dto.Conflicts.Count)</MudText>
+        <MudStack Spacing="2" Class="mb-3" data-testid="gitlab-conflicts">
+            @foreach (var c in _dto.Conflicts)
+            {
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="1">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(c.Kind == "Couldn't sync" ? Color.Error : Color.Warning)">@c.Kind</MudChip>
+                        <MudText Typo="Typo.body2"><b>@(c.TaskTitle ?? "The project")</b>@(c.GitLabLabel is { } l ? $" · GitLab {l}" : "") · @c.FieldLabel</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Class="mt-1">@c.Outcome</MudText>
+                    @if (c.WorkbenchValue is not null || c.GitLabValue is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Workbench: @(c.WorkbenchValue ?? "(none)") · GitLab: @(c.GitLabValue ?? "(none)")</MudText>
+                    }
+                    @if (c.Hint is { } hint)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block mt-1"><b>What to do:</b> @hint</MudText>
+                    }
+                    @if (_dto.CanManage)
+                    {
+                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                            @if (c.CanUseWorkbench)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ResolveAsync(c, GitLabConflictChoice.UseWorkbench)">Use Workbench's</MudButton>
+                            }
+                            @if (c.CanUseGitLab)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ResolveAsync(c, GitLabConflictChoice.UseGitLab)">Use GitLab's</MudButton>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ResolveAsync(c, GitLabConflictChoice.Dismiss)">OK, dismiss</MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+            }
+        </MudStack>
+    }
+
+    @if (_dto.Pending.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2 mb-1">New in GitLab (@_dto.Pending.Count)</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1">Issues someone added in GitLab under a linked phase. Add them to the plan, or leave them in GitLab only.</MudText>
+        <MudList T="string" Dense="true" Class="mb-3" data-testid="gitlab-pending">
+            @foreach (var p in _dto.Pending)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                        <MudLink Href="@p.WebUrl" Target="_blank" rel="noopener">#@p.Iid @p.Title</MudLink>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">under @(p.PhaseTitle ?? "the plan")@(p.Author is { } a ? $", added by @{a}" : "")</MudText>
+                        @if (_dto.CanManage)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => DecideAsync(p, true)">Add to the plan</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => DecideAsync(p, false)">Don't add</MudButton>
+                        }
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    }
+
+    @if (_dto.PeopleToMatch.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2 mb-1">People to match (@_dto.PeopleToMatch.Count)</MudText>
+        <MudList T="string" Dense="true" Class="mb-3" data-testid="gitlab-people-to-match">
+            @foreach (var person in _dto.PeopleToMatch)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                        @if (person.Side == "workbench")
+                        {
+                            <MudText Typo="Typo.body2"><b>@(person.DisplayName ?? person.Email)</b> is on @Tasks(person.Tasks) here but has no GitLab user, so their issues don't show them.</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2"><b>@@@person.GitLabUsername</b> is assigned in GitLab on @Tasks(person.Tasks) but isn't anyone in Workbench.</MudText>
+                        }
+
+                        @if (_dto.CanManage)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => MatchAsync(person)">Match</MudButton>
+                        }
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    }
+
+    <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2 mb-1">Linked tasks (@_dto.Tasks.Count(t => !t.IsRemoved))</MudText>
+    <MudTable T="GitLabTaskLinkDto" Items="_dto.Tasks" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" aria-label="Tasks linked to GitLab" data-testid="gitlab-tasks" Class="mb-3">
+        <HeaderContent>
+            <MudTh>Task</MudTh>
+            <MudTh>In GitLab</MudTh>
+            <MudTh>Last synced</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Task">@(context.WbsCode is { } code ? $"{code} " : "")@context.Title</MudTd>
+            <MudTd DataLabel="In GitLab">
+                <MudLink Href="@context.WebUrl" Target="_blank" rel="noopener">Linked to GitLab @context.Label</MudLink>
+                @if (context.IsRemoved)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"> (closed: the task was deleted)</MudText>
+                }
+                @if (context.LastError is { } e)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@e</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Last synced">@Ago(context.LastSyncedAtUtc)</MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>Nothing linked yet. The plan's tasks are being sent to GitLab.</MudText></NoRecordsContent>
+    </MudTable>
+
+    @if (_dto.Recent.Count > 0)
+    {
+        <MudExpansionPanels Outlined="true" Elevation="0">
+            <MudExpansionPanel Text="Recent sync activity">
+                <MudList T="string" Dense="true" data-testid="gitlab-recent">
+                    @foreach (var a in _dto.Recent.Take(15))
+                    {
+                        <MudListItem T="string"><MudText Typo="Typo.body2">@a.Summary <span class="mud-text-secondary">· @Ago(a.OccurredAtUtc)</span></MudText></MudListItem>
+                    }
+                </MudList>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    private GitLabProjectSyncDto? _dto;
+    private GitLabWebhookSetupDto? _webhook;
+    private GitLabProjectOptionDto? _choice;
+    private string? _typed;
+    private GitLabPhaseChoice _phases = GitLabPhaseChoice.Auto;
+    private int _levels = 1;
+    private bool _busy;
+    private readonly CancellationTokenSource _stop = new();
+
+    private string? ProjectText => _choice?.PathWithNamespace ?? _typed;
+
+    protected override void OnInitialized() => _ = RefreshWhileSendingAsync();
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _dto = await Sync.GetAsync(ProjectId);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add($"Couldn't load the GitLab sync: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // While changes are on their way, refresh every few seconds so the panel shows them land.
+    private async Task RefreshWhileSendingAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                if (_dto?.Link is null || _dto.ChangesWaiting == 0)
+                {
+                    continue;
+                }
+
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task<IEnumerable<GitLabProjectOptionDto>> SearchProjectsAsync(string? text, CancellationToken ct)
+    {
+        try
+        {
+            return await Sync.SearchGitLabProjectsAsync(ProjectId, text, ct);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return [];
+        }
+    }
+
+    private void KeepTyped(FocusEventArgs _)
+    {
+        // A pasted path or address that matched nothing in the list is still used as typed.
+    }
+
+    private Task LinkAsync() => RunAsync(async () =>
+    {
+        _dto = await Sync.LinkAsync(ProjectId, new LinkGitLabProjectRequest(ProjectText!, _phases, _levels));
+        Snackbar.Add($"Linked to {_dto.Link?.GitLabProjectPath}. The plan is on its way to GitLab.", Severity.Success);
+    });
+
+    private Task SyncNowAsync() => RunAsync(async () =>
+    {
+        var result = await Sync.SyncNowAsync(ProjectId);
+        _dto = await Sync.GetAsync(ProjectId);
+        Snackbar.Add(result.Message, Severity.Info);
+    });
+
+    private async Task UnlinkAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Unlink from GitLab?", "Nothing syncs any more. The issues stay in GitLab and the tasks stay in the plan; you can link again later.",
+                yesText: "Unlink", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Sync.UnlinkAsync(ProjectId);
+            _webhook = null;
+            _dto = await Sync.GetAsync(ProjectId);
+            Snackbar.Add("Unlinked from GitLab.", Severity.Success);
+        });
+    }
+
+    private Task ToggleWebhookAsync() => RunAsync(async () => _webhook = _webhook is null ? await Sync.GetWebhookSetupAsync(ProjectId) : null);
+
+    private Task ResolveAsync(GitLabConflictDto conflict, GitLabConflictChoice choice) => RunAsync(async () =>
+    {
+        _dto = await Sync.ResolveConflictAsync(ProjectId, conflict.Id, new ResolveGitLabConflictRequest(choice));
+    });
+
+    private Task DecideAsync(GitLabPendingIssueDto pending, bool approve) => RunAsync(async () =>
+    {
+        _dto = await Sync.DecidePendingAsync(ProjectId, pending.Id, approve);
+        Snackbar.Add(approve ? $"\"{pending.Title}\" added to the plan under {pending.PhaseTitle ?? "the plan"}." : $"\"{pending.Title}\" stays in GitLab only.", Severity.Success);
+    });
+
+    private async Task MatchAsync(GitLabPersonToMatchDto person)
+    {
+        var dialog = await Dialogs.ShowAsync<GitLabMatchPersonDialog>(person.Side == "workbench" ? $"Who is {person.DisplayName ?? person.Email} in GitLab?" : $"Who is @{person.GitLabUsername} in Workbench?",
+            new DialogParameters<GitLabMatchPersonDialog>
+            {
+                { d => d.Search, q => Sync.SearchUsersAsync(ProjectId, q) },
+                { d => d.Email, person.Email },
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: MatchGitLabPersonRequest request })
+        {
+            await RunAsync(async () =>
+            {
+                _dto = await Sync.MatchPersonAsync(ProjectId, request);
+                Snackbar.Add("Matched. Their issues update in a moment.", Severity.Success);
+            });
+        }
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        if (await IntegrationFormat.CopyAsync(JS, text))
+        {
+            Snackbar.Add("Copied.", Severity.Success);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string LevelsText(int levels) => levels switch
+    {
+        0 => "every summary task",
+        1 => "top-level summary tasks",
+        _ => $"{levels} levels of summary tasks",
+    };
+
+    private static string Tasks(int n) => n == 1 ? "1 task" : $"{n} tasks";
+
+    private static Color StateColor(string state) => state switch
+    {
+        "Up to date" => Color.Success,
+        "Needs attention" or "Some changes failed" => Color.Error,
+        _ => Color.Info,
+    };
+
+    private static string StateIcon(string state) => state switch
+    {
+        "Up to date" => Icons.Material.Filled.CheckCircle,
+        "Needs attention" or "Some changes failed" => Icons.Material.Filled.Error,
+        _ => Icons.Material.Filled.Sync,
+    };
+
+    internal static string Ago(DateTime? utc)
+    {
+        if (utc is not { } t)
+        {
+            return "not yet";
+        }
+
+        var span = DateTime.UtcNow - DateTime.SpecifyKind(t, DateTimeKind.Utc);
+        return span.TotalSeconds < 0 ? IntegrationFormat.When(t) + " UTC"
+            : span.TotalMinutes < 1 ? "just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min ago"
+            : span.TotalDays < 1 ? $"{(int)span.TotalHours} h ago"
+            : IntegrationFormat.When(t) + " UTC";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _stop.CancelAsync();
+        _stop.Dispose();
+    }
+}

@@ -1,0 +1,31 @@
+@* Picks a Workbench person (by email) and the GitLab user they are. *@
+<MudDialog data-testid="gitlab-match-dialog">
+    <DialogContent>
+        <MudTextField @bind-Value="_email" Label="Person's email in Workbench" Variant="Variant.Outlined" Required="true" Disabled="@(Email is not null)" Class="mb-3" data-testid="gitlab-match-email" />
+        <MudAutocomplete T="GitLabUserOptionDto" @bind-Value="_user" Label="GitLab user" SearchFunc="SearchAsync" ToStringFunc="@(u => u is null ? "" : $"@{u.Username} ({u.Name})")"
+                         Variant="Variant.Outlined" DebounceInterval="300" MinCharacters="2" ResetValueOnEmptyText="true" Placeholder="Type a name or user name" data-testid="gitlab-match-user" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_user is null || string.IsNullOrWhiteSpace(_email))" OnClick="Done" data-testid="gitlab-match-save">Match</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Func<string, Task<IReadOnlyList<GitLabUserOptionDto>>> Search { get; set; } = default!;
+
+    /// <summary>The person, when the dialog is opened for someone in particular.</summary>
+    [Parameter] public string? Email { get; set; }
+
+    private string? _email;
+    private GitLabUserOptionDto? _user;
+
+    protected override void OnInitialized() => _email = Email;
+
+    private async Task<IEnumerable<GitLabUserOptionDto>> SearchAsync(string? text, CancellationToken ct) =>
+        string.IsNullOrWhiteSpace(text) ? [] : await Search(text);
+
+    private void Done() => Dialog.Close(DialogResult.Ok(new MatchGitLabPersonRequest(_email!.Trim(), _user!.Id)));
+}

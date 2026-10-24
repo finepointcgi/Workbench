@@ -196,6 +196,21 @@ public sealed class GitLabSyncTests
     }
 
     [Fact]
+    public async Task A_task_already_done_when_linked_starts_closed_in_gitlab_without_a_note()
+    {
+        await using var kit = await GitLabKit.CreateAsync();
+        await kit.EditAsync("Code", i => i.Values[kit.StatusColumn.ToString()] = "Done", raise: false);
+        var panel = await kit.LinkAsync();
+
+        Assert.Equal("closed", kit.GitLab.IssueTitled("Code").State);
+        Assert.Equal("opened", kit.GitLab.IssueTitled("Requirements").State);
+        Assert.Equal("Done", kit.Status(await kit.ItemAsync("Code")));
+        Assert.Equal("100", kit.Percent(await kit.ItemAsync("Code")));
+        Assert.Empty(panel.Conflicts);
+        Assert.Contains(await kit.ActivityAsync("Code"), a => a.Contains("the task was already done"));
+    }
+
+    [Fact]
     public async Task Relinking_finds_issues_by_their_marker_instead_of_making_duplicates()
     {
         await using var kit = await GitLabKit.CreateAsync(epics: false);

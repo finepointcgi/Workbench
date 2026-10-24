@@ -1,0 +1,56 @@
+@* "Linked to GitLab issue #123" on a task's details, with when it last synced. Shows nothing for tasks that aren't linked. *@
+@inject IServiceProvider Services
+
+@if (_status is { } s)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2" data-testid="gitlab-task-link">
+        <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+        <MudText Typo="Typo.body2">
+            @if (s.IsRemoved)
+            {
+                <span>Was linked to GitLab <MudLink Href="@s.WebUrl" Target="_blank" rel="noopener">@s.Label</MudLink> (closed when the task was deleted)</span>
+            }
+            else
+            {
+                <span>Linked to GitLab <MudLink Href="@s.WebUrl" Target="_blank" rel="noopener">@s.Label</MudLink></span>
+                <span class="mud-text-secondary"> · synced @GitLabProjectPanel.Ago(s.LastSyncedAtUtc)</span>
+            }
+        </MudText>
+    </MudStack>
+    @if (s.LastError is { } error)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block mb-2">@error See the project's Setup tab › GitLab.</MudText>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter, EditorRequired] public Guid ItemId { get; set; }
+
+    private GitLabTaskStatusDto? _status;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == ItemId)
+        {
+            return;
+        }
+
+        _loadedFor = ItemId;
+        // Optional: hosts (and tests) without the GitLab sync simply show nothing.
+        if (Services.GetService(typeof(IGitLabProjectSyncService)) is not IGitLabProjectSyncService sync)
+        {
+            return;
+        }
+
+        try
+        {
+            _status = await sync.GetTaskStatusAsync(SheetId, ItemId);
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            _status = null; // not linked, or not for this reader
+        }
+    }
+}

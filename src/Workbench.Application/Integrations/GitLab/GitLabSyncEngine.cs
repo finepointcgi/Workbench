@@ -487,6 +487,15 @@ public sealed class GitLabSyncEngine(
 
         ctx.Activity(item.Id, "item.gitlab", created ? $"Created GitLab issue #{issue.Iid}" : $"Linked to GitLab issue #{issue.Iid} (found by its Workbench marker)");
 
+        // A task already done when it's first sent starts out closed in GitLab (from then on GitLab owns open and closed).
+        if (created && ctx.IsDone(item) && issue.State == "opened")
+        {
+            issue = await ctx.Client.UpdateIssueAsync(ctx.Link.GitLabProjectId, issue.Iid, new Dictionary<string, object?> { ["state_event"] = "close" }, ct);
+            link.BaseState = issue.State;
+            link.GitLabUpdatedAtUtc = issue.UpdatedAt;
+            ctx.Activity(item.Id, "item.gitlab", $"Closed GitLab issue #{issue.Iid}: the task was already done");
+        }
+
         // Estimate, dependencies and anything the create couldn't carry, through the normal pair sync.
         await SyncPairAsync(ctx, item, link, issue, ct);
 
@@ -787,6 +796,7 @@ public sealed class GitLabSyncEngine(
         var closed = issue.State == "closed";
         var wasClosed = link.BaseState == "closed";
         var workbenchDone = ctx.IsDone(item);
+        var stateFromWorkbench = false;
         if (force is { Field: "state", UseWorkbench: true })
         {
             var wantClosed = force.Value is null ? workbenchDone : force.Value == "Done";
@@ -795,6 +805,7 @@ public sealed class GitLabSyncEngine(
                 push["state_event"] = wantClosed ? "close" : "reopen";
                 sent.Add(wantClosed ? "closed" : "reopened");
                 closed = wantClosed;
+                stateFromWorkbench = true;
             }
         }
         else if (link.BaseState is not null && workbenchDone != closed && workbenchDone != wasClosed && closed == wasClosed && ctx.StatusColumn is not null)
@@ -812,12 +823,13 @@ public sealed class GitLabSyncEngine(
         if (closed && !wasClosed && link.BaseState is not null)
         {
             link.PercentBeforeClose = current is < 100 ? current : link.PercentBeforeClose;
-            changes.Add($"{label} closed in GitLab, so 100% complete");
+            changes.Add(stateFromWorkbench ? "closed from Workbench, so 100% complete" : $"{label} closed in GitLab, so 100% complete");
         }
         else if (!closed && wasClosed)
         {
             progress ??= link.PercentBeforeClose ?? 0;
-            changes.Add($"{label} reopened in GitLab, so {GitLabRules.Percent(progress.Value)}% complete");
+            changes.Add(stateFromWorkbench ? $"reopened from Workbench, so {GitLabRules.Percent(progress.Value)}% complete"
+                : $"{label} reopened in GitLab, so {GitLabRules.Percent(progress.Value)}% complete");
         }
 
         if (progress is { } p)
@@ -1390,7 +1402,7 @@ public sealed class GitLabSyncEngine(
             Sheet = await db.Sheets.FirstAsync(s => s.Id == sheetId, ct);
             Items = await db.Items.Where(i => i.SheetId == sheetId).ToDictionaryAsync(i => i.Id, ct);
             var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == sheetId).ToListAsync(ct);
-            PercentColumn = TaskRules.PercentColumn(columns);
+            PercentColumn = GitLabColumns.Percent(columns);
             StatusColumn = TaskRules.StatusColumn(columns);
             NotesColumn = GitLabColumns.Notes(columns);
             ItemLinks = (await db.Set<GitLabItemLink>().Where(l => l.LinkId == link.Id).ToListAsync(ct)).ToDictionary(l => l.ItemId);

@@ -146,13 +146,20 @@ public static class GitLabColumns
         columns.Where(c => c.Type == ColumnType.Text && c.Formula is null)
             .FirstOrDefault(c => string.Equals(c.Name, NotesName, StringComparison.OrdinalIgnoreCase) || string.Equals(c.Name, "Description", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The plan's % complete: the number column the schedule rolls up (<see cref="Tasks.TaskRules.PercentColumn"/>), else a Progress column.</summary>
+    public static Column? Percent(IEnumerable<Column> columns)
+    {
+        var list = columns.ToList();
+        return Tasks.TaskRules.PercentColumn(list) ?? list.FirstOrDefault(c => c.Type == ColumnType.Progress && c.Formula is null);
+    }
+
     /// <summary>Adds "% Complete" and "Notes" to the plan when missing (progress and the issue description need a home). Returns the names added.</summary>
     public static async Task<IReadOnlyList<string>> EnsureAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken ct)
     {
         var columns = await db.Columns.Where(c => c.SheetId == sheetId).ToListAsync(ct);
         var order = columns.Select(c => c.Order).DefaultIfEmpty(-1).Max();
         var added = new List<string>();
-        if (Tasks.TaskRules.PercentColumn(columns) is null)
+        if (Percent(columns) is null)
         {
             db.Columns.Add(new Column { SheetId = sheetId, Name = PercentName, Type = ColumnType.Number, Order = ++order });
             added.Add(PercentName);

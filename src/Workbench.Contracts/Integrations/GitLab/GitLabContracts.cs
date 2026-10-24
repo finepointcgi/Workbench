@@ -22,7 +22,8 @@ public sealed record GitLabConnectionDto(
     string? LastTestMessage,
     int LinkedProjects,
     string? UpdatedBy,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc,
+    string? CaCertificatePem = null);
 
 /// <param name="Token">A personal, group or project access token with the <c>api</c> scope. Null or blank keeps the saved one.</param>
 /// <param name="CaCertificatePem">PEM of a private certificate authority, for a self-managed server with an internal certificate. Blank: none.</param>

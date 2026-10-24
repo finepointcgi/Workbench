@@ -287,7 +287,7 @@ public sealed class GitLabConnectionService(
 
         return new GitLabConnectionDto(true, row.BaseUrl, GitLabUrls.IsGitLabCom(row.BaseUrl), row.TokenHint, row.CaCertificatePem is not null, ca, row.IsActive,
             row.ConnectedAsUsername, row.ConnectedAsName, row.ServerVersion, row.LastTestedAtUtc, row.LastTestOk, row.LastTestMessage, linked, row.UpdatedBy ?? row.CreatedBy,
-            row.UpdatedAtUtc);
+            row.UpdatedAtUtc, row.CaCertificatePem);
     }
 }
 
