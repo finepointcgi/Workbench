@@ -7,7 +7,8 @@ namespace Workbench.Contracts.Resourcing;
 
 /// <summary>
 /// Someone on a task: their assignment (hours staffed week by week show as the assignment they'd be, and become one when
-/// first changed; <see cref="AssignmentId"/> is null only for someone being tried), labor category, dates and hours. <see cref="DirectCost"/> is hours × their cost rate
+/// first changed; <see cref="AssignmentId"/> is null for someone being tried, and for an assignee with no hours on the task
+/// yet, <see cref="NoHoursYet"/>), labor category, dates and hours. <see cref="DirectCost"/> is hours × their cost rate
 /// in each week; <see cref="BurdenedCost"/> adds fringe, overhead and G&amp;A. Both are null when the viewer may not see
 /// cost. <see cref="Overbooked"/> lists weeks from this week on where they're booked past their hours on every project.
 /// </summary>
@@ -24,8 +25,13 @@ public sealed record PlanPersonDto(
     decimal? BurdenedCost,
     IReadOnlyList<AssignmentOverbookedWeekDto> Overbooked,
     bool Changed = false,
-    IReadOnlyList<AssignmentWeekDto>? Weeks = null)
+    IReadOnlyList<AssignmentWeekDto>? Weeks = null,
+    IReadOnlyList<string>? Problems = null,
+    bool NoHoursYet = false)
 {
+    /// <summary>Why this person's hours don't make sense on the task (dates outside it, more hours than fit, on a summary row).</summary>
+    public IReadOnlyList<string> Issues => Problems ?? [];
+
     /// <summary>The hours in one week (Monday), 0 when none.</summary>
     public decimal HoursIn(DateOnly weekStart) => Weeks?.FirstOrDefault(w => w.WeekStart == weekStart)?.Hours ?? 0m;
 
@@ -59,7 +65,8 @@ public sealed record PlanTaskRowDto(
 {
     public decimal? Cost => BurdenedCost ?? DirectCost;
 
-    public bool CanAssign => WbsElementId is not null;
+    /// <summary>People go on the lowest rows: tasks with a charge code and no subtasks.</summary>
+    public bool CanAssign => WbsElementId is not null && !IsSummary && !IsMilestone;
 
     /// <summary>Someone on this task (not its subtasks) is booked past their hours.</summary>
     public bool IsOverbooked => People.Any(p => p.IsOverbooked);
@@ -161,6 +168,12 @@ public enum PlanChangeKind
 
     /// <summary>Take someone off: removes the assignment <see cref="PlanChange.AssignmentId"/>.</summary>
     RemovePerson,
+
+    /// <summary>
+    /// Take someone with no hours yet off a task: <see cref="PlanChange.EmployeeId"/> stops being an assignee of the task
+    /// whose charge code is <see cref="PlanChange.WbsElementId"/>.
+    /// </summary>
+    Unassign,
 }
 
 /// <summary>

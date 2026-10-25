@@ -60,6 +60,13 @@ public sealed class StaffingAssignment : Entity
     public DateOnly From { get; set; }
     public DateOnly To { get; set; }
     public decimal TotalHours { get; set; }
+
+    /// <summary>
+    /// True when the dates are the task's on the plan, so they move when the task moves; false when someone set other
+    /// dates on purpose. Null for assignments made before this was kept (decided the first time their task is reflowed).
+    /// </summary>
+    public bool? FollowsTask { get; set; }
+
     public string? Notes { get; set; }
     public required string CreatedBy { get; set; }
     public DateTime CreatedAtUtc { get; set; }

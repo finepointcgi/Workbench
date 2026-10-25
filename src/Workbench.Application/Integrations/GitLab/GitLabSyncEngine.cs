@@ -273,7 +273,7 @@ public sealed class GitLabSyncEngine(
         await ctx.SaveAsync(ct);
 
         // Number its WBS code and roll the plan up, then send the code and dates back to the issue.
-        await PlanReflow.ReflowAndSaveAsync(ctx.Db, ctx.Sheet.Id, ct);
+        await PlanReflow.ReflowAndSaveAsync(ctx.Db, ctx.Sheet.Id, ct, clock);
         ctx.Shape = new GitLabRules.PlanShape(ctx.Items.Values, ctx.Link.PhaseLevels);
         await SyncPairAsync(ctx, item, link, issue, ct);
         await ctx.SaveAsync(ct);
@@ -1738,7 +1738,7 @@ public sealed class GitLabSyncEngine(
             if (_changedItems.Count > 0)
             {
                 // Roll summaries up (% complete) and renumber; then tell open plans.
-                await PlanReflow.ReflowAndSaveAsync(db, Sheet.Id, ct);
+                await PlanReflow.ReflowAndSaveAsync(db, Sheet.Id, ct, clock);
                 var changed = _changedItems.ToList();
                 _changedItems.Clear();
 

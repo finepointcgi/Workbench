@@ -66,6 +66,7 @@ public sealed class StaffingAssignmentService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var saved = await SaveOneAsync(db, request, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await SyncAssigneesAsync(db, saved.ProjectId, cancellationToken);
         return (await ToDtosAsync(db, [saved], cancellationToken))[0];
     }
 
@@ -97,25 +98,41 @@ public sealed class StaffingAssignmentService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await SyncAssigneesAsync(db, projectId, cancellationToken);
         return await ToDtosAsync(db, saved, cancellationToken);
     }
 
     public async Task DeleteAsync(Guid assignmentId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        await DeleteOneAsync(db, assignmentId, cancellationToken);
+        var projectId = await DeleteOneAsync(db, assignmentId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await SyncAssigneesAsync(db, projectId, cancellationToken);
     }
 
-    /// <summary>Removes the assignment and its weekly rows in <paramref name="db"/> without saving (the caller saves).</summary>
-    internal async Task DeleteOneAsync(IWorkbenchDbContext db, Guid assignmentId, CancellationToken ct)
+    /// <summary>Everyone with hours on a plan task is one of its assignees (<see cref="PlanPeopleSync"/>); saves when that changed anything.</summary>
+    internal static async Task SyncAssigneesAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct)
+    {
+        if (await PlanPeopleSync.SyncAssigneesAsync(db, projectId, ct))
+        {
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// Removes the assignment and its weekly rows in <paramref name="db"/> without saving (the caller saves); unless they
+    /// have other hours on the task, the person stops being its assignee too. Returns the project.
+    /// </summary>
+    internal async Task<Guid> DeleteOneAsync(IWorkbenchDbContext db, Guid assignmentId, CancellationToken ct)
     {
         var assignment = await db.Set<StaffingAssignment>().FirstOrDefaultAsync(a => a.Id == assignmentId, ct)
             ?? throw WorkbenchNotFoundException.For("Assignment", assignmentId);
+        await PlanPeopleSync.TakeOffTaskAsync(db, assignment.WbsElementId, assignment.EmployeeId, assignment.Id, ct);
         var rows = await db.Set<ResourceAllocation>().Where(a => a.AssignmentId == assignmentId).ToListAsync(ct);
         db.Set<ResourceAllocation>().RemoveRange(rows);
         db.Set<StaffingAssignment>().Remove(assignment);
         audit.Record(db, EntityType, assignment.Id, "Deleted", before: Snapshot(assignment));
+        return assignment.ProjectId;
     }
 
     public async Task<StaffingAssignmentDto> SetWeekAsync(Guid assignmentId, DateOnly weekStart, decimal hours, CancellationToken cancellationToken = default)
@@ -461,6 +478,7 @@ public sealed class StaffingAssignmentService(
         assignment.From = plan.From;
         assignment.To = plan.To;
         assignment.TotalHours = exactWeeks is null ? Math.Round(request.TotalHours, 2, MidpointRounding.AwayFromZero) : plan.Weeks.Sum(w => w.Hours);
+        assignment.FollowsTask = await FollowsTaskAsync(db, request.WbsElementId, plan.From, plan.To, ct);
         assignment.Notes = Clean(request.Notes);
 
         var rows = plan.Existing is null ? [] : await db.Set<ResourceAllocation>().Where(a => a.AssignmentId == assignment.Id).ToListAsync(ct);
@@ -488,6 +506,21 @@ public sealed class StaffingAssignmentService(
 
         audit.Record(db, EntityType, assignment.Id, before is null ? "Created" : "Updated", before, Snapshot(assignment));
         return assignment;
+    }
+
+    /// <summary>
+    /// Whether dates on this charge code are its plan task's, so they'll move with the task (null: not a task on a plan).
+    /// </summary>
+    private async Task<bool?> FollowsTaskAsync(IWorkbenchDbContext db, Guid? wbsElementId, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        if (wbsElementId is not { } wbs
+            || await db.Set<WbsElement>().AsNoTracking().Where(w => w.Id == wbs).Select(w => w.ItemId).FirstOrDefaultAsync(ct) is not { } itemId)
+        {
+            return null;
+        }
+
+        var task = await db.Items.AsNoTracking().Where(i => i.Id == itemId).Select(i => new { i.Start, i.Finish }).FirstOrDefaultAsync(ct);
+        return task is null ? null : PlanPeopleSync.Aligned(from, to, task.Start, task.Finish, Today);
     }
 
     private ResourceAllocation NewRow(StaffingAssignment assignment, DateOnly week, decimal hours, DateTime now) => new()
@@ -534,6 +567,13 @@ public sealed class StaffingAssignmentService(
         {
             element = await db.Set<WbsElement>().AsNoTracking().FirstOrDefaultAsync(w => w.Id == wbsId && w.ProjectId == project.Id, ct)
                 ?? throw new ArgumentException($"That task isn't on project {project.Code}.");
+
+            // People go on the plan's lowest rows (the charge codes); a summary's hours are its tasks'. Someone already
+            // on a summary can still be changed or moved off it.
+            if (element.ItemId is { } itemId && existing?.WbsElementId != element.Id && await db.Items.AnyAsync(i => i.ParentId == itemId, ct))
+            {
+                throw new ArgumentException($"{element.Code} {element.Name} is a summary row. Put people on one of its tasks.");
+            }
         }
 
         if (request.LaborCategoryId is { } catId && !await db.Set<LaborCategory>().AnyAsync(c => c.Id == catId, ct))
