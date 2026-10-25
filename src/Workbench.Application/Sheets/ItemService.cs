@@ -75,7 +75,7 @@ public sealed class ItemService(
         db.Items.Add(item);
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);
-        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
         return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
@@ -103,7 +103,7 @@ public sealed class ItemService(
         item.Values = await StoredValuesAsync(db, sheetId, request.Values, item.Values, cancellationToken);
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
         return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
@@ -146,7 +146,7 @@ public sealed class ItemService(
 
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
         return await WithComputedAsync(db, sheetId, item, cancellationToken);
     }
 
@@ -174,7 +174,7 @@ public sealed class ItemService(
         Renumber(items.Where(i => i.ParentId == item.ParentId && !doomed.Contains(i.Id)));
         await TouchSheetAsync(db, sheetId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
     }
 
     /// <summary>

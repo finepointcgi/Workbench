@@ -396,12 +396,14 @@ else if (_error is not null)
                  aria-label="@($"People on {row.Title}: {(row.People.Count == 0 ? "nobody" : string.Join(", ", row.People.Select(p => $"{p.Name} {PlanPeopleFormat.Hours(p.Hours)} hours")))}{(row.IsOverbooked ? ". Someone is booked past their hours" : "")}")">
             @foreach (var p in row.People.Take(3))
             {
-                <span class="@($"wb-plan-chip {(p.IsOverbooked ? "wb-plan-chip-over" : "")}")" title="@(p.IsOverbooked ? $"{p.Name} is {PlanPeopleFormat.Overbooked(p.Overbooked[0])}" : p.Name)">
-                    @if (p.IsOverbooked)
+                var flagged = p.IsOverbooked || p.Issues.Count > 0;
+                <span class="@($"wb-plan-chip {(flagged ? "wb-plan-chip-over" : "")}")"
+                      title="@(p.IsOverbooked ? $"{p.Name} is {PlanPeopleFormat.Overbooked(p.Overbooked[0])}" : p.Issues.Count > 0 ? string.Join(" ", p.Issues) : p.NoHoursYet ? $"{p.Name}: no hours yet" : p.Name)">
+                    @if (flagged)
                     {
                         <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" Class="wb-plan-chip-icon" />
                     }
-                    @First(p.Name) · @PlanPeopleFormat.Hours(p.Hours) h
+                    @First(p.Name) · @(p.NoHoursYet ? "no hours" : $"{PlanPeopleFormat.Hours(p.Hours)} h")
                 </span>
             }
             @if (row.People.Count > 3)

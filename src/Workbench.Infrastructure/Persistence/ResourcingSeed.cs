@@ -1,13 +1,15 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Resourcing;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Resourcing;
+using Workbench.Domain.Tasks;
 
 namespace Workbench.Infrastructure.Persistence;
 
 /// <summary>
-/// Development sample data for resource planning: allocations on project 1001 for the seeded employees over the next
-/// eight weeks. Dana Lee (dev@) is over-allocated in weeks 3 and 4 (48 h against 36 h of capacity). Runs once, after the
-/// project-accounting seed.
+/// Development sample data for resource planning: people on project 1001's plan tasks, each for hours that fit the task's
+/// dates (Unanet-style assignments spread over the working weeks, on the task's dates so they move with it), and each one
+/// the task's assignee. Runs once, after the project-accounting seed.
 /// </summary>
 internal static class ResourcingSeed
 {
@@ -15,7 +17,7 @@ internal static class ResourcingSeed
 
     public static async Task SeedAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
     {
-        if (await db.Set<ResourceAllocation>().AnyAsync(cancellationToken))
+        if (await db.Set<ResourceAllocation>().AnyAsync(cancellationToken) || await db.Set<StaffingAssignment>().AnyAsync(cancellationToken))
         {
             return;
         }
@@ -30,36 +32,62 @@ internal static class ResourcingSeed
 
         var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
-        var thisWeek = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
-        (string Email, string Wbs, decimal Hours, int FromWeek, int ToWeek)[] plan =
+        var holidays = (await db.Set<Domain.Leave.Holiday>().AsNoTracking().Select(h => h.Date).ToListAsync(cancellationToken)).ToHashSet();
+
+        // Who works each task and for how long: the hours fit inside the task's working days.
+        (string Email, string Wbs, decimal Hours)[] plan =
         [
-            ("pm@example.com", "1001.01.01", 16, 0, 7),
-            ("analyst@example.com", "1001.01.02", 34, 0, 7),
-            ("dev@workbench.local", "1001.01.04", 32, 0, 7),
-            ("dev@workbench.local", "1001.01.03", 16, 2, 3), // over-allocated: 48 h in weeks 3 and 4
-            ("viewer@example.com", "1001.01.01", 8, 0, 7),
+            ("pm@example.com", "1001.01.01", 8),        // Kickoff meeting: one day
+            ("viewer@example.com", "1001.01.01", 4),
+            ("analyst@example.com", "1001.01.02", 60),  // Requirements review: about two weeks
+            ("pm@example.com", "1001.01.03", 24),       // Baseline schedule: about two weeks
+            ("dev@workbench.local", "1001.01.03", 16),
+            ("dev@workbench.local", "1001.01.04", 300), // Execution: about ten weeks
+            ("analyst@example.com", "1001.01.04", 150),
         ];
-        foreach (var (email, code, hours, fromWeek, toWeek) in plan)
+        foreach (var (email, code, hours) in plan)
         {
-            if (!employees.TryGetValue(email, out var employee))
+            if (!employees.TryGetValue(email, out var employee) || !wbs.TryGetValue(code, out var element) || element.ItemId is not { } itemId
+                || await db.Items.FirstOrDefaultAsync(i => i.Id == itemId, cancellationToken) is not { Start: { } start, Finish: { } finish } task)
             {
                 continue;
             }
 
-            for (var week = fromWeek; week <= toWeek; week++)
+            var from = start > today ? start : today;
+            if (finish < from)
+            {
+                continue;
+            }
+
+            // A task that falls on a weekend or holiday (the sample plan starts today) has no working days to staff.
+            bool Working(DateOnly d) => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) && !holidays.Contains(d) && employee.IsActiveOn(d);
+            if (!Enumerable.Range(0, finish.DayNumber - from.DayNumber + 1).Select(from.AddDays).Any(Working))
+            {
+                continue;
+            }
+
+            var assignment = new StaffingAssignment
+            {
+                EmployeeId = employee.Id, ProjectId = project.Id, WbsElementId = element.Id, LaborCategoryId = employee.DefaultLaborCategoryId,
+                From = from, To = finish, TotalHours = hours, FollowsTask = true, CreatedBy = Actor, CreatedAtUtc = now,
+            };
+            db.Add(assignment);
+            foreach (var week in AssignmentSpread.Spread(hours, from, finish, Working).Where(w => w.Hours > 0))
             {
                 db.Add(new ResourceAllocation
                 {
-                    EmployeeId = employee.Id,
-                    ProjectId = project.Id,
-                    WbsElementId = wbs[code].Id,
-                    LaborCategoryId = employee.DefaultLaborCategoryId,
-                    WeekStart = thisWeek.AddDays(7 * week),
-                    Hours = hours,
-                    Source = AllocationSource.Manual,
-                    CreatedBy = Actor,
-                    CreatedAtUtc = now,
+                    EmployeeId = employee.Id, ProjectId = project.Id, WbsElementId = element.Id, LaborCategoryId = employee.DefaultLaborCategoryId,
+                    WeekStart = week.WeekStart, Hours = week.Hours, Source = AllocationSource.Manual, AssignmentId = assignment.Id,
+                    CreatedBy = Actor, CreatedAtUtc = now,
                 });
+            }
+
+            // People with hours on a task are its assignees (the task shows in their My work).
+            var lower = email.ToLowerInvariant();
+            if (!db.ChangeTracker.Entries<ItemAssignee>().Any(e => e.Entity.ItemId == itemId && e.Entity.Email == lower)
+                && !await db.Set<ItemAssignee>().AnyAsync(a => a.ItemId == itemId && a.Email == lower, cancellationToken))
+            {
+                db.Add(new ItemAssignee { SheetId = task.SheetId, ItemId = itemId, Email = lower, AssignedBy = "staffing", AssignedAtUtc = now });
             }
         }
 

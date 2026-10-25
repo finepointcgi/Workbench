@@ -96,7 +96,7 @@ public sealed class SheetBulkEditService(
             {
                 sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
                 await db.SaveChangesAsync(cancellationToken);
-                await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+                await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
                 if (sheet.SchedulingEnabled)
                 {
                     touched.AddRange(await MovedByThePlanAsync(db, sheetId, original, parents, touched, changes, cancellationToken));

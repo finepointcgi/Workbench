@@ -21503,6 +21503,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool?>("FollowsTask")
+                        .HasColumnType("boolean");
+
                     b.Property<DateOnly>("From")
                         .HasColumnType("date");
 
