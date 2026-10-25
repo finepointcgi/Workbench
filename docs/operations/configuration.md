@@ -156,7 +156,7 @@ Details: [monitoring.md](monitoring.md).
 | `PerDiem:Gsa:ApiKey` | — | **Secret.** api.data.gov key for GSA rates. |
 | `PerDiem:Gsa:BaseUrl` | `https://api.gsa.gov/travel/perdiem/v2/` | |
 | `Travel:TolerancePercent` | `10` | How far (percent) an expense report category or trip total may go over its approved travel authorization before it is flagged. |
-| `Resourcing:NonBillableAllowancePercent` / `:FullThresholdPercent` / `:StaffingTolerancePercent` | `10` / `90` / `10` | |
+| `Resourcing:NonBillableAllowancePercent` / `:FullThresholdPercent` / `:StaffingTolerancePercent` | `0` / `90` / `10` | |
 | `FundingNotices:WarningThreshold` / `:CriticalThreshold` | `0.75` / `0.90` | Limitation of Funds notices. |
 | `Billing:CompanyName` / `:RemitToAddress` / `:CageCode` / `:Uei` | — | Printed on invoices. |
 | `Purchasing:RetainageAccountNumber` / `:RetainageAccountName` | `2020` / `AP retainage` | |

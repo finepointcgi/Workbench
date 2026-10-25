@@ -8,7 +8,7 @@ public sealed class ResourcingOptions
     public const string Section = "Resourcing";
 
     /// <summary>Share of available hours kept for non-billable work (meetings, training, admin). Default 10%.</summary>
-    public decimal NonBillableAllowancePercent { get; set; } = 10m;
+    public decimal NonBillableAllowancePercent { get; set; } = 0m;
 
     /// <summary>A week is "full" from this share of capacity up to 100%. Default 90%.</summary>
     public decimal FullThresholdPercent { get; set; } = 90m;
