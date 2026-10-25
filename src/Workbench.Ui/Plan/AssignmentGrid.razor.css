@@ -116,3 +116,8 @@ input.wb-assign-input.wb-assign-week {
 .wb-assign-weekover {
     background: color-mix(in srgb, var(--mud-palette-warning) 18%, transparent);
 }
+
+.wb-assign-problem {
+    color: var(--mud-palette-warning-darken);
+    font-size: 0.8125rem;
+}

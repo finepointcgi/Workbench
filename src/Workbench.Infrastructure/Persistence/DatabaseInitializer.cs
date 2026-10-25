@@ -68,13 +68,11 @@ public static class DatabaseInitializer
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
         };
+        // Who works a task and for how many hours is the plan's people (assignees and staffing), not sheet columns.
         var status = new Column { Name = "Status", Type = ColumnType.Dropdown, Order = 0, Options = ["Not started", "In progress", "Blocked", "Done"] };
-        var owner = new Column { Name = "Owner", Type = ColumnType.Person, Order = 1 };
-        var hours = new Column { Name = "Planned hours", Type = ColumnType.Number, Order = 2 };
-        // Finance and owners only; "Cost per hour" reads it, so it is restricted too.
-        var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 3, IsRestricted = true };
-        var costPerHour = new Column { Name = "Cost per hour", Type = ColumnType.Currency, Order = 4, Formula = "[Budget] / [Planned hours]" };
-        schedule.Columns.AddRange([status, owner, hours, budget, costPerHour]);
+        // Finance and owners only.
+        var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 1, IsRestricted = true };
+        schedule.Columns.AddRange([status, budget]);
 
         var today = DateOnly.FromDateTime(now);
         var phase = new Item { Title = "Phase 1: Planning", Order = 0, Start = today, Finish = today.AddDays(20), CostpointWbsId = "1001.01.01" };
@@ -82,14 +80,14 @@ public static class DatabaseInitializer
         [
             phase,
             new Item { Title = "Kickoff meeting", ParentId = phase.Id, Order = 0, Start = today, Finish = today, CostpointWbsId = "1001.01.01",
-                Values = new() { [status.Id.ToString()] = "Done", [owner.Id.ToString()] = "pm@example.com", [hours.Id.ToString()] = "8", [budget.Id.ToString()] = "1200" } },
+                Values = new() { [status.Id.ToString()] = "Done", [budget.Id.ToString()] = "1200" } },
             new Item { Title = "Requirements review", ParentId = phase.Id, Order = 1, Start = today.AddDays(1), Finish = today.AddDays(10), CostpointWbsId = "1001.01.02",
-                Values = new() { [status.Id.ToString()] = "In progress", [owner.Id.ToString()] = "analyst@example.com", [hours.Id.ToString()] = "60", [budget.Id.ToString()] = "9000" } },
+                Values = new() { [status.Id.ToString()] = "In progress", [budget.Id.ToString()] = "9000" } },
             new Item { Title = "Baseline schedule", ParentId = phase.Id, Order = 2, Start = today.AddDays(11), Finish = today.AddDays(20), CostpointWbsId = "1001.01.03",
-                Values = new() { [status.Id.ToString()] = "Not started", [owner.Id.ToString()] = "pm@example.com", [hours.Id.ToString()] = "40", [budget.Id.ToString()] = "6000" } },
+                Values = new() { [status.Id.ToString()] = "Not started", [budget.Id.ToString()] = "6000" } },
             // A milestone: a key date with no duration (the calendar and Gantt show it as a diamond).
             new Item { Title = "Planning complete (baseline approved)", ParentId = phase.Id, Order = 3, Start = today.AddDays(20), Finish = today.AddDays(20),
-                IsMilestone = true, Values = new() { [status.Id.ToString()] = "Not started", [owner.Id.ToString()] = "pm@example.com" } },
+                IsMilestone = true, Values = new() { [status.Id.ToString()] = "Not started" } },
             new Item { Title = "Phase 2: Execution", Order = 1, Start = today.AddDays(21), Finish = today.AddDays(90), CostpointWbsId = "1001.02" },
         ]);
         var tracker = new Sheet
@@ -142,20 +140,18 @@ public static class DatabaseInitializer
         var sum = Contracts.Dashboards.MetricAggregate.Sum;
         overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Total budget", 3, Domain.Dashboards.WidgetHeight.Small,
             new(schedule.Id, sum, budget.Id)));
-        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Planned hours", 3, Domain.Dashboards.WidgetHeight.Small,
-            new(schedule.Id, sum, hours.Id)));
         overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "In progress", 3, Domain.Dashboards.WidgetHeight.Small,
             new(schedule.Id, FilterColumnId: status.Id, FilterValue: "In progress")));
-        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Average cost per hour", 3, Domain.Dashboards.WidgetHeight.Small,
-            new(schedule.Id, Contracts.Dashboards.MetricAggregate.Average, costPerHour.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Metric, "Done", 3, Domain.Dashboards.WidgetHeight.Small,
+            new(schedule.Id, FilterColumnId: status.Id, FilterValue: "Done")));
         overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Chart, "Tasks by status", 4, Domain.Dashboards.WidgetHeight.Medium,
             new(schedule.Id, Chart: Contracts.Dashboards.ChartKind.Donut, GroupColumnId: status.Id)));
-        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Chart, "Planned hours by owner", 4, Domain.Dashboards.WidgetHeight.Medium,
-            new(schedule.Id, ValueColumnId: hours.Id, GroupColumnId: owner.Id)));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.Chart, "Budget by status", 4, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id, ValueColumnId: budget.Id, GroupColumnId: status.Id)));
         overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ScheduleHealth, "Schedule health", 4, Domain.Dashboards.WidgetHeight.Medium,
             new(schedule.Id)));
-        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ItemList, "PM's tasks", 6, Domain.Dashboards.WidgetHeight.Medium,
-            new(schedule.Id, FilterColumnId: owner.Id, FilterValue: "pm@example.com")));
+        overview.Widgets.Add(Widget(Domain.Dashboards.WidgetType.ItemList, "Tasks in progress", 6, Domain.Dashboards.WidgetHeight.Medium,
+            new(schedule.Id, FilterColumnId: status.Id, FilterValue: "In progress")));
         var contract = await db.Set<Domain.ProjectAccounting.Contract>().OrderBy(c => c.ContractNumber).FirstOrDefaultAsync(cancellationToken);
         if (contract is not null)
         {

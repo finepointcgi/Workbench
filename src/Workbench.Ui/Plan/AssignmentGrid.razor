@@ -117,6 +117,10 @@
                                 {
                                     <select class="wb-assign-input" aria-label="Task" value="@(r.WbsElementId?.ToString() ?? "")" @onchange="e => SetTaskAsync(r, e.Value as string)" data-testid="assign-task-cell">
                                         <option value="">Whole project</option>
+                                        @if (r.WbsElementId is { } on && Tasks.All(t => t.WbsElementId != on) && AllTasks.FirstOrDefault(t => t.WbsElementId == on) is { } summary)
+                                        {
+                                            <option value="@on" disabled>@summary.WbsCode @summary.Title (a summary row)</option>
+                                        }
                                         @foreach (var t in Tasks)
                                         {
                                             <option value="@t.WbsElementId">@t.WbsCode @t.Title</option>
@@ -149,7 +153,8 @@
                             else
                             {
                                 <td class="wb-num">
-                                    <input class="wb-assign-input wb-num" type="number" min="0.25" step="0.25" value="@(r.Hours?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
+                                    <input class="wb-assign-input wb-num" type="number" min="0.25" step="0.25" value="@(r.NoHoursYet ? null : r.Hours?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
+                                           placeholder="@(r.NoHoursYet ? "Enter hours" : null)"
                                            aria-label="Hours in total" @onchange="e => SetHoursAsync(r, e.Value as string)" data-testid="assign-hours-cell" />
                                 </td>
                                 <td>
@@ -184,7 +189,11 @@
                             {
                                 <span class="wb-assign-changed">changed</span>
                             }
-                            @if (CanChange && !r.IsNew && r.AssignmentId is not null)
+                            @if (r.NoHoursYet)
+                            {
+                                <span class="wb-assign-changed" data-testid="assign-no-hours" title="On the task with no hours yet: enter their hours to plan and cost them">No hours yet</span>
+                            }
+                            @if (CanChange && !r.IsNew && (r.AssignmentId is not null || r.NoHoursYet))
                             {
                                 <MudIconButton Icon="@Icons.Material.Outlined.PersonRemove" Size="Size.Small" OnClick="() => RemoveAsync(r)" aria-label="@($"Take {r.PersonText} off {r.TaskLabel}")" />
                             }
@@ -194,6 +203,20 @@
                     {
                         <tr class="wb-assign-note">
                             <td colspan="@ColumnCount" class="wb-assign-error" role="alert">@r.Error</td>
+                        </tr>
+                    }
+                    else if (r.Source?.Issues is { Count: > 0 } issues)
+                    {
+                        <tr class="wb-assign-note">
+                            <td colspan="@ColumnCount" class="wb-assign-problem" data-testid="assign-problem">
+                                <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" /> @string.Join(" ", issues)
+                                @if (CanChange && !Trying && FirstTaskUnder(r.WbsElementId) is { } move)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="() => SetTaskAsync(r, move.WbsElementId.ToString())" data-testid="assign-move-down">
+                                        Move to @move.WbsCode @move.Title
+                                    </MudButton>
+                                }
+                            </td>
                         </tr>
                     }
                     @if (r.Fixes is { } fixes)
@@ -295,6 +318,9 @@
         public string? Error { get; set; }
         public bool Busy { get; set; }
         public bool IsNew => AssignmentId is null && Source is null;
+
+        /// <summary>An assignee of the task with no hours on it yet: entering hours adds them as a new assignment.</summary>
+        public bool NoHoursYet => Source?.NoHoursYet == true && AssignmentId is null;
         public IReadOnlyList<OverbookingFixDto>? Fixes { get; set; }
 
         /// <summary>Hours by week (Monday) as shown in "By week"; edits land here before they're saved.</summary>
@@ -329,7 +355,23 @@
 
     private bool CanChange => Current?.CanChange == true;
 
-    private IEnumerable<PlanTaskRowDto> Tasks => (Tried?.Tasks ?? Current?.Tasks ?? []).Where(t => t.CanAssign);
+    private IEnumerable<PlanTaskRowDto> AllTasks => Tried?.Tasks ?? Current?.Tasks ?? [];
+
+    private IEnumerable<PlanTaskRowDto> Tasks => AllTasks.Where(t => t.CanAssign);
+
+    /// <summary>For someone on a summary row: the first task under it they can go on (the rows are in outline order).</summary>
+    private PlanTaskRowDto? FirstTaskUnder(Guid? wbsElementId)
+    {
+        var rows = AllTasks.ToList();
+        var index = wbsElementId is null ? -1 : rows.FindIndex(t => t.WbsElementId == wbsElementId && t.IsSummary);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var depth = rows[index].Depth;
+        return rows.Skip(index + 1).TakeWhile(t => t.Depth > depth).FirstOrDefault(t => t.CanAssign);
+    }
 
     private IEnumerable<Row> VisibleRows => (FilterWbsElementId is { } f ? _rows.Where(r => r.WbsElementId == f) : _rows).Append(_new).Where(r => CanChange || !r.IsNew);
 
@@ -527,7 +569,7 @@
         var to = row.To is { } t && ResourcingFormat.WeekStart(t) == last ? t : last.AddDays(4);
         var total = weeks.Sum(w => w.Hours);
         PlanChange change;
-        if (row.IsNew)
+        if (row.IsNew || row.NoHoursYet)
         {
             change = new PlanChange(PlanChangeKind.SetPerson, WbsElementId: row.WbsElementId, EmployeeId: row.EmployeeId, Hours: total,
                 LaborCategoryId: row.CategoryId, From: from, To: to, Weeks: weeks);
@@ -658,6 +700,13 @@
             changes = [new PlanChange(PlanChangeKind.SetPerson, WbsElementId: row.WbsElementId, EmployeeId: row.EmployeeId, Hours: row.Hours,
                 LaborCategoryId: row.CategoryId, From: row.From, To: row.To)];
         }
+        else if (row.NoHoursYet && row.Source is { } assigned)
+        {
+            // Their dates start as the task's: left alone, they stay the task's (and move with it).
+            changes = [new PlanChange(PlanChangeKind.SetPerson, WbsElementId: row.WbsElementId, EmployeeId: row.EmployeeId, Hours: row.Hours,
+                LaborCategoryId: row.CategoryId != assigned.LaborCategoryId ? row.CategoryId : null,
+                From: row.From != assigned.From ? row.From : null, To: row.To != assigned.To ? row.To : null)];
+        }
         else if (row.Source is { } was && row.AssignmentId is { } id)
         {
             var movedTask = !row.TaskFixed && row.WbsElementId != row.OriginalWbsElementId;
@@ -699,7 +748,13 @@
 
     private async Task RemoveAsync(Row row)
     {
-        if (row.AssignmentId is { } id)
+        if (row.NoHoursYet && row.EmployeeId is { } employeeId)
+        {
+            row.Busy = true;
+            row.Error = await SendAsync([new PlanChange(PlanChangeKind.Unassign, WbsElementId: row.WbsElementId, EmployeeId: employeeId)]);
+            row.Busy = false;
+        }
+        else if (row.AssignmentId is { } id)
         {
             row.Busy = true;
             row.Error = await SendAsync([new PlanChange(PlanChangeKind.RemovePerson, AssignmentId: id)]);

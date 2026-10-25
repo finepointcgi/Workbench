@@ -6,7 +6,7 @@ using Workbench.Domain.Scheduling;
 
 namespace Workbench.Application.Scheduling;
 
-public sealed class DependencyService(IWorkbenchDbContextFactory dbFactory) : IDependencyService
+public sealed class DependencyService(IWorkbenchDbContextFactory dbFactory, TimeProvider? clock = null) : IDependencyService
 {
     private const int MaxLagDays = 3650;
 
@@ -74,7 +74,7 @@ public sealed class DependencyService(IWorkbenchDbContextFactory dbFactory) : ID
         await db.SaveChangesAsync(cancellationToken);
 
         // The successor now starts no earlier than the link allows (and its successors after it).
-        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
         return ToDto(dependency);
     }
 
