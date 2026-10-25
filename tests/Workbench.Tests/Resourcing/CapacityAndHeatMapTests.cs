@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Resourcing;
 using Workbench.Contracts.Resourcing;
 using static Workbench.Tests.Resourcing.ResourcingHost;
@@ -43,7 +44,7 @@ public sealed class CapacityAndHeatMapTests
     [Fact]
     public async Task Heat_map_and_capacity_use_the_leave_calendar_and_all_projects()
     {
-        await using var host = await CreateAsync();
+        await using var host = await CreateAsync(s => s.Configure<ResourcingOptions>(o => o.NonBillableAllowancePercent = 10m));
         host.Leave.Holidays.Add(new HolidayDay(new DateOnly(2026, 10, 12), "Columbus Day"));
         host.Leave.Leave.Add(new ApprovedLeaveDay(host.AnalystId, new DateOnly(2026, 10, 20), 8));
         var allocations = host.As(Admin).Get<IResourceAllocationService>();
@@ -71,7 +72,7 @@ public sealed class CapacityAndHeatMapTests
     [Fact]
     public async Task Find_people_by_labor_category_and_free_hours()
     {
-        await using var host = await CreateAsync();
+        await using var host = await CreateAsync(s => s.Configure<ResourcingOptions>(o => o.NonBillableAllowancePercent = 10m));
         await host.As(Admin).Get<IResourceAllocationService>().CreateAsync(new SaveAllocationRequest(host.DevId, host.Project1, ThisWeek, 30, Weeks: 2));
 
         var people = await host.As(Pm).Get<IResourcePlanningService>().FindAvailablePeopleAsync(new FindPeopleQuery(ThisWeek, ThisWeek.AddDays(13), host.Se2, 10));

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Resourcing;
 using Workbench.Contracts.Financials;
@@ -119,7 +120,7 @@ public sealed class AllocationPlanningTests
     [Fact]
     public async Task Utilization_is_approved_hours_over_available_hours()
     {
-        await using var host = await CreateAsync();
+        await using var host = await CreateAsync(s => s.Configure<ResourcingOptions>(o => o.NonBillableAllowancePercent = 10m));
         host.Leave.Holidays.Add(new HolidayDay(new DateOnly(2026, 10, 12), "Columbus Day"));
         host.Leave.Leave.Add(new ApprovedLeaveDay(host.DevId, new DateOnly(2026, 10, 16), 8));
         // dev@, Oct 12–16: 24 direct + 4 indirect + 8 leave (leave isn't worked time).
