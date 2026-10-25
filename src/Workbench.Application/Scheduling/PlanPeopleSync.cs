@@ -120,14 +120,14 @@ internal static class PlanPeopleSync
     /// <summary>
     /// Makes everyone with hours on a plan task one of its assignees, and drops assignees added that way once they have no
     /// hours there. Assignees someone added by hand stay (they're on the task with no hours yet). True when anything changed
-    /// (the caller saves).
+    /// (the caller saves). Returns the plan sheet and the tasks whose assignees changed (none: nothing changed).
     /// </summary>
-    public static async Task<bool> SyncAssigneesAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct)
+    public static async Task<(Guid SheetId, IReadOnlyList<Guid> Items)> SyncAssigneesAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct)
     {
         var sheetId = await db.Set<Project>().AsNoTracking().Where(p => p.Id == projectId).Select(p => p.SheetId).FirstOrDefaultAsync(ct);
         if (sheetId is not { } sheet)
         {
-            return false;
+            return (Guid.Empty, []);
         }
 
         var elements = await db.Set<WbsElement>().AsNoTracking().Where(w => w.ProjectId == projectId && w.ItemId != null)
@@ -159,7 +159,7 @@ internal static class PlanPeopleSync
         var drop = current.Where(a => a.AssignedBy == StaffingActor && !want.Contains((a.ItemId, a.Email))).ToList();
         db.Set<ItemAssignee>().AddRange(add.Select(w => new ItemAssignee { SheetId = sheet, ItemId = w.Item, Email = w.Email, AssignedBy = StaffingActor, AssignedAtUtc = now }));
         db.Set<ItemAssignee>().RemoveRange(drop);
-        return add.Count > 0 || drop.Count > 0;
+        return (sheet, add.Select(a => a.Item).Concat(drop.Select(d => d.ItemId)).Distinct().ToList());
     }
 
     /// <summary>

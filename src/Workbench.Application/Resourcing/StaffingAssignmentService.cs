@@ -20,7 +20,8 @@ public sealed class StaffingAssignmentService(
     IResourceLeaveCalendar leaveCalendar,
     ResourcingAccess rules,
     AuditRecorder audit,
-    TimeProvider clock) : IStaffingAssignmentService
+    TimeProvider clock,
+    Collaboration.ActivityRecorder? activity = null) : IStaffingAssignmentService
 {
     private const string EntityType = nameof(StaffingAssignment);
 
@@ -110,12 +111,29 @@ public sealed class StaffingAssignmentService(
         await SyncAssigneesAsync(db, projectId, cancellationToken);
     }
 
-    /// <summary>Everyone with hours on a plan task is one of its assignees (<see cref="PlanPeopleSync"/>); saves when that changed anything.</summary>
-    internal static async Task SyncAssigneesAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct)
+    private Task SyncAssigneesAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct) => SyncAssigneesAsync(db, projectId, activity, ct);
+
+    /// <summary>
+    /// Everyone with hours on a plan task is one of its assignees (<see cref="PlanPeopleSync"/>); saves when that changed
+    /// anything, and tells open grids, Gantts and boards so their Assignees refresh.
+    /// </summary>
+    internal static async Task SyncAssigneesAsync(IWorkbenchDbContext db, Guid projectId, Collaboration.ActivityRecorder? activity, CancellationToken ct)
     {
-        if (await PlanPeopleSync.SyncAssigneesAsync(db, projectId, ct))
+        var (sheetId, items) = await PlanPeopleSync.SyncAssigneesAsync(db, projectId, ct);
+        if (items.Count == 0)
         {
-            await db.SaveChangesAsync(ct);
+            return;
+        }
+
+        await db.SaveChangesAsync(ct);
+        if (activity is not null)
+        {
+            var titles = await db.Items.AsNoTracking().Where(i => items.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.Title, ct);
+            foreach (var itemId in items)
+            {
+                await activity.RecordAsync(sheetId, itemId, Contracts.Tasks.TaskActivityKinds.ItemAssigned,
+                    $"Assignees on \"{titles.GetValueOrDefault(itemId)}\" now match the people with hours on it", Contracts.Collaboration.SheetChangeKind.ItemUpdated);
+            }
         }
     }
 
