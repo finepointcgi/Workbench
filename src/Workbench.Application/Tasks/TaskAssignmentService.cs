@@ -81,6 +81,9 @@ public sealed class TaskAssignmentService(
             var now = clock.GetUtcNow().UtcDateTime;
             var actor = Truncate(currentUser.Email, 512);
             db.Set<ItemAssignee>().AddRange(added.Select(e => new ItemAssignee { SheetId = sheetId, ItemId = itemId, Email = e, AssignedBy = actor, AssignedAtUtc = now }));
+
+            // On a project's plan the assignees and the people with hours are one list: taking someone off takes their hours too.
+            await Scheduling.PlanPeopleSync.TakeOffHoursAsync(db, itemId, removed, actor, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             names = await NamesAsync(db, added.Concat(removed).Append(Me), cancellationToken);
         }

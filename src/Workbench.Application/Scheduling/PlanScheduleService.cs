@@ -632,7 +632,7 @@ public sealed class PlanScheduleService(
 
         sheet.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(cancellationToken);
-        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken);
+        await PlanReflow.ReflowAndSaveAsync(db, sheetId, cancellationToken, clock);
     }
 
     private static void SetValue(Dictionary<string, string?> values, Guid columnId, string? value)

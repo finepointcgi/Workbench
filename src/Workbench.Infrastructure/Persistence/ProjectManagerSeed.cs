@@ -95,7 +95,7 @@ internal static class ProjectManagerSeed
 
         // On 1001's plan (Pat's): the analyst is assigned the requirements review.
         var requirements = await db.Items.FirstOrDefaultAsync(i => i.Title == "Requirements review", cancellationToken);
-        if (requirements is not null)
+        if (requirements is not null && !await db.Set<ItemAssignee>().AnyAsync(a => a.ItemId == requirements.Id && a.Email == "analyst@example.com", cancellationToken))
         {
             db.Add(new ItemAssignee { SheetId = requirements.SheetId, ItemId = requirements.Id, Email = "analyst@example.com", AssignedBy = "pm@example.com", AssignedAtUtc = now });
         }

@@ -59,8 +59,11 @@ internal static class PlanReflow
             .Where(c => itemIds.Contains(c.ItemId))
             .ToDictionary(c => c.ItemId, c => new PlanConstraintDto((PlanConstraintKind)(int)c.Type, c.Date));
 
-    /// <summary>Reflows the sheet's tracked items in place and numbers a project plan's WBS codes. True when anything changed (the caller saves).</summary>
-    public static async Task<bool> ReflowAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reflows the sheet's tracked items in place and numbers a project plan's WBS codes; on a project's plan its people
+    /// follow their tasks and are their assignees (<see cref="PlanPeopleSync"/>). True when anything changed (the caller saves).
+    /// </summary>
+    public static async Task<bool> ReflowAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken, TimeProvider? clock = null)
     {
         var sheet = await db.Sheets.FirstOrDefaultAsync(s => s.Id == sheetId, cancellationToken);
         if (sheet is null)
@@ -82,6 +85,9 @@ internal static class PlanReflow
         if (project is not null)
         {
             changed |= await PlanWbsSync.ApplyAsync(db, project, state.Items, cancellationToken);
+            changed |= await PlanPeopleSync.FollowTasksAsync(db, project, state.Items, state.Calendar, (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime, cancellationToken);
+            // Read from what's saved: a charge code made in this same change has nobody on it yet.
+            changed |= (await PlanPeopleSync.SyncAssigneesAsync(db, project.Id, cancellationToken)).Items.Count > 0;
         }
 
         return changed;
@@ -110,9 +116,9 @@ internal static class PlanReflow
         db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.SheetId == sheetId, cancellationToken);
 
     /// <summary>Reflows and saves when anything moved.</summary>
-    public static async Task ReflowAndSaveAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken)
+    public static async Task ReflowAndSaveAsync(IWorkbenchDbContext db, Guid sheetId, CancellationToken cancellationToken, TimeProvider? clock = null)
     {
-        if (await ReflowAsync(db, sheetId, cancellationToken))
+        if (await ReflowAsync(db, sheetId, cancellationToken, clock))
         {
             await db.SaveChangesAsync(cancellationToken);
         }

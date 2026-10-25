@@ -20221,6 +20221,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool?>("FollowsTask")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateOnly>("From")
                         .HasColumnType("TEXT");
 

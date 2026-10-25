@@ -13,6 +13,7 @@ using Workbench.Domain;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Resourcing;
+using Workbench.Domain.Tasks;
 
 namespace Workbench.Application.Resourcing;
 
@@ -154,6 +155,8 @@ public sealed class ResourcePlanService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await UnassignAsync(db, model, changes.Where(c => c.Kind == PlanChangeKind.Unassign).ToList(), cancellationToken);
+        await StaffingAssignmentService.SyncAssigneesAsync(db, model.Project.Id, activity, cancellationToken);
 
         // Open grids, Gantts and calendars refresh as they do for any edit.
         if (activity is not null && model.Plan is { } shown)
@@ -309,6 +312,10 @@ public sealed class ResourcePlanService(
         /// </summary>
         public required Dictionary<Guid, StaffingAssignmentService.WeekByWeekGroup> WeekByWeek { get; init; }
         public required Dictionary<Guid, Employee> People { get; init; }
+
+        /// <summary>Each plan task's assignees (employees), including those with no hours on it yet.</summary>
+        public required Dictionary<Guid, List<Guid>> Assignees { get; init; }
+
         public required Dictionary<Guid, LaborCategory> Categories { get; init; }
         public required EffectiveRateTable<Guid> Rates { get; init; }
         public required decimal? Multiplier { get; init; }
@@ -398,6 +405,11 @@ public sealed class ResourcePlanService(
         var budget = version is null ? [] : await db.Set<BudgetLine>().AsNoTracking()
             .Where(l => l.BudgetVersionId == version.Id && l.CostType == BudgetCostType.Labor).ToListAsync(ct);
 
+        var byEmail = people.Values.GroupBy(e => e.Email.ToLowerInvariant()).ToDictionary(g => g.Key, g => g.First().Id);
+        var assignees = plan is null ? [] : (await db.Set<ItemAssignee>().AsNoTracking().Where(a => a.SheetId == plan.Sheet.Id).ToListAsync(ct))
+            .Where(a => byEmail.ContainsKey(a.Email.ToLowerInvariant()))
+            .GroupBy(a => a.ItemId).ToDictionary(g => g.Key, g => g.Select(a => byEmail[a.Email.ToLowerInvariant()]).Distinct().ToList());
+
         var model = new Model
         {
             Project = project,
@@ -408,6 +420,7 @@ public sealed class ResourcePlanService(
             Weeks = weeks,
             WeekByWeek = weekByWeek,
             People = people,
+            Assignees = assignees,
             Categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, ct),
             Rates = rates,
             Multiplier = multiplier,
@@ -420,6 +433,26 @@ public sealed class ResourcePlanService(
         };
         model.Outline = plan is null ? null : new PlanOutline(plan.Items);
         return model;
+    }
+
+    /// <summary>Takes people with no hours yet off their tasks (and any hours they do have there, as the Assignees cell does).</summary>
+    private static async Task UnassignAsync(IWorkbenchDbContext db, Model model, IReadOnlyList<PlanChange> unassign, CancellationToken ct)
+    {
+        foreach (var change in unassign)
+        {
+            if (model.ItemOf(change.WbsElementId) is not { } itemId || change.EmployeeId is not { } employeeId
+                || model.People.GetValueOrDefault(employeeId)?.Email.ToLowerInvariant() is not { } email)
+            {
+                continue;
+            }
+
+            db.Set<ItemAssignee>().RemoveRange(await db.Set<ItemAssignee>().Where(a => a.ItemId == itemId && a.Email == email).ToListAsync(ct));
+        }
+
+        if (unassign.Count > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
     }
 
     // ---- Trying changes ----
@@ -675,7 +708,17 @@ public sealed class ResourcePlanService(
             var category = model.CategoryOf(b.LaborCategoryId, b.EmployeeId);
             return new PlanPersonDto(b.AssignmentId, b.EmployeeId, model.People.GetValueOrDefault(b.EmployeeId)?.DisplayName ?? "?",
                 category, category is { } c && model.Categories.TryGetValue(c, out var cat) ? ProjectStaffingService.Label(cat) : null,
-                b.From, b.To, b.Hours, Money.Round(direct), model.Multiplier is { } m ? Money.Round(direct * m) : null, over, b.Changed, b.Weeks);
+                b.From, b.To, b.Hours, Money.Round(direct), model.Multiplier is { } m ? Money.Round(direct * m) : null, over, b.Changed, b.Weeks, Problems(model, b));
+        }
+
+        // Someone assigned to a task with no hours on it yet: on the task's dates, for the PM to give hours.
+        PlanPersonDto NoHours(Guid employeeId, Item task)
+        {
+            var category = model.CategoryOf(null, employeeId);
+            var start = task.Start ?? task.Finish ?? Today;
+            return new PlanPersonDto(null, employeeId, model.People.GetValueOrDefault(employeeId)?.DisplayName ?? "?",
+                category, category is { } c && model.Categories.TryGetValue(c, out var cat) ? ProjectStaffingService.Label(cat) : null,
+                start, task.Finish ?? start, 0m, 0m, model.Multiplier is null ? null : 0m, [], NoHoursYet: true);
         }
 
         var people = bookings.Select(b => (Booking: b, Person: Person(b))).ToList();
@@ -692,7 +735,13 @@ public sealed class ResourcePlanService(
                 var wbs = model.WbsOf(item.Id);
                 var mine = wbs is null ? [] : people.Where(p => p.Booking.WbsElementId == wbs).ToList();
                 onTasks.UnionWith(mine.Select(p => p.Booking));
-                own[item.Id] = mine.Select(p => p.Person).OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                var listed = mine.Select(p => p.Person).ToList();
+                if (wbs is not null && model.Assignees.TryGetValue(item.Id, out var assigned))
+                {
+                    listed.AddRange(assigned.Where(e => mine.All(p => p.Booking.EmployeeId != e)).Select(e => NoHours(e, item)));
+                }
+
+                own[item.Id] = listed.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
             }
 
             // Hours and cost roll up from subtasks to summaries, bottom up.
@@ -957,6 +1006,49 @@ public sealed class ResourcePlanService(
     private static string Weeks(int days) => Math.Max(1, (days + 6) / 7) is var w && w == 1 ? "1 week" : $"{w} weeks";
 
     private static string Days(int days) => Math.Abs(days) == 1 ? "1 working day" : $"{Math.Abs(days)} working days";
+
+    /// <summary>
+    /// What doesn't make sense about someone's hours on their task: on a summary row (people go on its tasks), dates outside
+    /// the task's, or more hours than they can work in their dates. Null when nothing's wrong or they're not on a plan task.
+    /// </summary>
+    private static List<string>? Problems(Model model, Booking b)
+    {
+        if (model.ItemOf(b.WbsElementId) is not { } taskId || model.Plan is null || model.Outline is null)
+        {
+            return null;
+        }
+
+        var task = model.Plan.Items.First(i => i.Id == taskId);
+        var person = model.People.GetValueOrDefault(b.EmployeeId);
+        var name = person?.DisplayName ?? "They";
+        var problems = new List<string>();
+        if (model.Outline.IsSummary(taskId))
+        {
+            problems.Add($"{task.Title} is a summary row: move {name} to one of its tasks.");
+        }
+        else if (task.Start is { } s && task.Finish is { } f && (b.From < s || b.To > f))
+        {
+            problems.Add($"Their dates ({Range(b.From, b.To)}) run outside the task ({Range(s, f)}).");
+        }
+
+        if (person is not null && b.Hours > 0)
+        {
+            var days = Enumerable.Range(0, b.To.DayNumber - b.From.DayNumber + 1).Select(b.From.AddDays).Count(d => model.Calendar.IsWorkingDay(d) && person.IsActiveOn(d));
+            var perDay = person.StandardHoursPerWeek / 5m;
+            if (days == 0)
+            {
+                problems.Add($"There are no working days between {Range(b.From, b.To)} for {Hours(b.Hours)} h.");
+            }
+            else if (b.Hours > days * perDay + 0.01m)
+            {
+                problems.Add($"{Hours(b.Hours)} h in {days} working day{(days == 1 ? "" : "s")} is {Hours(Math.Round(b.Hours / days, 1))} h a day; {name} works {Hours(perDay)} h a day.");
+            }
+        }
+
+        return problems.Count == 0 ? null : problems;
+    }
+
+    private static string Hours(decimal hours) => hours.ToString("#,##0.##", CultureInfo.InvariantCulture);
 
     private static string Range(DateOnly? start, DateOnly? finish) =>
         $"{start?.ToString("MMM d", CultureInfo.InvariantCulture) ?? "?"} – {finish?.ToString("MMM d, yyyy", CultureInfo.InvariantCulture) ?? "?"}";
