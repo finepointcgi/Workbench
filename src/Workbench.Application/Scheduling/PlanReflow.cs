@@ -87,7 +87,7 @@ internal static class PlanReflow
             changed |= await PlanWbsSync.ApplyAsync(db, project, state.Items, cancellationToken);
             changed |= await PlanPeopleSync.FollowTasksAsync(db, project, state.Items, state.Calendar, (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime, cancellationToken);
             // Read from what's saved: a charge code made in this same change has nobody on it yet.
-            changed |= await PlanPeopleSync.SyncAssigneesAsync(db, project.Id, cancellationToken);
+            changed |= (await PlanPeopleSync.SyncAssigneesAsync(db, project.Id, cancellationToken)).Items.Count > 0;
         }
 
         return changed;

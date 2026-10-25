@@ -156,7 +156,7 @@ public sealed class ResourcePlanService(
 
         await db.SaveChangesAsync(cancellationToken);
         await UnassignAsync(db, model, changes.Where(c => c.Kind == PlanChangeKind.Unassign).ToList(), cancellationToken);
-        await StaffingAssignmentService.SyncAssigneesAsync(db, model.Project.Id, cancellationToken);
+        await StaffingAssignmentService.SyncAssigneesAsync(db, model.Project.Id, activity, cancellationToken);
 
         // Open grids, Gantts and calendars refresh as they do for any edit.
         if (activity is not null && model.Plan is { } shown)
