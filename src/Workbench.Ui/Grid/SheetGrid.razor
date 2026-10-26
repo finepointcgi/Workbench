@@ -1364,10 +1364,14 @@
 
         var title = _quickTitle.Trim();
         _quickTitle = string.Empty;
-        var last = _children[null].OrderBy(i => i.Order).LastOrDefault();
+
+        // A project plan with a single top row (the CLIN, a WBS element) takes new tasks under it, so they aren't siblings of their own CLIN.
+        var top = _children[null].ToList();
+        var parent = top.Count == 1 && top[0].CostpointWbsId is not null ? top[0] : null;
+        var last = (parent is null ? top : _children[parent.Id].ToList()).OrderBy(i => i.Order).LastOrDefault();
         try
         {
-            var request = new CreateItemRequest(title);
+            var request = new CreateItemRequest(title, parent?.Id);
             request = last is null ? request : WithStart(request, last);
             RecordCreate("Add task", await ItemService.CreateAsync(SheetId, request), request);
             await Changed.InvokeAsync();
