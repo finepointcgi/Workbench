@@ -53,3 +53,15 @@ public sealed class ProjectPlan : Entity
     public string? UpdatedBy { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
 }
+
+/// <summary>
+/// A labor category a project may be planned with (Finance picks them when setting a project up). A project with none is
+/// unrestricted: its plan may use any category.
+/// </summary>
+public sealed class ProjectLaborCategory : Entity
+{
+    public Guid ProjectId { get; set; }
+    public Guid LaborCategoryId { get; set; }
+    public required string CreatedBy { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+}

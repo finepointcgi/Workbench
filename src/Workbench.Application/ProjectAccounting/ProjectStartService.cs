@@ -99,7 +99,8 @@ public sealed class ProjectStartService(
         var me = (await currentUser.GetAsync(cancellationToken)).EmployeeId;
         var manager = request.ProjectManagerId ?? me; // Finance picks the PM; otherwise its creator manages it
         var project = await projects.CreateProjectAsync(
-            new SaveProjectRequest(code, request.Name.Trim(), request.ContractId, manager, ProjectState.Active, start, finish), cancellationToken);
+            new SaveProjectRequest(code, request.Name.Trim(), request.ContractId, manager,
+                request.ContractId is null ? ProjectState.Active : ProjectState.Planning, start, finish), cancellationToken);
 
         // Source element id -> new element id, for copying the plan's dates and links after the sheet exists.
         var copied = new Dictionary<Guid, Guid>();
@@ -148,6 +149,23 @@ public sealed class ProjectStartService(
         if (request.Terms is { } terms && planTerms is not null)
         {
             await planTerms.SaveTermsAsync(project.Id, terms, cancellationToken);
+        }
+
+        // The labor categories the plan may use: the ones given, else the ones the contract prices. Only Finance can set them,
+        // so a project a PM requests waits for Finance to pick them before it can be submitted.
+        if (planTerms is not null && project.ContractId is not null)
+        {
+            var categories = request.LaborCategoryIds ?? await ContractCategoriesAsync(project.ContractId.Value, cancellationToken);
+            if (categories.Count > 0)
+            {
+                try
+                {
+                    await planTerms.SaveCategoriesAsync(project.Id, categories, cancellationToken);
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchForbiddenException)
+                {
+                }
+            }
         }
 
         if (handOff is not null && manager is not null && manager != me)
@@ -244,6 +262,14 @@ public sealed class ProjectStartService(
         {
             // Budgeting needs Finance or the project's manager; the project is still created.
         }
+    }
+
+    private async Task<IReadOnlyList<Guid>> ContractCategoriesAsync(Guid contractId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var priced = await db.Set<ContractLaborRate>().AsNoTracking().Where(r => r.ContractId == contractId).Select(r => r.LaborCategoryId).ToListAsync(cancellationToken);
+        var capped = await db.Set<Ceiling>().AsNoTracking().Where(c => c.ContractId == contractId && c.LaborCategoryId != null).Select(c => c.LaborCategoryId!.Value).ToListAsync(cancellationToken);
+        return priced.Concat(capped).Distinct().ToList();
     }
 
     private async Task<(DateOnly Start, DateOnly? Finish, WorkCalendar Calendar)> DatesAsync(StartProjectRequest request, CancellationToken cancellationToken)
