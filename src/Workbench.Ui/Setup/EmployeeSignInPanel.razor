@@ -1,0 +1,109 @@
+@* Whether an employee can sign in yet, and one button to invite them when they can't (administrators). Shown with the cost rates
+   when an employee is picked, so adding a person is one visit: their record, their cost rate, their sign-in invitation.
+   Nothing shows for people who can't administer users. *@
+@using Microsoft.Extensions.DependencyInjection
+@using Workbench.Contracts.Identity
+@using Workbench.Contracts.Security
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (_state != State.Hidden)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="employee-signin">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Sign-in</MudText>
+        @switch (_state)
+        {
+            case State.HasAccount:
+                <MudText Typo="Typo.body2" data-testid="signin-has-account">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="mr-1" />@Employee.DisplayName can sign in with @Employee.Email.
+                </MudText>
+                break;
+            case State.Invited:
+                <MudText Typo="Typo.body2" Class="mb-2" data-testid="signin-invited">Invited. The link in their email works until @_expires?.ToString("MMM d").</MudText>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="InviteAsync" Disabled="_busy" data-testid="signin-resend">Send it again</MudButton>
+                break;
+            default:
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">@Employee.DisplayName can't sign in yet. They get an email with a link to set a password.</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="InviteAsync" Disabled="_busy" data-testid="signin-invite">Invite to sign in</MudButton>
+                break;
+        }
+    </MudPaper>
+}
+
+@code {
+    private enum State { Hidden, None, Invited, HasAccount }
+
+    [Parameter, EditorRequired]
+    public EmployeeDto Employee { get; set; } = default!;
+
+    private State _state = State.Hidden;
+    private DateTime? _expires;
+    private bool _busy;
+    private Guid _loadedFor;
+
+    private IInviteService? Invites => Services.GetService<IInviteService>();
+
+    private IUserAdminService? Users => Services.GetService<IUserAdminService>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Employee.Id)
+        {
+            return;
+        }
+
+        _loadedFor = Employee.Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _state = State.Hidden;
+        if (Invites is not { } invites || Users is not { } users)
+        {
+            return;
+        }
+
+        try
+        {
+            if ((await users.ListUsersAsync(Employee.Email)).Any(u => string.Equals(u.Email, Employee.Email, StringComparison.OrdinalIgnoreCase)))
+            {
+                _state = State.HasAccount;
+                return;
+            }
+
+            var pending = (await invites.ListAsync()).Where(i => i.Status == InviteStatus.Pending && string.Equals(i.Email, Employee.Email, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(i => i.CreatedAtUtc).FirstOrDefault();
+            _state = pending is null ? State.None : State.Invited;
+            _expires = pending?.ExpiresAtUtc.ToLocalTime();
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            // Not someone who administers users: no panel.
+        }
+    }
+
+    private async Task InviteAsync()
+    {
+        if (Invites is not { } invites)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await invites.CreateAsync(new CreateInviteRequest(Employee.Email, Employee.DisplayName, OrgRoles.Employee));
+            Snackbar.Add($"Invited {Employee.DisplayName}. They'll get an email with a link.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
