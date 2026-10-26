@@ -6,6 +6,7 @@ using Workbench.Contracts.Revenue;
 using Workbench.Contracts.Time;
 using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Domain;
+using Workbench.Domain.Notifications;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 using static Workbench.Tests.Resourcing.ResourcingHost;
@@ -162,6 +163,39 @@ public sealed class ProjectLifecycleTests
         await host.As(Finance).Get<IProjectPlanService>().ApproveAsync(project.Id);
         var after = await host.As(Dev).Get<ITimesheetService>().GetOrCreateMyTimesheetAsync(new DateOnly(2026, 10, 14));
         Assert.Contains("1002 starts Oct 19", Assert.Single(after.NotOpenYet!, c => c.ProjectCode == "1002").Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_project_handed_off_without_a_plan_is_finished_in_one_step_like_a_started_one()
+    {
+        await using var host = await HostAsync();
+        var contract = await ContractAsync(host);
+        await using (var db = await host.Db.CreateAsync())
+        {
+            var c = await db.Set<Contract>().SingleAsync();
+            c.Type = ContractType.TimeAndMaterials;
+            db.Set<Clin>().Add(new Clin
+            {
+                ContractId = contract, Number = "0001", Description = "Base period", Pricing = ClinPricing.TimeAndMaterials, CeilingValue = 600_000m,
+                FundedValue = 100_000m, PeriodStart = new DateOnly(2026, 1, 1), PeriodEnd = new DateOnly(2027, 12, 31), Order = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // What the CRM hand-off leaves: a project on the contract with a manager, and no WBS or plan.
+        var shell = await host.As(Finance).Get<IProjectService>().CreateProjectAsync(
+            new SaveProjectRequest("3003", "Cloud migration", contract, host.PmId, ProjectState.Planning, new DateOnly(2026, 10, 19), new DateOnly(2027, 10, 18)));
+        Assert.Null(shell.SheetId);
+
+        var finished = await host.As(Finance).Get<IProjectStartService>().FinishSetupAsync(shell.Id);
+
+        Assert.NotNull(finished.SheetId);
+        var wbs = await host.Get<IProjectService>().ListWbsAsync(shell.Id);
+        Assert.Equal(["3003.01 CLIN 0001 Base period"], wbs.Select(w => $"{w.Code} {w.Name}"));
+        Assert.Single((await host.Get<IRevenueSetupService>().GetProjectAsync(shell.Id)).Setups);
+        await using var verify = await host.Db.CreateAsync();
+        Assert.Contains(await verify.Set<Notification>().Where(n => n.RecipientEmail == Pm).ToListAsync(), n => n.Title.Contains("3003", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<ArgumentException>(() => host.As(Finance).Get<IProjectStartService>().FinishSetupAsync(shell.Id)); // once
     }
 
     [Fact]

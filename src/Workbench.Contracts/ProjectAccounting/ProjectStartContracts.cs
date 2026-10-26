@@ -63,4 +63,10 @@ public interface IProjectStartService
     /// the template or source project, and its plan sheet. Returns the project with its <c>SheetId</c>.
     /// </summary>
     Task<ProjectDto> StartAsync(StartProjectRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finishes a project that has no plan yet (one handed off from a won opportunity): the contract's CLINs as WBS rows, the
+    /// plan sheet, revenue set up from the contract, its labor categories, and the project manager asked to plan it.
+    /// </summary>
+    Task<ProjectDto> FinishSetupAsync(Guid projectId, CancellationToken cancellationToken = default);
 }

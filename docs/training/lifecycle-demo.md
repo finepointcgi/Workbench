@@ -15,6 +15,10 @@ under the approval bar shows the steps and marks the next one.
 | **5103** Lifecycle 3: awaiting approval | Sam's plan is with Finance | Pat has the *Review the plan* to-do. Open it, see the people and hours, **Approve**: the project turns Active and the baseline is set. | Finance |
 | **5104** Lifecycle 4: executing | Plan approved | Baseline (40 h) and working budget, project Active, every step ticked. Make a change to the people: the plan shows *Changed since approval* against the baseline. | Sam, then Finance |
 
+A project handed off from a won opportunity (BD › Outcome › *Create contract and project*) starts with no plan: Finance lands on it,
+and one button, **Set up the plan from the contract**, makes the WBS from the CLINs, the plan, revenue and labor categories, and
+asks the project manager to plan it. From there it is the same as 5102.
+
 The existing project **1001** is the long-running one: months of approved time, burden allocations, invoices, a revenue run,
 a bank statement with a fee to book. Use it for the numbers (costs, billing, reconciliation); use 5101 to 5104 for the process.
 
