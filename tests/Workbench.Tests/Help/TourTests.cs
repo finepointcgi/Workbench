@@ -52,6 +52,23 @@ public sealed class TourTests
     }
 
     [Fact]
+    public async Task Someone_who_lands_on_another_page_first_isnt_interrupted_and_gets_the_tour_on_home()
+    {
+        var state = new FakeHelpState();
+        await using var ctx = Context(state);
+        var navigation = ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+        navigation.NavigateTo("projects/5101/plan"); // from a to-do or an emailed link
+        var cut = ctx.Render<WelcomeTour>(p => p.Add(x => x.Access, Access(OrgRoles.Employee)));
+
+        await Task.Delay(100);
+        Assert.Empty(cut.FindAll("[data-testid='welcome-tour']"));
+
+        navigation.NavigateTo("");
+        cut.WaitForAssertion(() => Assert.Equal("Step 1 of 5", cut.Find("[data-testid='tour-progress']").TextContent));
+        Assert.Empty(state.Completed); // it wasn't dismissed by being skipped over
+    }
+
+    [Fact]
     public async Task Finishing_the_tour_remembers_it_and_escape_dismisses()
     {
         var state = new FakeHelpState();
