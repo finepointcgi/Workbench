@@ -60,11 +60,44 @@ public sealed class ProjectPlanService(
         return await ToDtoAsync(db, project, cancellationToken);
     }
 
+    public async Task<ProjectPlanDto> SaveCategoriesAsync(Guid projectId, IReadOnlyList<Guid> laborCategoryIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(laborCategoryIds);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var project = await ProjectAsync(db, projectId, cancellationToken);
+        var wanted = laborCategoryIds.Distinct().ToList();
+        var known = await db.Set<LaborCategory>().AsNoTracking().Where(c => wanted.Contains(c.Id)).Select(c => c.Id).ToListAsync(cancellationToken);
+        if (known.Count != wanted.Count)
+        {
+            throw new ArgumentException("Unknown labor category.");
+        }
+
+        var current = await db.Set<ProjectLaborCategory>().Where(c => c.ProjectId == project.Id).ToListAsync(cancellationToken);
+        var removed = current.Where(c => !wanted.Contains(c.LaborCategoryId)).ToList();
+        var added = wanted.Where(id => current.All(c => c.LaborCategoryId != id)).ToList();
+        if (removed.Count == 0 && added.Count == 0)
+        {
+            return await ToDtoAsync(db, project, cancellationToken);
+        }
+
+        db.Set<ProjectLaborCategory>().RemoveRange(removed);
+        var now = clock.GetUtcNow().UtcDateTime;
+        db.Set<ProjectLaborCategory>().AddRange(added.Select(id => new ProjectLaborCategory { ProjectId = project.Id, LaborCategoryId = id, CreatedBy = audit.Actor, CreatedAtUtc = now }));
+        audit.Record(db, nameof(Project), project.Id, "LaborCategoriesSet", new { Categories = current.Select(c => c.LaborCategoryId) }, new { Categories = wanted });
+        await db.SaveChangesAsync(cancellationToken);
+        return await ToDtoAsync(db, project, cancellationToken);
+    }
+
     public async Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var project = await ProjectAsync(db, projectId, cancellationToken);
         var plan = await PlanRowAsync(db, project.Id, cancellationToken);
+        if (project.Status == ProjectStatus.Planning && await MissingSetupAsync(db, project, cancellationToken) is { Count: > 0 } missing)
+        {
+            throw new ArgumentException($"Finance hasn't finished setting up {project.Code} yet: they still need to add {string.Join(" and ", missing)}. You can plan, but not submit, until then.");
+        }
+
         if (plan.Status == ProjectPlanStatus.Submitted)
         {
             throw new ArgumentException("The plan is already with Finance.");
@@ -135,6 +168,14 @@ public sealed class ProjectPlanService(
                 new CreateBudgetVersionRequest("Working plan", BudgetVersionKind.Current, Description: "The approved plan, with changes Finance has approved since the baseline."), cancellationToken)).Version;
         await budgets.SaveLinesAsync(current.Id, requests, cancellationToken);
 
+        var opened = false;
+        if (await db.Set<Project>().FirstOrDefaultAsync(p => p.Id == project.Id, cancellationToken) is { Status: ProjectStatus.Planning } planning)
+        {
+            planning.Status = ProjectStatus.Active;
+            opened = true;
+            audit.Record(db, nameof(Project), project.Id, "Activated", new { Status = nameof(ProjectStatus.Planning) }, new { Status = nameof(ProjectStatus.Active), Why = "Plan approved" });
+        }
+
         plan.Status = ProjectPlanStatus.Approved;
         plan.Approvals++;
         plan.ReviewedBy = audit.Actor;
@@ -145,9 +186,9 @@ public sealed class ProjectPlanService(
             new { plan.Approvals, Hours = lines.Sum(l => l.Hours), BaselineVersionId = baseline.Id, CurrentVersionId = current.Id, plan.ReviewComment });
         await db.SaveChangesAsync(cancellationToken);
         await NotifyManagerAsync(db, project, plan.Approvals == 1 ? $"Finance approved the plan for {project.Code}" : $"Finance approved the changes to {project.Code}'s plan",
-            plan.Approvals == 1 ? "It's the project's baseline budget now. Changes from here are compared with it." : "They're in the working budget; the baseline stays as first approved.",
+            plan.Approvals == 1 ? "It's the project's baseline budget now" + (opened ? ", and the project is Active: time can be charged to it." : ".") + " Changes from here are compared with it." : "They're in the working budget; the baseline stays as first approved.",
             plan.ReviewComment, cancellationToken);
-        return await ToDtoAsync(db, project, cancellationToken);
+        return await ToDtoAsync(db, await ProjectAsync(db, projectId, cancellationToken), cancellationToken);
     }
 
     public async Task<ProjectPlanDto> ReturnAsync(Guid projectId, string comment, CancellationToken cancellationToken = default)
@@ -299,7 +340,60 @@ public sealed class ProjectPlanService(
             (PlanApprovalStatus)(int)(plan?.Status ?? ProjectPlanStatus.Draft),
             plan?.SubmittedBy, plan?.SubmittedAtUtc, plan?.SubmitNote, plan?.ReviewedBy, plan?.ReviewedAtUtc, plan?.ReviewComment, plan?.Approvals ?? 0,
             baseline?.Id, changed, since, CanEditTerms: false, CanSubmit: false, CanReview: false,
-            SubmittedByName: await NameAsync(db, plan?.SubmittedBy, ct), ReviewedByName: await NameAsync(db, plan?.ReviewedBy, ct));
+            SubmittedByName: await NameAsync(db, plan?.SubmittedBy, ct), ReviewedByName: await NameAsync(db, plan?.ReviewedBy, ct),
+            ProjectStatus: (ProjectState)(int)project.Status, Steps: await StepsAsync(db, project, loaded.Terms, plan, ct),
+            Categories: await CategoriesAsync(db, project, ct), SetupDone: project.Status != ProjectStatus.Planning || (await MissingSetupAsync(db, project, ct)).Count == 0);
+    }
+
+    /// <summary>What Finance still has to add before the manager can submit: funding (contract projects) and labor categories.</summary>
+    private static async Task<List<string>> MissingSetupAsync(IWorkbenchDbContext db, Project project, CancellationToken ct)
+    {
+        var missing = new List<string>();
+        if (project.ContractId is not null && (await ProjectTerms.LoadAsync(db, project, ct)).Terms.Funded is not > 0)
+        {
+            missing.Add("funding");
+        }
+
+        if (!await db.Set<ProjectLaborCategory>().AnyAsync(c => c.ProjectId == project.Id, ct))
+        {
+            missing.Add("labor categories");
+        }
+
+        return missing;
+    }
+
+    private static async Task<IReadOnlyList<ProjectCategoryDto>> CategoriesAsync(IWorkbenchDbContext db, Project project, CancellationToken ct)
+    {
+        var picked = (await db.Set<ProjectLaborCategory>().AsNoTracking().Where(c => c.ProjectId == project.Id).Select(c => c.LaborCategoryId).ToListAsync(ct)).ToHashSet();
+        var onContract = new HashSet<Guid>();
+        if (project.ContractId is { } contractId)
+        {
+            onContract.UnionWith(await db.Set<ContractLaborRate>().AsNoTracking().Where(r => r.ContractId == contractId).Select(r => r.LaborCategoryId).ToListAsync(ct));
+            onContract.UnionWith(await db.Set<Domain.Ceilings.Ceiling>().AsNoTracking().Where(c => c.ContractId == contractId && c.LaborCategoryId != null).Select(c => c.LaborCategoryId!.Value).ToListAsync(ct));
+        }
+
+        return (await db.Set<LaborCategory>().AsNoTracking().Where(c => c.IsActive || picked.Contains(c.Id)).OrderBy(c => c.Code).ToListAsync(ct))
+            .Select(c => new ProjectCategoryDto(c.Id, c.Code, c.Name, picked.Contains(c.Id), onContract.Contains(c.Id))).ToList();
+    }
+
+    private static async Task<IReadOnlyList<ProjectStepDto>> StepsAsync(IWorkbenchDbContext db, Project project, ProjectTermsDto terms, ProjectPlan? plan, CancellationToken ct)
+    {
+        var categories = await db.Set<ProjectLaborCategory>().CountAsync(c => c.ProjectId == project.Id, ct);
+        var hasPlan = plan is { Status: ProjectPlanStatus.Submitted or ProjectPlanStatus.Approved };
+        var started = hasPlan || await db.Set<ResourceAllocation>().AnyAsync(a => a.ProjectId == project.Id && a.Hours > 0, ct);
+        var funded = project.ContractId is null || terms.Funded is > 0;
+        var approved = plan is { Approvals: > 0 };
+        var steps = new List<(string Key, string Label, bool Done, string Detail)>
+        {
+            ("funding", "Funding", funded, funded ? (terms.Funded is { } f ? $"{Money(f)} funded" : "No contract funding needed") : "Finance adds it on a CLIN"),
+            ("categories", "Labor categories", categories > 0, categories > 0 ? $"{categories} to plan with" : "Finance picks the ones this project can use"),
+            ("manager", "Project manager", project.ProjectManagerId is not null, project.ProjectManagerId is not null ? "Assigned" : "Finance assigns one"),
+            ("plan", "Plan", hasPlan, hasPlan ? "Submitted" : started ? "The project manager is building it, then submits" : "The project manager builds the WBS and people"),
+            ("signoff", "Sign-off", approved, approved ? "Finance approved it: the baseline" : "Finance approves or returns it"),
+            ("executing", "Executing", project.Status == ProjectStatus.Active, project.Status == ProjectStatus.Active ? "Time can be charged" : "Opens when the plan is approved"),
+        };
+        var current = steps.FindIndex(s => !s.Done);
+        return steps.Select((s, i) => new ProjectStepDto(s.Key, s.Label, s.Done, i == current, s.Detail)).ToList();
     }
 
     /// <summary>A person's name for a stored email (who submitted or reviewed); the email when there's no such user.</summary>

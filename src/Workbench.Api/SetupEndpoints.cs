@@ -26,6 +26,7 @@ internal static class SetupEndpoints
         plans.MapGet("/{projectId:guid}", (Guid projectId, IProjectPlanService s, CancellationToken ct) => s.GetAsync(projectId, ct));
         plans.MapGet("/from-contract/{contractId:guid}", (Guid contractId, IProjectPlanService s, CancellationToken ct) => s.TermsFromContractAsync(contractId, ct));
         plans.MapPut("/{projectId:guid}/terms", (Guid projectId, SaveProjectTermsRequest r, IProjectPlanService s, CancellationToken ct) => s.SaveTermsAsync(projectId, r, ct));
+        plans.MapPut("/{projectId:guid}/categories", (Guid projectId, SaveProjectCategoriesRequest r, IProjectPlanService s, CancellationToken ct) => s.SaveCategoriesAsync(projectId, r.LaborCategoryIds, ct));
         plans.MapPost("/{projectId:guid}/submit", (Guid projectId, PlanReviewRequest r, IProjectPlanService s, CancellationToken ct) => s.SubmitAsync(projectId, r.Comment, ct));
         plans.MapPost("/{projectId:guid}/approve", (Guid projectId, PlanReviewRequest r, IProjectPlanService s, CancellationToken ct) => s.ApproveAsync(projectId, r.Comment, ct));
         plans.MapPost("/{projectId:guid}/return", (Guid projectId, PlanReviewRequest r, IProjectPlanService s, CancellationToken ct) => s.ReturnAsync(projectId, r.Comment ?? "", ct));

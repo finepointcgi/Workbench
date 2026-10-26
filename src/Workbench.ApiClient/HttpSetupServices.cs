@@ -71,6 +71,9 @@ public sealed class HttpProjectPlanService(HttpClient http) : IProjectPlanServic
     public async Task<ProjectPlanDto> SaveTermsAsync(Guid projectId, SaveProjectTermsRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PutAsJsonAsync($"{Root}/{projectId}/terms", request, cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
 
+    public async Task<ProjectPlanDto> SaveCategoriesAsync(Guid projectId, IReadOnlyList<Guid> laborCategoryIds, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Root}/{projectId}/categories", new SaveProjectCategoriesRequest(laborCategoryIds), cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
+
     public async Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"{Root}/{projectId}/submit", new PlanReviewRequest(note), cancellationToken)).ReadAsync<ProjectPlanDto>(cancellationToken);
 

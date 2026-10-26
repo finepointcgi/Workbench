@@ -64,10 +64,22 @@
             </MudPaper>
         }
 
+        @if (_finance && _contractId is not null)
+        {
+            <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
+                       Label="Labor categories" Clearable="true" data-testid="start-categories"
+                       HelperText="What the project manager can plan with. Leave empty to use the ones the contract prices.">
+                @foreach (var c in _categories)
+                {
+                    <MudSelectItem T="Guid" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
         @if (_finance)
         {
             <MudSelect T="Guid?" @bind-Value="_managerId" Label="Project manager" Clearable="true" data-testid="start-manager"
-                       HelperText="They get a to-do to plan it. Leave it empty to manage it yourself.">
+                       HelperText="They get a to-do to plan it once funding and labor categories are in. Leave it empty to manage it yourself.">
                 @foreach (var e in _employees)
                 {
                     <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
@@ -183,6 +195,8 @@
     private bool _finance;
     private IReadOnlyList<EmployeeDto> _employees = [];
     private Guid? _managerId;
+    private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private IReadOnlyCollection<Guid> _categoryIds = new HashSet<Guid>();
     private ProjectTermsDto? _terms;
     private decimal? _ceiling;
     private decimal? _funded;
@@ -208,6 +222,7 @@
             {
                 _finance = PlanTerms is not null;
                 _employees = (await people.ListEmployeesAsync()).OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+                _categories = (await people.ListLaborCategoriesAsync()).Where(c => c.IsActive).OrderBy(c => c.Code, StringComparer.OrdinalIgnoreCase).ToList();
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
@@ -295,7 +310,8 @@
                 ? new SaveProjectTermsRequest(_ceiling, _funded, _pricing, _feePercent is { } fee ? fee / 100m : null)
                 : null;
             var project = await Start.StartAsync(new StartProjectRequest(_code!.Trim(), _name!.Trim(), _contractId, from,
-                TemplateKey, SourceProjectId, Import: _from == ProjectStartFrom.ImportExcel ? _import : null, ProjectManagerId: _managerId, Terms: terms));
+                TemplateKey, SourceProjectId, Import: _from == ProjectStartFrom.ImportExcel ? _import : null, ProjectManagerId: _managerId, Terms: terms,
+                LaborCategoryIds: _finance && _contractId is not null && _categoryIds.Any() ? _categoryIds.ToList() : null));
             var handedOver = _managerId is { } pm && _employees.FirstOrDefault(e => e.Id == pm) is { } manager && project.ProjectManagerId == pm;
             Snackbar.Add(handedOver
                 ? $"Created {project.Code}. {_employees.First(e => e.Id == _managerId).DisplayName} has a to-do to plan it."
