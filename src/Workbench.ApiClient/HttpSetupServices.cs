@@ -55,6 +55,9 @@ public sealed class HttpProjectStartService(HttpClient http) : IProjectStartServ
     public async Task<ProjectDto> StartAsync(StartProjectRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync("api/v1/project-start", request, cancellationToken)).ReadAsync<ProjectDto>(cancellationToken);
 
+    public async Task<ProjectDto> FinishSetupAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"api/v1/project-start/{projectId}/finish", null, cancellationToken)).ReadAsync<ProjectDto>(cancellationToken);
+
     private sealed record SuggestedCode(string Code);
 }
 

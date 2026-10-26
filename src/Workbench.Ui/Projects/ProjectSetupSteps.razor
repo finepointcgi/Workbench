@@ -1,48 +1,58 @@
-@* "Set up this project" on the Overview, for the people who budget and staff it: contract and WBS → budget by labor
-   category → staff people. Hidden once every step is done. Fails soft when the staffing service isn't available. *@
+@* "Where this project is" on the Overview: funding, labor categories, project manager, plan, sign-off, executing, with the one step
+   that's next and a button for it. The same steps as the Plan tab's strip, so there is one list, not two. A project with no plan yet
+   (one handed off from a won opportunity) gets one button to finish its setup from the contract. Hidden once every step is done.
+   Fails soft for people who can't see the plan. *@
 @using Microsoft.Extensions.DependencyInjection
-@using Workbench.Contracts.Resourcing
+@using Workbench.Contracts.ProjectAccounting
 @inject IServiceProvider Services
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
-@if (_progress is { IsComplete: false } progress)
+@if (Hub.Project.SheetId is null && Hub.Tabs.Setup && Hub.Project.ContractId is not null)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="setup-no-plan">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">This project has no plan yet</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Set it up from the contract: its CLINs become the first rows of the WBS, the plan is made, and revenue and labor categories follow the contract.
+            @(Hub.Project.ProjectManagerId is null ? "Pick a project manager next." : "Its project manager is then asked to plan it.")
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="FinishAsync" Disabled="_busy" data-testid="finish-setup">Set up the plan from the contract</MudButton>
+    </MudPaper>
+}
+else if (_plan is { Steps: { } steps } plan && steps.Any(s => !s.Done))
 {
     <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="setup-steps">
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-1">
-            <MudText Typo="Typo.h6" HtmlTag="h2">Set up this project</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">@progress.DoneCount of @progress.Steps.Count done</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="h2">Where this project is</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@steps.Count(s => s.Done) of @steps.Count done</MudText>
         </MudStack>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-            Budget by labor category first, then staff people into those categories. Timesheets then charge actual hours, which are compared with the budget.
-        </MudText>
-        <MudProgressLinear Value="@(100.0 * progress.DoneCount / progress.Steps.Count)" Color="Color.Primary" Rounded="true" Size="Size.Small" Class="mb-3"
-                           aria-label="@($"Project setup: {progress.DoneCount} of {progress.Steps.Count} steps done")" />
+        <MudProgressLinear Value="@(100.0 * steps.Count(s => s.Done) / steps.Count)" Color="Color.Primary" Rounded="true" Size="Size.Small" Class="mb-3"
+                           aria-label="@($"Project steps: {steps.Count(s => s.Done)} of {steps.Count} done")" />
         <ol class="wb-setup-steps">
-            @for (var i = 0; i < progress.Steps.Count; i++)
+            @for (var i = 0; i < steps.Count; i++)
             {
-                var step = progress.Steps[i];
-                var isNext = step == progress.Next;
-                <li data-step="@step.Key" data-done="@(step.IsDone ? "true" : "false")">
+                var step = steps[i];
+                var number = i + 1; // captured: the content below renders after the loop has moved on
+                var action = step.Current ? ActionFor(step.Key) : null;
+                <li data-step="@step.Key" data-done="@(step.Done ? "true" : "false")">
                     <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
-                        @if (step.IsDone)
+                        @if (step.Done)
                         {
                             <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" aria-hidden="true" />
                         }
                         else
                         {
-                            <span class="wb-step-number @(isNext ? "next" : "")" aria-hidden="true">@(i + 1)</span>
+                            <span class="wb-step-number @(step.Current ? "next" : "")" aria-hidden="true">@number</span>
                         }
                         <div style="flex: 1">
                             <MudText Typo="Typo.subtitle2">
-                                @step.Title<span class="wb-sr-only">@(step.IsDone ? " (done)" : isNext ? " (next)" : " (to do)")</span>
+                                @step.Label<span class="wb-sr-only">@(step.Done ? " (done)" : step.Current ? " (next)" : " (to do)")</span>
                             </MudText>
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Explanation</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@step.Status</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Detail</MudText>
                         </div>
-                        @if (ProjectsFormat.AllowsLink(Hub.Tabs, step.Tab))
+                        @if (action is { } a)
                         {
-                            <MudButton Href="@($"projects/{Hub.Project.Id}/{step.Tab}")" Size="Size.Small"
-                                       Variant="@(isNext ? Variant.Filled : Variant.Text)" Color="Color.Primary"
-                                       data-testid="@($"setup-step-{step.Key}")">@step.ActionLabel</MudButton>
+                            <MudButton Href="@a.Href" Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" data-testid="@($"setup-step-{step.Key}")">@a.Label</MudButton>
                         }
                     </MudStack>
                 </li>
@@ -62,23 +72,60 @@
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
 
-    private ProjectSetupProgressDto? _progress;
+    private ProjectPlanDto? _plan;
+    private bool _busy;
+
+    private IProjectPlanService? Plans => Services.GetService<IProjectPlanService>();
+
+    private IProjectStartService? Start => Services.GetService<IProjectStartService>();
 
     protected override async Task OnParametersSetAsync()
     {
-        _progress = null;
-        if (!Hub.Tabs.Team || Services.GetService<IProjectStaffingService>() is not { } staffing)
+        _plan = null;
+        if (Hub.Project.SheetId is null || Plans is not { } plans)
         {
             return;
         }
 
         try
         {
-            _progress = await staffing.GetSetupProgressAsync(Hub.Project.Id);
+            _plan = await plans.GetAsync(Hub.Project.Id);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException or WorkbenchForbiddenException)
         {
-            _progress = null;
+            // Not someone who sees the plan's money: no steps to show.
+        }
+    }
+
+    /// <summary>The button for the next step, only when the viewer can do something about it.</summary>
+    private (string Label, string Href)? ActionFor(string key) => key switch
+    {
+        "funding" when Hub.Tabs.Setup && Hub.Project.ContractId is { } contractId => ("Fund the CLINs", $"setup/contracts/{contractId}"),
+        "categories" when _plan?.CanEditTerms == true => ("Choose the categories", $"projects/{Hub.Project.Id}/plan"),
+        "manager" when Hub.Tabs.Setup => ("Pick a manager", $"projects/{Hub.Project.Id}/setup"),
+        "plan" when Hub.Tabs.Plan => ("Open the plan", $"projects/{Hub.Project.Id}/plan"),
+        "signoff" when _plan?.CanReview == true => ("Review the plan", $"projects/{Hub.Project.Id}/plan"),
+        _ => null,
+    };
+
+    private async Task FinishAsync()
+    {
+        if (Start is not { } start)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var project = await start.FinishSetupAsync(Hub.Project.Id);
+            Snackbar.Add($"The plan for {project.Code} is ready.", Severity.Success);
+            Navigation.NavigateTo($"projects/{project.Id}", forceLoad: true);
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            _busy = false;
         }
     }
 }

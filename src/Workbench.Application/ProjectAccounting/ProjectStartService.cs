@@ -152,13 +152,59 @@ public sealed class ProjectStartService(
             await planTerms.SaveTermsAsync(project.Id, terms, cancellationToken);
         }
 
+        await FinishAsync(project, request.LaborCategoryIds, manager, me, cancellationToken);
+        return await projects.GetProjectAsync(project.Id, cancellationToken) ?? project;
+    }
+
+    /// <summary>
+    /// A project that exists without a plan (one handed off from a won opportunity) is finished the way "Start a project" would
+    /// have: the contract's CLINs as its first WBS rows, the plan sheet, revenue set up from the contract, the contract's labor
+    /// categories, and the project manager asked to plan it. One step, so there is one way a project becomes ready to plan.
+    /// </summary>
+    public async Task<ProjectDto> FinishSetupAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var project = await projects.GetProjectAsync(projectId, cancellationToken) ?? throw WorkbenchNotFoundException.For("Project", projectId);
+        if (project.SheetId is not null)
+        {
+            throw new ArgumentException($"{project.Code} already has its plan.");
+        }
+
+        var me = (await currentUser.GetAsync(cancellationToken)).EmployeeId;
+        if (project.ContractId is { } contractId && (await projects.ListWbsAsync(project.Id, cancellationToken)).Count == 0)
+        {
+            await FromContractAsync(project, contractId, cancellationToken);
+        }
+
+        project = await planSync.CreatePlanSheetAsync(project.Id, cancellationToken);
+        if (project.SheetId is { } sheetId)
+        {
+            DateOnly start;
+            await using (var db = await dbFactory.CreateAsync(cancellationToken))
+            {
+                var calendar = await PlanReflow.CalendarAsync(db, cancellationToken);
+                start = calendar.OnOrAfter(project.Start ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime));
+            }
+
+            foreach (var item in (await items.ListAsync(sheetId, cancellationToken)).Where(i => i.Start is null))
+            {
+                await items.UpdateAsync(sheetId, item.Id, new UpdateItemRequest(item.Title, start, start, item.CostpointWbsId, item.Values), cancellationToken);
+            }
+        }
+
+        await FinishAsync(project, null, project.ProjectManagerId, me, cancellationToken);
+        return await projects.GetProjectAsync(project.Id, cancellationToken) ?? project;
+    }
+
+    /// <summary>What every new project gets once it exists: revenue set up from the contract, its labor categories, and its manager asked to plan it.</summary>
+    private async Task FinishAsync(ProjectDto project, IReadOnlyList<Guid>? categoryIds, Guid? manager, Guid? me, CancellationToken cancellationToken)
+    {
         await SetUpRevenueAsync(project, planTerms, cancellationToken);
 
         // The labor categories the plan may use: the ones given, else the ones the contract prices. Only Finance can set them,
         // so a project a PM requests waits for Finance to pick them before it can be submitted.
         if (planTerms is not null && project.ContractId is not null)
         {
-            var categories = request.LaborCategoryIds ?? await ContractCategoriesAsync(project.ContractId.Value, cancellationToken);
+            var categories = categoryIds ?? await ContractCategoriesAsync(project.ContractId.Value, cancellationToken);
             if (categories.Count > 0)
             {
                 try
@@ -175,8 +221,6 @@ public sealed class ProjectStartService(
         {
             await handOff.HandOffAsync(project.Id, cancellationToken);
         }
-
-        return await projects.GetProjectAsync(project.Id, cancellationToken) ?? project;
     }
 
     public async Task<PlanImportPreview> CheckImportAsync(PlanImportRequest request, CancellationToken cancellationToken = default)
