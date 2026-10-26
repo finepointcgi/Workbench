@@ -126,6 +126,12 @@ public sealed class PermissionCheckingProjectStartService(Contracts.ProjectAccou
         return await inner.StartAsync(request, cancellationToken);
     }
 
+    public async Task<Contracts.ProjectAccounting.ProjectDto> FinishSetupAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.FinishSetupAsync(projectId, cancellationToken);
+    }
+
     private async Task RequireAsync(CancellationToken cancellationToken)
     {
         access.RequireSignedIn();
