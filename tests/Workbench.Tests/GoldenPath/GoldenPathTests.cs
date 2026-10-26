@@ -1,5 +1,6 @@
 using Workbench.ApiClient;
 using Workbench.Contracts.Accounting;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Cash;
 using Workbench.Contracts.Contracts;
@@ -100,6 +101,8 @@ public sealed class GoldenPathTests
         sheet = await timesheets.SaveEntriesAsync(sheet.Timesheet.Id, new SaveTimeEntriesRequest(
             keep.Concat(days.Select(d => new TimeEntryInput(wbs.Id, d, 8m))).ToList(), Reason: reason));
         await timesheets.SubmitAsync(sheet.Timesheet.Id, new SubmitTimesheetRequest(true));
+        var waiting = (await new HttpApprovalInboxService(finance).ListMineAsync()).Single(i => i.DocumentId == sheet.Timesheet.Id);
+        Assert.Equal("Alex Rivera", waiting.Submitter); // the inbox says who by name, not by sign-in email
         await new HttpTimesheetApprovalService(finance).ApproveAsync(sheet.Timesheet.Id);
 
         // ---- The ledger has the labor, and project financials agree with it ----

@@ -113,7 +113,7 @@
                         }
                     </MudTd>
                     <MudTd DataLabel="From">
-                        <div class="wb-inbox-wrap">@context.SubmitterEmail</div>
+                        <div class="wb-inbox-wrap" title="@context.SubmitterEmail">@context.Submitter</div>
                         <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                             @context.StepName @(context.ScopeLabel is null ? "" : $"({context.ScopeLabel})")@(context.OnBehalfOf is null ? "" : $" · for {context.OnBehalfOf}")
                         </MudText>

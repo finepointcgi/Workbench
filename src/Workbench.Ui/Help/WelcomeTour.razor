@@ -1,6 +1,7 @@
 @* The first sign-in welcome tour for the user's role: a small card that steps through where things are and points at
    each one. Finishing or skipping it is remembered on the server (IHelpStateService), so it shows once per person,
-   on any device. Escape skips it. *@
+   on any device. Escape skips it. It opens on Home: someone who arrives on another page (from a link or a to-do) isn't
+   interrupted there, and gets the tour when they next reach Home. *@
 @using Microsoft.Extensions.DependencyInjection
 @using Microsoft.JSInterop
 @using Workbench.Contracts.Support
@@ -48,6 +49,10 @@
     [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
 
     private Tour? _tour;
+
+    // The tour this person hasn't seen yet, waiting for them to be on Home.
+    private Tour? _pending;
+    private bool _subscribed;
     private int _index;
     private bool _open;
     private bool _checked;
@@ -81,8 +86,33 @@
             return;
         }
 
-        Open(tour);
+        _pending = tour;
+        if (!_subscribed)
+        {
+            _subscribed = true;
+            Navigation.LocationChanged += OnLocationChanged;
+        }
+
+        OpenIfAtHome();
     }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(() =>
+        {
+            OpenIfAtHome();
+            StateHasChanged();
+        });
+
+    private void OpenIfAtHome()
+    {
+        if (_pending is { } tour && IsHomePage())
+        {
+            _pending = null;
+            Open(tour);
+        }
+    }
+
+    private bool IsHomePage() => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/') == "";
 
     /// <summary>Starts the tour for the user's role again (from the help panel).</summary>
     public async Task RestartAsync()
@@ -208,6 +238,11 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_subscribed)
+        {
+            Navigation.LocationChanged -= OnLocationChanged;
+        }
+
         if (_module is not null)
         {
             try

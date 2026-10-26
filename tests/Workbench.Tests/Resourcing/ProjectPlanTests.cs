@@ -340,6 +340,11 @@ public sealed class ProjectPlanTests
         Assert.Equal((80m, 100m, 20m), (se2.BaselineHours, se2.PlanHours, se2.HoursChange));
         Assert.True((await host.As(Pm).Get<IProjectPlanService>().GetAsync(host.Project1)).CanSubmit);
 
+        // The PM's to-do is to send the changes, not two staffing gaps against a budget that is the plan.
+        var afterApproval = (await host.As(Pm).Get<IMyTodoService>().GetAsync()).Items;
+        Assert.Contains(afterApproval, i => i.Key == $"plan:{host.Project1}:changes");
+        Assert.DoesNotContain(afterApproval, i => i.Key.StartsWith($"staffing:{host.Project1}:over:", StringComparison.Ordinal) || i.Key.StartsWith($"staffing:{host.Project1}:unstaffed", StringComparison.Ordinal));
+
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1, "Dana needs 20 more hours");
         var second = await host.As(Finance).Get<IProjectPlanService>().ApproveAsync(host.Project1);
         Assert.Equal(2, second.Approvals);

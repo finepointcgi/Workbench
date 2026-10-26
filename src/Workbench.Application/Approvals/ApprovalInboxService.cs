@@ -64,9 +64,12 @@ public sealed class ApprovalInboxService(
             .ToList();
         var shares = await ProjectHoursAsync(db, items.Where(x => x.OnlyProjects is not null && x.Item.DocumentType == ApprovalDocumentTypes.Timesheet)
             .Select(x => (x.Item.DocumentId, (IReadOnlyList<Guid>)x.OnlyProjects!)).ToList(), cancellationToken);
-        return items.Select(x => shares.TryGetValue(x.Item.DocumentId, out var share)
+        var emails = items.Select(x => x.Item.SubmitterEmail).Distinct().ToList();
+        var names = await db.Set<Domain.Identity.AppUser>().AsNoTracking().Where(u => emails.Contains(u.Email) && u.DisplayName != "")
+            .ToDictionaryAsync(u => u.Email, u => u.DisplayName, cancellationToken);
+        return items.Select(x => (shares.TryGetValue(x.Item.DocumentId, out var share)
                 ? x.Item with { Amount = share.Hours, Summary = $"{share.Hours:0.0} h on {share.Codes} of {share.Total:0.0} h" }
-                : x.Item)
+                : x.Item) with { SubmitterName = names.GetValueOrDefault(x.Item.SubmitterEmail) })
             .ToList();
     }
 
