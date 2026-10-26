@@ -342,7 +342,7 @@ public sealed class ProjectPlanService(
             baseline?.Id, changed, since, CanEditTerms: false, CanSubmit: false, CanReview: false,
             SubmittedByName: await NameAsync(db, plan?.SubmittedBy, ct), ReviewedByName: await NameAsync(db, plan?.ReviewedBy, ct),
             ProjectStatus: (ProjectState)(int)project.Status, Steps: await StepsAsync(db, project, loaded.Terms, plan, ct),
-            Categories: await CategoriesAsync(db, project, ct), SetupDone: (await MissingSetupAsync(db, project, ct)).Count == 0);
+            Categories: await CategoriesAsync(db, project, ct), SetupDone: project.Status != ProjectStatus.Planning || (await MissingSetupAsync(db, project, ct)).Count == 0);
     }
 
     /// <summary>What Finance still has to add before the manager can submit: funding (contract projects) and labor categories.</summary>

@@ -17,7 +17,7 @@
             @if (plan.CanSubmit && !_reviewing)
             {
                 <input class="wb-approval-note" placeholder="Note for Finance (optional)" aria-label="Note for Finance" @bind="_note" />
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="_busy"
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="@(_busy || !plan.SetupDone)"
                            data-testid="plan-submit">@(plan.Status == PlanApprovalStatus.Approved ? "Submit the changes" : "Submit plan for approval")</MudButton>
             }
             @if (plan.CanReview)
@@ -234,6 +234,7 @@
             $"Since the approved baseline: {Signed(plan.HoursChange)} h. Submit the changes when they're ready.",
         PlanApprovalStatus.Approved => $"Approved by {plan.ReviewedByName ?? plan.ReviewedBy}{When(plan.ReviewedAtUtc)}. It's the project's baseline budget.",
         PlanApprovalStatus.Returned => "Make the changes Finance asked for, then submit it again.",
+        _ when !plan.SetupDone => "Plan it now. You can submit it once Finance has added the project's funding and labor categories.",
         _ => "Build the WBS and assign people, then submit the plan to Finance.",
     };
 
