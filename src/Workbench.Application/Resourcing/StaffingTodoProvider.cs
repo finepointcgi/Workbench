@@ -23,9 +23,12 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
         // A project Finance handed over is planned from its plan to-do (ProjectPlanTodoProvider), not "assign people".
         var managed = await context.ManagedProjectsAsync(cancellationToken);
         var ids = managed.Select(p => p.Id).ToList();
-        HashSet<Guid> handedOver;
+        HashSet<Guid> handedOver, approved;
         await using (var db = await context.DbFactory.CreateAsync(cancellationToken))
         {
+            approved = (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+                db.Set<Domain.ProjectAccounting.ProjectPlan>().Where(p => ids.Contains(p.ProjectId) && p.Status == Domain.ProjectAccounting.ProjectPlanStatus.Approved)
+                    .Select(p => p.ProjectId), cancellationToken)).ToHashSet();
             handedOver = (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
                 db.Set<Domain.ProjectAccounting.ProjectPlan>().Where(p => ids.Contains(p.ProjectId) && p.Status != Domain.ProjectAccounting.ProjectPlanStatus.Approved)
                     .Select(p => p.ProjectId), cancellationToken)).ToHashSet();
@@ -38,7 +41,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
         }
 
         var empty = plans.Where(NeedsPeople).ToList();
-        var items = plans.SelectMany(p => For(p, includeAssign: empty.Count == 1)).ToList();
+        var items = plans.SelectMany(p => For(p, includeAssign: empty.Count == 1, planIsBudget: approved.Contains(p.ProjectId))).ToList();
         if (empty.Count > 1)
         {
             // One item for all of them, so several new projects don't crowd out everything else.
@@ -61,7 +64,8 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
 
     public static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan) => For(plan, includeAssign: true);
 
-    private static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan, bool includeAssign)
+    /// <param name="planIsBudget">Finance approved the plan, so it is the budget: changes since are sent for approval (the plan's own to-do), not chased as staffing gaps.</param>
+    private static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan, bool includeAssign, bool planIsBudget = false)
     {
         var link = $"projects/{plan.ProjectId}/staffing";
         string H(decimal h) => ProjectStaffingService.Hours(h);
@@ -75,7 +79,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
         }
 
         // Without a labor budget there's nothing to be under or over; the people assigned are the plan.
-        var unstaffed = plan.HasLaborBudget ? plan.Categories.Where(c => c.Status == StaffingGapStatus.Understaffed).ToList() : [];
+        var unstaffed = plan.HasLaborBudget && !planIsBudget ? plan.Categories.Where(c => c.Status == StaffingGapStatus.Understaffed).ToList() : [];
         if (unstaffed.Count > 0)
         {
             yield return new MyTodoItem(
@@ -85,7 +89,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
                 TodoUrgency.ThisWeek, null, link, "Assign people", Priority: 5);
         }
 
-        var over = plan.HasLaborBudget ? plan.Categories.Where(c => c.Status is StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted).ToList() : [];
+        var over = plan.HasLaborBudget && !planIsBudget ? plan.Categories.Where(c => c.Status is StaffingGapStatus.Overstaffed or StaffingGapStatus.NotBudgeted).ToList() : [];
         if (over.Count > 0)
         {
             yield return new MyTodoItem(

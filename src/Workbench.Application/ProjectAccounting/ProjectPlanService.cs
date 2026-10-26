@@ -301,7 +301,7 @@ public sealed class ProjectPlanService(
             .ToList();
     }
 
-    private static async Task<bool> ChangedSinceApprovalAsync(IWorkbenchDbContext db, Guid projectId, IReadOnlyList<PlanLine> lines, CancellationToken ct)
+    internal static async Task<bool> ChangedSinceApprovalAsync(IWorkbenchDbContext db, Guid projectId, IReadOnlyList<PlanLine> lines, CancellationToken ct)
     {
         var current = await db.Set<BudgetVersion>().AsNoTracking().Where(v => v.ProjectId == projectId && v.Kind == BudgetKind.Current)
             .OrderByDescending(v => v.CreatedAtUtc).Select(v => v.Id).FirstOrDefaultAsync(ct);
@@ -485,6 +485,11 @@ public sealed class ProjectPlanTodoProvider : IMyTodoProvider
                 case ProjectPlanStatus.Returned:
                     items.Add(new MyTodoItem($"plan:{project.Id}:returned:{plan.ReviewedAtUtc:O}", TodoCategories.Project, $"Fix and resubmit the plan for {project.Code}",
                         $"Finance returned it: \"{plan.ReviewComment}\"", TodoUrgency.ThisWeek, null, link, "Open the plan", Priority: 8));
+                    break;
+                case ProjectPlanStatus.Approved when await ProjectPlanService.ChangedSinceApprovalAsync(db, project.Id, await ProjectPlanService.PlanLinesAsync(db, project.Id, cancellationToken), cancellationToken):
+                    // Once approved, the plan is the budget: people or hours added since are changes to send, not a staffing gap to chase.
+                    items.Add(new MyTodoItem($"plan:{project.Id}:changes", TodoCategories.Project, $"Send the changes to the plan for {project.Code}",
+                        "People or hours have changed since Finance approved it. Send the changes for approval.", TodoUrgency.ThisWeek, null, link, "Review the changes", Priority: 6));
                     break;
                 case ProjectPlanStatus.Draft:
                     var hours = await db.Set<ResourceAllocation>().AnyAsync(a => a.ProjectId == project.Id && a.Hours > 0, cancellationToken);

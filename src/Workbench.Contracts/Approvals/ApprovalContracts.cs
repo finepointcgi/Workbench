@@ -236,7 +236,13 @@ public sealed record ApprovalInboxItemDto(
     int BusinessDaysWaiting,
     string? OnBehalfOf,
     string Link,
-    Guid? ProjectId = null);
+    Guid? ProjectId = null,
+
+    /// <summary>Who submitted it, by name (falls back to the email).</summary>
+    string? SubmitterName = null)
+{
+    public string Submitter => string.IsNullOrWhiteSpace(SubmitterName) ? SubmitterEmail : SubmitterName;
+}
 
 public sealed record ApprovalTaskDto(
     Guid Id,

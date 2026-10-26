@@ -70,9 +70,12 @@ Each has a test that fails without the fix.
 | B3 | Typing a task into a plan with a single CLIN row puts it under the CLIN. |
 | B4 | Submit and Approve say what's still wrong with the plan first (overbooked people, hours that don't fit, failing schedule checks, past funding) and ask. |
 | B7 | Post backlog asks before posting to the ledger. |
+| B5 | The welcome tour opens on Home. Someone who arrives on another page first isn't interrupted, and gets it when they reach Home. |
+| C1 (part) | The Approvals inbox shows who submitted by name (the email is the tooltip). |
+| New | Once the plan is approved, changes to people or hours are one to-do ("Send the changes to the plan"), not two staffing gaps against a budget that is the plan. |
 | A5 | Already available: Setup lets a project's manager approve time on their projects. |
 
-Open: A3, B5, B6, B8, B9 and the C items below.
+Open: A3, B6, B8, B9 and the rest of the C items below.
 
 ## Still to do, ranked
 
