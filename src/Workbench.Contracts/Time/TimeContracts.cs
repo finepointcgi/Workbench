@@ -71,6 +71,9 @@ public sealed record TimeEntryRevisionDto(
     string Reason);
 
 /// <summary>A charge code usable somewhere in the timesheet period, and the dates it may be charged.</summary>
+/// <summary>A code the employee is staffed or assigned on that they can't charge yet, and when or why it opens.</summary>
+public sealed record UpcomingChargeCodeDto(Guid WbsElementId, string Code, string Name, string ProjectCode, string Reason);
+
 public sealed record TimesheetChargeCodeDto(ChargeCodeDto ChargeCode, IReadOnlyList<DateOnly> ChargeableDates, bool RecentlyUsed);
 
 public sealed record TimesheetDayDto(
@@ -90,7 +93,10 @@ public sealed record TimesheetDetailDto(
     IReadOnlyList<TimeEntryRevisionDto> Revisions,
     IReadOnlyList<TimesheetDayDto> Days,
     IReadOnlyList<TimesheetChargeCodeDto> ChargeCodes,
-    IReadOnlyList<AuditEventDto> Audit);
+    IReadOnlyList<AuditEventDto> Audit,
+
+    /// <summary>Codes they're on but can't charge yet (the project is still being planned, or their dates start later), with when it opens.</summary>
+    IReadOnlyList<UpcomingChargeCodeDto>? NotOpenYet = null);
 
 /// <summary>
 /// One cell of the grid. <see cref="EntryId"/> identifies an existing entry (needed to move it to another charge

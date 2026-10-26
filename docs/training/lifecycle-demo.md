@@ -50,10 +50,9 @@ dotnet test tests/Workbench.Tests -c Release --filter "FullyQualifiedName~Golden
 
 ### What writing it found
 
-- Staffing a task that already ended fails with "The end date is before the start date. Nothing was changed." It should say the
-  task ended and offer to extend it.
-- The demo seed leaves Alex's current-week timesheet already submitted, so a new hour has to *reopen* it first (the real
-  "correct a submitted day" flow). The training exercise E2 assumes a draft.
-- A second statement for the same account in the same month is easy to mis-import: the reconciliation's suggested closing balance
-  comes from the first, so the bank side is short by the second file's items unless the closing balance is typed. A statement per
-  month is the norm, but nothing says so.
+- Staffing a task that had already ended said "The end date is before the start date." It now says when the task ended and what to do (fixed).
+- A project still being planned wasn't in anyone's timesheet picker, with nothing to say where it was. The timesheet now lists
+  "not open yet" codes with why (the plan isn't approved, or the project starts later) (fixed).
+- The sample data's dates come from the server's UTC clock and the app's "today" from the local one, so on a Sunday evening in
+  the US they are a day apart (the seed's "this week" is next week's Monday). The golden-path test reads the timesheet period
+  from the app instead of assuming a date.
