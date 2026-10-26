@@ -182,6 +182,7 @@ public static class DatabaseInitializer
         await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
         await CeilingsSeed.SeedAsync(db, cancellationToken);
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
+        await LifecycleSeed.SeedAsync(db, cancellationToken); // A project at each stage of its life (5101 set up, 5102 planning, 5103 awaiting approval, 5104 executing).
         await HrSeed.SeedAsync(db, cancellationToken); // HR: Harper Reed (HR role), positions, records, clearances, benefit plans, open enrollment, checklists.
         await MaterialsSeed.SeedAsync(db, services, cancellationToken); // Mia Torres (Materials), hardware project 3001: parts, 3-level BOM, stock, GFM, work orders.
         await CrmSeed.SeedAsync(db, services, cancellationToken); // Business development: Blake Diaz (bd@), 10 opportunities across the stages, accounts, contacts, leads.
