@@ -133,6 +133,24 @@ public sealed class PlanGridTests
     }
 
     [Fact]
+    public async Task A_plan_with_one_clin_row_takes_typed_tasks_under_it()
+    {
+        await using var ctx = CreateContext(out var items, out _);
+        var clin = new ItemDto(Guid.NewGuid(), null, 0, "CLIN 0001 Labor", Mon, Mon, "4202.01", new Dictionary<string, string?>());
+        var grid = ctx.Render<SheetGridView>(p => p
+            .Add(v => v.Sheet, new SheetDetail(new SheetSummary(SheetId, "Plan", null, "Program Office", 1, true, null, DateTime.UtcNow), []))
+            .Add(v => v.Items, [clin])
+            .AddCascadingValue(new PlanScheduleDto(SheetId, [new PlanTaskDto(clin.Id, 1, "1", 1, false, 1, "", null)], [])));
+        grid.WaitForAssertion(() => Assert.Single(grid.FindAll("tr.wb-row")));
+
+        grid.Find("[data-testid='grid-quick-add']").Input("Requirements");
+        grid.Find("[data-testid='grid-quick-add']").KeyDown("Enter");
+
+        grid.WaitForAssertion(() => Assert.Single(items.Creates));
+        Assert.Equal(("Requirements", (Guid?)clin.Id), (items.Creates[0].Title, items.Creates[0].ParentId));
+    }
+
+    [Fact]
     public async Task Typing_a_list_of_tasks_needs_no_dialogs()
     {
         await using var ctx = CreateContext(out var items, out _);
