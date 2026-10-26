@@ -19,6 +19,7 @@ internal static class SetupEndpoints
         start.MapGet("/templates", (IProjectStartService s, CancellationToken ct) => s.ListTemplatesAsync(ct));
         start.MapGet("/suggested-code", async (IProjectStartService s, CancellationToken ct) => new SuggestedProjectCode(await s.SuggestCodeAsync(ct)));
         start.MapPost("", (StartProjectRequest r, IProjectStartService s, CancellationToken ct) => s.StartAsync(r, ct));
+        start.MapPost("/{projectId:guid}/finish", (Guid projectId, IProjectStartService s, CancellationToken ct) => s.FinishSetupAsync(projectId, ct));
         start.MapPost("/check-import", (Workbench.Contracts.Scheduling.PlanImportRequest r, IProjectStartService s, CancellationToken ct) => s.CheckImportAsync(r, ct));
 
         // The project's plan with Finance: ceiling-first terms, submit, approve or return.

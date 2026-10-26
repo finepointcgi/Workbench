@@ -4,6 +4,7 @@
 @inject IContractService Contracts
 @inject IPeopleService People
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
 
 @if (Opportunity.Stage.IsOpen())
 {
@@ -186,12 +187,21 @@ else
 
     private Task ReopenAsync() => RunAsync(() => Opportunities.ReopenAsync(Opportunity.Id, new ChangeStageRequest(_reopenTo)), "Reopened.");
 
-    private Task HandoffAsync() => RunAsync(async () =>
+    /// <summary>Creates the contract and project, then opens the project, where "Set up the plan from the contract" finishes it.</summary>
+    private async Task HandoffAsync()
     {
-        await Opportunities.HandoffAsync(Opportunity.Id, new HandoffRequest(_contractNumber ?? "", _projectCode ?? "", _customerId, _customerCode, _customerName,
-            _contractName, _projectName, _pm));
-        return await Opportunities.GetAsync(Opportunity.Id);
-    }, "Contract and project created.");
+        HandoffResultDto? result = null;
+        await RunAsync(async () =>
+        {
+            result = await Opportunities.HandoffAsync(Opportunity.Id, new HandoffRequest(_contractNumber ?? "", _projectCode ?? "", _customerId, _customerCode, _customerName,
+                _contractName, _projectName, _pm));
+            return await Opportunities.GetAsync(Opportunity.Id);
+        }, "Contract and project created. Set up the project's plan next.");
+        if (result is { ProjectId: var projectId })
+        {
+            Navigation.NavigateTo($"projects/{projectId}");
+        }
+    }
 
     private async Task RunAsync(Func<Task<OpportunityDto>> action, string done)
     {
