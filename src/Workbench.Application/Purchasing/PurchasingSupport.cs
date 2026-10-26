@@ -142,6 +142,26 @@ internal static partial class PurchasingSupport
 
     public static bool SameEmail(string? a, string? b) => Normalize(a) == Normalize(b) && Normalize(a).Length > 0;
 
+    /// <summary>
+    /// Who else can take a step the person at the keyboard may not (approving what they entered or created): other Finance users
+    /// and administrators, by name. Said in the refusal so a small company isn't left guessing, and told what to do when there is nobody.
+    /// </summary>
+    internal static async Task<string> WhoElseAsync(IWorkbenchDbContext db, string? me, CancellationToken ct)
+    {
+        var emails = new HashSet<string>();
+        foreach (var role in new[] { Contracts.Approvals.ApprovalOrgRole.Finance, Contracts.Approvals.ApprovalOrgRole.Admin })
+        {
+            emails.UnionWith(await Approvals.ApproverRoles.MembersAsync(db, role.ToString(), ct));
+        }
+
+        emails.Remove(Normalize(me));
+        var names = (await db.Set<Domain.Identity.AppUser>().AsNoTracking().Where(u => u.IsActive && emails.Contains(u.Email))
+            .Select(u => u.DisplayName != "" ? u.DisplayName : u.Email).ToListAsync(ct)).Order(StringComparer.OrdinalIgnoreCase).Take(4).ToList();
+        return names.Count > 0
+            ? $" Ask {string.Join(", ", names)}."
+            : " There's no one else in Finance yet: add another Finance user or an administrator under Admin › People.";
+    }
+
     /// <summary>A vendor name reduced for duplicate checks: lower case, no punctuation, no corporate suffixes.</summary>
     public static string NameKey(string name)
     {
