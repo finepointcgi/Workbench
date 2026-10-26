@@ -12,7 +12,7 @@
         <FormField Key="email">
             <MudTextField @bind-Value="_email" Label="Email" autocomplete="off" Required="true" RequiredError="Email is required." Immediate="true"
                           Validation="@(new Func<string?, string?>(ValidateEmail))" InputType="InputType.Email"
-                          HelperText="Matches the person's sign-in account." data-testid="employee-email" />
+                          HelperText="The person's sign-in email." data-testid="employee-email" />
         </FormField>
         <FormField Key="orgUnitId" Sm="6" Context="field">
             <MudSelect T="Guid?" @bind-Value="_orgUnitId" Label="Org unit" Clearable="true" Required="field.Required" RequiredError="Org unit is required.">
@@ -122,7 +122,7 @@
         _loadedFor = Employee?.Id;
         _error = null;
         var e = Employee;
-        _number = e?.EmployeeNumber;
+        _number = e?.EmployeeNumber ?? SetupFormat.NextEmployeeNumber(Employees.Select(x => x.EmployeeNumber));
         _name = e?.DisplayName;
         _email = e?.Email;
         _orgUnitId = e?.OrgUnitId;
