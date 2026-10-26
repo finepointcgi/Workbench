@@ -129,6 +129,17 @@
     </MudStack>
 }
 
+@if (Detail.NotOpenYet is { Count: > 0 } soon)
+{
+    @* Codes they're on that aren't open yet: otherwise a new project's code is just missing, with nothing to say why. *@
+    <div class="mud-text-secondary mt-2" data-testid="not-open-yet">
+        @foreach (var upcoming in soon)
+        {
+            <MudText Typo="Typo.caption" Class="d-block"><b>@upcoming.Code @upcoming.Name</b>: not open yet. @upcoming.Reason</MudText>
+        }
+    </div>
+}
+
 @code {
     private readonly List<Row> _rows = [];
     private TimesheetDetailDto? _loaded;
