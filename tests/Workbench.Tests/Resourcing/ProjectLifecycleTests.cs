@@ -3,6 +3,7 @@ using Workbench.Application.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Resourcing;
 using Workbench.Contracts.Revenue;
+using Workbench.Contracts.Time;
 using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
@@ -140,6 +141,27 @@ public sealed class ProjectLifecycleTests
 
         var setup = Assert.Single((await host.As(Finance).Get<IRevenueSetupService>().GetProjectAsync(project.Id)).Setups);
         Assert.Equal(RevenueMethodKind.TimeAndMaterialsIncurred, setup.Method);
+    }
+
+    [Fact]
+    public async Task Someone_staffed_on_a_project_still_being_planned_sees_it_in_their_timesheet_as_not_open_yet()
+    {
+        await using var host = await HostAsync();
+        var project = await StartAsync(host, Finance);
+        var kickoff = await TaskAsync(host, project, "Kickoff");
+        await host.As(Pm).Get<IResourcePlanService>().ApplyAsync(project.Id, [new PlanChange(PlanChangeKind.SetPerson, ItemId: kickoff, EmployeeId: host.DevId, Hours: 8m)]);
+
+        var sheet = await host.As(Dev).Get<ITimesheetService>().GetOrCreateMyTimesheetAsync(new DateOnly(2026, 10, 14));
+        var wbs = Assert.Single(sheet.NotOpenYet!, c => c.ProjectCode == "1002");
+        Assert.Contains("opens when Finance approves its plan", wbs.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain(sheet.ChargeCodes, c => c.ChargeCode.ProjectCode == "1002");
+
+        // Approving the plan opens the project; this week's timesheet still can't charge it, because it starts the week after.
+        await host.As(Finance).Get<IProjectPlanService>().SaveCategoriesAsync(project.Id, [host.Se2]);
+        await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(project.Id);
+        await host.As(Finance).Get<IProjectPlanService>().ApproveAsync(project.Id);
+        var after = await host.As(Dev).Get<ITimesheetService>().GetOrCreateMyTimesheetAsync(new DateOnly(2026, 10, 14));
+        Assert.Contains("1002 starts Oct 19", Assert.Single(after.NotOpenYet!, c => c.ProjectCode == "1002").Reason, StringComparison.Ordinal);
     }
 
     [Fact]

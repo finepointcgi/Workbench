@@ -80,12 +80,17 @@ else
                                              Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(v => v < 0 ? "Can't be negative." : null))"
                                              Disabled="HasClins" HelperText="@(HasClins ? "Sum of exercised CLIN values." : "")" />
                         </FormField>
-                        <FormField Key="fundedValue" Sm="6">
-                            <MudNumericField T="decimal" @bind-Value="_funded" Label="Funded value" Adornment="Adornment.Start" AdornmentText="$"
-                                             Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(ValidateFunded))"
-                                             HelperText="@(HasClins ? "Sum of CLIN funding; change it with a modification." : "Obligated to date. Can't exceed the ceiling.")"
-                                             Disabled="HasClins" data-testid="contract-funded" />
-                        </FormField>
+                        @if (_contract is not null)
+                        {
+                            @* A new contract has no funding to type: money is put on each CLIN with its Fund button, and the contract's
+                               figure is their sum. (A figure typed here used to be dropped when the first CLIN was added.) *@
+                            <FormField Key="fundedValue" Sm="6">
+                                <MudNumericField T="decimal" @bind-Value="_funded" Label="Funded value" Adornment="Adornment.Start" AdornmentText="$"
+                                                 Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(ValidateFunded))"
+                                                 HelperText="@(HasClins ? "Sum of CLIN funding; fund a CLIN from its row." : "Obligated to date. Can't exceed the ceiling.")"
+                                                 Disabled="HasClins" data-testid="contract-funded" />
+                            </FormField>
+                        }
                         <FormField Key="isPrime">
                             <MudSwitch @bind-Value="_isPrime" Label="We are the prime contractor" Color="Color.Primary" />
                         </FormField>
@@ -278,7 +283,7 @@ else
             {
                 var created = await Contracts.CreateContractAsync(request);
                 await (_layout?.SaveCustomFieldsAsync(created.Id) ?? Task.CompletedTask);
-                Snackbar.Add($"Created {created.ContractNumber}. Add its bill rates next.", Severity.Success);
+                Snackbar.Add($"Created {created.ContractNumber}. Add its bill rates and CLINs next; fund each CLIN once it exists.", Severity.Success);
                 Navigation.NavigateTo($"setup/contracts/{created.Id}");
             }
             else

@@ -66,6 +66,19 @@ public sealed class ReconciliationTests
     }
 
     [Fact]
+    public async Task A_second_statement_for_the_same_end_date_without_a_closing_balance_still_suggests_a_balance_that_includes_it()
+    {
+        var (kit, _, _) = await ScenarioAsync();
+        await using var _ = kit;
+
+        // The first statement says its closing balance (10,075.00). A second file for the same end date doesn't, and has one more item.
+        await kit.ImportAsync(("2026-10-31", "DFAS EFT PMT LATE", 2_400m, null, "B9"));
+
+        var defaults = await kit.Reconciliations.GetDefaultsAsync(kit.Bank.Id);
+        Assert.Equal(10_075m + 2_400m, defaults.StatementEndingBalance);
+    }
+
+    [Fact]
     public async Task Booking_the_bank_fee_posts_a_bank_journal_entry_and_matches_it()
     {
         var (kit, _, _) = await ScenarioAsync();

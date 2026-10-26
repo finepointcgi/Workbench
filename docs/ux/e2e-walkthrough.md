@@ -59,6 +59,21 @@ Each has a test that fails without the fix.
 | After picking a code under "Add a charge code", the picker showed the code's id (a GUID). | `Time/TimesheetGrid.razor` | `TimesheetGridTests.Picking_a_code_adds_its_row_and_leaves_the_picker_empty` |
 | Project › Setup › "Charge codes and who can charge" said "Add tasks on the Plan tab and make them charge codes there", a step that no longer exists. | `ProjectSetupTab.razor` | (copy) |
 
+## Done since (October 25 to 26)
+
+| Item | What changed |
+| --- | --- |
+| A1 | A new contract no longer asks for a funded value that was thrown away; fund each CLIN from its row (the Fund button). |
+| A2 | The timesheet lists codes you're on that aren't open yet, with why ("1002 opens when Finance approves its plan", "starts Nov 2"). |
+| A4 | A project started from a contract gets its revenue method from the contract's type (T&M earns at the bill rate as worked, cost-plus earns cost plus fee, fixed price on milestones). |
+| B1, B2 | People follow their task's dates unless set by hand; hours that don't fit are flagged; one list of people per task. |
+| B3 | Typing a task into a plan with a single CLIN row puts it under the CLIN. |
+| B4 | Submit and Approve say what's still wrong with the plan first (overbooked people, hours that don't fit, failing schedule checks, past funding) and ask. |
+| B7 | Post backlog asks before posting to the ledger. |
+| A5 | Already available: Setup lets a project's manager approve time on their projects. |
+
+Open: A3, B5, B6, B8, B9 and the C items below.
+
 ## Still to do, ranked
 
 Ranked by how likely a new customer is to hit it and how badly it stops them. **A** blocks or silently does the wrong
