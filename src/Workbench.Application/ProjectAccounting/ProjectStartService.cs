@@ -33,7 +33,8 @@ public sealed class ProjectStartService(
     IBudgetService budgets,
     TimeProvider clock,
     IProjectPlanService? planTerms = null,
-    ProjectPlanService? handOff = null) : IProjectStartService
+    ProjectPlanService? handOff = null,
+    Contracts.Revenue.IRevenueSetupService? revenueSetup = null) : IProjectStartService
 {
     private static readonly IReadOnlyList<ProjectTemplateDto> Templates =
     [
@@ -151,6 +152,8 @@ public sealed class ProjectStartService(
             await planTerms.SaveTermsAsync(project.Id, terms, cancellationToken);
         }
 
+        await SetUpRevenueAsync(project, planTerms, cancellationToken);
+
         // The labor categories the plan may use: the ones given, else the ones the contract prices. Only Finance can set them,
         // so a project a PM requests waits for Finance to pick them before it can be submitted.
         if (planTerms is not null && project.ContractId is not null)
@@ -261,6 +264,49 @@ public sealed class ProjectStartService(
         catch (Exception ex) when (ex is UnauthorizedAccessException or ArgumentException)
         {
             // Budgeting needs Finance or the project's manager; the project is still created.
+        }
+    }
+
+    /// <summary>
+    /// How the project earns revenue follows its contract, so Finance doesn't have to set it up before the first month end: T&amp;M
+    /// and labor-hour earn hours at the bill rate as they are worked, cost-plus earns cost plus fee, fixed price earns on milestones.
+    /// Only Finance can set it (a project a PM requests is set up by Finance later), and other contract types keep the default.
+    /// </summary>
+    private async Task SetUpRevenueAsync(ProjectDto project, IProjectPlanService? terms, CancellationToken cancellationToken)
+    {
+        if (revenueSetup is null || project.ContractId is not { } contractId)
+        {
+            return;
+        }
+
+        ContractType type;
+        await using (var db = await dbFactory.CreateAsync(cancellationToken))
+        {
+            type = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.Type).FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var method = type switch
+        {
+            ContractType.TimeAndMaterials or ContractType.LaborHour => (Contracts.Revenue.RevenueMethodKind?)Contracts.Revenue.RevenueMethodKind.TimeAndMaterialsIncurred,
+            ContractType.CostPlusFixedFee or ContractType.CostPlusAwardFee or ContractType.CostPlusIncentiveFee => Contracts.Revenue.RevenueMethodKind.CostPlusFee,
+            ContractType.FirmFixedPrice => Contracts.Revenue.RevenueMethodKind.FixedPriceMilestones,
+            _ => null,
+        };
+        if (method is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var fee = method == Contracts.Revenue.RevenueMethodKind.CostPlusFee && terms is not null
+                ? (await terms.TermsFromContractAsync(contractId, cancellationToken)).FeeRate
+                : (decimal?)null;
+            await revenueSetup.SaveSetupAsync(new Contracts.Revenue.SaveRevenueSetupRequest(project.Id, method.Value, FeeRate: fee > 0 ? fee : null), cancellationToken);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchForbiddenException or ArgumentException)
+        {
+            // Setting revenue up is Finance's; the project is still created.
         }
     }
 
