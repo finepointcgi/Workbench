@@ -46,17 +46,24 @@ labor; the invoice equals hours times the bill rate; the ledger-to-financials re
 payment; the bank reconciliation completes with the receipt in transit and the bank fee booked; nothing of the chain is left
 unposted. `LifecycleDemoTests` checks the four staged projects above.
 
-Run just these two:
+Run just these:
 
 ```bash
-dotnet test tests/Workbench.Tests -c Release --filter "FullyQualifiedName~GoldenPath|FullyQualifiedName~LifecycleDemo"
+dotnet test tests/Workbench.Tests -c Release --filter "FullyQualifiedName~GoldenPath"
 ```
+
+`ProcureToPayTests` does the same for money going out, on the demo seed: a requisition for project 1001 (Alex), approved (Pat), a new
+vendor and the purchase order from the requisition, received, the vendor's bill matched to the order line, approved by someone
+other than who entered it, a payment run approved by someone other than who made it, and the $1,000 on the project once, in the
+ledger and in project financials. It also walks an expense report (Alex submits with a receipt, Pat approves) to the same tie.
 
 ### What writing it found
 
 - Staffing a task that had already ended said "The end date is before the start date." It now says when the task ended and what to do (fixed).
 - A project still being planned wasn't in anyone's timesheet picker, with nothing to say where it was. The timesheet now lists
   "not open yet" codes with why (the plan isn't approved, or the project starts later) (fixed).
+- Separation of duties stopped the one-person Finance team twice (a bill you entered, a payment run you made) with a bare
+  refusal. It now names who else can ("Ask Dana Lee."), or says to add a second Finance user (fixed).
 - The sample data's dates come from the server's UTC clock and the app's "today" from the local one, so on a Sunday evening in
   the US they are a day apart (the seed's "this week" is next week's Monday). The golden-path test reads the timesheet period
   from the app instead of assuming a date.

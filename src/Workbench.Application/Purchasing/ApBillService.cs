@@ -263,7 +263,7 @@ public sealed class ApBillService(
 
             if (PurchasingSupport.SameEmail(bill.EnteredBy, Me))
             {
-                throw new WorkbenchForbiddenException("You can't approve a bill you entered.");
+                throw new WorkbenchForbiddenException("You can't approve a bill you entered." + await PurchasingSupport.WhoElseAsync(db, Me, cancellationToken));
             }
 
             var submitters = await LinkedOdcSubmittersAsync(db, bill.Lines, cancellationToken);
