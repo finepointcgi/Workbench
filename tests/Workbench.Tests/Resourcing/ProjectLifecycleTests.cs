@@ -134,6 +134,9 @@ public sealed class ProjectLifecycleTests
         var plan = await host.As(Finance).Get<IProjectPlanService>().GetAsync(requested.Id);
         Assert.False(plan.SetupDone);
 
+        // A project that was already running isn't held up by it.
+        Assert.True((await host.As(Finance).Get<IProjectPlanService>().GetAsync(host.Project1)).SetupDone);
+
         var internalWork = await host.As(Finance).Get<IProjectStartService>().StartAsync(new StartProjectRequest("9001", "Training", Start: new DateOnly(2026, 10, 19)));
         Assert.Equal(ProjectState.Active, internalWork.Status);
     }
