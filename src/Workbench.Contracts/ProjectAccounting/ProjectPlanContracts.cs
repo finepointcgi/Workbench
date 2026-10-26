@@ -138,12 +138,35 @@ public sealed record ProjectPlanDto(
 
     /// <summary>The names of who submitted and who reviewed it, for display (<see cref="SubmittedBy"/> and <see cref="ReviewedBy"/> are their emails).</summary>
     string? SubmittedByName = null,
-    string? ReviewedByName = null)
+    string? ReviewedByName = null,
+
+    /// <summary>Where the project stands (Planning until its plan is approved), its steps in order, and the labor categories to choose from.</summary>
+    ProjectState? ProjectStatus = null,
+    IReadOnlyList<ProjectStepDto>? Steps = null,
+    IReadOnlyList<ProjectCategoryDto>? Categories = null,
+
+    /// <summary>Finance has added what the project manager plans against (funding and labor categories), so the plan can be submitted.</summary>
+    bool SetupDone = true)
 {
     public decimal HoursChange => SinceBaseline.Sum(l => l.HoursChange);
 
     public decimal AmountChange => SinceBaseline.Sum(l => l.AmountChange);
 }
+
+/// <summary>A labor category a project can be planned with: <see cref="Selected"/> is on the project's list, <see cref="OnContract"/> has a bill rate or hour ceiling on its contract.</summary>
+public sealed record ProjectCategoryDto(Guid Id, string Code, string Name, bool Selected, bool OnContract)
+{
+    public string Label => $"{Code} {Name}";
+}
+
+/// <summary>
+/// One step of a project's life, in order: funding, labor categories, project manager, plan, sign-off, executing.
+/// <see cref="Current"/> is the first step not done: what has to happen next, and <see cref="Detail"/> says who and what.
+/// </summary>
+public sealed record ProjectStepDto(string Key, string Label, bool Done, bool Current, string? Detail);
+
+/// <summary>HTTP body for setting a project's labor categories.</summary>
+public sealed record SaveProjectCategoriesRequest(IReadOnlyList<Guid> LaborCategoryIds);
 
 /// <summary>HTTP body for submitting, approving or returning a plan.</summary>
 public sealed record PlanReviewRequest(string? Comment = null);
@@ -160,6 +183,12 @@ public interface IProjectPlanService
     Task<ProjectTermsDto> TermsFromContractAsync(Guid contractId, CancellationToken cancellationToken = default);
 
     Task<ProjectPlanDto> SaveTermsAsync(Guid projectId, SaveProjectTermsRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The labor categories the project's plan may use (Finance). An empty list means any category. People already staffed
+    /// in a category left off the list stay; new staffing must use the list.
+    /// </summary>
+    Task<ProjectPlanDto> SaveCategoriesAsync(Guid projectId, IReadOnlyList<Guid> laborCategoryIds, CancellationToken cancellationToken = default);
 
     /// <summary>Sends the plan to Finance (with an optional note). Finance is notified.</summary>
     Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default);

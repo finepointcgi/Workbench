@@ -133,6 +133,17 @@ internal sealed class ProjectPlanConfiguration : IEntityTypeConfiguration<Projec
     }
 }
 
+internal sealed class ProjectLaborCategoryConfiguration : IEntityTypeConfiguration<ProjectLaborCategory>
+{
+    public void Configure(EntityTypeBuilder<ProjectLaborCategory> b)
+    {
+        b.HasIndex(c => new { c.ProjectId, c.LaborCategoryId }).IsUnique();
+        b.Property(c => c.CreatedBy).HasMaxLength(256);
+        b.HasOne<Project>().WithMany().HasForeignKey(c => c.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<LaborCategory>().WithMany().HasForeignKey(c => c.LaborCategoryId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class WbsElementConfiguration : IEntityTypeConfiguration<WbsElement>
 {
     public void Configure(EntityTypeBuilder<WbsElement> b)

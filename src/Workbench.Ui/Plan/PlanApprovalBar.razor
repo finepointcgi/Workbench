@@ -29,6 +29,21 @@
             }
         </div>
 
+        @if (plan.Steps is { Count: > 0 } steps && steps.Any(s => !s.Done))
+        {
+            @* Where the project is in its life, and the one step that's next. *@
+            <ol class="wb-approval-steps" data-testid="plan-steps" aria-label="Project steps">
+                @foreach (var step in steps)
+                {
+                    <li class="@(step.Done ? "wb-step-done" : step.Current ? "wb-step-current" : "wb-step-todo")" aria-current="@(step.Current ? "step" : null)">
+                        <MudIcon Icon="@(step.Done ? Icons.Material.Filled.CheckCircle : step.Current ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Outlined.RadioButtonUnchecked)"
+                                 Size="Size.Small" Color="@(step.Done ? Color.Success : step.Current ? Color.Primary : Color.Default)" />
+                        <span><strong>@step.Label</strong>@(step.Detail is { } d ? $" · {d}" : "")</span>
+                    </li>
+                }
+            </ol>
+        }
+
         @if (plan.Status == PlanApprovalStatus.Returned && plan.ReviewComment is { } why)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1" data-testid="plan-returned">@(plan.ReviewedByName ?? plan.ReviewedBy) returned it: "@why"</MudAlert>
@@ -65,8 +80,29 @@
             @if (plan.CanEditTerms)
             {
                 <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editing = !_editing" data-testid="plan-terms-edit">@(_editing ? "Close" : "Change the ceiling or funding")</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editingCategories = !_editingCategories" data-testid="plan-categories-edit">@(_editingCategories ? "Close" : "Labor categories")</MudButton>
             }
         </div>
+        @if (plan.Categories?.Where(c => c.Selected).ToList() is { Count: > 0 } picked)
+        {
+            <div class="wb-approval-terms" data-testid="plan-categories">
+                <span>Plan with: @string.Join(", ", picked.Select(c => c.Label))</span>
+            </div>
+        }
+        @if (_editingCategories && plan.Categories is { } all)
+        {
+            <div class="wb-approval-row mt-1" data-testid="plan-categories-form">
+                <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
+                           Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px">
+                    @foreach (var c in all)
+                    {
+                        <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? " · on the contract" : "")</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCategoriesAsync" Disabled="_busy" data-testid="plan-categories-save">Save</MudButton>
+                <span class="wb-approval-text">The project manager plans with these. Leave it empty to allow any.</span>
+            </div>
+        }
         @if (_editing)
         {
             <div class="wb-approval-row mt-1" data-testid="plan-terms-form">
@@ -95,6 +131,8 @@
     private string? _comment;
     private bool _busy;
     private bool _editing;
+    private bool _editingCategories;
+    private IReadOnlyCollection<Guid> _categoryIds = new HashSet<Guid>();
     private bool _reviewing;
     private decimal? _ceiling;
     private decimal? _funded;
@@ -132,6 +170,7 @@
     {
         _plan = plan;
         (_ceiling, _funded, _fee) = (plan.Terms.Ceiling, plan.Terms.Funded, Math.Round(plan.Terms.FeeRate * 100, 2));
+        _categoryIds = (plan.Categories ?? []).Where(c => c.Selected).Select(c => c.Id).ToHashSet();
     }
 
     private Task SubmitAsync() => RunAsync(p => p.SubmitAsync(ProjectId, _note), "Sent to Finance. You'll be notified when they approve it or send it back.");
@@ -142,6 +181,8 @@
 
     private Task SaveTermsAsync() =>
         RunAsync(p => p.SaveTermsAsync(ProjectId, new SaveProjectTermsRequest(_ceiling, _funded, _plan?.Terms.Pricing, _fee is { } f ? f / 100m : null)), "Saved the project's ceiling and funding.");
+
+    private Task SaveCategoriesAsync() => RunAsync(p => p.SaveCategoriesAsync(ProjectId, _categoryIds.ToList()), "Saved the project's labor categories.");
 
     private async Task RunAsync(Func<IProjectPlanService, Task<ProjectPlanDto>> action, string done)
     {
@@ -154,7 +195,7 @@
         try
         {
             Set(await action(plans));
-            (_note, _comment, _editing) = (null, null, false);
+            (_note, _comment, _editing, _editingCategories) = (null, null, false, false);
             Snackbar.Add(done, Severity.Success);
             await Changed.InvokeAsync();
         }
