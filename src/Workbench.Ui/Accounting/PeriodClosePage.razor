@@ -173,6 +173,13 @@ else
 
     private async Task PostBacklogAsync()
     {
+        var waiting = _checklist?.Checks.FirstOrDefault(c => c.Kind == CloseCheckKind.NothingUnposted)?.Count;
+        var what = waiting is > 0 ? $"{waiting} approved item{(waiting == 1 ? "" : "s")}" : "every approved timesheet and expense that isn't in the ledger yet";
+        if (await DialogService.ShowMessageBoxAsync("Post to the general ledger?", $"This posts {what} to the general ledger now.", yesText: "Post", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
         _busy = true;
         try
         {

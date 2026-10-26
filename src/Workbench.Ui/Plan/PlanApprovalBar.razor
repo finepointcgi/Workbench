@@ -4,8 +4,10 @@
    Hidden for people who can't see the project's financials. *@
 @using Workbench.Contracts
 @using Workbench.Contracts.ProjectAccounting
+@using Workbench.Contracts.Resourcing
 @inject IServiceProvider Services
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 @if (_plan is { } plan)
 {
@@ -173,9 +175,81 @@
         _categoryIds = (plan.Categories ?? []).Where(c => c.Selected).Select(c => c.Id).ToHashSet();
     }
 
-    private Task SubmitAsync() => RunAsync(p => p.SubmitAsync(ProjectId, _note), "Sent to Finance. You'll be notified when they approve it or send it back.");
+    private async Task SubmitAsync()
+    {
+        if (await ConfirmOpenProblemsAsync("Submit the plan with these open?", "Submit anyway"))
+        {
+            await RunAsync(p => p.SubmitAsync(ProjectId, _note), "Sent to Finance. You'll be notified when they approve it or send it back.");
+        }
+    }
 
-    private Task ApproveAsync() => RunAsync(p => p.ApproveAsync(ProjectId, _comment), "Approved. The plan is the project's budget now.");
+    private async Task ApproveAsync()
+    {
+        if (await ConfirmOpenProblemsAsync("Approve the plan with these open?", "Approve anyway", "Approving makes it the baseline, so these are locked in."))
+        {
+            await RunAsync(p => p.ApproveAsync(ProjectId, _comment), "Approved. The plan is the project's budget now.");
+        }
+    }
+
+    /// <summary>
+    /// Submitting and approving are the points of no return (approval sets the baseline), so what's still wrong with the plan is
+    /// said first: overbooked people, hours that don't fit, failing schedule checks, a plan past its funding. Nothing open, no question.
+    /// </summary>
+    private async Task<bool> ConfirmOpenProblemsAsync(string title, string yes, string? footer = null)
+    {
+        var problems = await OpenProblemsAsync();
+        if (problems.Count == 0)
+        {
+            return true;
+        }
+
+        var items = string.Concat(problems.Take(6).Select(p => $"<li>{System.Net.WebUtility.HtmlEncode(p)}</li>"));
+        var more = problems.Count > 6 ? $"<p>and {problems.Count - 6} more.</p>" : "";
+        var message = new MarkupString($"<ul>{items}</ul>{more}{(footer is null ? "" : $"<p>{System.Net.WebUtility.HtmlEncode(footer)}</p>")}");
+        return await DialogService.ShowMessageBoxAsync(title, message, yesText: yes, cancelText: "Go back") == true;
+    }
+
+    private async Task<List<string>> OpenProblemsAsync()
+    {
+        var problems = new List<string>();
+        if (Services.GetService(typeof(IResourcePlanService)) is not IResourcePlanService resourcePlan)
+        {
+            return problems;
+        }
+
+        try
+        {
+            var model = await resourcePlan.GetAsync(ProjectId);
+            if (model.Totals.OverbookedPeople.Count > 0)
+            {
+                problems.Add($"{string.Join(", ", model.Totals.OverbookedPeople)} {(model.Totals.OverbookedPeople.Count == 1 ? "is" : "are")} booked past their hours.");
+            }
+
+            problems.AddRange(model.Tasks.SelectMany(t => t.People.SelectMany(p => p.Issues.Select(i => $"{t.Title}: {p.Name}. {i}"))));
+            if (model.Health is { Failed: > 0 } health && model.Totals.Hours > 0)
+            {
+                problems.Add($"{health.Failed} schedule check{(health.Failed == 1 ? "" : "s")} fail.");
+            }
+
+            if (model.Totals.Money is { } money)
+            {
+                if (money.Project.Status == PlanMoneyStatus.OverCeiling)
+                {
+                    problems.Add("The plan costs more than the contract's ceiling.");
+                }
+                else if (money.Project.Status == PlanMoneyStatus.OverFunding)
+                {
+                    problems.Add("The plan costs more than is funded so far.");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            // Not able to see the plan's people: nothing to warn about from here.
+        }
+
+        return problems;
+    }
 
     private Task ReturnAsync() => RunAsync(p => p.ReturnAsync(ProjectId, _comment ?? ""), "Returned to the project manager with your comments.");
 

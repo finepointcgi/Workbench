@@ -34,7 +34,7 @@ public sealed class LifecycleDemoTests
         // 2. Funded, categories chosen, Sam is the manager: waiting for his plan.
         var planning = await PlanAsync("5102");
         Assert.Equal((ProjectState.Planning, true, "plan", PlanApprovalStatus.Draft), (planning.ProjectStatus, planning.SetupDone, Next(planning), planning.Status));
-        Assert.Equal(2, planning.Categories!.Count(c => c.Selected));
+        Assert.Equal(3, planning.Categories!.Count(c => c.Selected));
         var todo = (await new HttpMyTodoService(pm).GetAsync()).Items;
         Assert.Contains(todo, i => i.Key == $"plan:{projects["5102"].Id}:plan");
 
@@ -50,7 +50,12 @@ public sealed class LifecycleDemoTests
         Assert.All(executing.Steps!, s => Assert.True(s.Done));
         Assert.NotNull(executing.BaselineVersionId);
         var totals = (await new HttpProjectFinancialsService(finance).GetProjectSummaryAsync(projects["5104"].Id)).Totals;
-        Assert.Equal(220m, totals.BudgetHours); // Alex 60 h and Dana 160 h
+        Assert.Equal(40m, totals.BudgetHours); // Sam 16 h, Val 8 h, Sam 16 h
+
+        // 5103 is ready to approve: nobody is overbooked and every task has someone, so the plan has nothing to warn about.
+        var resourcePlan = await new HttpResourcePlanService(finance).GetAsync(projects["5103"].Id);
+        Assert.True(resourcePlan.Totals.OverbookedPeople.Count == 0, "overbooked: " + string.Join(", ", resourcePlan.Totals.OverbookedPeople));
+        Assert.Equal((0, 0), (resourcePlan.Health!.Failed, resourcePlan.Tasks.Sum(t => t.People.Sum(p => p.Issues.Count))));
 
         // Finance can approve 5103, which opens it.
         var approved = await plans.ApproveAsync(projects["5103"].Id);

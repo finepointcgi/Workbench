@@ -580,6 +580,11 @@ public sealed class ResourcePlanService(
 
                 from ??= item.Start is { } s && s > Today ? s : Today;
                 to ??= item.Finish;
+                if (add.From is null && add.To is null && to is { } ended && ended < from)
+                {
+                    errors.Add($"{item.Title} finished on {ended:MMM d, yyyy}, so there are no days left to staff. Move its finish date on the plan, or pick the dates.");
+                    continue;
+                }
             }
             else if (wbsId is { } w && !model.Wbs.ContainsKey(w))
             {
