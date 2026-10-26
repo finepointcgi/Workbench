@@ -111,6 +111,22 @@ public sealed class PlanPeopleRulesTests
     }
 
     [Fact]
+    public async Task Staffing_a_task_that_has_already_ended_says_when_it_ended()
+    {
+        await using var host = await HostAsync();
+        var design = await ItemAsync(host, "Design");
+        // Design ended on Mon Oct 12, before today (Wed Oct 14).
+        await host.As(Pm).Get<IItemService>().UpdateAsync(host.SheetId, design,
+            new UpdateItemRequest("Design", new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 12), null, new Dictionary<string, string?>()));
+
+        var error = await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            host.As(Pm).Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: design, EmployeeId: host.DevId, Hours: 8m)]));
+
+        Assert.Contains("Design finished on Oct 12, 2026", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("end date is before", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Hours_that_cant_fit_and_people_on_a_summary_are_flagged_and_a_summary_takes_nobody_new()
     {
         await using var host = await HostAsync();

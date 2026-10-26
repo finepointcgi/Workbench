@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Resourcing;
+using Workbench.Contracts.Revenue;
 using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
@@ -123,6 +124,22 @@ public sealed class ProjectLifecycleTests
         // Emptying the list lifts the limit again.
         await FinancePlans().SaveCategoriesAsync(project.Id, []);
         await Staffing().ApplyAsync(project.Id, [new PlanChange(PlanChangeKind.SetPerson, ItemId: other, EmployeeId: host.Pm2Id, Hours: 8m)]);
+    }
+
+    [Fact]
+    public async Task A_project_started_from_a_contract_earns_revenue_the_way_its_contract_is_priced()
+    {
+        await using var host = await HostAsync();
+        await using (var db = await host.Db.CreateAsync())
+        {
+            (await db.Set<Contract>().SingleAsync()).Type = ContractType.TimeAndMaterials;
+            await db.SaveChangesAsync();
+        }
+
+        var project = await StartAsync(host, Finance);
+
+        var setup = Assert.Single((await host.As(Finance).Get<IRevenueSetupService>().GetProjectAsync(project.Id)).Setups);
+        Assert.Equal(RevenueMethodKind.TimeAndMaterialsIncurred, setup.Method);
     }
 
     [Fact]
