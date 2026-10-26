@@ -200,7 +200,7 @@ public sealed class ApPaymentService(
 
         if (PurchasingSupport.SameEmail(run.CreatedBy, access.Email))
         {
-            throw new WorkbenchForbiddenException("You can't approve a payment run you created; another Finance user must approve it.");
+            throw new WorkbenchForbiddenException("You can't approve a payment run you created; another Finance user must approve it." + await PurchasingSupport.WhoElseAsync(db, access.Email, cancellationToken));
         }
 
         run.Status = PaymentRunStatus.Approved;
