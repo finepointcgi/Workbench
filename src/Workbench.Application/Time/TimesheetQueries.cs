@@ -127,7 +127,55 @@ internal static class TimesheetQueries
             .Select(a => new AuditEventDto(a.Id, a.EntityType, a.EntityId, a.Action, a.BeforeJson, a.AfterJson, a.Actor, a.OccurredAtUtc, a.Reason))
             .ToList();
 
-        return new TimesheetDetailDto(sheet.ToDto(employee), entries, revisionDtos, days, chargeCodes, auditDtos);
+        return new TimesheetDetailDto(sheet.ToDto(employee), entries, revisionDtos, days, chargeCodes, auditDtos,
+            await NotOpenYetAsync(db, employee, sheet.PeriodEnd, chargeCodes, cancellationToken));
+    }
+
+    /// <summary>
+    /// The codes someone is staffed or assigned on that aren't in the picker, with why: the project is still in Planning (its plan
+    /// isn't approved), the project starts later, or their own dates start later. Otherwise a new project's code is simply
+    /// missing, with nothing to say where it went.
+    /// </summary>
+    private static async Task<IReadOnlyList<UpcomingChargeCodeDto>> NotOpenYetAsync(
+        IWorkbenchDbContext db, Employee employee, DateOnly periodEnd, IReadOnlyList<TimesheetChargeCodeDto> chargeCodes, CancellationToken cancellationToken)
+    {
+        var have = chargeCodes.Select(c => c.ChargeCode.WbsElementId).ToHashSet();
+        var staffed = await db.Set<Domain.Resourcing.StaffingAssignment>().AsNoTracking()
+            .Where(a => a.EmployeeId == employee.Id && a.WbsElementId != null && a.To >= periodEnd.AddDays(-6))
+            .Select(a => new { Wbs = a.WbsElementId!.Value, a.From })
+            .ToListAsync(cancellationToken);
+        var assigned = await db.Set<ChargeAssignment>().AsNoTracking()
+            .Where(a => a.EmployeeId == employee.Id && (a.To == null || a.To >= periodEnd.AddDays(-6)))
+            .Select(a => new { Wbs = a.WbsElementId, From = a.From ?? DateOnly.MinValue })
+            .ToListAsync(cancellationToken);
+        var starts = staffed.Concat(assigned).GroupBy(x => x.Wbs).ToDictionary(g => g.Key, g => g.Min(x => x.From));
+        var ids = starts.Keys.Where(id => !have.Contains(id)).ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await (
+                from w in db.Set<WbsElement>().AsNoTracking()
+                join p in db.Set<Project>().AsNoTracking() on w.ProjectId equals p.Id
+                where ids.Contains(w.Id) && w.IsOpen && w.IsChargeable && p.Status != ProjectStatus.Closed
+                select new { w.Id, w.Code, w.Name, ProjectCode = p.Code, p.Status, p.Start })
+            .ToListAsync(cancellationToken);
+        var result = new List<UpcomingChargeCodeDto>();
+        foreach (var r in rows.OrderBy(r => r.Code, StringComparer.Ordinal))
+        {
+            var from = starts[r.Id];
+            var reason = r.Status == ProjectStatus.Planning ? $"{r.ProjectCode} opens when Finance approves its plan."
+                : r.Start is { } start && start > periodEnd ? $"{r.ProjectCode} starts {start:MMM d}."
+                : from > periodEnd ? $"You're on it from {from:MMM d}."
+                : null;
+            if (reason is not null)
+            {
+                result.Add(new UpcomingChargeCodeDto(r.Id, r.Code, r.Name, r.ProjectCode, reason));
+            }
+        }
+
+        return result.Take(6).ToList();
     }
 
     /// <summary>A predicate telling whether a date lies inside an open fiscal period.</summary>
